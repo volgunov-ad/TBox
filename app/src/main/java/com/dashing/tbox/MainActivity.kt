@@ -40,10 +40,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var buttonAPN2Fly: Button
     private lateinit var buttonAPN2Reconnect: Button
     private lateinit var buttontest1: Button
-    private lateinit var buttontest2: Button
-    private lateinit var buttontest3: Button
+    private lateinit var buttonPIN: Button
+    private lateinit var buttonPUK: Button
     private lateinit var numberPin: EditText
     private lateinit var numberPuk: EditText
+    private lateinit var textATCmd: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,11 +76,12 @@ class MainActivity : AppCompatActivity() {
         buttonAPN2Fly = findViewById(R.id.btnAPN2Fly)
         buttonAPN2Reconnect = findViewById(R.id.btnAPN2Reconnect)
         buttontest1 = findViewById(R.id.btntest1)
-        buttontest2 = findViewById(R.id.btntest2)
-        buttontest3 = findViewById(R.id.btntest3)
+        buttonPIN = findViewById(R.id.btnPIN)
+        buttonPUK= findViewById(R.id.btnPUK)
 
         numberPin = findViewById(R.id.pin)
         numberPuk = findViewById(R.id.puk)
+        textATCmd = findViewById(R.id.atCmd)
 
         buttonModemCheck.setOnClickListener {
             modemCheck()
@@ -112,13 +114,13 @@ class MainActivity : AppCompatActivity() {
             apnManage(2, "reconnect")
         }
         buttontest1.setOnClickListener {
-            test(1)
+            test()
         }
-        buttontest2.setOnClickListener {
-            test(2)
+        buttonPIN.setOnClickListener {
+            pin(0)
         }
-        buttontest3.setOnClickListener {
-            test(3)
+        buttonPUK.setOnClickListener {
+            pin(1)
         }
         startNetUpdater()
         //startAPNUpdater()
@@ -291,39 +293,43 @@ class MainActivity : AppCompatActivity() {
         startService(intent)
     }
 
-    private fun test(cmd: Int) {
+    private fun test() {
+        val atCmd = textATCmd.text.toString()
         val intent = Intent(this, BackgroundService::class.java).apply {
-            action = if (cmd == 2) {
-                BackgroundService.ACTION_TEST2
-            }
-            else if (cmd == 3) {
-                BackgroundService.ACTION_TEST3
+            action = BackgroundService.ACTION_TEST1
+            putExtra(BackgroundService.EXTRA_AT_CMD, atCmd + "\r\n")
+        }
+        startService(intent)
+    }
+
+    private fun pin(cmd: Int) {
+        val pinText = numberPin.text.toString()
+        val intent = Intent(this, BackgroundService::class.java).apply {
+            action = if (cmd == 1) {
+                BackgroundService.ACTION_PUK
             }
             else {
-                BackgroundService.ACTION_TEST1
+                BackgroundService.ACTION_PIN
             }
-            val pinText = numberPin.text.toString()
-            if (cmd == 2 || cmd == 3) {
-                if (pinText.isNotEmpty()) {
-                    if (cmd == 2) {
-                        putExtra(BackgroundService.EXTRA_PIN, pinText)
-                    }
-                    else {
-                        val pukText = numberPuk.text.toString()
-                        if (pukText.isNotEmpty()) {
-                            putExtra(BackgroundService.EXTRA_PIN, pinText)
-                            putExtra(BackgroundService.EXTRA_PUK, pukText)
-                        }
-                        else {
-                            Toast.makeText(this@MainActivity, "Не введен PUK", Toast.LENGTH_SHORT).show()
-                            return
-                        }
-                    }
+            if (pinText.isNotEmpty()) {
+                if (cmd == 0) {
+                    putExtra(BackgroundService.EXTRA_PIN, pinText)
                 }
                 else {
-                    Toast.makeText(this@MainActivity, "Не введен PIN", Toast.LENGTH_SHORT).show()
-                    return
+                    val pukText = numberPuk.text.toString()
+                    if (pukText.isNotEmpty()) {
+                        putExtra(BackgroundService.EXTRA_PIN, pinText)
+                        putExtra(BackgroundService.EXTRA_PUK, pukText)
+                    }
+                    else {
+                        Toast.makeText(this@MainActivity, "Не введен PUK", Toast.LENGTH_SHORT).show()
+                        return
+                    }
                 }
+            }
+            else {
+                Toast.makeText(this@MainActivity, "Не введен PIN", Toast.LENGTH_SHORT).show()
+                return
             }
         }
         startService(intent)

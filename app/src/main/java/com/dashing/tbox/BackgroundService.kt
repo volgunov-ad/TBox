@@ -19,23 +19,33 @@ import java.net.InetAddress
 class BackgroundService : Service() {
     private val serverIp = "192.168.225.1"
     private val serverPort = 50047
-    private val serverPort2 = 50047
 
-    private val socket = DatagramSocket().apply {soTimeout = 2000}
-    private val socket2 = DatagramSocket().apply {soTimeout = 2000}
+    private lateinit var themeObserver: ThemeObserver
+    private var currentTheme: Int = 1
+
+    private val socket = DatagramSocket().apply {soTimeout = 1000}
+    private val socket2 = DatagramSocket().apply {soTimeout = 1000}
 
     private val job = Job()
     private val scope = CoroutineScope(Dispatchers.Default + job)
     private val mutex = Mutex()
 
     private var mainJob: Job? = null
+    private var listenJob: Job? = null
     private var activityJob: Job? = null
     private var sendATJob: Job? = null
     private var singleCmdJob: Job? = null
     private var testJob: Job? = null
 
+    private var address: InetAddress? = null
+    private var netUpdateTime: Long = 5000
+    private var apnUpdatePass: Int = 1
+    private var netUpdateCount: Int = 0
+    private var apn1UpdateCount: Int = 0
+    private var apn2UpdateCount: Int = 0
+
     companion object {
-        const val NOTIFICATION_ID = 1234
+        //const val NOTIFICATION_ID = 1234
         const val CHANNEL_ID = "tbox_background_channel"
 
         const val ACTION_UPDATE_WIDGET = "com.dashing.tbox.ACTION_UPDATE_WIDGET"
@@ -45,6 +55,8 @@ class BackgroundService : Service() {
         const val EXTRA_APN_STATUS = "com.dashing.tbox.EXTRA_APN_STATUS"
         const val EXTRA_PIN = "com.dashing.tbox.EXTRA_PIN"
         const val EXTRA_PUK = "com.dashing.tbox.EXTRA_PUK"
+        const val EXTRA_THEME = "com.dashing.tbox.EXTRA_THEME"
+        const val EXTRA_AT_CMD = "com.dashing.tbox.EXTRA_AT_CMD"
 
         const val ACTION_NET_UPD_START = "com.dashing.tbox.NET_UPD_START"
         const val ACTION_NET_UPD_STOP = "com.dashing.tbox.NET_UPD_STOP"
@@ -62,18 +74,59 @@ class BackgroundService : Service() {
         const val ACTION_APN2_FLY = "com.dashing.tbox.ACTION_APN2_FLY"
         const val ACTION_APN2_RECONNECT = "com.dashing.tbox.ACTION_APN2_RECONNECT"
         const val ACTION_TEST1 = "com.dashing.tbox.ACTION_TEST1"
-        const val ACTION_TEST2 = "com.dashing.tbox.ACTION_TEST2"
-        const val ACTION_TEST3 = "com.dashing.tbox.ACTION_TEST3"
+        const val ACTION_PIN = "com.dashing.tbox.ACTION_PIN"
+        const val ACTION_PUK = "com.dashing.tbox.ACTION_PUK"
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        try {
+            setupThemeObserver()
+            Log.d("ThemeService", "Service created successfully")
+        } catch (e: Exception) {
+            Log.e("ThemeService", "Failed to create service", e)
+            stopSelf() // Останавливаем сервис при критической ошибке
+        }
+    }
+
+    private fun setupThemeObserver() {
+        try {
+            themeObserver = ThemeObserver(this) { themeMode ->
+                handleThemeChange(themeMode)
+            }
+            themeObserver.startObserving()
+        } catch (e: Exception) {
+            Log.e("ThemeService", "Failed to setup theme observer", e)
+            // Используем тему по умолчанию
+            handleThemeChange(1)
+        }
+    }
+
+    private fun handleThemeChange(themeMode: Int) {
+        try {
+            if (currentTheme != themeMode) {
+                currentTheme = themeMode
+            }
+        } catch (e: Exception) {
+            Log.e("ThemeService", "Error handling theme change", e)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        createNotificationChannel()
-        val notification = createNotification()
-        startForeground(NOTIFICATION_ID, notification)
+        address = InetAddress.getByName(serverIp)
+        //createNotificationChannel()
+        //val notification = createNotification()
+        //startForeground(NOTIFICATION_ID, notification)
 
         when (intent?.action) {
-            ACTION_NET_UPD_START -> startNetUpdater()
-            ACTION_NET_UPD_STOP -> stopNetUpdater()
+            ACTION_NET_UPD_START -> {
+                startNetUpdater()
+                startListener()
+            }
+            ACTION_NET_UPD_STOP -> {
+                stopNetUpdater()
+                stopListener()
+            }
             ACTION_APN_UPD_START -> startAPNUpdater()
             ACTION_APN_UPD_STOP -> stopAPNUpdater()
             ACTION_SEND_AT -> sendAT("ATI\r\n".toByteArray())
@@ -87,12 +140,17 @@ class BackgroundService : Service() {
             ACTION_APN2_RESTART -> sendAPNManage(byteArrayOf(0x00, 0x01, 0x01, 0x00))
             ACTION_APN2_FLY -> sendAPNManage(byteArrayOf(0x00, 0x01, 0x02, 0x00))
             ACTION_APN2_RECONNECT -> sendAPNManage(byteArrayOf(0x00, 0x01, 0x03, 0x00))
-            ACTION_TEST1 -> sendAT("AT+CPIN?\r\n".toByteArray())
-            ACTION_TEST2 -> {
+            ACTION_TEST1 -> {
+                //val atCmd = intent.getStringExtra(EXTRA_AT_CMD) ?: "ATI"
+                test(byteArrayOf(0x00, 0x00, 0x31, 0x39, 0x32, 0x2E, 0x31, 0x36, 0x38, 0x2E, 0x32,
+                    0x32, 0x35, 0x2E, 0x32, 0x37, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x35, 0x30, 0x37, 0x30, 0x00, 0x00))
+            }
+            ACTION_PIN -> {
                 val pin = intent.getStringExtra(EXTRA_PIN) ?: ""
                 sendAT("AT+CPIN=\"$pin\"\r\n".toByteArray())
             }
-            ACTION_TEST3 -> {
+            ACTION_PUK -> {
                 val pin = intent.getStringExtra(EXTRA_PIN) ?: ""
                 val puk = intent.getStringExtra(EXTRA_PUK) ?: ""
                 sendAT("AT+CPIN=\"$puk\",\"$pin\"\r\n".toByteArray())
@@ -134,47 +192,104 @@ class BackgroundService : Service() {
 
     private fun startNetUpdater() {
         if (mainJob?.isActive == true) return
-        var netErr = 0
-        var apnErr = 0
-        var apn2Err = 0
+        var apnCount = apnUpdatePass
+        Log.d("NetUpdater", "Start updating network state")
         mainJob = scope.launch {
             while (isActive) {
-                Log.d("NetUpdater", "Update network state")
                 mutex.withLock {
-                    if (sendUdpMessage(socket, serverPort, 0x25, 0x37, 0x07, byteArrayOf(0x01, 0x00))) {
-                        netErr = 0
+                    sendUdpMessage(
+                        socket,
+                        serverPort,
+                        0x25,
+                        0x37,
+                        0x07,
+                        byteArrayOf(0x01, 0x00)
+                    )
+                    netUpdateCount += 1
+                    if (netUpdateCount > 2) {
+                        clearNetStates()
+                    }
+                }
+                delay(500)
+                if (TboxRepository.tboxConnected.value && apnCount == apnUpdatePass) {
+                    Log.d("APNUpdater", "Update APN state")
+                    mutex.withLock {
+                        sendUdpMessage(
+                            socket,
+                            serverPort,
+                            0x25,
+                            0x37,
+                            0x11,
+                            byteArrayOf(0x00, 0x00, 0x00, 0x00))
+                    }
+                    apn1UpdateCount += 1
+                    if (apn1UpdateCount > 2) {
+                        clearNetStates()
+                    }
+                    delay(500)
+                    mutex.withLock {
+                        sendUdpMessage(
+                            socket,
+                            serverPort,
+                            0x25,
+                            0x37,
+                            0x11,
+                            byteArrayOf(0x00, 0x00, 0x01, 0x00)
+                        )
+                    }
+                    apn2UpdateCount += 1
+                    if (apn2UpdateCount > 2) {
+                        clearNetStates()
+                    }
+
+                }
+                apnCount += 1
+                if (apnCount > apnUpdatePass) {
+                    apnCount = 0
+                }
+                delay(netUpdateTime)
+            }
+        }
+    }
+
+    private fun startListener() {
+        if (listenJob?.isActive == true) return
+        var errCount = 0
+        var message = ""
+        val receiveData = ByteArray(1024)
+        val receivePacket = DatagramPacket(receiveData, receiveData.size)
+        Log.d("UDP Listener", "Start UDP listener")
+        listenJob = scope.launch {
+            while (isActive) {
+                message = ""
+                //val receiveData = ByteArray(1024)
+                //val receivePacket = DatagramPacket(receiveData, receiveData.size)
+                try {
+                    socket.receive(receivePacket)
+                    message += responseWork(receivePacket)
+                    errCount = 0
+                    if (!TboxRepository.tboxConnected.value) {
+                        message += "Связь с Tbox восстановлена\n"
                         TboxRepository.updateTboxConnected(true)
-                    } else {
-                        netErr += 1
-                        if (netErr > 1) {
+                    }
+                } catch (e: Exception) {
+                    //message += "Ошибка приема сообщеня $errCount\n"
+                    if (TboxRepository.tboxConnected.value) {
+                        errCount += 1
+                        if (errCount > netUpdateTime * 2 / 1000) {
+                            message += "Связь с Tbox потеряна\n"
+                            TboxRepository.updateTboxConnected(false)
                             clearNetStates()
                             clearAPNStates()
                             clearAPN2States()
-                            TboxRepository.updateTboxConnected(false)
-                        }
-                    }
-                    if (TboxRepository.tboxConnected.value) {
-                        Log.d("APNUpdater", "Update APN state")
-                        if (sendUdpMessage(socket, serverPort, 0x25, 0x37, 0x11, byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-                            apnErr = 0
-                        } else {
-                            apnErr += 1
-                            if (apnErr > 1) {
-                                clearAPNStates()
-                            }
-                        }
-                        if (sendUdpMessage(socket, serverPort, 0x25, 0x37, 0x11, byteArrayOf(0x00, 0x00, 0x01, 0x00))) {
-                            apn2Err = 0
-                        } else {
-                            apn2Err += 1
-                            if (apn2Err > 1) {
-                                clearAPN2States()
-                            }
+                            sendWidgetUpdate()
                         }
                     }
                 }
-                sendWidgetUpdate()
-                delay(10000)
+                if (message.isNotEmpty()) {
+                    TboxRepository.updateMessage(message)
+                }
+                delay(100)
             }
         }
     }
@@ -182,6 +297,11 @@ class BackgroundService : Service() {
     private fun stopNetUpdater() {
         mainJob?.cancel()
         mainJob = null
+    }
+
+    private fun stopListener() {
+        listenJob?.cancel()
+        listenJob = null
     }
 
     private fun startAPNUpdater() {
@@ -258,7 +378,7 @@ class BackgroundService : Service() {
         if (testJob?.isActive == true) return
         testJob = scope.launch {
             mutex.withLock {
-                sendUdpMessage(socket2, serverPort2, 0x23, 0x37, 0x10, cmd)
+                sendUdpMessage(socket2, serverPort, 0x2F, 0x37, 0x0F, cmd)
             }
         }
     }
@@ -270,6 +390,7 @@ class BackgroundService : Service() {
             putExtra(EXTRA_NET_TYPE, TboxRepository.netState.value.netStatus)
             putExtra(EXTRA_TBOX_STATUS, TboxRepository.tboxConnected.value)
             putExtra(EXTRA_APN_STATUS, TboxRepository.apnState.value.apnStatus)
+            putExtra(EXTRA_THEME, currentTheme)
         }
         try {
             sendBroadcast(intent)
@@ -284,24 +405,30 @@ class BackgroundService : Service() {
         super.onDestroy()
         job.cancel()
         socket.close()
+        try {
+            themeObserver.stopObserving()
+            Log.d("ThemeService", "Service destroyed")
+        } catch (e: Exception) {
+            Log.e("ThemeService", "Error during service destruction", e)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun sendUdpMessage(socket: DatagramSocket, port: Int, tid: Byte, sid: Byte, cmd: Byte, msg: ByteArray): Boolean {
         var message = ""
-        val receiveData = ByteArray(1024)
-        val receivePacket = DatagramPacket(receiveData, receiveData.size)
+        //val receiveData = ByteArray(1024)
+        //val receivePacket = DatagramPacket(receiveData, receiveData.size)
 
         var data = fillHeader(msg.size, tid, sid, cmd) + msg
         val checkSum = xorSum(data)
         data += checkSum
         try {
-            val address = InetAddress.getByName(serverIp)
+            //val address = InetAddress.getByName(serverIp)
             val packet = DatagramPacket(data, data.size, address, port)
             socket.send(packet)
             message = "Отправлено: ${toHexString(data)}\n"
-            try {
+            /*try {
                 socket.receive(receivePacket)
                 message += responseWork(receivePacket)
             } catch (e: Exception) {
@@ -309,7 +436,7 @@ class BackgroundService : Service() {
                 e.printStackTrace()
                 TboxRepository.updateMessage(message)
                 return false
-            }
+            }*/
         } catch (e: Exception) {
             message += "Ошибка отправки сообщения\n"
             e.printStackTrace()
@@ -339,10 +466,12 @@ class BackgroundService : Service() {
                         if (sid == 0x37.toByte()) {
                             if (cmd == 0x87.toByte()) {
                                 message = ansMDCNetState(receivedData)
+                                sendWidgetUpdate()
                             } else if ((cmd == 0x90.toByte())) {
                                 message = ansMDCAPNManage(receivedData)
                             } else if ((cmd == 0x91.toByte())) {
                                 message = ansMDCAPNState(receivedData)
+                                sendWidgetUpdate()
                             } else if ((cmd == 0x8E.toByte())) {
                                 message = ansATcmd(receivedData)
                             } else {
@@ -445,6 +574,7 @@ class BackgroundService : Service() {
             netStatus = netStatus,
             regStatus = regStatus,
             simStatus = simStatus))
+        netUpdateCount = 0
 
         var imei = "-"
         var iccid = "-"
@@ -542,6 +672,7 @@ class BackgroundService : Service() {
                 apnDNS1 = apnDNS1,
                 apnDNS2 = apnDNS2
             ))
+            apn1UpdateCount = 0
         }
         else if (data[4] == 0x01.toByte()) {
             TboxRepository.updateAPN2State(APNState(
@@ -552,6 +683,7 @@ class BackgroundService : Service() {
                 apnDNS1 = apnDNS1,
                 apnDNS2 = apnDNS2
             ))
+            apn2UpdateCount = 0
         }
 
         return message

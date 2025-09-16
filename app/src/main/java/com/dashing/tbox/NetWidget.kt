@@ -5,11 +5,18 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.res.Resources
-import android.graphics.Color
+import android.os.Handler
+import android.os.Looper
 import android.widget.RemoteViews
 
 class NetWidget : AppWidgetProvider() {
+    companion object {
+        private const val TIMEOUT_MS = 30000L // 30 секунд
+        private var lastUpdateTime: Long = 0
+        private val handler = Handler(Looper.getMainLooper())
+        private var timeoutRunnable: Runnable? = null
+    }
+
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         updateWidget(context, manager, ids)
 
@@ -32,6 +39,7 @@ class NetWidget : AppWidgetProvider() {
         super.onReceive(context, intent)
 
         if (intent.action == BackgroundService.ACTION_UPDATE_WIDGET) {
+            val theme = intent.getIntExtra(BackgroundService.EXTRA_THEME, 1)
             val csq = intent.getIntExtra(BackgroundService.EXTRA_CSQ, 99)
             val netType = intent.getStringExtra(BackgroundService.EXTRA_NET_TYPE) ?: ""
             val apnStatus = intent.getStringExtra(BackgroundService.EXTRA_APN_STATUS) ?: ""
@@ -43,117 +51,186 @@ class NetWidget : AppWidgetProvider() {
                 ComponentName(context, NetWidget::class.java)
             )
 
-            updateWidget(context, appWidgetManager, appWidgetIds, csq, netType, apnStatus, tboxStatus)
+            updateWidget(context, appWidgetManager, appWidgetIds, theme, csq, netType, apnStatus, tboxStatus)
+
+            // Перезапускаем проверку таймаута
+            restartTimeoutCheck(context)
         }
+    }
+
+    private fun startTimeoutCheck(context: Context) {
+        lastUpdateTime = System.currentTimeMillis()
+        restartTimeoutCheck(context)
+    }
+
+    private fun restartTimeoutCheck(context: Context) {
+        // Удаляем предыдущую проверку
+        timeoutRunnable?.let { handler.removeCallbacks(it) }
+
+        timeoutRunnable = Runnable {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastUpdateTime >= TIMEOUT_MS) {
+                // Прошло более 30 секунд без обновлений - показываем отсутствие сигнала
+                showNoSignal(context)
+            } else {
+                // Планируем следующую проверку
+                val timeSinceLastUpdate = currentTime - lastUpdateTime
+                val delay = TIMEOUT_MS - timeSinceLastUpdate
+                if (delay > 0) {
+                    handler.postDelayed(timeoutRunnable!!, delay)
+                }
+            }
+        }
+
+        handler.postDelayed(timeoutRunnable!!, TIMEOUT_MS)
+    }
+
+    private fun showNoSignal(context: Context) {
+        val appWidgetManager = AppWidgetManager.getInstance(context)
+        val appWidgetIds = appWidgetManager.getAppWidgetIds(
+            ComponentName(context, NetWidget::class.java)
+        )
+
+        // Используем стандартную тему (1) для отображения отсутствия сигнала
+        updateWidget(context, appWidgetManager, appWidgetIds, theme = 1, csq = 99,
+            netType = "", apnStatus = "", tboxStatus = false)
     }
 
     private fun updateWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
+        theme: Int = 1,
         csq: Int = 99,
         netType: String = "",
         apnStatus: String = "",
         tboxStatus: Boolean = false
     ) {
-        var imageR = R.drawable.ic_signal_nosig_sharp_outlined
+        var imageR = if (theme == 1) R.drawable.ic_signal_nosig_sharp_outlined else
+            R.drawable.ic_signal_nosig_sharp_outlined
         if (tboxStatus) {
+            val signalLevel = csq.getSignalLevel()
             if (apnStatus == "подключен") {
                 when (netType) {
                     "2G" -> {
-                        when (csq) {
-                            in 1..6 -> {
-                                imageR = R.drawable.ic_signal_e_cellular_1_sharp_outlined
+                        when (signalLevel) {
+                            1 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_1_sharp_outlined else
+                                    R.drawable.ic_signal_e_cellular_1_sharp_outlined
                             }
-                            in 7..13 -> {
-                                imageR = R.drawable.ic_signal_e_cellular_2_sharp_outlined
+                            2 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_2_sharp_outlined else
+                                    R.drawable.ic_signal_e_cellular_2_sharp_outlined
                             }
-                            in 14..20 -> {
-                                imageR = R.drawable.ic_signal_e_cellular_3_sharp_outlined
+                            3 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_3_sharp_outlined else
+                                    R.drawable.ic_signal_e_cellular_3_sharp_outlined
                             }
-                            in 21..32 -> {
-                                imageR = R.drawable.ic_signal_e_cellular_4_sharp_outlined
+                            4 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_4_sharp_outlined else
+                                    R.drawable.ic_signal_e_cellular_4_sharp_outlined
                             }
                             else -> {
-                                imageR = R.drawable.ic_signal_e_cellular_0_sharp_outlined
+                                imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_0_sharp_outlined else
+                                    R.drawable.ic_signal_e_cellular_0_sharp_outlined
                             }
                         }
                     }
                     "3G" -> {
-                        when (csq) {
-                            in 1..6 -> {
-                                imageR = R.drawable.ic_signal_3g_cellular_1_sharp_outlined
+                        when (signalLevel) {
+                            1 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_1_sharp_outlined else
+                                    R.drawable.ic_signal_3g_cellular_1_sharp_outlined
                             }
-                            in 7..13 -> {
-                                imageR = R.drawable.ic_signal_3g_cellular_2_sharp_outlined
+                            2 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_2_sharp_outlined else
+                                    R.drawable.ic_signal_3g_cellular_2_sharp_outlined
                             }
-                            in 14..20 -> {
-                                imageR = R.drawable.ic_signal_3g_cellular_3_sharp_outlined
+                            3 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_3_sharp_outlined else
+                                    R.drawable.ic_signal_3g_cellular_3_sharp_outlined
                             }
-                            in 21..32 -> {
-                                imageR = R.drawable.ic_signal_3g_cellular_4_sharp_outlined
+                            4 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_4_sharp_outlined else
+                                    R.drawable.ic_signal_3g_cellular_4_sharp_outlined
                             }
                             else -> {
-                                imageR = R.drawable.ic_signal_3g_cellular_0_sharp_outlined
+                                imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_0_sharp_outlined else
+                                    R.drawable.ic_signal_3g_cellular_0_sharp_outlined
                             }
                         }
                     }
                     "4G" -> {
-                        when (csq) {
-                            in 1..6 -> {
-                                imageR = R.drawable.ic_signal_4g_cellular_1_sharp_outlined
+                        when (signalLevel) {
+                            1 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_4g_cellular_1_sharp_outlined else
+                                    R.drawable.ic_signal_4g_cellular_1_sharp_outlined
                             }
-                            in 7..13 -> {
-                                imageR = R.drawable.ic_signal_4g_cellular_2_sharp_outlined
+                            2 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_4g_cellular_2_sharp_outlined else
+                                    R.drawable.ic_signal_4g_cellular_2_sharp_outlined
                             }
-                            in 14..20 -> {
-                                imageR = R.drawable.ic_signal_4g_cellular_3_sharp_outlined
+                            3 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_4g_cellular_3_sharp_outlined else
+                                    R.drawable.ic_signal_4g_cellular_3_sharp_outlined_dark
                             }
-                            in 21..32 -> {
-                                imageR = R.drawable.ic_signal_4g_cellular_4_sharp_outlined
+                            4 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_4g_cellular_4_sharp_outlined else
+                                    R.drawable.ic_signal_4g_cellular_4_sharp_outlined_dark
                             }
                             else -> {
-                                imageR = R.drawable.ic_signal_4g_cellular_0_sharp_outlined
+                                imageR = if (theme == 1) R.drawable.ic_signal_4g_cellular_0_sharp_outlined else
+                                    R.drawable.ic_signal_4g_cellular_0_sharp_outlined
                             }
                         }
                     }
                     else -> {
-                        when (csq) {
-                            in 1..6 -> {
-                                imageR = R.drawable.ic_signal_cellular_1_sharp_outlined
+                        when (signalLevel) {
+                            1 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_cellular_1_sharp_outlined else
+                                    R.drawable.ic_signal_cellular_1_sharp_outlined
                             }
-                            in 7..13 -> {
-                                imageR = R.drawable.ic_signal_cellular_2_sharp_outlined
+                            2 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_cellular_2_sharp_outlined else
+                                    R.drawable.ic_signal_cellular_2_sharp_outlined
                             }
-                            in 14..20 -> {
-                                imageR = R.drawable.ic_signal_cellular_3_sharp_outlined
+                            3 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_cellular_3_sharp_outlined else
+                                    R.drawable.ic_signal_cellular_3_sharp_outlined
                             }
-                            in 21..32 -> {
-                                imageR = R.drawable.ic_signal_cellular_4_sharp_outlined
+                            4 -> {
+                                imageR = if (theme == 2) R.drawable.ic_signal_cellular_4_sharp_outlined else
+                                    R.drawable.ic_signal_cellular_4_sharp_outlined
                             }
                             else -> {
-                                imageR = R.drawable.ic_signal_cellular_0_sharp_outlined
+                                imageR = if (theme == 2) R.drawable.ic_signal_cellular_0_sharp_outlined else
+                                    R.drawable.ic_signal_cellular_0_sharp_outlined
                             }
                         }
                     }
                 }
             }
             else {
-                when (csq) {
-                    in 1..6 -> {
-                        imageR = R.drawable.ic_signal_cellular_1_sharp_outlined
+                when (signalLevel) {
+                    1 -> {
+                        imageR = if (theme == 2) R.drawable.ic_signal_cellular_1_sharp_outlined else
+                            R.drawable.ic_signal_cellular_1_sharp_outlined
                     }
-                    in 7..13 -> {
-                        imageR = R.drawable.ic_signal_cellular_2_sharp_outlined
+                    2 -> {
+                        imageR = if (theme == 2) R.drawable.ic_signal_cellular_2_sharp_outlined else
+                            R.drawable.ic_signal_cellular_2_sharp_outlined
                     }
-                    in 14..20 -> {
-                        imageR = R.drawable.ic_signal_cellular_3_sharp_outlined
+                    3 -> {
+                        imageR = if (theme == 2) R.drawable.ic_signal_cellular_3_sharp_outlined else
+                            R.drawable.ic_signal_cellular_3_sharp_outlined
                     }
-                    in 21..32 -> {
-                        imageR = R.drawable.ic_signal_cellular_4_sharp_outlined
+                    4 -> {
+                        imageR = if (theme == 2) R.drawable.ic_signal_cellular_4_sharp_outlined else
+                            R.drawable.ic_signal_cellular_4_sharp_outlined
                     }
                     else -> {
-                        imageR = R.drawable.ic_signal_cellular_0_sharp_outlined
+                        imageR = if (theme == 2) R.drawable.ic_signal_cellular_0_sharp_outlined else
+                            R.drawable.ic_signal_cellular_0_sharp_outlined
                     }
                 }
             }
@@ -165,37 +242,16 @@ class NetWidget : AppWidgetProvider() {
             }
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
-        /*val textTboxStatus = if (tboxStatus) {
-            "TBox подключен"
-        } else {
-            "TBox отключен"
+    }
+
+    private fun Int.getSignalLevel(): Int {
+        return when (this) {
+            in 1..6 -> 1
+            in 7..13 -> 2
+            in 14..20 -> 3
+            in 21..32 -> 4
+            else -> 0
         }
-        val colorTbox = if (tboxStatus) Color.GREEN else Color.RED
-        val colorAPN = if (apnStatus == "подключен") Color.GREEN else Color.RED
-        val color = when (csq) {
-            in 0..10 -> Color.RED
-            in 11..20 -> Color.rgb(255,110,0)
-            99 -> Color.RED
-            else -> Color.GREEN
-        }
-        val csqText = if (csq == 99) {
-            "-"
-        }
-        else {
-            csq.toString()
-        }
-        appWidgetIds.forEach { appWidgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_net).apply {
-                setTextViewText(R.id.widget_csq_value, csqText)
-                setTextColor(R.id.widget_csq_value, color)
-                setTextViewText(R.id.widget_net_type, netType)
-                setTextViewText(R.id.widget_apn_status, apnStatus)
-                setTextColor(R.id.widget_apn_status, colorAPN)
-                setTextViewText(R.id.widget_connection_status, textTboxStatus)
-                setTextColor(R.id.widget_connection_status, colorTbox)
-            }
-            appWidgetManager.updateAppWidget(appWidgetId, views)
-        }*/
     }
 
     override fun onDisabled(context: Context) {
@@ -205,5 +261,7 @@ class NetWidget : AppWidgetProvider() {
                 action = BackgroundService.ACTION_NET_UPD_STOP
             })
         }
+        // Останавливаем проверку таймаута
+        timeoutRunnable?.let { handler.removeCallbacks(it) }
     }
 }

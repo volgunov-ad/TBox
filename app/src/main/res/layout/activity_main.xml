@@ -405,6 +405,29 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="16dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="AT команда:"
+                    android:textSize="16sp" />
+
+                <EditText
+                    android:id="@+id/atCmd"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:text=""
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
             <!-- Поле Сообщения -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -561,21 +584,21 @@
                     android:layout_weight="1"
                     android:text="Тест1" />
                 <Button
-                    android:id="@+id/btntest2"
+                    android:id="@+id/btnPIN"
                     style="?android:attr/buttonBarButtonStyle"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
-                    android:text="Тест2" />
+                    android:text="Ввести PIN" />
                 <Button
-                    android:id="@+id/btntest3"
+                    android:id="@+id/btnPUK"
                     style="?android:attr/buttonBarButtonStyle"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
-                    android:text="Тест3" />
+                    android:text="Ввести PUK" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
