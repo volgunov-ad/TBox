@@ -15,8 +15,13 @@ import kotlinx.coroutines.sync.withLock
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.Date
 
 class BackgroundService : Service() {
+    private lateinit var settingsManager: SettingsManager
+
     private val serverIp = "192.168.225.1"
     private val serverPort = 50047
 
@@ -24,28 +29,34 @@ class BackgroundService : Service() {
     private var currentTheme: Int = 1
 
     private val socket = DatagramSocket().apply {soTimeout = 1000}
-    private val socket2 = DatagramSocket().apply {soTimeout = 1000}
 
     private val job = Job()
     private val scope = CoroutineScope(Dispatchers.Default + job)
     private val mutex = Mutex()
 
     private var mainJob: Job? = null
+    private var apnJob: Job? = null
+    private var appCmd: Job? = null
+    private var swdCmd: Job? = null
+    private var locCmd: Job? = null
     private var listenJob: Job? = null
-    private var activityJob: Job? = null
-    private var sendATJob: Job? = null
     private var singleCmdJob: Job? = null
     private var testJob: Job? = null
+    private var sendATJob: Job? = null
+    private var modemModeJob: Job? = null
+    private var checkConnectionJob: Job? = null
 
     private var address: InetAddress? = null
     private var netUpdateTime: Long = 5000
-    private var apnUpdatePass: Int = 1
+    private var apnUpdateTime: Long = 10000
     private var netUpdateCount: Int = 0
     private var apn1UpdateCount: Int = 0
     private var apn2UpdateCount: Int = 0
+    private var apnCheck: Boolean = false
 
     companion object {
-        //const val NOTIFICATION_ID = 1234
+        const val LOCATION_UPDATE_TIME = 10
+        const val NOTIFICATION_ID = 50047
         const val CHANNEL_ID = "tbox_background_channel"
 
         const val ACTION_UPDATE_WIDGET = "com.dashing.tbox.ACTION_UPDATE_WIDGET"
@@ -60,12 +71,11 @@ class BackgroundService : Service() {
 
         const val ACTION_NET_UPD_START = "com.dashing.tbox.NET_UPD_START"
         const val ACTION_NET_UPD_STOP = "com.dashing.tbox.NET_UPD_STOP"
-        const val ACTION_APN_UPD_START = "com.dashing.tbox.APN_UPD_START"
-        const val ACTION_APN_UPD_STOP = "com.dashing.tbox.APN_UPD_STOP"
         const val ACTION_SEND_AT = "com.dashing.tbox.ACTION_SEND_AT"
         const val ACTION_MODEM_CHECK = "com.dashing.tbox.ACTION_MODEM_CHECK"
         const val ACTION_MODEM_OFF = "com.dashing.tbox.ACTION_MODEM_OFF"
         const val ACTION_MODEM_ON = "com.dashing.tbox.ACTION_MODEM_ON"
+        const val ACTION_MODEM_FLY = "com.dashing.tbox.ACTION_MODEM_FLY"
         const val ACTION_TBOX_REBOOT = "com.dashing.tbox.ACTION_TBOX_REBOOT"
         const val ACTION_APN1_RESTART = "com.dashing.tbox.ACTION_APN1_RESTART"
         const val ACTION_APN1_FLY = "com.dashing.tbox.ACTION_APN1_FLY"
@@ -76,10 +86,13 @@ class BackgroundService : Service() {
         const val ACTION_TEST1 = "com.dashing.tbox.ACTION_TEST1"
         const val ACTION_PIN = "com.dashing.tbox.ACTION_PIN"
         const val ACTION_PUK = "com.dashing.tbox.ACTION_PUK"
+        const val ACTION_LOC_SUBSCRIBE = "com.dashing.tbox.ACTION_LOC_SUBSCRIBE"
+        const val ACTION_LOC_UNSUBSCRIBE = "com.dashing.tbox.ACTION_LOC_UNSUBSCRIBE"
     }
 
     override fun onCreate() {
         super.onCreate()
+        address = InetAddress.getByName(serverIp)
         try {
             setupThemeObserver()
             Log.d("ThemeService", "Service created successfully")
@@ -87,6 +100,13 @@ class BackgroundService : Service() {
             Log.e("ThemeService", "Failed to create service", e)
             stopSelf() // Останавливаем сервис при критической ошибке
         }
+        settingsManager = SettingsManager(this)
+        createNotificationChannel()
+
+        //startNetUpdater()
+        //startAPNUpdater()
+        //startListener()
+        //startCheckConnection()
     }
 
     private fun setupThemeObserver() {
@@ -113,26 +133,26 @@ class BackgroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        address = InetAddress.getByName(serverIp)
-        //createNotificationChannel()
-        //val notification = createNotification()
-        //startForeground(NOTIFICATION_ID, notification)
-
+        val notification = createNotification(intent?.action)
+        startForeground(NOTIFICATION_ID, notification)
         when (intent?.action) {
             ACTION_NET_UPD_START -> {
                 startNetUpdater()
+                startAPNUpdater()
                 startListener()
+                startCheckConnection()
             }
             ACTION_NET_UPD_STOP -> {
                 stopNetUpdater()
+                stopAPNUpdater()
                 stopListener()
+                stopCheckConnection()
             }
-            ACTION_APN_UPD_START -> startAPNUpdater()
-            ACTION_APN_UPD_STOP -> stopAPNUpdater()
             ACTION_SEND_AT -> sendAT("ATI\r\n".toByteArray())
-            ACTION_MODEM_CHECK -> sendAT("AT+CFUN?\r\n".toByteArray())
-            ACTION_MODEM_OFF -> sendAT("AT+CFUN=0\r\n".toByteArray())
-            ACTION_MODEM_ON -> sendAT("AT+CFUN=1\r\n".toByteArray())
+            ACTION_MODEM_CHECK -> modemMode(-1)
+            ACTION_MODEM_OFF -> modemMode(0)
+            ACTION_MODEM_ON -> modemMode(1)
+            ACTION_MODEM_FLY -> modemMode(4)
             ACTION_TBOX_REBOOT -> rebootTbox(byteArrayOf(0x02))
             ACTION_APN1_RESTART -> sendAPNManage(byteArrayOf(0x00, 0x00, 0x01, 0x00))
             ACTION_APN1_FLY -> sendAPNManage(byteArrayOf(0x00, 0x00, 0x02, 0x00))
@@ -141,10 +161,11 @@ class BackgroundService : Service() {
             ACTION_APN2_FLY -> sendAPNManage(byteArrayOf(0x00, 0x01, 0x02, 0x00))
             ACTION_APN2_RECONNECT -> sendAPNManage(byteArrayOf(0x00, 0x01, 0x03, 0x00))
             ACTION_TEST1 -> {
-                //val atCmd = intent.getStringExtra(EXTRA_AT_CMD) ?: "ATI"
-                test(byteArrayOf(0x00, 0x00, 0x31, 0x39, 0x32, 0x2E, 0x31, 0x36, 0x38, 0x2E, 0x32,
-                    0x32, 0x35, 0x2E, 0x32, 0x37, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x35, 0x30, 0x37, 0x30, 0x00, 0x00))
+                val atCmd = intent.getStringExtra(EXTRA_AT_CMD) ?: "ATI"
+                sendAT(atCmd.toByteArray())
+                //test(byteArrayOf(0x00, 0x00, 0x31, 0x39, 0x32, 0x2E, 0x31, 0x36, 0x38, 0x2E, 0x32,
+                //    0x32, 0x35, 0x2E, 0x32, 0x37, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                //    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x35, 0x30, 0x37, 0x30, 0x00, 0x00))
             }
             ACTION_PIN -> {
                 val pin = intent.getStringExtra(EXTRA_PIN) ?: ""
@@ -155,11 +176,10 @@ class BackgroundService : Service() {
                 val puk = intent.getStringExtra(EXTRA_PUK) ?: ""
                 sendAT("AT+CPIN=\"$puk\",\"$pin\"\r\n".toByteArray())
             }
+            ACTION_LOC_SUBSCRIBE -> locSubscribe()
+            ACTION_LOC_UNSUBSCRIBE -> locUnsubscribe()
         }
         return START_STICKY
-        //ACTION_GPS_CHECK -> sendAT("AT\$MYGPSSTATE\r\n".toByteArray())
-        //ACTION_GPS_OFF -> sendAT("AT\$MYGPSPWR=0\r\n".toByteArray())
-        //ACTION_GPS_ON -> sendAT("AT\$MYGPSPWR=1\r\n".toByteArray())
     }
 
     private fun createNotificationChannel() {
@@ -169,7 +189,7 @@ class BackgroundService : Service() {
                 "TBox Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Background network monitoring"
+                description = "Background TBox monitoring"
                 setShowBadge(false)
             }
 
@@ -178,10 +198,10 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun createNotification(): Notification {
+    private fun createNotification(text: String?): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("TBox Monitor")
-            .setContentText("Active connection monitoring")
+            .setContentText(text)
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -192,10 +212,10 @@ class BackgroundService : Service() {
 
     private fun startNetUpdater() {
         if (mainJob?.isActive == true) return
-        var apnCount = apnUpdatePass
-        Log.d("NetUpdater", "Start updating network state")
+        Log.d("Net Updater", "Start updating network state")
         mainJob = scope.launch {
             while (isActive) {
+                TboxRepository.addLog("DEBUG", "MDC send", "Update network")
                 mutex.withLock {
                     sendUdpMessage(
                         socket,
@@ -205,14 +225,72 @@ class BackgroundService : Service() {
                         0x07,
                         byteArrayOf(0x01, 0x00)
                     )
-                    netUpdateCount += 1
-                    if (netUpdateCount > 2) {
-                        clearNetStates()
+                }
+                netUpdateCount += 1
+                if (netUpdateCount > 2) {
+                    clearNetStates()
+                }
+                delay(netUpdateTime)
+            }
+        }
+    }
+
+    private fun stopNetUpdater() {
+        mainJob?.cancel()
+        mainJob = null
+    }
+
+    private fun startListener() {
+        if (listenJob?.isActive == true) return
+        var errCount = 0
+        val receiveData = ByteArray(1024)
+        val receivePacket = DatagramPacket(receiveData, receiveData.size)
+        Log.d("UDP Listener", "Start UDP listener")
+        listenJob = scope.launch {
+            TboxRepository.updateTboxConnectionTime()
+            while (isActive) {
+                try {
+                    socket.receive(receivePacket)
+                    responseWork(receivePacket)
+                    errCount = 0
+                    if (!TboxRepository.tboxConnected.value) {
+                        onTboxConnected(true)
+                    }
+                } catch (e: Exception) {
+                    if (TboxRepository.tboxConnected.value) {
+                        errCount += 1
+                        if (errCount > netUpdateTime * 2 / 1000) {
+                            onTboxConnected(false)
+                        }
                     }
                 }
-                delay(500)
-                if (TboxRepository.tboxConnected.value && apnCount == apnUpdatePass) {
-                    Log.d("APNUpdater", "Update APN state")
+                if (TboxRepository.locationSubscribed.value){
+                    val delta =  (Date().time - TboxRepository.locUpdateTime.value.time) / 1000
+                    if (delta > LOCATION_UPDATE_TIME * 3) {
+                        TboxRepository.updateLocationSubscribed(false)
+                    }
+                }
+                delay(100)
+            }
+        }
+    }
+
+    private fun stopListener() {
+        listenJob?.cancel()
+        listenJob = null
+    }
+
+    private fun startAPNUpdater() {
+        if (apnJob?.isActive == true) return
+        Log.d("APNUpdater", "Start updating APN state")
+        apnJob = scope.launch {
+            while (isActive) {
+                if (TboxRepository.tboxConnected.value) {
+                    if (!apnCheck) {
+                        delay(1000)
+                        continue
+                    }
+                    TboxRepository.addLog("DEBUG", "MDC send", "Update APN1")
                     mutex.withLock {
                         sendUdpMessage(
                             socket,
@@ -224,9 +302,10 @@ class BackgroundService : Service() {
                     }
                     apn1UpdateCount += 1
                     if (apn1UpdateCount > 2) {
-                        clearNetStates()
+                        clearAPNStates()
                     }
                     delay(500)
+                    TboxRepository.addLog("DEBUG", "MDC send", "Update APN2")
                     mutex.withLock {
                         sendUdpMessage(
                             socket,
@@ -239,97 +318,106 @@ class BackgroundService : Service() {
                     }
                     apn2UpdateCount += 1
                     if (apn2UpdateCount > 2) {
-                        clearNetStates()
+                        clearAPN2States()
                     }
 
                 }
-                apnCount += 1
-                if (apnCount > apnUpdatePass) {
-                    apnCount = 0
-                }
-                delay(netUpdateTime)
-            }
-        }
-    }
-
-    private fun startListener() {
-        if (listenJob?.isActive == true) return
-        var errCount = 0
-        var message = ""
-        val receiveData = ByteArray(1024)
-        val receivePacket = DatagramPacket(receiveData, receiveData.size)
-        Log.d("UDP Listener", "Start UDP listener")
-        listenJob = scope.launch {
-            while (isActive) {
-                message = ""
-                //val receiveData = ByteArray(1024)
-                //val receivePacket = DatagramPacket(receiveData, receiveData.size)
-                try {
-                    socket.receive(receivePacket)
-                    message += responseWork(receivePacket)
-                    errCount = 0
-                    if (!TboxRepository.tboxConnected.value) {
-                        message += "Связь с Tbox восстановлена\n"
-                        TboxRepository.updateTboxConnected(true)
-                    }
-                } catch (e: Exception) {
-                    //message += "Ошибка приема сообщеня $errCount\n"
-                    if (TboxRepository.tboxConnected.value) {
-                        errCount += 1
-                        if (errCount > netUpdateTime * 2 / 1000) {
-                            message += "Связь с Tbox потеряна\n"
-                            TboxRepository.updateTboxConnected(false)
-                            clearNetStates()
-                            clearAPNStates()
-                            clearAPN2States()
-                            sendWidgetUpdate()
-                        }
-                    }
-                }
-                if (message.isNotEmpty()) {
-                    TboxRepository.updateMessage(message)
-                }
-                delay(100)
-            }
-        }
-    }
-
-    private fun stopNetUpdater() {
-        mainJob?.cancel()
-        mainJob = null
-    }
-
-    private fun stopListener() {
-        listenJob?.cancel()
-        listenJob = null
-    }
-
-    private fun startAPNUpdater() {
-        if (activityJob?.isActive == true) return
-        var apnErr = 0
-        activityJob = scope.launch {
-            while (isActive) {
-                if (TboxRepository.tboxConnected.value) {
-                    Log.d("APNUpdater", "Update APN state")
-                    mutex.withLock {
-                        if (sendUdpMessage(socket, serverPort, 0x25, 0x37, 0x11, byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-                            apnErr = 0
-                        } else {
-                            apnErr += 1
-                            if (apnErr > 1) {
-                                clearAPNStates()
-                            }
-                        }
-                    }
-                }
-                delay(15000)
+                delay(apnUpdateTime)
             }
         }
     }
 
     private fun stopAPNUpdater() {
-        activityJob?.cancel()
-        activityJob = null
+        apnJob?.cancel()
+        apnJob = null
+    }
+
+    private fun startCheckConnection() {
+        if (checkConnectionJob?.isActive == true) return
+        var rebootTimeout = 60000L
+        var modemCheckTimeout = 10000L
+        Log.d("NetUpdater", "Start check connection")
+        checkConnectionJob = scope.launch {
+            delay(5000)
+            while (isActive) {
+                delay(5000)
+                if (!TboxRepository.tboxConnected.value) {
+                    continue
+                }
+                if (checkConnection()) {
+                    modemCheckTimeout = 10000
+                    rebootTimeout = 600000
+                    continue
+                }
+                if (settingsManager.getAutoModemRestartSetting()) {
+                    delay(modemCheckTimeout)
+                    if (!checkConnection()) {
+                        TboxRepository.addLog("WARN", "Net connection checker",
+                            "No network connection. Restart modem")
+                        modemMode(0, needCheck = false)
+                        delay(5000)
+                        modemMode(1, 1000)
+                        delay(5000)
+                        if (TboxRepository.modemStatus.value != 1) {
+                            modemMode(1)
+                        }
+                        delay(10000)
+                        modemCheckTimeout += 10000
+                        if (modemCheckTimeout > 50000) {
+                            modemCheckTimeout = 10000
+                        }
+
+                        if (!checkConnection()) {
+                            if (settingsManager.getAutoTboxRebootSetting()) {
+                                TboxRepository.addLog("WARN", "Net connection checker",
+                                    "No network connection. Restart TBox")
+                                rebootTbox(byteArrayOf(0x02))
+                                delay(rebootTimeout)
+                                rebootTimeout += 600000
+                                if (rebootTimeout > 3000000) {
+                                    rebootTimeout = 600000
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun checkConnection(): Boolean {
+        return TboxRepository.netState.value.netStatus in listOf("2G", "3G", "4G") &&
+            TboxRepository.apnState.value.apnStatus == "подключен"
+    }
+
+    private fun stopCheckConnection() {
+        checkConnectionJob?.cancel()
+        checkConnectionJob = null
+    }
+
+    private fun modemMode(mode: Int, timeout: Long = 5000, needCheck: Boolean = true) {
+        if (!TboxRepository.tboxConnected.value) {
+            return
+        }
+        if (modemModeJob?.isActive == true) return
+        modemModeJob = scope.launch {
+            if (mode != -1) {
+                if (!sendATJob.awaitCompletionWithTimeout(5000)) {
+                    return@launch
+                }
+                sendAT("AT+CFUN=$mode\r\n".toByteArray())
+                //TboxRepository.updateModemStatus(mode)
+                if (needCheck) {
+                    delay(timeout)
+                }
+            }
+            if (needCheck) {
+                if (!sendATJob.awaitCompletionWithTimeout(5000)) {
+                    return@launch
+                }
+                sendAT("AT+CFUN?\r\n".toByteArray())
+            }
+        }
     }
 
     private fun sendAT(cmd: ByteArray) {
@@ -338,6 +426,8 @@ class BackgroundService : Service() {
         }
         if (sendATJob?.isActive == true) return
         sendATJob = scope.launch {
+            val cmds = String(cmd, charset = Charsets.UTF_8).trimEnd()
+            TboxRepository.addLog("DEBUG", "MDC send", "AT command send: $cmds")
             mutex.withLock {
                 sendUdpMessage(socket, serverPort, 0x25, 0x37, 0x0E,
                     byteArrayOf(
@@ -348,11 +438,10 @@ class BackgroundService : Service() {
     }
 
     private fun rebootTbox(cmd: ByteArray) {
-        if (!TboxRepository.tboxConnected.value) {
-            return
-        }
         if (singleCmdJob?.isActive == true) return
+        Log.d("CMD", "Send restart TBox")
         singleCmdJob = scope.launch {
+            TboxRepository.addLog("DEBUG", "CRT send", "Restart TBox")
             mutex.withLock {
                 sendUdpMessage(socket, serverPort, 0x23, 0x37, 0x2B, cmd)
             }
@@ -378,7 +467,60 @@ class BackgroundService : Service() {
         if (testJob?.isActive == true) return
         testJob = scope.launch {
             mutex.withLock {
-                sendUdpMessage(socket2, serverPort, 0x2F, 0x37, 0x0F, cmd)
+                sendUdpMessage(socket, serverPort, 0x2F, 0x37, 0x0F, cmd)
+            }
+        }
+    }
+
+    private fun suspendTboxApp() {
+        if (!TboxRepository.tboxConnected.value) {
+            return
+        }
+        if (appCmd?.isActive == true) return
+        appCmd = scope.launch {
+            TboxRepository.addLog("DEBUG", "APP send", "Suspend APP")
+            mutex.withLock {
+                sendUdpMessage(socket, serverPort, 0x2F, 0x37, 0x02, byteArrayOf(0x00))
+            }
+        }
+    }
+
+    private fun preventRestart() {
+        if (!TboxRepository.tboxConnected.value) {
+            return
+        }
+        if (swdCmd?.isActive == true) return
+        swdCmd = scope.launch {
+            TboxRepository.addLog("DEBUG", "SWD send", "Prevent restart")
+            mutex.withLock {
+                sendUdpMessage(socket, serverPort, 0x2D, 0x37, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x00))
+            }
+        }
+    }
+
+    private fun locSubscribe() {
+        if (!TboxRepository.tboxConnected.value) {
+            return
+        }
+        if (locCmd?.isActive == true) return
+        locCmd = scope.launch {
+            TboxRepository.addLog("DEBUG", "LOC send", "Location subscribe")
+            val timeout = (LOCATION_UPDATE_TIME).toByte()
+            mutex.withLock {
+                sendUdpMessage(socket, serverPort, 0x29, 0x37, 0x05, byteArrayOf(0x02, timeout, 0x00))
+            }
+        }
+    }
+
+    private fun locUnsubscribe() {
+        if (!TboxRepository.tboxConnected.value) {
+            return
+        }
+        if (locCmd?.isActive == true) return
+        locCmd = scope.launch {
+            TboxRepository.addLog("DEBUG", "LOC send", "Location unsubscribe")
+            mutex.withLock {
+                sendUdpMessage(socket, serverPort, 0x29, 0x37, 0x05, byteArrayOf(0x00, 0x00, 0x00))
             }
         }
     }
@@ -416,10 +558,6 @@ class BackgroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun sendUdpMessage(socket: DatagramSocket, port: Int, tid: Byte, sid: Byte, cmd: Byte, msg: ByteArray): Boolean {
-        var message = ""
-        //val receiveData = ByteArray(1024)
-        //val receivePacket = DatagramPacket(receiveData, receiveData.size)
-
         var data = fillHeader(msg.size, tid, sid, cmd) + msg
         val checkSum = xorSum(data)
         data += checkSum
@@ -427,33 +565,23 @@ class BackgroundService : Service() {
             //val address = InetAddress.getByName(serverIp)
             val packet = DatagramPacket(data, data.size, address, port)
             socket.send(packet)
-            message = "Отправлено: ${toHexString(data)}\n"
-            /*try {
-                socket.receive(receivePacket)
-                message += responseWork(receivePacket)
-            } catch (e: Exception) {
-                message += "Ошибка приема сообщения\n"
-                e.printStackTrace()
-                TboxRepository.updateMessage(message)
-                return false
-            }*/
+            TboxRepository.addLog("DEBUG", "UDP message send", toHexString(data))
         } catch (e: Exception) {
-            message += "Ошибка отправки сообщения\n"
+            TboxRepository.addLog("ERROR", "UDP message send", "Error send message")
             e.printStackTrace()
-            TboxRepository.updateMessage(message)
             return false
         }
-        TboxRepository.updateMessage(message)
         return true
     }
 
-    private fun responseWork(receivePacket: DatagramPacket): String {
-        var message = ""
+    private fun responseWork(receivePacket: DatagramPacket) {
         val fromAddress = receivePacket.address.hostAddress
         val fromPort = receivePacket.port
         if (checkPacket(receivePacket.data)) {
             val dataLength = extractDataLength(receivePacket.data)
             val receivedData = extractData(receivePacket.data, dataLength)
+            //TboxRepository.addLog("DEBUG", "UDP response",
+            //    "Received from $fromAddress:$fromPort: " + toHexString(receivePacket.data))
             if (!receivedData.contentEquals(ByteArray(0))) {
                 val tid = receivePacket.data[9]
                 val tids = String.format("%02X", tid)
@@ -461,61 +589,87 @@ class BackgroundService : Service() {
                 val sids = String.format("%02X", sid)
                 val cmd = receivePacket.data[12]
                 val cmds = String.format("%02X", cmd)
-                if (receivedData.size >= 4) {
-                    if (tid == 0x25.toByte()) {
-                        if (sid == 0x37.toByte()) {
-                            if (cmd == 0x87.toByte()) {
-                                message = ansMDCNetState(receivedData)
-                                sendWidgetUpdate()
-                            } else if ((cmd == 0x90.toByte())) {
-                                message = ansMDCAPNManage(receivedData)
-                            } else if ((cmd == 0x91.toByte())) {
-                                message = ansMDCAPNState(receivedData)
-                                sendWidgetUpdate()
-                            } else if ((cmd == 0x8E.toByte())) {
-                                message = ansATcmd(receivedData)
-                            } else {
-                                message = "Неизвестный ответ от MDC\n"
-                            }
+
+                if (tid == 0x25.toByte()) {
+                    if (receivedData.size >= 4) {
+                        if (cmd == 0x87.toByte()) {
+                            ansMDCNetState(receivedData)
+                            sendWidgetUpdate()
+                        } else if ((cmd == 0x90.toByte())) {
+                            ansMDCAPNManage(receivedData)
+                        } else if ((cmd == 0x91.toByte())) {
+                            ansMDCAPNState(receivedData)
+                            sendWidgetUpdate()
+                        } else if ((cmd == 0x8E.toByte())) {
+                            ansATcmd(receivedData)
                         } else {
-                            message = "Неизвестный SID 0x$sids\n"
+                            TboxRepository.addLog("ERROR", "MDC response", "Unknown message from MDC")
                         }
                     } else {
-                        message = "Неизвестный TID 0x$tids\n"
+                        TboxRepository.addLog("ERROR", "MDC response", "Too small data length")
+                    }
+                } else if (tid == 0x2F.toByte()) {
+                    if ((cmd == 0x82.toByte())) {
+                        if (receivedData.contentEquals(byteArrayOf(0x01))) {
+                            TboxRepository.addLog("DEBUG", "APP response", "Command STOP complete")
+                        }
+                        else {
+                            TboxRepository.addLog("WARN", "APP response", "Command STOP not complete")
+                        }
+                    } else {
+                        TboxRepository.addLog("ERROR", "APP response", "Unknown message from APP")
+                    }
+                } else if (tid == 0x2D.toByte()) {
+                    if ((cmd == 0x87.toByte())) {
+                        if (receivedData.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+                            TboxRepository.addLog("DEBUG", "SWD response", "Command PreventRestart complete")
+                        }
+                        else {
+                            TboxRepository.addLog("WARN", "SWD response", "Command PreventRestart not complete")
+                        }
+                    } else {
+                        TboxRepository.addLog("ERROR", "SWD response", "Unknown message from SWD")
+                    }
+                } else if (tid == 0x29.toByte()) {
+                    if ((cmd == 0x85.toByte())) {
+                        ansLOCValues(receivedData)
+                    } else {
+                        TboxRepository.addLog("ERROR", "LOC response", "Unknown message from LOC")
                     }
                 } else {
-                    message = "Мало данных\n"
+                    TboxRepository.addLog("ERROR", "UDP response", "Unknown TID 0x$tids")
                 }
-                message += "Получено от $fromAddress:$fromPort: TID: 0x$tids, SID: 0x$sids, CMD: 0x$cmds - " +
-                        "${toHexString(receivedData)}\n"
+                TboxRepository.addLog("DEBUG", "UDP response",
+                    "Received from $fromAddress:$fromPort: TID: 0x$tids, SID: 0x$sids, CMD: 0x$cmds - " +
+                        toHexString(receivedData))
             } else {
-                message += "Неверные данные 1\nПолучено от $fromAddress:$fromPort: " +
-                        "${toHexString(receivePacket.data)}\n"
+                TboxRepository.addLog("ERROR", "UDP response",
+                    "Unknown data received from $fromAddress:$fromPort: " +
+                            toHexString(receivePacket.data))
             }
         }
         else {
-            message += "Неверные данные 2\nПолучено от $fromAddress:$fromPort: " +
-                    "${toHexString(receivePacket.data)}\n"
+            TboxRepository.addLog("ERROR", "UDP response",
+                "Unknown data received from $fromAddress:$fromPort: \" +\n" +
+                    toHexString(receivePacket.data))
         }
-        return message
     }
 
-    private fun ansMDCNetState(data: ByteArray): String {
-        var message = ""
+    private fun ansMDCNetState(data: ByteArray) {
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            message = "Ошибка проверки состояния сети\n"
+            TboxRepository.addLog("ERROR", "MDC response ", "Error check network state")
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xF4.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            message = "Ошибка проверки состояния сети - неправильное состояние системы\n"
+            TboxRepository.addLog("ERROR", "MDC response ", "Error check network state - state not correct")
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xF5.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            message = "Ошибка проверки состояния сети - неверный тип подписки\n"
+            TboxRepository.addLog("ERROR", "MDC response ", "Error check network state - subscribe type not correct")
         }
 
         var csq = 99
@@ -575,6 +729,14 @@ class BackgroundService : Service() {
             regStatus = regStatus,
             simStatus = simStatus))
         netUpdateCount = 0
+        if (TboxRepository.netState.value.regStatus !in listOf("домашняя сеть", "роуминг")) {
+            clearAPNStates()
+            clearAPN2States()
+            apnCheck = false
+        }
+        else {
+            apnCheck = true
+        }
 
         var imei = "-"
         var iccid = "-"
@@ -596,7 +758,6 @@ class BackgroundService : Service() {
             imsi = imsi,
             operator = operator)
         )
-        return message
     }
 
     private fun clearNetStates() {
@@ -612,37 +773,34 @@ class BackgroundService : Service() {
             operator = "-"))
     }
 
-    private fun ansMDCAPNManage(data: ByteArray): String {
-        var message = ""
+    private fun ansMDCAPNManage(data: ByteArray) {
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            message = "Результат: Ошибка управления APN\n"
+            TboxRepository.addLog("ERROR", "MDC APN Manage response ", "Error APN manage")
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xF4.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            message = "Результат: Операция не разрешена в текущем состоянии APN\n"
+            TboxRepository.addLog("ERROR", "MDC APN Manage response ", "The operation is not permitted in the current APN state")
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xF5.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            message = "Результат: Неверный номер канала APN\n"
+            TboxRepository.addLog("ERROR", "MDC APN Manage response ", "Invalid APN channel number")
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0, 0, 0, 0))
         ) {
-            message = "Результат: Команда APN выполнена\n"
+            TboxRepository.addLog("ERROR", "MDC APN Manage response ", "APN command completed")
         }
-        return message
     }
 
-    private fun ansMDCAPNState(data: ByteArray): String {
-        var message = ""
+    private fun ansMDCAPNState(data: ByteArray) {
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            message = "Результат: Ошибка проверки состояния APN\n"
+            TboxRepository.addLog("ERROR", "MDC APN State response ", "APN state check error")
         }
 
         var apnStatus = "-"
@@ -685,8 +843,6 @@ class BackgroundService : Service() {
             ))
             apn2UpdateCount = 0
         }
-
-        return message
     }
 
     private fun clearAPNStates() {
@@ -715,18 +871,142 @@ class BackgroundService : Service() {
         )
     }
 
-    private fun ansATcmd(data: ByteArray): String {
-        var message = ""
+    private fun ansATcmd(data: ByteArray) {
+        if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
+        ) {
+            TboxRepository.addLog("ERROR", "MDC AT response ", "Error sending AT command")
+        } else {
+            val ans = String(data.copyOfRange(10, data.size), charset = Charsets.UTF_8).trimEnd()
+            if ("ERROR" in ans) {
+                TboxRepository.addLog("ERROR", "MDC AT response ", "AT command error: $ans")
+                return
+            }
+            TboxRepository.addLog("DEBUG", "MDC AT response ", "AT command answer: $ans")
+            if ("+CFUN: 0" in ans || ("AT+CFUN=0" in ans && "OK" in ans)) {
+                TboxRepository.updateModemStatus(0)
+            } else if ("+CFUN: 1" in ans || ("AT+CFUN=1" in ans && "OK" in ans)) {
+                TboxRepository.updateModemStatus(1)
+            } else if ("+CFUN: 4" in ans || ("AT+CFUN=4" in ans && "OK" in ans)) {
+                TboxRepository.updateModemStatus(4)
+            }
+        }
+    }
+
+    private fun ansLOCValues(data: ByteArray) {
+        TboxRepository.addLog("DEBUG", "LOC response", "Location values")
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            message = "Результат: Ошибка отправки AT-команды\n"
+            TboxRepository.addLog("ERROR", "LOC response ", "Error location")
+        }
+
+        if (data.size == 6) {
+            if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x0, 0x00, 0x00, 0x00))) {
+                TboxRepository.addLog("DEBUG", "LOC response ", "Location subscribe command complete")
+                return
+            }
+        }
+
+        if (data.size >= 45) {
+            TboxRepository.updateLocationSubscribed(true)
+            TboxRepository.updateLocUpdateTime()
+
+            val rawValue = toHexString(data.copyOfRange(6, 45))
+
+            val gpsData = data.copyOfRange(6, 45)
+            val buffer = ByteBuffer.wrap(gpsData).order(ByteOrder.LITTLE_ENDIAN)
+
+            // 1. Статус позиционирования (1 байт)
+            val locateStatus = buffer.get().toInt() and 0xFF
+
+            // 2. Время UTC (8 байт)
+            val utcTime = UtcTime(
+                year = buffer.short.toInt() and 0xFFFF,
+                month = buffer.get().toInt() and 0xFF,
+                day = buffer.get().toInt() and 0xFF,
+                hour = buffer.get().toInt() and 0xFF,
+                minute = buffer.get().toInt() and 0xFF,
+                second = buffer.get().toInt() and 0xFF
+            )
+
+            // 3. Долгота (4 байта, int32)
+            val rawLongitude = buffer.int
+            val longitude = rawLongitude.toDouble() / 1000000.0
+
+            // 4. Широта (4 байта, int32)
+            val rawLatitude = buffer.int
+            val latitude = rawLatitude.toDouble() / 1000000.0
+
+            // 5. Высота (4 байта, int32)
+            val rawAltitude = buffer.int
+            val altitude = rawAltitude.toDouble()
+
+            // 6. Видимые спутники (1 байт)
+            val visibleSatellites = buffer.get().toInt() and 0xFF
+
+            // 7. Используемые спутники (1 байт)
+            val usingSatellites = buffer.get().toInt() and 0xFF
+
+            // 8. Скорость (2 байта, uint16)
+            val rawSpeed = buffer.short.toInt() and 0xFFFF
+            val speed = rawSpeed.toDouble()
+
+            // 9. Истинное направление (2 байта, uint16)
+            val trueDirection = buffer.short.toInt() and 0xFFFF
+
+            // 10. Магнитное направление (2 байта, uint16)
+            val magneticDirection = buffer.short.toInt() and 0xFFFF
+
+            TboxRepository.updateLocValues(LocValues(
+                rawValue = rawValue,
+                locateStatus = locateStatus,
+                utcTime = utcTime,
+                longitude = longitude,
+                latitude = latitude,
+                altitude = altitude,
+                visibleSatellites = visibleSatellites,
+                usingSatellites = usingSatellites,
+                speed = speed,
+                trueDirection = trueDirection,
+                magneticDirection = magneticDirection
+            ))
+        }
+    }
+
+    private suspend fun onTboxConnected(value: Boolean = false) {
+        if (value) {
+            TboxRepository.addLog("DEBUG", "UDP Listener", "TBox connected")
+            TboxRepository.updateTboxConnected(true)
+            if (settingsManager.getAutoStopTboxAppSetting()) {
+                suspendTboxApp()
+            }
+            if (settingsManager.getAutoPreventTboxRestartSetting()) {
+                preventRestart()
+            }
+            modemMode(-1)
         }
         else {
-            message = "Результат: AT команда выполнена\n" +
-                    String(data.copyOfRange(10, data.size), charset = Charsets.UTF_8) + "\n"
+            TboxRepository.addLog("DEBUG", "UDP Listener", "TBox disconnected")
+            TboxRepository.updateTboxConnected(false)
+            clearNetStates()
+            clearAPNStates()
+            clearAPN2States()
+            sendWidgetUpdate()
         }
-        return message
+        TboxRepository.updateTboxConnectionTime()
+    }
+
+    private suspend fun Job?.awaitCompletionWithTimeout(timeoutMillis: Long = 5000): Boolean {
+        if (this == null || !isActive) return true
+
+        return try {
+            withTimeout(timeoutMillis) {
+                join()
+            }
+            true
+        } catch (e: TimeoutCancellationException) {
+            false
+        }
     }
 }
 
