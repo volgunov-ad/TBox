@@ -1,236 +1,58 @@
 package com.dashing.tbox
 
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
-import android.widget.Button
 import android.widget.EditText
-import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.Lifecycle
-import kotlinx.coroutines.launch
+import androidx.activity.compose.setContent
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
 
-class MainActivity : AppCompatActivity() {
-    private lateinit var tboxConnection: TextView
-    private lateinit var textMessage: TextView
-    private lateinit var textCSQValue: TextView
-    private lateinit var textIMEIValue: TextView
-    private lateinit var textICCIDValue: TextView
-    private lateinit var textOperatorValue: TextView
-    private lateinit var textRegistrationStatus: TextView
-    private lateinit var textSIMStatus: TextView
-    private lateinit var textNetStatus: TextView
-    private lateinit var textAPNStatus: TextView
-    private lateinit var textAPNType: TextView
-    private lateinit var textAPNIP: TextView
-    private lateinit var textAPN2Status: TextView
-    private lateinit var textAPN2Type: TextView
-    private lateinit var textAPN2IP: TextView
-    private lateinit var buttonModemCheck: Button
-    private lateinit var buttonModemOn: Button
-    private lateinit var buttonModemOff: Button
-    private lateinit var buttonTboxReboot: Button
-    private lateinit var buttonAPN1Restart: Button
-    private lateinit var buttonAPN1Fly: Button
-    private lateinit var buttonAPN1Reconnect: Button
-    private lateinit var buttonAPN2Restart: Button
-    private lateinit var buttonAPN2Fly: Button
-    private lateinit var buttonAPN2Reconnect: Button
-    private lateinit var buttontest1: Button
-    private lateinit var buttonPIN: Button
-    private lateinit var buttonPUK: Button
+class MainActivity : ComponentActivity() {
     private lateinit var numberPin: EditText
     private lateinit var numberPuk: EditText
     private lateinit var textATCmd: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        tboxConnection = findViewById(R.id.tboxConnection)
-        textMessage = findViewById(R.id.txtMessage)
-        textCSQValue = findViewById(R.id.csqValue)
-        textIMEIValue = findViewById(R.id.imeiValue)
-        textICCIDValue = findViewById(R.id.iccidValue)
-        textOperatorValue = findViewById(R.id.operatorValue)
-        textRegistrationStatus = findViewById(R.id.registrationStatus)
-        textSIMStatus = findViewById(R.id.simStatus)
-        textNetStatus = findViewById(R.id.netStatus)
-        textAPNStatus = findViewById(R.id.apnStatus)
-        textAPNType = findViewById(R.id.apnType)
-        textAPNIP = findViewById(R.id.apnIP)
-        textAPN2Status = findViewById(R.id.apn2Status)
-        textAPN2Type = findViewById(R.id.apn2Type)
-        textAPN2IP = findViewById(R.id.apn2IP)
-        buttonModemCheck = findViewById(R.id.btnModemCheck)
-        buttonModemOn = findViewById(R.id.btnModemOn)
-        buttonModemOff = findViewById(R.id.btnModemOff)
-        buttonTboxReboot = findViewById(R.id.btnTboxReboot)
-        buttonAPN1Restart = findViewById(R.id.btnAPN1Restart)
-        buttonAPN1Fly = findViewById(R.id.btnAPN1Fly)
-        buttonAPN1Reconnect = findViewById(R.id.btnAPN1Reconnect)
-        buttonAPN2Restart = findViewById(R.id.btnAPN2Restart)
-        buttonAPN2Fly = findViewById(R.id.btnAPN2Fly)
-        buttonAPN2Reconnect = findViewById(R.id.btnAPN2Reconnect)
-        buttontest1 = findViewById(R.id.btntest1)
-        buttonPIN = findViewById(R.id.btnPIN)
-        buttonPUK= findViewById(R.id.btnPUK)
-
-        numberPin = findViewById(R.id.pin)
-        numberPuk = findViewById(R.id.puk)
-        textATCmd = findViewById(R.id.atCmd)
-
-        buttonModemCheck.setOnClickListener {
-            modemCheck()
+        val settingsManager = SettingsManager(this)
+        setContent {
+            TboxAppTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    TboxApp(
+                        settingsManager = settingsManager,
+                        onTboxRestart = { rebootTbox() },
+                        onModemCheck = { modemCheck() },
+                        onSetModemMode = { setModemMode() },
+                        onLocSubscribeClick = { locSubscribe() },
+                        onLocUnsubscribeClick = { locUnsubscribe() }
+                    )
+                }
+            }
         }
-        buttonModemOn.setOnClickListener {
-            modemOn()
-        }
-        buttonModemOff.setOnClickListener {
-            modemOff()
-        }
-        buttonTboxReboot.setOnClickListener {
-            rebootTbox()
-        }
-        buttonAPN1Restart.setOnClickListener {
-            apnManage(1, "restart")
-        }
-        buttonAPN1Fly.setOnClickListener {
-            apnManage(1, "fly")
-        }
-        buttonAPN1Reconnect.setOnClickListener {
-            apnManage(1, "reconnect")
-        }
-        buttonAPN2Restart.setOnClickListener {
-            apnManage(2, "restart")
-        }
-        buttonAPN2Fly.setOnClickListener {
-            apnManage(2, "fly")
-        }
-        buttonAPN2Reconnect.setOnClickListener {
-            apnManage(2, "reconnect")
-        }
-        buttontest1.setOnClickListener {
-            test()
-        }
-        buttonPIN.setOnClickListener {
-            pin(0)
-        }
-        buttonPUK.setOnClickListener {
-            pin(1)
-        }
-        startNetUpdater()
-        //startAPNUpdater()
-        setupStateFlowObservers()
+        startBackgroundService()
     }
 
     override fun onRestart() {
         super.onRestart()
-        startNetUpdater()
-        //startAPNUpdater()
+        startBackgroundService()
     }
 
-    private fun setupStateFlowObservers() {
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                TboxRepository.tboxConnected.collect { tboxConnected ->
-                    updateConnectionUI(tboxConnected)
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                TboxRepository.netState.collect { netState ->
-                    updateSignalQualityUI(netState.csq)
-                    textNetStatus.text = netState.netStatus
-                    textSIMStatus.text = netState.simStatus
-                    textRegistrationStatus.text = netState.regStatus
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                TboxRepository.netValues.collect { netValues ->
-                    textIMEIValue.text = netValues.imei
-                    textICCIDValue.text = netValues.iccid
-                    textOperatorValue.text = netValues.operator
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                TboxRepository.apnState.collect { apnState ->
-                    textAPNStatus.text = apnState.apnStatus
-                    textAPNType.text = apnState.apnType
-                    textAPNIP.text = apnState.apnIP
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                TboxRepository.apn2State.collect { apnState ->
-                    textAPN2Status.text = apnState.apnStatus
-                    textAPN2Type.text = apnState.apnType
-                    textAPN2IP.text = apnState.apnIP
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                TboxRepository.message.collect { message ->
-                    textMessage.append(message)
-                    val scrollAmount = textMessage.layout?.getLineTop(textMessage.lineCount) ?: 0
-                    if (scrollAmount > textMessage.height) {
-                        textMessage.scrollTo(0, scrollAmount - textMessage.height)
-                    }
-                    val pattern = Regex("Результат:\\s*(.+)\\s*")
-                    val matchResult = pattern.find(message)
-                    val res = matchResult?.groupValues?.get(1) ?: ""
-                    if (res.isNotEmpty()) {
-                        Toast.makeText(this@MainActivity, res, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
-    }
-
-    private fun updateSignalQualityUI(csq: Int) {
-        val color = when (csq) {
-            in 0..10 -> Color.RED
-            in 11..20 -> Color.YELLOW
-            99 -> Color.RED
-            else -> Color.GREEN
-        }
-        textCSQValue.setTextColor(color)
-        if (csq == 99) {
-            textCSQValue.text = "-"
-        }
-        else {
-            textCSQValue.text = csq.toString()
-        }
-    }
-
-    private fun updateConnectionUI(connected: Boolean) {
-        val color = if (connected) Color.GREEN else Color.RED
-        tboxConnection.setTextColor(color)
-        tboxConnection.text = if (connected) "TBox подключен" else "TBox отключен"
-    }
-
-    private fun startNetUpdater() {
+    private fun startBackgroundService() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_NET_UPD_START
         }
-        startService(intent)
-    }
-
-    private fun startAPNUpdater() {
-        val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_APN_UPD_START
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
         }
-        startService(intent)
     }
 
     private fun modemCheck() {
@@ -240,16 +62,31 @@ class MainActivity : AppCompatActivity() {
         startService(intent)
     }
 
-    private fun modemOff() {
+    private fun locSubscribe() {
         val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_MODEM_OFF
+            action = BackgroundService.ACTION_LOC_SUBSCRIBE
         }
         startService(intent)
     }
 
-    private fun modemOn() {
+    private fun locUnsubscribe() {
         val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_MODEM_ON
+            action = BackgroundService.ACTION_LOC_UNSUBSCRIBE
+        }
+        startService(intent)
+    }
+
+    private fun setModemMode(mode: String = "on") {
+        val intent = Intent(this, BackgroundService::class.java).apply {
+            action = if (mode == "off") {
+                BackgroundService.ACTION_MODEM_OFF
+            }
+            else if (mode == "fly") {
+                BackgroundService.ACTION_MODEM_FLY
+            }
+            else {
+                BackgroundService.ACTION_MODEM_ON
+            }
         }
         startService(intent)
     }
@@ -337,15 +174,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        //stopAPNUpdater()
-        stopNetUpdaterIfNoClients()
-    }
-
-    private fun stopAPNUpdater() {
-        val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_APN_UPD_STOP
-        }
-        startService(intent)
+        //stopNetUpdaterIfNoClients()
     }
 
     private fun stopNetUpdaterIfNoClients() {
@@ -356,4 +185,8 @@ class MainActivity : AppCompatActivity() {
             startService(intent)
         }
     }
+
+
 }
+
+

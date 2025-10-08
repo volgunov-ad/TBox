@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@android:color/transparent">
@@ -8,6 +9,7 @@
         android:id="@+id/widget_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:contentDescription="net"
         android:scaleType="centerCrop"
         android:adjustViewBounds="true"
         android:src="@drawable/ic_signal_nosig_sharp_outlined" />

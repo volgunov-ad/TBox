@@ -15,6 +15,8 @@ class NetWidget : AppWidgetProvider() {
         private var lastUpdateTime: Long = 0
         private val handler = Handler(Looper.getMainLooper())
         private var timeoutRunnable: Runnable? = null
+        // Кэш для PendingIntent чтобы не создавать его каждый раз
+        private var cachedPendingIntent: android.app.PendingIntent? = null
     }
 
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -23,16 +25,17 @@ class NetWidget : AppWidgetProvider() {
         //context.startService(Intent(context, BackgroundService::class.java).apply {
         //    action = BackgroundService.ACTION_NET_UPD_START
         //})
-        val serviceIntent = Intent(context, BackgroundService::class.java).apply {
+        val intent = Intent(context, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_NET_UPD_START
         }
 
-        // Для Android 8+ используйте startForegroundService
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
+            context.startForegroundService(intent)
         } else {
-            context.startService(serviceIntent)
+            context.startService(intent)
         }
+        // Запускаем проверку таймаута
+        startTimeoutCheck(context)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -235,21 +238,38 @@ class NetWidget : AppWidgetProvider() {
                 }
             }
         }
-
+        val pendingIntent = getPendingIntent(context)
         appWidgetIds.forEach { appWidgetId ->
             val views = RemoteViews(context.packageName, R.layout.widget_net).apply {
                 setImageViewResource(R.id.widget_image, imageR)
             }
+            // Создаем PendingIntent для открытия MainActivity
+            views.setOnClickPendingIntent(R.id.widget_image, pendingIntent)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }
 
+    private fun getPendingIntent(context: Context): android.app.PendingIntent {
+        if (cachedPendingIntent == null) {
+            cachedPendingIntent = Intent(context, MainActivity::class.java).let { intent ->
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                android.app.PendingIntent.getActivity(
+                    context,
+                    0,
+                    intent,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                )
+            }
+        }
+        return cachedPendingIntent!!
+    }
+
     private fun Int.getSignalLevel(): Int {
         return when (this) {
-            in 1..6 -> 1
-            in 7..13 -> 2
-            in 14..20 -> 3
-            in 21..32 -> 4
+            in 1..10 -> 1
+            in 11..16 -> 2
+            in 17..24 -> 3
+            in 25..32 -> 4
             else -> 0
         }
     }

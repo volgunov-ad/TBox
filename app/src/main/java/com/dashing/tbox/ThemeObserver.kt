@@ -8,7 +8,7 @@ import android.provider.Settings
 import android.util.Log
 
 class ThemeObserver(
-    private val context: Context,
+    context: Context,
     private val callback: (themeMode: Int) -> Unit
 ) : ContentObserver(Handler(Looper.getMainLooper())) {
 
