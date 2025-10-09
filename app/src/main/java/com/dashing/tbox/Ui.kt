@@ -358,13 +358,13 @@ fun LocationTab(
                     "${locValues.utcTime.hour}:${locValues.utcTime.minute}:${locValues.utcTime.second}"
             val lastUpdate = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(locUpdateTime)
             item { StatusRow("Последнее обновление", lastUpdate) }
-            item { StatusRow("Фиксация местоположения", if (locValues.locateStatus == 1) {"да"} else {"нет"}) }
+            item { StatusRow("Фиксация местоположения", if (locValues.locateStatus) {"да"} else {"нет"}) }
             item { StatusRow("Долгота", locValues.longitude.toString()) }
             item { StatusRow("Широта", locValues.latitude.toString()) }
-            item { StatusRow("Высота", locValues.altitude.toString()) }
+            item { StatusRow("Высота, м", locValues.altitude.toString()) }
             item { StatusRow("Видимые спутники", locValues.visibleSatellites.toString()) }
             item { StatusRow("Используемые спутники", locValues.usingSatellites.toString()) }
-            item { StatusRow("Скорость", locValues.speed.toString()) }
+            item { StatusRow("Скорость, км/ч", locValues.speed.toString()) }
             item { StatusRow("Истинное направление", locValues.trueDirection.toString()) }
             item { StatusRow("Магнитное направление", locValues.magneticDirection.toString()) }
             item { StatusRow("Дата и время", dateTime) }

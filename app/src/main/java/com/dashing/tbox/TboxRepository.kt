@@ -33,7 +33,7 @@ data class APNState(
 
 data class LocValues(
     val rawValue: String = "",
-    val locateStatus: Int = 0,
+    val locateStatus: Boolean = false,
     val utcTime: UtcTime = UtcTime(),
     val longitude: Double = 0.0,
     val latitude: Double = 0.0,
@@ -41,8 +41,8 @@ data class LocValues(
     val visibleSatellites: Int = 0,
     val usingSatellites: Int = 0,
     val speed: Double = 0.0,
-    val trueDirection: Int = 0,
-    val magneticDirection: Int = 0
+    val trueDirection: Double = 0.0,
+    val magneticDirection: Double = 0.0
 )
 
 data class UtcTime(

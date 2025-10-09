@@ -917,11 +917,11 @@ class BackgroundService : Service() {
             val buffer = ByteBuffer.wrap(gpsData).order(ByteOrder.LITTLE_ENDIAN)
 
             // 1. Статус позиционирования (1 байт)
-            val locateStatus = buffer.get().toInt() and 0xFF
+            val locateStatus = buffer.get().toInt() and 0xFF != 0
 
             // 2. Время UTC (8 байт)
             val utcTime = UtcTime(
-                year = buffer.short.toInt() and 0xFFFF,
+                year = buffer.get().toInt() and 0xFF,
                 month = buffer.get().toInt() and 0xFF,
                 day = buffer.get().toInt() and 0xFF,
                 hour = buffer.get().toInt() and 0xFF,
@@ -929,9 +929,15 @@ class BackgroundService : Service() {
                 second = buffer.get().toInt() and 0xFF
             )
 
+            // Пропускаем 1 байт (выравнивание или reserved)
+            buffer.get()
+
             // 3. Долгота (4 байта, int32)
             val rawLongitude = buffer.int
             val longitude = rawLongitude.toDouble() / 1000000.0
+
+            // Пропускаем 1 байт (выравнивание или reserved)
+            buffer.get()
 
             // 4. Широта (4 байта, int32)
             val rawLatitude = buffer.int
@@ -939,7 +945,7 @@ class BackgroundService : Service() {
 
             // 5. Высота (4 байта, int32)
             val rawAltitude = buffer.int
-            val altitude = rawAltitude.toDouble()
+            val altitude = rawAltitude.toDouble() / 1000000.0
 
             // 6. Видимые спутники (1 байт)
             val visibleSatellites = buffer.get().toInt() and 0xFF
@@ -949,13 +955,15 @@ class BackgroundService : Service() {
 
             // 8. Скорость (2 байта, uint16)
             val rawSpeed = buffer.short.toInt() and 0xFFFF
-            val speed = rawSpeed.toDouble()
+            val speed = rawSpeed.toDouble() / 10.0
 
             // 9. Истинное направление (2 байта, uint16)
-            val trueDirection = buffer.short.toInt() and 0xFFFF
+            val rawTrueDirection = buffer.short.toInt() and 0xFFFF
+            val trueDirection = rawTrueDirection.toDouble() / 10.0
 
             // 10. Магнитное направление (2 байта, uint16)
-            val magneticDirection = buffer.short.toInt() and 0xFFFF
+            val rawMagneticDirection = buffer.short.toInt() and 0xFFFF
+            val magneticDirection = rawMagneticDirection.toDouble() / 10.0
 
             TboxRepository.updateLocValues(LocValues(
                 rawValue = rawValue,
