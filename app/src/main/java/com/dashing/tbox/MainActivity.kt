@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
 
     private fun startBackgroundService() {
         val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_NET_UPD_START
+            action = BackgroundService.ACTION_START
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             startForegroundService(intent)
@@ -184,13 +184,11 @@ class MainActivity : ComponentActivity() {
     private fun stopNetUpdaterIfNoClients() {
         if (!WidgetUtils.isWidgetActive(this)) {
             val intent = Intent(this, BackgroundService::class.java).apply {
-                action = BackgroundService.ACTION_NET_UPD_STOP
+                action = BackgroundService.ACTION_STOP
             }
             startService(intent)
         }
     }
-
-
 }
 
 

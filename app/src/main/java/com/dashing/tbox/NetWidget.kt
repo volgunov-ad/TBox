@@ -26,7 +26,7 @@ class NetWidget : AppWidgetProvider() {
         //    action = BackgroundService.ACTION_NET_UPD_START
         //})
         val intent = Intent(context, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_NET_UPD_START
+            action = BackgroundService.ACTION_START
         }
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -276,11 +276,11 @@ class NetWidget : AppWidgetProvider() {
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        if (!WidgetUtils.isWidgetActive(context)) {
+        /*if (!WidgetUtils.isWidgetActive(context)) {
             context.stopService(Intent(context, BackgroundService::class.java).apply {
-                action = BackgroundService.ACTION_NET_UPD_STOP
+                action = BackgroundService.ACTION_STOP
             })
-        }
+        }*/
         // Останавливаем проверку таймаута
         timeoutRunnable?.let { handler.removeCallbacks(it) }
     }

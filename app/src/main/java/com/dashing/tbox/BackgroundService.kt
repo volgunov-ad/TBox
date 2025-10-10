@@ -60,11 +60,12 @@ class BackgroundService : Service() {
     private var apnCheck: Boolean = false
 
     companion object {
+        private var isRunning = false
         const val LOCATION_UPDATE_TIME = 1
         const val NOTIFICATION_ID = 50047
         const val CHANNEL_ID = "tbox_background_channel"
 
-        const val ACTION_UPDATE_WIDGET = "com.dashing.tbox.ACTION_UPDATE_WIDGET"
+        const val ACTION_UPDATE_WIDGET = "com.dashing.tbox.UPDATE_WIDGET"
         const val EXTRA_CSQ = "com.dashing.tbox.CSQ"
         const val EXTRA_TBOX_STATUS = "com.dashing.tbox.TBOX_STATUS"
         const val EXTRA_NET_TYPE = "com.dashing.tbox.NET_TYPE"
@@ -74,25 +75,25 @@ class BackgroundService : Service() {
         const val EXTRA_THEME = "com.dashing.tbox.EXTRA_THEME"
         const val EXTRA_AT_CMD = "com.dashing.tbox.EXTRA_AT_CMD"
 
-        const val ACTION_NET_UPD_START = "com.dashing.tbox.NET_UPD_START"
-        const val ACTION_NET_UPD_STOP = "com.dashing.tbox.NET_UPD_STOP"
-        const val ACTION_SEND_AT = "com.dashing.tbox.ACTION_SEND_AT"
-        const val ACTION_MODEM_CHECK = "com.dashing.tbox.ACTION_MODEM_CHECK"
-        const val ACTION_MODEM_OFF = "com.dashing.tbox.ACTION_MODEM_OFF"
-        const val ACTION_MODEM_ON = "com.dashing.tbox.ACTION_MODEM_ON"
-        const val ACTION_MODEM_FLY = "com.dashing.tbox.ACTION_MODEM_FLY"
-        const val ACTION_TBOX_REBOOT = "com.dashing.tbox.ACTION_TBOX_REBOOT"
-        const val ACTION_APN1_RESTART = "com.dashing.tbox.ACTION_APN1_RESTART"
-        const val ACTION_APN1_FLY = "com.dashing.tbox.ACTION_APN1_FLY"
-        const val ACTION_APN1_RECONNECT = "com.dashing.tbox.ACTION_APN1_RECONNECT"
-        const val ACTION_APN2_RESTART = "com.dashing.tbox.ACTION_APN2_RESTART"
-        const val ACTION_APN2_FLY = "com.dashing.tbox.ACTION_APN2_FLY"
-        const val ACTION_APN2_RECONNECT = "com.dashing.tbox.ACTION_APN2_RECONNECT"
-        const val ACTION_TEST1 = "com.dashing.tbox.ACTION_TEST1"
-        const val ACTION_PIN = "com.dashing.tbox.ACTION_PIN"
-        const val ACTION_PUK = "com.dashing.tbox.ACTION_PUK"
-        const val ACTION_LOC_SUBSCRIBE = "com.dashing.tbox.ACTION_LOC_SUBSCRIBE"
-        const val ACTION_LOC_UNSUBSCRIBE = "com.dashing.tbox.ACTION_LOC_UNSUBSCRIBE"
+        const val ACTION_START = "com.dashing.tbox.START"
+        const val ACTION_STOP = "com.dashing.tbox.STOP"
+        const val ACTION_SEND_AT = "com.dashing.tbox.SEND_AT"
+        const val ACTION_MODEM_CHECK = "com.dashing.tbox.MODEM_CHECK"
+        const val ACTION_MODEM_OFF = "com.dashing.tbox.MODEM_OFF"
+        const val ACTION_MODEM_ON = "com.dashing.tbox.MODEM_ON"
+        const val ACTION_MODEM_FLY = "com.dashing.tbox.MODEM_FLY"
+        const val ACTION_TBOX_REBOOT = "com.dashing.tbox.TBOX_REBOOT"
+        const val ACTION_APN1_RESTART = "com.dashing.tbox.APN1_RESTART"
+        const val ACTION_APN1_FLY = "com.dashing.tbox.APN1_FLY"
+        const val ACTION_APN1_RECONNECT = "com.dashing.tbox.APN1_RECONNECT"
+        const val ACTION_APN2_RESTART = "com.dashing.tbox.APN2_RESTART"
+        const val ACTION_APN2_FLY = "com.dashing.tbox.APN2_FLY"
+        const val ACTION_APN2_RECONNECT = "com.dashing.tbox.APN2_RECONNECT"
+        const val ACTION_TEST1 = "com.dashing.tbox.TEST1"
+        const val ACTION_PIN = "com.dashing.tbox.PIN"
+        const val ACTION_PUK = "com.dashing.tbox.PUK"
+        const val ACTION_LOC_SUBSCRIBE = "com.dashing.tbox.LOC_SUBSCRIBE"
+        const val ACTION_LOC_UNSUBSCRIBE = "com.dashing.tbox.LOC_UNSUBSCRIBE"
     }
 
     override fun onCreate() {
@@ -141,14 +142,18 @@ class BackgroundService : Service() {
         val notification = createNotification(intent?.action)
         startForeground(NOTIFICATION_ID, notification)
         when (intent?.action) {
-            ACTION_NET_UPD_START -> {
-                startNetUpdater()
-                startAPNUpdater()
-                startListener()
-                startCheckConnection()
-                startPeriodicJob()
+            ACTION_START -> {
+                if (!isRunning) {
+                    isRunning = true
+                    startNetUpdater()
+                    startAPNUpdater()
+                    startListener()
+                    startCheckConnection()
+                    startPeriodicJob()
+                }
             }
-            ACTION_NET_UPD_STOP -> {
+            ACTION_STOP -> {
+                isRunning = false
                 stopNetUpdater()
                 stopAPNUpdater()
                 stopListener()
@@ -607,6 +612,7 @@ class BackgroundService : Service() {
         super.onDestroy()
         job.cancel()
         socket.close()
+        isRunning = false
         try {
             themeObserver.stopObserving()
             Log.d("ThemeService", "Service destroyed")
