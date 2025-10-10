@@ -413,12 +413,15 @@ class BackgroundService : Service() {
                         if (!preventRestartSend) {
                             preventRestart()
                         }
-                    }
-                    if (settingsManager.getAutoStopTboxAppSetting()) {
                         if (!suspendTboxAppSend) {
                             suspendTboxApp()
                         }
                     }
+                    //if (settingsManager.getAutoStopTboxAppSetting()) {
+                    //    if (!suspendTboxAppSend) {
+                    //        suspendTboxApp()
+                    //    }
+                    //}
                 }
                 delay(1000)
             }
@@ -1073,10 +1076,11 @@ class BackgroundService : Service() {
             TboxRepository.updateTboxConnected(true)
             modemMode(-1)
 
-            if (settingsManager.getAutoStopTboxAppSetting()) {
-                suspendTboxApp()
-            }
+            //if (settingsManager.getAutoStopTboxAppSetting()) {
+            //    suspendTboxApp()
+            //}
             if (settingsManager.getAutoPreventTboxRestartSetting()) {
+                suspendTboxApp()
                 preventRestart()
             }
 

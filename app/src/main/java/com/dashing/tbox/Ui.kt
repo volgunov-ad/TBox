@@ -248,7 +248,7 @@ fun SettingsTab(
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
-    val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
+    //val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -279,14 +279,14 @@ fun SettingsTab(
             "Автоматическое отключение приложения APP на TBox",
             "Отключение приложения APP на TBox позволяет избежать перезагрузки TBox каждые 30 минут"
         )
-        SettingSwitch(
+        /*SettingSwitch(
             isAutoPreventTboxRestartEnabled,
             { enabled ->
                 settingsViewModel.saveAutoPreventTboxRestartSetting(enabled)
             },
             "Автоматическое предотвращение перезагрузки TBox по состоянию сети",
             "TBox не будет проверять состояние сети, это поможет избежать автоматической перезагрузки TBox"
-        )
+        )*/
         Spacer(modifier = Modifier.width(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),

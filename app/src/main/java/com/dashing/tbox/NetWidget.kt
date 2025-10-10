@@ -119,23 +119,23 @@ class NetWidget : AppWidgetProvider() {
                         when (signalLevel) {
                             1 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_1_sharp_outlined else
-                                    R.drawable.ic_signal_e_cellular_1_sharp_outlined
+                                    R.drawable.ic_signal_e_cellular_1_sharp_outlined_dark
                             }
                             2 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_2_sharp_outlined else
-                                    R.drawable.ic_signal_e_cellular_2_sharp_outlined
+                                    R.drawable.ic_signal_e_cellular_2_sharp_outlined_dark
                             }
                             3 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_3_sharp_outlined else
-                                    R.drawable.ic_signal_e_cellular_3_sharp_outlined
+                                    R.drawable.ic_signal_e_cellular_3_sharp_outlined_dark
                             }
                             4 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_4_sharp_outlined else
-                                    R.drawable.ic_signal_e_cellular_4_sharp_outlined
+                                    R.drawable.ic_signal_e_cellular_4_sharp_outlined_dark
                             }
                             else -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_e_cellular_0_sharp_outlined else
-                                    R.drawable.ic_signal_e_cellular_0_sharp_outlined
+                                    R.drawable.ic_signal_e_cellular_0_sharp_outlined_dark
                             }
                         }
                     }
@@ -143,23 +143,23 @@ class NetWidget : AppWidgetProvider() {
                         when (signalLevel) {
                             1 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_1_sharp_outlined else
-                                    R.drawable.ic_signal_3g_cellular_1_sharp_outlined
+                                    R.drawable.ic_signal_3g_cellular_1_sharp_outlined_dark
                             }
                             2 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_2_sharp_outlined else
-                                    R.drawable.ic_signal_3g_cellular_2_sharp_outlined
+                                    R.drawable.ic_signal_3g_cellular_2_sharp_outlined_dark
                             }
                             3 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_3_sharp_outlined else
-                                    R.drawable.ic_signal_3g_cellular_3_sharp_outlined
+                                    R.drawable.ic_signal_3g_cellular_3_sharp_outlined_dark
                             }
                             4 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_4_sharp_outlined else
-                                    R.drawable.ic_signal_3g_cellular_4_sharp_outlined
+                                    R.drawable.ic_signal_3g_cellular_4_sharp_outlined_dark
                             }
                             else -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_3g_cellular_0_sharp_outlined else
-                                    R.drawable.ic_signal_3g_cellular_0_sharp_outlined
+                                    R.drawable.ic_signal_3g_cellular_0_sharp_outlined_dark
                             }
                         }
                     }
@@ -167,11 +167,11 @@ class NetWidget : AppWidgetProvider() {
                         when (signalLevel) {
                             1 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_4g_cellular_1_sharp_outlined else
-                                    R.drawable.ic_signal_4g_cellular_1_sharp_outlined
+                                    R.drawable.ic_signal_4g_cellular_1_sharp_outlined_dark
                             }
                             2 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_4g_cellular_2_sharp_outlined else
-                                    R.drawable.ic_signal_4g_cellular_2_sharp_outlined
+                                    R.drawable.ic_signal_4g_cellular_2_sharp_outlined_dark
                             }
                             3 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_4g_cellular_3_sharp_outlined else
@@ -183,7 +183,7 @@ class NetWidget : AppWidgetProvider() {
                             }
                             else -> {
                                 imageR = if (theme == 1) R.drawable.ic_signal_4g_cellular_0_sharp_outlined else
-                                    R.drawable.ic_signal_4g_cellular_0_sharp_outlined
+                                    R.drawable.ic_signal_4g_cellular_0_sharp_outlined_dark
                             }
                         }
                     }
@@ -191,23 +191,23 @@ class NetWidget : AppWidgetProvider() {
                         when (signalLevel) {
                             1 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_cellular_1_sharp_outlined else
-                                    R.drawable.ic_signal_cellular_1_sharp_outlined
+                                    R.drawable.ic_signal_cellular_1_sharp_outlined_dark
                             }
                             2 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_cellular_2_sharp_outlined else
-                                    R.drawable.ic_signal_cellular_2_sharp_outlined
+                                    R.drawable.ic_signal_cellular_2_sharp_outlined_dark
                             }
                             3 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_cellular_3_sharp_outlined else
-                                    R.drawable.ic_signal_cellular_3_sharp_outlined
+                                    R.drawable.ic_signal_cellular_3_sharp_outlined_dark
                             }
                             4 -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_cellular_4_sharp_outlined else
-                                    R.drawable.ic_signal_cellular_4_sharp_outlined
+                                    R.drawable.ic_signal_cellular_4_sharp_outlined_dark
                             }
                             else -> {
                                 imageR = if (theme == 2) R.drawable.ic_signal_cellular_0_sharp_outlined else
-                                    R.drawable.ic_signal_cellular_0_sharp_outlined
+                                    R.drawable.ic_signal_cellular_0_sharp_outlined_dark
                             }
                         }
                     }
@@ -217,23 +217,23 @@ class NetWidget : AppWidgetProvider() {
                 when (signalLevel) {
                     1 -> {
                         imageR = if (theme == 2) R.drawable.ic_signal_cellular_1_sharp_outlined else
-                            R.drawable.ic_signal_cellular_1_sharp_outlined
+                            R.drawable.ic_signal_cellular_1_sharp_outlined_dark
                     }
                     2 -> {
                         imageR = if (theme == 2) R.drawable.ic_signal_cellular_2_sharp_outlined else
-                            R.drawable.ic_signal_cellular_2_sharp_outlined
+                            R.drawable.ic_signal_cellular_2_sharp_outlined_dark
                     }
                     3 -> {
                         imageR = if (theme == 2) R.drawable.ic_signal_cellular_3_sharp_outlined else
-                            R.drawable.ic_signal_cellular_3_sharp_outlined
+                            R.drawable.ic_signal_cellular_3_sharp_outlined_dark
                     }
                     4 -> {
                         imageR = if (theme == 2) R.drawable.ic_signal_cellular_4_sharp_outlined else
-                            R.drawable.ic_signal_cellular_4_sharp_outlined
+                            R.drawable.ic_signal_cellular_4_sharp_outlined_dark
                     }
                     else -> {
                         imageR = if (theme == 2) R.drawable.ic_signal_cellular_0_sharp_outlined else
-                            R.drawable.ic_signal_cellular_0_sharp_outlined
+                            R.drawable.ic_signal_cellular_0_sharp_outlined_dark
                     }
                 }
             }
