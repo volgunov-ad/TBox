@@ -47,7 +47,9 @@ fun TboxApp(
     settingsManager: SettingsManager,
     onTboxRestart: () -> Unit,
     onModemCheck: () -> Unit,
-    onSetModemMode: () -> Unit,
+    onModemOn: () -> Unit,
+    onModemFly: () -> Unit,
+    onModemOff: () -> Unit,
     onLocSubscribeClick: () -> Unit,
     onLocUnsubscribeClick: () -> Unit
 ) {
@@ -58,7 +60,9 @@ fun TboxApp(
         settingsViewModel = settingsViewModel,
         onTboxRestart = onTboxRestart,
         onModemCheck = onModemCheck,
-        onSetModemMode = { onSetModemMode },
+        onModemOn = onModemOn,
+        onModemFly = onModemFly,
+        onModemOff = onModemOff,
         onLocSubscribeClick = onLocSubscribeClick,
         onLocUnsubscribeClick = onLocUnsubscribeClick,
     )
@@ -76,7 +80,9 @@ fun TboxScreen(viewModel: TboxViewModel,
                settingsViewModel: SettingsViewModel,
                onTboxRestart: () -> Unit,
                onModemCheck: () -> Unit,
-               onSetModemMode: (String) -> Unit,
+               onModemOn: () -> Unit,
+               onModemFly: () -> Unit,
+               onModemOff: () -> Unit,
                onLocSubscribeClick: () -> Unit,
                onLocUnsubscribeClick: () -> Unit
 ) {
@@ -104,7 +110,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             Text(
                 text = if (tboxConnected) "TBox подключен в $conTime"
                 else "TBox отключен в $conTime",
-                fontSize = 12.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
                 textAlign = TextAlign.Center,
@@ -125,16 +131,17 @@ fun TboxScreen(viewModel: TboxViewModel,
             }
 
             Text(
-                text = "Версия программы 0.1",
+                text = "Версия программы 0.2",
                 fontSize = 12.sp,
-                textAlign = TextAlign.Right
+                textAlign = TextAlign.Right,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
             )
         }
 
         // Содержимое справа
         Box(modifier = Modifier.weight(1f)) {
             when (selectedTab) {
-                0 -> ModemTab(viewModel, onSetModemMode)
+                0 -> ModemTab(viewModel, onModemOn, onModemFly, onModemOff)
                 1 -> LocationTab(viewModel, onLocSubscribeClick, onLocUnsubscribeClick)
                 2 -> SettingsTab(settingsViewModel, onTboxRestart)
                 3 -> LogsTab(viewModel, settingsViewModel)
@@ -173,13 +180,19 @@ fun TabMenuItem(
             text = title,
             color = textColor,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            textAlign = TextAlign.Left
+            textAlign = TextAlign.Left,
+            fontSize = 26.sp
         )
     }
 }
 
 @Composable
-fun ModemTab(viewModel: TboxViewModel, setModemMode: (String) -> Unit) {
+fun ModemTab(
+    viewModel: TboxViewModel,
+    onModemOn: () -> Unit,
+    onModemFly: () -> Unit,
+    onModemOff: () -> Unit
+) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
     val netValues by viewModel.netValues.collectAsStateWithLifecycle()
     val apn1State by viewModel.apn1State.collectAsStateWithLifecycle()
@@ -216,18 +229,12 @@ fun ModemTab(viewModel: TboxViewModel, setModemMode: (String) -> Unit) {
             item { StatusRow("DNS1 APN2", apn2State.apnDNS1) }
             item { StatusRow("DNS2 APN2", apn2State.apnDNS2) }
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(16.dp))
         ModemModeSelector(
             selectedMode = modemStatus,
-            onModemOn = {
-                setModemMode("on")
-            },
-            onModemOff = {
-                setModemMode("off")
-            },
-            onModemFly = {
-                setModemMode("fly")
-            },
+            onModemOn = onModemOn,
+            onModemFly = onModemFly,
+            onModemOff = onModemOff,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -246,7 +253,7 @@ fun SettingsTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         SettingSwitch(
             isAutoRestartEnabled,
@@ -280,7 +287,7 @@ fun SettingsTab(
             "Автоматическое предотвращение перезагрузки TBox по состоянию сети",
             "TBox не будет проверять состояние сети, это поможет избежать автоматической перезагрузки TBox"
         )
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(16.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -291,7 +298,7 @@ fun SettingsTab(
             ) {
                 Text(
                     text = "Перезагрузка TBox",
-                    fontSize = 12.sp,
+                    fontSize = 20.sp,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -324,13 +331,13 @@ fun SettingSwitch(
         ) {
             Text(
                 text = text,
-                fontSize = 18.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Medium
             )
 
             Text(
                 text = description,
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp)
             )
@@ -369,42 +376,73 @@ fun LocationTab(
             item { StatusRow("Магнитное направление", locValues.magneticDirection.toString()) }
             item { StatusRow("Дата и время", dateTime) }
         }
-        Spacer(modifier = Modifier.width(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Spacer(modifier = Modifier.width(16.dp))
+        LocationSubscribeSelector(locationSubscribed, onLocSubscribeClick, onLocUnsubscribeClick)
+        Column(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Button(
-                onClick = onLocSubscribeClick,
-                enabled = !locationSubscribed
-            ) {
-                Text(
-                    text = "Включить обновление местоположения",
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            Button(
-                onClick = onLocUnsubscribeClick,
-                enabled = locationSubscribed
-            ) {
-                Text(
-                    text = "Выключить обновление местоположения",
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
+            Text(text = locValues.rawValue, fontSize = 16.sp)
         }
+    }
+}
+
+@Composable
+fun LocationSubscribeSelector(
+    locationSubscribed: Boolean,
+    onOn: () -> Unit,
+    onOff: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var buttonsEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(buttonsEnabled) {
+        if (!buttonsEnabled) {
+            delay(5000) // Блокировка на 5 секунд
+            buttonsEnabled = true
+        }
+    }
+
+    Column(modifier = modifier) {
+        // Заголовок
+        Text(
+            text = "Обновление местоположения",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Text(text = locValues.rawValue, fontSize = 14.sp)
+            ModeButton(
+                text = "Включено",
+                isSelected = locationSubscribed,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onOn()
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            ModeButton(
+                text = "Выключено",
+                isSelected = !locationSubscribed,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onOff()
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -434,15 +472,15 @@ fun LogsTab(
 fun ModemModeSelector(
     selectedMode: Int,
     onModemOn: () -> Unit,
-    onModemOff: () -> Unit,
     onModemFly: () -> Unit,
+    onModemOff: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var buttonsEnabled by remember { mutableStateOf(true) }
 
     LaunchedEffect(buttonsEnabled) {
         if (!buttonsEnabled) {
-            delay(5000) // Блокировка на 5 секунд
+            delay(1000) // Блокировка на 1 секунду
             buttonsEnabled = true
         }
     }
@@ -451,20 +489,10 @@ fun ModemModeSelector(
         // Заголовок
         Text(
             text = "Режим модема",
-            fontSize = 16.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        // Индикатор блокировки
-        if (!buttonsEnabled) {
-            Text(
-                text = "Ожидание выполнения команды",
-                color = Color.Gray,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
-
         Row(
             modifier = modifier
                 .fillMaxWidth()
@@ -553,7 +581,7 @@ fun ModeButton(
     ) {
         Text(
             text = text,
-            fontSize = 16.sp,
+            fontSize = 20.sp,
             maxLines = 2,
             textAlign = TextAlign.Center
         )
@@ -611,7 +639,7 @@ fun LogsCard(logs: List<String>, logLevel: String) {
                 Text(
                     text = "Журнал службы TBox",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 24.sp
                 )
             }
 
@@ -634,27 +662,27 @@ fun StatusRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text = label, fontSize = 14.sp)
-        Text(text = value, fontSize = 14.sp)
+        Text(text = label, fontSize = 20.sp)
+        Text(text = value, fontSize = 20.sp)
     }
 }
 
 @Composable
 fun ColoredLogEntry(log: String) {
     val color = when {
-        log.contains("ERROR", ignoreCase = true) -> Color(0xFFFF0000)
-        log.contains("WARN", ignoreCase = true) -> Color(0xFFFFA000) // Orange
-        log.contains("INFO", ignoreCase = true) -> Color(0xFF2196F3) // Blue
-        log.contains("DEBUG", ignoreCase = true) -> Color(0xFF4CAF50) // Green
+        log.contains("ERROR", ignoreCase = false) -> Color(0xFFFF0000)
+        log.contains("WARN", ignoreCase = false) -> Color(0xFFFFA000) // Orange
+        log.contains("INFO", ignoreCase = false) -> Color(0xFF2196F3) // Blue
+        log.contains("DEBUG", ignoreCase = false) -> Color(0xFF4CAF50) // Green
         else -> Color(0xFFFFF550)
     }
 
     Text(
         text = log,
-        fontSize = 12.sp,
+        fontSize = 16.sp,
         color = color,
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
     )

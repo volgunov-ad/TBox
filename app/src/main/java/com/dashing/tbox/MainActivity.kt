@@ -29,7 +29,9 @@ class MainActivity : ComponentActivity() {
                         settingsManager = settingsManager,
                         onTboxRestart = { rebootTbox() },
                         onModemCheck = { modemCheck() },
-                        onSetModemMode = { setModemMode() },
+                        onModemOn = { setModemMode("on") },
+                        onModemFly = { setModemMode("fly") },
+                        onModemOff = { setModemMode("off") },
                         onLocSubscribeClick = { locSubscribe() },
                         onLocUnsubscribeClick = { locUnsubscribe() }
                     )
@@ -78,14 +80,16 @@ class MainActivity : ComponentActivity() {
 
     private fun setModemMode(mode: String = "on") {
         val intent = Intent(this, BackgroundService::class.java).apply {
-            action = if (mode == "off") {
-                BackgroundService.ACTION_MODEM_OFF
-            }
-            else if (mode == "fly") {
-                BackgroundService.ACTION_MODEM_FLY
-            }
-            else {
-                BackgroundService.ACTION_MODEM_ON
+            action = when (mode) {
+                "off" -> {
+                    BackgroundService.ACTION_MODEM_OFF
+                }
+                "fly" -> {
+                    BackgroundService.ACTION_MODEM_FLY
+                }
+                else -> {
+                    BackgroundService.ACTION_MODEM_ON
+                }
             }
         }
         startService(intent)

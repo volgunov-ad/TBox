@@ -34,9 +34,14 @@ class BackgroundService : Service() {
     private val scope = CoroutineScope(Dispatchers.Default + job)
     private val mutex = Mutex()
 
+    private var preventRestartSend = false
+    private var suspendTboxAppSend = false
+
     private var mainJob: Job? = null
+    private var periodicJob: Job? = null
     private var apnJob: Job? = null
     private var appCmd: Job? = null
+    private var crtCmd: Job? = null
     private var swdCmd: Job? = null
     private var locCmd: Job? = null
     private var listenJob: Job? = null
@@ -55,7 +60,7 @@ class BackgroundService : Service() {
     private var apnCheck: Boolean = false
 
     companion object {
-        const val LOCATION_UPDATE_TIME = 10
+        const val LOCATION_UPDATE_TIME = 1
         const val NOTIFICATION_ID = 50047
         const val CHANNEL_ID = "tbox_background_channel"
 
@@ -141,19 +146,21 @@ class BackgroundService : Service() {
                 startAPNUpdater()
                 startListener()
                 startCheckConnection()
+                startPeriodicJob()
             }
             ACTION_NET_UPD_STOP -> {
                 stopNetUpdater()
                 stopAPNUpdater()
                 stopListener()
                 stopCheckConnection()
+                stopPeriodicJob()
             }
             ACTION_SEND_AT -> sendAT("ATI\r\n".toByteArray())
             ACTION_MODEM_CHECK -> modemMode(-1)
             ACTION_MODEM_OFF -> modemMode(0)
             ACTION_MODEM_ON -> modemMode(1)
             ACTION_MODEM_FLY -> modemMode(4)
-            ACTION_TBOX_REBOOT -> rebootTbox(byteArrayOf(0x02))
+            ACTION_TBOX_REBOOT -> rebootTbox()
             ACTION_APN1_RESTART -> sendAPNManage(byteArrayOf(0x00, 0x00, 0x01, 0x00))
             ACTION_APN1_FLY -> sendAPNManage(byteArrayOf(0x00, 0x00, 0x02, 0x00))
             ACTION_APN1_RECONNECT -> sendAPNManage(byteArrayOf(0x00, 0x00, 0x03, 0x00))
@@ -176,8 +183,8 @@ class BackgroundService : Service() {
                 val puk = intent.getStringExtra(EXTRA_PUK) ?: ""
                 sendAT("AT+CPIN=\"$puk\",\"$pin\"\r\n".toByteArray())
             }
-            ACTION_LOC_SUBSCRIBE -> locSubscribe()
-            ACTION_LOC_UNSUBSCRIBE -> locUnsubscribe()
+            ACTION_LOC_SUBSCRIBE -> locSubscribe(true)
+            ACTION_LOC_UNSUBSCRIBE -> locSubscribe(false)
         }
         return START_STICKY
     }
@@ -264,12 +271,6 @@ class BackgroundService : Service() {
                         }
                     }
                 }
-                if (TboxRepository.locationSubscribed.value){
-                    val delta =  (Date().time - TboxRepository.locUpdateTime.value.time) / 1000
-                    if (delta > LOCATION_UPDATE_TIME * 3) {
-                        TboxRepository.updateLocationSubscribed(false)
-                    }
-                }
                 delay(100)
             }
         }
@@ -302,7 +303,7 @@ class BackgroundService : Service() {
                     }
                     apn1UpdateCount += 1
                     if (apn1UpdateCount > 2) {
-                        clearAPNStates()
+                        clearAPNStates(1)
                     }
                     delay(500)
                     TboxRepository.addLog("DEBUG", "MDC send", "Update APN2")
@@ -318,7 +319,7 @@ class BackgroundService : Service() {
                     }
                     apn2UpdateCount += 1
                     if (apn2UpdateCount > 2) {
-                        clearAPN2States()
+                        clearAPNStates(2)
                     }
 
                 }
@@ -371,7 +372,7 @@ class BackgroundService : Service() {
                             if (settingsManager.getAutoTboxRebootSetting()) {
                                 TboxRepository.addLog("WARN", "Net connection checker",
                                     "No network connection. Restart TBox")
-                                rebootTbox(byteArrayOf(0x02))
+                                rebootTbox()
                                 delay(rebootTimeout)
                                 rebootTimeout += 600000
                                 if (rebootTimeout > 3000000) {
@@ -395,6 +396,40 @@ class BackgroundService : Service() {
         checkConnectionJob = null
     }
 
+    private fun startPeriodicJob() {
+        if (periodicJob?.isActive == true) return
+        Log.d("NetUpdater", "Start periodic job")
+        periodicJob = scope.launch {
+            delay(10000)
+            while (isActive) {
+                if (TboxRepository.locationSubscribed.value){
+                    val delta =  (Date().time - TboxRepository.locUpdateTime.value.time) / 1000
+                    if (delta > LOCATION_UPDATE_TIME * 3) {
+                        TboxRepository.updateLocationSubscribed(false)
+                    }
+                }
+                if (TboxRepository.tboxConnected.value) {
+                    if (settingsManager.getAutoPreventTboxRestartSetting()) {
+                        if (!preventRestartSend) {
+                            preventRestart()
+                        }
+                    }
+                    if (settingsManager.getAutoStopTboxAppSetting()) {
+                        if (!suspendTboxAppSend) {
+                            suspendTboxApp()
+                        }
+                    }
+                }
+                delay(1000)
+            }
+        }
+    }
+
+    private fun stopPeriodicJob() {
+        periodicJob?.cancel()
+        periodicJob = null
+    }
+
     private fun modemMode(mode: Int, timeout: Long = 5000, needCheck: Boolean = true) {
         if (!TboxRepository.tboxConnected.value) {
             return
@@ -406,7 +441,7 @@ class BackgroundService : Service() {
                     return@launch
                 }
                 sendAT("AT+CFUN=$mode\r\n".toByteArray())
-                //TboxRepository.updateModemStatus(mode)
+                TboxRepository.updateModemStatus(mode)
                 if (needCheck) {
                     delay(timeout)
                 }
@@ -437,13 +472,37 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun rebootTbox(cmd: ByteArray) {
-        if (singleCmdJob?.isActive == true) return
+    private fun rebootTbox() {
+        if (crtCmd?.isActive == true) return
         Log.d("CMD", "Send restart TBox")
-        singleCmdJob = scope.launch {
+        crtCmd = scope.launch {
             TboxRepository.addLog("DEBUG", "CRT send", "Restart TBox")
             mutex.withLock {
-                sendUdpMessage(socket, serverPort, 0x23, 0x37, 0x2B, cmd)
+                sendUdpMessage(socket, serverPort, 0x23, 0x37, 0x2B, byteArrayOf(0x02))
+            }
+        }
+    }
+
+    private fun ctrGetPowVolInfo() {
+        if (crtCmd?.isActive == true) return
+        Log.d("CMD", "Send GetPowVolInfo command")
+        crtCmd = scope.launch {
+            TboxRepository.addLog("DEBUG", "CRT send", "Send GetPowVolInfo command")
+            mutex.withLock {
+                sendUdpMessage(socket, serverPort, 0x23, 0x37, 0x10,
+                    byteArrayOf(0x00, 0x00, 0x00, 0x00))
+            }
+        }
+    }
+
+    private fun ctrGetHdmData() {
+        if (crtCmd?.isActive == true) return
+        Log.d("CMD", "Send GetHdmData command")
+        crtCmd = scope.launch {
+            TboxRepository.addLog("DEBUG", "CRT send", "Send GetHdmData command")
+            mutex.withLock {
+                sendUdpMessage(socket, serverPort, 0x23, 0x37, 0x14,
+                    byteArrayOf(0x00, 0x00, 0x00, 0x00))
             }
         }
     }
@@ -480,8 +539,9 @@ class BackgroundService : Service() {
         appCmd = scope.launch {
             TboxRepository.addLog("DEBUG", "APP send", "Suspend APP")
             mutex.withLock {
-                sendUdpMessage(socket, serverPort, 0x2F, 0x37, 0x02, byteArrayOf(0x00))
+                sendUdpMessage(socket, serverPort, 0x2F, 0x37, 0x04, byteArrayOf(0x00))
             }
+            suspendTboxAppSend = true
         }
     }
 
@@ -495,33 +555,30 @@ class BackgroundService : Service() {
             mutex.withLock {
                 sendUdpMessage(socket, serverPort, 0x2D, 0x37, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x00))
             }
+            preventRestartSend = true
         }
     }
 
-    private fun locSubscribe() {
+    private fun locSubscribe(value: Boolean = false) {
         if (!TboxRepository.tboxConnected.value) {
             return
         }
         if (locCmd?.isActive == true) return
         locCmd = scope.launch {
-            TboxRepository.addLog("DEBUG", "LOC send", "Location subscribe")
-            val timeout = (LOCATION_UPDATE_TIME).toByte()
-            mutex.withLock {
-                sendUdpMessage(socket, serverPort, 0x29, 0x37, 0x05, byteArrayOf(0x02, timeout, 0x00))
+            if (value) {
+                TboxRepository.addLog("DEBUG", "LOC send", "Location subscribe")
+                val timeout = (LOCATION_UPDATE_TIME).toByte()
+                mutex.withLock {
+                    sendUdpMessage(socket, serverPort, 0x29, 0x37, 0x05, byteArrayOf(0x02, timeout, 0x00))
+                }
             }
-        }
-    }
-
-    private fun locUnsubscribe() {
-        if (!TboxRepository.tboxConnected.value) {
-            return
-        }
-        if (locCmd?.isActive == true) return
-        locCmd = scope.launch {
-            TboxRepository.addLog("DEBUG", "LOC send", "Location unsubscribe")
-            mutex.withLock {
-                sendUdpMessage(socket, serverPort, 0x29, 0x37, 0x05, byteArrayOf(0x00, 0x00, 0x00))
+            else {
+                TboxRepository.addLog("DEBUG", "LOC send", "Location unsubscribe")
+                mutex.withLock {
+                    sendUdpMessage(socket, serverPort, 0x29, 0x37, 0x05, byteArrayOf(0x00, 0x00, 0x00))
+                }
             }
+            TboxRepository.updateLocationSubscribed(value)
         }
     }
 
@@ -609,18 +666,24 @@ class BackgroundService : Service() {
                         TboxRepository.addLog("ERROR", "MDC response", "Too small data length")
                     }
                 } else if (tid == 0x2F.toByte()) {
-                    if ((cmd == 0x82.toByte())) {
+                    if (cmd == 0x82.toByte()) {
                         if (receivedData.contentEquals(byteArrayOf(0x01))) {
-                            TboxRepository.addLog("DEBUG", "APP response", "Command STOP complete")
+                            TboxRepository.addLog("DEBUG", "APP response", "Command SUSPEND complete")
                         }
                         else {
+                            TboxRepository.addLog("WARN", "APP response", "Command SUSPEND not complete")
+                        }
+                    } else if (cmd == 0x84.toByte()) {
+                        if (receivedData.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+                            TboxRepository.addLog("DEBUG", "APP response", "Command STOP complete")
+                        } else {
                             TboxRepository.addLog("WARN", "APP response", "Command STOP not complete")
                         }
                     } else {
                         TboxRepository.addLog("ERROR", "APP response", "Unknown message from APP")
                     }
                 } else if (tid == 0x2D.toByte()) {
-                    if ((cmd == 0x87.toByte())) {
+                    if (cmd == 0x87.toByte()) {
                         if (receivedData.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
                             TboxRepository.addLog("DEBUG", "SWD response", "Command PreventRestart complete")
                         }
@@ -630,8 +693,14 @@ class BackgroundService : Service() {
                     } else {
                         TboxRepository.addLog("ERROR", "SWD response", "Unknown message from SWD")
                     }
+                } else if (tid == 0x23.toByte()) {
+                    if (cmd == 0x90.toByte()) {
+                        ansCRTPowVol(receivedData)
+                    } else {
+                        TboxRepository.addLog("ERROR", "CRT response", "Unknown message from CRT")
+                    }
                 } else if (tid == 0x29.toByte()) {
-                    if ((cmd == 0x85.toByte())) {
+                    if (cmd == 0x85.toByte()) {
                         ansLOCValues(receivedData)
                     } else {
                         TboxRepository.addLog("ERROR", "LOC response", "Unknown message from LOC")
@@ -730,8 +799,8 @@ class BackgroundService : Service() {
             simStatus = simStatus))
         netUpdateCount = 0
         if (TboxRepository.netState.value.regStatus !in listOf("домашняя сеть", "роуминг")) {
-            clearAPNStates()
-            clearAPN2States()
+            clearAPNStates(1)
+            clearAPNStates(2)
             apnCheck = false
         }
         else {
@@ -845,30 +914,25 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun clearAPNStates() {
-        TboxRepository.updateAPNState(
-            APNState(
-                apnIP = "-",
-                apnStatus = "-",
-                apnType = "-",
-                apnGate = "-",
-                apnDNS1 = "-",
-                apnDNS2 = "-"
-            )
+    private fun clearAPNStates(number: Int = 1) {
+        val apnState = APNState(
+            apnIP = "-",
+            apnStatus = "-",
+            apnType = "-",
+            apnGate = "-",
+            apnDNS1 = "-",
+            apnDNS2 = "-"
         )
-    }
-
-    private fun clearAPN2States() {
-        TboxRepository.updateAPN2State(
-            APNState(
-                apnIP = "-",
-                apnStatus = "-",
-                apnType = "-",
-                apnGate = "-",
-                apnDNS1 = "-",
-                apnDNS2 = "-"
+        if (number == 1) {
+            TboxRepository.updateAPNState(
+                apnState
             )
-        )
+        }
+        else {
+            TboxRepository.updateAPN2State(
+                apnState
+            )
+        }
     }
 
     private fun ansATcmd(data: ByteArray) {
@@ -889,6 +953,28 @@ class BackgroundService : Service() {
             } else if ("+CFUN: 4" in ans || ("AT+CFUN=4" in ans && "OK" in ans)) {
                 TboxRepository.updateModemStatus(4)
             }
+        }
+    }
+
+    private fun ansCRTPowVol(data: ByteArray) {
+        if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+            TboxRepository.addLog("DEBUG", "CRT response", "Power voltages info")
+        } else {
+            TboxRepository.addLog("ERROR", "CRT response ", "Error power voltages info")
+        }
+        if (data.size >= 10) {
+            val buffer = ByteBuffer.wrap(data.copyOfRange(4, 10)).order(ByteOrder.LITTLE_ENDIAN)
+
+            val rawVoltage1 = buffer.short.toInt() and 0xFFFF
+            val voltage1 = rawVoltage1.toDouble() / 1000.0
+
+            val rawVoltage2 = buffer.short.toInt() and 0xFFFF
+            val voltage2 = rawVoltage2.toDouble() / 1000.0
+
+            val rawVoltage3 = buffer.short.toInt() and 0xFFFF
+            val voltage3 = rawVoltage3.toDouble() / 1000.0
+
+            TboxRepository.addLog("INFO", "CRT response", "$voltage1 V, $voltage2 V, $voltage3 V")
         }
     }
 
@@ -985,21 +1071,27 @@ class BackgroundService : Service() {
         if (value) {
             TboxRepository.addLog("DEBUG", "UDP Listener", "TBox connected")
             TboxRepository.updateTboxConnected(true)
+            modemMode(-1)
+
             if (settingsManager.getAutoStopTboxAppSetting()) {
                 suspendTboxApp()
             }
             if (settingsManager.getAutoPreventTboxRestartSetting()) {
                 preventRestart()
             }
-            modemMode(-1)
+
+            //ctrGetPowVolInfo()
+            //ctrGetHdmData()
         }
         else {
             TboxRepository.addLog("DEBUG", "UDP Listener", "TBox disconnected")
             TboxRepository.updateTboxConnected(false)
             clearNetStates()
-            clearAPNStates()
-            clearAPN2States()
+            clearAPNStates(1)
+            clearAPNStates(2)
             sendWidgetUpdate()
+            suspendTboxAppSend = false
+            preventRestartSend = false
         }
         TboxRepository.updateTboxConnectionTime()
     }
