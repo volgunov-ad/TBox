@@ -150,6 +150,7 @@ class BackgroundService : Service() {
                     startListener()
                     startCheckConnection()
                     startPeriodicJob()
+                    TboxRepository.updateServiceStartTimeTime()
                 }
             }
             ACTION_STOP -> {
@@ -344,9 +345,9 @@ class BackgroundService : Service() {
         var modemCheckTimeout = 10000L
         Log.d("NetUpdater", "Start check connection")
         checkConnectionJob = scope.launch {
-            delay(5000)
+            //delay(5000)
             while (isActive) {
-                delay(5000)
+                delay(modemCheckTimeout)
                 if (!TboxRepository.tboxConnected.value) {
                     continue
                 }
@@ -369,7 +370,7 @@ class BackgroundService : Service() {
                         }
                         delay(10000)
                         modemCheckTimeout += 10000
-                        if (modemCheckTimeout > 50000) {
+                        if (modemCheckTimeout > 60000) {
                             modemCheckTimeout = 10000
                         }
 
@@ -380,8 +381,8 @@ class BackgroundService : Service() {
                                 rebootTbox()
                                 delay(rebootTimeout)
                                 rebootTimeout += 600000
-                                if (rebootTimeout > 3000000) {
-                                    rebootTimeout = 600000
+                                if (rebootTimeout > 3600000) {
+                                    rebootTimeout = 60000
                                 }
                             }
                         }

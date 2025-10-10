@@ -25,6 +25,13 @@ class TboxViewModel() : ViewModel() {
             initialValue = Date()
         )
 
+    val serviceStartTime: StateFlow<Date> = TboxRepository.serviceStartTime
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Date()
+        )
+
     val locationSubscribed: StateFlow<Boolean> = TboxRepository.locationSubscribed
         .stateIn(
             scope = viewModelScope,

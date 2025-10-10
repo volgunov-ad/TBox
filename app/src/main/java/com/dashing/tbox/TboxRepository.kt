@@ -79,6 +79,9 @@ object TboxRepository {
     private val _tboxConnectionTime = MutableStateFlow(Date())
     val tboxConnectionTime: StateFlow<Date> = _tboxConnectionTime.asStateFlow()
 
+    private val _serviceStartTime = MutableStateFlow(Date())
+    val serviceStartTime: StateFlow<Date> = _serviceStartTime.asStateFlow()
+
     private val _locUpdateTime = MutableStateFlow(Date())
     val locUpdateTime: StateFlow<Date> = _locUpdateTime.asStateFlow()
 
@@ -109,6 +112,10 @@ object TboxRepository {
 
     fun updateTboxConnectionTime() {
         _tboxConnectionTime.value = Date()
+    }
+
+    fun updateServiceStartTimeTime() {
+        _serviceStartTime.value = Date()
     }
 
     fun updateLocUpdateTime() {

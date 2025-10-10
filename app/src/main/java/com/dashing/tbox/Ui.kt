@@ -90,6 +90,7 @@ fun TboxScreen(viewModel: TboxViewModel,
     val tabs = listOf("Модем", "Геопозиция", "Настройки", "Журнал")
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
+    val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
     val conTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(tboxConnectionTime)
 
     LaunchedEffect(selectedTab) {
@@ -113,6 +114,13 @@ fun TboxScreen(viewModel: TboxViewModel,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            Text(
+                text = "Служба запущена в $conTime",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
@@ -206,7 +214,7 @@ fun ModemTab(
             .padding(16.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
-            item { StatusRow("CSQ", netState.csq.toString()) }
+            item { StatusRow("CSQ", if (netState.csq != 99) netState.csq.toString() else "-") }
             item { StatusRow("IMEI", netValues.imei) }
             item { StatusRow("ICCID", netValues.iccid) }
             item { StatusRow("IMSI", netValues.imsi) }
@@ -250,9 +258,12 @@ fun SettingsTab(
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
     //val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
 
+    val scrollState = rememberScrollState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
         SettingSwitch(
@@ -261,7 +272,10 @@ fun SettingsTab(
                 settingsViewModel.saveAutoRestartSetting(enabled)
             },
             "Автоматический перезапуск модема",
-            "Автоматически перезапускать модем при потере подключения к сети"
+            "Автоматически перезапускать модем при потере подключения к сети. " +
+                    "Проверка происходит с периодичностью 10 секунд с нарастанием в 10 секунд " +
+                    "после каждого перезапуска модема (сброс таймера до 10 секунд происходит при " +
+                    "подключении сети, а также когда он превысит 60 с"
         )
         SettingSwitch(
             isAutoTboxRebootEnabled,
@@ -269,15 +283,22 @@ fun SettingsTab(
                 settingsViewModel.saveAutoTboxRebootSetting(enabled)
             },
             "Автоматическая перезагрузка TBox",
-            "Автоматически презагружать TBox, если перезапуск модема не помогает"
+            "Автоматически презагружать TBox, если перезапуск модема не помогает. " +
+                    "Перезагрузка просходит через 60 секунд после попытки перезапуска модема, " +
+                    "если это не помогло. Далее таймер увеличиваться каждый раз на 10 минут " +
+                    "(сброс таймера до 60 секунд происходит при подключении сети, а также когда " +
+                    "он превысит 60 минут"
         )
         SettingSwitch(
             isAutoStopTboxAppEnabled,
             { enabled ->
                 settingsViewModel.saveAutoStopTboxAppSetting(enabled)
             },
-            "Автоматическое отключение приложения APP на TBox",
-            "Отключение приложения APP на TBox позволяет избежать перезагрузки TBox каждые 30 минут"
+            "Предотвращение перезагрузки TBox",
+            "Отключение приложения APP и проверки состояния сети в TBox " +
+                    "позволяет избежать периодической перезагрузки TBox. Необходимые команды " +
+                    "отправляются фоновой службой этого приложения каждый раз при запуске " +
+                    "головного устройства, а также сразу же при включении данной опции"
         )
         /*SettingSwitch(
             isAutoPreventTboxRestartEnabled,
@@ -287,9 +308,9 @@ fun SettingsTab(
             "Автоматическое предотвращение перезагрузки TBox по состоянию сети",
             "TBox не будет проверять состояние сети, это поможет избежать автоматической перезагрузки TBox"
         )*/
-        Spacer(modifier = Modifier.width(16.dp))
+        //Spacer(modifier = Modifier.width(16.dp))
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -315,7 +336,7 @@ fun SettingSwitch(
     description: String
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
