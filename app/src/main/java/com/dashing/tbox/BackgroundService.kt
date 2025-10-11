@@ -783,7 +783,7 @@ class BackgroundService : Service() {
             } else if (data[6].toInt() == 2) {
                 "требуется PIN"
             } else if (data[6].toInt() == 3) {
-                "SIM заблокирована"
+                "ошибка SIM"
             } else {
                 "${data[6]}"
             }
