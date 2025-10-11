@@ -92,6 +92,7 @@ fun TboxScreen(viewModel: TboxViewModel,
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
     val conTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(tboxConnectionTime)
+    val serviceTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(serviceStartTime)
 
     LaunchedEffect(selectedTab) {
         if (selectedTab == 0) {
@@ -118,7 +119,7 @@ fun TboxScreen(viewModel: TboxViewModel,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
             Text(
-                text = "Служба запущена в $conTime",
+                text = "Служба запущена в $serviceTime",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,

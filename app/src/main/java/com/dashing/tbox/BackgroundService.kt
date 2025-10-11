@@ -600,6 +600,14 @@ class BackgroundService : Service() {
             putExtra(EXTRA_APN_STATUS, TboxRepository.apnState.value.apnStatus)
             putExtra(EXTRA_THEME, currentTheme)
         }
+        /*val intent = Intent(ACTION_UPDATE_WIDGET).apply {
+            setPackage(this@BackgroundService.packageName)
+            putExtra(EXTRA_CSQ, 20)
+            putExtra(EXTRA_NET_TYPE, "4G")
+            putExtra(EXTRA_TBOX_STATUS, true)
+            putExtra(EXTRA_APN_STATUS, "подключен")
+            putExtra(EXTRA_THEME, currentTheme)
+        }*/
         try {
             sendBroadcast(intent)
             Log.d("Widget", "Update sent: CSQ=${TboxRepository.netState.value.csq}, " +

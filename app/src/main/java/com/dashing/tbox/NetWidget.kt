@@ -110,7 +110,7 @@ class NetWidget : AppWidgetProvider() {
         tboxStatus: Boolean = false
     ) {
         var imageR = if (theme == 1) R.drawable.ic_signal_nosig_sharp_outlined else
-            R.drawable.ic_signal_nosig_sharp_outlined
+            R.drawable.ic_signal_nosig_sharp_outlined_dark
         if (tboxStatus) {
             val signalLevel = csq.getSignalLevel()
             if (apnStatus == "подключен") {
