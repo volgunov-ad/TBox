@@ -140,7 +140,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             }
 
             Text(
-                text = "Версия программы 0.2",
+                text = "Версия программы 0.3",
                 fontSize = 12.sp,
                 textAlign = TextAlign.Right,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -152,7 +152,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             when (selectedTab) {
                 0 -> ModemTab(viewModel, onModemOn, onModemFly, onModemOff)
                 1 -> LocationTab(viewModel, onLocSubscribeClick, onLocUnsubscribeClick)
-                2 -> SettingsTab(settingsViewModel, onTboxRestart)
+                2 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart)
                 3 -> LogsTab(viewModel, settingsViewModel)
             }
         }
@@ -251,15 +251,26 @@ fun ModemTab(
 
 @Composable
 fun SettingsTab(
+    viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
-    onTboxRestartClick: () -> Unit
+    onTboxRestartClick: () -> Unit,
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
+    val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     //val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
+
+    var restartButtonEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(restartButtonEnabled) {
+        if (!restartButtonEnabled) {
+            delay(15000) // Блокировка на 15 секунд
+            restartButtonEnabled = true
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -316,7 +327,13 @@ fun SettingsTab(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
-                onClick = onTboxRestartClick,
+                onClick = {
+                    if (restartButtonEnabled) {
+                        restartButtonEnabled = false
+                        onTboxRestartClick()
+                    }
+                },
+                enabled = restartButtonEnabled && tboxConnected
             ) {
                 Text(
                     text = "Перезагрузка TBox",
