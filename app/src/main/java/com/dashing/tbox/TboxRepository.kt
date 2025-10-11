@@ -73,6 +73,12 @@ object TboxRepository {
     private val _tboxConnected = MutableStateFlow(false)
     val tboxConnected: StateFlow<Boolean> = _tboxConnected.asStateFlow()
 
+    private val _preventRestartSend = MutableStateFlow(false)
+    val preventRestartSend: StateFlow<Boolean> = _preventRestartSend.asStateFlow()
+
+    private val _suspendTboxAppSend = MutableStateFlow(false)
+    val suspendTboxAppSend: StateFlow<Boolean> = _suspendTboxAppSend.asStateFlow()
+
     private val _locationSubscribed = MutableStateFlow(false)
     val locationSubscribed: StateFlow<Boolean> = _locationSubscribed.asStateFlow()
 
@@ -144,5 +150,13 @@ object TboxRepository {
 
     fun updateLocValues(newValues: LocValues) {
         _locValues.value = newValues
+    }
+
+    fun updatePreventRestartSend(newValue: Boolean) {
+        _preventRestartSend.value = newValue
+    }
+
+    fun updateSuspendTboxAppSend(newValue: Boolean) {
+        _suspendTboxAppSend.value = newValue
     }
 }

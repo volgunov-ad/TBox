@@ -18,6 +18,20 @@ class TboxViewModel() : ViewModel() {
             initialValue = false
         )
 
+    val preventRestartSend: StateFlow<Boolean> = TboxRepository.preventRestartSend
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val suspendTboxAppSend: StateFlow<Boolean> = TboxRepository.suspendTboxAppSend
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val tboxConnectionTime: StateFlow<Date> = TboxRepository.tboxConnectionTime
         .stateIn(
             scope = viewModelScope,

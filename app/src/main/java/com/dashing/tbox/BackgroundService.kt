@@ -34,9 +34,6 @@ class BackgroundService : Service() {
     private val scope = CoroutineScope(Dispatchers.Default + job)
     private val mutex = Mutex()
 
-    private var preventRestartSend = false
-    private var suspendTboxAppSend = false
-
     private var mainJob: Job? = null
     private var periodicJob: Job? = null
     private var apnJob: Job? = null
@@ -405,6 +402,8 @@ class BackgroundService : Service() {
     private fun startPeriodicJob() {
         if (periodicJob?.isActive == true) return
         Log.d("NetUpdater", "Start periodic job")
+        var preventRestartLastTime = Date()
+        var timeDiff: Long? = null
         periodicJob = scope.launch {
             delay(10000)
             while (isActive) {
@@ -416,20 +415,23 @@ class BackgroundService : Service() {
                 }
                 if (TboxRepository.tboxConnected.value) {
                     if (settingsManager.getAutoPreventTboxRestartSetting()) {
-                        if (!preventRestartSend) {
+                        timeDiff = Date().time - preventRestartLastTime.time
+                        if (!TboxRepository.preventRestartSend.value && timeDiff > 10000) {
                             preventRestart()
+                            preventRestartLastTime = Date()
                         }
-                        if (!suspendTboxAppSend) {
+                        if (!TboxRepository.suspendTboxAppSend.value && timeDiff > 10000) {
                             suspendTboxApp()
+                            preventRestartLastTime = Date()
+                        }
+                        if (timeDiff > 900000) {
+                            preventRestart()
+                            suspendTboxApp()
+                            preventRestartLastTime = Date()
                         }
                     }
-                    //if (settingsManager.getAutoStopTboxAppSetting()) {
-                    //    if (!suspendTboxAppSend) {
-                    //        suspendTboxApp()
-                    //    }
-                    //}
                 }
-                delay(1000)
+                delay(5000)
             }
         }
     }
@@ -548,9 +550,8 @@ class BackgroundService : Service() {
         appCmd = scope.launch {
             TboxRepository.addLog("DEBUG", "APP send", "Suspend APP")
             mutex.withLock {
-                sendUdpMessage(socket, serverPort, 0x2F, 0x37, 0x04, byteArrayOf(0x00))
+                sendUdpMessage(socket, serverPort, 0x2F, 0x37, 0x02, byteArrayOf(0x00))
             }
-            suspendTboxAppSend = true
         }
     }
 
@@ -564,7 +565,6 @@ class BackgroundService : Service() {
             mutex.withLock {
                 sendUdpMessage(socket, serverPort, 0x2D, 0x37, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x00))
             }
-            preventRestartSend = true
         }
     }
 
@@ -600,14 +600,6 @@ class BackgroundService : Service() {
             putExtra(EXTRA_APN_STATUS, TboxRepository.apnState.value.apnStatus)
             putExtra(EXTRA_THEME, currentTheme)
         }
-        /*val intent = Intent(ACTION_UPDATE_WIDGET).apply {
-            setPackage(this@BackgroundService.packageName)
-            putExtra(EXTRA_CSQ, 20)
-            putExtra(EXTRA_NET_TYPE, "4G")
-            putExtra(EXTRA_TBOX_STATUS, true)
-            putExtra(EXTRA_APN_STATUS, "подключен")
-            putExtra(EXTRA_THEME, currentTheme)
-        }*/
         try {
             sendBroadcast(intent)
             Log.d("Widget", "Update sent: CSQ=${TboxRepository.netState.value.csq}, " +
@@ -687,6 +679,7 @@ class BackgroundService : Service() {
                     if (cmd == 0x82.toByte()) {
                         if (receivedData.contentEquals(byteArrayOf(0x01))) {
                             TboxRepository.addLog("DEBUG", "APP response", "Command SUSPEND complete")
+                            TboxRepository.updateSuspendTboxAppSend(true)
                         }
                         else {
                             TboxRepository.addLog("WARN", "APP response", "Command SUSPEND not complete")
@@ -704,6 +697,7 @@ class BackgroundService : Service() {
                     if (cmd == 0x87.toByte()) {
                         if (receivedData.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
                             TboxRepository.addLog("DEBUG", "SWD response", "Command PreventRestart complete")
+                            TboxRepository.updatePreventRestartSend(true)
                         }
                         else {
                             TboxRepository.addLog("WARN", "SWD response", "Command PreventRestart not complete")
@@ -1109,8 +1103,8 @@ class BackgroundService : Service() {
             clearAPNStates(1)
             clearAPNStates(2)
             sendWidgetUpdate()
-            suspendTboxAppSend = false
-            preventRestartSend = false
+            TboxRepository.updatePreventRestartSend(false)
+            TboxRepository.updateSuspendTboxAppSend(false)
         }
         TboxRepository.updateTboxConnectionTime()
     }

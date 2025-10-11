@@ -140,7 +140,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             }
 
             Text(
-                text = "Версия программы 0.3",
+                text = "Версия программы 0.3.1",
                 fontSize = 12.sp,
                 textAlign = TextAlign.Right,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -259,6 +259,8 @@ fun SettingsTab(
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+    val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
+    val suspendTboxAppSend by viewModel.suspendTboxAppSend.collectAsStateWithLifecycle()
     //val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
@@ -321,6 +323,8 @@ fun SettingsTab(
             "TBox не будет проверять состояние сети, это поможет избежать автоматической перезагрузки TBox"
         )*/
         //Spacer(modifier = Modifier.width(16.dp))
+        StatusRow("Отправка команды SUSPEND приложению APP", if (suspendTboxAppSend) "да" else "нет")
+        StatusRow("Отправка команды PREVENT RESTART приложению SWD", if (preventRestartSend) "да" else "нет")
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
