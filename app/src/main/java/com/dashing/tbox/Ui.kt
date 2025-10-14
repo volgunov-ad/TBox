@@ -41,6 +41,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Locale
+import com.dashing.tbox.ui.theme.TboxAppTheme
+import com.dashing.tbox.ui.StatusRow
+import com.dashing.tbox.ui.ModeButton
+import com.dashing.tbox.ui.ColoredLogEntry
+import com.dashing.tbox.ui.TabMenuItem
 
 @Composable
 fun TboxApp(
@@ -51,28 +56,28 @@ fun TboxApp(
     onModemFly: () -> Unit,
     onModemOff: () -> Unit,
     onLocSubscribeClick: () -> Unit,
-    onLocUnsubscribeClick: () -> Unit
+    onLocUnsubscribeClick: () -> Unit,
+    onGetCanFrame: () -> Unit
 ) {
     val viewModel = TboxViewModel()
     val settingsViewModel = remember { SettingsViewModel(settingsManager) }
-    TboxScreen(
-        viewModel = viewModel,
-        settingsViewModel = settingsViewModel,
-        onTboxRestart = onTboxRestart,
-        onModemCheck = onModemCheck,
-        onModemOn = onModemOn,
-        onModemFly = onModemFly,
-        onModemOff = onModemOff,
-        onLocSubscribeClick = onLocSubscribeClick,
-        onLocUnsubscribeClick = onLocUnsubscribeClick,
-    )
-}
 
-@Composable
-fun TboxAppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        content = content
-    )
+    val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
+
+    TboxAppTheme(theme = currentTheme) {
+        TboxScreen(
+            viewModel = viewModel,
+            settingsViewModel = settingsViewModel,
+            onTboxRestart = onTboxRestart,
+            onModemCheck = onModemCheck,
+            onModemOn = onModemOn,
+            onModemFly = onModemFly,
+            onModemOff = onModemOff,
+            onLocSubscribeClick = onLocSubscribeClick,
+            onLocUnsubscribeClick = onLocUnsubscribeClick,
+            onGetCanFrame = onGetCanFrame,
+        )
+    }
 }
 
 @Composable
@@ -84,7 +89,8 @@ fun TboxScreen(viewModel: TboxViewModel,
                onModemFly: () -> Unit,
                onModemOff: () -> Unit,
                onLocSubscribeClick: () -> Unit,
-               onLocUnsubscribeClick: () -> Unit
+               onLocUnsubscribeClick: () -> Unit,
+               onGetCanFrame: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Модем", "Геопозиция", "Настройки", "Журнал")
@@ -106,7 +112,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             modifier = Modifier
                 .width(300.dp)
                 .fillMaxHeight()
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(MaterialTheme.colorScheme.background),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
@@ -140,7 +146,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             }
 
             Text(
-                text = "Версия программы 0.3.1",
+                text = "Версия программы 0.3.2",
                 fontSize = 12.sp,
                 textAlign = TextAlign.Right,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -148,50 +154,17 @@ fun TboxScreen(viewModel: TboxViewModel,
         }
 
         // Содержимое справа
-        Box(modifier = Modifier.weight(1f)) {
+        Box(modifier = Modifier
+            .weight(1f)
+            .background(MaterialTheme.colorScheme.background)
+        ) {
             when (selectedTab) {
                 0 -> ModemTab(viewModel, onModemOn, onModemFly, onModemOff)
                 1 -> LocationTab(viewModel, onLocSubscribeClick, onLocUnsubscribeClick)
-                2 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart)
+                2 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart, onGetCanFrame)
                 3 -> LogsTab(viewModel, settingsViewModel)
             }
         }
-    }
-}
-
-@Composable
-fun TabMenuItem(
-    title: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val backgroundColor = if (selected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant
-    }
-
-    val textColor = if (selected) {
-        MaterialTheme.colorScheme.onPrimary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .background(backgroundColor)
-            .padding(vertical = 16.dp, horizontal = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = title,
-            color = textColor,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            textAlign = TextAlign.Left,
-            fontSize = 26.sp
-        )
     }
 }
 
@@ -254,14 +227,14 @@ fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onTboxRestartClick: () -> Unit,
+    onGetCanFrame: () -> Unit,
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
-    val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
+    val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
     val suspendTboxAppSend by viewModel.suspendTboxAppSend.collectAsStateWithLifecycle()
-    //val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
 
@@ -287,9 +260,9 @@ fun SettingsTab(
             },
             "Автоматический перезапуск модема",
             "Автоматически перезапускать модем при потере подключения к сети. " +
-                    "Проверка происходит с периодичностью 10 секунд с нарастанием в 10 секунд " +
+                    "Проверка происходит с периодичностью 10 секунд с нарастанием в 30 секунд " +
                     "после каждого перезапуска модема (сброс таймера до 10 секунд происходит при " +
-                    "подключении сети, а также когда он превысит 60 с"
+                    "подключении сети, а также когда он превысит 120 с"
         )
         SettingSwitch(
             isAutoTboxRebootEnabled,
@@ -304,9 +277,9 @@ fun SettingsTab(
                     "он превысит 60 минут"
         )
         SettingSwitch(
-            isAutoStopTboxAppEnabled,
+            isAutoPreventTboxRestartEnabled,
             { enabled ->
-                settingsViewModel.saveAutoStopTboxAppSetting(enabled)
+                settingsViewModel.saveAutoPreventTboxRestartSetting(enabled)
             },
             "Предотвращение перезагрузки TBox",
             "Отключение приложения APP и проверки состояния сети в TBox " +
@@ -346,6 +319,17 @@ fun SettingsTab(
                     textAlign = TextAlign.Center
                 )
             }
+            /*Button(
+                onClick = onGetCanFrame,
+                enabled = restartButtonEnabled && tboxConnected
+            ) {
+                Text(
+                    text = "getCanFrame",
+                    fontSize = 20.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }*/
         }
     }
 }
@@ -451,6 +435,7 @@ fun LocationSubscribeSelector(
             text = "Обновление местоположения",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Row(
@@ -589,49 +574,6 @@ fun ModemModeSelector(
 }
 
 @Composable
-fun ModeButton(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
-    val backgroundColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
-
-    val textColor = if (isSelected) {
-        MaterialTheme.colorScheme.onPrimary
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-
-    Button(
-        onClick = onClick,
-        modifier = modifier,
-        enabled = enabled,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = backgroundColor,
-            contentColor = textColor
-        ),
-        elevation = if (isSelected) {
-            ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
-        } else {
-            ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
-        }
-    ) {
-        Text(
-            text = text,
-            fontSize = 20.sp,
-            maxLines = 2,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
 fun LogsCard(logs: List<String>, logLevel: String) {
     val listState = rememberLazyListState()
     val filteredLogs = remember(logs, logLevel) {
@@ -669,7 +611,8 @@ fun LogsCard(logs: List<String>, logLevel: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        elevation = CardDefaults.cardElevation(4.dp)
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(
@@ -682,6 +625,7 @@ fun LogsCard(logs: List<String>, logLevel: String) {
                 Text(
                     text = "Журнал службы TBox",
                     fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 24.sp
                 )
             }
@@ -690,6 +634,7 @@ fun LogsCard(logs: List<String>, logLevel: String) {
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface)
             ) {
                 items(count = filteredLogs.size) { index ->
                     val logEntry = filteredLogs[index]
@@ -698,35 +643,4 @@ fun LogsCard(logs: List<String>, logLevel: String) {
             }
         }
     }
-}
-
-@Composable
-fun StatusRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, fontSize = 20.sp)
-        Text(text = value, fontSize = 20.sp)
-    }
-}
-
-@Composable
-fun ColoredLogEntry(log: String) {
-    val color = when {
-        log.contains("ERROR", ignoreCase = false) -> Color(0xFFFF0000)
-        log.contains("WARN", ignoreCase = false) -> Color(0xFFFFA000) // Orange
-        log.contains("INFO", ignoreCase = false) -> Color(0xFF2196F3) // Blue
-        log.contains("DEBUG", ignoreCase = false) -> Color(0xFF4CAF50) // Green
-        else -> Color(0xFFFFF550)
-    }
-
-    Text(
-        text = log,
-        fontSize = 16.sp,
-        color = color,
-        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-    )
 }

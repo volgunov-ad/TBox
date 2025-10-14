@@ -101,6 +101,13 @@ class TboxViewModel() : ViewModel() {
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = LocValues()
         )
+
+    val currentTheme: StateFlow<Int> = TboxRepository.currentTheme
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 1
+        )
 }
 
 class SettingsViewModel(private val settingsManager: SettingsManager) : ViewModel() {
@@ -113,13 +120,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val isAutoTboxRebootEnabled = settingsManager.autoTboxRebootFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
-        )
-
-    val isAutoStopTboxAppEnabled = settingsManager.autoStopTboxApp
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -149,12 +149,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveAutoTboxRebootSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveAutoTboxRebootSetting(enabled)
-        }
-    }
-
-    fun saveAutoStopTboxAppSetting(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsManager.saveAutoStopTboxAppSetting(enabled)
         }
     }
 

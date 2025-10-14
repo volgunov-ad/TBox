@@ -97,6 +97,9 @@ object TboxRepository {
     private val _locValues = MutableStateFlow(LocValues())
     val locValues: StateFlow<LocValues> = _locValues.asStateFlow()
 
+    private val _currentTheme = MutableStateFlow(1)
+    val currentTheme: StateFlow<Int> = _currentTheme.asStateFlow()
+
     private const val MAX_LOGS = 100
 
     fun addLog(level: String, tag: String, message: String) {
@@ -120,7 +123,7 @@ object TboxRepository {
         _tboxConnectionTime.value = Date()
     }
 
-    fun updateServiceStartTimeTime() {
+    fun updateServiceStartTime() {
         _serviceStartTime.value = Date()
     }
 
@@ -130,6 +133,10 @@ object TboxRepository {
 
     fun updateModemStatus(value: Int) {
         _modemStatus.value = value
+    }
+
+    fun updateCurrentTheme(value: Int) {
+        _currentTheme.value = value
     }
 
     fun updateNetState(newState: NetState) {

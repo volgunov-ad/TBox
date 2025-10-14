@@ -7,7 +7,6 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 
@@ -20,22 +19,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val settingsManager = SettingsManager(this)
         setContent {
-            TboxAppTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    TboxApp(
-                        settingsManager = settingsManager,
-                        onTboxRestart = { rebootTbox() },
-                        onModemCheck = { modemCheck() },
-                        onModemOn = { setModemMode("on") },
-                        onModemFly = { setModemMode("fly") },
-                        onModemOff = { setModemMode("off") },
-                        onLocSubscribeClick = { locSubscribe() },
-                        onLocUnsubscribeClick = { locUnsubscribe() }
-                    )
-                }
+            Surface(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                TboxApp(
+                    settingsManager = settingsManager,
+                    onTboxRestart = { rebootTbox() },
+                    onModemCheck = { modemCheck() },
+                    onModemOn = { setModemMode("on") },
+                    onModemFly = { setModemMode("fly") },
+                    onModemOff = { setModemMode("off") },
+                    onLocSubscribeClick = { locSubscribe() },
+                    onLocUnsubscribeClick = { locUnsubscribe() },
+                    onGetCanFrame = { getCanFrame() }
+                )
             }
         }
         startBackgroundService()
@@ -67,6 +64,13 @@ class MainActivity : ComponentActivity() {
     private fun locSubscribe() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_LOC_SUBSCRIBE
+        }
+        startService(intent)
+    }
+
+    private fun getCanFrame() {
+        val intent = Intent(this, BackgroundService::class.java).apply {
+            action = BackgroundService.ACTION_GET_CAN_FRAME
         }
         startService(intent)
     }

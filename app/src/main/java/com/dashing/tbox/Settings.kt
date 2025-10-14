@@ -19,7 +19,6 @@ class SettingsManager(private val context: Context) {
         private val AUTO_MODEM_RESTART_KEY = booleanPreferencesKey("auto_modem_restart")
         private val AUTO_TBOX_REBOOT_KEY = booleanPreferencesKey("auto_tbox_reboot")
         private val LOG_LEVEL = stringPreferencesKey("log_level")
-        private val AUTO_STOP_TBOX_APP_KEY = booleanPreferencesKey("auto_stop_tbox_app")
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("auto_prevent_tbox_restart")
     }
 
@@ -31,11 +30,6 @@ class SettingsManager(private val context: Context) {
     val autoTboxRebootFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[AUTO_TBOX_REBOOT_KEY] ?: false
-        }
-
-    val autoStopTboxApp: Flow<Boolean> = context.dataStore.data
-        .map { preferences ->
-            preferences[AUTO_STOP_TBOX_APP_KEY] ?: false
         }
 
     val autoPreventTboxRestart: Flow<Boolean> = context.dataStore.data
@@ -87,20 +81,6 @@ class SettingsManager(private val context: Context) {
     suspend fun saveLogLevel(level: String) {
         context.dataStore.edit { preferences ->
             preferences[LOG_LEVEL] = level
-        }
-    }
-
-    suspend fun getAutoStopTboxAppSetting(): Boolean {
-        return context.dataStore.data
-            .map { preferences ->
-                preferences[AUTO_STOP_TBOX_APP_KEY] ?: false
-            }
-            .first()
-    }
-
-    suspend fun saveAutoStopTboxAppSetting(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[AUTO_STOP_TBOX_APP_KEY] = enabled
         }
     }
 

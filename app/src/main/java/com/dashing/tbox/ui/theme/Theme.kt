@@ -1,58 +1,69 @@
 package com.dashing.tbox.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
-)
+import androidx.compose.ui.graphics.Color
 
 @Composable
-fun TBoxTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+fun TboxAppTheme(
+    theme: Int = 1, // 1 - светлая, 2 - темная
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+    val colorScheme = when (theme) {
+        2 -> darkColorScheme()
+        else -> lightColorScheme()
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
         content = content
     )
 }
+
+// Светлая цветовая схема
+fun lightColorScheme() = androidx.compose.material3.lightColorScheme(
+    primary = Color(0xFF0066CC),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFD6E3FF),
+    onPrimaryContainer = Color(0xFF001C3A),
+    secondary = Color(0xFF0066CC),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFD6E3FF),
+    onSecondaryContainer = Color(0xFF001C3A),
+    tertiary = Color(0xFF0066CC),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFD6E3FF),
+    onTertiaryContainer = Color(0xFF001C3A),
+    background = Color(0xFFF8F9FA),
+    onBackground = Color(0xFF1A1C1E),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF1A1C1E),
+    surfaceVariant = Color(0xFFE8ECF0),
+    onSurfaceVariant = Color(0xFF42474E),
+    outline = Color(0xFF72777F),
+    outlineVariant = Color(0xFFC2C7CF)
+)
+
+// Темная цветовая схема
+fun darkColorScheme() = androidx.compose.material3.darkColorScheme(
+    primary = Color(0xFF0066CC),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFF004586),
+    onPrimaryContainer = Color(0xFFD6E3FF),
+    secondary = Color(0xFFA8C7FF),
+    onSecondary = Color(0xFF002F5F),
+    secondaryContainer = Color(0xFF004586),
+    onSecondaryContainer = Color(0xFFD6E3FF),
+    tertiary = Color(0xFFA8C7FF),
+    onTertiary = Color(0xFF002F5F),
+    tertiaryContainer = Color(0xFF004586),
+    onTertiaryContainer = Color(0xFFD6E3FF),
+    background = Color(0xFF1A1C1E),
+    onBackground = Color(0xFFE2E2E6),
+    surface = Color(0xFF1A1C1E),
+    onSurface = Color(0xFFE2E2E6),
+    surfaceVariant = Color(0xFF42474E),
+    onSurfaceVariant = Color(0xFFC2C7CF),
+    outline = Color(0xFF8C9199),
+    outlineVariant = Color(0xFF42474E)
+)

@@ -26,7 +26,6 @@ class BackgroundService : Service() {
     private val serverPort = 50047
 
     private lateinit var themeObserver: ThemeObserver
-    private var currentTheme: Int = 1
 
     private val socket = DatagramSocket().apply {soTimeout = 1000}
 
@@ -39,6 +38,7 @@ class BackgroundService : Service() {
     private var apnJob: Job? = null
     private var appCmd: Job? = null
     private var crtCmd: Job? = null
+    private var ssmCmd: Job? = null
     private var swdCmd: Job? = null
     private var locCmd: Job? = null
     private var listenJob: Job? = null
@@ -91,6 +91,7 @@ class BackgroundService : Service() {
         const val ACTION_PUK = "com.dashing.tbox.PUK"
         const val ACTION_LOC_SUBSCRIBE = "com.dashing.tbox.LOC_SUBSCRIBE"
         const val ACTION_LOC_UNSUBSCRIBE = "com.dashing.tbox.LOC_UNSUBSCRIBE"
+        const val ACTION_GET_CAN_FRAME = "com.dashing.tbox.GET_CAN_FRAME"
     }
 
     override fun onCreate() {
@@ -127,9 +128,7 @@ class BackgroundService : Service() {
 
     private fun handleThemeChange(themeMode: Int) {
         try {
-            if (currentTheme != themeMode) {
-                currentTheme = themeMode
-            }
+            TboxRepository.updateCurrentTheme(themeMode)
         } catch (e: Exception) {
             Log.e("ThemeService", "Error handling theme change", e)
         }
@@ -147,7 +146,7 @@ class BackgroundService : Service() {
                     startListener()
                     startCheckConnection()
                     startPeriodicJob()
-                    TboxRepository.updateServiceStartTimeTime()
+                    TboxRepository.updateServiceStartTime()
                 }
             }
             ACTION_STOP -> {
@@ -188,6 +187,7 @@ class BackgroundService : Service() {
             }
             ACTION_LOC_SUBSCRIBE -> locSubscribe(true)
             ACTION_LOC_UNSUBSCRIBE -> locSubscribe(false)
+            ACTION_GET_CAN_FRAME -> ctrGetCanFrame()
         }
         return START_STICKY
     }
@@ -354,8 +354,13 @@ class BackgroundService : Service() {
                     continue
                 }
                 if (settingsManager.getAutoModemRestartSetting()) {
-                    delay(modemCheckTimeout)
                     if (!checkConnection()) {
+                        delay(10000)
+                        if (checkConnection()) {
+                            modemCheckTimeout = 10000
+                            rebootTimeout = 600000
+                            continue
+                        }
                         TboxRepository.addLog("WARN", "Net connection checker",
                             "No network connection. Restart modem")
                         modemMode(0, needCheck = false)
@@ -366,8 +371,8 @@ class BackgroundService : Service() {
                             modemMode(1)
                         }
                         delay(10000)
-                        modemCheckTimeout += 10000
-                        if (modemCheckTimeout > 60000) {
+                        modemCheckTimeout += 30000
+                        if (modemCheckTimeout > 120000) {
                             modemCheckTimeout = 10000
                         }
 
@@ -403,9 +408,9 @@ class BackgroundService : Service() {
         if (periodicJob?.isActive == true) return
         Log.d("NetUpdater", "Start periodic job")
         var preventRestartLastTime = Date()
-        var timeDiff: Long? = null
+        var timeDiff: Long
         periodicJob = scope.launch {
-            delay(10000)
+            delay(15000)
             while (isActive) {
                 if (TboxRepository.locationSubscribed.value){
                     val delta =  (Date().time - TboxRepository.locUpdateTime.value.time) / 1000
@@ -415,6 +420,8 @@ class BackgroundService : Service() {
                 }
                 if (TboxRepository.tboxConnected.value) {
                     if (settingsManager.getAutoPreventTboxRestartSetting()) {
+                        // Отправка команд предотвращения перезагрузки, если они не были подтверждены,
+                        // но не чаще 1 раза в 10 секунд
                         timeDiff = Date().time - preventRestartLastTime.time
                         if (!TboxRepository.preventRestartSend.value && timeDiff > 10000) {
                             preventRestart()
@@ -424,6 +431,7 @@ class BackgroundService : Service() {
                             suspendTboxApp()
                             preventRestartLastTime = Date()
                         }
+                        // Отправка команд предотвращения перезагрузки, через каждые 15 минут
                         if (timeDiff > 900000) {
                             preventRestart()
                             suspendTboxApp()
@@ -431,7 +439,7 @@ class BackgroundService : Service() {
                         }
                     }
                 }
-                delay(5000)
+                delay(1000)
             }
         }
     }
@@ -494,6 +502,18 @@ class BackgroundService : Service() {
         }
     }
 
+    private fun ctrGetCanFrame() {
+        if (crtCmd?.isActive == true) return
+        Log.d("CMD", "Send GetDid command")
+        crtCmd = scope.launch {
+            TboxRepository.addLog("DEBUG", "CRT send", "Send GetDid command")
+            mutex.withLock {
+                sendUdpMessage(socket, serverPort, 0x23, 0x37, 0x12,
+                    byteArrayOf(0x00, 0x14.toByte()))
+            }
+        }
+    }
+
     private fun ctrGetPowVolInfo() {
         if (crtCmd?.isActive == true) return
         Log.d("CMD", "Send GetPowVolInfo command")
@@ -514,6 +534,18 @@ class BackgroundService : Service() {
             mutex.withLock {
                 sendUdpMessage(socket, serverPort, 0x23, 0x37, 0x14,
                     byteArrayOf(0x00, 0x00, 0x00, 0x00))
+            }
+        }
+    }
+
+    private fun ssmGetDynamicCode() {
+        if (ssmCmd?.isActive == true) return
+        Log.d("SSM", "Send GetDynamicCode command")
+        ssmCmd = scope.launch {
+            TboxRepository.addLog("DEBUG", "CRT send", "Send GetDynamicCode command")
+            mutex.withLock {
+                sendUdpMessage(socket, serverPort, 0x35, 0x37, 0x06,
+                    byteArrayOf(0x00, 0x00))
             }
         }
     }
@@ -598,7 +630,7 @@ class BackgroundService : Service() {
             putExtra(EXTRA_NET_TYPE, TboxRepository.netState.value.netStatus)
             putExtra(EXTRA_TBOX_STATUS, TboxRepository.tboxConnected.value)
             putExtra(EXTRA_APN_STATUS, TboxRepository.apnState.value.apnStatus)
-            putExtra(EXTRA_THEME, currentTheme)
+            putExtra(EXTRA_THEME, TboxRepository.currentTheme.value)
         }
         try {
             sendBroadcast(intent)
@@ -1092,6 +1124,7 @@ class BackgroundService : Service() {
                 suspendTboxApp()
                 preventRestart()
             }
+            ssmGetDynamicCode()
 
             //ctrGetPowVolInfo()
             //ctrGetHdmData()
