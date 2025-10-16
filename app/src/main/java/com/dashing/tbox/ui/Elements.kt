@@ -4,12 +4,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,18 +27,25 @@ import androidx.compose.ui.unit.sp
 fun StatusRow(label: String, value: String) {
     Row(
         modifier = Modifier
+            .widthIn(max = 800.dp)
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
             text = label,
-            fontSize = 20.sp,
+            modifier = Modifier
+                .widthIn(max = 400.dp) // ← Максимальная ширина
+                .weight(1f),
+            fontSize = 22.sp,
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
             text = value,
-            fontSize = 20.sp,
+            modifier = Modifier
+                .widthIn(max = 400.dp) // ← Максимальная ширина
+                .weight(1f),
+            fontSize = 22.sp,
             color = MaterialTheme.colorScheme.onSurface
         )
     }
@@ -53,7 +63,7 @@ fun ColoredLogEntry(log: String) {
 
     Text(
         text = log,
-        fontSize = 16.sp,
+        fontSize = 18.sp,
         color = color,
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
     )
@@ -95,7 +105,7 @@ fun ModeButton(
     ) {
         Text(
             text = text,
-            fontSize = 20.sp,
+            fontSize = 24.sp,
             maxLines = 2,
             textAlign = TextAlign.Center
         )
@@ -111,13 +121,13 @@ fun TabMenuItem(
     val backgroundColor = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
-        MaterialTheme.colorScheme.surface
+        MaterialTheme.colorScheme.background
     }
 
     val textColor = if (selected) {
         MaterialTheme.colorScheme.onPrimary
     } else {
-        MaterialTheme.colorScheme.onSurface
+        MaterialTheme.colorScheme.onBackground
     }
 
     Box(
@@ -133,7 +143,47 @@ fun TabMenuItem(
             color = textColor,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Left,
-            fontSize = 26.sp
+            fontSize = 30.sp
         )
+    }
+}
+
+
+@Composable
+fun SettingSwitch(
+    isEnabled: Boolean,
+    onCheckedChange: (enabled: Boolean) -> Unit,
+    text: String,
+    description: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Switch(
+            checked = isEnabled,
+            onCheckedChange = { enabled ->
+                onCheckedChange(enabled)
+            }
+        )
+
+        Column(
+            modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
+        ) {
+            Text(
+                text = text,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Medium
+            )
+            if (!description.isEmpty()) {
+                Text(
+                    text = description,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
     }
 }

@@ -42,7 +42,8 @@ data class LocValues(
     val usingSatellites: Int = 0,
     val speed: Double = 0.0,
     val trueDirection: Double = 0.0,
-    val magneticDirection: Double = 0.0
+    val magneticDirection: Double = 0.0,
+    val updateTime: Date = Date(),
 )
 
 data class UtcTime(
@@ -52,6 +53,19 @@ data class UtcTime(
     val hour: Int = 0,
     val minute: Int = 0,
     val second: Int = 0
+)
+
+data class VoltagesState(
+    val voltage1: Double = 0.0,
+    val voltage2: Double = 0.0,
+    val voltage3: Double = 0.0,
+    val updateTime: Date = Date(),
+)
+
+data class HdmData(
+    val isPower: Boolean = false,
+    val isIgnition: Boolean = false,
+    val isCan: Boolean = false,
 )
 
 object TboxRepository {
@@ -66,6 +80,12 @@ object TboxRepository {
 
     private val _apn2State = MutableStateFlow(APNState())
     val apn2State: StateFlow<APNState> = _apn2State.asStateFlow()
+
+    private val _voltages = MutableStateFlow(VoltagesState())
+    val voltages: StateFlow<VoltagesState> = _voltages.asStateFlow()
+
+    private val _hdm = MutableStateFlow(HdmData())
+    val hdm: StateFlow<HdmData> = _hdm.asStateFlow()
 
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
@@ -87,9 +107,6 @@ object TboxRepository {
 
     private val _serviceStartTime = MutableStateFlow(Date())
     val serviceStartTime: StateFlow<Date> = _serviceStartTime.asStateFlow()
-
-    private val _locUpdateTime = MutableStateFlow(Date())
-    val locUpdateTime: StateFlow<Date> = _locUpdateTime.asStateFlow()
 
     private val _modemStatus = MutableStateFlow(0)
     val modemStatus: StateFlow<Int> = _modemStatus.asStateFlow()
@@ -127,10 +144,6 @@ object TboxRepository {
         _serviceStartTime.value = Date()
     }
 
-    fun updateLocUpdateTime() {
-        _locUpdateTime.value = Date()
-    }
-
     fun updateModemStatus(value: Int) {
         _modemStatus.value = value
     }
@@ -165,5 +178,13 @@ object TboxRepository {
 
     fun updateSuspendTboxAppSend(newValue: Boolean) {
         _suspendTboxAppSend.value = newValue
+    }
+
+    fun updateVoltages(newValue: VoltagesState) {
+        _voltages.value = newValue
+    }
+
+    fun updateHdm(newValue: HdmData) {
+        _hdm.value = newValue
     }
 }

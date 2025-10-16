@@ -8,93 +8,100 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+private const val DATASTORE_NAME = "com.dashing.tbox.settings"
+
+val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
 
 class SettingsManager(private val context: Context) {
 
     companion object {
-        private val AUTO_MODEM_RESTART_KEY = booleanPreferencesKey("auto_modem_restart")
-        private val AUTO_TBOX_REBOOT_KEY = booleanPreferencesKey("auto_tbox_reboot")
-        private val LOG_LEVEL = stringPreferencesKey("log_level")
-        private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("auto_prevent_tbox_restart")
+        private const val KEY_PREFIX = "com.dashing.tbox."
+
+        private val AUTO_MODEM_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_modem_restart")
+        private val AUTO_TBOX_REBOOT_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_tbox_reboot")
+        private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
+        private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
+        private val UPDATE_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}update_voltages")
+        private val TBOX_IP_KEY = stringPreferencesKey("${KEY_PREFIX}tbox_ip")
+
+        private const val DEFAULT_LOG_LEVEL = "DEBUG"
+        private const val DEFAULT_TBOX_IP = "192.168.225.1"
     }
 
-    val autoModemRestartFlow: Flow<Boolean> = context.dataStore.data
+    val autoModemRestartFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[AUTO_MODEM_RESTART_KEY] ?: false
         }
 
-    val autoTboxRebootFlow: Flow<Boolean> = context.dataStore.data
+    val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[AUTO_TBOX_REBOOT_KEY] ?: false
         }
 
-    val autoPreventTboxRestart: Flow<Boolean> = context.dataStore.data
+    val autoPreventTboxRestartFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false
         }
 
-    val logLevel: Flow<String> = context.dataStore.data
+    val updateVoltagesFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LOG_LEVEL] ?: "DEBUG"
+            preferences[UPDATE_VOLTAGES_KEY] ?: false
         }
 
-    suspend fun getAutoModemRestartSetting(): Boolean {
-        return context.dataStore.data
-            .map { preferences ->
-                preferences[AUTO_MODEM_RESTART_KEY] ?: false
-            }
-            .first()
-    }
+    val logLevelFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[LOG_LEVEL_KEY] ?: DEFAULT_LOG_LEVEL
+        }
+
+    val tboxIPFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[TBOX_IP_KEY] ?: DEFAULT_TBOX_IP
+        }
 
     suspend fun saveAutoModemRestartSetting(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        context.settingsDataStore.edit { preferences ->
             preferences[AUTO_MODEM_RESTART_KEY] = enabled
         }
     }
 
-    suspend fun getAutoTboxRebootSetting(): Boolean {
-        return context.dataStore.data
-            .map { preferences ->
-                preferences[AUTO_TBOX_REBOOT_KEY] ?: false
-            }
-            .first()
-    }
-
     suspend fun saveAutoTboxRebootSetting(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        context.settingsDataStore.edit { preferences ->
             preferences[AUTO_TBOX_REBOOT_KEY] = enabled
         }
     }
 
-    suspend fun getLogLevel(): String {
-        return context.dataStore.data
-            .map { preferences ->
-                preferences[LOG_LEVEL] ?: "DEBUG"
-            }
-            .first()
-    }
-
     suspend fun saveLogLevel(level: String) {
-        context.dataStore.edit { preferences ->
-            preferences[LOG_LEVEL] = level
+        context.settingsDataStore.edit { preferences ->
+            preferences[LOG_LEVEL_KEY] = level
         }
     }
 
-    suspend fun getAutoPreventTboxRestartSetting(): Boolean {
-        return context.dataStore.data
-            .map { preferences ->
-                preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false
-            }
-            .first()
+    suspend fun saveAutoPreventTboxRestartSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_PREVENT_TBOX_RESTART_KEY] = enabled
+        }
     }
 
-    suspend fun saveAutoPreventTboxRestartSetting(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
-            preferences[AUTO_PREVENT_TBOX_RESTART_KEY] = enabled
+    suspend fun saveCustomString(key: String, value: String) {
+        val preferencesKey = stringPreferencesKey("${KEY_PREFIX}$key")
+        context.settingsDataStore.edit { preferences ->
+            preferences[preferencesKey] = value
+        }
+    }
+
+    fun getStringFlow(key: String, defaultValue: String = ""): Flow<String> {
+        val preferencesKey = stringPreferencesKey("${KEY_PREFIX}$key")
+        return context.settingsDataStore.data
+            .map { preferences ->
+                preferences[preferencesKey] ?: defaultValue
+            }
+    }
+
+    suspend fun saveUpdateVoltagesSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[UPDATE_VOLTAGES_KEY] = enabled
         }
     }
 }

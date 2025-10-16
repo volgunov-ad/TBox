@@ -53,13 +53,6 @@ class TboxViewModel() : ViewModel() {
             initialValue = false
         )
 
-    val locUpdateTime: StateFlow<Date> = TboxRepository.locUpdateTime
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = Date()
-        )
-
     val modemStatus: StateFlow<Int> = TboxRepository.modemStatus
         .stateIn(
             scope = viewModelScope,
@@ -108,9 +101,27 @@ class TboxViewModel() : ViewModel() {
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = 1
         )
+
+    val voltages: StateFlow<VoltagesState> = TboxRepository.voltages
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = VoltagesState()
+        )
+
+    val hdm: StateFlow<HdmData> = TboxRepository.hdm
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = HdmData()
+        )
 }
 
 class SettingsViewModel(private val settingsManager: SettingsManager) : ViewModel() {
+
+    companion object {
+        private const val DEFAULT_LOG_LEVEL = "DEBUG"
+    }
 
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
         .stateIn(
@@ -126,18 +137,60 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
-    val isAutoPreventTboxRestartEnabled = settingsManager.autoPreventTboxRestart
+    val isAutoPreventTboxRestartEnabled = settingsManager.autoPreventTboxRestartFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
         )
 
-    val logLevel = settingsManager.logLevel
+    val isUpdateVoltagesEnabled = settingsManager.updateVoltagesFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = "DEBUG"
+            initialValue = false
+        )
+
+    val logLevel = settingsManager.logLevelFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_LOG_LEVEL
+        )
+
+    val crtVersion = settingsManager.getStringFlow("crt_version", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val appVersion = settingsManager.getStringFlow("app_version", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val mdcVersion = settingsManager.getStringFlow("mdc_version", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val swdVersion = settingsManager.getStringFlow("swd_version", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val locVersion = settingsManager.getStringFlow("loc_version", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
         )
 
     fun saveAutoRestartSetting(enabled: Boolean) {
@@ -161,6 +214,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveLogLevel(level: String) {
         viewModelScope.launch {
             settingsManager.saveLogLevel(level)
+        }
+    }
+
+    fun saveUpdateVoltagesSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUpdateVoltagesSetting(enabled)
         }
     }
 }

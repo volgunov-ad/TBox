@@ -1,7 +1,6 @@
 package com.dashing.tbox
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,16 +11,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,7 +42,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,6 +57,7 @@ import com.dashing.tbox.ui.StatusRow
 import com.dashing.tbox.ui.ModeButton
 import com.dashing.tbox.ui.ColoredLogEntry
 import com.dashing.tbox.ui.TabMenuItem
+import com.dashing.tbox.ui.SettingSwitch
 
 @Composable
 fun TboxApp(
@@ -57,7 +69,8 @@ fun TboxApp(
     onModemOff: () -> Unit,
     onLocSubscribeClick: () -> Unit,
     onLocUnsubscribeClick: () -> Unit,
-    onGetCanFrame: () -> Unit
+    onGetCanFrame: () -> Unit,
+    onUpdateVersions: () -> Unit
 ) {
     val viewModel = TboxViewModel()
     val settingsViewModel = remember { SettingsViewModel(settingsManager) }
@@ -76,6 +89,7 @@ fun TboxApp(
             onLocSubscribeClick = onLocSubscribeClick,
             onLocUnsubscribeClick = onLocUnsubscribeClick,
             onGetCanFrame = onGetCanFrame,
+            onUpdateVersions = onUpdateVersions,
         )
     }
 }
@@ -90,15 +104,18 @@ fun TboxScreen(viewModel: TboxViewModel,
                onModemOff: () -> Unit,
                onLocSubscribeClick: () -> Unit,
                onLocUnsubscribeClick: () -> Unit,
-               onGetCanFrame: () -> Unit
+               onGetCanFrame: () -> Unit,
+               onUpdateVersions: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Модем", "Геопозиция", "Настройки", "Журнал")
+    val tabs = listOf("Модем", "Геопозиция", "Данные авто", "Настройки", "Журнал", "Информация")
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
     val conTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(tboxConnectionTime)
     val serviceTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(serviceStartTime)
+
+    val scrollState = rememberScrollState()
 
     LaunchedEffect(selectedTab) {
         if (selectedTab == 0) {
@@ -113,7 +130,7 @@ fun TboxScreen(viewModel: TboxViewModel,
                 .width(300.dp)
                 .fillMaxHeight()
                 .background(MaterialTheme.colorScheme.background),
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
                 text = if (tboxConnected) "TBox подключен в $conTime"
@@ -133,7 +150,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             )
 
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).verticalScroll(scrollState),
                 verticalArrangement = Arrangement.Center
             ) {
                 tabs.forEachIndexed { index, title ->
@@ -146,7 +163,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             }
 
             Text(
-                text = "Версия программы 0.3.2",
+                text = "Версия программы 0.5",
                 fontSize = 12.sp,
                 textAlign = TextAlign.Right,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -161,8 +178,10 @@ fun TboxScreen(viewModel: TboxViewModel,
             when (selectedTab) {
                 0 -> ModemTab(viewModel, onModemOn, onModemFly, onModemOff)
                 1 -> LocationTab(viewModel, onLocSubscribeClick, onLocUnsubscribeClick)
-                2 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart, onGetCanFrame)
-                3 -> LogsTab(viewModel, settingsViewModel)
+                2 -> CarDataTab(viewModel)
+                3 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart, onGetCanFrame)
+                4 -> LogsTab(viewModel, settingsViewModel)
+                5 -> InfoTab(viewModel, settingsViewModel, onUpdateVersions)
             }
         }
     }
@@ -218,280 +237,6 @@ fun ModemTab(
             onModemFly = onModemFly,
             onModemOff = onModemOff,
             modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
-
-@Composable
-fun SettingsTab(
-    viewModel: TboxViewModel,
-    settingsViewModel: SettingsViewModel,
-    onTboxRestartClick: () -> Unit,
-    onGetCanFrame: () -> Unit,
-) {
-    val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
-    val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
-    val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
-    val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
-    val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
-    val suspendTboxAppSend by viewModel.suspendTboxAppSend.collectAsStateWithLifecycle()
-
-    val scrollState = rememberScrollState()
-
-    var restartButtonEnabled by remember { mutableStateOf(true) }
-
-    LaunchedEffect(restartButtonEnabled) {
-        if (!restartButtonEnabled) {
-            delay(15000) // Блокировка на 15 секунд
-            restartButtonEnabled = true
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(18.dp)
-    ) {
-        SettingSwitch(
-            isAutoRestartEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoRestartSetting(enabled)
-            },
-            "Автоматический перезапуск модема",
-            "Автоматически перезапускать модем при потере подключения к сети. " +
-                    "Проверка происходит с периодичностью 10 секунд с нарастанием в 30 секунд " +
-                    "после каждого перезапуска модема (сброс таймера до 10 секунд происходит при " +
-                    "подключении сети, а также когда он превысит 120 с"
-        )
-        SettingSwitch(
-            isAutoTboxRebootEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoTboxRebootSetting(enabled)
-            },
-            "Автоматическая перезагрузка TBox",
-            "Автоматически презагружать TBox, если перезапуск модема не помогает. " +
-                    "Перезагрузка просходит через 60 секунд после попытки перезапуска модема, " +
-                    "если это не помогло. Далее таймер увеличиваться каждый раз на 10 минут " +
-                    "(сброс таймера до 60 секунд происходит при подключении сети, а также когда " +
-                    "он превысит 60 минут"
-        )
-        SettingSwitch(
-            isAutoPreventTboxRestartEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoPreventTboxRestartSetting(enabled)
-            },
-            "Предотвращение перезагрузки TBox",
-            "Отключение приложения APP и проверки состояния сети в TBox " +
-                    "позволяет избежать периодической перезагрузки TBox. Необходимые команды " +
-                    "отправляются фоновой службой этого приложения каждый раз при запуске " +
-                    "головного устройства, а также сразу же при включении данной опции"
-        )
-        /*SettingSwitch(
-            isAutoPreventTboxRestartEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoPreventTboxRestartSetting(enabled)
-            },
-            "Автоматическое предотвращение перезагрузки TBox по состоянию сети",
-            "TBox не будет проверять состояние сети, это поможет избежать автоматической перезагрузки TBox"
-        )*/
-        //Spacer(modifier = Modifier.width(16.dp))
-        StatusRow("Отправка команды SUSPEND приложению APP", if (suspendTboxAppSend) "да" else "нет")
-        StatusRow("Отправка команды PREVENT RESTART приложению SWD", if (preventRestartSend) "да" else "нет")
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = {
-                    if (restartButtonEnabled) {
-                        restartButtonEnabled = false
-                        onTboxRestartClick()
-                    }
-                },
-                enabled = restartButtonEnabled && tboxConnected
-            ) {
-                Text(
-                    text = "Перезагрузка TBox",
-                    fontSize = 20.sp,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
-            /*Button(
-                onClick = onGetCanFrame,
-                enabled = restartButtonEnabled && tboxConnected
-            ) {
-                Text(
-                    text = "getCanFrame",
-                    fontSize = 20.sp,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }*/
-        }
-    }
-}
-
-@Composable
-fun SettingSwitch(
-    isEnabled: Boolean,
-    onCheckedChange: (enabled: Boolean) -> Unit,
-    text: String,
-    description: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Switch(
-            checked = isEnabled,
-            onCheckedChange = { enabled ->
-                onCheckedChange(enabled)
-            }
-        )
-
-        Column(
-            modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
-        ) {
-            Text(
-                text = text,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            Text(
-                text = description,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun LocationTab(
-    viewModel: TboxViewModel,
-    onLocSubscribeClick: () -> Unit,
-    onLocUnsubscribeClick: () -> Unit
-) {
-    val locValues by viewModel.locValues.collectAsStateWithLifecycle()
-    val locUpdateTime by viewModel.locUpdateTime.collectAsStateWithLifecycle()
-    val locationSubscribed by viewModel.locationSubscribed.collectAsStateWithLifecycle()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            val dateTime = "${locValues.utcTime.day}.${locValues.utcTime.month}.${locValues.utcTime.year} " +
-                    "${locValues.utcTime.hour}:${locValues.utcTime.minute}:${locValues.utcTime.second}"
-            val lastUpdate = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(locUpdateTime)
-            item { StatusRow("Последнее обновление", lastUpdate) }
-            item { StatusRow("Фиксация местоположения", if (locValues.locateStatus) {"да"} else {"нет"}) }
-            item { StatusRow("Долгота", locValues.longitude.toString()) }
-            item { StatusRow("Широта", locValues.latitude.toString()) }
-            item { StatusRow("Высота, м", locValues.altitude.toString()) }
-            item { StatusRow("Видимые спутники", locValues.visibleSatellites.toString()) }
-            item { StatusRow("Используемые спутники", locValues.usingSatellites.toString()) }
-            item { StatusRow("Скорость, км/ч", locValues.speed.toString()) }
-            item { StatusRow("Истинное направление", locValues.trueDirection.toString()) }
-            item { StatusRow("Магнитное направление", locValues.magneticDirection.toString()) }
-            item { StatusRow("Дата и время", dateTime) }
-        }
-        Spacer(modifier = Modifier.width(16.dp))
-        LocationSubscribeSelector(locationSubscribed, onLocSubscribeClick, onLocUnsubscribeClick)
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(text = locValues.rawValue, fontSize = 16.sp)
-        }
-    }
-}
-
-@Composable
-fun LocationSubscribeSelector(
-    locationSubscribed: Boolean,
-    onOn: () -> Unit,
-    onOff: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var buttonsEnabled by remember { mutableStateOf(true) }
-
-    LaunchedEffect(buttonsEnabled) {
-        if (!buttonsEnabled) {
-            delay(5000) // Блокировка на 5 секунд
-            buttonsEnabled = true
-        }
-    }
-
-    Column(modifier = modifier) {
-        // Заголовок
-        Text(
-            text = "Обновление местоположения",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            ModeButton(
-                text = "Включено",
-                isSelected = locationSubscribed,
-                onClick = {
-                    if (buttonsEnabled) {
-                        buttonsEnabled = false
-                        onOn()
-                    }
-                },
-                enabled = buttonsEnabled,
-                modifier = Modifier.weight(1f)
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            ModeButton(
-                text = "Выключено",
-                isSelected = !locationSubscribed,
-                onClick = {
-                    if (buttonsEnabled) {
-                        buttonsEnabled = false
-                        onOff()
-                    }
-                },
-                enabled = buttonsEnabled,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-fun LogsTab(
-    viewModel: TboxViewModel,
-    settingsViewModel: SettingsViewModel
-) {
-    val logs by viewModel.logs.collectAsStateWithLifecycle()
-    val logLevel by settingsViewModel.logLevel.collectAsStateWithLifecycle()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Spacer(modifier = Modifier.width(12.dp))
-        LogsCard(
-            logs = logs,
-            logLevel = logLevel
         )
     }
 }
@@ -574,10 +319,437 @@ fun ModemModeSelector(
 }
 
 @Composable
-fun LogsCard(logs: List<String>, logLevel: String) {
+fun SettingsTab(
+    viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel,
+    onTboxRestartClick: () -> Unit,
+    onGetCanFrame: () -> Unit,
+) {
+    val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
+    val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
+    val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
+    val isUpdateVoltagesEnabled by settingsViewModel.isUpdateVoltagesEnabled.collectAsStateWithLifecycle()
+    val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+
+    val scrollState = rememberScrollState()
+
+    var restartButtonEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(restartButtonEnabled) {
+        if (!restartButtonEnabled) {
+            delay(15000) // Блокировка на 15 секунд
+            restartButtonEnabled = true
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(18.dp)
+    ) {
+        SettingSwitch(
+            isAutoRestartEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoRestartSetting(enabled)
+            },
+            "Автоматический перезапуск модема",
+            "Автоматически перезапускать модем при потере подключения к сети. " +
+                    "Проверка происходит с периодичностью 10 секунд в первый раз и " +
+                    "5 минут в последующие разы " +
+                    "(сброс таймера до 10 секунд происходит при " +
+                    "подключении сети)"
+        )
+        SettingSwitch(
+            isAutoTboxRebootEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoTboxRebootSetting(enabled)
+            },
+            "Автоматическая перезагрузка TBox",
+            "Автоматически презагружать TBox, если перезапуск модема не помогает. " +
+                    "Перезагрузка просходит через 60 секунд после попытки перезапуска модема, " +
+                    "если это не помогло, в первый раз. " +
+                    "Далее таймер устанавливается на 30 минут " +
+                    "(сброс таймера до 60 секунд происходит при подключении сети)"
+        )
+        SettingSwitch(
+            isUpdateVoltagesEnabled,
+            { enabled ->
+                settingsViewModel.saveUpdateVoltagesSetting(enabled)
+            },
+            "Получать данные о напряжении Tbox",
+            ""
+        )
+        SettingSwitch(
+            isAutoPreventTboxRestartEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoPreventTboxRestartSetting(enabled)
+            },
+            "Предотвращение перезагрузки TBox",
+            "Отключение приложения APP и проверки состояния сети в TBox " +
+                    "позволяет избежать периодической перезагрузки TBox. Необходимые команды " +
+                    "отправляются фоновой службой этого приложения каждый раз при запуске " +
+                    "головного устройства, а также сразу же при включении данной опции"
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = {
+                    if (restartButtonEnabled) {
+                        restartButtonEnabled = false
+                        onTboxRestartClick()
+                    }
+                },
+                enabled = restartButtonEnabled && tboxConnected
+            ) {
+                Text(
+                    text = "Перезагрузка TBox",
+                    fontSize = 24.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LocationTab(
+    viewModel: TboxViewModel,
+    onLocSubscribeClick: () -> Unit,
+    onLocUnsubscribeClick: () -> Unit
+) {
+    val locValues by viewModel.locValues.collectAsStateWithLifecycle()
+    val locationSubscribed by viewModel.locationSubscribed.collectAsStateWithLifecycle()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            val dateTime = String.format(
+                Locale.getDefault(),
+                "%02d.%02d.%02d %02d:%02d:%02d",
+                locValues.utcTime.day,
+                locValues.utcTime.month,
+                locValues.utcTime.year,
+                locValues.utcTime.hour,
+                locValues.utcTime.minute,
+                locValues.utcTime.second
+            )
+            val lastUpdate = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(locValues.updateTime)
+            item { StatusRow("Последнее обновление", lastUpdate) }
+            item { StatusRow("Фиксация местоположения", if (locValues.locateStatus) {"да"} else {"нет"}) }
+            item { StatusRow("Долгота", locValues.longitude.toString()) }
+            item { StatusRow("Широта", locValues.latitude.toString()) }
+            item { StatusRow("Высота, м", locValues.altitude.toString()) }
+            item { StatusRow("Видимые спутники", locValues.visibleSatellites.toString()) }
+            item { StatusRow("Используемые спутники", locValues.usingSatellites.toString()) }
+            item { StatusRow("Скорость, км/ч", locValues.speed.toString()) }
+            item { StatusRow("Истинное направление", locValues.trueDirection.toString()) }
+            item { StatusRow("Магнитное направление", locValues.magneticDirection.toString()) }
+            item { StatusRow("Дата и время UTC", dateTime) }
+            item { StatusRow("Сырые данные", locValues.rawValue) }
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        LocationSubscribeSelector(locationSubscribed, onLocSubscribeClick, onLocUnsubscribeClick)
+    }
+}
+
+@Composable
+fun LocationSubscribeSelector(
+    locationSubscribed: Boolean,
+    onOn: () -> Unit,
+    onOff: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var buttonsEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(buttonsEnabled) {
+        if (!buttonsEnabled) {
+            delay(5000) // Блокировка на 5 секунд
+            buttonsEnabled = true
+        }
+    }
+
+    Column(modifier = modifier) {
+        // Заголовок
+        Text(
+            text = "Обновление местоположения",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            ModeButton(
+                text = "Включено",
+                isSelected = locationSubscribed,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onOn()
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f)
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            ModeButton(
+                text = "Выключено",
+                isSelected = !locationSubscribed,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onOff()
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+fun InfoTab(
+    viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel,
+    onUpdateVersionsClick: () -> Unit,
+) {
+    val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+    val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
+    val suspendTboxAppSend by viewModel.suspendTboxAppSend.collectAsStateWithLifecycle()
+    val appVersion by settingsViewModel.appVersion.collectAsStateWithLifecycle()
+    val mdcVersion by settingsViewModel.mdcVersion.collectAsStateWithLifecycle()
+    val swdVersion by settingsViewModel.swdVersion.collectAsStateWithLifecycle()
+    val crtVersion by settingsViewModel.crtVersion.collectAsStateWithLifecycle()
+    val locVersion by settingsViewModel.locVersion.collectAsStateWithLifecycle()
+
+    val scrollState = rememberScrollState()
+
+    var updateVersionButtonEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(updateVersionButtonEnabled) {
+        if (!updateVersionButtonEnabled) {
+            delay(30000) // Блокировка на 30 секунд
+            updateVersionButtonEnabled = true
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(18.dp)
+    ) {
+        StatusRow("Подтверждение команды SUSPEND приложению APP", if (suspendTboxAppSend) "да" else "нет")
+        StatusRow("Подтверждение команды PREVENT RESTART приложению SWD", if (preventRestartSend) "да" else "нет")
+        StatusRow("Версия приложения APP", appVersion)
+        StatusRow("Версия приложения CRT", crtVersion)
+        StatusRow("Версия приложения LOC", locVersion)
+        StatusRow("Версия приложения MDC", mdcVersion)
+        StatusRow("Версия приложения SWD", swdVersion)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = {
+                    if (updateVersionButtonEnabled) {
+                        updateVersionButtonEnabled = false
+                        onUpdateVersionsClick()
+                    }
+                },
+                enabled = updateVersionButtonEnabled && tboxConnected
+            ) {
+                Text(
+                    text = "Проверить версии приложений TBox",
+                    fontSize = 24.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CarDataTab(
+    viewModel: TboxViewModel,
+) {
+    val voltages by viewModel.voltages.collectAsStateWithLifecycle()
+    val hdm by viewModel.hdm.collectAsStateWithLifecycle()
+
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(18.dp)
+    ) {
+        StatusRow("Напряжение 1, В", voltages.voltage1.toString())
+        StatusRow("Напряжение 2, В", voltages.voltage2.toString())
+        StatusRow("Напряжение 3, В", voltages.voltage3.toString())
+        StatusRow("Основное питание", if (hdm.isPower) "да" else "нет")
+        StatusRow("Зажигание", if (hdm.isIgnition) "да" else "нет")
+        StatusRow("CAN", if (hdm.isCan) "да" else "нет")
+    }
+}
+
+@Composable
+fun LogsTab(
+    viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel
+) {
+    val logs by viewModel.logs.collectAsStateWithLifecycle()
+    val logLevel by settingsViewModel.logLevel.collectAsStateWithLifecycle()
+
+    // Состояние для раскрывающегося списка
+    var expanded by remember { mutableStateOf(false) }
+    val logLevels = listOf("DEBUG", "INFO", "WARN", "ERROR")
+
+    // Состояние для текстового фильтра
+    var searchText by remember { mutableStateOf("") }
+
+    val focusManager = LocalFocusManager.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Текстовое поле для фильтрации логов
+            OutlinedTextField(
+                value = searchText,
+                onValueChange = { newText ->
+                    searchText = newText
+                },
+                modifier = Modifier
+                    .padding(vertical = 8.dp),
+                label = {
+                    Text(
+                        text = "Фильтр по тексту (минимум 3 символа)",
+                        fontSize = 16.sp
+                    )
+                },
+                placeholder = {
+                    Text(
+                        text = "Введите текст для поиска...",
+                        fontSize = 16.sp
+                    )
+                },
+                singleLine = true,
+                trailingIcon = {
+                    if (searchText.isNotEmpty()) {
+                        IconButton(
+                            onClick = { searchText = "" }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Очистить"
+                            )
+                        }
+                    }
+                },
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                    }
+                )
+            )
+
+            // Раскрывающийся список для выбора уровня логов
+            Box(
+                modifier = Modifier.wrapContentSize()
+            ) {
+                // Кнопка для открытия списка
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier.width(200.dp)
+                ) {
+                    Text(
+                        text = logLevel,
+                        fontSize = 20.sp,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = if (expanded) "Свернуть" else "Развернуть"
+                    )
+                }
+
+                // Выпадающее меню
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.width(200.dp)
+                ) {
+                    logLevels.forEach { level ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = level,
+                                    fontSize = 20.sp,
+                                    color = if (level == logLevel) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            },
+                            onClick = {
+                                settingsViewModel.saveLogLevel(level)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        //Spacer(modifier = Modifier.width(12.dp))
+        LogsCard(
+            logs = logs,
+            logLevel = logLevel,
+            searchText = searchText
+        )
+    }
+}
+
+@Composable
+fun LogsCard(
+    logs: List<String>,
+    logLevel: String,
+    searchText: String = ""
+) {
     val listState = rememberLazyListState()
-    val filteredLogs = remember(logs, logLevel) {
-        when (logLevel) {
+
+    val filteredLogs = remember(logs, logLevel, searchText) {
+        val levelFilteredLogs = when (logLevel) {
             "DEBUG" -> {
                 logs.filter { it.contains("DEBUG") ||
                         it.contains("INFO") ||
@@ -597,8 +769,16 @@ fun LogsCard(logs: List<String>, logLevel: String) {
                 logs.filter { it.contains("ERROR") }
             }
         }
-    }
 
+        // Применяем текстовый фильтр если есть поисковый запрос
+        if (searchText.length >= 3) {
+            levelFilteredLogs.filter { log ->
+                log.contains(searchText, ignoreCase = true)
+            }
+        } else {
+            levelFilteredLogs
+        }
+    }
 
     // Автопрокрутка к новым логам
     LaunchedEffect(logs.size) {
@@ -615,21 +795,6 @@ fun LogsCard(logs: List<String>, logLevel: String) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Журнал службы TBox",
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontSize = 24.sp
-                )
-            }
-
             LazyColumn(
                 state = listState,
                 modifier = Modifier

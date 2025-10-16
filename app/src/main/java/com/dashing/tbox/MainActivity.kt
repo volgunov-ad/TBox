@@ -31,7 +31,8 @@ class MainActivity : ComponentActivity() {
                     onModemOff = { setModemMode("off") },
                     onLocSubscribeClick = { locSubscribe() },
                     onLocUnsubscribeClick = { locUnsubscribe() },
-                    onGetCanFrame = { getCanFrame() }
+                    onGetCanFrame = { getCanFrame() },
+                    onUpdateVersions = { updateVersions() },
                 )
             }
         }
@@ -138,11 +139,9 @@ class MainActivity : ComponentActivity() {
         startService(intent)
     }
 
-    private fun test() {
-        val atCmd = textATCmd.text.toString()
+    private fun updateVersions() {
         val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_TEST1
-            putExtra(BackgroundService.EXTRA_AT_CMD, atCmd + "\r\n")
+            action = BackgroundService.ACTION_GET_VERSIONS
         }
         startService(intent)
     }
