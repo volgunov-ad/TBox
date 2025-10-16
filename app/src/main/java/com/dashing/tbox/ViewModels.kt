@@ -137,6 +137,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val isWidgetShowIndicatorEnabled = settingsManager.widgetShowIndicatorFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val isAutoPreventTboxRestartEnabled = settingsManager.autoPreventTboxRestartFlow
         .stateIn(
             scope = viewModelScope,
@@ -145,6 +152,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val isUpdateVoltagesEnabled = settingsManager.updateVoltagesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isGetCanFrameEnabled = settingsManager.getCanFrameFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -205,6 +219,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveWidgetShowIndicatorSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWidgetShowIndicatorSetting(enabled)
+        }
+    }
+
     fun saveAutoPreventTboxRestartSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveAutoPreventTboxRestartSetting(enabled)
@@ -220,6 +240,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveUpdateVoltagesSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveUpdateVoltagesSetting(enabled)
+        }
+    }
+
+    fun saveGetCanFrameSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveGetCanFrameSetting(enabled)
         }
     }
 }

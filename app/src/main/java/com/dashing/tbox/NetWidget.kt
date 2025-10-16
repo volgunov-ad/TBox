@@ -47,6 +47,7 @@ class NetWidget : AppWidgetProvider() {
             val netType = intent.getStringExtra(BackgroundService.EXTRA_NET_TYPE) ?: ""
             val apnStatus = intent.getStringExtra(BackgroundService.EXTRA_APN_STATUS) ?: ""
             val tboxStatus = intent.getBooleanExtra(BackgroundService.EXTRA_TBOX_STATUS, false)
+            val showIndicator = intent.getBooleanExtra(BackgroundService.EXTRA_WIDGET_SHOW_INDICATOR, false)
 
             // Обновляем все экземпляры виджета
             val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -54,7 +55,8 @@ class NetWidget : AppWidgetProvider() {
                 ComponentName(context, NetWidget::class.java)
             )
 
-            updateWidget(context, appWidgetManager, appWidgetIds, theme, csq, netType, apnStatus, tboxStatus)
+            updateWidget(context, appWidgetManager, appWidgetIds, theme, csq, netType,
+                apnStatus, tboxStatus, showIndicator, false)
 
             // Перезапускаем проверку таймаута
             restartTimeoutCheck(context)
@@ -96,7 +98,7 @@ class NetWidget : AppWidgetProvider() {
 
         // Используем стандартную тему (1) для отображения отсутствия сигнала
         updateWidget(context, appWidgetManager, appWidgetIds, theme = 1, csq = 99,
-            netType = "", apnStatus = "", tboxStatus = false)
+            netType = "", apnStatus = "", tboxStatus = false, showIndicator = true, isNoData = true)
     }
 
     private fun updateWidget(
@@ -107,10 +109,20 @@ class NetWidget : AppWidgetProvider() {
         csq: Int = 99,
         netType: String = "",
         apnStatus: String = "",
-        tboxStatus: Boolean = false
+        tboxStatus: Boolean = false,
+        showIndicator: Boolean = true,
+        isNoData: Boolean = false,
     ) {
         var imageR = if (theme == 1) R.drawable.ic_signal_nosig_sharp_outlined else
             R.drawable.ic_signal_nosig_sharp_outlined_dark
+
+        val indicatorDrawable = when {
+            !showIndicator -> R.drawable.indicator_none
+            isNoData -> R.drawable.indicator_err
+            !tboxStatus -> R.drawable.indicator_warn
+            else -> R.drawable.indicator_ok
+        }
+
         if (tboxStatus) {
             val signalLevel = csq.getSignalLevel()
             if (apnStatus == "подключен") {
@@ -238,10 +250,12 @@ class NetWidget : AppWidgetProvider() {
                 }
             }
         }
+
         val pendingIntent = getPendingIntent(context)
         appWidgetIds.forEach { appWidgetId ->
             val views = RemoteViews(context.packageName, R.layout.widget_net).apply {
                 setImageViewResource(R.id.widget_image, imageR)
+                setImageViewResource(R.id.status_indicator, indicatorDrawable)
             }
             // Создаем PendingIntent для открытия MainActivity
             views.setOnClickPendingIntent(R.id.widget_image, pendingIntent)

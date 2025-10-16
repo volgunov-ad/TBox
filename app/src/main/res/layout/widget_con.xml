@@ -6,23 +6,13 @@
     android:background="@android:color/transparent">
 
     <ImageView
-        android:id="@+id/widget_image"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:contentDescription="net"
-        android:scaleType="fitCenter"
-        android:adjustViewBounds="true"
-        android:src="@drawable/ic_signal_nosig_sharp_outlined_dark" />
-
-    <ImageView
         android:id="@+id/status_indicator"
         android:contentDescription="connection"
-        android:layout_width="8dp"
-        android:layout_height="8dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:scaleType="fitCenter"
-        android:layout_gravity="end|top"
-        android:layout_marginEnd="5dp"
-        android:layout_marginTop="5dp"
+        android:adjustViewBounds="true"
+        android:layout_margin="20dp"
         android:src="@drawable/indicator_err" />
 
 </FrameLayout>

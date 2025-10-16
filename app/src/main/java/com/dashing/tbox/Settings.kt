@@ -24,6 +24,8 @@ class SettingsManager(private val context: Context) {
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
         private val UPDATE_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}update_voltages")
+        private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
+        private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val TBOX_IP_KEY = stringPreferencesKey("${KEY_PREFIX}tbox_ip")
 
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
@@ -33,6 +35,11 @@ class SettingsManager(private val context: Context) {
     val autoModemRestartFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[AUTO_MODEM_RESTART_KEY] ?: false
+        }
+
+    val widgetShowIndicatorFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[WIDGET_SHOW_INDICATOR] ?: false
         }
 
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -48,6 +55,11 @@ class SettingsManager(private val context: Context) {
     val updateVoltagesFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[UPDATE_VOLTAGES_KEY] ?: false
+        }
+
+    val getCanFrameFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[GET_CAN_FRAME_KEY] ?: false
         }
 
     val logLevelFlow: Flow<String> = context.settingsDataStore.data
@@ -69,6 +81,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveAutoTboxRebootSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[AUTO_TBOX_REBOOT_KEY] = enabled
+        }
+    }
+
+    suspend fun saveWidgetShowIndicatorSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIDGET_SHOW_INDICATOR] = enabled
         }
     }
 
@@ -102,6 +120,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveUpdateVoltagesSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[UPDATE_VOLTAGES_KEY] = enabled
+        }
+    }
+
+    suspend fun saveGetCanFrameSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GET_CAN_FRAME_KEY] = enabled
         }
     }
 }

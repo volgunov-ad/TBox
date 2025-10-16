@@ -30,14 +30,29 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
-        <receiver android:name=".NetWidget" android:exported="true">
+        <receiver
+            android:name=".NetWidget"
+            android:enabled="true"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
                 <action android:name="com.dashing.tbox.UPDATE_WIDGET" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/net_widget_info"/>
+                android:resource="@xml/widget_net_info"/>
+        </receiver>
+        <receiver
+            android:name=".ConWidget"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+                <action android:name="com.dashing.tbox.UPDATE_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_con_info"/>
         </receiver>
         <receiver
             android:name=".BootCompleteReceiver"

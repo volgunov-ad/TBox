@@ -30,7 +30,9 @@ class BackgroundService : Service() {
     private lateinit var autoTboxReboot: StateFlow<Boolean>
     private lateinit var autoPreventTboxRestart: StateFlow<Boolean>
     private lateinit var updateVoltages: StateFlow<Boolean>
+    private lateinit var getCanFrame: StateFlow<Boolean>
     private lateinit var serverIp: StateFlow<String>
+    private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private val serverPort = 50047
     private var address: InetAddress? = null
     private lateinit var themeObserver: ThemeObserver
@@ -58,6 +60,7 @@ class BackgroundService : Service() {
     private var apn1UpdateCount: Int = 0
     private var apn2UpdateCount: Int = 0
     private var apnCheck: Boolean = false
+    private var preventRestartLastTime = Date()
 
     companion object {
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
@@ -75,6 +78,7 @@ class BackgroundService : Service() {
         const val EXTRA_PUK = "com.dashing.tbox.EXTRA_PUK"
         const val EXTRA_THEME = "com.dashing.tbox.EXTRA_THEME"
         const val EXTRA_AT_CMD = "com.dashing.tbox.EXTRA_AT_CMD"
+        const val EXTRA_WIDGET_SHOW_INDICATOR = "com.dashing.tbox.EXTRA_WIDGET_SHOW_INDICATOR"
 
         const val ACTION_START = "com.dashing.tbox.START"
         const val ACTION_STOP = "com.dashing.tbox.STOP"
@@ -113,8 +117,12 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, false)
         updateVoltages = settingsManager.updateVoltagesFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
+        getCanFrame = settingsManager.getCanFrameFlow
+            .stateIn(scope, SharingStarted.Eagerly, false)
         serverIp = settingsManager.tboxIPFlow
             .stateIn(scope, SharingStarted.Eagerly, DEFAULT_TBOX_IP)
+        widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
+            .stateIn(scope, SharingStarted.Eagerly, false)
 
         //address = InetAddress.getByName(serverIp.value)
         //address = InetAddress.getByName(DEFAULT_TBOX_IP)
@@ -403,6 +411,9 @@ class BackgroundService : Service() {
                     if (autoModemRestart.value) {
                         if (!checkConnection()) {
                             delay(10000)
+                            if (!TboxRepository.tboxConnected.value) {
+                                continue
+                            }
                             if (checkConnection()) {
                                 modemCheckTimeout = 10000
                                 rebootTimeout = 600000
@@ -419,6 +430,9 @@ class BackgroundService : Service() {
                             }
                             delay(10000)
                             modemCheckTimeout = 300000
+                            if (!TboxRepository.tboxConnected.value) {
+                                continue
+                            }
 
                             if (!checkConnection()) {
                                 if (autoTboxReboot.value) {
@@ -456,11 +470,12 @@ class BackgroundService : Service() {
         periodicJob = scope.launch {
             try {
                 Log.d("1s Job", "Start periodic job")
-                var preventRestartLastTime = Date()
                 var preventRestartTimeDiff: Long
                 delay(5000)
                 sendWidgetUpdate()
                 var widgetUpdateTime = Date()
+                var crtGetPowVolInfoTime = Date()
+                var crtGetCanFrameTime = Date()
                 delay(15000)
                 while (isActive) {
                     if(Date().time - widgetUpdateTime.time > 5000) {
@@ -477,8 +492,18 @@ class BackgroundService : Service() {
                         val delta = Date().time - TboxRepository.voltages.value.updateTime.time
                         if (delta > 30000) {
                             TboxRepository.updateVoltages(VoltagesState(0.0, 0.0, 0.0))
-                            if (TboxRepository.tboxConnected.value) {
+                            if (TboxRepository.tboxConnected.value && Date().time - crtGetPowVolInfoTime.time > 10000) {
                                 crtGetPowVolInfo()
+                                crtGetPowVolInfoTime = Date()
+                            }
+                        }
+                    }
+                    if (getCanFrame.value) {
+                        val delta = Date().time - TboxRepository.canFrameTime.value.time
+                        if (delta > 60000) {
+                            if (TboxRepository.tboxConnected.value && Date().time - crtGetCanFrameTime.time > 10000) {
+                                crtGetCanFrame()
+                                crtGetCanFrameTime = Date()
                             }
                         }
                     }
@@ -597,6 +622,7 @@ class BackgroundService : Service() {
         versionsJob = scope.launch {
             try {
                 TboxRepository.addLog("DEBUG", "Versions", "Get apps versions")
+                clearVersions()
                 sendUdpMessage(socket, serverPort, 0x23, 0x37, 0x01,
                     byteArrayOf(0x00, 0x00))
                 sendUdpMessage(socket, serverPort, 0x25, 0x37, 0x01,
@@ -616,8 +642,16 @@ class BackgroundService : Service() {
         }
     }
 
+    private suspend fun clearVersions() {
+        settingsManager.saveCustomString("app_version", "")
+        settingsManager.saveCustomString("crt_version", "")
+        settingsManager.saveCustomString("loc_version", "")
+        settingsManager.saveCustomString("mdc_version", "")
+        settingsManager.saveCustomString("swd_version", "")
+    }
+
     private fun crtGetCanFrame() {
-        crtCmd(0x12, byteArrayOf(0x00, 0x14.toByte()), "Send GetDid command")
+        crtCmd(0x12, byteArrayOf(0x00, 0x14.toByte()), "Send GetDid command GetCanFrame")
     }
 
     private fun crtGetPowVolInfo() {
@@ -696,7 +730,9 @@ class BackgroundService : Service() {
             putExtra(EXTRA_TBOX_STATUS, TboxRepository.tboxConnected.value)
             putExtra(EXTRA_APN_STATUS, TboxRepository.apnState.value.apnStatus)
             putExtra(EXTRA_THEME, TboxRepository.currentTheme.value)
+            putExtra(EXTRA_WIDGET_SHOW_INDICATOR, widgetShowIndicator.value)
         }
+        //TboxRepository.addLog("DEBUG", "Widget", "${widgetShowIndicator.value}")
         try {
             sendBroadcast(intent)
         } catch (e: Exception) {
@@ -827,8 +863,11 @@ class BackgroundService : Service() {
                         0x90.toByte() -> {
                             ansCRTPowVol(receivedData)
                         }
+                        0x92.toByte() -> {
+                            ansCRTDidData(receivedData)
+                        }
                         0x94.toByte() -> {
-                            ansHdmData(receivedData)
+                            ansCRTHdmData(receivedData)
                         }
                         0x81.toByte() -> {
                             ansVersion("CRT", receivedData)
@@ -1086,27 +1125,25 @@ class BackgroundService : Service() {
         if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
             TboxRepository.addLog("ERROR", "MDC AT response ", "Error sending AT command")
-        } else {
-            val ans = String(data.copyOfRange(10, data.size), charset = Charsets.UTF_8).trimEnd()
-            if ("ERROR" in ans) {
-                TboxRepository.addLog("ERROR", "MDC AT response ", "AT command error: $ans")
-                return
-            }
-            TboxRepository.addLog("DEBUG", "MDC AT response ", "AT command answer: $ans")
-            if ("+CFUN: 0" in ans || ("AT+CFUN=0" in ans && "OK" in ans)) {
-                TboxRepository.updateModemStatus(0)
-            } else if ("+CFUN: 1" in ans || ("AT+CFUN=1" in ans && "OK" in ans)) {
-                TboxRepository.updateModemStatus(1)
-            } else if ("+CFUN: 4" in ans || ("AT+CFUN=4" in ans && "OK" in ans)) {
-                TboxRepository.updateModemStatus(4)
-            }
+            return
+        }
+        val ans = String(data.copyOfRange(10, data.size), charset = Charsets.UTF_8).trimEnd()
+        if ("ERROR" in ans) {
+            TboxRepository.addLog("ERROR", "MDC AT response ", "AT command error: $ans")
+            return
+        }
+        TboxRepository.addLog("DEBUG", "MDC AT response ", "AT command answer: $ans")
+        if ("+CFUN: 0" in ans || ("AT+CFUN=0" in ans && "OK" in ans)) {
+            TboxRepository.updateModemStatus(0)
+        } else if ("+CFUN: 1" in ans || ("AT+CFUN=1" in ans && "OK" in ans)) {
+            TboxRepository.updateModemStatus(1)
+        } else if ("+CFUN: 4" in ans || ("AT+CFUN=4" in ans && "OK" in ans)) {
+            TboxRepository.updateModemStatus(4)
         }
     }
 
     private fun ansCRTPowVol(data: ByteArray) {
-        if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-            TboxRepository.addLog("DEBUG", "CRT response", "Get power voltages info")
-        } else {
+        if (!data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
             TboxRepository.addLog("ERROR", "CRT response ", "Error power voltages info")
             return
         }
@@ -1123,14 +1160,22 @@ class BackgroundService : Service() {
             val voltage3 = rawVoltage3.toDouble() / 1000.0
 
             TboxRepository.updateVoltages(VoltagesState(voltage1, voltage2, voltage3))
-            //TboxRepository.addLog("INFO", "CRT response", "$voltage1 V, $voltage2 V, $voltage3 V")
+            TboxRepository.addLog("DEBUG", "CRT response",
+                "Get power voltages: $voltage1 V, $voltage2 V, $voltage3 V")
         }
     }
 
-    private fun ansHdmData(data: ByteArray) {
-        if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-            TboxRepository.addLog("DEBUG", "CRT response", "Get HDM data")
-        } else {
+    private fun ansCRTDidData(data: ByteArray) {
+        if (!data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+            TboxRepository.addLog("ERROR", "CRT response ", "Error DID data")
+            return
+        }
+        TboxRepository.addLog("DEBUG", "CRT response",
+            "Get DID data: ${toHexString(data)}")
+    }
+
+    private fun ansCRTHdmData(data: ByteArray) {
+        if (!data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
             TboxRepository.addLog("ERROR", "CRT response ", "Error HDM data")
             return
         }
@@ -1142,6 +1187,11 @@ class BackgroundService : Service() {
             val isCan = buffer.get().toInt() and 0xFF != 0
 
             TboxRepository.updateHdm(HdmData(isPower, isIgnition, isCan))
+            TboxRepository.addLog("DEBUG", "CRT response",
+                "Get HDM data: $isPower, $isIgnition, $isCan")
+        } else {
+            TboxRepository.addLog("DEBUG", "CRT response",
+                "Get HDM data")
         }
     }
 
@@ -1158,7 +1208,6 @@ class BackgroundService : Service() {
     }
 
     private fun ansLOCValues(data: ByteArray) {
-        TboxRepository.addLog("DEBUG", "LOC response", "Get location values")
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
@@ -1171,9 +1220,7 @@ class BackgroundService : Service() {
                 TboxRepository.addLog("DEBUG", "LOC response ", "Location subscribe command complete")
                 return
             }
-        }
-
-        if (data.size >= 45) {
+        } else if (data.size >= 45) {
             TboxRepository.updateLocationSubscribed(true)
 
             val rawValue = toHexString(data.copyOfRange(6, 45))
@@ -1243,6 +1290,11 @@ class BackgroundService : Service() {
                 trueDirection = trueDirection,
                 magneticDirection = magneticDirection
             ))
+            TboxRepository.addLog("DEBUG", "LOC response",
+                "Get location values: $longitude, $latitude")
+        } else {
+            TboxRepository.addLog("DEBUG", "LOC response",
+                "Get location values")
         }
     }
 
@@ -1259,10 +1311,14 @@ class BackgroundService : Service() {
             if (autoPreventTboxRestart.value) {
                 appSuspendTboxApp()
                 swdPreventRestart()
+                preventRestartLastTime = Date()
             }
             //ssmGetDynamicCode()
             if (updateVoltages.value) {
                 crtGetPowVolInfo()
+            }
+            if (getCanFrame.value) {
+                crtGetCanFrame()
             }
             crtGetHdmData()
         }
@@ -1277,6 +1333,7 @@ class BackgroundService : Service() {
             TboxRepository.updateSuspendTboxAppSend(false)
         }
         TboxRepository.updateTboxConnectionTime()
+        sendWidgetUpdate()
     }
 
     private suspend fun Job?.awaitCompletionWithTimeout(timeoutMillis: Long = 5000): Boolean {

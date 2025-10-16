@@ -117,6 +117,9 @@ object TboxRepository {
     private val _currentTheme = MutableStateFlow(1)
     val currentTheme: StateFlow<Int> = _currentTheme.asStateFlow()
 
+    private val _canFrameTime = MutableStateFlow(Date())
+    val canFrameTime: StateFlow<Date> = _canFrameTime.asStateFlow()
+
     private const val MAX_LOGS = 100
 
     fun addLog(level: String, tag: String, message: String) {
@@ -186,5 +189,9 @@ object TboxRepository {
 
     fun updateHdm(newValue: HdmData) {
         _hdm.value = newValue
+    }
+
+    fun updateCanFrameTime() {
+        _canFrameTime.value = Date()
     }
 }

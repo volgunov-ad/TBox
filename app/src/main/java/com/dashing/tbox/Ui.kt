@@ -329,6 +329,8 @@ fun SettingsTab(
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
     val isUpdateVoltagesEnabled by settingsViewModel.isUpdateVoltagesEnabled.collectAsStateWithLifecycle()
+    val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
+    val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
@@ -348,6 +350,12 @@ fun SettingsTab(
             .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
+        Text(
+            text = "Настройки контроля сети",
+            fontSize = 24.sp,
+            maxLines = 1,
+            textAlign = TextAlign.Left
+        )
         SettingSwitch(
             isAutoRestartEnabled,
             { enabled ->
@@ -372,13 +380,11 @@ fun SettingsTab(
                     "Далее таймер устанавливается на 30 минут " +
                     "(сброс таймера до 60 секунд происходит при подключении сети)"
         )
-        SettingSwitch(
-            isUpdateVoltagesEnabled,
-            { enabled ->
-                settingsViewModel.saveUpdateVoltagesSetting(enabled)
-            },
-            "Получать данные о напряжении Tbox",
-            ""
+        Text(
+            text = "Настройки предотвращения перезагрузки",
+            fontSize = 24.sp,
+            maxLines = 1,
+            textAlign = TextAlign.Left
         )
         SettingSwitch(
             isAutoPreventTboxRestartEnabled,
@@ -390,6 +396,45 @@ fun SettingsTab(
                     "позволяет избежать периодической перезагрузки TBox. Необходимые команды " +
                     "отправляются фоновой службой этого приложения каждый раз при запуске " +
                     "головного устройства, а также сразу же при включении данной опции"
+        )
+        Text(
+            text = "Настройки виджета",
+            fontSize = 24.sp,
+            maxLines = 1,
+            textAlign = TextAlign.Left
+        )
+        SettingSwitch(
+            isWidgetShowIndicatorEnabled,
+            { enabled ->
+                settingsViewModel.saveWidgetShowIndicatorSetting(enabled)
+            },
+            "Показывать индикатор подключения Tbox в виджете",
+            "Индикатор в виджете в виде круга может иметь 3 цвета: \n" +
+                    "красный - нет данных от фоновой службы;\n" +
+                    "желтый - нет связи с TBox;\n" +
+                    "зелены - есть связь с TBox"
+        )
+        Text(
+            text = "Экспериментальные настройки",
+            fontSize = 24.sp,
+            maxLines = 1,
+            textAlign = TextAlign.Left
+        )
+        SettingSwitch(
+            isUpdateVoltagesEnabled,
+            { enabled ->
+                settingsViewModel.saveUpdateVoltagesSetting(enabled)
+            },
+            "Получать данные о напряжении Tbox",
+            ""
+        )
+        SettingSwitch(
+            isGetCanFrameEnabled,
+            { enabled ->
+                settingsViewModel.saveGetCanFrameSetting(enabled)
+            },
+            "Получать данные по CAN",
+            ""
         )
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
