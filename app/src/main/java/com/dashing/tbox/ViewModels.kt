@@ -10,6 +10,32 @@ import java.util.Date
 
 class TboxViewModel() : ViewModel() {
     val logs: StateFlow<List<String>> = TboxRepository.logs
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = listOf("")
+        )
+
+    val didDataCSV: StateFlow<List<String>> = TboxRepository.didDataCSV
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = listOf("")
+        )
+
+    val ipList: StateFlow<List<String>> = TboxRepository.ipList
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = listOf("")
+        )
+
+    val canFramesList: StateFlow<List<String>> = TboxRepository.canFramesList
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = listOf("")
+        )
 
     val tboxConnected: StateFlow<Boolean> = TboxRepository.tboxConnected
         .stateIn(
@@ -115,12 +141,69 @@ class TboxViewModel() : ViewModel() {
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = HdmData()
         )
+
+    val odo: StateFlow<OdoData> = TboxRepository.odo
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = OdoData()
+        )
+
+    val engineSpeed: StateFlow<EngineSpeedData> = TboxRepository.engineSpeed
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = EngineSpeedData()
+        )
+
+    val carSpeed: StateFlow<CarSpeedData> = TboxRepository.carSpeed
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = CarSpeedData()
+        )
+
+    val cruise: StateFlow<Cruise> = TboxRepository.cruise
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Cruise()
+        )
+
+    val wheels: StateFlow<Wheels> = TboxRepository.wheels
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Wheels()
+        )
+
+    val steer: StateFlow<SteerData> = TboxRepository.steer
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SteerData()
+        )
+
+    val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = TboxRepository.canFramesStructured
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+
+    val canFrameTime: StateFlow<Date> = TboxRepository.canFrameTime
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Date()
+        )
 }
 
 class SettingsViewModel(private val settingsManager: SettingsManager) : ViewModel() {
 
     companion object {
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
+        private const val DEFAULT_TBOX_IP = "192.168.225.1"
     }
 
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
@@ -205,6 +288,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ""
+        )
+
+    val swVersion = settingsManager.getStringFlow("sw_version", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val hwVersion = settingsManager.getStringFlow("hw_version", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val tboxIP = settingsManager.tboxIPFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_TBOX_IP
         )
 
     fun saveAutoRestartSetting(enabled: Boolean) {

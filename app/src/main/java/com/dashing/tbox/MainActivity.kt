@@ -1,14 +1,23 @@
 package com.dashing.tbox
 
+import android.app.Activity
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import java.io.File
+import java.io.FileWriter
+import androidx.core.net.toUri
 
 class MainActivity : ComponentActivity() {
     private lateinit var numberPin: EditText
@@ -18,6 +27,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val settingsManager = SettingsManager(this)
+
+        requestPermissions()
+
         setContent {
             Surface(
                 modifier = Modifier.fillMaxSize()
@@ -31,11 +43,12 @@ class MainActivity : ComponentActivity() {
                     onModemOff = { setModemMode("off") },
                     onLocSubscribeClick = { locSubscribe() },
                     onLocUnsubscribeClick = { locUnsubscribe() },
-                    onGetCanFrame = { getCanFrame() },
                     onUpdateVersions = { updateVersions() },
+                    onSaveToFile = { ipList -> saveDataToFile(ipList) }
                 )
             }
         }
+
         startBackgroundService()
     }
 
@@ -184,12 +197,49 @@ class MainActivity : ComponentActivity() {
         //stopNetUpdaterIfNoClients()
     }
 
-    private fun stopNetUpdaterIfNoClients() {
-        if (!WidgetUtils.isWidgetActive(this)) {
-            val intent = Intent(this, BackgroundService::class.java).apply {
-                action = BackgroundService.ACTION_STOP
+    private fun saveDataToFile(dataList: List<String>) {
+        try {
+            val savePath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+            val csvFile = File(savePath, "data_${System.currentTimeMillis()}.txt")
+
+            FileWriter(csvFile).use { writer ->
+                dataList.forEach { value ->
+                    writer.append("$value\n")
+                }
             }
-            startService(intent)
+
+            Toast.makeText(this, "Сохранено в: ${csvFile.absolutePath}", Toast.LENGTH_LONG).show()
+
+        } catch (e: Exception) {
+            Toast.makeText(this, "Ошибка сохранения: ${e.message}", Toast.LENGTH_LONG).show()
+            e.printStackTrace()
+        }
+    }
+
+    // Контракт для разрешений
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (!allGranted) {
+            Toast.makeText(this, "Не все разрешения предоставлены", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun requestPermissions() {
+        val permissions = arrayOf(
+            android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = "package:$packageName".toUri()
+                startActivity(intent)
+            }
+        } else {
+            requestPermissionLauncher.launch(permissions)
         }
     }
 }

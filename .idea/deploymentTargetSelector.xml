@@ -4,7 +4,7 @@
     <selectionStates>
       <SelectionState runConfigName="tbox">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2025-10-14T19:24:20.255985300Z">
+        <DropdownSelection timestamp="2025-10-17T11:44:36.483383900Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\volgu\.android\avd\Medium_Phone.avd" />

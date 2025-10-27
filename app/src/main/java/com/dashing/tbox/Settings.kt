@@ -128,4 +128,10 @@ class SettingsManager(private val context: Context) {
             preferences[GET_CAN_FRAME_KEY] = enabled
         }
     }
+
+    suspend fun saveTboxIP(value: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[TBOX_IP_KEY] = value
+        }
+    }
 }

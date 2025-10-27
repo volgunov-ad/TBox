@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.util.Locale
 import java.util.Date
+import kotlin.collections.copyOfRange
 
 data class NetState(
     val csq: Int = 99,
@@ -68,6 +69,58 @@ data class HdmData(
     val isCan: Boolean = false,
 )
 
+data class OdoData(
+    val odometer: Int = 0,
+)
+
+data class EngineSpeedData(
+    val rpm: Double = 0.0,
+    val speed: Double = 0.0,
+)
+
+data class CarSpeedData(
+    val speed: Double = 0.0,
+)
+
+data class Cruise(
+    val speed: Int = 0,
+)
+
+data class Wheels(
+    val speed1: Double = 0.0,
+    val speed2: Double = 0.0,
+    val speed3: Double = 0.0,
+    val speed4: Double = 0.0,
+)
+
+data class SteerData(
+    val angle: Double = 0.0,
+    val speed: Int = 0,
+)
+
+data class CanFrame(
+    val date: Date,
+    val rawValue: ByteArray,
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as CanFrame
+
+        if (date != other.date) return false
+        if (!rawValue.contentEquals(other.rawValue)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = date.hashCode()
+        result = 31 * result + rawValue.contentHashCode()
+        return result
+    }
+}
+
 object TboxRepository {
     private val _netState = MutableStateFlow(NetState())
     val netState: StateFlow<NetState> = _netState.asStateFlow()
@@ -86,6 +139,24 @@ object TboxRepository {
 
     private val _hdm = MutableStateFlow(HdmData())
     val hdm: StateFlow<HdmData> = _hdm.asStateFlow()
+
+    private val _odo = MutableStateFlow(OdoData())
+    val odo: StateFlow<OdoData> = _odo.asStateFlow()
+
+    private val _engineSpeed = MutableStateFlow(EngineSpeedData())
+    val engineSpeed: StateFlow<EngineSpeedData> = _engineSpeed.asStateFlow()
+
+    private val _carSpeed = MutableStateFlow(CarSpeedData())
+    val carSpeed: StateFlow<CarSpeedData> = _carSpeed.asStateFlow()
+
+    private val _cruise = MutableStateFlow(Cruise())
+    val cruise: StateFlow<Cruise> = _cruise.asStateFlow()
+
+    private val _wheels = MutableStateFlow(Wheels())
+    val wheels: StateFlow<Wheels> = _wheels.asStateFlow()
+
+    private val _steer = MutableStateFlow(SteerData())
+    val steer: StateFlow<SteerData> = _steer.asStateFlow()
 
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
@@ -120,7 +191,21 @@ object TboxRepository {
     private val _canFrameTime = MutableStateFlow(Date())
     val canFrameTime: StateFlow<Date> = _canFrameTime.asStateFlow()
 
+    private val _ipList = MutableStateFlow<List<String>>(emptyList())
+    val ipList: StateFlow<List<String>> = _ipList.asStateFlow()
+
+    private val _didDataCSV = MutableStateFlow<List<String>>(emptyList())
+    val didDataCSV: StateFlow<List<String>> = _didDataCSV.asStateFlow()
+
+    private val _canFramesList = MutableStateFlow<List<String>>(emptyList())
+    val canFramesList: StateFlow<List<String>> = _canFramesList.asStateFlow()
+
+    private val _canFramesStructured = MutableStateFlow<Map<String, List<CanFrame>>>(emptyMap())
+    val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = _canFramesStructured.asStateFlow()
+
     private const val MAX_LOGS = 100
+    private const val MAX_CAN_FRAMES = 5
+    private const val MAX_FRAMES_PER_ID = 5
 
     fun addLog(level: String, tag: String, message: String) {
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
@@ -129,6 +214,24 @@ object TboxRepository {
         _logs.update { currentLogs ->
             (currentLogs + logEntry).takeLast(MAX_LOGS)
         }
+    }
+
+    fun addDidDataCSV(did: String, rawValue: String, value: String) {
+        val entry = "$did;$rawValue;$value"
+
+        _didDataCSV.update { currentData ->
+            (currentData + entry)
+        }
+    }
+
+    fun addCanFrame(rawValue: String) {
+        val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        val entry = "$timestamp;$rawValue"
+
+        _canFramesList.update { currentData ->
+            (currentData + entry).takeLast(MAX_CAN_FRAMES)
+        }
+        _canFrameTime.value = Date()
     }
 
     fun updateTboxConnected(value: Boolean) {
@@ -191,7 +294,70 @@ object TboxRepository {
         _hdm.value = newValue
     }
 
-    fun updateCanFrameTime() {
+    fun updateOdo(newValue: OdoData) {
+        _odo.value = newValue
+    }
+
+    fun updateEngineSpeed(newValue: EngineSpeedData) {
+        _engineSpeed.value = newValue
+    }
+
+    fun updateCarSpeed(newValue: CarSpeedData) {
+        _carSpeed.value = newValue
+    }
+
+    fun updateCruise(newValue: Cruise) {
+        _cruise.value = newValue
+    }
+
+    fun updateWheels(newValue: Wheels) {
+        _wheels.value = newValue
+    }
+
+    fun updateSteer(newValue: SteerData) {
+        _steer.value = newValue
+    }
+
+    fun updateIPList(value: List<String>) {
+        _ipList.value = value
+    }
+
+    fun addCanFrameStructured(canId: String, rawValue: ByteArray) {
+        val date = Date()
+        val frame = CanFrame(date, rawValue)
+
+        _canFramesStructured.update { currentMap ->
+            val currentFrames = currentMap[canId] ?: emptyList()
+            val updatedFrames = (currentFrames + frame).takeLast(MAX_FRAMES_PER_ID)
+
+            currentMap + (canId to updatedFrames)
+        }
         _canFrameTime.value = Date()
+    }
+
+    fun getFramesForId(canId: String): List<CanFrame> {
+        return _canFramesStructured.value[canId] ?: emptyList()
+    }
+
+    // Получить последний фрейм для конкретного CAN ID
+    fun getLastFrameForId(canId: String): CanFrame? {
+        return _canFramesStructured.value[canId]?.lastOrNull()
+    }
+
+    // Получить все CAN ID
+    fun getAllCanIds(): Set<String> {
+        return _canFramesStructured.value.keys
+    }
+
+    // Очистить все фреймы для конкретного CAN ID
+    fun clearFramesForId(canId: String) {
+        _canFramesStructured.update { currentMap ->
+            currentMap - canId
+        }
+    }
+
+    // Очистить все фреймы
+    fun clearAllFrames() {
+        _canFramesStructured.value = emptyMap()
     }
 }

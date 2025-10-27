@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -21,6 +22,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.AlertDialog
+//import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,6 +52,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dashing.tbox.ui.CanIdEntry
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -58,6 +62,9 @@ import com.dashing.tbox.ui.ModeButton
 import com.dashing.tbox.ui.ColoredLogEntry
 import com.dashing.tbox.ui.TabMenuItem
 import com.dashing.tbox.ui.SettingSwitch
+import com.dashing.tbox.ui.StatusHeader
+import java.io.File
+import java.io.FileWriter
 
 @Composable
 fun TboxApp(
@@ -69,8 +76,11 @@ fun TboxApp(
     onModemOff: () -> Unit,
     onLocSubscribeClick: () -> Unit,
     onLocUnsubscribeClick: () -> Unit,
-    onGetCanFrame: () -> Unit,
-    onUpdateVersions: () -> Unit
+    //onGetCanFrame: () -> Unit,
+    onUpdateVersions: () -> Unit,
+    //currentSavePath: String,
+    //onSelectFolder: () -> Unit,
+    onSaveToFile: (List<String>) -> Unit
 ) {
     val viewModel = TboxViewModel()
     val settingsViewModel = remember { SettingsViewModel(settingsManager) }
@@ -88,8 +98,11 @@ fun TboxApp(
             onModemOff = onModemOff,
             onLocSubscribeClick = onLocSubscribeClick,
             onLocUnsubscribeClick = onLocUnsubscribeClick,
-            onGetCanFrame = onGetCanFrame,
+            //onGetCanFrame = onGetCanFrame,
             onUpdateVersions = onUpdateVersions,
+            //currentSavePath = currentSavePath,
+            //onSelectFolder = onSelectFolder,
+            onSaveToFile = onSaveToFile
         )
     }
 }
@@ -104,11 +117,14 @@ fun TboxScreen(viewModel: TboxViewModel,
                onModemOff: () -> Unit,
                onLocSubscribeClick: () -> Unit,
                onLocUnsubscribeClick: () -> Unit,
-               onGetCanFrame: () -> Unit,
-               onUpdateVersions: () -> Unit
+               //onGetCanFrame: () -> Unit,
+               onUpdateVersions: () -> Unit,
+               //currentSavePath: String,
+               //onSelectFolder: () -> Unit,
+               onSaveToFile: (List<String>) -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Модем", "Геопозиция", "Данные авто", "Настройки", "Журнал", "Информация")
+    val tabs = listOf("Модем", "Геопозиция", "Данные авто", "Настройки", "Журнал", "Информация", "CAN")
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
@@ -135,7 +151,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             Text(
                 text = if (tboxConnected) "TBox подключен в $conTime"
                 else "TBox отключен в $conTime",
-                fontSize = 16.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
                 textAlign = TextAlign.Center,
@@ -143,9 +159,10 @@ fun TboxScreen(viewModel: TboxViewModel,
             )
             Text(
                 text = "Служба запущена в $serviceTime",
-                fontSize = 16.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
@@ -163,9 +180,10 @@ fun TboxScreen(viewModel: TboxViewModel,
             }
 
             Text(
-                text = "Версия программы 0.5",
-                fontSize = 12.sp,
+                text = "Версия программы 0.5.1",
+                fontSize = 16.sp,
                 textAlign = TextAlign.Right,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
         }
@@ -179,9 +197,10 @@ fun TboxScreen(viewModel: TboxViewModel,
                 0 -> ModemTab(viewModel, onModemOn, onModemFly, onModemOff)
                 1 -> LocationTab(viewModel, onLocSubscribeClick, onLocUnsubscribeClick)
                 2 -> CarDataTab(viewModel)
-                3 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart, onGetCanFrame)
+                3 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart, onSaveToFile)
                 4 -> LogsTab(viewModel, settingsViewModel)
                 5 -> InfoTab(viewModel, settingsViewModel, onUpdateVersions)
+                6 -> CanTab(viewModel, onSaveToFile)
             }
         }
     }
@@ -203,19 +222,22 @@ fun ModemTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
-            item { StatusRow("CSQ", if (netState.csq != 99) netState.csq.toString() else "-") }
+            item { StatusHeader("Данные модема и SIM") }
             item { StatusRow("IMEI", netValues.imei) }
             item { StatusRow("ICCID", netValues.iccid) }
             item { StatusRow("IMSI", netValues.imsi) }
             item { StatusRow("Оператор", netValues.operator) }
+
+            item { StatusHeader("Данные подключения") }
+            item { StatusRow("CSQ", if (netState.csq != 99) netState.csq.toString() else "-") }
             item { StatusRow("Регистрация", netState.regStatus) }
             item { StatusRow("SIM статус", netState.simStatus) }
             item { StatusRow("Сеть", netState.netStatus) }
 
+            item { StatusHeader("APN 1") }
             item { StatusRow("APN", apn1State.apnStatus) }
             item { StatusRow("Тип APN", apn1State.apnType) }
             item { StatusRow("IP APN", apn1State.apnIP) }
@@ -223,6 +245,7 @@ fun ModemTab(
             item { StatusRow("DNS1 APN", apn1State.apnDNS1) }
             item { StatusRow("DNS2 APN", apn1State.apnDNS2) }
 
+            item { StatusHeader("APN 2") }
             item { StatusRow("APN2", apn2State.apnStatus) }
             item { StatusRow("Тип APN2", apn2State.apnType) }
             item { StatusRow("IP APN2", apn2State.apnIP) }
@@ -264,6 +287,7 @@ fun ModemModeSelector(
             text = "Режим модема",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Row(
@@ -323,7 +347,7 @@ fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onTboxRestartClick: () -> Unit,
-    onGetCanFrame: () -> Unit,
+    onSaveToFile: (List<String>) -> Unit
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
@@ -332,8 +356,13 @@ fun SettingsTab(
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+    val canFramesList by viewModel.canFramesList.collectAsStateWithLifecycle()
+    val didDataCSV by viewModel.didDataCSV.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
+
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var showSaveDidDialog by remember { mutableStateOf(false) }
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
@@ -353,7 +382,9 @@ fun SettingsTab(
         Text(
             text = "Настройки контроля сети",
             fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Left
         )
         SettingSwitch(
@@ -383,7 +414,9 @@ fun SettingsTab(
         Text(
             text = "Настройки предотвращения перезагрузки",
             fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Left
         )
         SettingSwitch(
@@ -400,7 +433,9 @@ fun SettingsTab(
         Text(
             text = "Настройки виджета",
             fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Left
         )
         SettingSwitch(
@@ -408,16 +443,18 @@ fun SettingsTab(
             { enabled ->
                 settingsViewModel.saveWidgetShowIndicatorSetting(enabled)
             },
-            "Показывать индикатор подключения Tbox в виджете",
+            "Показывать индикатор подключения TBox в виджете",
             "Индикатор в виджете в виде круга может иметь 3 цвета: \n" +
                     "красный - нет данных от фоновой службы;\n" +
                     "желтый - нет связи с TBox;\n" +
-                    "зелены - есть связь с TBox"
+                    "зеленый - есть связь с TBox"
         )
         Text(
             text = "Экспериментальные настройки",
             fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Left
         )
         SettingSwitch(
@@ -425,7 +462,7 @@ fun SettingsTab(
             { enabled ->
                 settingsViewModel.saveUpdateVoltagesSetting(enabled)
             },
-            "Получать данные о напряжении Tbox",
+            "Получать данные о напряжении TBox",
             ""
         )
         SettingSwitch(
@@ -433,9 +470,10 @@ fun SettingsTab(
             { enabled ->
                 settingsViewModel.saveGetCanFrameSetting(enabled)
             },
-            "Получать данные по CAN",
+            "Получать данные CAN от TBox",
             ""
         )
+
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -458,6 +496,82 @@ fun SettingsTab(
                 )
             }
         }
+
+        /*Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { showSaveDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Сохранить в CAN Frames в файл", fontSize = 24.sp, maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            if (showSaveDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSaveDialog = false },
+                    title = { Text("Сохранение файла") },
+                    text = {
+                        Text("Сохранить ${canFramesList.size} CAN Frames в папку Загрузки")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                onSaveToFile(canFramesList)
+                                showSaveDialog = false
+                            }
+                        ) {
+                            Text("Сохранить")
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = { showSaveDialog = false }
+                        ) {
+                            Text("Отмена")
+                        }
+                    }
+                )
+            }
+        }
+
+        Button(
+            onClick = { showSaveDidDialog = true },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = "Сохранить в DIDs в файл", fontSize = 24.sp, maxLines = 2,
+                textAlign = TextAlign.Center)
+        }
+        if (showSaveDidDialog) {
+            AlertDialog(
+                onDismissRequest = { showSaveDidDialog = false },
+                title = { Text("Сохранение файла") },
+                text = {
+                    Text("Сохранить ${didDataCSV.size} DIDs в папку Загрузки")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onSaveToFile(didDataCSV)
+                            showSaveDidDialog = false
+                        }
+                    ) {
+                        Text("Сохранить")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(
+                        onClick = { showSaveDidDialog = false }
+                    ) {
+                        Text("Отмена")
+                    }
+                }
+            )
+        }*/
     }
 }
 
@@ -576,11 +690,15 @@ fun InfoTab(
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
     val suspendTboxAppSend by viewModel.suspendTboxAppSend.collectAsStateWithLifecycle()
+    val ipList by viewModel.ipList.collectAsStateWithLifecycle()
     val appVersion by settingsViewModel.appVersion.collectAsStateWithLifecycle()
     val mdcVersion by settingsViewModel.mdcVersion.collectAsStateWithLifecycle()
     val swdVersion by settingsViewModel.swdVersion.collectAsStateWithLifecycle()
     val crtVersion by settingsViewModel.crtVersion.collectAsStateWithLifecycle()
     val locVersion by settingsViewModel.locVersion.collectAsStateWithLifecycle()
+    val swVersion by settingsViewModel.swVersion.collectAsStateWithLifecycle()
+    val hwVersion by settingsViewModel.hwVersion.collectAsStateWithLifecycle()
+    val tboxIP by settingsViewModel.tboxIP.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
 
@@ -596,36 +714,54 @@ fun InfoTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
-        StatusRow("Подтверждение команды SUSPEND приложению APP", if (suspendTboxAppSend) "да" else "нет")
-        StatusRow("Подтверждение команды PREVENT RESTART приложению SWD", if (preventRestartSend) "да" else "нет")
-        StatusRow("Версия приложения APP", appVersion)
-        StatusRow("Версия приложения CRT", crtVersion)
-        StatusRow("Версия приложения LOC", locVersion)
-        StatusRow("Версия приложения MDC", mdcVersion)
-        StatusRow("Версия приложения SWD", swdVersion)
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = {
-                    if (updateVersionButtonEnabled) {
-                        updateVersionButtonEnabled = false
-                        onUpdateVersionsClick()
-                    }
-                },
-                enabled = updateVersionButtonEnabled && tboxConnected
-            ) {
-                Text(
-                    text = "Проверить версии приложений TBox",
-                    fontSize = 24.sp,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            item {
+                StatusRow(
+                    "Подтверждение команды SUSPEND приложению APP",
+                    if (suspendTboxAppSend) "да" else "нет"
                 )
+            }
+            item {
+                StatusRow(
+                    "Подтверждение команды PREVENT RESTART приложению SWD",
+                    if (preventRestartSend) "да" else "нет"
+                )
+            }
+            item { StatusRow("Сохраненный IP адрес TBox", tboxIP) }
+            item { StatusRow("Список возможных IP адресов TBox", ipList.joinToString("; ")) }
+            item { StatusRow("Версия приложения APP", appVersion) }
+            item { StatusRow("Версия приложения CRT", crtVersion) }
+            item { StatusRow("Версия приложения LOC", locVersion) }
+            item { StatusRow("Версия приложения MDC", mdcVersion) }
+            item { StatusRow("Версия приложения SWD", swdVersion) }
+            item { StatusRow("Версия SW", swVersion) }
+            item { StatusRow("Версия HW", hwVersion) }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            if (updateVersionButtonEnabled) {
+                                updateVersionButtonEnabled = false
+                                onUpdateVersionsClick()
+                            }
+                        },
+                        enabled = updateVersionButtonEnabled && tboxConnected
+                    ) {
+                        Text(
+                            text = "Проверить версии приложений TBox",
+                            fontSize = 24.sp,
+                            maxLines = 2,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
         }
     }
@@ -636,22 +772,43 @@ fun CarDataTab(
     viewModel: TboxViewModel,
 ) {
     val voltages by viewModel.voltages.collectAsStateWithLifecycle()
-    val hdm by viewModel.hdm.collectAsStateWithLifecycle()
+    val odo by viewModel.odo.collectAsStateWithLifecycle()
+    val engineSpeed by viewModel.engineSpeed.collectAsStateWithLifecycle()
+    val carSpeed by viewModel.carSpeed.collectAsStateWithLifecycle()
+    val cruise by viewModel.cruise.collectAsStateWithLifecycle()
+    val wheels by viewModel.wheels.collectAsStateWithLifecycle()
+    val steer by viewModel.steer.collectAsStateWithLifecycle()
+    //val hdm by viewModel.hdm.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
-        StatusRow("Напряжение 1, В", voltages.voltage1.toString())
-        StatusRow("Напряжение 2, В", voltages.voltage2.toString())
-        StatusRow("Напряжение 3, В", voltages.voltage3.toString())
-        StatusRow("Основное питание", if (hdm.isPower) "да" else "нет")
-        StatusRow("Зажигание", if (hdm.isIgnition) "да" else "нет")
-        StatusRow("CAN", if (hdm.isCan) "да" else "нет")
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            item { StatusRow("Напряжение, В", voltages.voltage3.toString()) }
+            item { StatusHeader("00 C4") }
+            item { StatusRow("Угол поворота руля", steer.angle.toString()) }
+            item { StatusRow("Скорость вращения руля", steer.speed.toString()) }
+            item { StatusHeader("00 FA") }
+            item { StatusRow("Обороты двигателя, об/мин", engineSpeed.rpm.toString()) }
+            item { StatusHeader("02 00")}
+            item { StatusRow("Скорость автомобиля, км/ч", carSpeed.speed.toString()) }
+            item { StatusHeader("03 05") }
+            item { StatusRow("Скорость круиз-контроля, км/ч", cruise.speed.toString()) }
+            item { StatusHeader("03 10") }
+            item { StatusRow("Скорость колеса 1, км/ч", wheels.speed1.toString()) }
+            item { StatusRow("Скорость колеса 2, км/ч", wheels.speed2.toString()) }
+            item { StatusRow("Скорость колеса 3, км/ч", wheels.speed3.toString()) }
+            item { StatusRow("Скорость колеса 4, км/ч", wheels.speed4.toString()) }
+            item { StatusHeader("04 30") }
+            item { StatusRow("Одометр, км", odo.odometer.toString()) }
+        }
     }
 }
 
@@ -852,5 +1009,118 @@ fun LogsCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun CanTab(
+    viewModel: TboxViewModel,
+    onSaveToFile: (List<String>) -> Unit
+) {
+    val canFramesStructured by viewModel.canFramesStructured.collectAsStateWithLifecycle()
+    val canFrameTime by viewModel.canFrameTime.collectAsStateWithLifecycle()
+
+    var showSaveDialog by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Преобразуем Map в отсортированный список
+        val sortedCanEntries = remember(canFramesStructured) {
+            canFramesStructured.entries.sortedBy { it.key }
+        }
+        // Заголовок с количеством CAN ID
+        Text(
+            text = "CAN ID (${sortedCanEntries.size}). " +
+                    "Последние данные: ${SimpleDateFormat("HH:mm:ss",
+                        Locale.getDefault()).format(canFrameTime)}",
+            modifier = Modifier.padding(6.dp),
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { showSaveDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Сохранить текущие CAN данные в файл", fontSize = 24.sp, maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            if (showSaveDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSaveDialog = false },
+                    title = { Text("Сохранение файла") },
+                    text = {
+                        Text("Сохранить ${sortedCanEntries.size} CAN ID в папку Загрузки")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val csvCanEnries = mutableListOf<String>()
+                                sortedCanEntries.forEach { (canId, frames) ->
+                                    frames.forEach { frame ->
+                                        val timestamp = SimpleDateFormat(
+                                            "yyyy-MM-dd HH:mm:ss",
+                                            Locale.getDefault()
+                                        ).format(frame.date)
+                                        val rawValueHex =
+                                            frame.rawValue.joinToString(" ") { "%02X".format(it) }
+                                        csvCanEnries.add("$timestamp;$canId;$rawValueHex")
+                                    }
+                                }
+                                onSaveToFile(csvCanEnries)
+                                showSaveDialog = false
+                            }
+                        ) {
+                            Text("Сохранить")
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = { showSaveDialog = false }
+                        ) {
+                            Text("Отмена")
+                        }
+                    }
+                )
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            elevation = CardDefaults.cardElevation(4.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                ) {
+                    items(
+                        items = sortedCanEntries,
+                        key = { it.key } // Важно для стабильной анимации
+                    ) { (canId, frames) ->
+                        val lastFrame = frames.lastOrNull()
+                        CanIdEntry(
+                            canId = canId,
+                            lastFrame = lastFrame
+                        )
+                    }
+                }
+            }
+        }
+
     }
 }

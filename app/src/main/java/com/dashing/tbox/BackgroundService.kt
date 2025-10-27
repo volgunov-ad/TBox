@@ -24,6 +24,7 @@ import java.util.Date
 
 class BackgroundService : Service() {
     private lateinit var settingsManager: SettingsManager
+    private lateinit var ipManager: IPManager
     private lateinit var scope: CoroutineScope
     private val job = SupervisorJob()
     private lateinit var autoModemRestart: StateFlow<Boolean>
@@ -34,6 +35,7 @@ class BackgroundService : Service() {
     private lateinit var serverIp: StateFlow<String>
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private val serverPort = 50047
+    private var currentIP: String? = null
     private var address: InetAddress? = null
     private lateinit var themeObserver: ThemeObserver
     private val socket = DatagramSocket().apply {soTimeout = 1000}
@@ -42,11 +44,12 @@ class BackgroundService : Service() {
     private var mainJob: Job? = null
     private var periodicJob: Job? = null
     private var apnJob: Job? = null
-    private var appCmd: Job? = null
-    private var crtCmd: Job? = null
-    private var ssmCmd: Job? = null
-    private var swdCmd: Job? = null
-    private var locCmd: Job? = null
+    private var appCmdJob: Job? = null
+    private var crtCmdJob: Job? = null
+    private var crtWaitCmdJob: Job? = null
+    private var ssmCmdJob: Job? = null
+    private var swdCmdJob: Job? = null
+    private var locCmdJob: Job? = null
     private var listenJob: Job? = null
     private var apnCmdJob: Job? = null
     private var sendATJob: Job? = null
@@ -63,6 +66,13 @@ class BackgroundService : Service() {
     private var preventRestartLastTime = Date()
 
     companion object {
+        private const val APP_CODE = 0x2F.toByte()
+        private const val MDC_CODE = 0x25.toByte()
+        private const val LOC_CODE = 0x29.toByte()
+        private const val CRT_CODE = 0x23.toByte()
+        private const val SWD_CODE = 0x2D.toByte()
+        private const val NTM_CODE = 0x24.toByte()
+        private const val GATE_CODE = 0x37.toByte()
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
         private var isRunning = false
         const val LOCATION_UPDATE_TIME = 1
@@ -123,6 +133,12 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, DEFAULT_TBOX_IP)
         widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
+
+        ipManager = IPManager(this)
+        ipManager.updateIPs(serverIp.value)
+        TboxRepository.updateIPList(ipManager.getIPList())
+        currentIP = ipManager.getNextIP()
+        TboxRepository.addLog("DEBUG", "IP manager", "Set TBox current IP: $currentIP")
 
         //address = InetAddress.getByName(serverIp.value)
         //address = InetAddress.getByName(DEFAULT_TBOX_IP)
@@ -251,10 +267,10 @@ class BackgroundService : Service() {
 
     private fun getCurrentAddress(): InetAddress? {
         return try {
-            InetAddress.getByName(serverIp.value)
+            InetAddress.getByName(currentIP)
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Tbox IP address",
-                "Failed to get address for IP: ${serverIp.value}")
+                "Failed to get address for IP: $currentIP")
             null
         }
     }
@@ -269,8 +285,8 @@ class BackgroundService : Service() {
                     sendUdpMessage(
                         socket,
                         serverPort,
-                        0x25,
-                        0x37,
+                        MDC_CODE,
+                        GATE_CODE,
                         0x07,
                         byteArrayOf(0x01, 0x00)
                     )
@@ -299,7 +315,7 @@ class BackgroundService : Service() {
         listenJob = scope.launch {
             try {
                 var errCount = 0
-                val receiveData = ByteArray(1024)
+                val receiveData = ByteArray(4096)
                 val receivePacket = DatagramPacket(receiveData, receiveData.size)
                 Log.d("UDP Listener", "Start UDP listener")
                 TboxRepository.updateTboxConnectionTime()
@@ -350,8 +366,8 @@ class BackgroundService : Service() {
                         sendUdpMessage(
                             socket,
                             serverPort,
-                            0x25,
-                            0x37,
+                            MDC_CODE,
+                            GATE_CODE,
                             0x11,
                             byteArrayOf(0x00, 0x00, 0x00, 0x00))
                         apn1UpdateCount += 1
@@ -363,8 +379,8 @@ class BackgroundService : Service() {
                         sendUdpMessage(
                             socket,
                             serverPort,
-                            0x25,
-                            0x37,
+                            MDC_CODE,
+                            GATE_CODE,
                             0x11,
                             byteArrayOf(0x00, 0x00, 0x01, 0x00)
                         )
@@ -397,7 +413,7 @@ class BackgroundService : Service() {
                 var rebootTimeout = 60000L
                 var modemCheckTimeout = 10000L
                 Log.d("Connection checker", "Start check connection")
-                //delay(5000)
+                delay(10000)
                 while (isActive) {
                     delay(modemCheckTimeout)
                     if (!TboxRepository.tboxConnected.value) {
@@ -440,7 +456,11 @@ class BackgroundService : Service() {
                                         "No network connection. Restart TBox")
                                     crtRebootTbox()
                                     delay(rebootTimeout)
-                                    rebootTimeout = 1800000
+                                    rebootTimeout = if (rebootTimeout == 60000L){
+                                        600000
+                                    } else {
+                                        1800000
+                                    }
                                 }
                             }
                         }
@@ -476,6 +496,7 @@ class BackgroundService : Service() {
                 var widgetUpdateTime = Date()
                 var crtGetPowVolInfoTime = Date()
                 var crtGetCanFrameTime = Date()
+                var updateIPTime = Date()
                 delay(15000)
                 while (isActive) {
                     if(Date().time - widgetUpdateTime.time > 5000) {
@@ -484,7 +505,7 @@ class BackgroundService : Service() {
                     }
                     if (TboxRepository.locationSubscribed.value){
                         val delta =  (Date().time - TboxRepository.locValues.value.updateTime.time) / 1000
-                        if (delta > LOCATION_UPDATE_TIME * 3) {
+                        if (delta > LOCATION_UPDATE_TIME * 6) {
                             TboxRepository.updateLocationSubscribed(false)
                         }
                     }
@@ -528,6 +549,33 @@ class BackgroundService : Service() {
                             }
                         }
                     }
+                    else {
+                        // Выбор следующего IP адреса, если подключения нет больше 60 с
+                        if (Date().time - TboxRepository.tboxConnectionTime.value.time > 60000 && Date().time - updateIPTime.time > 60000) {
+                            if (ipManager.isCurrentIPLast()) {
+                                ipManager.updateIPs(serverIp.value)
+                                TboxRepository.updateIPList(ipManager.getIPList())
+                                TboxRepository.addLog("DEBUG", "IP manager",
+                                    "Update IP list: ${TboxRepository.ipList.value.joinToString("; ")}")
+                            }
+                            currentIP = ipManager.getNextIP()
+                            TboxRepository.addLog("DEBUG", "IP manager", "Set TBox current IP: $currentIP")
+                            address = null
+                            updateIPTime = Date()
+                        }
+                    }
+
+                    /*for (i in 0 until 25) {
+                        TboxRepository.addCanFrameStructured(
+                            "00 00 $i 00",
+                            byteArrayOf(0x16, 0x56, 0x41, 0x18, 0x08, 0x26, 0x0, 0x0C)
+                        )
+                        TboxRepository.addCanFrameStructured(
+                            "00 00 $i 00",
+                            byteArrayOf(0x16, 0x56, 0x41, 0x18, 0x08, 0x26, 0x0, 0x0C)
+                        )
+                    }*/
+
                     delay(1000)
                 }
             } catch (e: CancellationException) {
@@ -585,7 +633,7 @@ class BackgroundService : Service() {
             try {
                 val cmds = String(cmd, charset = Charsets.UTF_8).trimEnd()
                 TboxRepository.addLog("DEBUG", "MDC send", "AT command send: $cmds")
-                sendUdpMessage(socket, serverPort, 0x25, 0x37, 0x0E,
+                sendUdpMessage(socket, serverPort, MDC_CODE, GATE_CODE, 0x0E,
                     byteArrayOf(
                         (cmd.size + 10 shr 8).toByte(), (cmd.size + 10 and 0xFF).toByte(),
                         0xFF.toByte(), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00) + cmd)
@@ -599,11 +647,15 @@ class BackgroundService : Service() {
     }
 
     private fun crtCmd (cmd: Byte, data: ByteArray, descr: String) {
-        if (crtCmd?.isActive == true) return
-        crtCmd = scope.launch {
+        if (!TboxRepository.tboxConnected.value) {
+            return
+        }
+        //if (crtCmdJob?.isActive == true) return
+        scope.launch {
             try {
                 TboxRepository.addLog("DEBUG", "CRT send", descr)
-                sendUdpMessage(socket, serverPort, 0x23, 0x37, cmd, data)
+                sendUdpMessage(socket, serverPort, CRT_CODE, GATE_CODE, cmd, data)
+                delay(100)
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
                 throw e
@@ -623,16 +675,20 @@ class BackgroundService : Service() {
             try {
                 TboxRepository.addLog("DEBUG", "Versions", "Get apps versions")
                 clearVersions()
-                sendUdpMessage(socket, serverPort, 0x23, 0x37, 0x01,
+                sendUdpMessage(socket, serverPort, CRT_CODE, GATE_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
-                sendUdpMessage(socket, serverPort, 0x25, 0x37, 0x01,
+                sendUdpMessage(socket, serverPort, MDC_CODE, GATE_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
-                sendUdpMessage(socket, serverPort, 0x29, 0x37, 0x01,
+                sendUdpMessage(socket, serverPort, LOC_CODE, GATE_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
-                sendUdpMessage(socket, serverPort, 0x2D, 0x37, 0x01,
+                sendUdpMessage(socket, serverPort, SWD_CODE, GATE_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
-                sendUdpMessage(socket, serverPort, 0x2F, 0x37, 0x01,
+                sendUdpMessage(socket, serverPort, APP_CODE, GATE_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
+                sendUdpMessage(socket, serverPort, CRT_CODE, GATE_CODE, 0x12,
+                    byteArrayOf(0x00, 0x00, 0x01, 0x04.toByte())) // CRT - SW
+                sendUdpMessage(socket, serverPort, CRT_CODE, GATE_CODE, 0x12,
+                    byteArrayOf(0x00, 0x00, 0x01, 0x05.toByte())) // CRT - HW
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
                 throw e
@@ -648,25 +704,40 @@ class BackgroundService : Service() {
         settingsManager.saveCustomString("loc_version", "")
         settingsManager.saveCustomString("mdc_version", "")
         settingsManager.saveCustomString("swd_version", "")
+        settingsManager.saveCustomString("sw_version", "")
+        settingsManager.saveCustomString("hw_version", "")
     }
 
     private fun crtGetCanFrame() {
-        crtCmd(0x12, byteArrayOf(0x00, 0x14.toByte()), "Send GetDid command GetCanFrame")
+        crtCmd(0x15, byteArrayOf(0x00, 0x00), "Send GetCanFrame command")
+        //crtCmd(0x12, byteArrayOf(0x01, 0x15.toByte()), "Send GetDid command CanFrame")
     }
 
     private fun crtGetPowVolInfo() {
-        crtCmd(0x10, byteArrayOf(0x00, 0x00, 0x00, 0x00), "Send GetPowVolInfo command")
+        crtCmd(0x10, byteArrayOf(0x01, 0x01), "Send GetPowVolInfo command")
+        //crtCmd(0x12, byteArrayOf(0x01, 0x10.toByte()), "Send GetDid command PowVolInfo")
     }
 
     private fun crtGetHdmData() {
-        crtCmd(0x14, byteArrayOf(0x00, 0x00), "Send GetHdmData command")
+        crtCmd(0x14, byteArrayOf(0x03, 0x00), "Send GetHdmData command")
+        val didList = listOf(0x01.toByte(), 0x02.toByte(), 0x03.toByte(), 0x04.toByte(), 0x05.toByte(),
+            0x06.toByte(), 0x07.toByte(), 0x08.toByte(), 0x0A.toByte(), 0x0B.toByte(),
+            0x09.toByte(), 0x0C.toByte(), 0x0D.toByte(), 0x0E.toByte(), 0x0F.toByte(),
+            0x10.toByte(), 0x11.toByte(), 0x12.toByte(), 0x13.toByte(), 0x14.toByte(),
+            0x15.toByte(), 0x16.toByte(), 0x17.toByte(), 0x18.toByte(), 0x19.toByte(),
+            0x1A.toByte(), 0x1C.toByte(), 0x1B.toByte(), 0x1D.toByte(), 0x1E.toByte(),
+            0x1F.toByte(), 0x20.toByte(), 0x21.toByte(), 0x22.toByte(), 0x23.toByte(),
+            0x24.toByte(), 0x80.toByte(), 0x81.toByte(), 0x82.toByte(), 0x83.toByte())
+        for (i in didList) {
+            crtCmd(0x12, byteArrayOf(0x00, 0x00, 0x01, i.toByte()), "Send GetDid command HdmData - byte: 0x${i.toString(16).uppercase()}")
+        }
     }
 
     private fun ssmGetDynamicCode() {
-        if (ssmCmd?.isActive == true) return
-        ssmCmd = scope.launch {
+        if (ssmCmdJob?.isActive == true) return
+        ssmCmdJob = scope.launch {
             TboxRepository.addLog("DEBUG", "SSM send", "Send GetDynamicCode command")
-            sendUdpMessage(socket, serverPort, 0x35, 0x37, 0x06,
+            sendUdpMessage(socket, serverPort, 0x35, GATE_CODE, 0x06,
                 byteArrayOf(0x00, 0x00))
         }
     }
@@ -677,7 +748,7 @@ class BackgroundService : Service() {
         }
         if (apnCmdJob?.isActive == true) return
         apnCmdJob = scope.launch {
-            sendUdpMessage(socket, serverPort, 0x25, 0x37, 0x10, cmd)
+            sendUdpMessage(socket, serverPort, MDC_CODE, GATE_CODE, 0x10, cmd)
         }
     }
 
@@ -685,10 +756,10 @@ class BackgroundService : Service() {
         if (!TboxRepository.tboxConnected.value) {
             return
         }
-        if (appCmd?.isActive == true) return
-        appCmd = scope.launch {
+        if (appCmdJob?.isActive == true) return
+        appCmdJob = scope.launch {
             TboxRepository.addLog("DEBUG", "APP send", "Suspend APP")
-            sendUdpMessage(socket, serverPort, 0x2F, 0x37, 0x02, byteArrayOf(0x00))
+            sendUdpMessage(socket, serverPort, APP_CODE, GATE_CODE, 0x02, byteArrayOf(0x00))
         }
     }
 
@@ -696,10 +767,10 @@ class BackgroundService : Service() {
         if (!TboxRepository.tboxConnected.value) {
             return
         }
-        if (swdCmd?.isActive == true) return
-        swdCmd = scope.launch {
+        if (swdCmdJob?.isActive == true) return
+        swdCmdJob = scope.launch {
             TboxRepository.addLog("DEBUG", "SWD send", "Prevent restart")
-            sendUdpMessage(socket, serverPort, 0x2D, 0x37, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x00))
+            sendUdpMessage(socket, serverPort, SWD_CODE, GATE_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x00))
         }
     }
 
@@ -707,16 +778,16 @@ class BackgroundService : Service() {
         if (!TboxRepository.tboxConnected.value) {
             return
         }
-        if (locCmd?.isActive == true) return
-        locCmd = scope.launch {
+        if (locCmdJob?.isActive == true) return
+        locCmdJob = scope.launch {
             if (value) {
                 TboxRepository.addLog("DEBUG", "LOC send", "Location subscribe")
                 val timeout = (LOCATION_UPDATE_TIME).toByte()
-                sendUdpMessage(socket, serverPort, 0x29, 0x37, 0x05, byteArrayOf(0x02, timeout, 0x00))
+                sendUdpMessage(socket, serverPort, LOC_CODE, GATE_CODE, 0x05, byteArrayOf(0x02, timeout, 0x00))
             }
             else {
                 TboxRepository.addLog("DEBUG", "LOC send", "Location unsubscribe")
-                sendUdpMessage(socket, serverPort, 0x29, 0x37, 0x05, byteArrayOf(0x00, 0x00, 0x00))
+                sendUdpMessage(socket, serverPort, LOC_CODE, GATE_CODE, 0x05, byteArrayOf(0x00, 0x00, 0x00))
             }
             TboxRepository.updateLocationSubscribed(value)
         }
@@ -742,8 +813,8 @@ class BackgroundService : Service() {
 
     private fun cancelAllJobs() {
         listOf(
-            mainJob, periodicJob, apnJob, appCmd, crtCmd, ssmCmd,
-            swdCmd, locCmd, listenJob, apnCmdJob, sendATJob,
+            mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
+            swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob,
             modemModeJob, checkConnectionJob, versionsJob
         ).forEach { job ->
             job?.cancel()
@@ -768,10 +839,13 @@ class BackgroundService : Service() {
 
     private suspend fun sendUdpMessage(socket: DatagramSocket, port: Int, tid: Byte, sid: Byte, cmd: Byte, msg: ByteArray): Boolean {
         try {
-            address = getCurrentAddress()
+            if (!TboxRepository.tboxConnected.value || address == null) {
+                address = getCurrentAddress()
+            }
             if (address == null) {
                 return false
             }
+
             var data = fillHeader(msg.size, tid, sid, cmd) + msg
             val checkSum = xorSum(data)
             data += checkSum
@@ -780,10 +854,14 @@ class BackgroundService : Service() {
                 socket.send(packet)
             }
             TboxRepository.addLog("DEBUG", "UDP message send", toHexString(data))
+
+            if (serverIp.value != currentIP) {
+                settingsManager.saveTboxIP(currentIP!!)
+            }
+
             return true
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "UDP message send", "Error send message")
-            e.printStackTrace()
             return false
         }
     }
@@ -791,138 +869,194 @@ class BackgroundService : Service() {
     private fun responseWork(receivePacket: DatagramPacket) {
         val fromAddress = receivePacket.address.hostAddress
         val fromPort = receivePacket.port
-        if (checkPacket(receivePacket.data)) {
-            val dataLength = extractDataLength(receivePacket.data)
-            val receivedData = extractData(receivePacket.data, dataLength)
-            //TboxRepository.addLog("DEBUG", "UDP response",
-            //    "Received from $fromAddress:$fromPort: " + toHexString(receivePacket.data))
-            if (!receivedData.contentEquals(ByteArray(0))) {
-                val tid = receivePacket.data[9]
-                val tids = String.format("%02X", tid)
-                val sid = receivePacket.data[8]
-                val sids = String.format("%02X", sid)
-                val cmd = receivePacket.data[12]
-                val cmds = String.format("%02X", cmd)
-
-                if (tid == 0x25.toByte()) {
-                    if (receivedData.size >= 4) {
-                        if (cmd == 0x87.toByte()) {
-                            ansMDCNetState(receivedData)
-                            //sendWidgetUpdate()
-                        } else if ((cmd == 0x90.toByte())) {
-                            ansMDCAPNManage(receivedData)
-                        } else if ((cmd == 0x91.toByte())) {
-                            ansMDCAPNState(receivedData)
-                            //sendWidgetUpdate()
-                        } else if ((cmd == 0x8E.toByte())) {
-                            ansATcmd(receivedData)
-                        } else if (cmd == 0x81.toByte()) {
-                            ansVersion("MDC", receivedData)
-                        } else {
-                            TboxRepository.addLog("ERROR", "MDC response", "Unknown message from MDC")
-                        }
-                    } else {
-                        TboxRepository.addLog("ERROR", "MDC response", "Too small data length")
-                    }
-                } else if (tid == 0x2F.toByte()) {
-                    if (cmd == 0x82.toByte()) {
-                        if (receivedData.contentEquals(byteArrayOf(0x01))) {
-                            TboxRepository.addLog("DEBUG", "APP response", "Command SUSPEND complete")
-                            TboxRepository.updateSuspendTboxAppSend(true)
-                        }
-                        else {
-                            TboxRepository.addLog("ERROR", "APP response", "Command SUSPEND not complete")
-                        }
-                    } else if (cmd == 0x84.toByte()) {
-                        if (receivedData.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-                            TboxRepository.addLog("DEBUG", "APP response", "Command STOP complete")
-                        } else {
-                            TboxRepository.addLog("ERROR", "APP response", "Command STOP not complete")
-                        }
-                    } else if (cmd == 0x81.toByte()) {
-                        ansVersion("APP", receivedData)
-                    } else {
-                        TboxRepository.addLog("ERROR", "APP response", "Unknown message from APP")
-                    }
-                } else if (tid == 0x2D.toByte()) {
-                    if (cmd == 0x87.toByte()) {
-                        if (receivedData.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-                            TboxRepository.addLog("DEBUG", "SWD response", "Command PreventRestart complete")
-                            TboxRepository.updatePreventRestartSend(true)
-                        }
-                        else {
-                            TboxRepository.addLog("ERROR", "SWD response", "Command PreventRestart not complete")
-                        }
-                    } else if (cmd == 0x81.toByte()) {
-                        ansVersion("SWD", receivedData)
-                    } else {
-                        TboxRepository.addLog("ERROR", "SWD response", "Unknown message from SWD")
-                    }
-                } else if (tid == 0x23.toByte()) {
-                    when (cmd) {
-                        0x90.toByte() -> {
-                            ansCRTPowVol(receivedData)
-                        }
-                        0x92.toByte() -> {
-                            ansCRTDidData(receivedData)
-                        }
-                        0x94.toByte() -> {
-                            ansCRTHdmData(receivedData)
-                        }
-                        0x81.toByte() -> {
-                            ansVersion("CRT", receivedData)
-                        }
-                        else -> {
-                            TboxRepository.addLog("ERROR", "CRT response", "Unknown message from CRT")
-                        }
-                    }
-                } else if (tid == 0x29.toByte()) {
-                    when (cmd) {
-                        0x85.toByte() -> {
-                            ansLOCValues(receivedData)
-                        }
-                        0x81.toByte() -> {
-                            ansVersion("LOC", receivedData)
-                        }
-                        else -> {
-                            TboxRepository.addLog("ERROR", "LOC response", "Unknown message from LOC")
-                        }
-                    }
-                } else {
-                    TboxRepository.addLog("ERROR", "UDP response", "Unknown TID 0x$tids")
-                }
-                TboxRepository.addLog("DEBUG", "UDP response",
-                    "Received from $fromAddress:$fromPort: TID: 0x$tids, SID: 0x$sids, CMD: 0x$cmds - " +
-                        toHexString(receivedData))
-            } else {
-                TboxRepository.addLog("ERROR", "UDP response",
-                    "Unknown data received from $fromAddress:$fromPort: " +
-                            toHexString(receivePacket.data))
-            }
-        }
-        else {
+        if (!checkPacket(receivePacket.data)) {
             TboxRepository.addLog("ERROR", "UDP response",
                 "Unknown data received from $fromAddress:$fromPort: \" +\n" +
-                    toHexString(receivePacket.data))
+                        toHexString(receivePacket.data))
+            return
+        }
+        val dataLength = extractDataLength(receivePacket.data)
+        if (!checkLength(receivePacket.data, dataLength)) {
+            TboxRepository.addLog("ERROR", "UDP response",
+                "Error data length ${receivePacket.data.size-14} < $dataLength " +
+                        "received from $fromAddress:$fromPort: " +
+                        toHexString(receivePacket.data))
+            return
+        }
+        val receivedData = extractData(receivePacket.data, dataLength)
+        if (receivedData.contentEquals(ByteArray(0))) {
+            TboxRepository.addLog(
+                "ERROR", "UDP response",
+                "Checksum error or no data received from $fromAddress:$fromPort: " +
+                        toHexString(receivePacket.data))
+            return
+        }
+        val tid = receivePacket.data[9]
+        val tids = String.format("%02X", tid)
+        var tidName = ""
+        val sid = receivePacket.data[8]
+        val sids = String.format("%02X", sid)
+        val cmd = receivePacket.data[12]
+        val cmds = String.format("%02X", cmd)
+        var needEndLog = true
+
+        if (tid == MDC_CODE) {
+            tidName = "MDC"
+            try {
+                needEndLog = !if (cmd == 0x87.toByte()) {
+                    ansMDCNetState(receivedData)
+                    //sendWidgetUpdate()
+                } else if ((cmd == 0x90.toByte())) {
+                    ansMDCAPNManage(receivedData)
+                } else if ((cmd == 0x91.toByte())) {
+                    ansMDCAPNState(receivedData)
+                    //sendWidgetUpdate()
+                } else if ((cmd == 0x8E.toByte())) {
+                    ansATcmd(receivedData)
+                } else if (cmd == 0x81.toByte()) {
+                    ansVersion("MDC", receivedData)
+                } else {
+                    TboxRepository.addLog("ERROR", "MDC response", "Unknown message from MDC")
+                    false
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "MDC response", "$e")
+            }
+        } else if (tid == APP_CODE) {
+            tidName = "APP"
+            try {
+                if (cmd == 0x82.toByte()) {
+                    if (receivedData.contentEquals(byteArrayOf(0x01))) {
+                        TboxRepository.addLog("DEBUG", "APP response", "Command SUSPEND complete")
+                        TboxRepository.updateSuspendTboxAppSend(true)
+                        needEndLog = false
+                    } else {
+                        TboxRepository.addLog(
+                            "ERROR",
+                            "APP response",
+                            "Command SUSPEND not complete"
+                        )
+                    }
+                } else if (cmd == 0x84.toByte()) {
+                    if (receivedData.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+                        TboxRepository.addLog("DEBUG", "APP response", "Command STOP complete")
+                        needEndLog = false
+                    } else {
+                        TboxRepository.addLog("ERROR", "APP response", "Command STOP not complete")
+                    }
+                } else if (cmd == 0x81.toByte()) {
+                    needEndLog = !ansVersion("APP", receivedData)
+                } else {
+                    TboxRepository.addLog("ERROR", "APP response", "Unknown message from APP")
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "APP response", "$e")
+            }
+        } else if (tid == SWD_CODE) {
+            tidName = "SWD"
+            try {
+                if (cmd == 0x87.toByte()) {
+                    if (receivedData.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+                        TboxRepository.addLog("DEBUG", "SWD response", "Command PreventRestart complete")
+                        TboxRepository.updatePreventRestartSend(true)
+                        needEndLog = false
+                    }
+                    else {
+                        TboxRepository.addLog("ERROR", "SWD response", "Command PreventRestart not complete")
+                    }
+                } else if (cmd == 0x81.toByte()) {
+                    needEndLog = !ansVersion("SWD", receivedData)
+                } else {
+                    TboxRepository.addLog("ERROR", "SWD response", "Unknown message from SWD")
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "SWD response", "$e")
+            }
+        } else if (tid == CRT_CODE) {
+            tidName = "CRT"
+            try {
+                when (cmd) {
+                    0x90.toByte() -> {
+                        needEndLog = !ansCRTPowVol(receivedData)
+                    }
+
+                    0x92.toByte() -> {
+                        needEndLog = !ansCRTDidData(receivedData)
+                    }
+
+                    0x94.toByte() -> {
+                        needEndLog = !ansCRTHdmData(receivedData)
+                    }
+
+                    0x81.toByte() -> {
+                        needEndLog = !ansVersion("CRT", receivedData)
+                    }
+
+                    0x95.toByte() -> {
+                        needEndLog = !ansCRTCanFrame(receivedData)
+                    }
+
+                    else -> {
+                        TboxRepository.addLog("ERROR", "CRT response", "Unknown message from CRT")
+                    }
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "CRT response", "$e")
+            }
+        } else if (tid == LOC_CODE) {
+            tidName = "LOC"
+            try {
+                when (cmd) {
+                    0x85.toByte() -> {
+                        needEndLog = !ansLOCValues(receivedData)
+                    }
+
+                    0x81.toByte() -> {
+                        needEndLog = !ansVersion("LOC", receivedData)
+                    }
+
+                    else -> {
+                        TboxRepository.addLog(
+                            "ERROR", "LOC response", "Unknown message from LOC"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "LOC response", "$e")
+            }
+        } else {
+            TboxRepository.addLog("ERROR", "UDP response",
+                "Unknown TID 0x$tids")
+        }
+        if (needEndLog) {
+            TboxRepository.addLog(
+                "DEBUG", "UDP response",
+                "Received from $fromAddress:$fromPort: TID: 0x$tids ($tidName), " +
+                        "SID: 0x$sids, CMD: 0x$cmds - " +
+                        toHexString(receivedData)
+            )
         }
     }
 
-    private fun ansMDCNetState(data: ByteArray) {
-        TboxRepository.addLog("DEBUG", "MDC response ", "Get network state")
+    private fun ansMDCNetState(data: ByteArray): Boolean {
+        TboxRepository.addLog("DEBUG", "MDC response", "Get network state")
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            TboxRepository.addLog("ERROR", "MDC response ", "Error check network state")
+            TboxRepository.addLog("ERROR", "MDC response", "Error check network state")
+            return false
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xF4.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            TboxRepository.addLog("ERROR", "MDC response ", "Error check network state - state not correct")
+            TboxRepository.addLog("ERROR", "MDC response", "Error check network state - state not correct")
+            return false
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xF5.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            TboxRepository.addLog("ERROR", "MDC response ", "Error check network state - subscribe type not correct")
+            TboxRepository.addLog("ERROR", "MDC response", "Error check network state - subscribe type not correct")
+            return false
         }
 
         var csq = 99
@@ -1011,6 +1145,7 @@ class BackgroundService : Service() {
             imsi = imsi,
             operator = operator)
         )
+        return true
     }
 
     private fun clearNetStates() {
@@ -1026,36 +1161,41 @@ class BackgroundService : Service() {
             operator = "-"))
     }
 
-    private fun ansMDCAPNManage(data: ByteArray) {
-        TboxRepository.addLog("DEBUG", "MDC response ", "Get APN manage response")
+    private fun ansMDCAPNManage(data: ByteArray): Boolean {
+        TboxRepository.addLog("DEBUG", "MDC response", "Get APN manage response")
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            TboxRepository.addLog("ERROR", "MDC APN Manage response ", "Error APN manage")
+            TboxRepository.addLog("ERROR", "MDC APN Manage response", "Error APN manage")
+            return false
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xF4.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            TboxRepository.addLog("ERROR", "MDC APN Manage response ", "The operation is not permitted in the current APN state")
+            TboxRepository.addLog("ERROR", "MDC APN Manage response", "The operation is not permitted in the current APN state")
+            return false
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xF5.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            TboxRepository.addLog("ERROR", "MDC APN Manage response ", "Invalid APN channel number")
+            TboxRepository.addLog("ERROR", "MDC APN Manage response", "Invalid APN channel number")
+            return false
         }
         else if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0, 0, 0, 0))
         ) {
-            TboxRepository.addLog("ERROR", "MDC APN Manage response ", "APN command completed")
+            TboxRepository.addLog("DEBUG", "MDC APN Manage response", "APN command completed")
         }
+        return true
     }
 
-    private fun ansMDCAPNState(data: ByteArray) {
-        TboxRepository.addLog("DEBUG", "MDC response ", "Get APN state")
+    private fun ansMDCAPNState(data: ByteArray): Boolean {
+        TboxRepository.addLog("DEBUG", "MDC response", "Get APN state")
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            TboxRepository.addLog("ERROR", "MDC APN State response ", "APN state check error")
+            TboxRepository.addLog("ERROR", "MDC APN State response", "APN state check error")
+            return false
         }
 
         var apnStatus = "-"
@@ -1064,7 +1204,7 @@ class BackgroundService : Service() {
         var apnGate = "-"
         var apnDNS1 = "-"
         var apnDNS2 = "-"
-        if (data.size >= 87) {
+        if (data.size >= 103) {
             apnStatus = if (data[6] == 0x01.toByte()) {
                 "подключен"
             } else {
@@ -1072,8 +1212,8 @@ class BackgroundService : Service() {
             }
             apnType = String(data, 7, 32, Charsets.UTF_8)
             apnIP = String(data, 39, 15, Charsets.UTF_8)
-            apnGate = String(data, 55, 15, Charsets.UTF_8)
-            apnDNS1 = String(data, 71, 15, Charsets.UTF_8)
+            apnGate = String(data, 87, 15, Charsets.UTF_8)
+            apnDNS1 = String(data, 55, 15, Charsets.UTF_8)
             apnDNS2 = String(data, 71, 15, Charsets.UTF_8)
         }
         if (data[4] == 0x00.toByte()) {
@@ -1098,6 +1238,7 @@ class BackgroundService : Service() {
             ))
             apn2UpdateCount = 0
         }
+        return true
     }
 
     private fun clearAPNStates(number: Int = 1) {
@@ -1121,18 +1262,18 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun ansATcmd(data: ByteArray) {
+    private fun ansATcmd(data: ByteArray): Boolean {
         if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            TboxRepository.addLog("ERROR", "MDC AT response ", "Error sending AT command")
-            return
+            TboxRepository.addLog("ERROR", "MDC AT response", "Error sending AT command")
+            return false
         }
         val ans = String(data.copyOfRange(10, data.size), charset = Charsets.UTF_8).trimEnd()
         if ("ERROR" in ans) {
-            TboxRepository.addLog("ERROR", "MDC AT response ", "AT command error: $ans")
-            return
+            TboxRepository.addLog("ERROR", "MDC AT response", "AT command error: $ans")
+            return false
         }
-        TboxRepository.addLog("DEBUG", "MDC AT response ", "AT command answer: $ans")
+        TboxRepository.addLog("DEBUG", "MDC AT response", "AT command answer: $ans")
         if ("+CFUN: 0" in ans || ("AT+CFUN=0" in ans && "OK" in ans)) {
             TboxRepository.updateModemStatus(0)
         } else if ("+CFUN: 1" in ans || ("AT+CFUN=1" in ans && "OK" in ans)) {
@@ -1140,12 +1281,13 @@ class BackgroundService : Service() {
         } else if ("+CFUN: 4" in ans || ("AT+CFUN=4" in ans && "OK" in ans)) {
             TboxRepository.updateModemStatus(4)
         }
+        return true
     }
 
-    private fun ansCRTPowVol(data: ByteArray) {
+    private fun ansCRTPowVol(data: ByteArray): Boolean {
         if (!data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-            TboxRepository.addLog("ERROR", "CRT response ", "Error power voltages info")
-            return
+            TboxRepository.addLog("ERROR", "CRT response", "Error power voltages info")
+            return false
         }
         if (data.size >= 10) {
             val buffer = ByteBuffer.wrap(data.copyOfRange(4, 10)).order(ByteOrder.LITTLE_ENDIAN)
@@ -1162,22 +1304,123 @@ class BackgroundService : Service() {
             TboxRepository.updateVoltages(VoltagesState(voltage1, voltage2, voltage3))
             TboxRepository.addLog("DEBUG", "CRT response",
                 "Get power voltages: $voltage1 V, $voltage2 V, $voltage3 V")
+            return true
         }
+        return false
     }
 
-    private fun ansCRTDidData(data: ByteArray) {
+    private fun ansCRTCanFrame(data: ByteArray): Boolean {
         if (!data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-            TboxRepository.addLog("ERROR", "CRT response ", "Error DID data")
-            return
+            TboxRepository.addLog("ERROR", "CRT response", "Error CAN Frame")
+            return false
+        }
+        try {
+            val rawValue = data.copyOfRange(4, data.size)
+            TboxRepository.addCanFrame(toHexString(rawValue))
+            for (i in 0 until rawValue.size step 17) {
+                try {
+                    val rawFrame = rawValue.copyOfRange(i, i + 17)
+                    val timeStamp = rawFrame.copyOfRange(0, 4)
+                    val canID = rawFrame.copyOfRange(4, 8)
+                    val dlc = rawFrame[8]
+                    val data = rawFrame.copyOfRange(9, 17)
+
+                    if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+                        continue
+                    }
+
+                    TboxRepository.addCanFrameStructured(
+                        toHexString(canID),
+                        data
+                    )
+
+                    if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xC4.toByte()))) {
+                        val angle = data.copyOfRange(0, 2).toDouble("UINT16_BE") / 100.0
+                        val speed = data[2].toInt()
+                        TboxRepository.updateSteer(SteerData(angle, speed))
+                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xFA.toByte()))) {
+                        val rpm = data.copyOfRange(0, 2).toDouble("UINT16_BE") / 4.0
+                        val speed = data[3].toDouble()
+                        TboxRepository.updateEngineSpeed(EngineSpeedData(rpm, speed))
+                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0x00))) {
+                        val speed = data.copyOfRange(4, 6).toDouble("UINT16_BE") / 100.0
+                        TboxRepository.updateCarSpeed(CarSpeedData(speed))
+                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x05))) {
+                        val speed = data[0].toInt()
+                        TboxRepository.updateCruise(Cruise(speed))
+                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x10))) {
+                        val speed1 = data.copyOfRange(0, 2).toDouble("UINT16_BE") * 0.065
+                        val speed2 = data.copyOfRange(2, 4).toDouble("UINT16_BE") * 0.065
+                        val speed3 = data.copyOfRange(4, 6).toDouble("UINT16_BE") * 0.065
+                        val speed4 = data.copyOfRange(6, 8).toDouble("UINT16_BE") * 0.065
+                        TboxRepository.updateWheels(Wheels(speed1, speed2, speed3, speed4))
+                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x04, 0x30))) {
+                        val odometer = data.copyOfRange(5, 8).toUInt20FromNibbleBigEndian()
+                        TboxRepository.updateOdo(OdoData(odometer))
+                    }
+                } catch (e: Exception) {
+                    TboxRepository.addLog("ERROR", "CRT response",
+                        "Error get CAN Frame $i: $e")
+                }
+            }
+            TboxRepository.addLog("DEBUG", "CRT response",
+                "Get CAN Frame")
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "CRT response",
+                "Error get CAN Frame: $e")
+            return false
+        }
+        return true
+    }
+
+    private fun ansCRTDidData(data: ByteArray): Boolean {
+        if (!data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+            TboxRepository.addLog("ERROR", "CRT response", "Error DID data")
+            return false
+        }
+        if (data.size >= 7) {
+            if (data[4] == 0x01.toByte()) {
+                val value = try {
+                    String(data.copyOfRange(6, data.size), charset = Charsets.UTF_8).trimEnd()
+                } catch (e: Exception) {
+                    ""
+                }
+                TboxRepository.addDidDataCSV(
+                    toHexString(byteArrayOf(data[5])),
+                    toHexString(data.copyOfRange(6, data.size)),
+                    value)
+
+                if (data[5] == 0x04.toByte()) {
+                    val sw =
+                        String(data.copyOfRange(6, data.size), charset = Charsets.UTF_8).trimEnd()
+                    TboxRepository.addLog("DEBUG", "CRT response", "Version SW: $sw")
+                    scope.launch {
+                        settingsManager.saveCustomString("sw_version", sw)
+                    }
+                    return true
+                } else if (data[5] == 0x05.toByte()) {
+                    toHexString(byteArrayOf(data[5]))
+                    val hw =
+                        String(data.copyOfRange(6, data.size), charset = Charsets.UTF_8).trimEnd()
+                    TboxRepository.addLog("DEBUG", "CRT response", "Version HW: $hw")
+                    scope.launch {
+                        settingsManager.saveCustomString("hw_version", hw)
+                    }
+                    return true
+                } else if (data[5] == 0x82.toByte()) {
+                    return ansLOCValues(data)
+                }
+            }
         }
         TboxRepository.addLog("DEBUG", "CRT response",
             "Get DID data: ${toHexString(data)}")
+        return true
     }
 
-    private fun ansCRTHdmData(data: ByteArray) {
+    private fun ansCRTHdmData(data: ByteArray): Boolean {
         if (!data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-            TboxRepository.addLog("ERROR", "CRT response ", "Error HDM data")
-            return
+            TboxRepository.addLog("ERROR", "CRT response", "Error HDM data")
+            return false
         }
         if (data.size >= 7) {
             val buffer = ByteBuffer.wrap(data.copyOfRange(4, 6)).order(ByteOrder.LITTLE_ENDIAN)
@@ -1190,35 +1433,37 @@ class BackgroundService : Service() {
             TboxRepository.addLog("DEBUG", "CRT response",
                 "Get HDM data: $isPower, $isIgnition, $isCan")
         } else {
-            TboxRepository.addLog("DEBUG", "CRT response",
-                "Get HDM data")
+            TboxRepository.addLog("WARN", "CRT response",
+                "No HDM data")
+            return false
         }
+        return true
     }
 
-    private fun ansVersion(app: String, data: ByteArray) {
+    private fun ansVersion(app: String, data: ByteArray): Boolean {
         if (!data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-            TboxRepository.addLog("ERROR", "$app response ", "Error version info")
-            return
+            TboxRepository.addLog("ERROR", "$app response", "Error version info")
+            return false
         }
         val version =  String(data.copyOfRange(4, data.size), charset = Charsets.UTF_8).trimEnd()
         scope.launch {
             settingsManager.saveCustomString("${app.lowercase()}_version", version)
         }
         TboxRepository.addLog("DEBUG", "$app response", "Version info: $version")
+        return true
     }
 
-    private fun ansLOCValues(data: ByteArray) {
+    private fun ansLOCValues(data: ByteArray): Boolean {
         if (data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
-            TboxRepository.addLog("ERROR", "LOC response ", "Error location")
-            return
+            TboxRepository.addLog("ERROR", "LOC response", "Error location")
+            return false
         }
 
         if (data.size == 6) {
-            if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x0, 0x00, 0x00, 0x00))) {
-                TboxRepository.addLog("DEBUG", "LOC response ", "Location subscribe command complete")
-                return
+            if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+                TboxRepository.addLog("DEBUG", "LOC response", "Location subscribe command complete")
             }
         } else if (data.size >= 45) {
             TboxRepository.updateLocationSubscribed(true)
@@ -1295,32 +1540,30 @@ class BackgroundService : Service() {
         } else {
             TboxRepository.addLog("DEBUG", "LOC response",
                 "Get location values")
+            return false
         }
+        return true
     }
 
     private fun onTboxConnected(value: Boolean = false) {
         if (value) {
             TboxRepository.addLog("INFO", "UDP Listener", "TBox connected")
             TboxRepository.updateTboxConnected(true)
+
             modemMode(-1)
 
-            //if (settingsManager.getAutoStopTboxAppSetting()) {
-            //    suspendTboxApp()
-            //}
-            //if (autoPreventTboxRestart.value) {
             if (autoPreventTboxRestart.value) {
                 appSuspendTboxApp()
                 swdPreventRestart()
                 preventRestartLastTime = Date()
             }
-            //ssmGetDynamicCode()
             if (updateVoltages.value) {
                 crtGetPowVolInfo()
             }
             if (getCanFrame.value) {
                 crtGetCanFrame()
             }
-            crtGetHdmData()
+            //crtGetHdmData()
         }
         else {
             TboxRepository.addLog("WARN", "UDP Listener", "TBox disconnected")
@@ -1346,6 +1589,45 @@ class BackgroundService : Service() {
             true
         } catch (e: TimeoutCancellationException) {
             false
+        }
+    }
+
+    fun ByteArray.toUInt20FromNibbleBigEndian(): Int {
+        require(this.size >= 3) { "ByteArray must have at least 3 bytes" }
+        return ((this[0].toInt() and 0x0F) shl 16) or
+                ((this[1].toInt() and 0xFF) shl 8) or
+                (this[2].toInt() and 0xFF)
+    }
+
+    fun ByteArray.toDouble(format: String = "UINT16_BE"): Double {
+        return when (format) {
+            "UINT16_BE" -> {
+                require(this.size >= 2) { "ByteArray must have at least 2 bytes for UINT16_BE" }
+                val intValue = ((this[0].toInt() and 0xFF) shl 8) or
+                        (this[1].toInt() and 0xFF)
+                intValue.toDouble()
+            }
+            "UINT16_LE" -> {
+                require(this.size >= 2) { "ByteArray must have at least 2 bytes for UINT16_LE" }
+                val intValue = ((this[1].toInt() and 0xFF) shl 8) or
+                        (this[0].toInt() and 0xFF)
+                intValue.toDouble()
+            }
+            "UINT24_BE" -> {
+                require(this.size >= 3) { "ByteArray must have at least 3 bytes for UINT24_BE" }
+                val intValue = ((this[0].toInt() and 0xFF) shl 16) or
+                        ((this[1].toInt() and 0xFF) shl 8) or
+                        (this[2].toInt() and 0xFF)
+                intValue.toDouble()
+            }
+            "UINT24_LE" -> {
+                require(this.size >= 3) { "ByteArray must have at least 3 bytes for UINT24_LE" }
+                val intValue = ((this[2].toInt() and 0xFF) shl 16) or
+                        ((this[1].toInt() and 0xFF) shl 8) or
+                        (this[0].toInt() and 0xFF)
+                intValue.toDouble()
+            }
+            else -> throw IllegalArgumentException("Unknown format: $format. Supported: UINT16_BE, UINT16_LE, UINT24_BE, UINT24_LE")
         }
     }
 }
@@ -1385,10 +1667,11 @@ fun extractDataLength(data: ByteArray): Int {
     return ((data[10].toInt() and 0xFF) shl 8) or (data[11].toInt() and 0xFF)
 }
 
+fun checkLength(data: ByteArray, length: Int): Boolean {
+    return data.size - 14 >= length
+}
+
 fun extractData(data: ByteArray, length: Int): ByteArray {
-    if (data.size < 14 + length) {
-        return ByteArray(0)
-    }
     if (xorSum(data.copyOfRange(0, 13+length)) != data[13+length]) {
         return ByteArray(0)
     }
@@ -1408,6 +1691,6 @@ fun xorSum(data: ByteArray): Byte {
     return checksum
 }
 
-fun toHexString(data: ByteArray): String {
-    return data.joinToString(" ") { "%02X".format(it) }
+fun toHexString(data: ByteArray, separator: String = " "): String {
+    return data.joinToString(separator) { "%02X".format(it) }
 }
