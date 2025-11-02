@@ -23,8 +23,10 @@ class SettingsManager(private val context: Context) {
         private val AUTO_TBOX_REBOOT_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_tbox_reboot")
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
-        private val UPDATE_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}update_voltages")
+        private val GET_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}get_voltages")
         private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
+        private val GET_CYCLE_SIGNAL_KEY = booleanPreferencesKey("${KEY_PREFIX}get_cycle_signal")
+        private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val TBOX_IP_KEY = stringPreferencesKey("${KEY_PREFIX}tbox_ip")
 
@@ -52,14 +54,24 @@ class SettingsManager(private val context: Context) {
             preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false
         }
 
-    val updateVoltagesFlow: Flow<Boolean> = context.settingsDataStore.data
+    val getVoltagesFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[UPDATE_VOLTAGES_KEY] ?: false
+            preferences[GET_VOLTAGES_KEY] ?: false
         }
 
     val getCanFrameFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[GET_CAN_FRAME_KEY] ?: false
+        }
+
+    val getCycleSignalFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[GET_CYCLE_SIGNAL_KEY] ?: false
+        }
+
+    val getLocDataFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[GET_LOC_DATA_KEY] ?: false
         }
 
     val logLevelFlow: Flow<String> = context.settingsDataStore.data
@@ -117,15 +129,27 @@ class SettingsManager(private val context: Context) {
             }
     }
 
-    suspend fun saveUpdateVoltagesSetting(enabled: Boolean) {
+    suspend fun saveGetVoltagesSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[UPDATE_VOLTAGES_KEY] = enabled
+            preferences[GET_VOLTAGES_KEY] = enabled
         }
     }
 
     suspend fun saveGetCanFrameSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[GET_CAN_FRAME_KEY] = enabled
+        }
+    }
+
+    suspend fun saveGetCycleSignalSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GET_CYCLE_SIGNAL_KEY] = enabled
+        }
+    }
+
+    suspend fun saveGetLocDataSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[GET_LOC_DATA_KEY] = enabled
         }
     }
 

@@ -16,12 +16,12 @@ class TboxViewModel() : ViewModel() {
             initialValue = listOf("")
         )
 
-    val didDataCSV: StateFlow<List<String>> = TboxRepository.didDataCSV
+    /*val didDataCSV: StateFlow<List<String>> = TboxRepository.didDataCSV
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = listOf("")
-        )
+        )*/
 
     val ipList: StateFlow<List<String>> = TboxRepository.ipList
         .stateIn(
@@ -30,12 +30,12 @@ class TboxViewModel() : ViewModel() {
             initialValue = listOf("")
         )
 
-    val canFramesList: StateFlow<List<String>> = TboxRepository.canFramesList
+    /*val canFramesList: StateFlow<List<String>> = TboxRepository.canFramesList
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = listOf("")
-        )
+        )*/
 
     val tboxConnected: StateFlow<Boolean> = TboxRepository.tboxConnected
         .stateIn(
@@ -72,12 +72,12 @@ class TboxViewModel() : ViewModel() {
             initialValue = Date()
         )
 
-    val locationSubscribed: StateFlow<Boolean> = TboxRepository.locationSubscribed
+    /*val locationSubscribed: StateFlow<Boolean> = TboxRepository.locationSubscribed
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
-        )
+        )*/
 
     val modemStatus: StateFlow<Int> = TboxRepository.modemStatus
         .stateIn(
@@ -234,7 +234,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
-    val isUpdateVoltagesEnabled = settingsManager.updateVoltagesFlow
+    val isGetVoltagesEnabled = settingsManager.getVoltagesFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -242,6 +242,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val isGetCanFrameEnabled = settingsManager.getCanFrameFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isGetCycleSignalEnabled = settingsManager.getCycleSignalFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isGetLocDataEnabled = settingsManager.getLocDataFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -341,15 +355,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun saveUpdateVoltagesSetting(enabled: Boolean) {
+    fun saveGetVoltagesSetting(enabled: Boolean) {
         viewModelScope.launch {
-            settingsManager.saveUpdateVoltagesSetting(enabled)
+            settingsManager.saveGetVoltagesSetting(enabled)
         }
     }
 
     fun saveGetCanFrameSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveGetCanFrameSetting(enabled)
+        }
+    }
+
+    fun saveGetCycleSignalSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveGetCycleSignalSetting(enabled)
+        }
+    }
+
+    fun saveGetLocDataSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveGetLocDataSetting(enabled)
         }
     }
 }

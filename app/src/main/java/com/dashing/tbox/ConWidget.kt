@@ -19,12 +19,11 @@ class ConWidget : AppWidgetProvider() {
         private var cachedPendingIntent: android.app.PendingIntent? = null
     }
 
-    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
-        updateWidget(context, manager, ids)
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        appWidgetIds.forEach { appWidgetId ->
+            updateWidget(context, appWidgetManager, appWidgetId)
+        }
 
-        //context.startService(Intent(context, BackgroundService::class.java).apply {
-        //    action = BackgroundService.ACTION_NET_UPD_START
-        //})
         val intent = Intent(context, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_START
         }
@@ -51,11 +50,14 @@ class ConWidget : AppWidgetProvider() {
                 ComponentName(context, ConWidget::class.java)
             )
 
-            updateWidget(context, appWidgetManager, appWidgetIds,
-                theme,
-                tboxStatus,
-                isNoData = false
-            )
+            appWidgetIds.forEach { appWidgetId ->
+                updateWidget(
+                    context, appWidgetManager, appWidgetId,
+                    theme,
+                    tboxStatus,
+                    isNoData = false
+                )
+            }
 
             // Перезапускаем проверку таймаута
             restartTimeoutCheck(context)
@@ -92,18 +94,22 @@ class ConWidget : AppWidgetProvider() {
     private fun showNoSignal(context: Context) {
         val appWidgetManager = AppWidgetManager.getInstance(context)
         val appWidgetIds = appWidgetManager.getAppWidgetIds(
-            ComponentName(context, NetWidget::class.java)
+            ComponentName(context, ConWidget::class.java)
         )
 
         // Используем стандартную тему (1) для отображения отсутствия сигнала
-        updateWidget(context, appWidgetManager, appWidgetIds, theme = 1, tboxStatus = false,
-            isNoData = true)
+        appWidgetIds.forEach { appWidgetId ->
+            updateWidget(
+                context, appWidgetManager, appWidgetId, theme = 1, tboxStatus = false,
+                isNoData = true
+            )
+        }
     }
 
     private fun updateWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray,
+        appWidgetId: Int,
         theme: Int = 1,
         tboxStatus: Boolean = false,
         isNoData: Boolean = false,
@@ -116,14 +122,12 @@ class ConWidget : AppWidgetProvider() {
         }
 
         val pendingIntent = getPendingIntent(context)
-        appWidgetIds.forEach { appWidgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_con).apply {
-                setImageViewResource(R.id.status_indicator, indicatorDrawable)
-            }
-            // Создаем PendingIntent для открытия MainActivity
-            views.setOnClickPendingIntent(R.id.widget_image, pendingIntent)
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+        val views = RemoteViews(context.packageName, R.layout.widget_con).apply {
+            setImageViewResource(R.id.status_indicator, indicatorDrawable)
         }
+        // Создаем PendingIntent для открытия MainActivity
+        views.setOnClickPendingIntent(R.id.status_indicator, pendingIntent)
+        appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 
     private fun getPendingIntent(context: Context): android.app.PendingIntent {
@@ -143,11 +147,6 @@ class ConWidget : AppWidgetProvider() {
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        /*if (!WidgetUtils.isWidgetActive(context)) {
-            context.stopService(Intent(context, BackgroundService::class.java).apply {
-                action = BackgroundService.ACTION_STOP
-            })
-        }*/
         // Останавливаем проверку таймаута
         timeoutRunnable?.let { handler.removeCallbacks(it) }
     }

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@android:color/transparent"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/tbox_text"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="TBox"
+        android:textColor="@color/status_err"
+        android:textStyle="bold"
+        android:lineSpacingExtra="2sp" />
+
+    <TextView
+        android:id="@+id/res_text"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="RES"
+        android:textColor="@color/on_light_background"
+        android:textStyle="bold"
+        android:lineSpacingExtra="2sp" />
+
+</LinearLayout>

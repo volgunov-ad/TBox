@@ -180,7 +180,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             }
 
             Text(
-                text = "Версия программы 0.5.1",
+                text = "Версия программы 0.6",
                 fontSize = 16.sp,
                 textAlign = TextAlign.Right,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -197,7 +197,7 @@ fun TboxScreen(viewModel: TboxViewModel,
                 0 -> ModemTab(viewModel, onModemOn, onModemFly, onModemOff)
                 1 -> LocationTab(viewModel, onLocSubscribeClick, onLocUnsubscribeClick)
                 2 -> CarDataTab(viewModel)
-                3 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart, onSaveToFile)
+                3 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart)
                 4 -> LogsTab(viewModel, settingsViewModel)
                 5 -> InfoTab(viewModel, settingsViewModel, onUpdateVersions)
                 6 -> CanTab(viewModel, onSaveToFile)
@@ -347,22 +347,24 @@ fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onTboxRestartClick: () -> Unit,
-    onSaveToFile: (List<String>) -> Unit
+    //onSaveToFile: (List<String>) -> Unit
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
-    val isUpdateVoltagesEnabled by settingsViewModel.isUpdateVoltagesEnabled.collectAsStateWithLifecycle()
+    //val isGetVoltagesEnabled by settingsViewModel.isGetVoltagesEnabled.collectAsStateWithLifecycle()
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
+    val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
+    val isGetLocDataEnabled by settingsViewModel.isGetLocDataEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
-    val canFramesList by viewModel.canFramesList.collectAsStateWithLifecycle()
-    val didDataCSV by viewModel.didDataCSV.collectAsStateWithLifecycle()
+    //val canFramesList by viewModel.canFramesList.collectAsStateWithLifecycle()
+    //val didDataCSV by viewModel.didDataCSV.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
 
-    var showSaveDialog by remember { mutableStateOf(false) }
-    var showSaveDidDialog by remember { mutableStateOf(false) }
+    //var showSaveDialog by remember { mutableStateOf(false) }
+    // showSaveDidDialog by remember { mutableStateOf(false) }
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
@@ -397,7 +399,8 @@ fun SettingsTab(
                     "Проверка происходит с периодичностью 10 секунд в первый раз и " +
                     "5 минут в последующие разы " +
                     "(сброс таймера до 10 секунд происходит при " +
-                    "подключении сети)"
+                    "подключении сети)",
+            true
         )
         SettingSwitch(
             isAutoTboxRebootEnabled,
@@ -409,7 +412,8 @@ fun SettingsTab(
                     "Перезагрузка просходит через 60 секунд после попытки перезапуска модема, " +
                     "если это не помогло, в первый раз. " +
                     "Далее таймер устанавливается на 30 минут " +
-                    "(сброс таймера до 60 секунд происходит при подключении сети)"
+                    "(сброс таймера до 60 секунд происходит при подключении сети)",
+            isAutoRestartEnabled
         )
         Text(
             text = "Настройки предотвращения перезагрузки",
@@ -428,7 +432,8 @@ fun SettingsTab(
             "Отключение приложения APP и проверки состояния сети в TBox " +
                     "позволяет избежать периодической перезагрузки TBox. Необходимые команды " +
                     "отправляются фоновой службой этого приложения каждый раз при запуске " +
-                    "головного устройства, а также сразу же при включении данной опции"
+                    "головного устройства, а также сразу же при включении данной опции",
+            true
         )
         Text(
             text = "Настройки виджета",
@@ -447,7 +452,8 @@ fun SettingsTab(
             "Индикатор в виджете в виде круга может иметь 3 цвета: \n" +
                     "красный - нет данных от фоновой службы;\n" +
                     "желтый - нет связи с TBox;\n" +
-                    "зеленый - есть связь с TBox"
+                    "зеленый - есть связь с TBox",
+            true
         )
         Text(
             text = "Экспериментальные настройки",
@@ -457,21 +463,40 @@ fun SettingsTab(
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Left
         )
-        SettingSwitch(
+        /*SettingSwitch(
             isUpdateVoltagesEnabled,
             { enabled ->
                 settingsViewModel.saveUpdateVoltagesSetting(enabled)
             },
             "Получать данные о напряжении TBox",
             ""
-        )
+        )*/
         SettingSwitch(
             isGetCanFrameEnabled,
             { enabled ->
                 settingsViewModel.saveGetCanFrameSetting(enabled)
             },
             "Получать данные CAN от TBox",
-            ""
+            "",
+            true
+        )
+        SettingSwitch(
+            isGetCycleSignalEnabled,
+            { enabled ->
+                settingsViewModel.saveGetCycleSignalSetting(enabled)
+            },
+            "Получать циклические данные от TBox",
+            "",
+            true
+        )
+        SettingSwitch(
+            isGetLocDataEnabled,
+            { enabled ->
+                settingsViewModel.saveGetLocDataSetting(enabled)
+            },
+            "Получать данные о геопозиции от TBox",
+            "",
+            true
         )
 
         Row(
@@ -582,7 +607,7 @@ fun LocationTab(
     onLocUnsubscribeClick: () -> Unit
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
-    val locationSubscribed by viewModel.locationSubscribed.collectAsStateWithLifecycle()
+    //val locationSubscribed by viewModel.locationSubscribed.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -608,14 +633,14 @@ fun LocationTab(
             item { StatusRow("Высота, м", locValues.altitude.toString()) }
             item { StatusRow("Видимые спутники", locValues.visibleSatellites.toString()) }
             item { StatusRow("Используемые спутники", locValues.usingSatellites.toString()) }
-            item { StatusRow("Скорость, км/ч", locValues.speed.toString()) }
-            item { StatusRow("Истинное направление", locValues.trueDirection.toString()) }
-            item { StatusRow("Магнитное направление", locValues.magneticDirection.toString()) }
+            item { StatusRow("Скорость, км/ч", String.format(Locale.getDefault(), "%.1f", locValues.speed)) }
+            item { StatusRow("Истинное направление", String.format(Locale.getDefault(), "%.1f", locValues.trueDirection)) }
+            item { StatusRow("Магнитное направление", String.format(Locale.getDefault(), "%.1f", locValues.magneticDirection)) }
             item { StatusRow("Дата и время UTC", dateTime) }
             item { StatusRow("Сырые данные", locValues.rawValue) }
         }
-        Spacer(modifier = Modifier.width(16.dp))
-        LocationSubscribeSelector(locationSubscribed, onLocSubscribeClick, onLocUnsubscribeClick)
+        //Spacer(modifier = Modifier.width(16.dp))
+        //LocationSubscribeSelector(locationSubscribed, onLocSubscribeClick, onLocUnsubscribeClick)
     }
 }
 
@@ -791,22 +816,22 @@ fun CarDataTab(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            item { StatusRow("Напряжение, В", voltages.voltage3.toString()) }
-            item { StatusHeader("00 C4") }
-            item { StatusRow("Угол поворота руля", steer.angle.toString()) }
+            //item { StatusRow("Напряжение, В", voltages.voltage4.toString()) }
+            //item { StatusHeader("00 C4") }
+            item { StatusRow("Угол поворота руля", String.format(Locale.getDefault(), "%.1f", steer.angle)) }
             item { StatusRow("Скорость вращения руля", steer.speed.toString()) }
-            item { StatusHeader("00 FA") }
-            item { StatusRow("Обороты двигателя, об/мин", engineSpeed.rpm.toString()) }
-            item { StatusHeader("02 00")}
-            item { StatusRow("Скорость автомобиля, км/ч", carSpeed.speed.toString()) }
-            item { StatusHeader("03 05") }
+            //item { StatusHeader("00 FA") }
+            item { StatusRow("Обороты двигателя, об/мин", String.format(Locale.getDefault(), "%.1f", engineSpeed.rpm)) }
+            //item { StatusHeader("02 00")}
+            item { StatusRow("Скорость автомобиля, км/ч", String.format(Locale.getDefault(), "%.1f", odo.speed)) }
+            //item { StatusHeader("03 05") }
             item { StatusRow("Скорость круиз-контроля, км/ч", cruise.speed.toString()) }
-            item { StatusHeader("03 10") }
-            item { StatusRow("Скорость колеса 1, км/ч", wheels.speed1.toString()) }
-            item { StatusRow("Скорость колеса 2, км/ч", wheels.speed2.toString()) }
-            item { StatusRow("Скорость колеса 3, км/ч", wheels.speed3.toString()) }
-            item { StatusRow("Скорость колеса 4, км/ч", wheels.speed4.toString()) }
-            item { StatusHeader("04 30") }
+            //item { StatusHeader("03 10") }
+            //item { StatusRow("Скорость колеса 1, км/ч", String.format(Locale.getDefault(), "%.1f", wheels.speed1)) }
+            //item { StatusRow("Скорость колеса 2, км/ч", String.format(Locale.getDefault(), "%.1f", wheels.speed2)) }
+            //item { StatusRow("Скорость колеса 3, км/ч", String.format(Locale.getDefault(), "%.1f", wheels.speed3)) }
+            //item { StatusRow("Скорость колеса 4, км/ч", String.format(Locale.getDefault(), "%.1f", wheels.speed4)) }
+            //item { StatusHeader("04 30") }
             item { StatusRow("Одометр, км", odo.odometer.toString()) }
         }
     }

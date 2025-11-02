@@ -1,8 +1,6 @@
 package com.dashing.tbox
 
-import android.app.Activity
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -36,7 +34,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 TboxApp(
                     settingsManager = settingsManager,
-                    onTboxRestart = { rebootTbox() },
+                    onTboxRestart = { rebootTBox() },
                     onModemCheck = { modemCheck() },
                     onModemOn = { setModemMode("on") },
                     onModemFly = { setModemMode("fly") },
@@ -64,7 +62,7 @@ class MainActivity : ComponentActivity() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             startForegroundService(intent)
         } else {
-            startService(intent)
+            startServiceSafely(intent)
         }
     }
 
@@ -72,28 +70,28 @@ class MainActivity : ComponentActivity() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_MODEM_CHECK
         }
-        startService(intent)
+        startServiceSafely(intent)
     }
 
     private fun locSubscribe() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_LOC_SUBSCRIBE
         }
-        startService(intent)
+        startServiceSafely(intent)
     }
 
     private fun getCanFrame() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_GET_CAN_FRAME
         }
-        startService(intent)
+        startServiceSafely(intent)
     }
 
     private fun locUnsubscribe() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_LOC_UNSUBSCRIBE
         }
-        startService(intent)
+        startServiceSafely(intent)
     }
 
     private fun setModemMode(mode: String = "on") {
@@ -110,14 +108,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        startService(intent)
+        startServiceSafely(intent)
     }
 
-    private fun rebootTbox() {
+    private fun rebootTBox() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_TBOX_REBOOT
         }
-        startService(intent)
+        startServiceSafely(intent)
     }
 
     private fun apnManage(number: Int, cmd: String) {
@@ -149,14 +147,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        startService(intent)
+        startServiceSafely(intent)
     }
 
     private fun updateVersions() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_GET_VERSIONS
         }
-        startService(intent)
+        startServiceSafely(intent)
     }
 
     private fun pin(cmd: Int) {
@@ -189,7 +187,7 @@ class MainActivity : ComponentActivity() {
                 return
             }
         }
-        startService(intent)
+        startServiceSafely(intent)
     }
 
     override fun onDestroy() {
@@ -240,6 +238,19 @@ class MainActivity : ComponentActivity() {
             }
         } else {
             requestPermissionLauncher.launch(permissions)
+        }
+    }
+
+    private fun startServiceSafely(intent: Intent) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            // Логируем ошибку
+            e.printStackTrace()
         }
     }
 }

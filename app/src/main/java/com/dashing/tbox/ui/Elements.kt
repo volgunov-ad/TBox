@@ -196,10 +196,11 @@ fun TabMenuItem(
 
 @Composable
 fun SettingSwitch(
-    isEnabled: Boolean,
+    isChecked: Boolean,
     onCheckedChange: (enabled: Boolean) -> Unit,
     text: String,
-    description: String
+    description: String,
+    enabled: Boolean
 ) {
     Row(
         modifier = Modifier
@@ -209,7 +210,8 @@ fun SettingSwitch(
     ) {
         // Switch выровнен по центру первого текста
         Switch(
-            checked = isEnabled,
+            checked = isChecked,
+            enabled = enabled,
             onCheckedChange = { enabled ->
                 onCheckedChange(enabled)
             },

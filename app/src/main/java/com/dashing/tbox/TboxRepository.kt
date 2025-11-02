@@ -7,13 +7,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.util.Locale
 import java.util.Date
-import kotlin.collections.copyOfRange
 
 data class NetState(
     val csq: Int = 99,
-    val netStatus: String = "",
-    val regStatus: String = "",
-    val simStatus: String = ""
+    val signalLevel: Int = 0,
+    val netStatus: String = "", // -, 2G, 3G, 4G, нет сети
+    val regStatus: String = "", // "нет сети", "домашняя сеть", "поиск сети", "регистрация отклонена", "роуминг"
+    val simStatus: String = "" // "нет SIM", "SIM готова", "требуется PIN", "ошибка SIM"
 )
 
 data class NetValues(
@@ -41,9 +41,9 @@ data class LocValues(
     val altitude: Double = 0.0,
     val visibleSatellites: Int = 0,
     val usingSatellites: Int = 0,
-    val speed: Double = 0.0,
-    val trueDirection: Double = 0.0,
-    val magneticDirection: Double = 0.0,
+    val speed: Float = 0f,
+    val trueDirection: Float = 0f,
+    val magneticDirection: Float = 0f,
     val updateTime: Date = Date(),
 )
 
@@ -57,9 +57,10 @@ data class UtcTime(
 )
 
 data class VoltagesState(
-    val voltage1: Double = 0.0,
-    val voltage2: Double = 0.0,
-    val voltage3: Double = 0.0,
+    val voltage1: Float = 0f,
+    val voltage2: Float = 0f,
+    val voltage3: Float = 0f,
+    val voltage4: Float = 0f,
     val updateTime: Date = Date(),
 )
 
@@ -70,16 +71,17 @@ data class HdmData(
 )
 
 data class OdoData(
+    val speed: Float = 0f,
     val odometer: Int = 0,
 )
 
 data class EngineSpeedData(
-    val rpm: Double = 0.0,
-    val speed: Double = 0.0,
+    val rpm: Float = 0f,
+    val speed: Float = 0f,
 )
 
 data class CarSpeedData(
-    val speed: Double = 0.0,
+    val speed: Float = 0f,
 )
 
 data class Cruise(
@@ -87,14 +89,14 @@ data class Cruise(
 )
 
 data class Wheels(
-    val speed1: Double = 0.0,
-    val speed2: Double = 0.0,
-    val speed3: Double = 0.0,
-    val speed4: Double = 0.0,
+    val speed1: Float = 0f,
+    val speed2: Float = 0f,
+    val speed3: Float = 0f,
+    val speed4: Float = 0f,
 )
 
 data class SteerData(
-    val angle: Double = 0.0,
+    val angle: Float = 0f,
     val speed: Int = 0,
 )
 
@@ -134,6 +136,9 @@ object TboxRepository {
     private val _apn2State = MutableStateFlow(APNState())
     val apn2State: StateFlow<APNState> = _apn2State.asStateFlow()
 
+    private val _apnStatus = MutableStateFlow(false)
+    val apnStatus: StateFlow<Boolean> = _apnStatus.asStateFlow()
+
     private val _voltages = MutableStateFlow(VoltagesState())
     val voltages: StateFlow<VoltagesState> = _voltages.asStateFlow()
 
@@ -170,8 +175,8 @@ object TboxRepository {
     private val _suspendTboxAppSend = MutableStateFlow(false)
     val suspendTboxAppSend: StateFlow<Boolean> = _suspendTboxAppSend.asStateFlow()
 
-    private val _locationSubscribed = MutableStateFlow(false)
-    val locationSubscribed: StateFlow<Boolean> = _locationSubscribed.asStateFlow()
+    //private val _locationSubscribed = MutableStateFlow(false)
+    //val locationSubscribed: StateFlow<Boolean> = _locationSubscribed.asStateFlow()
 
     private val _tboxConnectionTime = MutableStateFlow(Date())
     val tboxConnectionTime: StateFlow<Date> = _tboxConnectionTime.asStateFlow()
@@ -191,14 +196,17 @@ object TboxRepository {
     private val _canFrameTime = MutableStateFlow(Date())
     val canFrameTime: StateFlow<Date> = _canFrameTime.asStateFlow()
 
+    private val _cycleSignalTime = MutableStateFlow(Date())
+    val cycleSignalTime: StateFlow<Date> = _cycleSignalTime.asStateFlow()
+
     private val _ipList = MutableStateFlow<List<String>>(emptyList())
     val ipList: StateFlow<List<String>> = _ipList.asStateFlow()
 
     private val _didDataCSV = MutableStateFlow<List<String>>(emptyList())
     val didDataCSV: StateFlow<List<String>> = _didDataCSV.asStateFlow()
 
-    private val _canFramesList = MutableStateFlow<List<String>>(emptyList())
-    val canFramesList: StateFlow<List<String>> = _canFramesList.asStateFlow()
+    //private val _canFramesList = MutableStateFlow<List<String>>(emptyList())
+    //val canFramesList: StateFlow<List<String>> = _canFramesList.asStateFlow()
 
     private val _canFramesStructured = MutableStateFlow<Map<String, List<CanFrame>>>(emptyMap())
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = _canFramesStructured.asStateFlow()
@@ -224,7 +232,7 @@ object TboxRepository {
         }
     }
 
-    fun addCanFrame(rawValue: String) {
+    /*fun addCanFrame(rawValue: String) {
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         val entry = "$timestamp;$rawValue"
 
@@ -232,15 +240,23 @@ object TboxRepository {
             (currentData + entry).takeLast(MAX_CAN_FRAMES)
         }
         _canFrameTime.value = Date()
+    }*/
+
+    fun updateCycleSignalTime() {
+        _cycleSignalTime.value = Date()
+    }
+
+    fun updateCanFrameTime() {
+        _canFrameTime.value = Date()
     }
 
     fun updateTboxConnected(value: Boolean) {
         _tboxConnected.value = value
     }
 
-    fun updateLocationSubscribed(value: Boolean) {
+    /*fun updateLocationSubscribed(value: Boolean) {
         _locationSubscribed.value = value
-    }
+    }*/
 
     fun updateTboxConnectionTime() {
         _tboxConnectionTime.value = Date()
@@ -272,6 +288,10 @@ object TboxRepository {
 
     fun updateAPN2State(newState: APNState) {
         _apn2State.value = newState
+    }
+
+    fun updateAPNStatus(value: Boolean) {
+        _apnStatus.value = value
     }
 
     fun updateLocValues(newValues: LocValues) {
@@ -332,7 +352,6 @@ object TboxRepository {
 
             currentMap + (canId to updatedFrames)
         }
-        _canFrameTime.value = Date()
     }
 
     fun getFramesForId(canId: String): List<CanFrame> {

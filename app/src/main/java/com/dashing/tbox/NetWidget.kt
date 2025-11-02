@@ -19,8 +19,10 @@ class NetWidget : AppWidgetProvider() {
         private var cachedPendingIntent: android.app.PendingIntent? = null
     }
 
-    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
-        updateWidget(context, manager, ids)
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        appWidgetIds.forEach { appWidgetId ->
+            updateWidget(context, appWidgetManager, appWidgetId)
+        }
 
         //context.startService(Intent(context, BackgroundService::class.java).apply {
         //    action = BackgroundService.ACTION_NET_UPD_START
@@ -43,9 +45,9 @@ class NetWidget : AppWidgetProvider() {
 
         if (intent.action == BackgroundService.ACTION_UPDATE_WIDGET) {
             val theme = intent.getIntExtra(BackgroundService.EXTRA_THEME, 1)
-            val csq = intent.getIntExtra(BackgroundService.EXTRA_CSQ, 99)
+            val signalLevel = intent.getIntExtra(BackgroundService.EXTRA_SIGNAL_LEVEL, 0)
             val netType = intent.getStringExtra(BackgroundService.EXTRA_NET_TYPE) ?: ""
-            val apnStatus = intent.getStringExtra(BackgroundService.EXTRA_APN_STATUS) ?: ""
+            val apnStatus = intent.getBooleanExtra(BackgroundService.EXTRA_APN_STATUS, false)
             val tboxStatus = intent.getBooleanExtra(BackgroundService.EXTRA_TBOX_STATUS, false)
             val showIndicator = intent.getBooleanExtra(BackgroundService.EXTRA_WIDGET_SHOW_INDICATOR, false)
 
@@ -55,8 +57,12 @@ class NetWidget : AppWidgetProvider() {
                 ComponentName(context, NetWidget::class.java)
             )
 
-            updateWidget(context, appWidgetManager, appWidgetIds, theme, csq, netType,
-                apnStatus, tboxStatus, showIndicator, false)
+            appWidgetIds.forEach { appWidgetId ->
+                updateWidget(
+                    context, appWidgetManager, appWidgetId, theme, signalLevel, netType,
+                    apnStatus, tboxStatus, showIndicator, false
+                )
+            }
 
             // Перезапускаем проверку таймаута
             restartTimeoutCheck(context)
@@ -96,24 +102,36 @@ class NetWidget : AppWidgetProvider() {
             ComponentName(context, NetWidget::class.java)
         )
 
-        // Используем стандартную тему (1) для отображения отсутствия сигнала
-        updateWidget(context, appWidgetManager, appWidgetIds, theme = 1, csq = 99,
-            netType = "", apnStatus = "", tboxStatus = false, showIndicator = true, isNoData = true)
+        appWidgetIds.forEach { appWidgetId ->
+            // Используем стандартную тему (1) для отображения отсутствия сигнала
+            updateWidget(
+                context,
+                appWidgetManager,
+                appWidgetId,
+                theme = 1,
+                signalLevel = 0,
+                netType = "",
+                apnStatus = false,
+                tboxStatus = false,
+                showIndicator = true,
+                isNoData = true
+            )
+        }
     }
 
     private fun updateWidget(
         context: Context,
         appWidgetManager: AppWidgetManager,
-        appWidgetIds: IntArray,
+        appWidgetId: Int,
         theme: Int = 1,
-        csq: Int = 99,
+        signalLevel: Int = 0,
         netType: String = "",
-        apnStatus: String = "",
+        apnStatus: Boolean = false,
         tboxStatus: Boolean = false,
         showIndicator: Boolean = true,
         isNoData: Boolean = false,
     ) {
-        var imageR = if (theme == 1) R.drawable.ic_signal_nosig_sharp_outlined else
+        var imageR = if (theme == 2) R.drawable.ic_signal_nosig_sharp_outlined else
             R.drawable.ic_signal_nosig_sharp_outlined_dark
 
         val indicatorDrawable = when {
@@ -124,8 +142,7 @@ class NetWidget : AppWidgetProvider() {
         }
 
         if (tboxStatus) {
-            val signalLevel = csq.getSignalLevel()
-            if (apnStatus == "подключен") {
+            if (apnStatus) {
                 when (netType) {
                     "2G" -> {
                         when (signalLevel) {
@@ -252,15 +269,13 @@ class NetWidget : AppWidgetProvider() {
         }
 
         val pendingIntent = getPendingIntent(context)
-        appWidgetIds.forEach { appWidgetId ->
-            val views = RemoteViews(context.packageName, R.layout.widget_net).apply {
-                setImageViewResource(R.id.widget_image, imageR)
-                setImageViewResource(R.id.status_indicator, indicatorDrawable)
-            }
-            // Создаем PendingIntent для открытия MainActivity
-            views.setOnClickPendingIntent(R.id.widget_image, pendingIntent)
-            appWidgetManager.updateAppWidget(appWidgetId, views)
+        val views = RemoteViews(context.packageName, R.layout.widget_net).apply {
+            setImageViewResource(R.id.widget_image, imageR)
+            setImageViewResource(R.id.status_indicator, indicatorDrawable)
         }
+        // Создаем PendingIntent для открытия MainActivity
+        views.setOnClickPendingIntent(R.id.widget_image, pendingIntent)
+        appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 
     private fun getPendingIntent(context: Context): android.app.PendingIntent {
@@ -278,23 +293,8 @@ class NetWidget : AppWidgetProvider() {
         return cachedPendingIntent!!
     }
 
-    private fun Int.getSignalLevel(): Int {
-        return when (this) {
-            in 1..10 -> 1
-            in 11..16 -> 2
-            in 17..24 -> 3
-            in 25..32 -> 4
-            else -> 0
-        }
-    }
-
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        /*if (!WidgetUtils.isWidgetActive(context)) {
-            context.stopService(Intent(context, BackgroundService::class.java).apply {
-                action = BackgroundService.ACTION_STOP
-            })
-        }*/
         // Останавливаем проверку таймаута
         timeoutRunnable?.let { handler.removeCallbacks(it) }
     }

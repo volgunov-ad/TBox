@@ -6,9 +6,9 @@
     android:maxHeight="100dp"
     android:minResizeWidth="8dp"
     android:minResizeHeight="8dp"
-    android:initialLayout="@layout/widget_con"
+    android:initialLayout="@layout/widget_con_res"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:previewImage="@drawable/con_widget_preview"
+    android:previewImage="@drawable/con_res_widget_preview"
     android:updatePeriodMillis="0"
-    android:initialKeyguardLayout="@layout/widget_con" />
+    android:initialKeyguardLayout="@layout/widget_con_res" />
