@@ -357,6 +357,7 @@ fun SettingsTab(
     val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
     val isGetLocDataEnabled by settingsViewModel.isGetLocDataEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
+    val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     //val canFramesList by viewModel.canFramesList.collectAsStateWithLifecycle()
     //val didDataCSV by viewModel.didDataCSV.collectAsStateWithLifecycle()
@@ -455,6 +456,18 @@ fun SettingsTab(
                     "зеленый - есть связь с TBox",
             true
         )
+        SettingSwitch(
+            isWidgetShowLocIndicatorEnabled,
+            { enabled ->
+                settingsViewModel.saveWidgetShowLocIndicatorSetting(enabled)
+            },
+            "Показывать индикатор состояния геопозиции в виджете",
+            "Индикатор в виджете в виде стрелки может иметь 3 цвета: \n" +
+                    "красный - нет фиксации местоположения;\n" +
+                    "желтый - данные о реальной скорости сильно не совпадают с данными со спутников;\n" +
+                    "зеленый - есть фиксация местоположения, данные в норме",
+            true
+        )
         Text(
             text = "Экспериментальные настройки",
             fontSize = 24.sp,
@@ -480,7 +493,7 @@ fun SettingsTab(
             "",
             true
         )
-        SettingSwitch(
+        /*SettingSwitch(
             isGetCycleSignalEnabled,
             { enabled ->
                 settingsViewModel.saveGetCycleSignalSetting(enabled)
@@ -488,7 +501,7 @@ fun SettingsTab(
             "Получать циклические данные от TBox",
             "",
             true
-        )
+        )*/
         SettingSwitch(
             isGetLocDataEnabled,
             { enabled ->
@@ -615,17 +628,11 @@ fun LocationTab(
             .padding(16.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
-            val dateTime = String.format(
-                Locale.getDefault(),
-                "%02d.%02d.%02d %02d:%02d:%02d",
-                locValues.utcTime.day,
-                locValues.utcTime.month,
-                locValues.utcTime.year,
-                locValues.utcTime.hour,
-                locValues.utcTime.minute,
-                locValues.utcTime.second
-            )
-            val lastUpdate = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(locValues.updateTime)
+            val dateTime = locValues.utcTime?.formatDateTime() ?: ""
+            val lastUpdate = locValues.updateTime?.let { updateTime ->
+                SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(updateTime)
+            } ?: ""
+
             item { StatusRow("Последнее обновление", lastUpdate) }
             item { StatusRow("Фиксация местоположения", if (locValues.locateStatus) {"да"} else {"нет"}) }
             item { StatusRow("Долгота", locValues.longitude.toString()) }
@@ -796,16 +803,58 @@ fun InfoTab(
 fun CarDataTab(
     viewModel: TboxViewModel,
 ) {
-    val voltages by viewModel.voltages.collectAsStateWithLifecycle()
+    //val voltages by viewModel.voltages.collectAsStateWithLifecycle()
     val odo by viewModel.odo.collectAsStateWithLifecycle()
     val engineSpeed by viewModel.engineSpeed.collectAsStateWithLifecycle()
-    val carSpeed by viewModel.carSpeed.collectAsStateWithLifecycle()
+    //val carSpeed by viewModel.carSpeed.collectAsStateWithLifecycle()
     val cruise by viewModel.cruise.collectAsStateWithLifecycle()
-    val wheels by viewModel.wheels.collectAsStateWithLifecycle()
+    //val wheels by viewModel.wheels.collectAsStateWithLifecycle()
     val steer by viewModel.steer.collectAsStateWithLifecycle()
+    //val climate by viewModel.climate.collectAsStateWithLifecycle()
+    val temperature by viewModel.temperature.collectAsStateWithLifecycle()
+    //val temperature2 by viewModel.temperature2.collectAsStateWithLifecycle()
     //val hdm by viewModel.hdm.collectAsStateWithLifecycle()
 
-    val scrollState = rememberScrollState()
+    val voltage = if (odo.voltage != null) {
+        String.format(Locale.getDefault(), "%.1f", odo.voltage)
+    } else {
+        ""
+    }
+    val steerAngle = if (steer.angle != null) {
+        String.format(Locale.getDefault(), "%.2f", steer.angle)
+    } else {
+        ""
+    }
+    val steerSpeed = if (steer.speed != null) {
+        steer.speed.toString()
+    } else {
+        ""
+    }
+    val engineSpeedRpm = if (engineSpeed.rpm != null) {
+        String.format(Locale.getDefault(), "%.1f", engineSpeed.rpm)
+    } else {
+        ""
+    }
+    val carSpeed = if (odo.speed != null) {
+        String.format(Locale.getDefault(), "%.1f", odo.speed)
+    } else {
+        ""
+    }
+    val cruiseSpeed = if (cruise.speed != null) {
+        cruise.speed.toString()
+    } else {
+        ""
+    }
+    val odometer = if (odo.odometer != null) {
+        odo.odometer.toString()
+    } else {
+        ""
+    }
+    val engineTemperature = if (temperature.engineTemperature != null) {
+        String.format(Locale.getDefault(), "%.1f", temperature.engineTemperature)
+    } else {
+        ""
+    }
 
     Column(
         modifier = Modifier
@@ -816,23 +865,15 @@ fun CarDataTab(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            //item { StatusRow("Напряжение, В", voltages.voltage4.toString()) }
-            //item { StatusHeader("00 C4") }
-            item { StatusRow("Угол поворота руля", String.format(Locale.getDefault(), "%.1f", steer.angle)) }
-            item { StatusRow("Скорость вращения руля", steer.speed.toString()) }
-            //item { StatusHeader("00 FA") }
-            item { StatusRow("Обороты двигателя, об/мин", String.format(Locale.getDefault(), "%.1f", engineSpeed.rpm)) }
-            //item { StatusHeader("02 00")}
-            item { StatusRow("Скорость автомобиля, км/ч", String.format(Locale.getDefault(), "%.1f", odo.speed)) }
-            //item { StatusHeader("03 05") }
-            item { StatusRow("Скорость круиз-контроля, км/ч", cruise.speed.toString()) }
-            //item { StatusHeader("03 10") }
-            //item { StatusRow("Скорость колеса 1, км/ч", String.format(Locale.getDefault(), "%.1f", wheels.speed1)) }
-            //item { StatusRow("Скорость колеса 2, км/ч", String.format(Locale.getDefault(), "%.1f", wheels.speed2)) }
-            //item { StatusRow("Скорость колеса 3, км/ч", String.format(Locale.getDefault(), "%.1f", wheels.speed3)) }
-            //item { StatusRow("Скорость колеса 4, км/ч", String.format(Locale.getDefault(), "%.1f", wheels.speed4)) }
-            //item { StatusHeader("04 30") }
-            item { StatusRow("Одометр, км", odo.odometer.toString()) }
+            item { StatusRow("Напряжение, В", voltage) }
+            item { StatusRow("Угол поворота руля, °", steerAngle) }
+            item { StatusRow("Скорость вращения руля", steerSpeed) }
+            item { StatusRow("Обороты двигателя, об/мин", engineSpeedRpm) }
+            item { StatusRow("Скорость автомобиля, км/ч", carSpeed) }
+            item { StatusRow("Скорость круиз-контроля, км/ч", cruiseSpeed) }
+            item { StatusRow("Одометр, км", odometer) }
+            //item { StatusRow("Темература климат-контроля, °C", String.format(Locale.getDefault(), "%.1f",climate.setTemperature)) }
+            item { StatusRow("Темература двигателя, °C", engineTemperature) }
         }
     }
 }

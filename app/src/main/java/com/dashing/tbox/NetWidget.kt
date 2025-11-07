@@ -50,6 +50,9 @@ class NetWidget : AppWidgetProvider() {
             val apnStatus = intent.getBooleanExtra(BackgroundService.EXTRA_APN_STATUS, false)
             val tboxStatus = intent.getBooleanExtra(BackgroundService.EXTRA_TBOX_STATUS, false)
             val showIndicator = intent.getBooleanExtra(BackgroundService.EXTRA_WIDGET_SHOW_INDICATOR, false)
+            val showLocIndicator = intent.getBooleanExtra(BackgroundService.EXTRA_WIDGET_SHOW_LOC_INDICATOR, false)
+            val locSetPosition = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_SET_POSITION, false)
+            val isLocTruePosition = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_TRUE_POSITION, false)
 
             // Обновляем все экземпляры виджета
             val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -60,7 +63,7 @@ class NetWidget : AppWidgetProvider() {
             appWidgetIds.forEach { appWidgetId ->
                 updateWidget(
                     context, appWidgetManager, appWidgetId, theme, signalLevel, netType,
-                    apnStatus, tboxStatus, showIndicator, false
+                    apnStatus, tboxStatus, showIndicator, showLocIndicator, locSetPosition, isLocTruePosition, false
                 )
             }
 
@@ -108,12 +111,6 @@ class NetWidget : AppWidgetProvider() {
                 context,
                 appWidgetManager,
                 appWidgetId,
-                theme = 1,
-                signalLevel = 0,
-                netType = "",
-                apnStatus = false,
-                tboxStatus = false,
-                showIndicator = true,
                 isNoData = true
             )
         }
@@ -129,6 +126,9 @@ class NetWidget : AppWidgetProvider() {
         apnStatus: Boolean = false,
         tboxStatus: Boolean = false,
         showIndicator: Boolean = true,
+        showLocIndicator: Boolean = false,
+        locSetPosition: Boolean = false,
+        isLocTruePosition: Boolean = false,
         isNoData: Boolean = false,
     ) {
         var imageR = if (theme == 2) R.drawable.ic_signal_nosig_sharp_outlined else
@@ -139,6 +139,13 @@ class NetWidget : AppWidgetProvider() {
             isNoData -> R.drawable.indicator_err
             !tboxStatus -> R.drawable.indicator_warn
             else -> R.drawable.indicator_ok
+        }
+
+        val locIndicatorDrawable = when {
+            !showLocIndicator -> R.drawable.loc_none
+            !locSetPosition -> R.drawable.loc_err
+            !isLocTruePosition -> R.drawable.loc_warn
+            else -> R.drawable.loc_ok
         }
 
         if (tboxStatus) {
@@ -272,6 +279,7 @@ class NetWidget : AppWidgetProvider() {
         val views = RemoteViews(context.packageName, R.layout.widget_net).apply {
             setImageViewResource(R.id.widget_image, imageR)
             setImageViewResource(R.id.status_indicator, indicatorDrawable)
+            setImageViewResource(R.id.location_indicator, locIndicatorDrawable)
         }
         // Создаем PendingIntent для открытия MainActivity
         views.setOnClickPendingIntent(R.id.widget_image, pendingIntent)

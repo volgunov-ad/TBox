@@ -184,6 +184,27 @@ class TboxViewModel() : ViewModel() {
             initialValue = SteerData()
         )
 
+    val climate: StateFlow<Climate> = TboxRepository.climate
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Climate()
+        )
+
+    val temperature: StateFlow<Temperature> = TboxRepository.temperature
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Temperature()
+        )
+
+    val temperature2: StateFlow<Temperature2> = TboxRepository.temperature2
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Temperature2()
+        )
+
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = TboxRepository.canFramesStructured
         .stateIn(
             scope = viewModelScope,
@@ -221,6 +242,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val isWidgetShowIndicatorEnabled = settingsManager.widgetShowIndicatorFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isWidgetShowLocIndicatorEnabled = settingsManager.widgetShowLocIndicatorFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -340,6 +368,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveWidgetShowIndicatorSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveWidgetShowIndicatorSetting(enabled)
+        }
+    }
+
+    fun saveWidgetShowLocIndicatorSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWidgetShowLocIndicatorSetting(enabled)
         }
     }
 

@@ -11,7 +11,6 @@ import android.os.Looper
 import android.util.TypedValue
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
-import java.util.Date
 
 class ConResWidget : AppWidgetProvider() {
 
@@ -20,7 +19,7 @@ class ConResWidget : AppWidgetProvider() {
         private var lastUpdateTime: Long = 0
         private val handler = Handler(Looper.getMainLooper())
         private var timeoutRunnable: Runnable? = null
-        private var restartBlock = Date()
+        private var restartBlock = System.currentTimeMillis()
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
@@ -50,6 +49,10 @@ class ConResWidget : AppWidgetProvider() {
             BackgroundService.ACTION_UPDATE_WIDGET -> {
                 val theme = intent.getIntExtra(BackgroundService.EXTRA_THEME, 1)
                 val tboxStatus = intent.getBooleanExtra(BackgroundService.EXTRA_TBOX_STATUS, false)
+                val showLocIndicator = intent.getBooleanExtra(BackgroundService.EXTRA_WIDGET_SHOW_LOC_INDICATOR, false)
+                val locSetPosition = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_SET_POSITION, false)
+                val isLocTruePosition = intent.getBooleanExtra(BackgroundService.EXTRA_LOC_TRUE_POSITION, false)
+
 
                 // Обновляем все экземпляры виджета
                 val appWidgetManager = AppWidgetManager.getInstance(context)
@@ -61,6 +64,9 @@ class ConResWidget : AppWidgetProvider() {
                         context, appWidgetManager, appWidgetId,
                         theme,
                         tboxStatus,
+                        showLocIndicator,
+                        locSetPosition,
+                        isLocTruePosition,
                         isNoData = false
                     )
                 }
@@ -70,7 +76,7 @@ class ConResWidget : AppWidgetProvider() {
             }
 
             BackgroundService.ACTION_TBOX_REBOOT -> {
-                restartBlock = Date()
+                restartBlock = System.currentTimeMillis()
             }
         }
     }
@@ -124,6 +130,9 @@ class ConResWidget : AppWidgetProvider() {
         appWidgetId: Int,
         theme: Int = 1,
         tboxStatus: Boolean = false,
+        showLocIndicator: Boolean = false,
+        locSetPosition: Boolean = false,
+        isLocTruePosition: Boolean = false,
         isNoData: Boolean = false,
     ) {
         // Определяем цвет текста
@@ -133,39 +142,59 @@ class ConResWidget : AppWidgetProvider() {
             else -> ContextCompat.getColor(context, R.color.status_ok)
         }
 
+        val locIndicatorDrawable = when {
+            !showLocIndicator -> R.drawable.loc_none
+            !locSetPosition -> R.drawable.loc_err
+            !isLocTruePosition -> R.drawable.loc_warn
+            else -> R.drawable.loc_ok
+        }
+
         val resColor = when {
             theme == 2 -> ContextCompat.getColor(context, R.color.on_dark_background)
             else -> ContextCompat.getColor(context, R.color.on_light_background)
-        }
-
-        val views = RemoteViews(context.packageName, R.layout.widget_con_res).apply {
-            // Устанавливаем цвет текста TextView
-            setTextColor(R.id.tbox_text, color)
-            setTextColor(R.id.res_text, resColor)
-
-            // Устанавливаем клики
-            setOnClickPendingIntent(R.id.tbox_text, getMainPendingIntent(context))
-
-            // Условие для клика на RES (перезагрузка)
-            if (tboxStatus && !isNoData && Date().time - restartBlock.time > 15000) {
-                setOnClickPendingIntent(R.id.res_text, getRebootPendingIntent(context))
-            } else {
-                // Если перезагрузка заблокирована, убираем клик или ставим основной
-                setOnClickPendingIntent(R.id.res_text, null)
-            }
         }
 
         // Настраиваем размер текста
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
         val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
         val textSize = calculateTextSize(minWidth)
+        //val indicatorSize = calculateIndicatorSize(minWidth)
 
-        // Устанавливаем размер текста для обоих TextView
-        views.setTextViewTextSize(R.id.res_text, TypedValue.COMPLEX_UNIT_SP, textSize)
-        views.setTextViewTextSize(R.id.tbox_text, TypedValue.COMPLEX_UNIT_SP, textSize)
+        val views = RemoteViews(context.packageName, R.layout.widget_con_res).apply {
+            // Устанавливаем цвет текста TextView
+            setTextColor(R.id.tbox_text, color)
+            setTextColor(R.id.res_text, resColor)
+            setImageViewResource(R.id.location_indicator, locIndicatorDrawable)
+
+            setTextViewTextSize(R.id.res_text, TypedValue.COMPLEX_UNIT_SP, textSize)
+            setTextViewTextSize(R.id.tbox_text, TypedValue.COMPLEX_UNIT_SP, textSize)
+
+            // Устанавливаем клики
+            setOnClickPendingIntent(R.id.tbox_text, getMainPendingIntent(context))
+
+            // Условие для клика на RES (перезагрузка)
+            if (tboxStatus && !isNoData && System.currentTimeMillis() - restartBlock > 15000) {
+                setOnClickPendingIntent(R.id.res_text, getRebootPendingIntent(context))
+            } else {
+                // Если перезагрузка заблокирована, убираем клик
+                setOnClickPendingIntent(R.id.res_text, null)
+            }
+        }
+
+        //setImageSize(views, context, R.id.location_indicator, indicatorSize)
 
         // Обновляем виджет
         appWidgetManager.updateAppWidget(appWidgetId, views)
+    }
+
+    private fun setImageSize(views: RemoteViews, context: Context, viewId: Int, sizeDp: Int) {
+        val density = context.resources.displayMetrics.density
+        val sizePx = (sizeDp * density).toInt()
+
+        views.setInt(viewId, "setMaxWidth", sizePx)
+        views.setInt(viewId, "setMaxHeight", sizePx)
+        views.setInt(viewId, "setMinimumWidth", sizePx)
+        views.setInt(viewId, "setMinimumHeight", sizePx)
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -204,11 +233,32 @@ class ConResWidget : AppWidgetProvider() {
     private fun calculateTextSize(minWidth: Int): Float {
         // Адаптивный расчет размера текста
         return when {
-            minWidth < 120 -> 14f
-            minWidth < 160 -> 20f
-            minWidth < 200 -> 30f
-            minWidth < 250 -> 40f
-            else -> 50f
+            minWidth < 100 -> 10f
+            minWidth < 150 -> 15f
+            minWidth < 200 -> 20f
+            minWidth < 250 -> 25f
+            minWidth < 300 -> 30f
+            minWidth < 350 -> 35f
+            minWidth < 400 -> 40f
+            minWidth < 450 -> 45f
+            minWidth < 500 -> 50f
+            else -> 60f
+        }
+    }
+
+    private fun calculateIndicatorSize(minWidth: Int): Int {
+        // Адаптивный расчет размера индикатора
+        return when {
+            minWidth < 100 -> 10
+            minWidth < 150 -> 15
+            minWidth < 200 -> 20
+            minWidth < 250 -> 25
+            minWidth < 300 -> 30
+            minWidth < 350 -> 35
+            minWidth < 400 -> 40
+            minWidth < 450 -> 45
+            minWidth < 500 -> 50
+            else -> 60
         }
     }
 

@@ -35,7 +35,7 @@ data class APNState(
 data class LocValues(
     val rawValue: String = "",
     val locateStatus: Boolean = false,
-    val utcTime: UtcTime = UtcTime(),
+    val utcTime: UtcTime? = null,
     val longitude: Double = 0.0,
     val latitude: Double = 0.0,
     val altitude: Double = 0.0,
@@ -44,7 +44,7 @@ data class LocValues(
     val speed: Float = 0f,
     val trueDirection: Float = 0f,
     val magneticDirection: Float = 0f,
-    val updateTime: Date = Date(),
+    val updateTime: Date? = null,
 )
 
 data class UtcTime(
@@ -54,14 +54,24 @@ data class UtcTime(
     val hour: Int = 0,
     val minute: Int = 0,
     val second: Int = 0
-)
+) {
+    fun formatDateTime(): String {
+        return "%02d.%02d.%02d %02d:%02d:%02d".format(
+            day, month, year, hour, minute, second
+        )
+    }
+
+    fun isValid(): Boolean {
+        return year > 0 && month in 1..12 && day in 1..31 &&
+                hour in 0..23 && minute in 0..59 && second in 0..59
+    }
+}
 
 data class VoltagesState(
-    val voltage1: Float = 0f,
-    val voltage2: Float = 0f,
-    val voltage3: Float = 0f,
-    val voltage4: Float = 0f,
-    val updateTime: Date = Date(),
+    val voltage1: Float? = null,
+    val voltage2: Float? = null,
+    val voltage3: Float? = null,
+    val updateTime: Date? = null,
 )
 
 data class HdmData(
@@ -71,33 +81,46 @@ data class HdmData(
 )
 
 data class OdoData(
-    val speed: Float = 0f,
-    val odometer: Int = 0,
+    val speed: Float? = null,
+    val voltage: Float? = null,
+    val odometer: Int? = null,
 )
 
 data class EngineSpeedData(
-    val rpm: Float = 0f,
-    val speed: Float = 0f,
+    val rpm: Float? = null,
+    val speed: Float? = null,
 )
 
 data class CarSpeedData(
-    val speed: Float = 0f,
+    val speed: Float? = null,
 )
 
 data class Cruise(
-    val speed: Int = 0,
+    val speed: UInt? = null,
 )
 
 data class Wheels(
-    val speed1: Float = 0f,
-    val speed2: Float = 0f,
-    val speed3: Float = 0f,
-    val speed4: Float = 0f,
+    val speed1: Float? = null,
+    val speed2: Float? = null,
+    val speed3: Float? = null,
+    val speed4: Float? = null,
 )
 
 data class SteerData(
-    val angle: Float = 0f,
-    val speed: Int = 0,
+    val angle: Float? = null,
+    val speed: Int? = null,
+)
+
+data class Climate(
+    val setTemperature: Float? = null,
+)
+
+data class Temperature(
+    val engineTemperature: Float? = null,
+)
+
+data class Temperature2(
+    val temperature: Float? = null,
 )
 
 data class CanFrame(
@@ -163,6 +186,15 @@ object TboxRepository {
     private val _steer = MutableStateFlow(SteerData())
     val steer: StateFlow<SteerData> = _steer.asStateFlow()
 
+    private val _climate = MutableStateFlow(Climate())
+    val climate: StateFlow<Climate> = _climate.asStateFlow()
+
+    private val _temperature = MutableStateFlow(Temperature())
+    val temperature: StateFlow<Temperature> = _temperature.asStateFlow()
+
+    private val _temperature2 = MutableStateFlow(Temperature2())
+    val temperature2: StateFlow<Temperature2> = _temperature2.asStateFlow()
+
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
@@ -189,6 +221,9 @@ object TboxRepository {
 
     private val _locValues = MutableStateFlow(LocValues())
     val locValues: StateFlow<LocValues> = _locValues.asStateFlow()
+
+    private val _isLocValuesTrue = MutableStateFlow(false)
+    val isLocValuesTrue: StateFlow<Boolean> = _isLocValuesTrue.asStateFlow()
 
     private val _currentTheme = MutableStateFlow(1)
     val currentTheme: StateFlow<Int> = _currentTheme.asStateFlow()
@@ -298,6 +333,10 @@ object TboxRepository {
         _locValues.value = newValues
     }
 
+    fun updateIsLocValuesTrue(newValues: Boolean) {
+        _isLocValuesTrue.value = newValues
+    }
+
     fun updatePreventRestartSend(newValue: Boolean) {
         _preventRestartSend.value = newValue
     }
@@ -336,6 +375,18 @@ object TboxRepository {
 
     fun updateSteer(newValue: SteerData) {
         _steer.value = newValue
+    }
+
+    fun updateClimate(newValue: Climate) {
+        _climate.value = newValue
+    }
+
+    fun updateTemperature(newValue: Temperature) {
+        _temperature.value = newValue
+    }
+
+    fun updateTemperature2(newValue: Temperature2) {
+        _temperature2.value = newValue
     }
 
     fun updateIPList(value: List<String>) {

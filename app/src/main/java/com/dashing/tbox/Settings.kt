@@ -28,6 +28,7 @@ class SettingsManager(private val context: Context) {
         private val GET_CYCLE_SIGNAL_KEY = booleanPreferencesKey("${KEY_PREFIX}get_cycle_signal")
         private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
+        private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val TBOX_IP_KEY = stringPreferencesKey("${KEY_PREFIX}tbox_ip")
 
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
@@ -42,6 +43,11 @@ class SettingsManager(private val context: Context) {
     val widgetShowIndicatorFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[WIDGET_SHOW_INDICATOR] ?: false
+        }
+
+    val widgetShowLocIndicatorFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false
         }
 
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -99,6 +105,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveWidgetShowIndicatorSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[WIDGET_SHOW_INDICATOR] = enabled
+        }
+    }
+
+    suspend fun saveWidgetShowLocIndicatorSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIDGET_SHOW_LOC_INDICATOR] = enabled
         }
     }
 

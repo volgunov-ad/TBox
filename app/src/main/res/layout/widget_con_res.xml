@@ -1,31 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
-    android:background="@android:color/transparent"
-    android:padding="8dp">
-
-    <TextView
-        android:id="@+id/tbox_text"
-        android:layout_width="0dp"
+    android:background="@android:color/transparent">
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:text="TBox"
-        android:textColor="@color/status_err"
-        android:textStyle="bold"
-        android:lineSpacingExtra="2sp" />
+        android:orientation="horizontal"
+        android:background="@android:color/transparent"
+        android:padding="8dp">
 
-    <TextView
-        android:id="@+id/res_text"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:text="RES"
-        android:textColor="@color/on_light_background"
-        android:textStyle="bold"
-        android:lineSpacingExtra="2sp" />
+        <TextView
+            android:id="@+id/tbox_text"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="TBox"
+            android:textColor="@color/status_err"
+            android:textStyle="bold"
+            android:lineSpacingExtra="2sp" />
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/res_text"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="RES"
+            android:textColor="@color/on_light_background"
+            android:textStyle="bold"
+            android:lineSpacingExtra="2sp" />
+
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/location_indicator"
+        android:contentDescription="location"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:scaleType="fitCenter"
+        android:layout_gravity="start|top"
+        android:layout_marginStart="5dp"
+        android:layout_marginTop="5dp"
+        android:src="@drawable/loc_none" />
+</FrameLayout>

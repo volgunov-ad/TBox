@@ -5,125 +5,141 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import java.util.Date
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 
 class TBoxBroadcastReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "TBoxBroadcastReceiver"
-        const val MAIN_ACTION = "com.dashing.tbox.MAIN_ACTION"
-        const val GET_STATE = "com.dashing.tbox.GET_STATE"
-        const val ACTION_ERROR_RESPONSE = "com.dashing.tbox.ERROR_RESPONSE"
-        const val SENDER ="sender"
-        const val EXTRA_NAME_2 ="extraName_2"
-        const val EXTRA_VALUE_2 ="extraValue_2"
-        const val RETURN_EXTRA_NAME_1 = "returnExtraName_1"
-        const val RETURN_EXTRA_VALUE_1 = "returnExtraValue_1"
-        const val EXTRA_NAME_2_ERROR = "error"
-        const val UNKNOWN_EXTRA_NAME_2 = "unknown_extraName_2"
-        const val UNKNOWN_EXTRA_VALUE_2 = "unknown_extraValue_2"
-        const val INTERNAL_ERROR = "internal_error"
+        const val MAIN_ACTION = "com.dashing.tbox.main_action"
+        const val GET_STATE = "com.dashing.tbox.get_state"
+        const val SUBSCRIBE = "com.dashing.tbox.subscribe"
+        const val SENDER = "sender"
+        const val EXTRA_NAME_1 = "extraname_1"
+        const val EXTRA_NAME_2 = "extraname_2"
+        const val EXTRA_VALUE_1 = "extravalue_1"
+        const val EXTRA_VALUE_2 = "extravalue_2"
     }
 
+    private lateinit var broadcastSender: TboxBroadcastSender
+
     override fun onReceive(context: Context, intent: Intent?) {
-        when (intent?.action) {
+        when (intent?.action?.lowercase()) {
             MAIN_ACTION -> {
-                val sender = intent.getStringArrayExtra(SENDER) ?: return
-                val extraName2 = intent.getStringExtra(EXTRA_NAME_2) ?: ""
-                val extraValue2 = intent.getStringExtra(EXTRA_VALUE_2) ?: ""
+                if (intent.getStringExtra(EXTRA_NAME_1)?.lowercase() != SENDER) return
+                val sender = intent.getStringArrayExtra(EXTRA_VALUE_1)?.getOrNull(0) ?: return
+                val extraName2 = intent.getStringExtra(EXTRA_NAME_2)?.lowercase() ?: ""
+                val extraValue2 = intent.getStringExtra(EXTRA_VALUE_2)?.lowercase() ?: ""
                 mainAction(context, sender, extraName2, extraValue2)
             }
             GET_STATE -> {
-                val sender = intent.getStringArrayExtra(SENDER) ?: return
-                val extraName2 = intent.getStringExtra(EXTRA_NAME_2) ?: ""
-                val extraValue2 = intent.getStringExtra(EXTRA_VALUE_2) ?: ""
+                if (intent.getStringExtra(EXTRA_NAME_1)?.lowercase() != SENDER) return
+                val sender = intent.getStringArrayExtra(EXTRA_VALUE_1)?.getOrNull(0) ?: return
+                val extraName2 = intent.getStringExtra(EXTRA_NAME_2)?.lowercase() ?: ""
+                val extraValue2 = intent.getStringExtra(EXTRA_VALUE_2)?.lowercase() ?: ""
                 getState(context, sender, extraName2, extraValue2)
+            }
+            SUBSCRIBE -> {
+                if (intent.getStringExtra(EXTRA_NAME_1)?.lowercase() != SENDER) return
+                val sender = intent.getStringArrayExtra(EXTRA_VALUE_1)?.getOrNull(0) ?: return
+                val extraName2 = intent.getStringExtra(EXTRA_NAME_2)?.lowercase() ?: ""
+                val extraValue2 = intent.getStringExtra(EXTRA_VALUE_2)?.lowercase() ?: ""
+                broadcastSender.addSubscriber(sender, extraName2, extraValue2)
             }
         }
     }
 
-    private fun mainAction(context: Context, sender: Array<String>, extraName2: String, extraValue2: String) {
+    private fun mainAction(context: Context, sender: String, extraName2: String, extraValue2: String) {
         when (extraName2) {
             //"active" -> handleActiveCommand(context, sender)
             "tbox" -> handleTBoxAction(context, sender, extraValue2)
             else -> {
                 Log.w(TAG, "Unknown main action command: $extraName2")
-                sendResponse(context, sender, EXTRA_NAME_2_ERROR,
-                    UNKNOWN_EXTRA_NAME_2)
             }
         }
     }
 
-    private fun handleTBoxAction(context: Context, sender: Array<String>, extraValue2: String) {
+    private fun handleTBoxAction(context: Context, sender: String, extraValue2: String) {
         when (extraValue2) {
             "reboot" -> rebootTBox(context, sender)
             else -> {
                 Log.w(TAG, "Unknown main action value: $extraValue2")
-                sendResponse(context, sender, EXTRA_NAME_2_ERROR,
-                    UNKNOWN_EXTRA_VALUE_2)
             }
         }
     }
 
-    private fun getState(context: Context, sender: Array<String>, extraName2: String, extraValue2: String) {
+    private fun getState(context: Context, sender: String, extraName2: String, extraValue2: String) {
         when (extraName2) {
-            "netState" -> handleNetStateCommand(context, sender, extraValue2)
+            "netstate" -> handleNetStateCommand(context, sender, extraValue2)
             "status" -> handleStatusCommand(context, sender, extraValue2)
-            "apnStatus" -> sendResponse(context, sender, "<default>",
-                TboxRepository.apnStatus.value)
-            "tboxConnected" -> sendResponse(context, sender, "<default>",
-                TboxRepository.tboxConnected.value)
-            "preventRestartSend" -> sendResponse(context, sender, "<default>",
-                TboxRepository.preventRestartSend.value)
-            "suspendTboxAppSend" -> sendResponse(context, sender, "<default>",
-                TboxRepository.suspendTboxAppSend.value)
-            "startTime" -> handleStartTime(context, sender, extraValue2)
+            "apnstatus" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "apnStatus",
+                    TboxRepository.apnStatus.value)
+            "tboxconnected" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "tboxConnected",
+                    TboxRepository.tboxConnected.value)
+            "preventrestartsend" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "preventRestartSend",
+                    TboxRepository.preventRestartSend.value)
+            "suspendtboxappsend" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "suspendTboxAppSend",
+                    TboxRepository.suspendTboxAppSend.value)
+            "starttime" -> handleStartTime(context, sender, extraValue2)
             else -> {
                 Log.w(TAG, "Unknown main action command: $extraName2")
-                sendResponse(context, sender, EXTRA_NAME_2_ERROR,
-                    UNKNOWN_EXTRA_NAME_2)
             }
         }
     }
 
-    private fun handleNetStateCommand(context: Context, sender: Array<String>, extraValue2: String) {
+    private fun handleNetStateCommand(context: Context, sender: String, extraValue2: String) {
         when (extraValue2) {
-            "level" -> sendResponse(context, sender, extraValue2,
-                TboxRepository.netState.value.signalLevel.toString())
-            "status" -> sendResponse(context, sender, extraValue2,
-                TboxRepository.netState.value.netStatus)
+            "level" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "netState",
+                    TboxRepository.netState.value.signalLevel)
+            "status" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "netState",
+                    TboxRepository.netState.value.netStatus)
             else -> {
                 Log.w(TAG, "Unknown get Net state action value: $extraValue2")
-                sendResponse(context, sender, EXTRA_NAME_2_ERROR,
-                    UNKNOWN_EXTRA_VALUE_2)
             }
         }
     }
 
-    private fun handleStatusCommand(context: Context, sender: Array<String>, extraValue2: String) {
+    private fun handleStatusCommand(context: Context, sender: String, extraValue2: String) {
         when (extraValue2) {
-            "region" -> sendResponse(context, sender, extraValue2,
-                TboxRepository.netState.value.regStatus)
-            "sim" -> sendResponse(context, sender, extraValue2,
-                TboxRepository.netState.value.simStatus)
+            "region" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "status",
+                    TboxRepository.netState.value.regStatus)
+            "sim" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "status",
+                    TboxRepository.netState.value.simStatus)
             else -> {
                 Log.w(TAG, "Unknown get Status action value: $extraValue2")
-                sendResponse(context, sender, EXTRA_NAME_2_ERROR,
-                    UNKNOWN_EXTRA_VALUE_2)
             }
         }
     }
 
-    private fun handleStartTime(context: Context, sender: Array<String>, extraValue2: String) {
+    private fun handleStartTime(context: Context, sender: String, extraValue2: String) {
         when (extraValue2) {
-            "tbox" -> sendResponse(context, sender, extraValue2,
-                TboxRepository.tboxConnectionTime.value)
-            "service" -> sendResponse(context, sender, extraValue2,
-                TboxRepository.serviceStartTime.value)
+            "tbox" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "startTime",
+                    TboxRepository.tboxConnectionTime.value)
+            "service" ->
+                TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
+                    "startTime",
+                    TboxRepository.serviceStartTime.value)
             else -> {
                 Log.w(TAG, "Unknown get Status action value: $extraValue2")
-                sendResponse(context, sender, EXTRA_NAME_2_ERROR,
-                    UNKNOWN_EXTRA_VALUE_2)
             }
         }
     }
@@ -142,14 +158,14 @@ class TBoxBroadcastReceiver : BroadcastReceiver() {
         context.stopService(intent)
     }
 
-    private fun rebootTBox(context: Context, sender: Array<String>) {
+    private fun rebootTBox(context: Context, sender: String) {
         val intent = Intent(context, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_TBOX_REBOOT
         }
         if (startServiceSafely(context, intent)) {
-            sendResponse(context, sender, "tbox", true)
+            TboxBroadcastSender.sendResponse(context, sender, MAIN_ACTION, "tbox", true)
         } else {
-            sendResponse(context, sender, "tbox", false)
+            TboxBroadcastSender.sendResponse(context, sender, MAIN_ACTION, "tbox", false)
         }
     }
 
@@ -165,34 +181,5 @@ class TBoxBroadcastReceiver : BroadcastReceiver() {
             return false
         }
         return true
-    }
-
-    private fun sendResponse(
-        context: Context,
-        sender: Array<String>,
-        returnExtraName1: String,
-        returnExtraValue1: Any,
-        )
-    {
-        try {
-            val errorIntent = Intent(ACTION_ERROR_RESPONSE).apply {
-                setPackage(sender.getOrNull(0) ?: return)
-                putExtra("sender", arrayOf(
-                    "com.dashing.tbox",
-                    sender.getOrNull(1) ?: return
-                ))
-                putExtra(RETURN_EXTRA_NAME_1, returnExtraName1)
-                when (returnExtraValue1) {
-                    is String -> putExtra(RETURN_EXTRA_VALUE_1, returnExtraValue1)
-                    is Boolean -> putExtra(RETURN_EXTRA_VALUE_1, returnExtraValue1)
-                    is Date -> putExtra(RETURN_EXTRA_VALUE_1, returnExtraValue1.time)
-                    else -> putExtra(EXTRA_NAME_2_ERROR, INTERNAL_ERROR)
-                }
-            }
-
-            context.sendBroadcast(errorIntent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to send response", e)
-        }
     }
 }

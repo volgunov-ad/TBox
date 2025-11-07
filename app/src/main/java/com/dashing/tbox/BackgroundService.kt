@@ -10,11 +10,18 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.onSuccess
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.DatagramPacket
@@ -22,7 +29,10 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
+import kotlin.let
 
 class BackgroundService : Service() {
     private lateinit var settingsManager: SettingsManager
@@ -38,6 +48,8 @@ class BackgroundService : Service() {
     private lateinit var getLocData: StateFlow<Boolean>
     private lateinit var serverIp: StateFlow<String>
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
+    private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
+
     private val serverPort = 50047
     private var currentIP: String? = null
     private var address: InetAddress? = null
@@ -94,6 +106,9 @@ class BackgroundService : Service() {
         const val EXTRA_THEME = "com.dashing.tbox.EXTRA_THEME"
         const val EXTRA_AT_CMD = "com.dashing.tbox.EXTRA_AT_CMD"
         const val EXTRA_WIDGET_SHOW_INDICATOR = "com.dashing.tbox.EXTRA_WIDGET_SHOW_INDICATOR"
+        const val EXTRA_WIDGET_SHOW_LOC_INDICATOR = "com.dashing.tbox.EXTRA_WIDGET_SHOW_LOC_INDICATOR"
+        const val EXTRA_LOC_SET_POSITION = "com.dashing.tbox.EXTRA_LOC_SET_POSITION"
+        const val EXTRA_LOC_TRUE_POSITION = "com.dashing.tbox.EXTRA_LOC_TRUE_POSITION"
 
         const val ACTION_START = "com.dashing.tbox.START"
         const val ACTION_STOP = "com.dashing.tbox.STOP"
@@ -141,6 +156,8 @@ class BackgroundService : Service() {
         serverIp = settingsManager.tboxIPFlow
             .stateIn(scope, SharingStarted.Eagerly, DEFAULT_TBOX_IP)
         widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
+            .stateIn(scope, SharingStarted.Eagerly, false)
+        widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
 
         ipManager = IPManager(this)
@@ -402,6 +419,12 @@ class BackgroundService : Service() {
                         }
 
                     }
+                    if (TboxRepository.apnState.value.apnStatus == "подключен" ||
+                        TboxRepository.apn2State.value.apnStatus == "подключен") {
+                        TboxRepository.updateAPNStatus(true)
+                    } else {
+                        TboxRepository.updateAPNStatus(true)
+                    }
                     delay(apnUpdateTime)
                 }
             } catch (e: CancellationException) {
@@ -490,12 +513,6 @@ class BackgroundService : Service() {
     }
 
     private fun checkConnection(): Boolean {
-        if (TboxRepository.apnState.value.apnStatus == "подключен" ||
-            TboxRepository.apn2State.value.apnStatus == "подключен") {
-            TboxRepository.updateAPNStatus(true)
-        } else {
-            TboxRepository.updateAPNStatus(true)
-        }
         return TboxRepository.netState.value.netStatus in listOf("2G", "3G", "4G") &&
             TboxRepository.apnStatus.value
     }
@@ -530,6 +547,8 @@ class BackgroundService : Service() {
         settingsListenerJob = scope.launch {
             getLocData.collect { isGetLocData ->
                 if (!isGetLocData) {
+                    TboxRepository.updateLocValues(LocValues())
+                    TboxRepository.updateIsLocValuesTrue(false)
                     locSubscribe(false)
                 }
             }
@@ -555,6 +574,7 @@ class BackgroundService : Service() {
                 var crtGetCycleSignalTime = System.currentTimeMillis()
                 var crtGetLocDataTime = System.currentTimeMillis()
                 var updateIPTime = System.currentTimeMillis()
+                var locErrorCount = 0
                 delay(15000)
                 while (isActive) {
                     if(System.currentTimeMillis() - widgetUpdateTime > 5000) {
@@ -590,17 +610,40 @@ class BackgroundService : Service() {
                         val delta = Date().time - TboxRepository.cycleSignalTime.value.time
                         if (delta > 60000) {
                             if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetCycleSignalTime > 10000) {
-                                crtGetCycleSignal()
+                                //crtGetCycleSignal()
                                 crtGetCycleSignalTime = System.currentTimeMillis()
                             }
                         }
                     }
                     if (getLocData.value) {
-                        val delta = Date().time - TboxRepository.locValues.value.updateTime.time
+                        val delta = Date().time - (TboxRepository.locValues.value.updateTime?.time
+                            ?: 0)
                         if (delta > 10000) {
+                            TboxRepository.updateLocValues(LocValues())
+                            TboxRepository.updateIsLocValuesTrue(false)
                             if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetLocDataTime > 10000) {
                                 locSubscribe(true)
                                 crtGetLocDataTime = System.currentTimeMillis()
+                            }
+                        } else {
+                            if (getCanFrame.value) {
+                                TboxRepository.odo.value.speed?.let { speed ->
+                                    val min = speed - 10f
+                                    val max = speed + 10f
+                                    TboxRepository.locValues.value.speed.let { locSpeed ->
+                                        if (locSpeed >= min || locSpeed <= max) {
+                                            TboxRepository.updateIsLocValuesTrue(true)
+                                            locErrorCount = 0
+                                        } else {
+                                            if (locErrorCount < 2) {
+                                                locErrorCount += 1
+                                            }
+                                            else {
+                                                TboxRepository.updateIsLocValuesTrue(false)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -798,7 +841,7 @@ class BackgroundService : Service() {
     }
 
     private fun crtGetCanFrame() {
-        crtCmd(0x15, byteArrayOf(0x00, 0x00), "Send GetCanFrame command")
+        crtCmd(0x15, byteArrayOf(0x01, 0x02), "Send GetCanFrame command")
     }
 
     private fun crtGetCycleSignal() {
@@ -893,6 +936,15 @@ class BackgroundService : Service() {
             putExtra(EXTRA_APN_STATUS, (TboxRepository.apnStatus.value))
             putExtra(EXTRA_THEME, TboxRepository.currentTheme.value)
             putExtra(EXTRA_WIDGET_SHOW_INDICATOR, widgetShowIndicator.value)
+            putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value)
+            putExtra(EXTRA_LOC_SET_POSITION, TboxRepository.locValues.value.locateStatus)
+
+            val isTruePosition = if (getCanFrame.value) {
+                TboxRepository.isLocValuesTrue.value
+            } else {
+                TboxRepository.locValues.value.locateStatus
+            }
+            putExtra(EXTRA_LOC_TRUE_POSITION, isTruePosition)
         }
         //TboxRepository.addLog("DEBUG", "Widget", "${widgetShowIndicator.value}")
         try {
@@ -1222,16 +1274,26 @@ class BackgroundService : Service() {
                 "${data[7]}"
             }
         }
-        TboxRepository.updateNetState(NetState(
-            csq = csq,
-            signalLevel = signalLevel,
-            netStatus = netStatus,
-            regStatus = regStatus,
-            simStatus = simStatus))
+        if (
+            TboxRepository.netState.value.csq != csq
+            || TboxRepository.netState.value.signalLevel != signalLevel
+            || TboxRepository.netState.value.netStatus != netStatus
+            || TboxRepository.netState.value.regStatus != regStatus
+            || TboxRepository.netState.value.simStatus != simStatus
+            ) {
+            TboxRepository.updateNetState(NetState(
+                csq = csq,
+                signalLevel = signalLevel,
+                netStatus = netStatus,
+                regStatus = regStatus,
+                simStatus = simStatus))
+        }
+
         netUpdateCount = 0
         if (TboxRepository.netState.value.regStatus !in listOf("домашняя сеть", "роуминг")) {
             clearAPNStates(1)
             clearAPNStates(2)
+            TboxRepository.updateAPNStatus(false)
             apnCheck = false
         }
         else {
@@ -1251,13 +1313,21 @@ class BackgroundService : Service() {
                 String(data, 49, 2, Charsets.UTF_8)
             )
         }
-        TboxRepository.updateNetValues(
-            NetValues(
-            imei = imei,
-            iccid = iccid,
-            imsi = imsi,
-            operator = operator)
-        )
+        if (
+            TboxRepository.netValues.value.imei != imei
+            || TboxRepository.netValues.value.iccid != iccid
+            || TboxRepository.netValues.value.imsi != imsi
+            || TboxRepository.netValues.value.operator != operator
+            ) {
+            TboxRepository.updateNetValues(
+                NetValues(
+                    imei = imei,
+                    iccid = iccid,
+                    imsi = imsi,
+                    operator = operator
+                )
+            )
+        }
         return true
     }
 
@@ -1340,25 +1410,47 @@ class BackgroundService : Service() {
             apnDNS2 = String(data, 71, 15, Charsets.UTF_8)
         }
         if (data[4] == 0x00.toByte()) {
-            TboxRepository.updateAPNState(APNState(
-                apnIP = apnIP,
-                apnStatus = apnStatus,
-                apnType = apnType,
-                apnGate = apnGate,
-                apnDNS1 = apnDNS1,
-                apnDNS2 = apnDNS2
-            ))
+            if (
+                TboxRepository.apnState.value.apnIP != apnIP
+                || TboxRepository.apnState.value.apnStatus != apnStatus
+                || TboxRepository.apnState.value.apnType != apnType
+                || TboxRepository.apnState.value.apnGate != apnGate
+                || TboxRepository.apnState.value.apnDNS1 != apnDNS1
+                || TboxRepository.apnState.value.apnDNS2 != apnDNS2
+            ) {
+                TboxRepository.updateAPNState(
+                    APNState(
+                        apnIP = apnIP,
+                        apnStatus = apnStatus,
+                        apnType = apnType,
+                        apnGate = apnGate,
+                        apnDNS1 = apnDNS1,
+                        apnDNS2 = apnDNS2
+                    )
+                )
+            }
             apn1UpdateCount = 0
         }
         else if (data[4] == 0x01.toByte()) {
-            TboxRepository.updateAPN2State(APNState(
-                apnIP = apnIP,
-                apnStatus = apnStatus,
-                apnType = apnType,
-                apnGate = apnGate,
-                apnDNS1 = apnDNS1,
-                apnDNS2 = apnDNS2
-            ))
+            if (
+                TboxRepository.apnState.value.apnIP != apnIP
+                || TboxRepository.apnState.value.apnStatus != apnStatus
+                || TboxRepository.apnState.value.apnType != apnType
+                || TboxRepository.apnState.value.apnGate != apnGate
+                || TboxRepository.apnState.value.apnDNS1 != apnDNS1
+                || TboxRepository.apnState.value.apnDNS2 != apnDNS2
+            ) {
+                TboxRepository.updateAPN2State(
+                    APNState(
+                        apnIP = apnIP,
+                        apnStatus = apnStatus,
+                        apnType = apnType,
+                        apnGate = apnGate,
+                        apnDNS1 = apnDNS1,
+                        apnDNS2 = apnDNS2
+                    )
+                )
+            }
             apn2UpdateCount = 0
         }
         return true
@@ -1424,7 +1516,12 @@ class BackgroundService : Service() {
             val rawVoltage3 = buffer.short.toInt() and 0xFFFF
             val voltage3 = rawVoltage3.toFloat() / 1000f
 
-            TboxRepository.updateVoltages(VoltagesState(voltage1, voltage2, voltage3))
+            TboxRepository.updateVoltages(VoltagesState(
+                voltage1,
+                voltage2,
+                voltage3,
+                updateTime = Date()
+            ))
             TboxRepository.addLog("DEBUG", "CRT response",
                 "Get power voltages: $voltage1 V, $voltage2 V, $voltage3 V")
             return true
@@ -1459,19 +1556,19 @@ class BackgroundService : Service() {
                     )
 
                     if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xC4.toByte()))) {
-                        val angle = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 100f
+                        val angle = (singleData.copyOfRange(0, 2).toFloat("UINT16_BE") - 32768f) * 6f / 100f
                         val speed = singleData[2].toInt()
                         TboxRepository.updateSteer(SteerData(angle, speed))
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xFA.toByte()))) {
                         val rpm = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 4f
-                        val speed = singleData[3].toFloat()
+                        val speed = singleData[3].toUInt().toFloat()
                         TboxRepository.updateEngineSpeed(EngineSpeedData(rpm, speed))
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0x00))) {
                         val speed = singleData.copyOfRange(4, 6).toFloat("UINT16_BE") / 100f
                         TboxRepository.updateCarSpeed(CarSpeedData(speed))
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x05))) {
-                        val speed = singleData[0].toInt()
-                        TboxRepository.updateCruise(Cruise(speed))
+                        val cruiseSpeed = singleData[0].toUInt()
+                        TboxRepository.updateCruise(Cruise(cruiseSpeed))
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x10))) {
                         val speed1 = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") * 0.065f
                         val speed2 = singleData.copyOfRange(2, 4).toFloat("UINT16_BE") * 0.065f
@@ -1480,8 +1577,22 @@ class BackgroundService : Service() {
                         TboxRepository.updateWheels(Wheels(speed1, speed2, speed3, speed4))
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x04, 0x30))) {
                         val speed = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 16f
+                        val voltage = singleData[2].toUInt().toFloat() / 10f
                         val odometer = singleData.copyOfRange(5, 8).toUInt20FromNibbleBigEndian()
-                        TboxRepository.updateOdo(OdoData(speed, odometer))
+                        TboxRepository.updateOdo(OdoData(speed, voltage, odometer))
+                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x01))) {
+                        val engineTemperature = singleData[2].toUInt().toFloat() * 0.75f - 48f
+                        if (singleData[1].toInt() == 1) {
+                            val cruiseSpeed = singleData[4].toUInt() - 3u + if (singleData[5].toUInt() >= 192u) 1u else 0u
+                            TboxRepository.updateCruise(Cruise(cruiseSpeed))
+                        }
+                        TboxRepository.updateTemperature(Temperature(engineTemperature))
+                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x2F))) {
+                        val setTemperature = singleData[5].toUInt().toFloat() / 4f
+                        if (setTemperature != 0f) {
+                            val setTemperature = singleData[5].toUInt().toFloat() / 4f
+                            TboxRepository.updateClimate(Climate(setTemperature))
+                        }
                     }
                 } catch (e: Exception) {
                     TboxRepository.addLog("ERROR", "CRT response",
@@ -1678,7 +1789,8 @@ class BackgroundService : Service() {
                 usingSatellites = usingSatellites,
                 speed = speed,
                 trueDirection = trueDirection,
-                magneticDirection = magneticDirection
+                magneticDirection = magneticDirection,
+                updateTime = Date()
             ))
             TboxRepository.addLog("DEBUG", "LOC response",
                 "Get location values: $longitude, $latitude")
@@ -1708,11 +1820,11 @@ class BackgroundService : Service() {
             if (getCanFrame.value) {
                 crtGetCanFrame()
             }
-            if (getCycleSignal.value) {
-                crtGetCycleSignal()
-            }
+            //if (getCycleSignal.value) {
+            //    crtGetCycleSignal()
+            //}
             if (getLocData.value) {
-                locSubscribe()
+                locSubscribe(true)
             }
             //crtGetHdmData()
         }
@@ -1722,6 +1834,7 @@ class BackgroundService : Service() {
             clearNetStates()
             clearAPNStates(1)
             clearAPNStates(2)
+            TboxRepository.updateAPNStatus(false)
             //sendWidgetUpdate()
             TboxRepository.updatePreventRestartSend(false)
             TboxRepository.updateSuspendTboxAppSend(false)
@@ -1741,6 +1854,10 @@ class BackgroundService : Service() {
         } catch (e: TimeoutCancellationException) {
             false
         }
+    }
+
+    fun Byte.toUInt(): UInt {
+        return this.toUByte().toUInt()
     }
 
     fun ByteArray.toUInt20FromNibbleBigEndian(): Int {
