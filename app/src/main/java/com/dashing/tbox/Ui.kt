@@ -167,7 +167,9 @@ fun TboxScreen(viewModel: TboxViewModel,
             )
 
             Column(
-                modifier = Modifier.weight(1f).verticalScroll(scrollState),
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.Center
             ) {
                 tabs.forEachIndexed { index, title ->
@@ -180,7 +182,7 @@ fun TboxScreen(viewModel: TboxViewModel,
             }
 
             Text(
-                text = "Версия программы 0.6",
+                text = "Версия программы 0.6.2",
                 fontSize = 16.sp,
                 textAlign = TextAlign.Right,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -513,7 +515,9 @@ fun SettingsTab(
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -773,7 +777,9 @@ fun InfoTab(
 
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -812,6 +818,11 @@ fun CarDataTab(
     val steer by viewModel.steer.collectAsStateWithLifecycle()
     //val climate by viewModel.climate.collectAsStateWithLifecycle()
     val temperature by viewModel.temperature.collectAsStateWithLifecycle()
+    val gearBoxMode by viewModel.gearBoxMode.collectAsStateWithLifecycle()
+    val gearBoxCurrentGear by viewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
+    val gearBoxPreparedGear by viewModel.gearBoxPreparedGear.collectAsStateWithLifecycle()
+    val gearBoxChangeGear by viewModel.gearBoxChangeGear.collectAsStateWithLifecycle()
+    val gearBoxOilTemperature by viewModel.gearBoxOilTemperature.collectAsStateWithLifecycle()
     //val temperature2 by viewModel.temperature2.collectAsStateWithLifecycle()
     //val hdm by viewModel.hdm.collectAsStateWithLifecycle()
 
@@ -855,6 +866,14 @@ fun CarDataTab(
     } else {
         ""
     }
+    val gearBoxCurrentGearString = gearBoxCurrentGear?.toString() ?: ""
+    val gearBoxPreparedGearString = gearBoxPreparedGear?.toString() ?: ""
+    val gearBoxChangeGearString = if (gearBoxChangeGear != null) {
+        if (gearBoxChangeGear == true) "переключение" else "нет"
+    } else {
+        ""
+    }
+    val gearBoxOilTemperatureString = gearBoxOilTemperature?.toString() ?: ""
 
     Column(
         modifier = Modifier
@@ -874,6 +893,11 @@ fun CarDataTab(
             item { StatusRow("Одометр, км", odometer) }
             //item { StatusRow("Темература климат-контроля, °C", String.format(Locale.getDefault(), "%.1f",climate.setTemperature)) }
             item { StatusRow("Темература двигателя, °C", engineTemperature) }
+            item { StatusRow("Темература масла КПП, °C", gearBoxOilTemperatureString) }
+            item { StatusRow("Режим КПП", gearBoxMode) }
+            item { StatusRow("Текущая передача КПП", gearBoxCurrentGearString) }
+            item { StatusRow("Приготовленная передача КПП", gearBoxPreparedGearString) }
+            item { StatusRow("Выполнение переключения", gearBoxChangeGearString) }
         }
     }
 }
@@ -1109,7 +1133,9 @@ fun CanTab(
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {

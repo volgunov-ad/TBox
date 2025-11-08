@@ -85,6 +85,14 @@ class BackgroundService : Service() {
         const val NOTIFICATION_ID = 50047
         const val CHANNEL_ID = "tbox_background_channel"
 
+        private val GEAR_BOX_7_DRIVE_MODES = setOf(0x1B, 0x2B, 0x3B, 0x4B, 0x5B, 0x6B, 0x7B)
+            .map { it.toByte() }
+            .toSet()
+
+        private val GEAR_BOX_7_PREPARED_DRIVE_MODES = setOf(0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70)
+            .map { it.toByte() }
+            .toSet()
+
         const val ACTION_UPDATE_WIDGET = "com.dashing.tbox.UPDATE_WIDGET"
         const val EXTRA_SIGNAL_LEVEL = "com.dashing.tbox.SIGNAL_LEVEL"
         const val EXTRA_TBOX_STATUS = "com.dashing.tbox.TBOX_STATUS"
@@ -1555,6 +1563,49 @@ class BackgroundService : Service() {
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0x00))) {
                         val speed = singleData.copyOfRange(4, 6).toFloat("UINT16_BE") / 100f
                         TboxRepository.updateCarSpeed(CarSpeedData(speed))
+                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x00))) {
+                        val gearBoxMode: String
+                        val gearBoxCurrentGear: Int
+                        val gearBoxPreparedGear: Int
+
+                        if (singleData[0] in GEAR_BOX_7_DRIVE_MODES) {
+                            gearBoxMode = "D"
+                            gearBoxCurrentGear = ((singleData[0].toInt() and 0xFF) shr 4) and 0x0F
+                        } else if (singleData[0] == 0xBE.toByte()) {
+                            gearBoxMode = "P"
+                            gearBoxCurrentGear = 0
+                        } else if (singleData[0] == 0xAC.toByte()) {
+                            gearBoxMode = "N"
+                            gearBoxCurrentGear = 0
+                        } else if (singleData[0] == 0xAD.toByte()) {
+                            gearBoxMode = "R"
+                            gearBoxCurrentGear = 0
+                        } else {
+                            gearBoxMode = "N/A"
+                            gearBoxCurrentGear = 0
+                        }
+
+                        if (singleData[3] in GEAR_BOX_7_PREPARED_DRIVE_MODES) {
+                            gearBoxPreparedGear = ((singleData[3].toInt() and 0xFF) shr 4) and 0x0F
+                        } else {
+                            gearBoxPreparedGear = 0
+                        }
+
+                        val gearBoxChangeGear = if (singleData[1] == 0xB1.toByte()) {
+                            false
+                        } else if (singleData[1] == 0xF1.toByte()) {
+                            true
+                        } else {
+                            false
+                        }
+
+                        val gearBoxOilTemperature = singleData[2].toUByte().toInt() - 40
+
+                        TboxRepository.updateGearBoxMode(gearBoxMode)
+                        TboxRepository.updateGearBoxCurrentGear(gearBoxCurrentGear)
+                        TboxRepository.updateGearBoxPreparedGear(gearBoxPreparedGear)
+                        TboxRepository.updateGearBoxChangeGear(gearBoxChangeGear)
+                        TboxRepository.updateGearBoxOilTemperature(gearBoxOilTemperature)
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x05))) {
                         val cruiseSpeed = singleData[0].toUInt()
                         TboxRepository.updateCruise(Cruise(cruiseSpeed))

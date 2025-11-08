@@ -195,6 +195,21 @@ object TboxRepository {
     private val _temperature2 = MutableStateFlow(Temperature2())
     val temperature2: StateFlow<Temperature2> = _temperature2.asStateFlow()
 
+    private val _gearBoxMode = MutableStateFlow("")
+    val gearBoxMode: StateFlow<String> = _gearBoxMode.asStateFlow()
+
+    private val _gearBoxCurrentGear = MutableStateFlow<Int?>(null)
+    val gearBoxCurrentGear: StateFlow<Int?> = _gearBoxCurrentGear.asStateFlow()
+
+    private val _gearBoxPreparedGear = MutableStateFlow<Int?>(null)
+    val gearBoxPreparedGear: StateFlow<Int?> = _gearBoxPreparedGear.asStateFlow()
+
+    private val _gearBoxChangeGear = MutableStateFlow<Boolean?>(null)
+    val gearBoxChangeGear: StateFlow<Boolean?> = _gearBoxChangeGear.asStateFlow()
+
+    private val _gearBoxOilTemperature = MutableStateFlow<Int?>(null)
+    val gearBoxOilTemperature: StateFlow<Int?> = _gearBoxOilTemperature.asStateFlow()
+
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
@@ -387,6 +402,26 @@ object TboxRepository {
 
     fun updateTemperature2(newValue: Temperature2) {
         _temperature2.value = newValue
+    }
+
+    fun updateGearBoxMode(newValue: String) {
+        _gearBoxMode.value = newValue
+    }
+
+    fun updateGearBoxCurrentGear(newValue: Int) {
+        _gearBoxCurrentGear.value = newValue
+    }
+
+    fun updateGearBoxChangeGear(newValue: Boolean) {
+        _gearBoxChangeGear.value = newValue
+    }
+
+    fun updateGearBoxPreparedGear(newValue: Int) {
+        _gearBoxPreparedGear.value = newValue
+    }
+
+    fun updateGearBoxOilTemperature(newValue: Int) {
+        _gearBoxOilTemperature.value = newValue
     }
 
     fun updateIPList(value: List<String>) {

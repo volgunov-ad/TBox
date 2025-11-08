@@ -1,26 +1,37 @@
 package com.dashing.tbox
 
+import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.util.Log
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private lateinit var numberPin: EditText
     private lateinit var numberPuk: EditText
     private lateinit var textATCmd: EditText
+
+    companion object {
+        private const val TAG = "MainActivity"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -197,48 +208,135 @@ class MainActivity : ComponentActivity() {
 
     private fun saveDataToFile(dataList: List<String>) {
         try {
-            val savePath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
-            val csvFile = File(savePath, "data_${System.currentTimeMillis()}.txt")
+            // Проверяем разрешения перед сохранением
+            if (!hasStoragePermissions()) {
+                Toast.makeText(this, "Нет разрешений для сохранения файла", Toast.LENGTH_LONG).show()
+                requestPermissions()
+                return
+            }
 
-            FileWriter(csvFile).use { writer ->
+            val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Для Android 11+ используем Downloads directory через MediaStore
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+            } else {
+                // Для старых версий
+                Environment.getExternalStorageDirectory().absolutePath + "/Download"
+            }
+
+            val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss",
+                Locale.getDefault()).format(Date())
+            val dataFile = File(savePath, "tbox_data_$timestamp.txt")
+
+            FileWriter(dataFile).use { writer ->
                 dataList.forEach { value ->
                     writer.append("$value\n")
                 }
             }
 
-            Toast.makeText(this, "Сохранено в: ${csvFile.absolutePath}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Сохранено в: ${dataFile.absolutePath}", Toast.LENGTH_LONG).show()
+            Log.d(TAG, "Файл сохранен: ${dataFile.absolutePath}")
 
         } catch (e: Exception) {
+            Log.e(TAG, "Ошибка сохранения файла", e)
             Toast.makeText(this, "Ошибка сохранения: ${e.message}", Toast.LENGTH_LONG).show()
-            e.printStackTrace()
         }
     }
 
-    // Контракт для разрешений
+    // Контракт для стандартных разрешений (Android 10-)
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (!allGranted) {
-            Toast.makeText(this, "Не все разрешения предоставлены", Toast.LENGTH_LONG).show()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            val allGranted = permissions.values.all { it }
+            if (allGranted) {
+                onPermissionsGranted()
+            } else {
+                onPermissionsDenied()
+            }
         }
     }
 
-    private fun requestPermissions() {
-        val permissions = arrayOf(
-            android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-            android.Manifest.permission.READ_EXTERNAL_STORAGE
-        )
+    // Контракт для MANAGE_EXTERNAL_STORAGE (Android 11+)
+    private val manageExternalStorageLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // Проверяем результат после возврата из системных настроек
+        checkStoragePermissions()
+    }
 
+    private fun requestPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                intent.data = "package:$packageName".toUri()
-                startActivity(intent)
+            // Android 11+ - используем MANAGE_EXTERNAL_STORAGE
+            checkStoragePermissions()
+        } else {
+            // Android 10 и ниже - запрашиваем стандартные разрешения
+            requestLegacyStoragePermissions()
+        }
+    }
+
+    private fun checkStoragePermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Environment.isExternalStorageManager()) {
+                onPermissionsGranted()
+            } else {
+                requestManageExternalStoragePermission()
             }
         } else {
-            requestPermissionLauncher.launch(permissions)
+            // Для Android 10- проверяем стандартные разрешения
+            if (hasLegacyStoragePermissions()) {
+                onPermissionsGranted()
+            } else {
+                requestLegacyStoragePermissions()
+            }
         }
+    }
+
+    private fun requestLegacyStoragePermissions() {
+        val permissions = arrayOf(
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+        )
+        requestPermissionLauncher.launch(permissions)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun requestManageExternalStoragePermission() {
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+            intent.data = "package:$packageName".toUri()
+            manageExternalStorageLauncher.launch(intent)
+        } catch (e: Exception) {
+            // Fallback
+            val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+            manageExternalStorageLauncher.launch(intent)
+        }
+    }
+
+    private fun hasStoragePermissions(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            hasLegacyStoragePermissions()
+        }
+    }
+
+    private fun hasLegacyStoragePermissions(): Boolean {
+        return (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+    }
+
+    private fun onPermissionsGranted() {
+        // Разрешения получены - запускаем основную логику
+        Log.d("Permissions", "Storage permissions granted")
+    }
+
+    private fun onPermissionsDenied() {
+        // Разрешения отклонены - ограничиваем функциональность
+        Log.w("Permissions", "Storage permissions denied")
+        // Можно показать диалог с объяснением
+        Toast.makeText(this,
+            "Без разрешений некоторые функции могут не работать",
+            Toast.LENGTH_LONG).show()
     }
 
     private fun startServiceSafely(intent: Intent) {

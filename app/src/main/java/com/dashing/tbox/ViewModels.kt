@@ -205,6 +205,41 @@ class TboxViewModel() : ViewModel() {
             initialValue = Temperature2()
         )
 
+    val gearBoxMode: StateFlow<String> = TboxRepository.gearBoxMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val gearBoxCurrentGear: StateFlow<Int?> = TboxRepository.gearBoxCurrentGear
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val gearBoxChangeGear: StateFlow<Boolean?> = TboxRepository.gearBoxChangeGear
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val gearBoxPreparedGear: StateFlow<Int?> = TboxRepository.gearBoxPreparedGear
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val gearBoxOilTemperature: StateFlow<Int?> = TboxRepository.gearBoxOilTemperature
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = TboxRepository.canFramesStructured
         .stateIn(
             scope = viewModelScope,
