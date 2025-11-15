@@ -1,4 +1,4 @@
-package com.dashing.tbox
+package com.dashing.tbox.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -23,12 +23,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.AlertDialog
-//import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,33 +38,32 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dashing.tbox.ui.CanIdEntry
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dashing.tbox.SettingsManager
+import com.dashing.tbox.SettingsViewModel
+import com.dashing.tbox.TboxViewModel
+import com.dashing.tbox.WidgetViewModel
+import com.dashing.tbox.WidgetsRepository
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Locale
 import com.dashing.tbox.ui.theme.TboxAppTheme
-import com.dashing.tbox.ui.StatusRow
-import com.dashing.tbox.ui.ModeButton
-import com.dashing.tbox.ui.ColoredLogEntry
-import com.dashing.tbox.ui.TabMenuItem
-import com.dashing.tbox.ui.SettingSwitch
-import com.dashing.tbox.ui.StatusHeader
-import java.io.File
-import java.io.FileWriter
 
 @Composable
 fun TboxApp(
@@ -74,64 +73,87 @@ fun TboxApp(
     onModemOn: () -> Unit,
     onModemFly: () -> Unit,
     onModemOff: () -> Unit,
-    onLocSubscribeClick: () -> Unit,
-    onLocUnsubscribeClick: () -> Unit,
-    //onGetCanFrame: () -> Unit,
-    onUpdateVersions: () -> Unit,
-    //currentSavePath: String,
-    //onSelectFolder: () -> Unit,
+    onUpdateInfoClick: () -> Unit,
     onSaveToFile: (List<String>) -> Unit
 ) {
-    val viewModel = TboxViewModel()
-    val settingsViewModel = remember { SettingsViewModel(settingsManager) }
+    // Используем viewModel() для правильного создания ViewModel
+    val viewModel: TboxViewModel = viewModel()
+    val widgetViewModel: WidgetViewModel = viewModel()
+    val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(settingsManager))
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
 
     TboxAppTheme(theme = currentTheme) {
         TboxScreen(
             viewModel = viewModel,
+            widgetViewModel = widgetViewModel,
             settingsViewModel = settingsViewModel,
             onTboxRestart = onTboxRestart,
             onModemCheck = onModemCheck,
             onModemOn = onModemOn,
             onModemFly = onModemFly,
             onModemOff = onModemOff,
-            onLocSubscribeClick = onLocSubscribeClick,
-            onLocUnsubscribeClick = onLocUnsubscribeClick,
-            //onGetCanFrame = onGetCanFrame,
-            onUpdateVersions = onUpdateVersions,
-            //currentSavePath = currentSavePath,
-            //onSelectFolder = onSelectFolder,
+            onUpdateInfoClick = onUpdateInfoClick,
             onSaveToFile = onSaveToFile
         )
     }
 }
 
+// Factory для SettingsViewModel
+class SettingsViewModelFactory(private val settingsManager: SettingsManager) :
+    ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return SettingsViewModel(settingsManager) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TboxScreen(viewModel: TboxViewModel,
-               settingsViewModel: SettingsViewModel,
-               onTboxRestart: () -> Unit,
-               onModemCheck: () -> Unit,
-               onModemOn: () -> Unit,
-               onModemFly: () -> Unit,
-               onModemOff: () -> Unit,
-               onLocSubscribeClick: () -> Unit,
-               onLocUnsubscribeClick: () -> Unit,
-               //onGetCanFrame: () -> Unit,
-               onUpdateVersions: () -> Unit,
-               //currentSavePath: String,
-               //onSelectFolder: () -> Unit,
-               onSaveToFile: (List<String>) -> Unit
+fun TboxScreen(
+    viewModel: TboxViewModel,
+    widgetViewModel: WidgetViewModel,
+    settingsViewModel: SettingsViewModel,
+    onTboxRestart: () -> Unit,
+    onModemCheck: () -> Unit,
+    onModemOn: () -> Unit,
+    onModemFly: () -> Unit,
+    onModemOff: () -> Unit,
+    onUpdateInfoClick: () -> Unit,
+    onSaveToFile: (List<String>) -> Unit
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Модем", "Геопозиция", "Данные авто", "Настройки", "Журнал", "Информация", "CAN")
+    val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
+    val tabs = listOf("Модем", "Геопозиция", "Данные авто", "Настройки", "Журнал", "Информация", "CAN", "Плитки")
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
-    val conTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(tboxConnectionTime)
-    val serviceTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(serviceStartTime)
+
+    // Используем remember для форматтеров даты
+    val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    val conTime = remember(tboxConnectionTime) { timeFormat.format(tboxConnectionTime) }
+    val serviceTime = remember(serviceStartTime) { timeFormat.format(serviceStartTime) }
+
+    val context = LocalContext.current
+    val packageInfo = remember { context.packageManager.getPackageInfo(context.packageName, 0) }
+    val versionName = remember { packageInfo.versionName }
 
     val scrollState = rememberScrollState()
+
+    // Показываем loading пока загружается сохраненная вкладка
+    if (selectedTab == null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Загрузка...", fontSize = 18.sp)
+        }
+        return
+    }
 
     LaunchedEffect(selectedTab) {
         if (selectedTab == 0) {
@@ -155,7 +177,9 @@ fun TboxScreen(viewModel: TboxViewModel,
                 fontWeight = FontWeight.Bold,
                 color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(horizontal = 8.dp)
             )
             Text(
                 text = "Служба запущена в $serviceTime",
@@ -163,7 +187,9 @@ fun TboxScreen(viewModel: TboxViewModel,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(horizontal = 8.dp)
             )
 
             Column(
@@ -176,33 +202,40 @@ fun TboxScreen(viewModel: TboxViewModel,
                     TabMenuItem(
                         title = title,
                         selected = selectedTab == index,
-                        onClick = { selectedTab = index }
+                        onClick = {
+                            // Сохраняем выбор вкладки через ViewModel
+                            settingsViewModel.saveSelectedTab(index)
+                        }
                     )
                 }
             }
 
             Text(
-                text = "Версия программы 0.6.2",
+                text = "Версия программы $versionName",
                 fontSize = 16.sp,
-                textAlign = TextAlign.Right,
+                textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(horizontal = 8.dp)
             )
         }
 
         // Содержимое справа
-        Box(modifier = Modifier
-            .weight(1f)
-            .background(MaterialTheme.colorScheme.background)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .background(MaterialTheme.colorScheme.background)
         ) {
             when (selectedTab) {
                 0 -> ModemTab(viewModel, onModemOn, onModemFly, onModemOff)
-                1 -> LocationTab(viewModel, onLocSubscribeClick, onLocUnsubscribeClick)
+                1 -> LocationTab(viewModel)
                 2 -> CarDataTab(viewModel)
                 3 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart)
                 4 -> LogsTab(viewModel, settingsViewModel)
-                5 -> InfoTab(viewModel, settingsViewModel, onUpdateVersions)
+                5 -> InfoTab(viewModel, settingsViewModel, onUpdateInfoClick)
                 6 -> CanTab(viewModel, onSaveToFile)
+                7 -> DashboardTab(viewModel, widgetViewModel, settingsViewModel)
             }
         }
     }
@@ -255,7 +288,7 @@ fun ModemTab(
             item { StatusRow("DNS1 APN2", apn2State.apnDNS1) }
             item { StatusRow("DNS2 APN2", apn2State.apnDNS2) }
         }
-        Spacer(modifier = Modifier.width(16.dp))
+
         ModemModeSelector(
             selectedMode = modemStatus,
             onModemOn = onModemOn,
@@ -284,7 +317,6 @@ fun ModemModeSelector(
     }
 
     Column(modifier = modifier) {
-        // Заголовок
         Text(
             text = "Режим модема",
             fontSize = 24.sp,
@@ -349,25 +381,17 @@ fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onTboxRestartClick: () -> Unit,
-    //onSaveToFile: (List<String>) -> Unit
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
-    //val isGetVoltagesEnabled by settingsViewModel.isGetVoltagesEnabled.collectAsStateWithLifecycle()
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
-    val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
     val isGetLocDataEnabled by settingsViewModel.isGetLocDataEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
-    //val canFramesList by viewModel.canFramesList.collectAsStateWithLifecycle()
-    //val didDataCSV by viewModel.didDataCSV.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
-
-    //var showSaveDialog by remember { mutableStateOf(false) }
-    // showSaveDidDialog by remember { mutableStateOf(false) }
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
@@ -418,6 +442,7 @@ fun SettingsTab(
                     "(сброс таймера до 60 секунд происходит при подключении сети)",
             isAutoRestartEnabled
         )
+
         Text(
             text = "Настройки предотвращения перезагрузки",
             fontSize = 24.sp,
@@ -438,6 +463,7 @@ fun SettingsTab(
                     "головного устройства, а также сразу же при включении данной опции",
             true
         )
+
         Text(
             text = "Настройки виджета",
             fontSize = 24.sp,
@@ -453,9 +479,9 @@ fun SettingsTab(
             },
             "Показывать индикатор подключения TBox в виджете",
             "Индикатор в виджете в виде круга может иметь 3 цвета: \n" +
-                    "красный - нет данных от фоновой службы;\n" +
-                    "желтый - нет связи с TBox;\n" +
-                    "зеленый - есть связь с TBox",
+                    "- красный - нет данных от фоновой службы;\n" +
+                    "- желтый - нет связи с TBox;\n" +
+                    "- зеленый - есть связь с TBox",
             true
         )
         SettingSwitch(
@@ -465,11 +491,12 @@ fun SettingsTab(
             },
             "Показывать индикатор состояния геопозиции в виджете",
             "Индикатор в виджете в виде стрелки может иметь 3 цвета: \n" +
-                    "красный - нет фиксации местоположения;\n" +
-                    "желтый - данные о реальной скорости сильно не совпадают с данными со спутников;\n" +
-                    "зеленый - есть фиксация местоположения, данные в норме",
-            true
+                    "- красный - нет фиксации местоположения;\n" +
+                    "- желтый - данные о реальной скорости сильно не совпадают с данными со спутников;\n" +
+                    "- зеленый - есть фиксация местоположения, данные в норме",
+            isGetLocDataEnabled
         )
+
         Text(
             text = "Экспериментальные настройки",
             fontSize = 24.sp,
@@ -478,14 +505,6 @@ fun SettingsTab(
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Left
         )
-        /*SettingSwitch(
-            isUpdateVoltagesEnabled,
-            { enabled ->
-                settingsViewModel.saveUpdateVoltagesSetting(enabled)
-            },
-            "Получать данные о напряжении TBox",
-            ""
-        )*/
         SettingSwitch(
             isGetCanFrameEnabled,
             { enabled ->
@@ -495,15 +514,6 @@ fun SettingsTab(
             "",
             true
         )
-        /*SettingSwitch(
-            isGetCycleSignalEnabled,
-            { enabled ->
-                settingsViewModel.saveGetCycleSignalSetting(enabled)
-            },
-            "Получать циклические данные от TBox",
-            "",
-            true
-        )*/
         SettingSwitch(
             isGetLocDataEnabled,
             { enabled ->
@@ -538,93 +548,24 @@ fun SettingsTab(
                 )
             }
         }
-
-        /*Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = { showSaveDialog = true },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Сохранить в CAN Frames в файл", fontSize = 24.sp, maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
-            if (showSaveDialog) {
-                AlertDialog(
-                    onDismissRequest = { showSaveDialog = false },
-                    title = { Text("Сохранение файла") },
-                    text = {
-                        Text("Сохранить ${canFramesList.size} CAN Frames в папку Загрузки")
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                onSaveToFile(canFramesList)
-                                showSaveDialog = false
-                            }
-                        ) {
-                            Text("Сохранить")
-                        }
-                    },
-                    dismissButton = {
-                        OutlinedButton(
-                            onClick = { showSaveDialog = false }
-                        ) {
-                            Text("Отмена")
-                        }
-                    }
-                )
-            }
-        }
-
-        Button(
-            onClick = { showSaveDidDialog = true },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(text = "Сохранить в DIDs в файл", fontSize = 24.sp, maxLines = 2,
-                textAlign = TextAlign.Center)
-        }
-        if (showSaveDidDialog) {
-            AlertDialog(
-                onDismissRequest = { showSaveDidDialog = false },
-                title = { Text("Сохранение файла") },
-                text = {
-                    Text("Сохранить ${didDataCSV.size} DIDs в папку Загрузки")
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onSaveToFile(didDataCSV)
-                            showSaveDidDialog = false
-                        }
-                    ) {
-                        Text("Сохранить")
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = { showSaveDidDialog = false }
-                    ) {
-                        Text("Отмена")
-                    }
-                }
-            )
-        }*/
     }
 }
 
 @Composable
 fun LocationTab(
     viewModel: TboxViewModel,
-    onLocSubscribeClick: () -> Unit,
-    onLocUnsubscribeClick: () -> Unit
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
-    //val locationSubscribed by viewModel.locationSubscribed.collectAsStateWithLifecycle()
+
+    // Используем remember для форматтера
+    val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+
+    val dateTime = locValues.utcTime?.formatDateTime() ?: ""
+    val lastUpdate = remember(locValues.updateTime) {
+        locValues.updateTime?.let { updateTime ->
+            timeFormat.format(updateTime)
+        } ?: ""
+    }
 
     Column(
         modifier = Modifier
@@ -632,11 +573,6 @@ fun LocationTab(
             .padding(16.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
-            val dateTime = locValues.utcTime?.formatDateTime() ?: ""
-            val lastUpdate = locValues.updateTime?.let { updateTime ->
-                SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(updateTime)
-            } ?: ""
-
             item { StatusRow("Последнее обновление", lastUpdate) }
             item { StatusRow("Фиксация местоположения", if (locValues.locateStatus) {"да"} else {"нет"}) }
             item { StatusRow("Долгота", locValues.longitude.toString()) }
@@ -650,70 +586,6 @@ fun LocationTab(
             item { StatusRow("Дата и время UTC", dateTime) }
             item { StatusRow("Сырые данные", locValues.rawValue) }
         }
-        //Spacer(modifier = Modifier.width(16.dp))
-        //LocationSubscribeSelector(locationSubscribed, onLocSubscribeClick, onLocUnsubscribeClick)
-    }
-}
-
-@Composable
-fun LocationSubscribeSelector(
-    locationSubscribed: Boolean,
-    onOn: () -> Unit,
-    onOff: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var buttonsEnabled by remember { mutableStateOf(true) }
-
-    LaunchedEffect(buttonsEnabled) {
-        if (!buttonsEnabled) {
-            delay(5000) // Блокировка на 5 секунд
-            buttonsEnabled = true
-        }
-    }
-
-    Column(modifier = modifier) {
-        // Заголовок
-        Text(
-            text = "Обновление местоположения",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        Row(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            ModeButton(
-                text = "Включено",
-                isSelected = locationSubscribed,
-                onClick = {
-                    if (buttonsEnabled) {
-                        buttonsEnabled = false
-                        onOn()
-                    }
-                },
-                enabled = buttonsEnabled,
-                modifier = Modifier.weight(1f)
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            ModeButton(
-                text = "Выключено",
-                isSelected = !locationSubscribed,
-                onClick = {
-                    if (buttonsEnabled) {
-                        buttonsEnabled = false
-                        onOff()
-                    }
-                },
-                enabled = buttonsEnabled,
-                modifier = Modifier.weight(1f)
-            )
-        }
     }
 }
 
@@ -721,7 +593,7 @@ fun LocationSubscribeSelector(
 fun InfoTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
-    onUpdateVersionsClick: () -> Unit,
+    onUpdateInfoClick: () -> Unit,
 ) {
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
@@ -734,9 +606,8 @@ fun InfoTab(
     val locVersion by settingsViewModel.locVersion.collectAsStateWithLifecycle()
     val swVersion by settingsViewModel.swVersion.collectAsStateWithLifecycle()
     val hwVersion by settingsViewModel.hwVersion.collectAsStateWithLifecycle()
+    val vinCode by settingsViewModel.vinCode.collectAsStateWithLifecycle()
     val tboxIP by settingsViewModel.tboxIP.collectAsStateWithLifecycle()
-
-    val scrollState = rememberScrollState()
 
     var updateVersionButtonEnabled by remember { mutableStateOf(true) }
 
@@ -774,6 +645,7 @@ fun InfoTab(
             item { StatusRow("Версия приложения SWD", swdVersion) }
             item { StatusRow("Версия SW", swVersion) }
             item { StatusRow("Версия HW", hwVersion) }
+            item { StatusRow("VIN код", vinCode) }
 
             item {
                 Row(
@@ -787,13 +659,13 @@ fun InfoTab(
                         onClick = {
                             if (updateVersionButtonEnabled) {
                                 updateVersionButtonEnabled = false
-                                onUpdateVersionsClick()
+                                onUpdateInfoClick()
                             }
                         },
                         enabled = updateVersionButtonEnabled && tboxConnected
                     ) {
                         Text(
-                            text = "Проверить версии приложений TBox",
+                            text = "Запросить информацию из TBox",
                             fontSize = 24.sp,
                             maxLines = 2,
                             textAlign = TextAlign.Center
@@ -809,99 +681,51 @@ fun InfoTab(
 fun CarDataTab(
     viewModel: TboxViewModel,
 ) {
-    //val voltages by viewModel.voltages.collectAsStateWithLifecycle()
-    val odo by viewModel.odo.collectAsStateWithLifecycle()
-    val engineSpeed by viewModel.engineSpeed.collectAsStateWithLifecycle()
-    //val carSpeed by viewModel.carSpeed.collectAsStateWithLifecycle()
-    val cruise by viewModel.cruise.collectAsStateWithLifecycle()
-    //val wheels by viewModel.wheels.collectAsStateWithLifecycle()
-    val steer by viewModel.steer.collectAsStateWithLifecycle()
-    //val climate by viewModel.climate.collectAsStateWithLifecycle()
-    val temperature by viewModel.temperature.collectAsStateWithLifecycle()
+    val odometer by viewModel.odometer.collectAsStateWithLifecycle()
+    val engineRPM by viewModel.engineRPM.collectAsStateWithLifecycle()
+    val voltage by viewModel.voltage.collectAsStateWithLifecycle()
+    val fuelLevelPercentage by viewModel.fuelLevelPercentage.collectAsStateWithLifecycle()
+    val carSpeed by viewModel.carSpeed.collectAsStateWithLifecycle()
+    val cruiseSetSpeed by viewModel.cruiseSetSpeed.collectAsStateWithLifecycle()
+    val steerAngle by viewModel.steerAngle.collectAsStateWithLifecycle()
+    val steerSpeed by viewModel.steerSpeed.collectAsStateWithLifecycle()
+    val engineTemperature by viewModel.engineTemperature.collectAsStateWithLifecycle()
     val gearBoxMode by viewModel.gearBoxMode.collectAsStateWithLifecycle()
     val gearBoxCurrentGear by viewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
     val gearBoxPreparedGear by viewModel.gearBoxPreparedGear.collectAsStateWithLifecycle()
     val gearBoxChangeGear by viewModel.gearBoxChangeGear.collectAsStateWithLifecycle()
     val gearBoxOilTemperature by viewModel.gearBoxOilTemperature.collectAsStateWithLifecycle()
-    //val temperature2 by viewModel.temperature2.collectAsStateWithLifecycle()
-    //val hdm by viewModel.hdm.collectAsStateWithLifecycle()
-
-    val voltage = if (odo.voltage != null) {
-        String.format(Locale.getDefault(), "%.1f", odo.voltage)
-    } else {
-        ""
-    }
-    val steerAngle = if (steer.angle != null) {
-        String.format(Locale.getDefault(), "%.2f", steer.angle)
-    } else {
-        ""
-    }
-    val steerSpeed = if (steer.speed != null) {
-        steer.speed.toString()
-    } else {
-        ""
-    }
-    val engineSpeedRpm = if (engineSpeed.rpm != null) {
-        String.format(Locale.getDefault(), "%.1f", engineSpeed.rpm)
-    } else {
-        ""
-    }
-    val carSpeed = if (odo.speed != null) {
-        String.format(Locale.getDefault(), "%.1f", odo.speed)
-    } else {
-        ""
-    }
-    val cruiseSpeed = if (cruise.speed != null) {
-        cruise.speed.toString()
-    } else {
-        ""
-    }
-    val odometer = if (odo.odometer != null) {
-        odo.odometer.toString()
-    } else {
-        ""
-    }
-    val engineTemperature = if (temperature.engineTemperature != null) {
-        String.format(Locale.getDefault(), "%.1f", temperature.engineTemperature)
-    } else {
-        ""
-    }
-    val gearBoxCurrentGearString = gearBoxCurrentGear?.toString() ?: ""
-    val gearBoxPreparedGearString = gearBoxPreparedGear?.toString() ?: ""
-    val gearBoxChangeGearString = if (gearBoxChangeGear != null) {
-        if (gearBoxChangeGear == true) "переключение" else "нет"
-    } else {
-        ""
-    }
-    val gearBoxOilTemperatureString = gearBoxOilTemperature?.toString() ?: ""
+    val gearBoxDriveMode by viewModel.gearBoxDriveMode.collectAsStateWithLifecycle()
+    val gearBoxWork by viewModel.gearBoxWork.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(18.dp)
     ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
-            item { StatusRow("Напряжение, В", voltage) }
-            item { StatusRow("Угол поворота руля, °", steerAngle) }
-            item { StatusRow("Скорость вращения руля", steerSpeed) }
-            item { StatusRow("Обороты двигателя, об/мин", engineSpeedRpm) }
-            item { StatusRow("Скорость автомобиля, км/ч", carSpeed) }
-            item { StatusRow("Скорость круиз-контроля, км/ч", cruiseSpeed) }
-            item { StatusRow("Одометр, км", odometer) }
-            //item { StatusRow("Темература климат-контроля, °C", String.format(Locale.getDefault(), "%.1f",climate.setTemperature)) }
-            item { StatusRow("Темература двигателя, °C", engineTemperature) }
-            item { StatusRow("Темература масла КПП, °C", gearBoxOilTemperatureString) }
-            item { StatusRow("Режим КПП", gearBoxMode) }
-            item { StatusRow("Текущая передача КПП", gearBoxCurrentGearString) }
-            item { StatusRow("Приготовленная передача КПП", gearBoxPreparedGearString) }
-            item { StatusRow("Выполнение переключения", gearBoxChangeGearString) }
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("voltage"), valueToString(voltage, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("steerAngle"), valueToString(steerAngle, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("steerSpeed"), valueToString(steerSpeed)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("engineRPM"), valueToString(engineRPM, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("carSpeed"), valueToString(carSpeed, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("cruiseSetSpeed"), valueToString(cruiseSetSpeed)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("odometer"), valueToString(odometer)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("fuelLevelPercentage"), valueToString(fuelLevelPercentage)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("engineTemperature"), valueToString(engineTemperature, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxOilTemperature"), valueToString(gearBoxOilTemperature)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxMode"), gearBoxMode) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxDriveMode"), gearBoxDriveMode) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxWork"), gearBoxWork) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxCurrentGear"), valueToString(gearBoxCurrentGear)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxPreparedGear"), valueToString(gearBoxPreparedGear)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxChangeGear"),
+                valueToString(gearBoxChangeGear, booleanTrue = "переключение", booleanFalse = "нет")) }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogsTab(
     viewModel: TboxViewModel,
@@ -910,11 +734,8 @@ fun LogsTab(
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val logLevel by settingsViewModel.logLevel.collectAsStateWithLifecycle()
 
-    // Состояние для раскрывающегося списка
     var expanded by remember { mutableStateOf(false) }
     val logLevels = listOf("DEBUG", "INFO", "WARN", "ERROR")
-
-    // Состояние для текстового фильтра
     var searchText by remember { mutableStateOf("") }
 
     val focusManager = LocalFocusManager.current
@@ -931,14 +752,14 @@ fun LogsTab(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Текстовое поле для фильтрации логов
             OutlinedTextField(
                 value = searchText,
                 onValueChange = { newText ->
                     searchText = newText
                 },
                 modifier = Modifier
-                    .padding(vertical = 8.dp),
+                    .weight(1f)
+                    .padding(end = 8.dp),
                 label = {
                     Text(
                         text = "Фильтр по тексту (минимум 3 символа)",
@@ -974,11 +795,7 @@ fun LogsTab(
                 )
             )
 
-            // Раскрывающийся список для выбора уровня логов
-            Box(
-                modifier = Modifier.wrapContentSize()
-            ) {
-                // Кнопка для открытия списка
+            Box(modifier = Modifier.wrapContentSize()) {
                 OutlinedButton(
                     onClick = { expanded = true },
                     modifier = Modifier.width(200.dp)
@@ -995,7 +812,6 @@ fun LogsTab(
                     )
                 }
 
-                // Выпадающее меню
                 DropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
@@ -1023,7 +839,7 @@ fun LogsTab(
                 }
             }
         }
-        //Spacer(modifier = Modifier.width(12.dp))
+
         LogsCard(
             logs = logs,
             logLevel = logLevel,
@@ -1062,7 +878,6 @@ fun LogsCard(
             }
         }
 
-        // Применяем текстовый фильтр если есть поисковый запрос
         if (searchText.length >= 3) {
             levelFilteredLogs.filter { log ->
                 log.contains(searchText, ignoreCase = true)
@@ -1072,7 +887,6 @@ fun LogsCard(
         }
     }
 
-    // Автопрокрутка к новым логам
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty()) {
             listState.animateScrollToItem(logs.size - 1)
@@ -1112,20 +926,26 @@ fun CanTab(
 
     var showSaveDialog by remember { mutableStateOf(false) }
 
+    // Используем remember для форматтера
+    val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+
+    val formattedTime = remember(canFrameTime) {
+        canFrameTime?.let { timeFormat.format(it) } ?: "нет данных"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Преобразуем Map в отсортированный список
         val sortedCanEntries = remember(canFramesStructured) {
             canFramesStructured.entries.sortedBy { it.key }
         }
-        // Заголовок с количеством CAN ID
+
         Text(
             text = "CAN ID (${sortedCanEntries.size}). " +
-                    "Последние данные: ${SimpleDateFormat("HH:mm:ss",
-                        Locale.getDefault()).format(canFrameTime)}",
+                    "Последние данные: $formattedTime",
             modifier = Modifier.padding(6.dp),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
@@ -1144,10 +964,13 @@ fun CanTab(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Сохранить текущие CAN данные в файл", fontSize = 24.sp, maxLines = 2,
+                    text = "Сохранить текущие CAN данные в файл",
+                    fontSize = 24.sp,
+                    maxLines = 2,
                     textAlign = TextAlign.Center
                 )
             }
+
             if (showSaveDialog) {
                 AlertDialog(
                     onDismissRequest = { showSaveDialog = false },
@@ -1158,19 +981,16 @@ fun CanTab(
                     confirmButton = {
                         Button(
                             onClick = {
-                                val csvCanEnries = mutableListOf<String>()
+                                val csvCanEntries = mutableListOf<String>()
                                 sortedCanEntries.forEach { (canId, frames) ->
                                     frames.forEach { frame ->
-                                        val timestamp = SimpleDateFormat(
-                                            "yyyy-MM-dd HH:mm:ss",
-                                            Locale.getDefault()
-                                        ).format(frame.date)
+                                        val timestamp = dateFormat.format(frame.date)
                                         val rawValueHex =
                                             frame.rawValue.joinToString(" ") { "%02X".format(it) }
-                                        csvCanEnries.add("$timestamp;$canId;$rawValueHex")
+                                        csvCanEntries.add("$timestamp;$canId;$rawValueHex")
                                     }
                                 }
-                                onSaveToFile(csvCanEnries)
+                                onSaveToFile(csvCanEntries)
                                 showSaveDialog = false
                             }
                         ) {
@@ -1196,13 +1016,10 @@ fun CanTab(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                ) {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(
                         items = sortedCanEntries,
-                        key = { it.key } // Важно для стабильной анимации
+                        key = { it.key }
                     ) { (canId, frames) ->
                         val lastFrame = frames.lastOrNull()
                         CanIdEntry(
@@ -1213,6 +1030,23 @@ fun CanTab(
                 }
             }
         }
+    }
+}
 
+fun valueToString(value: Any?, accuracy: Int = 1, booleanTrue: String = "да", booleanFalse: String = "нет"): String {
+    if (value == null) {
+        return ""
+    }
+    return when (value) {
+        is Int -> value.toString()
+        is UInt -> value.toString()
+        is Float -> when (accuracy) {
+            1 -> String.format(Locale.getDefault(), "%.1f", value)
+            2 -> String.format(Locale.getDefault(), "%.2f", value)
+            else -> String.format(Locale.getDefault(), "%.3f", value)
+        }
+        is Boolean -> if (value) booleanTrue else booleanFalse
+        is String -> value
+        else -> ""
     }
 }

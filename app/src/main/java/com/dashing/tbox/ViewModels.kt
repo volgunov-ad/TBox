@@ -2,18 +2,22 @@ package com.dashing.tbox
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Date
+import java.util.Locale
 
-class TboxViewModel() : ViewModel() {
+class TboxViewModel : ViewModel() {
     val logs: StateFlow<List<String>> = TboxRepository.logs
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = listOf("")
+            initialValue = emptyList()
         )
 
     /*val didDataCSV: StateFlow<List<String>> = TboxRepository.didDataCSV
@@ -27,7 +31,7 @@ class TboxViewModel() : ViewModel() {
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = listOf("")
+            initialValue = emptyList()
         )
 
     /*val canFramesList: StateFlow<List<String>> = TboxRepository.canFramesList
@@ -142,32 +146,46 @@ class TboxViewModel() : ViewModel() {
             initialValue = HdmData()
         )
 
-    val odo: StateFlow<OdoData> = TboxRepository.odo
+    val odometer: StateFlow<Int?> = TboxRepository.odometer
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = OdoData()
+            initialValue = null
         )
 
-    val engineSpeed: StateFlow<EngineSpeedData> = TboxRepository.engineSpeed
+    val engineRPM: StateFlow<Float?> = TboxRepository.engineRPM
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = EngineSpeedData()
+            initialValue = null
         )
 
-    val carSpeed: StateFlow<CarSpeedData> = TboxRepository.carSpeed
+    val carSpeed: StateFlow<Float?> = TboxRepository.carSpeed
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = CarSpeedData()
+            initialValue = null
         )
 
-    val cruise: StateFlow<Cruise> = TboxRepository.cruise
+    val voltage: StateFlow<Float?> = TboxRepository.voltage
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = Cruise()
+            initialValue = null
+        )
+
+    val fuelLevelPercentage: StateFlow<UInt?> = TboxRepository.fuelLevelPercentage
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val cruiseSetSpeed: StateFlow<UInt?> = TboxRepository.cruiseSetSpeed
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
         )
 
     val wheels: StateFlow<Wheels> = TboxRepository.wheels
@@ -177,33 +195,34 @@ class TboxViewModel() : ViewModel() {
             initialValue = Wheels()
         )
 
-    val steer: StateFlow<SteerData> = TboxRepository.steer
+    val steerAngle: StateFlow<Float?> = TboxRepository.steerAngle
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = SteerData()
+            initialValue = null
         )
 
-    val climate: StateFlow<Climate> = TboxRepository.climate
+    val steerSpeed: StateFlow<Int?> = TboxRepository.steerSpeed
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = Climate()
+            initialValue = null
         )
 
-    val temperature: StateFlow<Temperature> = TboxRepository.temperature
+    val climateSetTemperature1: StateFlow<Float?> = TboxRepository.climateSetTemperature1
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = Temperature()
+            initialValue = null
         )
 
-    val temperature2: StateFlow<Temperature2> = TboxRepository.temperature2
+    val engineTemperature: StateFlow<Float?> = TboxRepository.engineTemperature
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = Temperature2()
+            initialValue = null
         )
+
 
     val gearBoxMode: StateFlow<String> = TboxRepository.gearBoxMode
         .stateIn(
@@ -240,6 +259,20 @@ class TboxViewModel() : ViewModel() {
             initialValue = null
         )
 
+    val gearBoxDriveMode: StateFlow<String> = TboxRepository.gearBoxDriveMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val gearBoxWork: StateFlow<String> = TboxRepository.gearBoxWork
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = TboxRepository.canFramesStructured
         .stateIn(
             scope = viewModelScope,
@@ -247,11 +280,11 @@ class TboxViewModel() : ViewModel() {
             initialValue = emptyMap()
         )
 
-    val canFrameTime: StateFlow<Date> = TboxRepository.canFrameTime
+    val canFrameTime: StateFlow<Date?> = TboxRepository.canFrameTime
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = Date()
+            initialValue = null
         )
 }
 
@@ -381,11 +414,32 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = ""
         )
 
+    val vinCode = settingsManager.getStringFlow("vin_code", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
     val tboxIP = settingsManager.tboxIPFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_TBOX_IP
+        )
+
+    val selectedTab = settingsManager.selectedTabFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = null
+        )
+
+    val dashboardWidgetsConfig = settingsManager.dashboardWidgetsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
         )
 
     fun saveAutoRestartSetting(enabled: Boolean) {
@@ -447,4 +501,105 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             settingsManager.saveGetLocDataSetting(enabled)
         }
     }
+
+    fun saveSelectedTab(tabIndex: Int) {
+        viewModelScope.launch {
+            settingsManager.saveSelectedTab(tabIndex)
+        }
+    }
+
+    fun saveDashboardWidgets(config: String) {
+        viewModelScope.launch {
+            settingsManager.saveDashboardWidgets(config)
+        }
+    }
 }
+
+class WidgetViewModel : ViewModel() {
+
+    val dashboardState: StateFlow<DashboardState> = WidgetsRepository.dashboardState
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DashboardState()
+        )
+
+    // Метод для обновления виджетов
+    fun updateDashboardWidgets(widgets: List<DashboardWidget>) {
+        viewModelScope.launch {
+            WidgetsRepository.updateDashboardWidgets(widgets)
+        }
+    }
+}
+
+object WidgetsRepository {
+    private val _dashboardState = MutableStateFlow(DashboardState())
+    val dashboardState: StateFlow<DashboardState> = _dashboardState.asStateFlow()
+
+    // Соответствие ключей заголовкам и единицам измерения
+    private data class DataTitle(val title: String, val unit: String)
+
+    private val dataKeyTitles = mapOf(
+        "voltage" to DataTitle("Напряжение", "В"),
+        "steerAngle" to DataTitle("Угол поворота руля", "°"),
+        "steerSpeed" to DataTitle("Скорость вращения руля", ""),
+        "engineRPM" to DataTitle("Обороты двигателя", "об/мин"),
+        "carSpeed" to DataTitle("Скорость автомобиля", "км/ч"),
+        "cruiseSetSpeed" to DataTitle("Скорость круиз-контроля", "км/ч"),
+        "odometer" to DataTitle("Одометр", "км"),
+        "fuelLevelPercentage" to DataTitle("Уровень топлива", "%"),
+        "engineTemperature" to DataTitle("Температура двигателя", "°C"),
+        "gearBoxOilTemperature" to DataTitle("Температура масла КПП", "°C"),
+        "gearBoxCurrentGear" to DataTitle("Текущая передача КПП", ""),
+        "gearBoxPreparedGear" to DataTitle("Приготовленная передача КПП", ""),
+        "gearBoxChangeGear" to DataTitle("Выполнение переключения", ""),
+        "gearBoxMode" to DataTitle("Режим КПП", ""),
+        "gearBoxDriveMode" to DataTitle("Режим движения КПП", ""),
+        "gearBoxWork" to DataTitle("Работа КПП", ""),
+        "locateStatus" to DataTitle("Фиксация местоположения", ""),
+        "gnssSpeed" to DataTitle("Скорость GNSS", "км/ч"),
+        "visibleSatellites" to DataTitle("Видимые спутники", ""),
+        "locationUpdateTime" to DataTitle("Время обновления GNSS", ""),
+    )
+
+    fun getTitleForDataKey(dataKey: String): String {
+        return dataKeyTitles[dataKey]?.title ?: ""
+    }
+
+    fun getUnitForDataKey(dataKey: String): String {
+        return dataKeyTitles[dataKey]?.unit ?: ""
+    }
+
+    fun getTitleUnitForDataKey(dataKey: String): String {
+        val unit = getUnitForDataKey(dataKey)
+        return if (unit != "") {
+            "${getTitleForDataKey(dataKey)}, $unit"
+        } else {
+            getTitleForDataKey(dataKey)
+        }
+    }
+
+    fun updateDashboardWidgets(widgets: List<DashboardWidget>) {
+        _dashboardState.update { currentState ->
+            currentState.copy(widgets = widgets)
+        }
+    }
+
+    fun getAvailableDataKeys(): List<String> {
+        return dataKeyTitles.keys.toList()
+    }
+}
+
+// Модель для виджета панели
+data class DashboardWidget(
+    val id: Int,
+    val title: String,
+    val unit: String = "",
+    val dataKey: String = "" // Ключ для идентификации данных
+)
+
+// Состояние панели виджетов
+data class DashboardState(
+    val widgets: List<DashboardWidget> = emptyList(),
+    val availableDataKeys: List<String> = emptyList()
+)

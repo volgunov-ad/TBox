@@ -103,38 +103,38 @@ class TboxBroadcastSender(
     private fun sendNetState(netState: NetState, subscriber: Array<String>) {
         try {
             if (subscriber[1] == "netstate") {
-                if (subscriber[2] == "level") {
+                if (subscriber[2] == "net_level") {
                     sendResponse(
                         context,
                         subscriber[0],
                         GET_STATE,
-                        subscriber[1],
+                        subscriber[2],
                         netState.signalLevel
                     )
-                } else if (subscriber[2] == "status") {
+                } else if (subscriber[2] == "net_status") {
                     sendResponse(
                         context,
                         subscriber[0],
                         GET_STATE,
-                        subscriber[1],
+                        subscriber[2],
                         netState.netStatus
                     )
                 }
             } else if (subscriber[1] == "status") {
-                if (subscriber[2] == "reg") {
+                if (subscriber[2] == "net_reg") {
                     sendResponse(
                         context,
                         subscriber[0],
                         GET_STATE,
-                        subscriber[1],
+                        subscriber[2],
                         netState.regStatus
                     )
-                } else if (subscriber[2] == "sim") {
+                } else if (subscriber[2] == "net_sim") {
                     sendResponse(
                         context,
                         subscriber[0],
                         GET_STATE,
-                        subscriber[1],
+                        subscriber[2],
                         netState.simStatus
                     )
                 }

@@ -1,6 +1,6 @@
 package com.dashing.tbox
 
-import android.icu.text.SimpleDateFormat
+import java.text.SimpleDateFormat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,47 +80,11 @@ data class HdmData(
     val isCan: Boolean = false,
 )
 
-data class OdoData(
-    val speed: Float? = null,
-    val voltage: Float? = null,
-    val odometer: Int? = null,
-)
-
-data class EngineSpeedData(
-    val rpm: Float? = null,
-    val speed: Float? = null,
-)
-
-data class CarSpeedData(
-    val speed: Float? = null,
-)
-
-data class Cruise(
-    val speed: UInt? = null,
-)
-
 data class Wheels(
     val speed1: Float? = null,
     val speed2: Float? = null,
     val speed3: Float? = null,
     val speed4: Float? = null,
-)
-
-data class SteerData(
-    val angle: Float? = null,
-    val speed: Int? = null,
-)
-
-data class Climate(
-    val setTemperature: Float? = null,
-)
-
-data class Temperature(
-    val engineTemperature: Float? = null,
-)
-
-data class Temperature2(
-    val temperature: Float? = null,
 )
 
 data class CanFrame(
@@ -168,32 +132,38 @@ object TboxRepository {
     private val _hdm = MutableStateFlow(HdmData())
     val hdm: StateFlow<HdmData> = _hdm.asStateFlow()
 
-    private val _odo = MutableStateFlow(OdoData())
-    val odo: StateFlow<OdoData> = _odo.asStateFlow()
-
-    private val _engineSpeed = MutableStateFlow(EngineSpeedData())
-    val engineSpeed: StateFlow<EngineSpeedData> = _engineSpeed.asStateFlow()
-
-    private val _carSpeed = MutableStateFlow(CarSpeedData())
-    val carSpeed: StateFlow<CarSpeedData> = _carSpeed.asStateFlow()
-
-    private val _cruise = MutableStateFlow(Cruise())
-    val cruise: StateFlow<Cruise> = _cruise.asStateFlow()
+    private val _cruiseSetSpeed = MutableStateFlow<UInt?>(null)
+    val cruiseSetSpeed: StateFlow<UInt?> = _cruiseSetSpeed.asStateFlow()
 
     private val _wheels = MutableStateFlow(Wheels())
     val wheels: StateFlow<Wheels> = _wheels.asStateFlow()
 
-    private val _steer = MutableStateFlow(SteerData())
-    val steer: StateFlow<SteerData> = _steer.asStateFlow()
+    private val _climateSetTemperature1 = MutableStateFlow<Float?>(null)
+    val climateSetTemperature1: StateFlow<Float?> = _climateSetTemperature1.asStateFlow()
 
-    private val _climate = MutableStateFlow(Climate())
-    val climate: StateFlow<Climate> = _climate.asStateFlow()
+    private val _engineRPM = MutableStateFlow<Float?>(null)
+    val engineRPM: StateFlow<Float?> = _engineRPM.asStateFlow()
 
-    private val _temperature = MutableStateFlow(Temperature())
-    val temperature: StateFlow<Temperature> = _temperature.asStateFlow()
+    private val _steerAngle = MutableStateFlow<Float?>(null)
+    val steerAngle: StateFlow<Float?> = _steerAngle.asStateFlow()
 
-    private val _temperature2 = MutableStateFlow(Temperature2())
-    val temperature2: StateFlow<Temperature2> = _temperature2.asStateFlow()
+    private val _steerSpeed = MutableStateFlow<Int?>(null)
+    val steerSpeed: StateFlow<Int?> = _steerSpeed.asStateFlow()
+
+    private val _engineTemperature = MutableStateFlow<Float?>(null)
+    val engineTemperature: StateFlow<Float?> = _engineTemperature.asStateFlow()
+
+    private val _odometer = MutableStateFlow<Int?>(null)
+    val odometer: StateFlow<Int?> = _odometer.asStateFlow()
+
+    private val _carSpeed = MutableStateFlow<Float?>(null)
+    val carSpeed: StateFlow<Float?> = _carSpeed.asStateFlow()
+
+    private val _voltage = MutableStateFlow<Float?>(null)
+    val voltage: StateFlow<Float?> = _voltage.asStateFlow()
+
+    private val _fuelLevelPercentage = MutableStateFlow<UInt?>(null)
+    val fuelLevelPercentage: StateFlow<UInt?> = _fuelLevelPercentage.asStateFlow()
 
     private val _gearBoxMode = MutableStateFlow("")
     val gearBoxMode: StateFlow<String> = _gearBoxMode.asStateFlow()
@@ -209,6 +179,12 @@ object TboxRepository {
 
     private val _gearBoxOilTemperature = MutableStateFlow<Int?>(null)
     val gearBoxOilTemperature: StateFlow<Int?> = _gearBoxOilTemperature.asStateFlow()
+
+    private val _gearBoxDriveMode = MutableStateFlow<String>("")
+    val gearBoxDriveMode: StateFlow<String> = _gearBoxDriveMode.asStateFlow()
+
+    private val _gearBoxWork = MutableStateFlow<String>("")
+    val gearBoxWork: StateFlow<String> = _gearBoxWork.asStateFlow()
 
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
@@ -243,11 +219,11 @@ object TboxRepository {
     private val _currentTheme = MutableStateFlow(1)
     val currentTheme: StateFlow<Int> = _currentTheme.asStateFlow()
 
-    private val _canFrameTime = MutableStateFlow(Date())
-    val canFrameTime: StateFlow<Date> = _canFrameTime.asStateFlow()
+    private val _canFrameTime = MutableStateFlow<Date?>(null)
+    val canFrameTime: StateFlow<Date?> = _canFrameTime.asStateFlow()
 
-    private val _cycleSignalTime = MutableStateFlow(Date())
-    val cycleSignalTime: StateFlow<Date> = _cycleSignalTime.asStateFlow()
+    private val _cycleSignalTime = MutableStateFlow<Date?>(null)
+    val cycleSignalTime: StateFlow<Date?> = _cycleSignalTime.asStateFlow()
 
     private val _ipList = MutableStateFlow<List<String>>(emptyList())
     val ipList: StateFlow<List<String>> = _ipList.asStateFlow()
@@ -265,13 +241,21 @@ object TboxRepository {
     private const val MAX_CAN_FRAMES = 5
     private const val MAX_FRAMES_PER_ID = 5
 
+    private val timeFormat: ThreadLocal<SimpleDateFormat> = ThreadLocal.withInitial {
+        SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    }
+
     fun addLog(level: String, tag: String, message: String) {
-        val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        val timestamp = timeFormat.get()?.format(Date())
         val logEntry = "[$timestamp] $level: $tag. $message"
 
         _logs.update { currentLogs ->
             (currentLogs + logEntry).takeLast(MAX_LOGS)
         }
+    }
+
+    fun clearLogs() {
+        _logs.value = emptyList()
     }
 
     fun addDidDataCSV(did: String, rawValue: String, value: String) {
@@ -283,7 +267,7 @@ object TboxRepository {
     }
 
     /*fun addCanFrame(rawValue: String) {
-        val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        val timestamp = timeFormat.format(Date())
         val entry = "$timestamp;$rawValue"
 
         _canFramesList.update { currentData ->
@@ -368,40 +352,48 @@ object TboxRepository {
         _hdm.value = newValue
     }
 
-    fun updateOdo(newValue: OdoData) {
-        _odo.value = newValue
+    fun updateVoltage(newValue: Float) {
+        _voltage.value = newValue
     }
 
-    fun updateEngineSpeed(newValue: EngineSpeedData) {
-        _engineSpeed.value = newValue
-    }
-
-    fun updateCarSpeed(newValue: CarSpeedData) {
+    fun updateCarSpeed(newValue: Float) {
         _carSpeed.value = newValue
     }
 
-    fun updateCruise(newValue: Cruise) {
-        _cruise.value = newValue
+    fun updateOdometer(newValue: Int) {
+        _odometer.value = newValue
+    }
+
+    fun updateFuelLevelPercentage(newValue: UInt) {
+        _fuelLevelPercentage.value = newValue
+    }
+
+    fun updateCruiseSetSpeed(newValue: UInt) {
+        _cruiseSetSpeed.value = newValue
     }
 
     fun updateWheels(newValue: Wheels) {
         _wheels.value = newValue
     }
 
-    fun updateSteer(newValue: SteerData) {
-        _steer.value = newValue
+    fun updateEngineRPM(newValue: Float) {
+        _engineRPM.value = newValue
     }
 
-    fun updateClimate(newValue: Climate) {
-        _climate.value = newValue
+    fun updateSteerAngle(newValue: Float) {
+        _steerAngle.value = newValue
     }
 
-    fun updateTemperature(newValue: Temperature) {
-        _temperature.value = newValue
+    fun updateSteerSpeed(newValue: Int) {
+        _steerSpeed.value = newValue
     }
 
-    fun updateTemperature2(newValue: Temperature2) {
-        _temperature2.value = newValue
+    fun updateClimateSetTemperature1(newValue: Float) {
+        _climateSetTemperature1.value = newValue
+    }
+
+    fun updateEngineTemperature(newValue: Float) {
+        _engineTemperature.value = newValue
     }
 
     fun updateGearBoxMode(newValue: String) {
@@ -422,6 +414,14 @@ object TboxRepository {
 
     fun updateGearBoxOilTemperature(newValue: Int) {
         _gearBoxOilTemperature.value = newValue
+    }
+
+    fun updateGearBoxDriveMode(newValue: String) {
+        _gearBoxDriveMode.value = newValue
+    }
+
+    fun updateGearBoxWork(newValue: String) {
+        _gearBoxWork.value = newValue
     }
 
     fun updateIPList(value: List<String>) {
@@ -464,5 +464,16 @@ object TboxRepository {
     // Очистить все фреймы
     fun clearAllFrames() {
         _canFramesStructured.value = emptyMap()
+    }
+
+    // Метод для сброса всех данных (при переподключении)
+    fun resetConnectionData() {
+        _tboxConnected.value = false
+        _netState.value = NetState()
+        _apnState.value = APNState()
+        _apn2State.value = APNState()
+        _apnStatus.value = false
+        _preventRestartSend.value = false
+        _suspendTboxAppSend.value = false
     }
 }

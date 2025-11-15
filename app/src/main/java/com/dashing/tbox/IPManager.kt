@@ -3,6 +3,7 @@ package com.dashing.tbox
 import android.Manifest
 import android.content.Context
 import android.net.ConnectivityManager
+import android.os.Build
 import androidx.annotation.RequiresPermission
 
 class IPManager(private val context: Context, initialIP: String = "192.168.225.1") {
@@ -10,37 +11,63 @@ class IPManager(private val context: Context, initialIP: String = "192.168.225.1
     private var currentIndex = 0
     private var isFirstCall = true
 
+    companion object {
+        private const val TAG = "IPManager"
+        private const val DEFAULT_IP = "192.168.225.1"
+    }
+
     init {
         updateIPs(initialIP)
     }
 
-    fun updateIPs(initialIP: String = "192.168.225.1") {
+    fun updateIPs(initialIP: String = DEFAULT_IP) {
         synchronized(ipList) {
             val newList = mutableListOf<String>()
 
-            // 1. Ранее использованный IP
+            // 1. Ранее использованный IP (initialIP) - должен быть первым в списке
             if (initialIP.isNotBlank() && isValidIP(initialIP)) {
                 newList.add(initialIP)
             }
 
-            // 2. Стандартный IP
-            val defaultIP = "192.168.225.1"
-            if (defaultIP !in newList && isValidIP(defaultIP)) {
-                newList.add(defaultIP)
+            // 2. Обязательный IP 192.168.225.1 (если его еще нет в списке)
+            if (DEFAULT_IP !in newList && isValidIP(DEFAULT_IP)) {
+                newList.add(DEFAULT_IP)
             }
 
-            // 3. Шлюзы из текущих сетей
-            getCurrentGatewayIPs().forEach { gatewayIP ->
-                if (gatewayIP.isNotBlank() && gatewayIP !in newList && isValidIP(gatewayIP)) {
-                    newList.add(gatewayIP)
+            // 3. Шлюзы из текущих сетей (только если есть разрешения)
+            try {
+                if (hasNetworkStatePermission()) {
+                    getCurrentGatewayIPs().forEach { gatewayIP ->
+                        if (gatewayIP.isNotBlank() && gatewayIP !in newList && isValidIP(gatewayIP)) {
+                            newList.add(gatewayIP)
+                        }
+                    }
+                } else {
+                    // Если нет разрешений - оставляем только initialIP и DEFAULT_IP
+                    android.util.Log.d(TAG, "No network state permission, using only initial and default IPs")
+                    // Удаляем все кроме initialIP и DEFAULT_IP
+                    val allowedIPs = listOf(initialIP, DEFAULT_IP).filter { isValidIP(it) }
+                    newList.removeAll { it !in allowedIPs }
                 }
+            } catch (e: SecurityException) {
+                // Если возникла SecurityException - оставляем только initialIP и DEFAULT_IP
+                android.util.Log.w(TAG, "Security exception, using only initial and default IPs")
+                val allowedIPs = listOf(initialIP, DEFAULT_IP).filter { isValidIP(it) }
+                newList.removeAll { it !in allowedIPs }
             }
 
             ipList.clear()
-            ipList.addAll(newList)
+            ipList.addAll(newList.distinct()) // Убираем дубликаты
             currentIndex = 0
             isFirstCall = true
+
+            android.util.Log.d(TAG, "Updated IP list: $ipList")
         }
+    }
+
+    private fun hasNetworkStatePermission(): Boolean {
+        return context.checkSelfPermission(Manifest.permission.ACCESS_NETWORK_STATE) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
@@ -49,21 +76,41 @@ class IPManager(private val context: Context, initialIP: String = "192.168.225.1
 
         try {
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            connectivityManager?.allNetworks?.forEach { network ->
-                val linkProperties = connectivityManager.getLinkProperties(network)
-                linkProperties?.routes?.forEach { route ->
-                    // Берем только default routes (шлюзы по умолчанию)
-                    if (route.isDefaultRoute) {
-                        route.gateway?.hostAddress?.let { gateway ->
-                            if (isValidIP(gateway) && gateway !in gatewayIPs) {
-                                gatewayIPs.add(gateway)
+                ?: return emptyList()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // Для Android 6.0+ используем активную сеть
+                val activeNetwork = connectivityManager.activeNetwork
+                activeNetwork?.let { network ->
+                    val linkProperties = connectivityManager.getLinkProperties(network)
+                    linkProperties?.routes?.forEach { route ->
+                        if (route.isDefaultRoute) {
+                            route.gateway?.hostAddress?.let { gateway ->
+                                if (isValidIP(gateway) && gateway !in gatewayIPs) {
+                                    gatewayIPs.add(gateway)
+                                }
                             }
                         }
                     }
                 }
+            } else {
+                // Для старых версий (устаревший метод)
+                @Suppress("DEPRECATION")
+                (connectivityManager.allNetworks.forEach { network ->
+                    val linkProperties = connectivityManager.getLinkProperties(network)
+                    linkProperties?.routes?.forEach { route ->
+                        if (route.isDefaultRoute) {
+                            route.gateway?.hostAddress?.let { gateway ->
+                                if (isValidIP(gateway) && gateway !in gatewayIPs) {
+                                    gatewayIPs.add(gateway)
+                                }
+                            }
+                        }
+                    }
+                })
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e(TAG, "Error getting gateway IPs", e)
         }
 
         return gatewayIPs
@@ -82,16 +129,31 @@ class IPManager(private val context: Context, initialIP: String = "192.168.225.1
         }
     }
 
+    fun reset() {
+        synchronized(ipList) {
+            currentIndex = 0
+            isFirstCall = true
+        }
+    }
+
     fun isCurrentIPLast(): Boolean {
         return currentIndex + 1 == ipList.size
     }
 
     fun getIPList(): List<String> = ipList.toList()
 
+    fun getCurrentIP(): String? {
+        synchronized(ipList) {
+            return if (ipList.isEmpty()) null else ipList[currentIndex]
+        }
+    }
+
     private fun isValidIP(ip: String): Boolean {
         return try {
             val parts = ip.split(".")
-            parts.size == 4 && parts.all { part -> part.toIntOrNull() in 0..255 }
+            parts.size == 4 && parts.all { part ->
+                part.toIntOrNull() in 0..255 && part.isNotBlank()
+            }
         } catch (e: Exception) {
             false
         }

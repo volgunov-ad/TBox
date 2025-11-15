@@ -39,7 +39,7 @@ fun lightColorScheme() = androidx.compose.material3.lightColorScheme(
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF1A1C1E),
     surfaceVariant = Color(0xFFE8ECF0),
-    onSurfaceVariant = Color(0xFF42474E),
+    onSurfaceVariant = Color(0xFF211F1F),
     outline = Color(0xFF72777F),
     outlineVariant = Color(0xFFC2C7CF)
 )

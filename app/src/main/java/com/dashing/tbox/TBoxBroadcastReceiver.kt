@@ -100,11 +100,11 @@ class TBoxBroadcastReceiver : BroadcastReceiver() {
         when (extraValue2) {
             "level" ->
                 TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
-                    "netState",
+                    "net_level",
                     TboxRepository.netState.value.signalLevel)
             "status" ->
                 TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
-                    "netState",
+                    "net_status",
                     TboxRepository.netState.value.netStatus)
             else -> {
                 Log.w(TAG, "Unknown get Net state action value: $extraValue2")
@@ -116,11 +116,11 @@ class TBoxBroadcastReceiver : BroadcastReceiver() {
         when (extraValue2) {
             "region" ->
                 TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
-                    "status",
+                    "net_region",
                     TboxRepository.netState.value.regStatus)
             "sim" ->
                 TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
-                    "status",
+                    "net_sim",
                     TboxRepository.netState.value.simStatus)
             else -> {
                 Log.w(TAG, "Unknown get Status action value: $extraValue2")
@@ -132,11 +132,11 @@ class TBoxBroadcastReceiver : BroadcastReceiver() {
         when (extraValue2) {
             "tbox" ->
                 TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
-                    "startTime",
+                    "tbox_startTime",
                     TboxRepository.tboxConnectionTime.value)
             "service" ->
                 TboxBroadcastSender.sendResponse(context, sender, GET_STATE,
-                    "startTime",
+                    "service_startTime",
                     TboxRepository.serviceStartTime.value)
             else -> {
                 Log.w(TAG, "Unknown get Status action value: $extraValue2")
@@ -163,9 +163,9 @@ class TBoxBroadcastReceiver : BroadcastReceiver() {
             action = BackgroundService.ACTION_TBOX_REBOOT
         }
         if (startServiceSafely(context, intent)) {
-            TboxBroadcastSender.sendResponse(context, sender, MAIN_ACTION, "tbox", true)
+            TboxBroadcastSender.sendResponse(context, sender, MAIN_ACTION, "tbox_reboot", true)
         } else {
-            TboxBroadcastSender.sendResponse(context, sender, MAIN_ACTION, "tbox", false)
+            TboxBroadcastSender.sendResponse(context, sender, MAIN_ACTION, "tbox_reboot", false)
         }
     }
 

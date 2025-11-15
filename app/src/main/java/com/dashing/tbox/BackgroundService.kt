@@ -78,7 +78,7 @@ class BackgroundService : Service() {
         private const val CRT_CODE = 0x23.toByte()
         private const val SWD_CODE = 0x2D.toByte()
         private const val NTM_CODE = 0x24.toByte()
-        private const val GATE_CODE = 0x37.toByte()
+        private const val SELF_CODE = 0x50.toByte()
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
         private var isRunning = false
         const val LOCATION_UPDATE_TIME = 1
@@ -127,14 +127,14 @@ class BackgroundService : Service() {
         const val ACTION_LOC_SUBSCRIBE = "com.dashing.tbox.LOC_SUBSCRIBE"
         const val ACTION_LOC_UNSUBSCRIBE = "com.dashing.tbox.LOC_UNSUBSCRIBE"
         const val ACTION_GET_CAN_FRAME = "com.dashing.tbox.GET_CAN_FRAME"
-        const val ACTION_GET_VERSIONS = "com.dashing.tbox.GET_VERSIONS"
+        const val ACTION_GET_INFO = "com.dashing.tbox.GET_INFO"
     }
 
     override fun onCreate() {
         super.onCreate()
 
         settingsManager = SettingsManager(this)
-        scope = CoroutineScope(Dispatchers.Default + job)
+        scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
 
         autoModemRestart = settingsManager.autoModemRestartFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
@@ -198,8 +198,7 @@ class BackgroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification(intent?.action)
-        startForeground(NOTIFICATION_ID, notification)
+
         when (intent?.action) {
             ACTION_START -> {
                 if (!isRunning) {
@@ -212,6 +211,8 @@ class BackgroundService : Service() {
                     startPeriodicJob()
                     startSettingsListener()
                     TboxRepository.updateServiceStartTime()
+                    val notification = createNotification("Start service")
+                    startForeground(NOTIFICATION_ID, notification)
                 }
             }
             ACTION_STOP -> {
@@ -225,6 +226,8 @@ class BackgroundService : Service() {
                     stopPeriodicJob()
                     stopSettingsListener()
                     stopStateBroadcastListener()
+                    val notification = createNotification("Stop service")
+                    startForeground(NOTIFICATION_ID, notification)
                 }
             }
             ACTION_SEND_AT -> mdcSendAT("ATI\r\n".toByteArray())
@@ -258,7 +261,7 @@ class BackgroundService : Service() {
             ACTION_LOC_SUBSCRIBE -> locSubscribe(true)
             ACTION_LOC_UNSUBSCRIBE -> locSubscribe(false)
             ACTION_GET_CAN_FRAME -> crtGetCanFrame()
-            ACTION_GET_VERSIONS -> getVersions()
+            ACTION_GET_INFO -> getInfo()
         }
         return START_STICKY
     }
@@ -312,13 +315,13 @@ class BackgroundService : Service() {
                         socket,
                         serverPort,
                         MDC_CODE,
-                        GATE_CODE,
+                        SELF_CODE,
                         0x07,
                         byteArrayOf(0x01, 0x00)
                     )
                     netUpdateCount += 1
                     if (netUpdateCount > 2) {
-                        clearNetStates()
+                        TboxRepository.updateNetState(NetState())
                     }
                     delay(netUpdateTime)
                 }
@@ -393,12 +396,12 @@ class BackgroundService : Service() {
                             socket,
                             serverPort,
                             MDC_CODE,
-                            GATE_CODE,
+                            SELF_CODE,
                             0x11,
                             byteArrayOf(0x00, 0x00, 0x00, 0x00))
                         apn1UpdateCount += 1
                         if (apn1UpdateCount > 2) {
-                            clearAPNStates(1)
+                            TboxRepository.updateAPNState(APNState())
                         }
                         delay(500)
                         TboxRepository.addLog("DEBUG", "MDC send", "Update APN2")
@@ -406,13 +409,13 @@ class BackgroundService : Service() {
                             socket,
                             serverPort,
                             MDC_CODE,
-                            GATE_CODE,
+                            SELF_CODE,
                             0x11,
                             byteArrayOf(0x00, 0x00, 0x01, 0x00)
                         )
                         apn2UpdateCount += 1
                         if (apn2UpdateCount > 2) {
-                            clearAPNStates(2)
+                            TboxRepository.updateAPN2State(APNState())
                         }
 
                     }
@@ -578,14 +581,9 @@ class BackgroundService : Service() {
                         sendWidgetUpdate()
                         widgetUpdateTime = System.currentTimeMillis()
                     }
-                    /*if (TboxRepository.locationSubscribed.value){
-                        val delta =  (Date().time - TboxRepository.locValues.value.updateTime.time) / 1000
-                        if (delta > LOCATION_UPDATE_TIME * 6) {
-                            TboxRepository.updateLocationSubscribed(false)
-                        }
-                    }*/
+                    val currentTime = Date().time
                     /*if (updateVoltages.value) {
-                        val delta = Date().time - TboxRepository.voltages.value.updateTime.time
+                        val delta = currentTime - TboxRepository.voltages.value.updateTime.time
                         if (delta > 30000) {
                             TboxRepository.updateVoltages(VoltagesState(0.0, 0.0, 0.0))
                             if (TboxRepository.tboxConnected.value && Date().time - crtGetPowVolInfoTime.time > 10000) {
@@ -595,7 +593,7 @@ class BackgroundService : Service() {
                         }
                     }*/
                     if (getCanFrame.value) {
-                        val delta = Date().time - TboxRepository.canFrameTime.value.time
+                        val delta = currentTime - (TboxRepository.canFrameTime.value?.time ?: 0)
                         if (delta > 60000) {
                             if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetCanFrameTime > 10000) {
                                 crtGetCanFrame()
@@ -604,7 +602,7 @@ class BackgroundService : Service() {
                         }
                     }
                     if (getCycleSignal.value) {
-                        val delta = Date().time - TboxRepository.cycleSignalTime.value.time
+                        val delta = currentTime - (TboxRepository.cycleSignalTime.value?.time ?: 0)
                         if (delta > 60000) {
                             if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetCycleSignalTime > 10000) {
                                 //crtGetCycleSignal()
@@ -613,7 +611,7 @@ class BackgroundService : Service() {
                         }
                     }
                     if (getLocData.value) {
-                        val delta = Date().time - (TboxRepository.locValues.value.updateTime?.time
+                        val delta = currentTime - (TboxRepository.locValues.value.updateTime?.time
                             ?: 0)
                         if (delta > 10000) {
                             TboxRepository.updateLocValues(LocValues())
@@ -624,11 +622,11 @@ class BackgroundService : Service() {
                             }
                         } else {
                             if (getCanFrame.value) {
-                                TboxRepository.odo.value.speed?.let { speed ->
+                                TboxRepository.carSpeed.value?.let { speed ->
                                     val min = speed - 10f
                                     val max = speed + 10f
                                     TboxRepository.locValues.value.speed.let { locSpeed ->
-                                        if (locSpeed >= min || locSpeed <= max) {
+                                        if (locSpeed >= min && locSpeed <= max) {
                                             TboxRepository.updateIsLocValuesTrue(true)
                                             locErrorCount = 0
                                         } else {
@@ -667,7 +665,7 @@ class BackgroundService : Service() {
                     }
                     else {
                         // Выбор следующего IP адреса, если подключения нет больше 60 с
-                        if (Date().time - TboxRepository.tboxConnectionTime.value.time > 60000 &&
+                        if (currentTime - TboxRepository.tboxConnectionTime.value.time > 60000 &&
                             System.currentTimeMillis() - updateIPTime > 60000) {
                             if (ipManager.isCurrentIPLast()) {
                                 ipManager.updateIPs(serverIp.value)
@@ -762,7 +760,7 @@ class BackgroundService : Service() {
             try {
                 val cmds = String(cmd, charset = Charsets.UTF_8).trimEnd()
                 TboxRepository.addLog("DEBUG", "MDC send", "AT command send: $cmds")
-                sendUdpMessage(socket, serverPort, MDC_CODE, GATE_CODE, 0x0E,
+                sendUdpMessage(socket, serverPort, MDC_CODE, SELF_CODE, 0x0E,
                     byteArrayOf(
                         (cmd.size + 10 shr 8).toByte(), (cmd.size + 10 and 0xFF).toByte(),
                         0xFF.toByte(), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00) + cmd)
@@ -783,7 +781,7 @@ class BackgroundService : Service() {
         scope.launch {
             try {
                 TboxRepository.addLog(logLevel, "CRT send", description)
-                sendUdpMessage(socket, serverPort, CRT_CODE, GATE_CODE, cmd, data)
+                sendUdpMessage(socket, serverPort, CRT_CODE, SELF_CODE, cmd, data)
                 delay(100)
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
@@ -798,26 +796,28 @@ class BackgroundService : Service() {
         crtCmd(0x2B, byteArrayOf(0x02), "Restart TBox", "INFO")
     }
 
-    private fun getVersions() {
+    private fun getInfo() {
         if (versionsJob?.isActive == true) return
         versionsJob = scope.launch {
             try {
-                TboxRepository.addLog("DEBUG", "Versions", "Get apps versions")
-                clearVersions()
-                sendUdpMessage(socket, serverPort, CRT_CODE, GATE_CODE, 0x01,
+                TboxRepository.addLog("DEBUG", "Info", "Get TBox Info")
+                clearInfo()
+                sendUdpMessage(socket, serverPort, CRT_CODE, SELF_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
-                sendUdpMessage(socket, serverPort, MDC_CODE, GATE_CODE, 0x01,
+                sendUdpMessage(socket, serverPort, MDC_CODE, SELF_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
-                sendUdpMessage(socket, serverPort, LOC_CODE, GATE_CODE, 0x01,
+                sendUdpMessage(socket, serverPort, LOC_CODE, SELF_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
-                sendUdpMessage(socket, serverPort, SWD_CODE, GATE_CODE, 0x01,
+                sendUdpMessage(socket, serverPort, SWD_CODE, SELF_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
-                sendUdpMessage(socket, serverPort, APP_CODE, GATE_CODE, 0x01,
+                sendUdpMessage(socket, serverPort, APP_CODE, SELF_CODE, 0x01,
                     byteArrayOf(0x00, 0x00))
-                sendUdpMessage(socket, serverPort, CRT_CODE, GATE_CODE, 0x12,
+                sendUdpMessage(socket, serverPort, CRT_CODE, SELF_CODE, 0x12,
                     byteArrayOf(0x00, 0x00, 0x01, 0x04.toByte())) // CRT - SW
-                sendUdpMessage(socket, serverPort, CRT_CODE, GATE_CODE, 0x12,
+                sendUdpMessage(socket, serverPort, CRT_CODE, SELF_CODE, 0x12,
                     byteArrayOf(0x00, 0x00, 0x01, 0x05.toByte())) // CRT - HW
+                sendUdpMessage(socket, serverPort, CRT_CODE, SELF_CODE, 0x12,
+                    byteArrayOf(0x00, 0x00, 0x01, 0x0F.toByte())) // CRT VIN code
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
                 throw e
@@ -827,7 +827,7 @@ class BackgroundService : Service() {
         }
     }
 
-    private suspend fun clearVersions() {
+    private suspend fun clearInfo() {
         settingsManager.saveCustomString("app_version", "")
         settingsManager.saveCustomString("crt_version", "")
         settingsManager.saveCustomString("loc_version", "")
@@ -835,6 +835,7 @@ class BackgroundService : Service() {
         settingsManager.saveCustomString("swd_version", "")
         settingsManager.saveCustomString("sw_version", "")
         settingsManager.saveCustomString("hw_version", "")
+        settingsManager.saveCustomString("vin_code", "")
     }
 
     private fun crtGetCanFrame() {
@@ -868,7 +869,7 @@ class BackgroundService : Service() {
         if (ssmCmdJob?.isActive == true) return
         ssmCmdJob = scope.launch {
             TboxRepository.addLog("DEBUG", "SSM send", "Send GetDynamicCode command")
-            sendUdpMessage(socket, serverPort, 0x35, GATE_CODE, 0x06,
+            sendUdpMessage(socket, serverPort, 0x35, SELF_CODE, 0x06,
                 byteArrayOf(0x00, 0x00))
         }
     }
@@ -879,7 +880,7 @@ class BackgroundService : Service() {
         }
         if (apnCmdJob?.isActive == true) return
         apnCmdJob = scope.launch {
-            sendUdpMessage(socket, serverPort, MDC_CODE, GATE_CODE, 0x10, cmd)
+            sendUdpMessage(socket, serverPort, MDC_CODE, SELF_CODE, 0x10, cmd)
         }
     }
 
@@ -890,7 +891,7 @@ class BackgroundService : Service() {
         if (appCmdJob?.isActive == true) return
         appCmdJob = scope.launch {
             TboxRepository.addLog("DEBUG", "APP send", "Suspend APP")
-            sendUdpMessage(socket, serverPort, APP_CODE, GATE_CODE, 0x02, byteArrayOf(0x00))
+            sendUdpMessage(socket, serverPort, APP_CODE, SELF_CODE, 0x02, byteArrayOf(0x00))
         }
     }
 
@@ -901,7 +902,7 @@ class BackgroundService : Service() {
         if (swdCmdJob?.isActive == true) return
         swdCmdJob = scope.launch {
             TboxRepository.addLog("DEBUG", "SWD send", "Prevent restart")
-            sendUdpMessage(socket, serverPort, SWD_CODE, GATE_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x00))
+            sendUdpMessage(socket, serverPort, SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x00))
         }
     }
 
@@ -914,11 +915,11 @@ class BackgroundService : Service() {
             if (value) {
                 TboxRepository.addLog("DEBUG", "LOC send", "Location subscribe")
                 val timeout = (LOCATION_UPDATE_TIME).toByte()
-                sendUdpMessage(socket, serverPort, LOC_CODE, GATE_CODE, 0x05, byteArrayOf(0x02, timeout, 0x00))
+                sendUdpMessage(socket, serverPort, LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x02, timeout, 0x00))
             }
             else {
                 TboxRepository.addLog("DEBUG", "LOC send", "Location unsubscribe")
-                sendUdpMessage(socket, serverPort, LOC_CODE, GATE_CODE, 0x05, byteArrayOf(0x00, 0x00, 0x00))
+                sendUdpMessage(socket, serverPort, LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x00, 0x00, 0x00))
             }
             //TboxRepository.updateLocationSubscribed(value)
         }
@@ -933,7 +934,7 @@ class BackgroundService : Service() {
             putExtra(EXTRA_APN_STATUS, (TboxRepository.apnStatus.value))
             putExtra(EXTRA_THEME, TboxRepository.currentTheme.value)
             putExtra(EXTRA_WIDGET_SHOW_INDICATOR, widgetShowIndicator.value)
-            putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value)
+            putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value && getLocData.value)
             putExtra(EXTRA_LOC_SET_POSITION, TboxRepository.locValues.value.locateStatus)
 
             val isTruePosition = if (getCanFrame.value) {
@@ -970,7 +971,8 @@ class BackgroundService : Service() {
         listOf(
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob,
-            modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob
+            modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
+            settingsListenerJob
         ).forEach { job ->
             job?.cancel()
         }
@@ -980,14 +982,25 @@ class BackgroundService : Service() {
         super.onDestroy()
         cancelAllJobs()
         job.cancel()
-        socket.close()
+
+        try {
+            socket.close()
+        } catch (e: Exception) {
+            Log.e("BackgroundService", "Error closing socket", e)
+        }
+
         isRunning = false
+
         try {
             themeObserver.stopObserving()
             Log.d("ThemeService", "Service destroyed")
         } catch (e: Exception) {
             Log.e("ThemeService", "Error during service destruction", e)
         }
+
+        // Очищаем ссылки
+        address = null
+        currentIP = null
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -1006,7 +1019,9 @@ class BackgroundService : Service() {
             data += checkSum
             val packet = DatagramPacket(data, data.size, address, port)
             mutex.withLock {
-                socket.send(packet)
+                withTimeout(1000) { // Таймаут на отправку
+                    socket.send(packet)
+                }
             }
             TboxRepository.addLog("DEBUG", "UDP message send", toHexString(data))
 
@@ -1288,8 +1303,8 @@ class BackgroundService : Service() {
 
         netUpdateCount = 0
         if (TboxRepository.netState.value.regStatus !in listOf("домашняя сеть", "роуминг")) {
-            clearAPNStates(1)
-            clearAPNStates(2)
+            TboxRepository.updateAPNState(APNState())
+            TboxRepository.updateAPN2State(APNState())
             TboxRepository.updateAPNStatus(false)
             apnCheck = false
         }
@@ -1336,19 +1351,6 @@ class BackgroundService : Service() {
             in 25..32 -> 4
             else -> 0
         }
-    }
-
-    private fun clearNetStates() {
-        TboxRepository.updateNetState(NetState(
-            csq = 99,
-            netStatus = "-",
-            regStatus = "-",
-            simStatus = "-"))
-        TboxRepository.updateNetValues(NetValues(
-            imei = "-",
-            iccid = "-",
-            imsi = "-",
-            operator = "-"))
     }
 
     private fun ansMDCAPNManage(data: ByteArray): Boolean {
@@ -1453,27 +1455,6 @@ class BackgroundService : Service() {
         return true
     }
 
-    private fun clearAPNStates(number: Int = 1) {
-        val apnState = APNState(
-            apnIP = "-",
-            apnStatus = "-",
-            apnType = "-",
-            apnGate = "-",
-            apnDNS1 = "-",
-            apnDNS2 = "-"
-        )
-        if (number == 1) {
-            TboxRepository.updateAPNState(
-                apnState
-            )
-        }
-        else {
-            TboxRepository.updateAPN2State(
-                apnState
-            )
-        }
-    }
-
     private fun ansATcmd(data: ByteArray): Boolean {
         if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
@@ -1555,14 +1536,11 @@ class BackgroundService : Service() {
                     if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xC4.toByte()))) {
                         val angle = (singleData.copyOfRange(0, 2).toFloat("UINT16_BE") - 32768f) * 6f / 100f
                         val speed = singleData[2].toInt()
-                        TboxRepository.updateSteer(SteerData(angle, speed))
+                        TboxRepository.updateSteerAngle(angle)
+                        TboxRepository.updateSteerSpeed(speed)
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xFA.toByte()))) {
                         val rpm = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 4f
-                        val speed = singleData[3].toUInt().toFloat()
-                        TboxRepository.updateEngineSpeed(EngineSpeedData(rpm, speed))
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0x00))) {
-                        val speed = singleData.copyOfRange(4, 6).toFloat("UINT16_BE") / 100f
-                        TboxRepository.updateCarSpeed(CarSpeedData(speed))
+                        TboxRepository.updateEngineRPM(rpm)
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x00))) {
                         val gearBoxMode: String
                         val gearBoxCurrentGear: Int
@@ -1570,7 +1548,7 @@ class BackgroundService : Service() {
 
                         if (singleData[0] in GEAR_BOX_7_DRIVE_MODES) {
                             gearBoxMode = "D"
-                            gearBoxCurrentGear = ((singleData[0].toInt() and 0xFF) shr 4) and 0x0F
+                            gearBoxCurrentGear = singleData[0].getLeftNibble()
                         } else if (singleData[0] == 0xBE.toByte()) {
                             gearBoxMode = "P"
                             gearBoxCurrentGear = 0
@@ -1585,30 +1563,54 @@ class BackgroundService : Service() {
                             gearBoxCurrentGear = 0
                         }
 
-                        if (singleData[3] in GEAR_BOX_7_PREPARED_DRIVE_MODES) {
-                            gearBoxPreparedGear = ((singleData[3].toInt() and 0xFF) shr 4) and 0x0F
-                        } else {
-                            gearBoxPreparedGear = 0
+                        val gearBoxChangeGearByte = singleData[1].getLeftNibble()
+                        val gearBoxChangeGear = when (gearBoxChangeGearByte) {
+                            0xB -> {
+                                false
+                            }
+                            0xF -> {
+                                true
+                            }
+                            else -> {
+                                false
+                            }
                         }
 
-                        val gearBoxChangeGear = if (singleData[1] == 0xB1.toByte()) {
-                            false
-                        } else if (singleData[1] == 0xF1.toByte()) {
-                            true
-                        } else {
-                            false
+                        val gearBoxDriveModeByte = singleData[1].getRightNibble()
+                        val gearBoxDriveMode = when (gearBoxDriveModeByte) {
+                            0 -> {
+                                "ECO"
+                            }
+                            1 -> {
+                                "NOR"
+                            }
+                            2 -> {
+                                "SPT"
+                            }
+                            else -> {
+                                "N/A"
+                            }
                         }
 
                         val gearBoxOilTemperature = singleData[2].toUByte().toInt() - 40
+
+                        if (singleData[3] in GEAR_BOX_7_PREPARED_DRIVE_MODES) {
+                            gearBoxPreparedGear = (singleData[3].toInt() and 0xF0) ushr 4
+                        } else {
+                            gearBoxPreparedGear = 0
+                        }
+                        val gearBoxWork = toHexString(byteArrayOf(singleData[5]))
 
                         TboxRepository.updateGearBoxMode(gearBoxMode)
                         TboxRepository.updateGearBoxCurrentGear(gearBoxCurrentGear)
                         TboxRepository.updateGearBoxPreparedGear(gearBoxPreparedGear)
                         TboxRepository.updateGearBoxChangeGear(gearBoxChangeGear)
                         TboxRepository.updateGearBoxOilTemperature(gearBoxOilTemperature)
+                        TboxRepository.updateGearBoxDriveMode(gearBoxDriveMode)
+                        TboxRepository.updateGearBoxWork(gearBoxWork)
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x05))) {
                         val cruiseSpeed = singleData[0].toUInt()
-                        TboxRepository.updateCruise(Cruise(cruiseSpeed))
+                        TboxRepository.updateCruiseSetSpeed(cruiseSpeed)
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x10))) {
                         val speed1 = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") * 0.065f
                         val speed2 = singleData.copyOfRange(2, 4).toFloat("UINT16_BE") * 0.065f
@@ -1618,20 +1620,26 @@ class BackgroundService : Service() {
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x04, 0x30))) {
                         val speed = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 16f
                         val voltage = singleData[2].toUInt().toFloat() / 10f
+                        val fuelLevelPercentage = singleData[4].toUInt()
                         val odometer = singleData.copyOfRange(5, 8).toUInt20FromNibbleBigEndian()
-                        TboxRepository.updateOdo(OdoData(speed, voltage, odometer))
+                        TboxRepository.updateCarSpeed(speed)
+                        TboxRepository.updateOdometer(odometer)
+                        TboxRepository.updateVoltage(voltage)
+                        TboxRepository.updateFuelLevelPercentage(fuelLevelPercentage)
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x01))) {
                         val engineTemperature = singleData[2].toUInt().toFloat() * 0.75f - 48f
-                        if (singleData[1].toInt() == 1) {
+                        if (singleData[1].toInt() == 1 || singleData[1].toInt() == 2) {
                             val cruiseSpeed = singleData[4].toUInt() - 3u + if (singleData[5].toUInt() >= 192u) 1u else 0u
-                            TboxRepository.updateCruise(Cruise(cruiseSpeed))
+                            TboxRepository.updateCruiseSetSpeed(cruiseSpeed)
+                        } else if (singleData[1].toInt() == 0) {
+                            TboxRepository.updateCruiseSetSpeed(0u)
                         }
-                        TboxRepository.updateTemperature(Temperature(engineTemperature))
+                        TboxRepository.updateEngineTemperature(engineTemperature)
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x2F))) {
                         val setTemperature = singleData[5].toUInt().toFloat() / 4f
                         if (setTemperature != 0f) {
-                            val setTemperature = singleData[5].toUInt().toFloat() / 4f
-                            TboxRepository.updateClimate(Climate(setTemperature))
+                            val setTemperature1 = singleData[5].toUInt().toFloat() / 4f
+                            TboxRepository.updateClimateSetTemperature1(setTemperature1)
                         }
                     }
                 } catch (e: Exception) {
@@ -1704,6 +1712,15 @@ class BackgroundService : Service() {
                         settingsManager.saveCustomString("hw_version", hw)
                     }
                     return true
+                } else if (data[5] == 0x0F.toByte()) {
+                    toHexString(byteArrayOf(data[5]))
+                    val vin =
+                        String(data.copyOfRange(6, data.size), charset = Charsets.UTF_8).trimEnd()
+                    TboxRepository.addLog("DEBUG", "CRT response", "VIN code: $vin")
+                    scope.launch {
+                        settingsManager.saveCustomString("vin_code", vin)
+                    }
+                    return true
                 } else if (data[5] == 0x82.toByte()) {
                     return ansLOCValues(data)
                 }
@@ -1763,77 +1780,86 @@ class BackgroundService : Service() {
                 TboxRepository.addLog("DEBUG", "LOC response", "Location subscribe command complete")
             }
         } else if (data.size >= 45) {
-            //TboxRepository.updateLocationSubscribed(true)
-            val rawValue = toHexString(data.copyOfRange(6, 45))
+            try {
+                //TboxRepository.updateLocationSubscribed(true)
+                val rawValue = toHexString(data.copyOfRange(6, 45))
 
-            val gpsData = data.copyOfRange(6, 45)
-            val buffer = ByteBuffer.wrap(gpsData).order(ByteOrder.LITTLE_ENDIAN)
+                val gpsData = data.copyOfRange(6, 45)
+                val buffer = ByteBuffer.wrap(gpsData).order(ByteOrder.LITTLE_ENDIAN)
 
-            // 1. Статус позиционирования (1 байт)
-            val locateStatus = buffer.get().toInt() and 0xFF != 0
+                // 1. Статус позиционирования (1 байт)
+                val locateStatus = buffer.get().toInt() and 0xFF != 0
 
-            // 2. Время UTC (8 байт)
-            val utcTime = UtcTime(
-                year = buffer.get().toInt() and 0xFF,
-                month = buffer.get().toInt() and 0xFF,
-                day = buffer.get().toInt() and 0xFF,
-                hour = buffer.get().toInt() and 0xFF,
-                minute = buffer.get().toInt() and 0xFF,
-                second = buffer.get().toInt() and 0xFF
-            )
+                // 2. Время UTC (8 байт)
+                val utcTime = UtcTime(
+                    year = buffer.get().toInt() and 0xFF,
+                    month = buffer.get().toInt() and 0xFF,
+                    day = buffer.get().toInt() and 0xFF,
+                    hour = buffer.get().toInt() and 0xFF,
+                    minute = buffer.get().toInt() and 0xFF,
+                    second = buffer.get().toInt() and 0xFF
+                )
 
-            // Пропускаем 1 байт (выравнивание или reserved)
-            buffer.get()
+                // Пропускаем 1 байт (выравнивание или reserved)
+                buffer.get()
 
-            // 3. Долгота (4 байта, int32)
-            val rawLongitude = buffer.int
-            val longitude = rawLongitude.toDouble() / 1000000.0
+                // 3. Долгота (4 байта, int32)
+                val rawLongitude = buffer.int
+                val longitude = rawLongitude.toDouble() / 1000000.0
 
-            // Пропускаем 1 байт (выравнивание или reserved)
-            buffer.get()
+                // Пропускаем 1 байт (выравнивание или reserved)
+                buffer.get()
 
-            // 4. Широта (4 байта, int32)
-            val rawLatitude = buffer.int
-            val latitude = rawLatitude.toDouble() / 1000000.0
+                // 4. Широта (4 байта, int32)
+                val rawLatitude = buffer.int
+                val latitude = rawLatitude.toDouble() / 1000000.0
 
-            // 5. Высота (4 байта, int32)
-            val rawAltitude = buffer.int
-            val altitude = rawAltitude.toDouble() / 1000000.0
+                // 5. Высота (4 байта, int32)
+                val rawAltitude = buffer.int
+                val altitude = rawAltitude.toDouble() / 1000000.0
 
-            // 6. Видимые спутники (1 байт)
-            val visibleSatellites = buffer.get().toInt() and 0xFF
+                // 6. Видимые спутники (1 байт)
+                val visibleSatellites = buffer.get().toInt() and 0xFF
 
-            // 7. Используемые спутники (1 байт)
-            val usingSatellites = buffer.get().toInt() and 0xFF
+                // 7. Используемые спутники (1 байт)
+                val usingSatellites = buffer.get().toInt() and 0xFF
 
-            // 8. Скорость (2 байта, uint16)
-            val rawSpeed = buffer.short.toInt() and 0xFFFF
-            val speed = rawSpeed.toFloat() / 10f
+                // 8. Скорость (2 байта, uint16)
+                val rawSpeed = buffer.short.toInt() and 0xFFFF
+                val speed = rawSpeed.toFloat() / 10f
 
-            // 9. Истинное направление (2 байта, uint16)
-            val rawTrueDirection = buffer.short.toInt() and 0xFFFF
-            val trueDirection = rawTrueDirection.toFloat() / 10f
+                // 9. Истинное направление (2 байта, uint16)
+                val rawTrueDirection = buffer.short.toInt() and 0xFFFF
+                val trueDirection = rawTrueDirection.toFloat() / 10f
 
-            // 10. Магнитное направление (2 байта, uint16)
-            val rawMagneticDirection = buffer.short.toInt() and 0xFFFF
-            val magneticDirection = rawMagneticDirection.toFloat() / 10f
+                // 10. Магнитное направление (2 байта, uint16)
+                val rawMagneticDirection = buffer.short.toInt() and 0xFFFF
+                val magneticDirection = rawMagneticDirection.toFloat() / 10f
 
-            TboxRepository.updateLocValues(LocValues(
-                rawValue = rawValue,
-                locateStatus = locateStatus,
-                utcTime = utcTime,
-                longitude = longitude,
-                latitude = latitude,
-                altitude = altitude,
-                visibleSatellites = visibleSatellites,
-                usingSatellites = usingSatellites,
-                speed = speed,
-                trueDirection = trueDirection,
-                magneticDirection = magneticDirection,
-                updateTime = Date()
-            ))
-            TboxRepository.addLog("DEBUG", "LOC response",
-                "Get location values: $longitude, $latitude")
+                TboxRepository.updateLocValues(
+                    LocValues(
+                        rawValue = rawValue,
+                        locateStatus = locateStatus,
+                        utcTime = utcTime,
+                        longitude = longitude,
+                        latitude = latitude,
+                        altitude = altitude,
+                        visibleSatellites = visibleSatellites,
+                        usingSatellites = usingSatellites,
+                        speed = speed,
+                        trueDirection = trueDirection,
+                        magneticDirection = magneticDirection,
+                        updateTime = Date()
+                    )
+                )
+                TboxRepository.addLog(
+                    "DEBUG", "LOC response",
+                    "Get location values: $longitude, $latitude"
+                )
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "LOC response", "Error parsing location data: ${e.message}")
+                return false
+            }
         } else {
             TboxRepository.addLog("DEBUG", "LOC response",
                 "Get location values")
@@ -1867,17 +1893,14 @@ class BackgroundService : Service() {
                 locSubscribe(true)
             }
             //crtGetHdmData()
+            val notification = createNotification("TBox connected")
+            startForeground(NOTIFICATION_ID, notification)
         }
         else {
             TboxRepository.addLog("WARN", "UDP Listener", "TBox disconnected")
-            TboxRepository.updateTboxConnected(false)
-            clearNetStates()
-            clearAPNStates(1)
-            clearAPNStates(2)
-            TboxRepository.updateAPNStatus(false)
-            //sendWidgetUpdate()
-            TboxRepository.updatePreventRestartSend(false)
-            TboxRepository.updateSuspendTboxAppSend(false)
+            TboxRepository.resetConnectionData()
+            val notification = createNotification("TBox disconnected")
+            startForeground(NOTIFICATION_ID, notification)
         }
         TboxRepository.updateTboxConnectionTime()
         sendWidgetUpdate()
@@ -1899,6 +1922,9 @@ class BackgroundService : Service() {
     fun Byte.toUInt(): UInt {
         return this.toUByte().toUInt()
     }
+
+    fun Byte.getLeftNibble(): Int = (this.toInt() shr 4) and 0x0F
+    fun Byte.getRightNibble(): Int = this.toInt() and 0x0F
 
     fun ByteArray.toUInt20FromNibbleBigEndian(): Int {
         require(this.size >= 3) { "ByteArray must have at least 3 bytes" }
@@ -1969,6 +1995,11 @@ class BackgroundService : Service() {
             }
             else -> throw IllegalArgumentException("Unknown format: $format. Supported: UINT16_BE, UINT16_LE, UINT24_BE, UINT24_LE")
         }
+    }
+
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        Log.e("BackgroundService", "Coroutine error", throwable)
+        TboxRepository.addLog("ERROR", "Coroutine", "Error: ${throwable.message}")
     }
 }
 

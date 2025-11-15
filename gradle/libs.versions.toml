@@ -15,6 +15,7 @@ datastorePreferences = "1.1.7"
 documentfile = "1.1.0"
 material = "1.9.3"
 materialIconsCore = "1.7.8"
+lifecycleViewmodelCompose = "2.9.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -37,6 +38,7 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 androidx-material = { group = "androidx.compose.material", name = "material", version.ref = "material" }
 androidx-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core", version.ref = "materialIconsCore" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

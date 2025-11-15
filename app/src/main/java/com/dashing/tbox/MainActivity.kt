@@ -2,13 +2,11 @@ package com.dashing.tbox
 
 import android.Manifest
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.util.Log
-import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.ComponentActivity
@@ -20,24 +18,49 @@ import androidx.compose.ui.Modifier
 import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
+import com.dashing.tbox.ui.TboxApp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
-    private lateinit var numberPin: EditText
-    private lateinit var numberPuk: EditText
-    private lateinit var textATCmd: EditText
 
     companion object {
         private const val TAG = "MainActivity"
     }
 
+    // Контракт для стандартных разрешений (Android 10-)
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (allGranted) {
+            onStoragePermissionsGranted()
+        } else {
+            onStoragePermissionsDenied()
+        }
+    }
+
+    // Контракт для MANAGE_EXTERNAL_STORAGE (Android 11+)
+    private val manageExternalStorageLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (hasStoragePermissions()) {
+            onStoragePermissionsGranted()
+        } else {
+            onStoragePermissionsDenied()
+        }
+    }
+
+    // Переменная для хранения данных, которые нужно сохранить после получения разрешений
+    private var pendingDataToSave: List<String>? = null
+
+    private lateinit var settingsManager: SettingsManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val settingsManager = SettingsManager(this)
 
-        requestPermissions()
+        settingsManager = SettingsManager(this)
 
         setContent {
             Surface(
@@ -50,10 +73,10 @@ class MainActivity : ComponentActivity() {
                     onModemOn = { setModemMode("on") },
                     onModemFly = { setModemMode("fly") },
                     onModemOff = { setModemMode("off") },
-                    onLocSubscribeClick = { locSubscribe() },
-                    onLocUnsubscribeClick = { locUnsubscribe() },
-                    onUpdateVersions = { updateVersions() },
-                    onSaveToFile = { ipList -> saveDataToFile(ipList) }
+                    onUpdateInfoClick = { updateInfo() },
+                    onSaveToFile = { ipList ->
+                        saveDataToFile(ipList)
+                    }
                 )
             }
         }
@@ -70,37 +93,12 @@ class MainActivity : ComponentActivity() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_START
         }
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startServiceSafely(intent)
-        }
+        startServiceSafely(intent)
     }
 
     private fun modemCheck() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_MODEM_CHECK
-        }
-        startServiceSafely(intent)
-    }
-
-    private fun locSubscribe() {
-        val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_LOC_SUBSCRIBE
-        }
-        startServiceSafely(intent)
-    }
-
-    private fun getCanFrame() {
-        val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_GET_CAN_FRAME
-        }
-        startServiceSafely(intent)
-    }
-
-    private fun locUnsubscribe() {
-        val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_LOC_UNSUBSCRIBE
         }
         startServiceSafely(intent)
     }
@@ -161,66 +159,43 @@ class MainActivity : ComponentActivity() {
         startServiceSafely(intent)
     }
 
-    private fun updateVersions() {
+    private fun updateInfo() {
         val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_GET_VERSIONS
-        }
-        startServiceSafely(intent)
-    }
-
-    private fun pin(cmd: Int) {
-        val pinText = numberPin.text.toString()
-        val intent = Intent(this, BackgroundService::class.java).apply {
-            action = if (cmd == 1) {
-                BackgroundService.ACTION_PUK
-            }
-            else {
-                BackgroundService.ACTION_PIN
-            }
-            if (pinText.isNotEmpty()) {
-                if (cmd == 0) {
-                    putExtra(BackgroundService.EXTRA_PIN, pinText)
-                }
-                else {
-                    val pukText = numberPuk.text.toString()
-                    if (pukText.isNotEmpty()) {
-                        putExtra(BackgroundService.EXTRA_PIN, pinText)
-                        putExtra(BackgroundService.EXTRA_PUK, pukText)
-                    }
-                    else {
-                        Toast.makeText(this@MainActivity, "Не введен PUK", Toast.LENGTH_SHORT).show()
-                        return
-                    }
-                }
-            }
-            else {
-                Toast.makeText(this@MainActivity, "Не введен PIN", Toast.LENGTH_SHORT).show()
-                return
-            }
+            action = BackgroundService.ACTION_GET_INFO
         }
         startServiceSafely(intent)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        //stopNetUpdaterIfNoClients()
     }
 
     private fun saveDataToFile(dataList: List<String>) {
-        try {
-            // Проверяем разрешения перед сохранением
-            if (!hasStoragePermissions()) {
-                Toast.makeText(this, "Нет разрешений для сохранения файла", Toast.LENGTH_LONG).show()
-                requestPermissions()
-                return
-            }
+        // Проверяем есть ли уже разрешения
+        if (hasStoragePermissions()) {
+            // Если разрешения есть - сразу сохраняем
+            performFileSave(dataList)
+        } else {
+            // Если разрешений нет - сохраняем данные и запрашиваем разрешения
+            pendingDataToSave = dataList
+            requestStoragePermissions()
+        }
+    }
 
+    private fun performFileSave(dataList: List<String>) {
+        try {
             val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 // Для Android 11+ используем Downloads directory через MediaStore
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
             } else {
                 // Для старых версий
                 Environment.getExternalStorageDirectory().absolutePath + "/Download"
+            }
+
+            // Создаем папку если не существует
+            val saveDir = File(savePath)
+            if (!saveDir.exists()) {
+                saveDir.mkdirs()
             }
 
             val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss",
@@ -242,52 +217,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Контракт для стандартных разрешений (Android 10-)
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            val allGranted = permissions.values.all { it }
-            if (allGranted) {
-                onPermissionsGranted()
-            } else {
-                onPermissionsDenied()
-            }
-        }
-    }
-
-    // Контракт для MANAGE_EXTERNAL_STORAGE (Android 11+)
-    private val manageExternalStorageLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        // Проверяем результат после возврата из системных настроек
-        checkStoragePermissions()
-    }
-
-    private fun requestPermissions() {
+    private fun requestStoragePermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             // Android 11+ - используем MANAGE_EXTERNAL_STORAGE
-            checkStoragePermissions()
+            requestManageExternalStoragePermission()
         } else {
             // Android 10 и ниже - запрашиваем стандартные разрешения
             requestLegacyStoragePermissions()
-        }
-    }
-
-    private fun checkStoragePermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (Environment.isExternalStorageManager()) {
-                onPermissionsGranted()
-            } else {
-                requestManageExternalStoragePermission()
-            }
-        } else {
-            // Для Android 10- проверяем стандартные разрешения
-            if (hasLegacyStoragePermissions()) {
-                onPermissionsGranted()
-            } else {
-                requestLegacyStoragePermissions()
-            }
         }
     }
 
@@ -325,18 +261,21 @@ class MainActivity : ComponentActivity() {
                 checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED)
     }
 
-    private fun onPermissionsGranted() {
-        // Разрешения получены - запускаем основную логику
-        Log.d("Permissions", "Storage permissions granted")
+    private fun onStoragePermissionsGranted() {
+        Log.d(TAG, "Storage permissions granted")
+        // Если есть ожидающие данные для сохранения - сохраняем их
+        pendingDataToSave?.let { data ->
+            performFileSave(data)
+            pendingDataToSave = null
+        }
     }
 
-    private fun onPermissionsDenied() {
-        // Разрешения отклонены - ограничиваем функциональность
-        Log.w("Permissions", "Storage permissions denied")
-        // Можно показать диалог с объяснением
+    private fun onStoragePermissionsDenied() {
+        Log.w(TAG, "Storage permissions denied")
         Toast.makeText(this,
-            "Без разрешений некоторые функции могут не работать",
+            "Не удалось сохранить файл: нет разрешений на запись",
             Toast.LENGTH_LONG).show()
+        pendingDataToSave = null
     }
 
     private fun startServiceSafely(intent: Intent) {
@@ -347,10 +286,8 @@ class MainActivity : ComponentActivity() {
                 startService(intent)
             }
         } catch (e: Exception) {
-            // Логируем ошибку
-            e.printStackTrace()
+            Log.e(TAG, "Ошибка запуска сервиса", e)
+            Toast.makeText(this, "Ошибка запуска службы", Toast.LENGTH_SHORT).show()
         }
     }
 }
-
-
