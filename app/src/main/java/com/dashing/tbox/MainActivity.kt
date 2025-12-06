@@ -2,6 +2,7 @@ package com.dashing.tbox
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -19,6 +20,9 @@ import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
 import com.dashing.tbox.ui.TboxApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -30,7 +34,7 @@ class MainActivity : ComponentActivity() {
     }
 
     // Контракт для стандартных разрешений (Android 10-)
-    private val requestPermissionLauncher = registerForActivityResult(
+    private val requestStoragePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val allGranted = permissions.values.all { it }
@@ -55,6 +59,9 @@ class MainActivity : ComponentActivity() {
     // Переменная для хранения данных, которые нужно сохранить после получения разрешений
     private var pendingDataToSave: List<String>? = null
 
+    // Флаг для отслеживания состояния переключателя mock-локации
+    private var isMockLocationSettingPending = false
+
     private lateinit var settingsManager: SettingsManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,12 +77,19 @@ class MainActivity : ComponentActivity() {
                     settingsManager = settingsManager,
                     onTboxRestart = { rebootTBox() },
                     onModemCheck = { modemCheck() },
-                    onModemOn = { setModemMode("on") },
-                    onModemFly = { setModemMode("fly") },
-                    onModemOff = { setModemMode("off") },
+                    onModemMode = { mode -> setModemMode(mode) },
                     onUpdateInfoClick = { updateInfo() },
-                    onSaveToFile = { ipList ->
-                        saveDataToFile(ipList)
+                    onSaveToFile = { tag, dataList ->
+                        saveDataToFile(tag, dataList)
+                    },
+                    onTboxApplicationCommand = { app, command ->
+                        tboxApplicationCommand(app, command)
+                    },
+                    onMockLocationSettingChanged = { enabled ->
+                        handleMockLocationSettingChange(enabled)
+                    },
+                    onATcmdSend = { cmd ->
+                        atCmdSend(cmd)
                     }
                 )
             }
@@ -103,6 +117,14 @@ class MainActivity : ComponentActivity() {
         startServiceSafely(intent)
     }
 
+    private fun atCmdSend(cmd: String) {
+        val intent = Intent(this, BackgroundService::class.java).apply {
+            action = BackgroundService.ACTION_SEND_AT
+            putExtra(BackgroundService.EXTRA_AT_CMD, cmd)
+        }
+        startService(intent)
+    }
+
     private fun setModemMode(mode: String = "on") {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = when (mode) {
@@ -116,6 +138,30 @@ class MainActivity : ComponentActivity() {
                     BackgroundService.ACTION_MODEM_ON
                 }
             }
+        }
+        startServiceSafely(intent)
+    }
+
+    private fun tboxApplicationCommand(app: String, command: String) {
+        val intent = Intent(this, BackgroundService::class.java).apply {
+            action = when (command) {
+                "suspend" -> {
+                    if (app == "LOC") BackgroundService.ACTION_LOC_SUSPEND
+                    else null
+                }
+                "resume" -> {
+                    if (app == "LOC") BackgroundService.ACTION_LOC_RESUME
+                    else null
+                }
+                "stop" -> {
+                    if (app == "LOC") BackgroundService.ACTION_LOC_STOP
+                    else null
+                }
+                else -> {
+                    null
+                }
+            }
+            if (action == null) return
         }
         startServiceSafely(intent)
     }
@@ -170,11 +216,11 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private fun saveDataToFile(dataList: List<String>) {
+    private fun saveDataToFile(tag: String, dataList: List<String>) {
         // Проверяем есть ли уже разрешения
         if (hasStoragePermissions()) {
             // Если разрешения есть - сразу сохраняем
-            performFileSave(dataList)
+            performFileSave(tag, dataList)
         } else {
             // Если разрешений нет - сохраняем данные и запрашиваем разрешения
             pendingDataToSave = dataList
@@ -182,7 +228,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun performFileSave(dataList: List<String>) {
+    private fun performFileSave(tag: String, dataList: List<String>) {
         try {
             val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 // Для Android 11+ используем Downloads directory через MediaStore
@@ -200,7 +246,7 @@ class MainActivity : ComponentActivity() {
 
             val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss",
                 Locale.getDefault()).format(Date())
-            val dataFile = File(savePath, "tbox_data_$timestamp.txt")
+            val dataFile = File(savePath, "tbox_${tag}_$timestamp.txt")
 
             FileWriter(dataFile).use { writer ->
                 dataList.forEach { value ->
@@ -232,7 +278,7 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.WRITE_EXTERNAL_STORAGE
         )
-        requestPermissionLauncher.launch(permissions)
+        requestStoragePermissionLauncher.launch(permissions)
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
@@ -265,7 +311,7 @@ class MainActivity : ComponentActivity() {
         Log.d(TAG, "Storage permissions granted")
         // Если есть ожидающие данные для сохранения - сохраняем их
         pendingDataToSave?.let { data ->
-            performFileSave(data)
+            performFileSave("data", data)
             pendingDataToSave = null
         }
     }
@@ -289,5 +335,75 @@ class MainActivity : ComponentActivity() {
             Log.e(TAG, "Ошибка запуска сервиса", e)
             Toast.makeText(this, "Ошибка запуска службы", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // Контракт для разрешений локации
+    private val requestLocationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (allGranted) {
+            // Разрешения получены - включаем mock-локацию
+            enableMockLocation()
+        } else {
+            // Разрешения не получены - отключаем переключатель
+            disableMockLocation()
+            Toast.makeText(
+                this,
+                "Для подмены местоположения нужны разрешения геолокации",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    // Обработчик изменения настройки mock-локации
+    private fun handleMockLocationSettingChange(enabled: Boolean) {
+        if (enabled) {
+            // Проверяем есть ли уже разрешения
+            if (hasLocationPermissions()) {
+                // Если разрешения есть - сразу включаем
+                enableMockLocation()
+            } else {
+                // Если разрешений нет - запрашиваем
+                isMockLocationSettingPending = true
+                requestLocationPermissions()
+            }
+        } else {
+            // Отключаем mock-локацию
+            disableMockLocation()
+        }
+    }
+
+    // Включение mock-локации (после получения разрешений)
+    private fun enableMockLocation() {
+        isMockLocationSettingPending = false
+        // Сохраняем настройку
+        CoroutineScope(Dispatchers.IO).launch {
+            settingsManager.saveMockLocationSetting(true)
+        }
+    }
+
+    // Отключение mock-локации
+    private fun disableMockLocation() {
+        isMockLocationSettingPending = false
+        // Сохраняем настройку
+        CoroutineScope(Dispatchers.IO).launch {
+            settingsManager.saveMockLocationSetting(false)
+        }
+    }
+
+    // Запрос разрешений локации
+    private fun requestLocationPermissions() {
+        val permissions = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        requestLocationPermissionLauncher.launch(permissions)
+    }
+
+    // Проверка наличия разрешений локации
+    private fun hasLocationPermissions(): Boolean {
+        return (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
     }
 }

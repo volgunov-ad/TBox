@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.util.Locale
 import java.util.Date
 
@@ -13,7 +15,8 @@ data class NetState(
     val signalLevel: Int = 0,
     val netStatus: String = "", // -, 2G, 3G, 4G, нет сети
     val regStatus: String = "", // "нет сети", "домашняя сеть", "поиск сети", "регистрация отклонена", "роуминг"
-    val simStatus: String = "" // "нет SIM", "SIM готова", "требуется PIN", "ошибка SIM"
+    val simStatus: String = "", // "нет SIM", "SIM готова", "требуется PIN", "ошибка SIM"
+    val connectionChangeTime: Date? = null
 )
 
 data class NetValues(
@@ -24,12 +27,13 @@ data class NetValues(
 )
 
 data class APNState(
-    val apnStatus: String = "",
+    val apnStatus: Boolean? = null,
     val apnType: String = "",
     val apnIP: String = "",
     val apnGate: String = "",
     val apnDNS1: String = "",
-    val apnDNS2: String = ""
+    val apnDNS2: String = "",
+    val changeTime: Date? = null
 )
 
 data class LocValues(
@@ -61,6 +65,22 @@ data class UtcTime(
         )
     }
 
+    fun toLocalDateTime(): LocalDateTime? {
+        return if (isValid()) {
+            LocalDateTime.of(year, month, day, hour, minute, second)
+        } else {
+            null
+        }
+    }
+
+    fun toLocalTime(): LocalTime? {
+        return if (hour in 0..23 && minute in 0..59 && second in 0..59) {
+            LocalTime.of(hour, minute, second)
+        } else {
+            null
+        }
+    }
+
     fun isValid(): Boolean {
         return year > 0 && month in 1..12 && day in 1..31 &&
                 hour in 0..23 && minute in 0..59 && second in 0..59
@@ -81,10 +101,10 @@ data class HdmData(
 )
 
 data class Wheels(
-    val speed1: Float? = null,
-    val speed2: Float? = null,
-    val speed3: Float? = null,
-    val speed4: Float? = null,
+    val wheel1: Float? = null,
+    val wheel2: Float? = null,
+    val wheel3: Float? = null,
+    val wheel4: Float? = null,
 )
 
 data class CanFrame(
@@ -135,8 +155,11 @@ object TboxRepository {
     private val _cruiseSetSpeed = MutableStateFlow<UInt?>(null)
     val cruiseSetSpeed: StateFlow<UInt?> = _cruiseSetSpeed.asStateFlow()
 
-    private val _wheels = MutableStateFlow(Wheels())
-    val wheels: StateFlow<Wheels> = _wheels.asStateFlow()
+    private val _wheelsSpeed = MutableStateFlow(Wheels())
+    val wheelsSpeed: StateFlow<Wheels> = _wheelsSpeed.asStateFlow()
+
+    private val _wheelsPressure = MutableStateFlow(Wheels())
+    val wheelsPressure: StateFlow<Wheels> = _wheelsPressure.asStateFlow()
 
     private val _climateSetTemperature1 = MutableStateFlow<Float?>(null)
     val climateSetTemperature1: StateFlow<Float?> = _climateSetTemperature1.asStateFlow()
@@ -153,17 +176,32 @@ object TboxRepository {
     private val _engineTemperature = MutableStateFlow<Float?>(null)
     val engineTemperature: StateFlow<Float?> = _engineTemperature.asStateFlow()
 
-    private val _odometer = MutableStateFlow<Int?>(null)
-    val odometer: StateFlow<Int?> = _odometer.asStateFlow()
+    private val _odometer = MutableStateFlow<UInt?>(null)
+    val odometer: StateFlow<UInt?> = _odometer.asStateFlow()
+
+    private val _distanceToNextMaintenance = MutableStateFlow<UInt?>(null)
+    val distanceToNextMaintenance: StateFlow<UInt?> = _distanceToNextMaintenance.asStateFlow()
+
+    private val _distanceToFuelEmpty = MutableStateFlow<UInt?>(null)
+    val distanceToFuelEmpty: StateFlow<UInt?> = _distanceToFuelEmpty.asStateFlow()
+
+    private val _breakingForce = MutableStateFlow<UInt?>(null)
+    val breakingForce: StateFlow<UInt?> = _breakingForce.asStateFlow()
 
     private val _carSpeed = MutableStateFlow<Float?>(null)
     val carSpeed: StateFlow<Float?> = _carSpeed.asStateFlow()
+
+    private val _carSpeedAccurate = MutableStateFlow<Float?>(null)
+    val carSpeedAccurate: StateFlow<Float?> = _carSpeedAccurate.asStateFlow()
 
     private val _voltage = MutableStateFlow<Float?>(null)
     val voltage: StateFlow<Float?> = _voltage.asStateFlow()
 
     private val _fuelLevelPercentage = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentage: StateFlow<UInt?> = _fuelLevelPercentage.asStateFlow()
+
+    private val _fuelLevelPercentageFiltered = MutableStateFlow<UInt?>(null)
+    val fuelLevelPercentageFiltered: StateFlow<UInt?> = _fuelLevelPercentageFiltered.asStateFlow()
 
     private val _gearBoxMode = MutableStateFlow("")
     val gearBoxMode: StateFlow<String> = _gearBoxMode.asStateFlow()
@@ -189,6 +227,9 @@ object TboxRepository {
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
+    private val _atLogs = MutableStateFlow<List<String>>(emptyList())
+    val atLogs: StateFlow<List<String>> = _atLogs.asStateFlow()
+
     private val _tboxConnected = MutableStateFlow(false)
     val tboxConnected: StateFlow<Boolean> = _tboxConnected.asStateFlow()
 
@@ -198,6 +239,12 @@ object TboxRepository {
     private val _suspendTboxAppSend = MutableStateFlow(false)
     val suspendTboxAppSend: StateFlow<Boolean> = _suspendTboxAppSend.asStateFlow()
 
+    private val _tboxAppStoped = MutableStateFlow(false)
+    val tboxAppStoped: StateFlow<Boolean> = _tboxAppStoped.asStateFlow()
+
+    private val _tboxAppVersionAnswer = MutableStateFlow(false)
+    val tboxAppVersionAnswer: StateFlow<Boolean> = _tboxAppVersionAnswer.asStateFlow()
+
     //private val _locationSubscribed = MutableStateFlow(false)
     //val locationSubscribed: StateFlow<Boolean> = _locationSubscribed.asStateFlow()
 
@@ -206,6 +253,9 @@ object TboxRepository {
 
     private val _serviceStartTime = MutableStateFlow(Date())
     val serviceStartTime: StateFlow<Date> = _serviceStartTime.asStateFlow()
+
+    private val _locationUpdateTime = MutableStateFlow<Date?>(null)
+    val locationUpdateTime: StateFlow<Date?> = _locationUpdateTime.asStateFlow()
 
     private val _modemStatus = MutableStateFlow(0)
     val modemStatus: StateFlow<Int> = _modemStatus.asStateFlow()
@@ -258,6 +308,19 @@ object TboxRepository {
         _logs.value = emptyList()
     }
 
+    fun addATLog(message: String) {
+        val timestamp = timeFormat.get()?.format(Date())
+        val logEntry = "[$timestamp]: $message"
+
+        _atLogs.update { currentLogs ->
+            (currentLogs + logEntry).takeLast(MAX_LOGS)
+        }
+    }
+
+    fun clearATLogs() {
+        _atLogs.value = emptyList()
+    }
+
     fun addDidDataCSV(did: String, rawValue: String, value: String) {
         val entry = "$did;$rawValue;$value"
 
@@ -298,6 +361,10 @@ object TboxRepository {
 
     fun updateServiceStartTime() {
         _serviceStartTime.value = Date()
+    }
+
+    fun updateLocationUpdateTime() {
+        _locationUpdateTime.value = Date()
     }
 
     fun updateModemStatus(value: Int) {
@@ -344,6 +411,14 @@ object TboxRepository {
         _suspendTboxAppSend.value = newValue
     }
 
+    fun updateTboxAppStoped(newValue: Boolean) {
+        _tboxAppStoped.value = newValue
+    }
+
+    fun updateTboxAppVersionAnswer(newValue: Boolean) {
+        _tboxAppVersionAnswer.value = newValue
+    }
+
     fun updateVoltages(newValue: VoltagesState) {
         _voltages.value = newValue
     }
@@ -360,20 +435,44 @@ object TboxRepository {
         _carSpeed.value = newValue
     }
 
-    fun updateOdometer(newValue: Int) {
+    fun updateCarSpeedAccurate(newValue: Float) {
+        _carSpeedAccurate.value = newValue
+    }
+
+    fun updateOdometer(newValue: UInt) {
         _odometer.value = newValue
+    }
+
+    fun updateDistanceToNextMaintenance(newValue: UInt) {
+        _distanceToNextMaintenance.value = newValue
+    }
+
+    fun updateDistanceToFuelEmpty(newValue: UInt) {
+        _distanceToFuelEmpty.value = newValue
+    }
+
+    fun updateBreakingForce(newValue: UInt) {
+        _breakingForce.value = newValue
     }
 
     fun updateFuelLevelPercentage(newValue: UInt) {
         _fuelLevelPercentage.value = newValue
     }
 
+    fun updateFuelLevelPercentageFiltered(newValue: UInt) {
+        _fuelLevelPercentageFiltered.value = newValue
+    }
+
     fun updateCruiseSetSpeed(newValue: UInt) {
         _cruiseSetSpeed.value = newValue
     }
 
-    fun updateWheels(newValue: Wheels) {
-        _wheels.value = newValue
+    fun updateWheelsSpeed(newValue: Wheels) {
+        _wheelsSpeed.value = newValue
+    }
+
+    fun updateWheelsPressure(newValue: Wheels) {
+        _wheelsPressure.value = newValue
     }
 
     fun updateEngineRPM(newValue: Float) {
@@ -475,5 +574,6 @@ object TboxRepository {
         _apnStatus.value = false
         _preventRestartSend.value = false
         _suspendTboxAppSend.value = false
+        _tboxAppStoped.value = false
     }
 }

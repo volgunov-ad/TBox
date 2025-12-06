@@ -12,8 +12,8 @@ android {
         applicationId = "com.dashing.tbox"
         minSdk = 28
         targetSdk = 36
-        versionCode = 70
-        versionName = "0.7.1"
+        versionCode = 80
+        versionName = "0.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -27,6 +27,7 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
         }
         debug {
             isMinifyEnabled = false

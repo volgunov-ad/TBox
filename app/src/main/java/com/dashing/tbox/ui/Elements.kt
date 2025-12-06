@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -19,6 +22,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -259,30 +264,23 @@ fun CanIdEntry(
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
         )
-
-        // Время последнего фрейма
-        /*lastFrame?.let { frame ->
-            Text(
-                text = "  Последнее изменение: " +
-                        "${SimpleDateFormat("HH:mm:ss", 
-                            Locale.getDefault()).format(frame.date)}",
-                fontSize = 18.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }*/
     }
 
     // Информация о фреймах
     Column(
         horizontalAlignment = Alignment.End
     ) {
-        // Сырое значение (первые 8 байт для примера)
         lastFrame?.let { frame ->
-            val rawValuePreview = frame.rawValue.joinToString(" ") {
-                "%02X".format(it)
+            val rawValueHex =
+                frame.rawValue.joinToString(" ") {
+                    "%02X".format(it)
             }
+            val rawValueDec =
+                frame.rawValue.joinToString(" ") {
+                    "%-3d".format(it.toInt() and 0xFF)
+                }
             Text(
-                text = "  " + if (frame.rawValue.size > 8) "$rawValuePreview..." else rawValuePreview,
+                text = "  $rawValueHex -> $rawValueDec",
                 fontSize = 22.sp,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -291,5 +289,112 @@ fun CanIdEntry(
             fontSize = 22.sp,
             color = MaterialTheme.colorScheme.outline
         )
+    }
+}
+
+@Composable
+fun LogsCard(
+    logs: List<String>,
+    logLevel: String,
+    searchText: String = ""
+) {
+    val listState = rememberLazyListState()
+
+    val filteredLogs = remember(logs, logLevel, searchText) {
+        val levelFilteredLogs = when (logLevel) {
+            "DEBUG" -> {
+                logs.filter { it.contains("DEBUG") ||
+                        it.contains("INFO") ||
+                        it.contains("WARN") ||
+                        it.contains("ERROR")}
+            }
+            "INFO" -> {
+                logs.filter { it.contains("INFO") ||
+                        it.contains("WARN") ||
+                        it.contains("ERROR") }
+            }
+            "WARN" -> {
+                logs.filter { it.contains("WARN") ||
+                        it.contains("ERROR") }
+            }
+            else -> {
+                logs.filter { it.contains("ERROR") }
+            }
+        }
+
+        if (searchText.length >= 3) {
+            levelFilteredLogs.filter { log ->
+                log.contains(searchText, ignoreCase = true)
+            }
+        } else {
+            levelFilteredLogs
+        }
+    }
+
+    LaunchedEffect(logs.size) {
+        if (logs.isNotEmpty()) {
+            listState.animateScrollToItem(logs.size - 1)
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface)
+            ) {
+                items(count = filteredLogs.size) { index ->
+                    val logEntry = filteredLogs[index]
+                    ColoredLogEntry(log = logEntry)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ATLogsCard(
+    logs: List<String>
+) {
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(logs.size) {
+        if (logs.isNotEmpty()) {
+            listState.animateScrollToItem(logs.size - 1)
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface)
+            ) {
+                items(count = logs.size) { index ->
+                    val logEntry = logs[index]
+                    Text(
+                        text = logEntry,
+                        fontSize = 20.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
     }
 }

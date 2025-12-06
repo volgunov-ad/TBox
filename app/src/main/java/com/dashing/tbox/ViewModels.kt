@@ -10,10 +10,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Date
-import java.util.Locale
 
 class TboxViewModel : ViewModel() {
     val logs: StateFlow<List<String>> = TboxRepository.logs
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val atLogs: StateFlow<List<String>> = TboxRepository.atLogs
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -56,6 +62,13 @@ class TboxViewModel : ViewModel() {
         )
 
     val suspendTboxAppSend: StateFlow<Boolean> = TboxRepository.suspendTboxAppSend
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val tboxAppStoped: StateFlow<Boolean> = TboxRepository.tboxAppStoped
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -118,11 +131,32 @@ class TboxViewModel : ViewModel() {
             initialValue = APNState()
         )
 
+    val apnStatus: StateFlow<Boolean> = TboxRepository.apnStatus
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val locValues: StateFlow<LocValues> = TboxRepository.locValues
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = LocValues()
+        )
+
+    val locationUpdateTime: StateFlow<Date?> = TboxRepository.locationUpdateTime
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val isLocValuesTrue: StateFlow<Boolean> = TboxRepository.isLocValuesTrue
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
         )
 
     val currentTheme: StateFlow<Int> = TboxRepository.currentTheme
@@ -146,7 +180,28 @@ class TboxViewModel : ViewModel() {
             initialValue = HdmData()
         )
 
-    val odometer: StateFlow<Int?> = TboxRepository.odometer
+    val odometer: StateFlow<UInt?> = TboxRepository.odometer
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val distanceToNextMaintenance: StateFlow<UInt?> = TboxRepository.distanceToNextMaintenance
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val distanceToFuelEmpty: StateFlow<UInt?> = TboxRepository.distanceToFuelEmpty
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val breakingForce: StateFlow<UInt?> = TboxRepository.breakingForce
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -167,6 +222,13 @@ class TboxViewModel : ViewModel() {
             initialValue = null
         )
 
+    val carSpeedAccurate: StateFlow<Float?> = TboxRepository.carSpeedAccurate
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     val voltage: StateFlow<Float?> = TboxRepository.voltage
         .stateIn(
             scope = viewModelScope,
@@ -181,6 +243,13 @@ class TboxViewModel : ViewModel() {
             initialValue = null
         )
 
+    val fuelLevelPercentageFiltered: StateFlow<UInt?> = TboxRepository.fuelLevelPercentageFiltered
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     val cruiseSetSpeed: StateFlow<UInt?> = TboxRepository.cruiseSetSpeed
         .stateIn(
             scope = viewModelScope,
@@ -188,7 +257,14 @@ class TboxViewModel : ViewModel() {
             initialValue = null
         )
 
-    val wheels: StateFlow<Wheels> = TboxRepository.wheels
+    val wheelsSpeed: StateFlow<Wheels> = TboxRepository.wheelsSpeed
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Wheels()
+        )
+
+    val wheelsPressure: StateFlow<Wheels> = TboxRepository.wheelsPressure
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -317,6 +393,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val isWidgetShowLocIndicatorEnabled = settingsManager.widgetShowLocIndicatorFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isMockLocationEnabled = settingsManager.mockLocationFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isAutoSuspendTboxAppEnabled = settingsManager.autoSuspendTboxAppFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isAutoStopTboxAppEnabled = settingsManager.autoStopTboxAppFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -466,6 +563,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMockLocationSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMockLocationSetting(enabled)
+        }
+    }
+
+    fun saveAutoSuspendTboxAppSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoSuspendTboxAppSetting(enabled)
+        }
+    }
+
+    fun saveAutoStopTboxAppSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoStopTboxAppSetting(enabled)
+        }
+    }
+
     fun saveAutoPreventTboxRestartSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveAutoPreventTboxRestartSetting(enabled)
@@ -545,9 +660,22 @@ object WidgetsRepository {
         "steerSpeed" to DataTitle("Скорость вращения руля", ""),
         "engineRPM" to DataTitle("Обороты двигателя", "об/мин"),
         "carSpeed" to DataTitle("Скорость автомобиля", "км/ч"),
+        "carSpeedAccurate" to DataTitle("Точная корость автомобиля", "км/ч"),
+        "wheel1Speed" to DataTitle("Скорость колеса 1", "км/ч"),
+        "wheel2Speed" to DataTitle("Скорость колеса 2", "км/ч"),
+        "wheel3Speed" to DataTitle("Скорость колеса 3", "км/ч"),
+        "wheel4Speed" to DataTitle("Скорость колеса 4", "км/ч"),
+        "wheel1Pressure" to DataTitle("Давление колеса 1", "бар"),
+        "wheel2Pressure" to DataTitle("Давление колеса 2", "бар"),
+        "wheel3Pressure" to DataTitle("Давление колеса 3", "бар"),
+        "wheel4Pressure" to DataTitle("Давление колеса 4", "бар"),
         "cruiseSetSpeed" to DataTitle("Скорость круиз-контроля", "км/ч"),
         "odometer" to DataTitle("Одометр", "км"),
+        "distanceToNextMaintenance" to DataTitle("Пробег до следующего ТО", "км"),
+        "distanceToFuelEmpty" to DataTitle("Пробег на остатке топлива", "км"),
         "fuelLevelPercentage" to DataTitle("Уровень топлива", "%"),
+        "fuelLevelPercentageFiltered" to DataTitle("Уровень топлива (сглажено)", "%"),
+        "breakingForce" to DataTitle("Усилие торможения", ""),
         "engineTemperature" to DataTitle("Температура двигателя", "°C"),
         "gearBoxOilTemperature" to DataTitle("Температура масла КПП", "°C"),
         "gearBoxCurrentGear" to DataTitle("Текущая передача КПП", ""),
@@ -557,9 +685,19 @@ object WidgetsRepository {
         "gearBoxDriveMode" to DataTitle("Режим движения КПП", ""),
         "gearBoxWork" to DataTitle("Работа КПП", ""),
         "locateStatus" to DataTitle("Фиксация местоположения", ""),
+        "isLocValuesTrue" to DataTitle("Правдивость местоположения", ""),
         "gnssSpeed" to DataTitle("Скорость GNSS", "км/ч"),
         "visibleSatellites" to DataTitle("Видимые спутники", ""),
-        "locationUpdateTime" to DataTitle("Время обновления GNSS", ""),
+        "longitude" to DataTitle("Долгота", "°"),
+        "latitude" to DataTitle("Широта", "°"),
+        "altitude" to DataTitle("Высота", "м"),
+        "trueDirection" to DataTitle("Направление", ""),
+        "locationUpdateTime" to DataTitle("Время изменения GNSS", ""),
+        "locationRefreshTime" to DataTitle("Время получения GNSS", ""),
+        "signalLevel" to DataTitle("Уровень сигнала сети", ""),
+        "netStatus" to DataTitle("Тип сети", ""),
+        "regStatus" to DataTitle("Регистрация в сети", ""),
+        "simStatus" to DataTitle("Состояние SIM", ""),
     )
 
     fun getTitleForDataKey(dataKey: String): String {

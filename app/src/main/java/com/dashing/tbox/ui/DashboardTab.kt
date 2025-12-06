@@ -5,16 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -28,7 +23,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.disableHotReloadMode
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,9 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dashing.tbox.DashboardWidget
-import com.dashing.tbox.LocValues
 import com.dashing.tbox.SettingsViewModel
-import com.dashing.tbox.TboxRepository
 import com.dashing.tbox.TboxViewModel
 import com.dashing.tbox.WidgetViewModel
 import com.dashing.tbox.WidgetsRepository
@@ -67,10 +60,17 @@ fun DashboardTab(
     val steerSpeed by viewModel.steerSpeed.collectAsStateWithLifecycle()
     val engineRPM by viewModel.engineRPM.collectAsStateWithLifecycle()
     val carSpeed by viewModel.carSpeed.collectAsStateWithLifecycle()
+    val carSpeedAccurate by viewModel.carSpeedAccurate.collectAsStateWithLifecycle()
     val cruiseSetSpeed by viewModel.cruiseSetSpeed.collectAsStateWithLifecycle()
     val odometer by viewModel.odometer.collectAsStateWithLifecycle()
+    val distanceToNextMaintenance by viewModel.distanceToNextMaintenance.collectAsStateWithLifecycle()
+    val distanceToFuelEmpty by viewModel.distanceToFuelEmpty.collectAsStateWithLifecycle()
+    val breakingForce by viewModel.breakingForce.collectAsStateWithLifecycle()
     val fuelLevelPercentage by viewModel.fuelLevelPercentage.collectAsStateWithLifecycle()
+    val fuelLevelPercentageFiltered by viewModel.fuelLevelPercentageFiltered.collectAsStateWithLifecycle()
     val engineTemperature by viewModel.engineTemperature.collectAsStateWithLifecycle()
+    val wheelsSpeed by viewModel.wheelsSpeed.collectAsStateWithLifecycle()
+    val wheelsPressure by viewModel.wheelsPressure.collectAsStateWithLifecycle()
     val gearBoxOilTemperature by viewModel.gearBoxOilTemperature.collectAsStateWithLifecycle()
     val gearBoxCurrentGear by viewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
     val gearBoxPreparedGear by viewModel.gearBoxPreparedGear.collectAsStateWithLifecycle()
@@ -79,11 +79,20 @@ fun DashboardTab(
     val gearBoxDriveMode by viewModel.gearBoxDriveMode.collectAsStateWithLifecycle()
     val gearBoxWork by viewModel.gearBoxWork.collectAsStateWithLifecycle()
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
+    val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
+    val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
+    val netState by viewModel.netState.collectAsStateWithLifecycle()
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+
     val locLastUpdate = remember(locValues.updateTime) {
         locValues.updateTime?.let { updateTime ->
             timeFormat.format(updateTime)
+        } ?: ""
+    }
+    val locLastRefersh = remember(locationUpdateTime) {
+        locationUpdateTime?.let { locationUpdateTime ->
+            timeFormat.format(locationUpdateTime)
         } ?: ""
     }
 
@@ -165,9 +174,22 @@ fun DashboardTab(
                                     "steerSpeed" -> valueToString(steerSpeed)
                                     "engineRPM" -> valueToString(engineRPM, 1)
                                     "carSpeed" -> valueToString(carSpeed, 1)
+                                    "carSpeedAccurate" -> valueToString(carSpeedAccurate, 1)
+                                    "wheel1Speed" -> valueToString(wheelsSpeed.wheel1, 1)
+                                    "wheel2Speed" -> valueToString(wheelsSpeed.wheel2, 1)
+                                    "wheel3Speed" -> valueToString(wheelsSpeed.wheel3, 1)
+                                    "wheel4Speed" -> valueToString(wheelsSpeed.wheel4, 1)
+                                    "wheel1Pressure" -> valueToString(wheelsPressure.wheel1, 2)
+                                    "wheel2Pressure" -> valueToString(wheelsPressure.wheel2, 2)
+                                    "wheel3Pressure" -> valueToString(wheelsPressure.wheel3, 2)
+                                    "wheel4Pressure" -> valueToString(wheelsPressure.wheel4, 2)
                                     "cruiseSetSpeed" -> valueToString(cruiseSetSpeed)
                                     "odometer" -> valueToString(odometer)
+                                    "distanceToNextMaintenance" -> valueToString(distanceToNextMaintenance)
+                                    "distanceToFuelEmpty" -> valueToString(distanceToFuelEmpty)
+                                    "breakingForce" -> valueToString(breakingForce)
                                     "fuelLevelPercentage" -> valueToString(fuelLevelPercentage)
+                                    "fuelLevelPercentageFiltered" -> valueToString(fuelLevelPercentageFiltered)
                                     "engineTemperature" -> valueToString(engineTemperature, 1)
                                     "gearBoxOilTemperature" -> valueToString(gearBoxOilTemperature)
                                     "gearBoxCurrentGear" -> valueToString(gearBoxCurrentGear)
@@ -180,12 +202,20 @@ fun DashboardTab(
                                     "gearBoxMode" -> gearBoxMode
                                     "gearBoxDriveMode" -> gearBoxDriveMode
                                     "gearBoxWork" -> gearBoxWork
+                                    "signalLevel" -> valueToString(netState.signalLevel)
+                                    "netStatus" -> netState.netStatus
+                                    "regStatus" -> netState.regStatus
+                                    "simStatus" -> netState.simStatus
                                     "locateStatus" -> valueToString(locValues.locateStatus)
+                                    "isLocValuesTrue" -> valueToString(isLocValuesTrue)
                                     "gnssSpeed" -> valueToString(locValues.speed, 1)
+                                    "longitude" -> valueToString(locValues.longitude, 6)
+                                    "latitude" -> valueToString(locValues.latitude, 6)
+                                    "altitude" -> valueToString(locValues.altitude, 2)
                                     "visibleSatellites" -> valueToString(locValues.visibleSatellites)
-                                    "locationUpdateTime" -> {
-                                        locLastUpdate
-                                    }
+                                    "trueDirection" -> valueToString(locValues.trueDirection, 1)
+                                    "locationUpdateTime" -> locLastUpdate
+                                    "locationRefreshTime" -> locLastRefersh
                                     else -> {
                                         ""
                                     }
@@ -226,7 +256,7 @@ fun DashboardWidgetItem(
     Card(
         modifier = Modifier
             .fillMaxSize()
-            .clickable { onEditClick() },
+            .clickable { onEditClick() }, // .combinedClickable(onClick = {}, onLongClick = { onEditClick() })
         elevation = CardDefaults.cardElevation(4.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -295,6 +325,7 @@ fun WidgetSelectionDialog(
         title = {
             Text(
                 "Выберите данные для отображения",
+                fontSize = 24.sp,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         },
@@ -305,6 +336,7 @@ fun WidgetSelectionDialog(
             ) {
                 Text(
                     "Плитка ${widgetIndex + 1}",
+                    fontSize = 24.sp,
                     modifier = Modifier.padding(bottom = 16.dp),
                     fontWeight = FontWeight.Medium
                 )
@@ -339,6 +371,7 @@ fun WidgetSelectionDialog(
                             )
                             Text(
                                 text = displayName,
+                                fontSize = 22.sp,
                                 modifier = Modifier
                                     .padding(start = 8.dp)
                                     .weight(1f),

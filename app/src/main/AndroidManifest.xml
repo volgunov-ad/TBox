@@ -8,6 +8,15 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION"
+        tools:ignore="MockLocation" />
+
+    <queries>
+        <package android:name="com.dashing.tbox" />
+    </queries>
 
     <!-- Для Android 10+ -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
@@ -37,6 +46,15 @@
         android:theme="@style/Theme.TBox"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
+
+        <meta-data
+            android:name="android.app.default_searchable"
+            android:value=".MainActivity" />
+
+        <meta-data
+            android:name="mock_location"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -62,14 +80,6 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="connectedDevice">
-            <intent-filter>
-                <action android:name="com.dashing.tbox.MAIN_ACTION" />
-                <action android:name="com.dashing.tbox.GET_STATE" />
-                <action android:name="com.dashing.tbox.GET_NETWORK_DATA" />
-                <action android:name="com.dashing.tbox.GET_LOCATION_DATA" />
-                <action android:name="com.dashing.tbox.GET_CAN_DATA" />
-                <action android:name="com.dashing.tbox.SUBSCRIBE" />
-            </intent-filter>
         </service>
 
         <receiver

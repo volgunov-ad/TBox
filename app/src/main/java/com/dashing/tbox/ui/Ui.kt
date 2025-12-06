@@ -1,6 +1,8 @@
 package com.dashing.tbox.ui
 
+import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,19 +66,23 @@ import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Locale
 import com.dashing.tbox.ui.theme.TboxAppTheme
+import com.dashing.tbox.utils.MockLocationUtils
+import com.dashing.tbox.utils.canUseMockLocation
+import kotlin.collections.component1
+import kotlin.collections.component2
 
 @Composable
 fun TboxApp(
     settingsManager: SettingsManager,
     onTboxRestart: () -> Unit,
     onModemCheck: () -> Unit,
-    onModemOn: () -> Unit,
-    onModemFly: () -> Unit,
-    onModemOff: () -> Unit,
+    onModemMode: (String) -> Unit,
     onUpdateInfoClick: () -> Unit,
-    onSaveToFile: (List<String>) -> Unit
+    onSaveToFile: (String, List<String>) -> Unit,
+    onTboxApplicationCommand: (String, String) -> Unit,
+    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onATcmdSend: (String) -> Unit,
 ) {
-    // Используем viewModel() для правильного создания ViewModel
     val viewModel: TboxViewModel = viewModel()
     val widgetViewModel: WidgetViewModel = viewModel()
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(settingsManager))
@@ -90,11 +96,12 @@ fun TboxApp(
             settingsViewModel = settingsViewModel,
             onTboxRestart = onTboxRestart,
             onModemCheck = onModemCheck,
-            onModemOn = onModemOn,
-            onModemFly = onModemFly,
-            onModemOff = onModemOff,
+            onModemMode = onModemMode,
             onUpdateInfoClick = onUpdateInfoClick,
-            onSaveToFile = onSaveToFile
+            onSaveToFile = onSaveToFile,
+            onTboxApplicationCommand = onTboxApplicationCommand,
+            onMockLocationSettingChanged = onMockLocationSettingChanged,
+            onATcmdSend = onATcmdSend
         )
     }
 }
@@ -119,14 +126,15 @@ fun TboxScreen(
     settingsViewModel: SettingsViewModel,
     onTboxRestart: () -> Unit,
     onModemCheck: () -> Unit,
-    onModemOn: () -> Unit,
-    onModemFly: () -> Unit,
-    onModemOff: () -> Unit,
+    onModemMode: (String) -> Unit,
     onUpdateInfoClick: () -> Unit,
-    onSaveToFile: (List<String>) -> Unit
+    onSaveToFile: (String, List<String>) -> Unit,
+    onTboxApplicationCommand: (String, String) -> Unit,
+    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onATcmdSend: (String) -> Unit,
 ) {
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
-    val tabs = listOf("Модем", "Геопозиция", "Данные авто", "Настройки", "Журнал", "Информация", "CAN", "Плитки")
+    val tabs = listOf("Модем", "AT команды", "Геопозиция", "Данные авто", "Настройки", "Журнал", "Информация", "CAN", "Плитки")
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
@@ -228,14 +236,20 @@ fun TboxScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             when (selectedTab) {
-                0 -> ModemTab(viewModel, onModemOn, onModemFly, onModemOff)
-                1 -> LocationTab(viewModel)
-                2 -> CarDataTab(viewModel)
-                3 -> SettingsTab(viewModel, settingsViewModel, onTboxRestart)
-                4 -> LogsTab(viewModel, settingsViewModel)
-                5 -> InfoTab(viewModel, settingsViewModel, onUpdateInfoClick)
-                6 -> CanTab(viewModel, onSaveToFile)
-                7 -> DashboardTab(viewModel, widgetViewModel, settingsViewModel)
+                0 -> ModemTab(viewModel, onModemMode)
+                1 -> ATcmdTab (viewModel, onATcmdSend)
+                2 -> LocationTab(viewModel, onTboxApplicationCommand)
+                3 -> CarDataTab(viewModel)
+                4 -> SettingsTab(
+                    viewModel,
+                    settingsViewModel,
+                    onTboxRestart,
+                    onMockLocationSettingChanged)
+                5 -> LogsTab(viewModel, settingsViewModel, onSaveToFile)
+                6 -> InfoTab(viewModel, settingsViewModel, onUpdateInfoClick)
+                7 -> CanTab(viewModel, onSaveToFile)
+                8 -> DashboardTab(viewModel, widgetViewModel, settingsViewModel)
+                else -> ModemTab(viewModel, onModemMode)
             }
         }
     }
@@ -244,15 +258,26 @@ fun TboxScreen(
 @Composable
 fun ModemTab(
     viewModel: TboxViewModel,
-    onModemOn: () -> Unit,
-    onModemFly: () -> Unit,
-    onModemOff: () -> Unit
+    onModemMode: (String) -> Unit,
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
     val netValues by viewModel.netValues.collectAsStateWithLifecycle()
     val apn1State by viewModel.apn1State.collectAsStateWithLifecycle()
     val apn2State by viewModel.apn2State.collectAsStateWithLifecycle()
+    val apnStatus by viewModel.apnStatus.collectAsStateWithLifecycle()
     val modemStatus by viewModel.modemStatus.collectAsStateWithLifecycle()
+
+    val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+
+    val formattedConnectionChangeTime = remember(netState.connectionChangeTime) {
+        netState.connectionChangeTime?.let { timeFormat.format(it) } ?: "нет данных"
+    }
+    val formattedAPN1ChangeTime = remember(apn1State.changeTime) {
+        apn1State.changeTime?.let { timeFormat.format(it) } ?: "нет данных"
+    }
+    val formattedAPN2ChangeTime = remember(apn2State.changeTime) {
+        apn2State.changeTime?.let { timeFormat.format(it) } ?: "нет данных"
+    }
 
     Column(
         modifier = Modifier
@@ -271,29 +296,31 @@ fun ModemTab(
             item { StatusRow("Регистрация", netState.regStatus) }
             item { StatusRow("SIM статус", netState.simStatus) }
             item { StatusRow("Сеть", netState.netStatus) }
+            item { StatusRow("APN", if (apnStatus) "подключен" else "отключен") }
+            item { StatusRow("Время подключения", formattedConnectionChangeTime) }
 
             item { StatusHeader("APN 1") }
-            item { StatusRow("APN", apn1State.apnStatus) }
+            item { StatusRow("APN", valueToString(apn1State.apnStatus, booleanTrue = "подключен", booleanFalse = "отключен")) }
             item { StatusRow("Тип APN", apn1State.apnType) }
             item { StatusRow("IP APN", apn1State.apnIP) }
             item { StatusRow("Шлюз APN", apn1State.apnGate) }
             item { StatusRow("DNS1 APN", apn1State.apnDNS1) }
             item { StatusRow("DNS2 APN", apn1State.apnDNS2) }
+            item { StatusRow("Время изменения", formattedAPN1ChangeTime) }
 
             item { StatusHeader("APN 2") }
-            item { StatusRow("APN2", apn2State.apnStatus) }
+            item { StatusRow("APN2", valueToString(apn2State.apnStatus, booleanTrue = "подключен", booleanFalse = "отключен")) }
             item { StatusRow("Тип APN2", apn2State.apnType) }
             item { StatusRow("IP APN2", apn2State.apnIP) }
             item { StatusRow("Шлюз APN2", apn2State.apnGate) }
             item { StatusRow("DNS1 APN2", apn2State.apnDNS1) }
             item { StatusRow("DNS2 APN2", apn2State.apnDNS2) }
+            item { StatusRow("Время изменения", formattedAPN2ChangeTime) }
         }
 
         ModemModeSelector(
             selectedMode = modemStatus,
-            onModemOn = onModemOn,
-            onModemFly = onModemFly,
-            onModemOff = onModemOff,
+            onModemMode = onModemMode,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -302,9 +329,7 @@ fun ModemTab(
 @Composable
 fun ModemModeSelector(
     selectedMode: Int,
-    onModemOn: () -> Unit,
-    onModemFly: () -> Unit,
-    onModemOff: () -> Unit,
+    onModemMode: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var buttonsEnabled by remember { mutableStateOf(true) }
@@ -336,7 +361,7 @@ fun ModemModeSelector(
                 onClick = {
                     if (buttonsEnabled) {
                         buttonsEnabled = false
-                        onModemOn()
+                        onModemMode("on")
                     }
                 },
                 enabled = buttonsEnabled,
@@ -351,7 +376,7 @@ fun ModemModeSelector(
                 onClick = {
                     if (buttonsEnabled) {
                         buttonsEnabled = false
-                        onModemFly()
+                        onModemMode("fly")
                     }
                 },
                 enabled = buttonsEnabled,
@@ -366,7 +391,7 @@ fun ModemModeSelector(
                 onClick = {
                     if (buttonsEnabled) {
                         buttonsEnabled = false
-                        onModemOff()
+                        onModemMode("off")
                     }
                 },
                 enabled = buttonsEnabled,
@@ -381,17 +406,24 @@ fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onTboxRestartClick: () -> Unit,
+    onMockLocationSettingChanged: (Boolean) -> Unit
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
+    val isAutoSuspendTboxAppEnabled by settingsViewModel.isAutoSuspendTboxAppEnabled.collectAsStateWithLifecycle()
+    val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
     val isGetLocDataEnabled by settingsViewModel.isGetLocDataEnabled.collectAsStateWithLifecycle()
+    val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
+
+    val context = LocalContext.current
+    val canUseMockLocation = remember { context.canUseMockLocation() }
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
@@ -452,20 +484,48 @@ fun SettingsTab(
             textAlign = TextAlign.Left
         )
         SettingSwitch(
+            isAutoSuspendTboxAppEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoSuspendTboxAppSetting(enabled)
+                if (enabled && isAutoStopTboxAppEnabled) {
+                    settingsViewModel.saveAutoStopTboxAppSetting(false)
+                    showAlertDialog("ПРЕДУПРЕЖДЕНИЕ", "Требуется ручная перезагрузка TBox", context)
+                }
+            },
+            "Автоматическая отправка команды SUSPEND приложению APP в TBox",
+            "Приостановка приложения APP " +
+                    "позволяет избежать периодической перезагрузки TBox, " +
+                    "но может происходить регулярное переподключение модема, если установлена SIM-карта",
+            true
+        )
+        SettingSwitch(
+            isAutoStopTboxAppEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoStopTboxAppSetting(enabled)
+                if (enabled && isAutoSuspendTboxAppEnabled) {
+                    settingsViewModel.saveAutoSuspendTboxAppSetting(false)
+                    showAlertDialog("ПРЕДУПРЕЖДЕНИЕ", "Требуется ручная перезагрузка TBox", context)
+                }
+            },
+            "Автоматическая отправка команды STOP приложению APP в TBox",
+            "Полное отключение приложения APP " +
+                    "позволяет избежать периодической перезагрузки TBox и переподключения модема. " +
+                    "После включения опции может произойти однократная перезагрузка TBox",
+            true
+        )
+        SettingSwitch(
             isAutoPreventTboxRestartEnabled,
             { enabled ->
                 settingsViewModel.saveAutoPreventTboxRestartSetting(enabled)
             },
-            "Предотвращение перезагрузки TBox",
-            "Отключение приложения APP и проверки состояния сети в TBox " +
-                    "позволяет избежать периодической перезагрузки TBox. Необходимые команды " +
-                    "отправляются фоновой службой этого приложения каждый раз при запуске " +
-                    "головного устройства, а также сразу же при включении данной опции",
+            "Автоматическая отправка команды PREVENT RESTART приложению SWD в TBox",
+            "Отключение проверки состояния сети и аномалий в работе TBox. " +
+                    "Эти проверки могут приводить к лишним перезагрузкам",
             true
         )
 
         Text(
-            text = "Настройки виджета",
+            text = "Настройки виджетов",
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
@@ -498,7 +558,7 @@ fun SettingsTab(
         )
 
         Text(
-            text = "Экспериментальные настройки",
+            text = "Получение данных от TBox",
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
@@ -523,6 +583,30 @@ fun SettingsTab(
             "",
             true
         )
+        SettingSwitch(
+            isMockLocationEnabled,
+            { enabled ->
+                onMockLocationSettingChanged(enabled)
+            },
+            "(Экспериментальная опция!) Подменять системные данные о геопозиции",
+            if (canUseMockLocation) {
+                "Готово к использованию"
+            } else {
+                "Требует настройки разрешений и настройки фиктивных местоположений"
+            },
+            isGetLocDataEnabled
+        )
+
+        if (!canUseMockLocation) {
+            Text(
+                text = "Нажмите для просмотра требований к фиктивным местоположениям",
+                fontSize = 20.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clickable { showLocationRequirementsDialog(context) }
+                    .padding(top = 4.dp)
+            )
+        }
 
         Row(
             modifier = Modifier
@@ -551,20 +635,75 @@ fun SettingsTab(
     }
 }
 
+private fun showAlertDialog(title: String, message: String, context: Context) {
+    android.app.AlertDialog.Builder(context)
+        .setTitle(title)
+        .setMessage(message)
+        .setNeutralButton("Закрыть", null)
+        .show()
+}
+
+private fun showLocationRequirementsDialog(context: Context) {
+    val status = MockLocationUtils.checkMockLocationCapabilities(context)
+
+    val requirements = buildString {
+        if (!status.hasLocationPermissions) {
+            append("Нет разрешения на доступ к местоположению\n")
+        }
+        if (!status.isMockLocationEnabled) {
+            append("Не включена mock-локация в настройках разработчика\n")
+        }
+        if (!status.canAddTestProvider) {
+            append("Не удается добавить приложение в список провайдеров фиктивных местоположений\n")
+        }
+    }
+
+    android.app.AlertDialog.Builder(context)
+        .setTitle("Требования для mock-локации (Настройки разработчика)")
+        .setMessage(requirements)
+        .setPositiveButton("Настроить") { dialog, _ ->
+            // Открываем настройки разработчика
+            val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+            context.startActivity(intent)
+        }
+        .setNegativeButton("Отмена", null)
+        .show()
+}
+
 @Composable
 fun LocationTab(
     viewModel: TboxViewModel,
+    onTboxApplicationCommand: (String, String) -> Unit,
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
+    val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
+    val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
+    val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
     // Используем remember для форматтера
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
     val dateTime = locValues.utcTime?.formatDateTime() ?: ""
+
     val lastUpdate = remember(locValues.updateTime) {
         locValues.updateTime?.let { updateTime ->
             timeFormat.format(updateTime)
         } ?: ""
+    }
+
+    val lastRefresh = remember(locationUpdateTime) {
+        locationUpdateTime?.let { locationUpdateTime ->
+            timeFormat.format(locationUpdateTime)
+        } ?: ""
+    }
+
+    var commandButtonsEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(commandButtonsEnabled) {
+        if (!commandButtonsEnabled) {
+            delay(5000) // Блокировка на 5 секунд
+            commandButtonsEnabled = true
+        }
     }
 
     Column(
@@ -573,8 +712,10 @@ fun LocationTab(
             .padding(16.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
-            item { StatusRow("Последнее обновление", lastUpdate) }
+            item { StatusRow("Последнее обновление", lastRefresh) }
+            item { StatusRow("Последнее изменение", lastUpdate) }
             item { StatusRow("Фиксация местоположения", if (locValues.locateStatus) {"да"} else {"нет"}) }
+            item { StatusRow("Правдивость местоположения", if (isLocValuesTrue) {"да"} else {"нет"}) }
             item { StatusRow("Долгота", locValues.longitude.toString()) }
             item { StatusRow("Широта", locValues.latitude.toString()) }
             item { StatusRow("Высота, м", locValues.altitude.toString()) }
@@ -585,6 +726,62 @@ fun LocationTab(
             item { StatusRow("Магнитное направление", String.format(Locale.getDefault(), "%.1f", locValues.magneticDirection)) }
             item { StatusRow("Дата и время UTC", dateTime) }
             item { StatusRow("Сырые данные", locValues.rawValue) }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = {
+                    if (commandButtonsEnabled) {
+                        commandButtonsEnabled = false
+                        onTboxApplicationCommand("LOC", "suspend")
+                    }
+                },
+                enabled = commandButtonsEnabled && tboxConnected
+            ) {
+                Text(
+                    text = "Приостановить LOC",
+                    fontSize = 24.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Button(
+                onClick = {
+                    if (commandButtonsEnabled) {
+                        commandButtonsEnabled = false
+                        onTboxApplicationCommand("LOC", "resume")
+                    }
+                },
+                enabled = commandButtonsEnabled && tboxConnected
+            ) {
+                Text(
+                    text = "Возобновить LOC",
+                    fontSize = 24.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Button(
+                onClick = {
+                    if (commandButtonsEnabled) {
+                        commandButtonsEnabled = false
+                        onTboxApplicationCommand("LOC", "stop")
+                    }
+                },
+                enabled = commandButtonsEnabled && tboxConnected
+            ) {
+                Text(
+                    text = "Остановить LOC",
+                    fontSize = 24.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
@@ -598,6 +795,7 @@ fun InfoTab(
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
     val suspendTboxAppSend by viewModel.suspendTboxAppSend.collectAsStateWithLifecycle()
+    val tboxAppStoped by viewModel.tboxAppStoped.collectAsStateWithLifecycle()
     val ipList by viewModel.ipList.collectAsStateWithLifecycle()
     val appVersion by settingsViewModel.appVersion.collectAsStateWithLifecycle()
     val mdcVersion by settingsViewModel.mdcVersion.collectAsStateWithLifecycle()
@@ -628,6 +826,12 @@ fun InfoTab(
                 StatusRow(
                     "Подтверждение команды SUSPEND приложению APP",
                     if (suspendTboxAppSend) "да" else "нет"
+                )
+            }
+            item {
+                StatusRow(
+                    "Подтверждение команды STOP приложению APP",
+                    if (tboxAppStoped) "да" else "нет"
                 )
             }
             item {
@@ -682,10 +886,17 @@ fun CarDataTab(
     viewModel: TboxViewModel,
 ) {
     val odometer by viewModel.odometer.collectAsStateWithLifecycle()
+    val distanceToNextMaintenance by viewModel.distanceToNextMaintenance.collectAsStateWithLifecycle()
+    val distanceToFuelEmpty by viewModel.distanceToFuelEmpty.collectAsStateWithLifecycle()
+    val breakingForce by viewModel.breakingForce.collectAsStateWithLifecycle()
     val engineRPM by viewModel.engineRPM.collectAsStateWithLifecycle()
     val voltage by viewModel.voltage.collectAsStateWithLifecycle()
     val fuelLevelPercentage by viewModel.fuelLevelPercentage.collectAsStateWithLifecycle()
+    val fuelLevelPercentageFiltered by viewModel.fuelLevelPercentageFiltered.collectAsStateWithLifecycle()
     val carSpeed by viewModel.carSpeed.collectAsStateWithLifecycle()
+    val carSpeedAccurate by viewModel.carSpeedAccurate.collectAsStateWithLifecycle()
+    val wheelsSpeed by viewModel.wheelsSpeed.collectAsStateWithLifecycle()
+    val wheelsPressure by viewModel.wheelsPressure.collectAsStateWithLifecycle()
     val cruiseSetSpeed by viewModel.cruiseSetSpeed.collectAsStateWithLifecycle()
     val steerAngle by viewModel.steerAngle.collectAsStateWithLifecycle()
     val steerSpeed by viewModel.steerSpeed.collectAsStateWithLifecycle()
@@ -709,9 +920,18 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("steerSpeed"), valueToString(steerSpeed)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("engineRPM"), valueToString(engineRPM, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("carSpeed"), valueToString(carSpeed, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("carSpeedAccurate"), valueToString(carSpeedAccurate, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Speed"), valueToString(wheelsSpeed.wheel1, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Speed"), valueToString(wheelsSpeed.wheel2, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Speed"), valueToString(wheelsSpeed.wheel3, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Speed"), valueToString(wheelsSpeed.wheel4, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("cruiseSetSpeed"), valueToString(cruiseSetSpeed)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("odometer"), valueToString(odometer)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("distanceToNextMaintenance"), valueToString(distanceToNextMaintenance)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("distanceToFuelEmpty"), valueToString(distanceToFuelEmpty)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("fuelLevelPercentage"), valueToString(fuelLevelPercentage)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("fuelLevelPercentageFiltered"), valueToString(fuelLevelPercentageFiltered)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("breakingForce"), valueToString(breakingForce)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("engineTemperature"), valueToString(engineTemperature, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxOilTemperature"), valueToString(gearBoxOilTemperature)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxMode"), gearBoxMode) }
@@ -721,6 +941,10 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxPreparedGear"), valueToString(gearBoxPreparedGear)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxChangeGear"),
                 valueToString(gearBoxChangeGear, booleanTrue = "переключение", booleanFalse = "нет")) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Pressure"), valueToString(wheelsPressure.wheel1, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Pressure"), valueToString(wheelsPressure.wheel2, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Pressure"), valueToString(wheelsPressure.wheel3, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Pressure"), valueToString(wheelsPressure.wheel4, 2)) }
         }
     }
 }
@@ -729,7 +953,8 @@ fun CarDataTab(
 @Composable
 fun LogsTab(
     viewModel: TboxViewModel,
-    settingsViewModel: SettingsViewModel
+    settingsViewModel: SettingsViewModel,
+    onSaveToFile: (String, List<String>) -> Unit
 ) {
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val logLevel by settingsViewModel.logLevel.collectAsStateWithLifecycle()
@@ -737,6 +962,8 @@ fun LogsTab(
     var expanded by remember { mutableStateOf(false) }
     val logLevels = listOf("DEBUG", "INFO", "WARN", "ERROR")
     var searchText by remember { mutableStateOf("") }
+
+    var showSaveDialog by remember { mutableStateOf(false) }
 
     val focusManager = LocalFocusManager.current
 
@@ -840,6 +1067,57 @@ fun LogsTab(
             }
         }
 
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { showSaveDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Сохранить в файл",
+                    fontSize = 24.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            if (showSaveDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSaveDialog = false },
+                    title = { Text("Сохранение файла") },
+                    text = {
+                        Text("Сохранить журнал в папку Загрузки")
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val csvLogEntries = mutableListOf<String>()
+                                logs.forEach { logEntry ->
+                                    csvLogEntries.add(logEntry)
+                                }
+                                onSaveToFile("log", csvLogEntries)
+                                showSaveDialog = false
+                            }
+                        ) {
+                            Text("Сохранить")
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = { showSaveDialog = false }
+                        ) {
+                            Text("Отмена")
+                        }
+                    }
+                )
+            }
+        }
+
         LogsCard(
             logs = logs,
             logLevel = logLevel,
@@ -849,77 +1127,9 @@ fun LogsTab(
 }
 
 @Composable
-fun LogsCard(
-    logs: List<String>,
-    logLevel: String,
-    searchText: String = ""
-) {
-    val listState = rememberLazyListState()
-
-    val filteredLogs = remember(logs, logLevel, searchText) {
-        val levelFilteredLogs = when (logLevel) {
-            "DEBUG" -> {
-                logs.filter { it.contains("DEBUG") ||
-                        it.contains("INFO") ||
-                        it.contains("WARN") ||
-                        it.contains("ERROR")}
-            }
-            "INFO" -> {
-                logs.filter { it.contains("INFO") ||
-                        it.contains("WARN") ||
-                        it.contains("ERROR") }
-            }
-            "WARN" -> {
-                logs.filter { it.contains("WARN") ||
-                        it.contains("ERROR") }
-            }
-            else -> {
-                logs.filter { it.contains("ERROR") }
-            }
-        }
-
-        if (searchText.length >= 3) {
-            levelFilteredLogs.filter { log ->
-                log.contains(searchText, ignoreCase = true)
-            }
-        } else {
-            levelFilteredLogs
-        }
-    }
-
-    LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) {
-            listState.animateScrollToItem(logs.size - 1)
-        }
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surface)
-            ) {
-                items(count = filteredLogs.size) { index ->
-                    val logEntry = filteredLogs[index]
-                    ColoredLogEntry(log = logEntry)
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun CanTab(
     viewModel: TboxViewModel,
-    onSaveToFile: (List<String>) -> Unit
+    onSaveToFile: (String, List<String>) -> Unit
 ) {
     val canFramesStructured by viewModel.canFramesStructured.collectAsStateWithLifecycle()
     val canFrameTime by viewModel.canFrameTime.collectAsStateWithLifecycle()
@@ -928,7 +1138,7 @@ fun CanTab(
 
     // Используем remember для форматтера
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+    val dateTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
 
     val formattedTime = remember(canFrameTime) {
         canFrameTime?.let { timeFormat.format(it) } ?: "нет данных"
@@ -984,13 +1194,19 @@ fun CanTab(
                                 val csvCanEntries = mutableListOf<String>()
                                 sortedCanEntries.forEach { (canId, frames) ->
                                     frames.forEach { frame ->
-                                        val timestamp = dateFormat.format(frame.date)
+                                        val timestamp = dateTimeFormat.format(frame.date)
                                         val rawValueHex =
-                                            frame.rawValue.joinToString(" ") { "%02X".format(it) }
-                                        csvCanEntries.add("$timestamp;$canId;$rawValueHex")
+                                            frame.rawValue.joinToString(" ") {
+                                                "%02X".format(it)
+                                            }
+                                        val rawValueDec =
+                                            frame.rawValue.joinToString(";") {
+                                            (it.toInt() and 0xFF).toString()
+                                            }
+                                        csvCanEntries.add("$timestamp;$canId;$rawValueHex; ;$rawValueDec")
                                     }
                                 }
-                                onSaveToFile(csvCanEntries)
+                                onSaveToFile("can", csvCanEntries)
                                 showSaveDialog = false
                             }
                         ) {
@@ -1033,6 +1249,101 @@ fun CanTab(
     }
 }
 
+@Composable
+fun ATcmdTab(
+    viewModel: TboxViewModel,
+    onATcmdSend: (String) -> Unit
+) {
+    val atLogs by viewModel.atLogs.collectAsStateWithLifecycle()
+
+    var atCmdText by remember { mutableStateOf("") }
+
+    val focusManager = LocalFocusManager.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = atCmdText,
+                onValueChange = { newText ->
+                    atCmdText = newText
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp),
+                label = {
+                    Text(
+                        text = "AT команда",
+                        fontSize = 16.sp
+                    )
+                },
+                placeholder = {
+                    Text(
+                        text = "Введите AT команду",
+                        fontSize = 16.sp
+                    )
+                },
+                singleLine = true,
+                trailingIcon = {
+                    if (atCmdText.isNotEmpty()) {
+                        IconButton(
+                            onClick = { atCmdText = "" }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Очистить"
+                            )
+                        }
+                    }
+                },
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    imeAction = ImeAction.Send
+                ),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        if (atCmdText.isNotEmpty()) {
+                            onATcmdSend(atCmdText)
+                            atCmdText = ""
+                        }
+                        focusManager.clearFocus()
+                    }
+                )
+            )
+            Box(modifier = Modifier.wrapContentSize()) {
+                Button(
+                    onClick = {
+                        if (atCmdText != "") {
+                            onATcmdSend(atCmdText)
+                            atCmdText = ""
+                        }
+                    },
+                    modifier = Modifier.width(200.dp)
+                ) {
+                    Text(
+                        text = "Отправить",
+                        fontSize = 24.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        ATLogsCard(
+            logs = atLogs
+        )
+    }
+}
+
 fun valueToString(value: Any?, accuracy: Int = 1, booleanTrue: String = "да", booleanFalse: String = "нет"): String {
     if (value == null) {
         return ""
@@ -1040,10 +1351,14 @@ fun valueToString(value: Any?, accuracy: Int = 1, booleanTrue: String = "да", 
     return when (value) {
         is Int -> value.toString()
         is UInt -> value.toString()
-        is Float -> when (accuracy) {
+        is Float, is Double -> when (accuracy) {
             1 -> String.format(Locale.getDefault(), "%.1f", value)
             2 -> String.format(Locale.getDefault(), "%.2f", value)
-            else -> String.format(Locale.getDefault(), "%.3f", value)
+            3 -> String.format(Locale.getDefault(), "%.3f", value)
+            4 -> String.format(Locale.getDefault(), "%.4f", value)
+            5 -> String.format(Locale.getDefault(), "%.5f", value)
+            6 -> String.format(Locale.getDefault(), "%.6f", value)
+            else -> String.format(Locale.getDefault(), "%.1f", value)
         }
         is Boolean -> if (value) booleanTrue else booleanFalse
         is String -> value

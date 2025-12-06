@@ -24,6 +24,8 @@ class SettingsManager(private val context: Context) {
         // Boolean настройки
         private val AUTO_MODEM_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_modem_restart")
         private val AUTO_TBOX_REBOOT_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_tbox_reboot")
+        private val AUTO_SUSPEND_TBOX_APP_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_app")
+        private val AUTO_STOP_TBOX_APP_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_stop_tbox_app")
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
         private val GET_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}get_voltages")
         private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
@@ -31,6 +33,7 @@ class SettingsManager(private val context: Context) {
         private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
+        private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
@@ -66,8 +69,20 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false }
         .distinctUntilChanged()
 
+    val mockLocationFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MOCK_LOCATION] ?: false }
+        .distinctUntilChanged()
+
     val autoTboxRebootFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_TBOX_REBOOT_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val autoSuspendTboxAppFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_SUSPEND_TBOX_APP_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val autoStopTboxAppFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_STOP_TBOX_APP_KEY] ?: false }
         .distinctUntilChanged()
 
     val autoPreventTboxRestartFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -137,9 +152,27 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveMockLocationSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_LOCATION] = enabled
+        }
+    }
+
     suspend fun saveLogLevel(level: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[LOG_LEVEL_KEY] = level
+        }
+    }
+
+    suspend fun saveAutoSuspendTboxAppSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_SUSPEND_TBOX_APP_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAutoStopTboxAppSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_STOP_TBOX_APP_KEY] = enabled
         }
     }
 
@@ -217,11 +250,14 @@ class SettingsManager(private val context: Context) {
             // Boolean настройки сбрасываются в false
             preferences[AUTO_MODEM_RESTART_KEY] = false
             preferences[AUTO_TBOX_REBOOT_KEY] = false
+            preferences[AUTO_STOP_TBOX_APP_KEY] = false
+            preferences[AUTO_SUSPEND_TBOX_APP_KEY] = false
             preferences[AUTO_PREVENT_TBOX_RESTART_KEY] = false
             preferences[GET_VOLTAGES_KEY] = false
             preferences[GET_CAN_FRAME_KEY] = false
             preferences[GET_CYCLE_SIGNAL_KEY] = false
             preferences[GET_LOC_DATA_KEY] = false
+            preferences[MOCK_LOCATION] = false
             preferences[WIDGET_SHOW_INDICATOR] = false
             preferences[WIDGET_SHOW_LOC_INDICATOR] = false
 
