@@ -349,6 +349,20 @@ class TboxViewModel : ViewModel() {
             initialValue = ""
         )
 
+    val frontLeftSeatMode: StateFlow<UInt?> = TboxRepository.frontLeftSeatMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val frontRightSeatMode: StateFlow<UInt?> = TboxRepository.frontRightSeatMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = TboxRepository.canFramesStructured
         .stateIn(
             scope = viewModelScope,
@@ -684,6 +698,8 @@ object WidgetsRepository {
         "gearBoxMode" to DataTitle("Режим КПП", ""),
         "gearBoxDriveMode" to DataTitle("Режим движения КПП", ""),
         "gearBoxWork" to DataTitle("Работа КПП", ""),
+        "frontLeftSeatMode" to DataTitle("Режим левого переднего сиденья", ""),
+        "frontRightSeatMode" to DataTitle("Режим правого переднего сиденья", ""),
         "locateStatus" to DataTitle("Фиксация местоположения", ""),
         "isLocValuesTrue" to DataTitle("Правдивость местоположения", ""),
         "gnssSpeed" to DataTitle("Скорость GNSS", "км/ч"),

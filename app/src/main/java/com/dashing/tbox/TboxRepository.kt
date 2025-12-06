@@ -224,6 +224,12 @@ object TboxRepository {
     private val _gearBoxWork = MutableStateFlow<String>("")
     val gearBoxWork: StateFlow<String> = _gearBoxWork.asStateFlow()
 
+    private val _frontLeftSeatMode = MutableStateFlow<UInt?>(null)
+    val frontLeftSeatMode: StateFlow<UInt?> = _frontLeftSeatMode.asStateFlow()
+
+    private val _frontRightSeatMode = MutableStateFlow<UInt?>(null)
+    val frontRightSeatMode: StateFlow<UInt?> = _frontRightSeatMode.asStateFlow()
+
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
@@ -521,6 +527,14 @@ object TboxRepository {
 
     fun updateGearBoxWork(newValue: String) {
         _gearBoxWork.value = newValue
+    }
+
+    fun updateFrontLeftSeatMode(newValue: UInt) {
+        _frontLeftSeatMode.value = newValue
+    }
+
+    fun updateFrontRightSeatMode(newValue: UInt) {
+        _frontRightSeatMode.value = newValue
     }
 
     fun updateIPList(value: List<String>) {

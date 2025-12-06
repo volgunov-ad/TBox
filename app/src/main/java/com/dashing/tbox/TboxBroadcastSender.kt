@@ -53,6 +53,7 @@ class TboxBroadcastSender(
         const val CAR_STATE = "carState"
         const val FUEL_LEVEL_PERCENTAGE = "fuelLevelPercentage"
         const val FUEL_LEVEL_PERCENTAGE_FILTERED = "fuelLevelPercentageFiltered"
+        const val CRUISE_SET_SPEED = "cruiseSetSpeed"
     }
 
     private var netStateListenerJob: Job? = null
@@ -238,6 +239,9 @@ class TboxBroadcastSender(
                     }
                     FUEL_LEVEL_PERCENTAGE_FILTERED -> {
                         sendUInt(TboxRepository.fuelLevelPercentageFiltered.value, arrayOf(packageName, extraName, extraValue), extraValue)
+                    }
+                    CRUISE_SET_SPEED -> {
+                        sendUInt(TboxRepository.cruiseSetSpeed.value, arrayOf(packageName, extraName, extraValue), extraValue)
                     }
                 }
             }
@@ -639,6 +643,19 @@ class TboxBroadcastSender(
                             carStateSubscribers.forEach { subscriberKey ->
                                 val subscriber = parseSubscriberKey(subscriberKey)
                                 sendUInt(fuelLevelPercentageFiltered, subscriber, FUEL_LEVEL_PERCENTAGE_FILTERED)
+                            }
+                        }
+                    }
+            }
+
+            launch {
+                TboxRepository.cruiseSetSpeed
+                    .debounce(100) // Задержка 100ms чтобы избежать спама
+                    .collect { cruiseSetSpeed ->
+                        if (carStateSubscribers.isNotEmpty()) {
+                            carStateSubscribers.forEach { subscriberKey ->
+                                val subscriber = parseSubscriberKey(subscriberKey)
+                                sendUInt(cruiseSetSpeed, subscriber, CRUISE_SET_SPEED)
                             }
                         }
                     }

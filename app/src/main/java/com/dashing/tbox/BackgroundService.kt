@@ -1993,6 +1993,11 @@ class BackgroundService : Service() {
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x30))) {
                         val distanceToFuelEmpty = singleData.copyOfRange(2, 4).toUInt16BigEndian()
                         TboxRepository.updateDistanceToFuelEmpty(distanceToFuelEmpty)
+                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
+                        val frontLeftSeatMode = singleData[4].extractBitsToUInt(5, 3)
+                        val frontRightSeatMode = singleData[4].extractBitsToUInt(2, 3)
+                        TboxRepository.updateFrontLeftSeatMode(frontLeftSeatMode)
+                        TboxRepository.updateFrontRightSeatMode(frontRightSeatMode)
                     }
                 } catch (e: Exception) {
                     TboxRepository.addLog("ERROR", "CRT response",
@@ -2295,6 +2300,16 @@ class BackgroundService : Service() {
 
     fun Byte.toUInt(): UInt {
         return this.toUByte().toUInt()
+    }
+
+    fun Byte.extractBitsToUInt(startPos: Int, length: Int): UInt {
+        require(startPos in 0..7) { "startPos must be between 0 and 7" }
+        require(length in 1..8) { "length must be between 1 and 8" }
+        require(startPos + length <= 8) { "startPos + length must not exceed 8" }
+
+        val value = this.toUInt() and 0xFFu
+        val mask = ((1u shl length) - 1u) shl startPos
+        return (value and mask) shr startPos
     }
 
     fun Byte.getLeftNibble(): Int = (this.toInt() shr 4) and 0x0F
