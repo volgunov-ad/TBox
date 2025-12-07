@@ -34,6 +34,7 @@ class SettingsManager(private val context: Context) {
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
+        private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
@@ -103,6 +104,10 @@ class SettingsManager(private val context: Context) {
 
     val getLocDataFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[GET_LOC_DATA_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[EXPERT_MODE] ?: false }
         .distinctUntilChanged()
 
     // String flows
@@ -203,6 +208,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveGetLocDataSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[GET_LOC_DATA_KEY] = enabled
+        }
+    }
+
+    suspend fun saveExpertModeSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXPERT_MODE] = enabled
         }
     }
 

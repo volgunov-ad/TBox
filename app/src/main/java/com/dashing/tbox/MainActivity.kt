@@ -144,21 +144,58 @@ class MainActivity : ComponentActivity() {
 
     private fun tboxApplicationCommand(app: String, command: String) {
         val intent = Intent(this, BackgroundService::class.java).apply {
-            action = when (command) {
-                "suspend" -> {
-                    if (app == "LOC") BackgroundService.ACTION_LOC_SUSPEND
-                    else null
+            when (app) {
+                "CRT" -> {
+                    action = when (command) {
+                        "close" -> {
+                            BackgroundService.ACTION_CLOSE
+                        }
+
+                        "open" -> {
+                            BackgroundService.ACTION_OPEN
+                        }
+
+                        else -> {
+                            null
+                        }
+                    }
                 }
-                "resume" -> {
-                    if (app == "LOC") BackgroundService.ACTION_LOC_RESUME
-                    else null
+                "HUM" -> {
+                    action = when (command) {
+                        "lightShowStart" -> {
+                            BackgroundService.ACTION_LIGHT_SHOW_START
+                        }
+
+                        "lightShowStop" -> {
+                            BackgroundService.ACTION_LIGHT_SHOW_STOP
+                        }
+
+                        else -> {
+                            null
+                        }
+                    }
                 }
-                "stop" -> {
-                    if (app == "LOC") BackgroundService.ACTION_LOC_STOP
-                    else null
+                "LOC" -> {
+                    action = when (command) {
+                        "suspend" -> {
+                            BackgroundService.ACTION_LOC_SUSPEND
+                        }
+
+                        "resume" -> {
+                            BackgroundService.ACTION_LOC_RESUME
+                        }
+
+                        "stop" -> {
+                            BackgroundService.ACTION_LOC_STOP
+                        }
+
+                        else -> {
+                            null
+                        }
+                    }
                 }
                 else -> {
-                    null
+                    action = null
                 }
             }
             if (action == null) return

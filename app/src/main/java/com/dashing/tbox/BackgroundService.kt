@@ -62,6 +62,7 @@ class BackgroundService : Service() {
     private var locCmdJob: Job? = null
     private var listenJob: Job? = null
     private var apnCmdJob: Job? = null
+    private var humJob: Job? = null
     private var sendATJob: Job? = null
     private var modemModeJob: Job? = null
     private var checkConnectionJob: Job? = null
@@ -91,6 +92,8 @@ class BackgroundService : Service() {
         private const val CRT_CODE = 0x23.toByte()
         private const val SWD_CODE = 0x2D.toByte()
         private const val NTM_CODE = 0x24.toByte()
+        private const val HUM_CODE = 0x30.toByte()
+        private const val UDA_CODE = 0x38.toByte()
         private const val SELF_CODE = 0x50.toByte()
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
         private var isRunning = false
@@ -134,7 +137,8 @@ class BackgroundService : Service() {
         const val ACTION_APN2_RESTART = "com.dashing.tbox.APN2_RESTART"
         const val ACTION_APN2_FLY = "com.dashing.tbox.APN2_FLY"
         const val ACTION_APN2_RECONNECT = "com.dashing.tbox.APN2_RECONNECT"
-        const val ACTION_TEST1 = "com.dashing.tbox.TEST1"
+        const val ACTION_CLOSE = "com.dashing.tbox.CLOSE"
+        const val ACTION_OPEN = "com.dashing.tbox.OPEN"
         const val ACTION_PIN = "com.dashing.tbox.PIN"
         const val ACTION_PUK = "com.dashing.tbox.PUK"
         const val ACTION_LOC_SUSPEND = "com.dashing.tbox.LOC_SUSPEND"
@@ -144,6 +148,8 @@ class BackgroundService : Service() {
         const val ACTION_LOC_UNSUBSCRIBE = "com.dashing.tbox.LOC_UNSUBSCRIBE"
         const val ACTION_GET_CAN_FRAME = "com.dashing.tbox.GET_CAN_FRAME"
         const val ACTION_GET_INFO = "com.dashing.tbox.GET_INFO"
+        const val ACTION_LIGHT_SHOW_START = "com.dashing.tbox.LIGHT_SHOW_START"
+        const val ACTION_LIGHT_SHOW_STOP = "com.dashing.tbox.LIGHT_SHOW_STOP"
     }
 
     override fun onCreate() {
@@ -303,6 +309,17 @@ class BackgroundService : Service() {
             ACTION_LOC_UNSUBSCRIBE -> locSubscribe(false)
             ACTION_GET_CAN_FRAME -> crtGetCanFrame()
             ACTION_GET_INFO -> getInfo()
+            ACTION_CLOSE -> crtCmd(0x26,
+                ByteArray(45).apply {
+                    this[0] = 0x02 },
+                "Close", "INFO")
+            ACTION_OPEN -> crtCmd(0x26,
+                ByteArray(45).apply {
+                    this[0] = 0x02
+                    this[9] = 0x01 },
+                "Open", "INFO")
+            ACTION_LIGHT_SHOW_START -> humLightShowReq(byteArrayOf(1, 0, 0, 0, 0, 0, 0, 0, 0))
+            ACTION_LIGHT_SHOW_STOP -> humLightShowReq(byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0))
         }
         return START_STICKY
     }
@@ -1120,6 +1137,17 @@ class BackgroundService : Service() {
         }
     }
 
+    private fun humLightShowReq(value: ByteArray) {
+        if (!TboxRepository.tboxConnected.value) {
+            return
+        }
+        if (humJob?.isActive == true) return
+        humJob = scope.launch {
+            TboxRepository.addLog("DEBUG", "HUM send", "LightShowReq")
+            sendUdpMessage(socket, serverPort, HUM_CODE, SELF_CODE, 0x0F, value, false)
+        }
+    }
+
     private fun sendSuspendTboxApplication(app: String) {
         val appCode = when (app) {
             "APP" -> APP_CODE
@@ -1201,7 +1229,7 @@ class BackgroundService : Service() {
     private fun cancelAllJobs() {
         listOf(
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
-            swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob,
+            swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
             settingsListenerJob
         ).forEach { job ->
@@ -1912,7 +1940,26 @@ class BackgroundService : Service() {
                         } else {
                             gearBoxPreparedGear = 0
                         }
-                        val gearBoxWork = toHexString(byteArrayOf(singleData[5]))
+
+                        val gearBoxWork = if (singleData[5] == 0x00.toByte()) {
+                            "0"
+                        } else if (singleData[5] == 0xA1.toByte()) {
+                            "1"
+                        } else if (singleData[5] == 0x5E.toByte()) {
+                            "2"
+                        } else if (singleData[5] == 0x42.toByte()) {
+                            "3"
+                        } else if (singleData[5] == 0x30.toByte()) {
+                            "4"
+                        } else if (singleData[5] == 0x26.toByte()) {
+                            "5"
+                        } else if (singleData[5] == 0x1F.toByte()) {
+                            "6"
+                        } else if (singleData[5] == 0x1B.toByte()) {
+                            "7"
+                        } else {
+                            toHexString(byteArrayOf(singleData[5]))
+                        }
 
                         TboxRepository.updateGearBoxMode(gearBoxMode)
                         TboxRepository.updateGearBoxCurrentGear(gearBoxCurrentGear)
@@ -1994,8 +2041,8 @@ class BackgroundService : Service() {
                         val distanceToFuelEmpty = singleData.copyOfRange(2, 4).toUInt16BigEndian()
                         TboxRepository.updateDistanceToFuelEmpty(distanceToFuelEmpty)
                     } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
-                        val frontLeftSeatMode = singleData[4].extractBitsToUInt(5, 3)
-                        val frontRightSeatMode = singleData[4].extractBitsToUInt(2, 3)
+                        val frontLeftSeatMode = singleData[4].extractBitsToUInt(3, 3)
+                        val frontRightSeatMode = singleData[4].extractBitsToUInt(0, 3)
                         TboxRepository.updateFrontLeftSeatMode(frontLeftSeatMode)
                         TboxRepository.updateFrontRightSeatMode(frontRightSeatMode)
                     }
@@ -2308,8 +2355,10 @@ class BackgroundService : Service() {
         require(startPos + length <= 8) { "startPos + length must not exceed 8" }
 
         val value = this.toUInt() and 0xFFu
-        val mask = ((1u shl length) - 1u) shl startPos
-        return (value and mask) shr startPos
+        // Создаем маску для нужного количества битов
+        val bitMask = (1u shl length) - 1u
+        // Сдвигаем маску в нужную позицию и применяем
+        return (value shr startPos) and bitMask
     }
 
     fun Byte.getLeftNibble(): Int = (this.toInt() shr 4) and 0x0F

@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -62,12 +61,14 @@ import com.dashing.tbox.SettingsViewModel
 import com.dashing.tbox.TboxViewModel
 import com.dashing.tbox.WidgetViewModel
 import com.dashing.tbox.WidgetsRepository
+import com.dashing.tbox.seatModeToString
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Locale
 import com.dashing.tbox.ui.theme.TboxAppTheme
 import com.dashing.tbox.utils.MockLocationUtils
 import com.dashing.tbox.utils.canUseMockLocation
+import com.dashing.tbox.valueToString
 import kotlin.collections.component1
 import kotlin.collections.component2
 
@@ -134,6 +135,8 @@ fun TboxScreen(
     onATcmdSend: (String) -> Unit,
 ) {
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
+    val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
+
     val tabs = listOf("Модем", "AT команды", "Геопозиция", "Данные авто", "Настройки", "Журнал", "Информация", "CAN", "Плитки")
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
@@ -207,14 +210,16 @@ fun TboxScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 tabs.forEachIndexed { index, title ->
-                    TabMenuItem(
-                        title = title,
-                        selected = selectedTab == index,
-                        onClick = {
-                            // Сохраняем выбор вкладки через ViewModel
-                            settingsViewModel.saveSelectedTab(index)
-                        }
-                    )
+                    if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
+                        TabMenuItem(
+                            title = title,
+                            selected = selectedTab == index,
+                            onClick = {
+                                // Сохраняем выбор вкладки через ViewModel
+                                settingsViewModel.saveSelectedTab(index)
+                            }
+                        )
+                    }
                 }
             }
 
@@ -237,17 +242,29 @@ fun TboxScreen(
         ) {
             when (selectedTab) {
                 0 -> ModemTab(viewModel, onModemMode)
-                1 -> ATcmdTab (viewModel, onATcmdSend)
-                2 -> LocationTab(viewModel, onTboxApplicationCommand)
+                1 -> if (isExpertModeEnabled) {
+                    ATcmdTab (viewModel, onATcmdSend)
+                } else {
+                    ModemTab(viewModel, onModemMode)
+                }
+                2 -> LocationTab(viewModel, settingsViewModel, onTboxApplicationCommand)
                 3 -> CarDataTab(viewModel)
                 4 -> SettingsTab(
                     viewModel,
                     settingsViewModel,
                     onTboxRestart,
                     onMockLocationSettingChanged)
-                5 -> LogsTab(viewModel, settingsViewModel, onSaveToFile)
+                5 -> if (isExpertModeEnabled) {
+                    LogsTab(viewModel, settingsViewModel, onSaveToFile)
+                } else {
+                    ModemTab(viewModel, onModemMode)
+                }
                 6 -> InfoTab(viewModel, settingsViewModel, onUpdateInfoClick)
-                7 -> CanTab(viewModel, onSaveToFile)
+                7 -> if (isExpertModeEnabled) {
+                    CanTab(viewModel, onSaveToFile)
+                } else {
+                    ModemTab(viewModel, onModemMode)
+                }
                 8 -> DashboardTab(viewModel, widgetViewModel, settingsViewModel)
                 else -> ModemTab(viewModel, onModemMode)
             }
@@ -418,6 +435,7 @@ fun SettingsTab(
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
+    val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
@@ -584,28 +602,48 @@ fun SettingsTab(
             true
         )
         SettingSwitch(
-            isMockLocationEnabled,
+            isExpertModeEnabled,
             { enabled ->
-                onMockLocationSettingChanged(enabled)
+                settingsViewModel.saveExpertModeSetting(enabled)
+                if (!enabled) {
+                    settingsViewModel.saveMockLocationSetting(false)
+                } else {
+                    showAlertDialog("ПРЕДУПРЕЖДЕНИЕ",
+                        "Все изменения в экспертном режиме вы делаете на свой страх и " +
+                                "риск.\nНо к необратимым последствиям ваши действия в этом " +
+                                "режиме привести не могут", context)
+                }
             },
-            "(Экспериментальная опция!) Подменять системные данные о геопозиции",
-            if (canUseMockLocation) {
-                "Готово к использованию"
-            } else {
-                "Требует настройки разрешений и настройки фиктивных местоположений"
-            },
+            "Экспертный режим",
+            "",
             isGetLocDataEnabled
         )
 
-        if (!canUseMockLocation) {
-            Text(
-                text = "Нажмите для просмотра требований к фиктивным местоположениям",
-                fontSize = 20.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .clickable { showLocationRequirementsDialog(context) }
-                    .padding(top = 4.dp)
+        if (isExpertModeEnabled) {
+            SettingSwitch(
+                isMockLocationEnabled,
+                { enabled ->
+                    onMockLocationSettingChanged(enabled)
+                },
+                "Подменять системные данные о геопозиции (Фиктивные местоположения)",
+                if (canUseMockLocation) {
+                    "Готово к использованию"
+                } else {
+                    "Требует настройки разрешений и настройки фиктивных местоположений"
+                },
+                isGetLocDataEnabled
             )
+
+            if (!canUseMockLocation) {
+                Text(
+                    text = "Нажмите для просмотра требований к фиктивным местоположениям",
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickable { showLocationRequirementsDialog(context) }
+                        .padding(top = 4.dp)
+                )
+            }
         }
 
         Row(
@@ -673,12 +711,15 @@ private fun showLocationRequirementsDialog(context: Context) {
 @Composable
 fun LocationTab(
     viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel,
     onTboxApplicationCommand: (String, String) -> Unit,
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+
+    val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
 
     // Используем remember для форматтера
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -727,61 +768,145 @@ fun LocationTab(
             item { StatusRow("Дата и время UTC", dateTime) }
             item { StatusRow("Сырые данные", locValues.rawValue) }
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = {
-                    if (commandButtonsEnabled) {
-                        commandButtonsEnabled = false
-                        onTboxApplicationCommand("LOC", "suspend")
-                    }
-                },
-                enabled = commandButtonsEnabled && tboxConnected
+
+        if (isExpertModeEnabled) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Приостановить LOC",
-                    fontSize = 24.sp,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
+                Button(
+                    onClick = {
+                        if (commandButtonsEnabled) {
+                            commandButtonsEnabled = false
+                            onTboxApplicationCommand("LOC", "suspend")
+                        }
+                    },
+                    enabled = commandButtonsEnabled && tboxConnected
+                ) {
+                    Text(
+                        text = "Приостановить LOC",
+                        fontSize = 24.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Button(
+                    onClick = {
+                        if (commandButtonsEnabled) {
+                            commandButtonsEnabled = false
+                            onTboxApplicationCommand("LOC", "resume")
+                        }
+                    },
+                    enabled = commandButtonsEnabled && tboxConnected
+                ) {
+                    Text(
+                        text = "Возобновить LOC",
+                        fontSize = 24.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Button(
+                    onClick = {
+                        if (commandButtonsEnabled) {
+                            commandButtonsEnabled = false
+                            onTboxApplicationCommand("LOC", "stop")
+                        }
+                    },
+                    enabled = commandButtonsEnabled && tboxConnected
+                ) {
+                    Text(
+                        text = "Остановить LOC",
+                        fontSize = 24.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
-            Button(
-                onClick = {
-                    if (commandButtonsEnabled) {
-                        commandButtonsEnabled = false
-                        onTboxApplicationCommand("LOC", "resume")
-                    }
-                },
-                enabled = commandButtonsEnabled && tboxConnected
+
+            /*Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Возобновить LOC",
-                    fontSize = 24.sp,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
+                Button(
+                    onClick = {
+                        if (commandButtonsEnabled) {
+                            commandButtonsEnabled = false
+                            onTboxApplicationCommand("CRT", "close")
+                        }
+                    },
+                    enabled = commandButtonsEnabled && tboxConnected
+                ) {
+                    Text(
+                        text = "Закрыть",
+                        fontSize = 24.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Button(
+                    onClick = {
+                        if (commandButtonsEnabled) {
+                            commandButtonsEnabled = false
+                            onTboxApplicationCommand("CRT", "open")
+                        }
+                    },
+                    enabled = commandButtonsEnabled && tboxConnected
+                ) {
+                    Text(
+                        text = "Открыть",
+                        fontSize = 24.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
-            Button(
-                onClick = {
-                    if (commandButtonsEnabled) {
-                        commandButtonsEnabled = false
-                        onTboxApplicationCommand("LOC", "stop")
-                    }
-                },
-                enabled = commandButtonsEnabled && tboxConnected
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Остановить LOC",
-                    fontSize = 24.sp,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
+                Button(
+                    onClick = {
+                        if (commandButtonsEnabled) {
+                            commandButtonsEnabled = false
+                            onTboxApplicationCommand("HUM", "lightShowStart")
+                        }
+                    },
+                    enabled = commandButtonsEnabled && tboxConnected
+                ) {
+                    Text(
+                        text = "Световое шоу - старт",
+                        fontSize = 24.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
+                Button(
+                    onClick = {
+                        if (commandButtonsEnabled) {
+                            commandButtonsEnabled = false
+                            onTboxApplicationCommand("HUM", "lightShowStop")
+                        }
+                    },
+                    enabled = commandButtonsEnabled && tboxConnected
+                ) {
+                    Text(
+                        text = "Световое шоу - стоп",
+                        fontSize = 24.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }*/
         }
     }
 }
@@ -908,6 +1033,8 @@ fun CarDataTab(
     val gearBoxOilTemperature by viewModel.gearBoxOilTemperature.collectAsStateWithLifecycle()
     val gearBoxDriveMode by viewModel.gearBoxDriveMode.collectAsStateWithLifecycle()
     val gearBoxWork by viewModel.gearBoxWork.collectAsStateWithLifecycle()
+    val frontRightSeatMode by viewModel.frontRightSeatMode.collectAsStateWithLifecycle()
+    val frontLeftSeatMode by viewModel.frontLeftSeatMode.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -945,6 +1072,8 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Pressure"), valueToString(wheelsPressure.wheel2, 2)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Pressure"), valueToString(wheelsPressure.wheel3, 2)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Pressure"), valueToString(wheelsPressure.wheel4, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontLeftSeatMode"), seatModeToString(frontLeftSeatMode)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontRightSeatMode"), seatModeToString(frontRightSeatMode)) }
         }
     }
 }
@@ -1341,27 +1470,5 @@ fun ATcmdTab(
         ATLogsCard(
             logs = atLogs
         )
-    }
-}
-
-fun valueToString(value: Any?, accuracy: Int = 1, booleanTrue: String = "да", booleanFalse: String = "нет"): String {
-    if (value == null) {
-        return ""
-    }
-    return when (value) {
-        is Int -> value.toString()
-        is UInt -> value.toString()
-        is Float, is Double -> when (accuracy) {
-            1 -> String.format(Locale.getDefault(), "%.1f", value)
-            2 -> String.format(Locale.getDefault(), "%.2f", value)
-            3 -> String.format(Locale.getDefault(), "%.3f", value)
-            4 -> String.format(Locale.getDefault(), "%.4f", value)
-            5 -> String.format(Locale.getDefault(), "%.5f", value)
-            6 -> String.format(Locale.getDefault(), "%.6f", value)
-            else -> String.format(Locale.getDefault(), "%.1f", value)
-        }
-        is Boolean -> if (value) booleanTrue else booleanFalse
-        is String -> value
-        else -> ""
     }
 }

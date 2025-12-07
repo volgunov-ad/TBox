@@ -23,7 +23,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.disableHotReloadMode
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +40,8 @@ import com.dashing.tbox.SettingsViewModel
 import com.dashing.tbox.TboxViewModel
 import com.dashing.tbox.WidgetViewModel
 import com.dashing.tbox.WidgetsRepository
+import com.dashing.tbox.seatModeToString
+import com.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -78,6 +79,8 @@ fun DashboardTab(
     val gearBoxMode by viewModel.gearBoxMode.collectAsStateWithLifecycle()
     val gearBoxDriveMode by viewModel.gearBoxDriveMode.collectAsStateWithLifecycle()
     val gearBoxWork by viewModel.gearBoxWork.collectAsStateWithLifecycle()
+    val frontLeftSeatMode by viewModel.frontLeftSeatMode.collectAsStateWithLifecycle()
+    val frontRightSeatMode by viewModel.frontRightSeatMode.collectAsStateWithLifecycle()
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
@@ -202,6 +205,8 @@ fun DashboardTab(
                                     "gearBoxMode" -> gearBoxMode
                                     "gearBoxDriveMode" -> gearBoxDriveMode
                                     "gearBoxWork" -> gearBoxWork
+                                    "frontRightSeatMode" -> seatModeToString(frontRightSeatMode)
+                                    "frontLeftSeatMode" -> seatModeToString(frontLeftSeatMode)
                                     "signalLevel" -> valueToString(netState.signalLevel)
                                     "netStatus" -> netState.netStatus
                                     "regStatus" -> netState.regStatus

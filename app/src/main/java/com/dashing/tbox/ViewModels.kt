@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Date
+import java.util.Locale
 
 class TboxViewModel : ViewModel() {
     val logs: StateFlow<List<String>> = TboxRepository.logs
@@ -469,6 +470,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val isExpertModeEnabled = settingsManager.expertModeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val logLevel = settingsManager.logLevelFlow
         .stateIn(
             scope = viewModelScope,
@@ -631,6 +639,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveExpertModeSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveExpertModeSetting(enabled)
+        }
+    }
+
     fun saveSelectedTab(tabIndex: Int) {
         viewModelScope.launch {
             settingsManager.saveSelectedTab(tabIndex)
@@ -757,3 +771,55 @@ data class DashboardState(
     val widgets: List<DashboardWidget> = emptyList(),
     val availableDataKeys: List<String> = emptyList()
 )
+
+fun valueToString(value: Any?, accuracy: Int = 1, booleanTrue: String = "да", booleanFalse: String = "нет"): String {
+    if (value == null) {
+        return ""
+    }
+    return when (value) {
+        is Int -> value.toString()
+        is UInt -> value.toString()
+        is Float, is Double -> when (accuracy) {
+            1 -> String.format(Locale.getDefault(), "%.1f", value)
+            2 -> String.format(Locale.getDefault(), "%.2f", value)
+            3 -> String.format(Locale.getDefault(), "%.3f", value)
+            4 -> String.format(Locale.getDefault(), "%.4f", value)
+            5 -> String.format(Locale.getDefault(), "%.5f", value)
+            6 -> String.format(Locale.getDefault(), "%.6f", value)
+            else -> String.format(Locale.getDefault(), "%.1f", value)
+        }
+        is Boolean -> if (value) booleanTrue else booleanFalse
+        is String -> value
+        else -> ""
+    }
+}
+
+fun seatModeToString(seatMode: UInt?): String {
+    if (seatMode == null) return ""
+    return when (seatMode) {
+        1u -> {
+            "выключено"
+        }
+        2u -> {
+            "обогрев 1"
+        }
+        3u -> {
+            "обогрев 2"
+        }
+        4u -> {
+            "обогрев 3"
+        }
+        5u -> {
+            "вентиляция 1"
+        }
+        6u -> {
+            "вентиляция 2"
+        }
+        7u -> {
+            "вентиляция 3"
+        }
+        else -> {
+            seatMode.toString()
+        }
+    }
+}
