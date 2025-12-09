@@ -20,6 +20,17 @@ class ConResWidget : AppWidgetProvider() {
         private val handler = Handler(Looper.getMainLooper())
         private var timeoutRunnable: Runnable? = null
         private var restartBlock = System.currentTimeMillis()
+
+        private var cachedMainPendingIntent: android.app.PendingIntent? = null
+        private var cachedRebootPendingIntent: android.app.PendingIntent? = null
+
+        fun hasActiveWidgets(context: Context): Boolean {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val componentName = ComponentName(context, ConResWidget::class.java)
+            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+
+            return appWidgetIds.isNotEmpty()
+        }
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
@@ -187,16 +198,6 @@ class ConResWidget : AppWidgetProvider() {
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }
 
-    private fun setImageSize(views: RemoteViews, context: Context, viewId: Int, sizeDp: Int) {
-        val density = context.resources.displayMetrics.density
-        val sizePx = (sizeDp * density).toInt()
-
-        views.setInt(viewId, "setMaxWidth", sizePx)
-        views.setInt(viewId, "setMaxHeight", sizePx)
-        views.setInt(viewId, "setMinimumWidth", sizePx)
-        views.setInt(viewId, "setMinimumHeight", sizePx)
-    }
-
     override fun onAppWidgetOptionsChanged(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -207,27 +208,33 @@ class ConResWidget : AppWidgetProvider() {
     }
 
     private fun getMainPendingIntent(context: Context): android.app.PendingIntent {
-        return Intent(context, MainActivity::class.java).let { intent ->
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            android.app.PendingIntent.getActivity(
-                context,
-                0,
-                intent,
-                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-            )
+        if (cachedMainPendingIntent == null) {
+            cachedMainPendingIntent = Intent(context, MainActivity::class.java).let { intent ->
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                android.app.PendingIntent.getActivity(
+                    context,
+                    0,
+                    intent,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                )
+            }
         }
+        return cachedMainPendingIntent!!
     }
 
     private fun getRebootPendingIntent(context: Context): android.app.PendingIntent {
-        return Intent(context, BackgroundService::class.java).let { intent ->
-            intent.action = BackgroundService.ACTION_TBOX_REBOOT
-            android.app.PendingIntent.getService(
-                context,
-                1,
-                intent,
-                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-            )
+        if (cachedRebootPendingIntent == null) {
+            cachedRebootPendingIntent = Intent(context, BackgroundService::class.java).let { intent ->
+                intent.action = BackgroundService.ACTION_TBOX_REBOOT
+                android.app.PendingIntent.getService(
+                    context,
+                    0,
+                    intent,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                )
+            }
         }
+        return cachedRebootPendingIntent!!
     }
 
     private fun calculateTextSize(minWidth: Int): Float {

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -37,6 +38,10 @@ class SettingsManager(private val context: Context) {
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
+
+        private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
+        private val DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_cols")
+        private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
 
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
@@ -123,6 +128,19 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             preferences[SELECTED_TAB_KEY]?.toIntOrNull() ?: 0
         }
+        .distinctUntilChanged()
+
+    val dashboardRowsFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[DASHBOARD_ROWS_KEY] ?: 3 }
+        .distinctUntilChanged()
+
+    val dashboardColsFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[DASHBOARD_COLS_KEY] ?: 4 }
+        .distinctUntilChanged()
+
+    val dashboardChartFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[DASHBOARD_CHART_KEY] ?: false }
+        .distinctUntilChanged()
 
     // Suspend функции для сохранения настроек
 
@@ -250,6 +268,24 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveDashboardRows(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[DASHBOARD_ROWS_KEY] = config
+        }
+    }
+
+    suspend fun saveDashboardCols(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[DASHBOARD_COLS_KEY] = config
+        }
+    }
+
+    suspend fun saveDashboardChart(config: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[DASHBOARD_CHART_KEY] = config
+        }
+    }
+
     suspend fun clearAllSettings() {
         context.settingsDataStore.edit { preferences ->
             preferences.clear()
@@ -277,6 +313,10 @@ class SettingsManager(private val context: Context) {
             preferences[TBOX_IP_KEY] = DEFAULT_TBOX_IP
 
             preferences[DASHBOARD_WIDGETS_KEY] = ""
+
+            preferences[DASHBOARD_ROWS_KEY] = 3
+            preferences[DASHBOARD_COLS_KEY] = 4
+            preferences[DASHBOARD_CHART_KEY] = false
         }
     }
 }

@@ -66,10 +66,19 @@ class TboxBroadcastReceiver : BroadcastReceiver() {
 
     private fun mainAction(context: Context, sender: String, extraName2: String, extraValue2: String) {
         when (extraName2) {
-            //"active" -> handleActiveCommand(context, sender)
+            "activity" -> handleActiveCommand(context, sender, extraValue2)
             "tbox" -> handleTBoxAction(context, sender, extraValue2)
             else -> {
                 Log.w(TAG, "Unknown main action command: $extraName2")
+            }
+        }
+    }
+
+    private fun handleActiveCommand(context: Context, sender: String, extraValue2: String) {
+        when (extraValue2) {
+            "show" -> showMainActivity(context)
+            else -> {
+                Log.w(TAG, "Unknown main action MainActive value: $extraValue2")
             }
         }
     }
@@ -78,7 +87,7 @@ class TboxBroadcastReceiver : BroadcastReceiver() {
         when (extraValue2) {
             "reboot" -> rebootTBox(context)
             else -> {
-                Log.w(TAG, "Unknown main action value: $extraValue2")
+                Log.w(TAG, "Unknown main action Service value: $extraValue2")
             }
         }
     }
@@ -95,6 +104,19 @@ class TboxBroadcastReceiver : BroadcastReceiver() {
             action = BackgroundService.ACTION_STOP
         }
         context.stopService(intent)
+    }
+
+    private fun showMainActivity(context: Context) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            // Добавляем любые дополнительные данные, если нужно
+            // putExtra("key", "value")
+
+            // Можно также установить действие, если MainActivity обрабатывает разные действия
+            // action = "CUSTOM_ACTION"
+        }
+
+        context.startActivity(intent)
     }
 
     private fun rebootTBox(context: Context) {

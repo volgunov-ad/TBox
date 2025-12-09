@@ -17,6 +17,14 @@ class NetWidget : AppWidgetProvider() {
         private var timeoutRunnable: Runnable? = null
         // Кэш для PendingIntent чтобы не создавать его каждый раз
         private var cachedPendingIntent: android.app.PendingIntent? = null
+
+        fun hasActiveWidgets(context: Context): Boolean {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val componentName = ComponentName(context, NetWidget::class.java)
+            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+
+            return appWidgetIds.isNotEmpty()
+        }
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {

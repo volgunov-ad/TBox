@@ -80,8 +80,6 @@ class BackgroundService : Service() {
     private var suspendTboxAppLastTime = System.currentTimeMillis()
     private var preventRestartLastTime = System.currentTimeMillis()
 
-    private val fuelLevelPercentageBuffer = FuelLevelBuffer(10)
-
     private val broadcastReceiver = TboxBroadcastReceiver()
     lateinit var broadcastSender: TboxBroadcastSender
 
@@ -1200,6 +1198,15 @@ class BackgroundService : Service() {
     }
 
     private fun sendWidgetUpdate() {
+        // Проверяем, есть ли активные виджеты
+        if (!NetWidget.hasActiveWidgets(this) &&
+            !ConWidget.hasActiveWidgets(this) &&
+            !ConResWidget.hasActiveWidgets(this)
+            ) {
+            Log.d("Widget", "No active widgets found, skipping update")
+            return
+        }
+
         val intent = Intent(ACTION_UPDATE_WIDGET).apply {
             setPackage(this@BackgroundService.packageName)
             putExtra(EXTRA_SIGNAL_LEVEL, TboxRepository.netState.value.signalLevel)
@@ -1218,7 +1225,6 @@ class BackgroundService : Service() {
             }*/
             putExtra(EXTRA_LOC_TRUE_POSITION, TboxRepository.isLocValuesTrue.value)
         }
-        //TboxRepository.addLog("DEBUG", "Widget", "${widgetShowIndicator.value}")
         try {
             sendBroadcast(intent)
         } catch (e: Exception) {
@@ -1847,212 +1853,7 @@ class BackgroundService : Service() {
             return false
         }
         try {
-            TboxRepository.updateCanFrameTime()
-            val rawValue = data.copyOfRange(4, data.size)
-            var carType = "1.5"
-            //TboxRepository.addCanFrame(toHexString(rawValue))
-            for (i in 0 until rawValue.size step 17) {
-                try {
-                    val rawFrame = rawValue.copyOfRange(i, i + 17)
-                    val timeStamp = rawFrame.copyOfRange(0, 4)
-                    val canID = rawFrame.copyOfRange(4, 8)
-                    val dlc = rawFrame[8]
-                    val singleData = rawFrame.copyOfRange(9, 17)
-
-                    if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-                        continue
-                    }
-
-                    TboxRepository.addCanFrameStructured(
-                        toHexString(canID),
-                        singleData
-                    )
-
-                    if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xC4.toByte()))) {
-                        val angle = (singleData.copyOfRange(0, 2).toFloat("UINT16_BE") - 32768f) * 6f / 100f
-                        val speed = singleData[2].toInt()
-                        TboxRepository.updateSteerAngle(angle)
-                        TboxRepository.updateSteerSpeed(speed)
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xFA.toByte()))) {
-                        val rpm = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 4f
-                        TboxRepository.updateEngineRPM(rpm)
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0x87.toByte()))) {
-                        val distanceToNextMaintenance = singleData.copyOfRange(4, 6).toUInt16BigEndian()
-                        TboxRepository.updateDistanceToNextMaintenance(distanceToNextMaintenance)
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0xE9.toByte()))) {
-                        val breakingForce = singleData[2].toUInt()
-                        TboxRepository.updateBreakingForce(breakingForce)
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x00))) {
-                        val gearBoxMode: String
-                        val gearBoxCurrentGear: Int
-                        val gearBoxPreparedGear: Int
-
-                        if (singleData[0] in GEAR_BOX_7_DRIVE_MODES) {
-                            gearBoxMode = "D"
-                            gearBoxCurrentGear = singleData[0].getLeftNibble()
-                        } else if (singleData[0] == 0xBE.toByte()) {
-                            gearBoxMode = "P"
-                            gearBoxCurrentGear = 0
-                        } else if (singleData[0] == 0xAC.toByte()) {
-                            gearBoxMode = "N"
-                            gearBoxCurrentGear = 0
-                        } else if (singleData[0] == 0xAD.toByte()) {
-                            gearBoxMode = "R"
-                            gearBoxCurrentGear = 0
-                        } else {
-                            gearBoxMode = "N/A"
-                            gearBoxCurrentGear = 0
-                        }
-
-                        val gearBoxChangeGearByte = singleData[1].getLeftNibble()
-                        val gearBoxChangeGear = when (gearBoxChangeGearByte) {
-                            0xB -> {
-                                false
-                            }
-                            0xF -> {
-                                true
-                            }
-                            else -> {
-                                false
-                            }
-                        }
-
-                        val gearBoxDriveModeByte = singleData[1].getRightNibble()
-                        val gearBoxDriveMode = when (gearBoxDriveModeByte) {
-                            0 -> {
-                                "ECO"
-                            }
-                            1 -> {
-                                "NOR"
-                            }
-                            2 -> {
-                                "SPT"
-                            }
-                            else -> {
-                                "N/A"
-                            }
-                        }
-
-                        val gearBoxOilTemperature = singleData[2].toUByte().toInt() - 40
-
-                        if (singleData[3] in GEAR_BOX_7_PREPARED_DRIVE_MODES) {
-                            gearBoxPreparedGear = (singleData[3].toInt() and 0xF0) ushr 4
-                        } else {
-                            gearBoxPreparedGear = 0
-                        }
-
-                        val gearBoxWork = if (singleData[5] == 0x00.toByte()) {
-                            "0"
-                        } else if (singleData[5] == 0xA1.toByte()) {
-                            "1"
-                        } else if (singleData[5] == 0x5E.toByte()) {
-                            "2"
-                        } else if (singleData[5] == 0x42.toByte()) {
-                            "3"
-                        } else if (singleData[5] == 0x30.toByte()) {
-                            "4"
-                        } else if (singleData[5] == 0x26.toByte()) {
-                            "5"
-                        } else if (singleData[5] == 0x1F.toByte()) {
-                            "6"
-                        } else if (singleData[5] == 0x1B.toByte()) {
-                            "7"
-                        } else {
-                            toHexString(byteArrayOf(singleData[5]))
-                        }
-
-                        TboxRepository.updateGearBoxMode(gearBoxMode)
-                        TboxRepository.updateGearBoxCurrentGear(gearBoxCurrentGear)
-                        TboxRepository.updateGearBoxPreparedGear(gearBoxPreparedGear)
-                        TboxRepository.updateGearBoxChangeGear(gearBoxChangeGear)
-                        TboxRepository.updateGearBoxOilTemperature(gearBoxOilTemperature)
-                        TboxRepository.updateGearBoxDriveMode(gearBoxDriveMode)
-                        TboxRepository.updateGearBoxWork(gearBoxWork)
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x05))) {
-                        carType = "1.6"
-                        val cruiseSpeed = singleData[0].toUInt()
-                        TboxRepository.updateCruiseSetSpeed(cruiseSpeed)
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x10))) {
-                        val speed1 = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") * 0.065f
-                        val speed2 = singleData.copyOfRange(2, 4).toFloat("UINT16_BE") * 0.065f
-                        val speed3 = singleData.copyOfRange(4, 6).toFloat("UINT16_BE") * 0.065f
-                        val speed4 = singleData.copyOfRange(6, 8).toFloat("UINT16_BE") * 0.065f
-                        TboxRepository.updateWheelsSpeed(Wheels(speed1, speed2, speed3, speed4))
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x04, 0x30))) {
-                        val speed = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 16f
-                        val voltage = singleData[2].toUInt().toFloat() / 10f
-                        val fuelLevelPercentage = singleData[4].toUInt()
-                        val odometer = singleData.copyOfRange(5, 8).toUInt20FromNibbleBigEndian()
-                        TboxRepository.updateCarSpeed(speed)
-                        TboxRepository.updateOdometer(odometer)
-                        TboxRepository.updateVoltage(voltage)
-                        TboxRepository.updateFuelLevelPercentage(fuelLevelPercentage)
-                        if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
-                            TboxRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
-                        }
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x01))) {
-                        val engineTemperature = singleData[2].toUInt().toFloat() * 0.75f - 48f
-                        if (carType != "1.6") {
-                            if (singleData[1].toInt() == 1) {
-                                val cruiseSpeed =
-                                    singleData[4].toUInt() - 3u + if (singleData[5].toUInt() >= 192u) 1u else 0u
-                                TboxRepository.updateCruiseSetSpeed(cruiseSpeed)
-                            } else if (singleData[1].toInt() == 0) {
-                                TboxRepository.updateCruiseSetSpeed(0u)
-                            }
-                        }
-                        TboxRepository.updateEngineTemperature(engineTemperature)
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x02))) {
-                        val speed = if (singleData[2] != 0x00.toByte()) {
-                            singleData.copyOfRange(1, 3).toFloat("UINT16_BE") / 16f
-                        } else {
-                            0f
-                        }
-                        TboxRepository.updateCarSpeedAccurate(speed)
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x1B))) {
-                        val pressure1 = if (singleData[4] != 0xFF.toByte()) {
-                            singleData[4].toUInt().toFloat() / 35f
-                        } else {
-                            null
-                        }
-                        val pressure2 = if (singleData[5] != 0xFF.toByte()) {
-                            singleData[5].toUInt().toFloat() / 35f
-                        } else {
-                            null
-                        }
-                        val pressure3 = if (singleData[6] != 0xFF.toByte()) {
-                            singleData[6].toUInt().toFloat() / 35f
-                        } else {
-                            null
-                        }
-                        val pressure4 = if (singleData[7] != 0xFF.toByte()) {
-                            singleData[7].toUInt().toFloat() / 35f
-                        } else {
-                            null
-                        }
-                        TboxRepository.updateWheelsPressure(Wheels(pressure1, pressure2, pressure3, pressure4))
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x2F))) {
-                        val setTemperature = singleData[5].toUInt().toFloat() / 4f
-                        if (setTemperature != 0f) {
-                            val setTemperature1 = singleData[5].toUInt().toFloat() / 4f
-                            TboxRepository.updateClimateSetTemperature1(setTemperature1)
-                        }
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x30))) {
-                        val distanceToFuelEmpty = singleData.copyOfRange(2, 4).toUInt16BigEndian()
-                        TboxRepository.updateDistanceToFuelEmpty(distanceToFuelEmpty)
-                    } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
-                        val frontLeftSeatMode = singleData[4].extractBitsToUInt(3, 3)
-                        val frontRightSeatMode = singleData[4].extractBitsToUInt(0, 3)
-                        TboxRepository.updateFrontLeftSeatMode(frontLeftSeatMode)
-                        TboxRepository.updateFrontRightSeatMode(frontRightSeatMode)
-                    }
-                } catch (e: Exception) {
-                    TboxRepository.addLog("ERROR", "CRT response",
-                        "Error get CAN Frame $i: $e")
-                }
-            }
-            TboxRepository.addLog("DEBUG", "CRT response",
-                "Get CAN Frame")
+            CanFramesProcess.process(data)
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "CRT response",
                 "Error get CAN Frame: $e")
@@ -2345,72 +2146,6 @@ class BackgroundService : Service() {
         }
     }
 
-    fun Byte.toUInt(): UInt {
-        return this.toUByte().toUInt()
-    }
-
-    fun Byte.extractBitsToUInt(startPos: Int, length: Int): UInt {
-        require(startPos in 0..7) { "startPos must be between 0 and 7" }
-        require(length in 1..8) { "length must be between 1 and 8" }
-        require(startPos + length <= 8) { "startPos + length must not exceed 8" }
-
-        val value = this.toUInt() and 0xFFu
-        // Создаем маску для нужного количества битов
-        val bitMask = (1u shl length) - 1u
-        // Сдвигаем маску в нужную позицию и применяем
-        return (value shr startPos) and bitMask
-    }
-
-    fun Byte.getLeftNibble(): Int = (this.toInt() shr 4) and 0x0F
-    fun Byte.getRightNibble(): Int = this.toInt() and 0x0F
-
-    fun ByteArray.toUInt20FromNibbleBigEndian(): UInt {
-        require(this.size >= 3) { "ByteArray must have at least 3 bytes" }
-        val byte1 = (this[0].toUInt() and 0x0FU) shl 16
-        val byte2 = (this[1].toUInt() and 0xFFU) shl 8
-        val byte3 = this[2].toUInt() and 0xFFU
-        return byte1 or byte2 or byte3
-    }
-
-    fun ByteArray.toUInt16BigEndian(): UInt {
-        require(this.size >= 2) { "ByteArray must have at least 2 bytes" }
-        val byte1 = (this[0].toUInt() and 0xFFU) shl 8
-        val byte2 = this[1].toUInt() and 0xFFU
-        return byte1 or byte2
-    }
-
-    fun ByteArray.toDouble(format: String = "UINT16_BE"): Double {
-        return when (format) {
-            "UINT16_BE" -> {
-                require(this.size >= 2) { "ByteArray must have at least 2 bytes for UINT16_BE" }
-                val intValue = ((this[0].toInt() and 0xFF) shl 8) or
-                        (this[1].toInt() and 0xFF)
-                intValue.toDouble()
-            }
-            "UINT16_LE" -> {
-                require(this.size >= 2) { "ByteArray must have at least 2 bytes for UINT16_LE" }
-                val intValue = ((this[1].toInt() and 0xFF) shl 8) or
-                        (this[0].toInt() and 0xFF)
-                intValue.toDouble()
-            }
-            "UINT24_BE" -> {
-                require(this.size >= 3) { "ByteArray must have at least 3 bytes for UINT24_BE" }
-                val intValue = ((this[0].toInt() and 0xFF) shl 16) or
-                        ((this[1].toInt() and 0xFF) shl 8) or
-                        (this[2].toInt() and 0xFF)
-                intValue.toDouble()
-            }
-            "UINT24_LE" -> {
-                require(this.size >= 3) { "ByteArray must have at least 3 bytes for UINT24_LE" }
-                val intValue = ((this[2].toInt() and 0xFF) shl 16) or
-                        ((this[1].toInt() and 0xFF) shl 8) or
-                        (this[0].toInt() and 0xFF)
-                intValue.toDouble()
-            }
-            else -> throw IllegalArgumentException("Unknown format: $format. Supported: UINT16_BE, UINT16_LE, UINT24_BE, UINT24_LE")
-        }
-    }
-
     fun ByteArray.toFloat(format: String = "UINT16_BE"): Float {
         return when (format) {
             "UINT16_BE" -> {
@@ -2447,67 +2182,4 @@ class BackgroundService : Service() {
         Log.e("BackgroundService", "Coroutine error", throwable)
         TboxRepository.addLog("ERROR", "Coroutine", "Error: ${throwable.message}")
     }
-}
-
-fun fillHeader(dataLength: Int,
-               tid: Byte,
-               sid: Byte,
-               param: Byte): ByteArray {
-    val header = ByteArray(13)
-    header[0] = 0x8E.toByte()      // Стартовый байт
-    header[1] = 0x5D.toByte()      // Идентификатор протокола
-    header[2] = (dataLength + 10 shr 8).toByte()  // Длина данных (старший байт)
-    header[3] = (dataLength + 10 and 0xFF).toByte() // Длина данных (младший байт)
-    header[4] = 0x00               // Sequence number
-    header[5] = 0x00               // Reserved
-    header[6] = 0x01               // Версия протокола
-    header[7] = 0x00               // Reserved
-    header[8] = tid                // ID целевого модуля
-    header[9] = sid                // ID исходного модуля
-    header[10] = (dataLength shr 8).toByte()  // Длина данных (старший байт)
-    header[11] = (dataLength and 0xFF).toByte() // Длина данных (младший байт)
-    header[12] = param             // Команда
-    return header
-}
-
-fun checkPacket(data: ByteArray): Boolean {
-    if (data.isEmpty() || data.size < 14) {
-        return false
-    }
-    if (data[0] != 0x8E.toByte() || data[1] != 0x5D.toByte()) {
-        return false
-    }
-    return true
-}
-
-fun extractDataLength(data: ByteArray): Int {
-    return ((data[10].toInt() and 0xFF) shl 8) or (data[11].toInt() and 0xFF)
-}
-
-fun checkLength(data: ByteArray, length: Int): Boolean {
-    return data.size - 14 >= length
-}
-
-fun extractData(data: ByteArray, length: Int): ByteArray {
-    if (xorSum(data.copyOfRange(0, 13+length)) != data[13+length]) {
-        return ByteArray(0)
-    }
-    return data.copyOfRange(13, 13+length)
-}
-
-fun xorSum(data: ByteArray): Byte {
-    if (data.isEmpty() || data.size < 9) {
-        return 0
-    }
-
-    var checksum: Byte = 0
-    // Начинаем с 10-го байта (индекс 9, так как индексация с 0)
-    for (i in 9 until data.size) {
-        checksum = (checksum.toInt() xor data[i].toInt()).toByte()
-    }
-    return checksum
-}
-
-fun toHexString(data: ByteArray, separator: String = " "): String {
-    return data.joinToString(separator) { "%02X".format(it) }
 }

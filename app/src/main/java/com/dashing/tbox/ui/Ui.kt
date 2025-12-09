@@ -436,6 +436,11 @@ fun SettingsTab(
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
+
+    val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
+    val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
+    val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
+
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
     val scrollState = rememberScrollState()
@@ -576,6 +581,44 @@ fun SettingsTab(
         )
 
         Text(
+            text = "Настройки экрана Плитки",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Left
+        )
+        SettingSwitch(
+            dashboardChart,
+            { enabled ->
+                settingsViewModel.saveDashboardChart(enabled)
+            },
+            "Показывать графики изменения величин на плитках",
+            "",
+            true
+        )
+        SettingDropdownGeneric(
+            dashboardRows,
+            { rows ->
+                settingsViewModel.saveDashboardRows(rows)
+            },
+            "Количество строк плиток",
+            "",
+            true,
+            listOf(1, 2, 3, 4, 5, 6)
+        )
+        SettingDropdownGeneric(
+            dashboardCols,
+            { cols ->
+                settingsViewModel.saveDashboardCols(cols)
+            },
+            "Количество столбцов плиток",
+            "",
+            true,
+            listOf(1, 2, 3, 4, 5, 6)
+        )
+
+        Text(
             text = "Получение данных от TBox",
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
@@ -601,6 +644,7 @@ fun SettingsTab(
             "",
             true
         )
+
         SettingSwitch(
             isExpertModeEnabled,
             { enabled ->

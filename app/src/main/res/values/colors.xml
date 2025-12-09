@@ -8,9 +8,9 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <color name="status_warn">#98FFFF00</color>
-    <color name="status_err">#99FF0000</color>
-    <color name="status_ok">#9900FF00</color>
+    <color name="status_warn">#D9FF9800</color>
+    <color name="status_err">#D9FF0000</color>
+    <color name="status_ok">#D900A400</color>
 
     <color name="on_dark_background">#FFE2E2E6</color>
     <color name="on_light_background">#FF1A1C1E</color>

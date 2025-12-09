@@ -13,8 +13,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -30,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,7 +50,10 @@ fun DashboardTab(
     settingsViewModel: SettingsViewModel
 ) {
     val dashboardState by widgetViewModel.dashboardState.collectAsStateWithLifecycle()
+
     val widgetsConfig by settingsViewModel.dashboardWidgetsConfig.collectAsStateWithLifecycle()
+    val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
+    val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
 
     // Собираем все необходимые состояния как State
     val voltage by viewModel.voltage.collectAsStateWithLifecycle()
@@ -105,10 +105,10 @@ fun DashboardTab(
     LaunchedEffect(Unit) {
         if (dashboardState.widgets.isEmpty()) {
             val widgets = if (widgetsConfig.isNotEmpty()) {
-                loadWidgetsFromConfig(widgetsConfig)
+                loadWidgetsFromConfig(widgetsConfig, dashboardRows * dashboardCols)
             } else {
                 // Создаем 12 пустых виджетов (4x3)
-                List(12) { index ->
+                List(dashboardRows * dashboardCols) { index ->
                     DashboardWidget(
                         id = index,
                         title = "",
@@ -123,7 +123,7 @@ fun DashboardTab(
     // Инициализация из конфигурации при изменении widgetsConfig
     LaunchedEffect(widgetsConfig) {
         if (widgetsConfig.isNotEmpty()) {
-            val widgets = loadWidgetsFromConfig(widgetsConfig)
+            val widgets = loadWidgetsFromConfig(widgetsConfig, dashboardRows * dashboardCols)
             widgetViewModel.updateDashboardWidgets(widgets)
         }
     }
@@ -156,7 +156,7 @@ fun DashboardTab(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 3 строки
-                for (row in 0 until 3) {
+                for (row in 0 until dashboardRows) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -164,8 +164,8 @@ fun DashboardTab(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // 4 колонки в каждой строке
-                        for (col in 0 until 4) {
-                            val index = row * 4 + col
+                        for (col in 0 until dashboardCols) {
+                            val index = row * dashboardCols + col
                             val widget = dashboardState.widgets.getOrNull(index) ?: continue
 
                             Box(
@@ -230,7 +230,9 @@ fun DashboardTab(
                                     value = value,
                                     onEditClick = {
                                         showDialogForIndex = index
-                                    }
+                                    },
+                                    widgetViewModel,
+                                    settingsViewModel
                                 )
                             }
                         }
@@ -252,11 +254,12 @@ fun DashboardTab(
     }
 }
 
-@Composable
+/*@Composable
 fun DashboardWidgetItem(
     widget: DashboardWidget,
     value: String,
-    onEditClick: () -> Unit
+    onEditClick: () -> Unit,
+    viewModel: WidgetViewModel
 ) {
     Card(
         modifier = Modifier
@@ -310,7 +313,7 @@ fun DashboardWidgetItem(
             }
         }
     }
-}
+}*/
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -425,6 +428,8 @@ fun WidgetSelectionDialog(
                     val config = updatedWidgets.joinToString("|") { it.dataKey }
                     settingsViewModel.saveDashboardWidgets(config)
 
+                    widgetViewModel.clearWidgetHistory(widgetIndex)
+
                     onDismiss()
                 }
             ) {
@@ -442,16 +447,14 @@ fun WidgetSelectionDialog(
 }
 
 // Функция для загрузки виджетов из конфигурации
-private fun loadWidgetsFromConfig(config: String): List<DashboardWidget> {
+private fun loadWidgetsFromConfig(config: String, numberWidgets: Int): List<DashboardWidget> {
     val dataKeys = if (config.isNotEmpty()) {
         config.split("|")
     } else {
-        // Всегда возвращаем 12 виджетов для сетки 4x3
-        List(12) { "" }
+        List(numberWidgets) { "" }
     }
 
-    // Обеспечиваем, что всегда будет 12 виджетов
-    return (0 until 12).map { index ->
+    return (0 until numberWidgets).map { index ->
         val dataKey = dataKeys.getOrNull(index) ?: ""
         if (dataKey.isNotEmpty() && dataKey != "null") {
             DashboardWidget(

@@ -1,16 +1,20 @@
 package com.dashing.tbox
 
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Date
 import java.util.Locale
+import kotlin.Boolean
+import kotlin.collections.List
 
 class TboxViewModel : ViewModel() {
     val logs: StateFlow<List<String>> = TboxRepository.logs
@@ -561,6 +565,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = ""
         )
 
+    val dashboardRows = settingsManager.dashboardRowsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 3
+        )
+
+    val dashboardCols = settingsManager.dashboardColsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 4
+        )
+
+    val dashboardChart = settingsManager.dashboardChartFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     fun saveAutoRestartSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveAutoModemRestartSetting(enabled)
@@ -656,6 +681,28 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             settingsManager.saveDashboardWidgets(config)
         }
     }
+
+    fun saveDashboardRows(config: Int) {
+        if (config in 1..6) {
+            viewModelScope.launch {
+                settingsManager.saveDashboardRows(config)
+            }
+        }
+    }
+
+    fun saveDashboardCols(config: Int) {
+        if (config in 1..6) {
+            viewModelScope.launch {
+                settingsManager.saveDashboardCols(config)
+            }
+        }
+    }
+
+    fun saveDashboardChart(config: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveDashboardChart(config)
+        }
+    }
 }
 
 class WidgetViewModel : ViewModel() {
@@ -673,6 +720,38 @@ class WidgetViewModel : ViewModel() {
             WidgetsRepository.updateDashboardWidgets(widgets)
         }
     }
+
+    private val _widgetHistory = MutableStateFlow<Map<Int, List<Float>>>(emptyMap())
+    val widgetHistory: StateFlow<Map<Int, List<Float>>> = _widgetHistory
+
+    // Получение StateFlow для конкретного виджета (с кэшированием)
+    private val historyFlows = mutableMapOf<Int, StateFlow<List<Float>>>()
+
+    fun getWidgetHistoryFlow(widgetId: Int): StateFlow<List<Float>> {
+        return historyFlows.getOrPut(widgetId) {
+            widgetHistory
+                .map { it[widgetId] ?: emptyList() }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000),
+                    initialValue = emptyList()
+                )
+        }
+    }
+
+    fun updateWidgetHistory(widgetId: Int, value: Float) {
+        _widgetHistory.update { currentMap ->
+            val currentHistory = currentMap[widgetId] ?: emptyList()
+            val newHistory = (currentHistory + value).takeLast(60)
+            currentMap + (widgetId to newHistory)
+        }
+    }
+
+    fun clearWidgetHistory(widgetId: Int) {
+        val currentMap = _widgetHistory.value
+        _widgetHistory.value = currentMap - widgetId
+    }
+
 }
 
 object WidgetsRepository {
@@ -688,7 +767,7 @@ object WidgetsRepository {
         "steerSpeed" to DataTitle("Скорость вращения руля", ""),
         "engineRPM" to DataTitle("Обороты двигателя", "об/мин"),
         "carSpeed" to DataTitle("Скорость автомобиля", "км/ч"),
-        "carSpeedAccurate" to DataTitle("Точная корость автомобиля", "км/ч"),
+        "carSpeedAccurate" to DataTitle("Точная скорость автомобиля", "км/ч"),
         "wheel1Speed" to DataTitle("Скорость колеса 1", "км/ч"),
         "wheel2Speed" to DataTitle("Скорость колеса 2", "км/ч"),
         "wheel3Speed" to DataTitle("Скорость колеса 3", "км/ч"),
@@ -763,7 +842,9 @@ data class DashboardWidget(
     val id: Int,
     val title: String,
     val unit: String = "",
-    val dataKey: String = "" // Ключ для идентификации данных
+    val dataKey: String = "", // Ключ для идентификации данных
+    val maxValue: Float? = null,
+    val minValue: Float? = null
 )
 
 // Состояние панели виджетов
