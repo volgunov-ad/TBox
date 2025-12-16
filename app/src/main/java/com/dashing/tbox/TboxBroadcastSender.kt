@@ -146,7 +146,10 @@ class TboxBroadcastSender(
         }
 
         // Отправляем текущее значение
-        sendCurrentValue(packageName, extraName, extraValue)
+        scope.launch {
+            delay(1000) // Задержка 1 секунда
+            sendCurrentValue(packageName, extraName, extraValue)
+        }
     }
 
     private fun handleAddSubscriber(
