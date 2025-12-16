@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.dashing.tbox"
+    namespace = "vad.dashing.tbox"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.dashing.tbox"
+        applicationId = "vad.dashing.tbox"
         minSdk = 28
         targetSdk = 36
         versionCode = 81
