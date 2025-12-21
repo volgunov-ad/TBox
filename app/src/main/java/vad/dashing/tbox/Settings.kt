@@ -46,6 +46,7 @@ class SettingsManager(private val context: Context) {
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
         private val TBOX_IP_KEY = stringPreferencesKey("${KEY_PREFIX}tbox_ip")
+        private val TBOX_IP_ROTATION_KEY = booleanPreferencesKey("${KEY_PREFIX}tbox_ip_rotation")
 
         // Значения по умолчанию
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
@@ -56,11 +57,57 @@ class SettingsManager(private val context: Context) {
 
         // Ключ для сохранения конфигурации виджетов
         private val DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}dashboard_widgets")
+
+        private val FLOATING_DASHBOARD_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard")
+        private val FLOATING_DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}floating_dashboard_widgets")
+        private val FLOATING_DASHBOARD_WIDTH_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_width")
+        private val FLOATING_DASHBOARD_HEIGHT_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_height")
+        private val FLOATING_DASHBOARD_START_X_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_start_x")
+        private val FLOATING_DASHBOARD_START_Y_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_start_y")
+        private val FLOATING_DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_rows")
+        private val FLOATING_DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_cols")
+        private val FLOATING_DASHBOARD_BACKGROUND_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard_background")
     }
 
     // Flow для конфигурации виджетов
     val dashboardWidgetsFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[DASHBOARD_WIDGETS_KEY] ?: "" }
+        .distinctUntilChanged()
+
+    val floatingDashboardFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val floatingDashboardWidgetsFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_WIDGETS_KEY] ?: "" }
+        .distinctUntilChanged()
+
+    val floatingDashboardRowsFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_ROWS_KEY] ?: 1 }
+        .distinctUntilChanged()
+
+    val floatingDashboardColsFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_COLS_KEY] ?: 1 }
+        .distinctUntilChanged()
+
+    val floatingDashboardHeightFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_HEIGHT_KEY] ?: 100 }
+        .distinctUntilChanged()
+
+    val floatingDashboardWidthFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_WIDTH_KEY] ?: 100 }
+        .distinctUntilChanged()
+
+    val floatingDashboardStartXFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_START_X_KEY] ?: 50 }
+        .distinctUntilChanged()
+
+    val floatingDashboardStartYFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_START_Y_KEY] ?: 50 }
+        .distinctUntilChanged()
+
+    val floatingDashboardBackgroundFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_BACKGROUND_KEY] ?: false }
         .distinctUntilChanged()
 
     val autoModemRestartFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -122,6 +169,10 @@ class SettingsManager(private val context: Context) {
 
     val tboxIPFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[TBOX_IP_KEY] ?: DEFAULT_TBOX_IP }
+        .distinctUntilChanged()
+
+    val tboxIPRotationFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[TBOX_IP_ROTATION_KEY] ?: false }
         .distinctUntilChanged()
 
     val selectedTabFlow: Flow<Int> = context.settingsDataStore.data
@@ -235,9 +286,69 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveFloatingDashboardSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_KEY] = enabled
+        }
+    }
+
+    suspend fun saveFloatingDashboardWidgets(config: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_WIDGETS_KEY] = config
+        }
+    }
+
+    suspend fun saveFloatingDashboardRows(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_ROWS_KEY] = config
+        }
+    }
+
+    suspend fun saveFloatingDashboardCols(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_COLS_KEY] = config
+        }
+    }
+
+    suspend fun saveFloatingDashboardHeight(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_HEIGHT_KEY] = config
+        }
+    }
+
+    suspend fun saveFloatingDashboardWidth(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_WIDTH_KEY] = config
+        }
+    }
+
+    suspend fun saveFloatingDashboardStartX(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_START_X_KEY] = config
+        }
+    }
+
+    suspend fun saveFloatingDashboardStartY(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_START_Y_KEY] = config
+        }
+    }
+
+    suspend fun saveFloatingDashboardBackground(config: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_BACKGROUND_KEY] = config
+        }
+    }
+
     suspend fun saveTboxIP(value: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[TBOX_IP_KEY] = value
+        }
+    }
+
+    suspend fun saveTboxIPRotationSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[TBOX_IP_ROTATION_KEY] = enabled
         }
     }
 

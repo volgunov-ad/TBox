@@ -90,6 +90,9 @@ class MainActivity : ComponentActivity() {
                     },
                     onATcmdSend = { cmd ->
                         atCmdSend(cmd)
+                    },
+                    onFloatingDashboardChanged = { enabled ->
+                        handleFloatingDashboardChanged(enabled)
                     }
                 )
             }
@@ -442,5 +445,19 @@ class MainActivity : ComponentActivity() {
     private fun hasLocationPermissions(): Boolean {
         return (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+    }
+
+    private fun handleFloatingDashboardChanged(enabled: Boolean) {
+        val intent = Intent(this, BackgroundService::class.java).apply {
+            action = when (enabled) {
+                true -> {
+                    BackgroundService.ACTION_SHOW_FLOATING
+                }
+                else -> {
+                    BackgroundService.ACTION_HIDE_FLOATING
+                }
+            }
+        }
+        startServiceSafely(intent)
     }
 }

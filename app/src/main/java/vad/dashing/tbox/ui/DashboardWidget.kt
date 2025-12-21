@@ -1,12 +1,15 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -16,10 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -27,37 +32,46 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
-import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.WidgetViewModel
 import kotlinx.coroutines.delay
+import vad.dashing.tbox.DashboardManager
 import kotlin.math.abs
 
 @Composable
 fun DashboardWidgetItem(
     widget: DashboardWidget,
-    value: String,
-    onEditClick: () -> Unit,
-    widgetViewModel: WidgetViewModel,
-    settingsViewModel: SettingsViewModel
+    dataProvider: DataProvider,
+    onClick: () -> Unit = {},
+    onLongClick: () -> Unit = {},
+    dashboardManager: DashboardManager,
+    dashboardChart: Boolean,
+    elevation: Dp = 4.dp,
+    shape: Dp = 12.dp,
+    title: Boolean = true,
+    units: Boolean = true,
+    backgroundTransparent: Boolean = false
 ) {
-    val widgetHistory by widgetViewModel.getWidgetHistoryFlow(widget.id).collectAsState()
+    val widgetHistory by dashboardManager.getWidgetHistoryFlow(widget.id).collectAsState()
 
-    val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
+    val valueFlow = remember(widget.dataKey) {
+        dataProvider.getValueFlow(widget.dataKey)
+    }
 
-    if (dashboardChart) {
-        val currentValue by rememberUpdatedState(value.replace(",", ".").toFloatOrNull())
+    val valueString by valueFlow.collectAsStateWithLifecycle()
 
-        LaunchedEffect(widget.id) {
-            while (true) {
-                delay(1000L)
+    val currentValue by rememberUpdatedState(valueString.replace(",", ".").toFloatOrNull())
 
-                // Обновляем историю каждую секунду
+    LaunchedEffect(widget.id) {
+        while (true) {
+            delay(1000L)
+            if (dashboardChart) {
                 currentValue?.let {
-                    widgetViewModel.updateWidgetHistory(widget.id, it)
+                    dashboardManager.updateWidgetHistory(widget.id, it)
                 }
             }
         }
@@ -66,17 +80,24 @@ fun DashboardWidgetItem(
     Card(
         modifier = Modifier
             .fillMaxSize()
-            .clickable { onEditClick() },
-        elevation = CardDefaults.cardElevation(4.dp),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(shape)
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize()
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                color = Color.Transparent,
+                shape = RoundedCornerShape(shape)
+            )
         ) {
-            // График истории в фоне (только если есть хотя бы 2 точки и не все значения одинаковые)
             if (!widgetHistory.checkValues() && dashboardChart) {
                 HistoryLineChart(
                     values = widgetHistory,
@@ -86,52 +107,116 @@ fun DashboardWidgetItem(
                 )
             }
 
-            // Основной контент
+            val availableHeight = maxHeight
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp),
+                    .padding(6.dp)
+                    .wrapContentHeight(Alignment.CenterVertically),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Заголовок виджета
                 Text(
-                    text = widget.title,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                // Значение
-                Text(
-                    text = value,
-                    fontSize = 46.sp,
+                    text = if (title) widget.title else "",
+                    fontSize = calculateResponsiveFontSize(
+                        containerHeight = availableHeight,
+                        textType = TextType.TITLE
+                    ),
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
+                    softWrap = true,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically)
                 )
 
-                // Единицы измерения
-                if (widget.unit.isNotEmpty()) {
-                    Text(
-                        text = widget.unit,
-                        fontSize = 26.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = valueString,
+                    fontSize = calculateResponsiveFontSize(
+                        containerHeight = availableHeight,
+                        textType = TextType.VALUE
+                    ),
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(2f)
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically)
+                )
+
+                Text(
+                    text = if (units) widget.unit else "",
+                    fontSize = calculateResponsiveFontSize(
+                        containerHeight = availableHeight,
+                        textType = TextType.UNIT
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically)
+                )
             }
         }
     }
+}
+
+@Composable
+fun calculateResponsiveFontSize(
+    containerHeight: Dp,
+    textType: TextType = TextType.VALUE
+): TextUnit {
+    val heightInDp = containerHeight.value
+
+    return when (textType) {
+        TextType.TITLE -> {
+            when {
+                heightInDp < 60 -> 12.sp
+                heightInDp < 80 -> 16.sp
+                heightInDp < 100 -> 20.sp
+                heightInDp < 120 -> 24.sp
+                heightInDp < 150 -> 28.sp
+                else -> 32.sp
+            }
+        }
+        TextType.VALUE -> {
+            when {
+                heightInDp < 60 -> 18.sp
+                heightInDp < 80 -> 24.sp
+                heightInDp < 100 -> 30.sp
+                heightInDp < 120 -> 36.sp
+                heightInDp < 150 -> 42.sp
+                else -> 48.sp
+            }
+        }
+        TextType.UNIT -> {
+            when {
+                heightInDp < 60 -> 10.sp
+                heightInDp < 80 -> 14.sp
+                heightInDp < 100 -> 18.sp
+                heightInDp < 120 -> 22.sp
+                heightInDp < 150 -> 26.sp
+                else -> 30.sp
+            }
+        }
+    }
+}
+
+enum class TextType {
+    TITLE, VALUE, UNIT
 }
 
 @Composable
@@ -141,7 +226,7 @@ private fun HistoryLineChart(
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.padding(2.dp)) {
         // Добавляем проверку, чтобы избежать деления на ноль
         if (values.size < 2) return@Canvas
 

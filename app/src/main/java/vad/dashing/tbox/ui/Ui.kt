@@ -1,6 +1,8 @@
 package vad.dashing.tbox.ui
 
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +54,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,7 +62,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
-import vad.dashing.tbox.WidgetViewModel
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.seatModeToString
 import kotlinx.coroutines.delay
@@ -83,9 +85,10 @@ fun TboxApp(
     onTboxApplicationCommand: (String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onATcmdSend: (String) -> Unit,
+    onFloatingDashboardChanged: (Boolean) -> Unit,
 ) {
     val viewModel: TboxViewModel = viewModel()
-    val widgetViewModel: WidgetViewModel = viewModel()
+
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(settingsManager))
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
@@ -93,7 +96,6 @@ fun TboxApp(
     TboxAppTheme(theme = currentTheme) {
         TboxScreen(
             viewModel = viewModel,
-            widgetViewModel = widgetViewModel,
             settingsViewModel = settingsViewModel,
             onTboxRestart = onTboxRestart,
             onModemCheck = onModemCheck,
@@ -102,7 +104,8 @@ fun TboxApp(
             onSaveToFile = onSaveToFile,
             onTboxApplicationCommand = onTboxApplicationCommand,
             onMockLocationSettingChanged = onMockLocationSettingChanged,
-            onATcmdSend = onATcmdSend
+            onATcmdSend = onATcmdSend,
+            onFloatingDashboardChanged = onFloatingDashboardChanged
         )
     }
 }
@@ -123,7 +126,6 @@ class SettingsViewModelFactory(private val settingsManager: SettingsManager) :
 @Composable
 fun TboxScreen(
     viewModel: TboxViewModel,
-    widgetViewModel: WidgetViewModel,
     settingsViewModel: SettingsViewModel,
     onTboxRestart: () -> Unit,
     onModemCheck: () -> Unit,
@@ -133,6 +135,7 @@ fun TboxScreen(
     onTboxApplicationCommand: (String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onATcmdSend: (String) -> Unit,
+    onFloatingDashboardChanged: (Boolean) -> Unit,
 ) {
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
@@ -253,7 +256,8 @@ fun TboxScreen(
                     viewModel,
                     settingsViewModel,
                     onTboxRestart,
-                    onMockLocationSettingChanged)
+                    onMockLocationSettingChanged,
+                    onFloatingDashboardChanged)
                 5 -> if (isExpertModeEnabled) {
                     LogsTab(viewModel, settingsViewModel, onSaveToFile)
                 } else {
@@ -265,7 +269,7 @@ fun TboxScreen(
                 } else {
                     ModemTab(viewModel, onModemMode)
                 }
-                8 -> DashboardTab(viewModel, widgetViewModel, settingsViewModel)
+                8 -> MainDashboardTab(viewModel, settingsViewModel)
                 else -> ModemTab(viewModel, onModemMode)
             }
         }
@@ -423,7 +427,8 @@ fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onTboxRestartClick: () -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit
+    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onFloatingDashboardChanged: (Boolean) -> Unit
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
@@ -436,6 +441,13 @@ fun SettingsTab(
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
+
+    val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
+    val isFloatingDashboardBackground by settingsViewModel.isFloatingDashboardBackground.collectAsStateWithLifecycle()
+    val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
+    val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
+
+    val isTboxIPRotation by settingsViewModel.tboxIPRotation.collectAsStateWithLifecycle()
 
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
@@ -556,6 +568,55 @@ fun SettingsTab(
             textAlign = TextAlign.Left
         )
         SettingSwitch(
+            isFloatingDashboardEnabled,
+            { enabled ->
+                if (enabled) {
+                    if (Settings.canDrawOverlays(context)) {
+                        settingsViewModel.saveFloatingDashboardSetting(true)
+                        onFloatingDashboardChanged(true)
+                    } else {
+                        showOverlayRequirementsDialog(context)
+                    }
+                } else {
+                    settingsViewModel.saveFloatingDashboardSetting(false)
+                    onFloatingDashboardChanged(false)
+                }
+            },
+            "Показывать плавающую панель",
+            "",
+            true
+        )
+        SettingSwitch(
+            isFloatingDashboardBackground,
+            { enabled ->
+                settingsViewModel.saveFloatingDashboardBackground(enabled)
+            },
+            "Включить фон плавающей панели",
+            "Если выключено, то фон будет прозрачный",
+            true
+        )
+        SettingDropdownGeneric(
+            floatingDashboardRows,
+            { rows ->
+                settingsViewModel.saveFloatingDashboardRows(rows)
+            },
+            "Количество строк плиток плавающей панели",
+            "",
+            true,
+            listOf(1, 2, 3, 4, 5, 6)
+        )
+        SettingDropdownGeneric(
+            floatingDashboardCols,
+            { cols ->
+                settingsViewModel.saveFloatingDashboardCols(cols)
+            },
+            "Количество столбцов плиток плавающей панели",
+            "",
+            true,
+            listOf(1, 2, 3, 4, 5, 6)
+        )
+
+        SettingSwitch(
             isWidgetShowIndicatorEnabled,
             { enabled ->
                 settingsViewModel.saveWidgetShowIndicatorSetting(enabled)
@@ -665,6 +726,15 @@ fun SettingsTab(
 
         if (isExpertModeEnabled) {
             SettingSwitch(
+                isTboxIPRotation,
+                { enabled ->
+                    settingsViewModel.saveTboxIPRotationSetting(enabled)
+                },
+                "Искать другие IP адреса TBox",
+                "",
+                true
+            )
+            SettingSwitch(
                 isMockLocationEnabled,
                 { enabled ->
                     onMockLocationSettingChanged(enabled)
@@ -675,7 +745,7 @@ fun SettingsTab(
                 } else {
                     "Требует настройки разрешений и настройки фиктивных местоположений"
                 },
-                isGetLocDataEnabled
+                true
             )
 
             if (!canUseMockLocation) {
@@ -745,7 +815,23 @@ private fun showLocationRequirementsDialog(context: Context) {
         .setMessage(requirements)
         .setPositiveButton("Настроить") { dialog, _ ->
             // Открываем настройки разработчика
-            val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+            val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+            context.startActivity(intent)
+        }
+        .setNegativeButton("Отмена", null)
+        .show()
+}
+
+private fun showOverlayRequirementsDialog(context: Context) {
+    android.app.AlertDialog.Builder(context)
+        .setTitle("Требуется разрешение")
+        .setMessage("Для работы приложения необходимо разрешение\n" +
+                "«Отображение поверх других приложений»")
+        .setPositiveButton("Настроить") { dialog, _ ->
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                "package:${context.packageName}".toUri()
+            )
             context.startActivity(intent)
         }
         .setNegativeButton("Отмена", null)

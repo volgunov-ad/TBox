@@ -6,20 +6,19 @@ import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.Date
-import kotlin.collections.mutableSetOf
-import kotlin.math.roundToInt
+import java.util.concurrent.CopyOnWriteArraySet
 
 class TboxBroadcastSender(
     private val context: Context,
     private val scope: CoroutineScope
 ) {
 
-    private val netStateSubscribers = mutableSetOf<String>()
-    private val generalStateSubscribers = mutableSetOf<String>()
-    private val engineStateSubscribers = mutableSetOf<String>()
-    private val gearBoxStateSubscribers = mutableSetOf<String>()
-    private val locationStateSubscribers = mutableSetOf<String>()
-    private val carStateSubscribers = mutableSetOf<String>()
+    private val netStateSubscribers = CopyOnWriteArraySet<String>()
+    private val generalStateSubscribers = CopyOnWriteArraySet<String>()
+    private val engineStateSubscribers = CopyOnWriteArraySet<String>()
+    private val gearBoxStateSubscribers = CopyOnWriteArraySet<String>()
+    private val locationStateSubscribers = CopyOnWriteArraySet<String>()
+    private val carStateSubscribers = CopyOnWriteArraySet<String>()
 
     companion object {
         private const val TAG = "TboxBroadcastSender"
@@ -155,7 +154,7 @@ class TboxBroadcastSender(
     private fun handleAddSubscriber(
         packageName: String,
         key: String,
-        subscribers: MutableSet<String>,
+        subscribers: CopyOnWriteArraySet<String>,
         listenerJob: Job?,
         startListener: () -> Unit,
         logTag: String
@@ -348,7 +347,6 @@ class TboxBroadcastSender(
         netStateListenerJob = scope.launch {
             launch {
                 TboxRepository.netState
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { netState ->
                         if (netStateSubscribers.isNotEmpty()) {
                             netStateSubscribers.forEach { subscriberKey ->
@@ -361,7 +359,6 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.apnStatus
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { apnStatus ->
                         if (netStateSubscribers.isNotEmpty()) {
                             netStateSubscribers.forEach { subscriberKey ->
@@ -413,7 +410,6 @@ class TboxBroadcastSender(
         generalStateListenerJob = scope.launch {
             launch {
                 TboxRepository.tboxConnected
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { tboxConnected ->
                         if (generalStateSubscribers.isNotEmpty()) {
                             generalStateSubscribers.forEach { subscriberKey ->
@@ -426,7 +422,6 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.tboxConnectionTime
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { tboxConnectionTime ->
                         if (generalStateSubscribers.isNotEmpty()) {
                             generalStateSubscribers.forEach { subscriberKey ->
@@ -439,7 +434,6 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.serviceStartTime
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { serviceStartTime ->
                         if (generalStateSubscribers.isNotEmpty()) {
                             generalStateSubscribers.forEach { subscriberKey ->
@@ -554,10 +548,17 @@ class TboxBroadcastSender(
             return
         }
 
-        engineStateListenerJob = scope.launch {
+        engineStateListenerJob = scope.launch(
+            CoroutineExceptionHandler { _, exception ->
+                Log.e(TAG, "Engine State listener error", exception)
+                // Перезапускаем listener при ошибке
+                if (engineStateSubscribers.isNotEmpty()) {
+                    startEngineStateListener()
+                }
+            }
+        ) {
             launch {
                 TboxRepository.engineTemperature
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { engineTemperature ->
                         if (engineStateSubscribers.isNotEmpty()) {
                             engineStateSubscribers.forEach { subscriberKey ->
@@ -570,7 +571,6 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.engineRPM
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { engineRPM ->
                         if (engineStateSubscribers.isNotEmpty()) {
                             engineStateSubscribers.forEach { subscriberKey ->
@@ -591,10 +591,17 @@ class TboxBroadcastSender(
             return
         }
 
-        gearBoxStateListenerJob = scope.launch {
+        gearBoxStateListenerJob = scope.launch(
+            CoroutineExceptionHandler { _, exception ->
+                Log.e(TAG, "Gear Box State listener error", exception)
+                // Перезапускаем listener при ошибке
+                if (gearBoxStateSubscribers.isNotEmpty()) {
+                    startGearBoxStateListener()
+                }
+            }
+        ) {
             launch {
                 TboxRepository.gearBoxCurrentGear
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { gearBoxCurrentGear ->
                         if (gearBoxStateSubscribers.isNotEmpty()) {
                             gearBoxStateSubscribers.forEach { subscriberKey ->
@@ -607,7 +614,6 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.gearBoxOilTemperature
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { gearBoxOilTemperature ->
                         if (gearBoxStateSubscribers.isNotEmpty()) {
                             gearBoxStateSubscribers.forEach { subscriberKey ->
@@ -628,10 +634,17 @@ class TboxBroadcastSender(
             return
         }
 
-        carStateListenerJob = scope.launch {
+        carStateListenerJob = scope.launch(
+            CoroutineExceptionHandler { _, exception ->
+                Log.e(TAG, "Car State listener error", exception)
+                // Перезапускаем listener при ошибке
+                if (carStateSubscribers.isNotEmpty()) {
+                    startCarStateListener()
+                }
+            }
+        ) {
             launch {
                 TboxRepository.fuelLevelPercentage
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { fuelLevelPercentage ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -644,7 +657,6 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.fuelLevelPercentageFiltered
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { fuelLevelPercentageFiltered ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -657,7 +669,6 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.cruiseSetSpeed
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { cruiseSetSpeed ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -670,7 +681,7 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.voltage
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
+                    .sample(2000)
                     .collect { voltage ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -691,10 +702,17 @@ class TboxBroadcastSender(
             return
         }
 
-        locationStateListenerJob = scope.launch {
+        locationStateListenerJob = scope.launch(
+            CoroutineExceptionHandler { _, exception ->
+                Log.e(TAG, "Location State listener error", exception)
+                // Перезапускаем listener при ошибке
+                if (locationStateSubscribers.isNotEmpty()) {
+                    startLocationStateListener()
+                }
+            }
+        ) {
             launch {
                 TboxRepository.locValues
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { locValues ->
                         if (locationStateSubscribers.isNotEmpty()) {
                             locationStateSubscribers.forEach { subscriberKey ->
@@ -707,7 +725,6 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.isLocValuesTrue
-                    .debounce(100) // Задержка 100ms чтобы избежать спама
                     .collect { isLocValuesTrue ->
                         if (locationStateSubscribers.isNotEmpty()) {
                             locationStateSubscribers.forEach { subscriberKey ->
@@ -718,7 +735,7 @@ class TboxBroadcastSender(
                     }
             }
         }
-        Log.d(TAG, "Gear box State broadcast listener started")
+        Log.d(TAG, "Location State broadcast listener started")
     }
 
     fun stopListeners() {

@@ -6,10 +6,21 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
+import android.view.WindowManager
+import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import vad.dashing.tbox.location.LocationMockManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,6 +28,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import vad.dashing.tbox.ui.FloatingDashboardUI
+import vad.dashing.tbox.ui.MyLifecycleOwner
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -41,9 +54,15 @@ class BackgroundService : Service() {
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
     private lateinit var serverIp: StateFlow<String>
+    private lateinit var tboxIPRotation: StateFlow<Boolean>
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
+    private lateinit var isFloatingDashboard: StateFlow<Boolean>
+    private lateinit var floatingDashboardHeight: StateFlow<Int>
+    private lateinit var floatingDashboardWidth: StateFlow<Int>
+    private lateinit var floatingDashboardStartX: StateFlow<Int>
+    private lateinit var floatingDashboardStartY: StateFlow<Int>
 
     private val serverPort = 50047
     private var currentIP: String? = null
@@ -83,7 +102,17 @@ class BackgroundService : Service() {
     private val broadcastReceiver = TboxBroadcastReceiver()
     lateinit var broadcastSender: TboxBroadcastSender
 
+    private lateinit var windowManager: WindowManager
+    private var params: WindowManager.LayoutParams? = null
+    private var composeView: ComposeView? = null
+    private val lifecycleOwner by lazy { MyLifecycleOwner() }
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var overlayRetryCount = 0
+
     companion object {
+        private const val MAX_OVERLAY_RETRIES = 3
+
         private const val APP_CODE = 0x2F.toByte()
         private const val MDC_CODE = 0x25.toByte()
         private const val LOC_CODE = 0x29.toByte()
@@ -148,6 +177,9 @@ class BackgroundService : Service() {
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
         const val ACTION_LIGHT_SHOW_START = "vad.dashing.tbox.LIGHT_SHOW_START"
         const val ACTION_LIGHT_SHOW_STOP = "vad.dashing.tbox.LIGHT_SHOW_STOP"
+
+        const val ACTION_SHOW_FLOATING = "vad.dashing.tbox.ACTION_SHOW_FLOATING"
+        const val ACTION_HIDE_FLOATING = "vad.dashing.tbox.ACTION_HIDE_FLOATING"
     }
 
     override fun onCreate() {
@@ -156,6 +188,8 @@ class BackgroundService : Service() {
         settingsManager = SettingsManager(this)
         locationMockManager = LocationMockManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+
+        windowManager = getSystemService(WindowManager::class.java)
 
         autoModemRestart = settingsManager.autoModemRestartFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
@@ -177,17 +211,33 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, false)
         serverIp = settingsManager.tboxIPFlow
             .stateIn(scope, SharingStarted.Eagerly, DEFAULT_TBOX_IP)
+        tboxIPRotation = settingsManager.tboxIPRotationFlow
+            .stateIn(scope, SharingStarted.Eagerly, false)
         widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
         widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
         mockLocation = settingsManager.mockLocationFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
+        isFloatingDashboard = settingsManager.floatingDashboardFlow
+            .stateIn(scope, SharingStarted.Eagerly, false)
+        floatingDashboardHeight = settingsManager.floatingDashboardHeightFlow
+            .stateIn(scope, SharingStarted.Eagerly, 100)
+        floatingDashboardWidth = settingsManager.floatingDashboardWidthFlow
+            .stateIn(scope, SharingStarted.Eagerly, 100)
+        floatingDashboardStartX = settingsManager.floatingDashboardStartXFlow
+            .stateIn(scope, SharingStarted.Eagerly, 50)
+        floatingDashboardStartY = settingsManager.floatingDashboardStartYFlow
+            .stateIn(scope, SharingStarted.Eagerly, 50)
 
         ipManager = IPManager(this)
         ipManager.updateIPs(serverIp.value)
         TboxRepository.updateIPList(ipManager.getIPList())
-        currentIP = ipManager.getNextIP()
+        currentIP = if (tboxIPRotation.value) {
+            ipManager.getNextIP()
+        } else {
+            DEFAULT_TBOX_IP
+        }
         TboxRepository.addLog("DEBUG", "IP manager", "Set TBox current IP: $currentIP")
 
         broadcastSender = TboxBroadcastSender(this, scope)
@@ -259,6 +309,13 @@ class BackgroundService : Service() {
                     TboxRepository.updateServiceStartTime()
                     val notification = createNotification("Start service")
                     startForeground(NOTIFICATION_ID, notification)
+                    mainHandler.postDelayed({
+                        if (isFloatingDashboard.value) {
+                            TboxRepository.addLog("DEBUG", "Floating Dashboard",
+                                "Delayed overlay start (5000ms)")
+                            openOverlay()
+                        }
+                    }, 5000)
                 }
             }
             ACTION_STOP -> {
@@ -274,6 +331,7 @@ class BackgroundService : Service() {
                     stopStateBroadcastListener()
                     val notification = createNotification("Stop service")
                     startForeground(NOTIFICATION_ID, notification)
+                    closeOverlay()
                 }
             }
             ACTION_SEND_AT -> {
@@ -318,8 +376,146 @@ class BackgroundService : Service() {
                 "Open", "INFO")
             ACTION_LIGHT_SHOW_START -> humLightShowReq(byteArrayOf(1, 0, 0, 0, 0, 0, 0, 0, 0))
             ACTION_LIGHT_SHOW_STOP -> humLightShowReq(byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0))
+            ACTION_SHOW_FLOATING -> openOverlay()
+            ACTION_HIDE_FLOATING -> closeOverlay()
         }
         return START_STICKY
+    }
+
+    private fun openOverlay() {
+        // Проверяем, не открыто ли уже окно
+        if (composeView != null) {
+            TboxRepository.addLog("DEBUG", "Floating Dashboard", "Already shown")
+            overlayRetryCount = 0
+            return
+        }
+
+        // Проверяем максимальное количество попыток
+        if (overlayRetryCount >= MAX_OVERLAY_RETRIES) {
+            TboxRepository.addLog("ERROR", "Floating Dashboard",
+                "Max retries reached ($MAX_OVERLAY_RETRIES). Stopping attempts.")
+            return
+        }
+
+        if (!Settings.canDrawOverlays(this)) {
+            TboxRepository.addLog("ERROR", "Floating Dashboard", "Cannot draw overlays")
+            return
+        }
+
+        params = WindowManager.LayoutParams(
+            floatingDashboardWidth.value,
+            floatingDashboardHeight.value,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = floatingDashboardStartX.value
+            y = floatingDashboardStartY.value
+        }
+
+        val newComposeView = ComposeView(this)
+
+        try {
+            // Создаем новый ComposeView каждый раз
+            newComposeView.apply {
+                // Устанавливаем наш MyLifecycleOwner
+                setViewTreeLifecycleOwner(lifecycleOwner)
+                setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                setViewTreeViewModelStoreOwner(lifecycleOwner)
+
+                setContent {
+                    FloatingDashboardUI(
+                        settingsManager = settingsManager,
+                        service = this@BackgroundService,
+                        params = params!!
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FloatingDashboard", "Error creating view", e)
+            TboxRepository.addLog("ERROR", "Floating Dashboard", "Failed to create: ${e.message}")
+            composeView = null
+            overlayRetryCount++
+            scheduleOverlayCheck()
+            return
+        }
+
+        try {
+            windowManager.addView(newComposeView, params)
+            composeView = newComposeView
+
+            if (!lifecycleOwner.isInitialized || lifecycleOwner.lifecycle.currentState.isAtLeast(
+                    Lifecycle.State.DESTROYED
+                )
+            ) {
+                lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
+            }
+
+            TboxRepository.addLog("INFO", "Floating Dashboard", "Shown")
+        } catch (e: Exception) {
+            Log.e("FloatingDashboard", "Error adding view", e)
+            TboxRepository.addLog("ERROR", "Floating Dashboard", "Failed to show: ${e.message}")
+            composeView = null
+        }
+
+        if (composeView == null) {
+            overlayRetryCount++
+            scheduleOverlayCheck()
+        } else {
+            overlayRetryCount = 0 // Сброс при успехе
+        }
+    }
+
+    private fun closeOverlay() {
+        composeView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (e: Exception) {
+                Log.e("FloatingDashboard", "Error removing view", e)
+            }
+            composeView = null
+        }
+
+        TboxRepository.addLog("INFO", "Floating Dashboard", "Closed")
+    }
+
+    private fun scheduleOverlayCheck() {
+        if (!isFloatingDashboard.value || composeView != null || overlayRetryCount >= MAX_OVERLAY_RETRIES) {
+            return
+        }
+
+        mainHandler.postDelayed({
+            Log.d("OverlayCheck", "Retry attempt ${overlayRetryCount + 1}/$MAX_OVERLAY_RETRIES")
+            openOverlay()
+        }, 5000)
+    }
+
+    private fun stopOverlayCheck() {
+        mainHandler.removeCallbacksAndMessages(null)
+        overlayRetryCount = 0
+    }
+
+    fun updateWindowPosition(x: Int, y: Int) {
+        params?.let { currentParams ->
+            currentParams.x = x
+            currentParams.y = y
+            composeView?.let { view ->
+                windowManager.updateViewLayout(view, currentParams)
+            }
+        }
+    }
+
+    fun updateWindowSize(width: Int, height: Int) {
+        params?.let { currentParams ->
+            currentParams.width = width.coerceAtLeast(50)
+            currentParams.height = height.coerceAtLeast(50)
+            composeView?.let { view ->
+                windowManager.updateViewLayout(view, currentParams)
+            }
+        }
     }
 
     private fun createNotificationChannel() {
@@ -623,6 +819,14 @@ class BackgroundService : Service() {
                     }
                 }
             }
+
+            launch {
+                isFloatingDashboard.collect { showFloating ->
+                    if (!showFloating) {
+                        stopOverlayCheck()
+                    }
+                }
+            }
         }
     }
 
@@ -799,7 +1003,7 @@ class BackgroundService : Service() {
                             }
                         }
                     }
-                    else {
+                    else if (tboxIPRotation.value) {
                         // Выбор следующего IP адреса, если подключения нет больше 60 с
                         if (currentTime - TboxRepository.tboxConnectionTime.value.time > 60000 &&
                             System.currentTimeMillis() - updateIPTime > 60000) {
@@ -1203,7 +1407,6 @@ class BackgroundService : Service() {
             !ConWidget.hasActiveWidgets(this) &&
             !ConResWidget.hasActiveWidgets(this)
             ) {
-            Log.d("Widget", "No active widgets found, skipping update")
             return
         }
 
@@ -1277,6 +1480,10 @@ class BackgroundService : Service() {
         // Очищаем ссылки
         address = null
         currentIP = null
+
+        closeOverlay()
+        // Устанавливаем состояние DESTROYED для lifecycle
+        lifecycleOwner.setCurrentState(Lifecycle.State.DESTROYED)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

@@ -183,22 +183,22 @@ object CanFramesProcess {
                     TboxRepository.updateCarSpeedAccurate(speed)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x1B))) {
                     val pressure1 = if (singleData[4] != 0xFF.toByte()) {
-                        singleData[4].toUInt().toFloat() / 35f
+                        singleData[4].toUInt().toFloat() / 36f
                     } else {
                         null
                     }
                     val pressure2 = if (singleData[5] != 0xFF.toByte()) {
-                        singleData[5].toUInt().toFloat() / 35f
+                        singleData[5].toUInt().toFloat() / 36f
                     } else {
                         null
                     }
                     val pressure3 = if (singleData[6] != 0xFF.toByte()) {
-                        singleData[6].toUInt().toFloat() / 35f
+                        singleData[6].toUInt().toFloat() / 36f
                     } else {
                         null
                     }
                     val pressure4 = if (singleData[7] != 0xFF.toByte()) {
-                        singleData[7].toUInt().toFloat() / 35f
+                        singleData[7].toUInt().toFloat() / 36f
                     } else {
                         null
                     }

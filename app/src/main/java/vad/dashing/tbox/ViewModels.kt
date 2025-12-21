@@ -3,6 +3,8 @@ package vad.dashing.tbox
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -481,6 +483,69 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val isFloatingDashboardEnabled = settingsManager.floatingDashboardFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val floatingDashboardWidgetsConfig = settingsManager.floatingDashboardWidgetsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val floatingDashboardRows = settingsManager.floatingDashboardRowsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 1
+        )
+
+    val floatingDashboardCols = settingsManager.floatingDashboardColsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 1
+        )
+
+    val floatingDashboardHeight = settingsManager.floatingDashboardHeightFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 100
+        )
+
+    val floatingDashboardWidth = settingsManager.floatingDashboardWidthFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 100
+        )
+
+    val floatingDashboardStartX = settingsManager.floatingDashboardStartXFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 50
+        )
+
+    val floatingDashboardStartY = settingsManager.floatingDashboardStartYFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 50
+        )
+
+    val isFloatingDashboardBackground = settingsManager.floatingDashboardBackgroundFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val logLevel = settingsManager.logLevelFlow
         .stateIn(
             scope = viewModelScope,
@@ -551,6 +616,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_TBOX_IP
         )
 
+    val tboxIPRotation = settingsManager.tboxIPRotationFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val selectedTab = settingsManager.selectedTabFlow
         .stateIn(
             scope = viewModelScope,
@@ -607,6 +679,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveWidgetShowLocIndicatorSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveWidgetShowLocIndicatorSetting(enabled)
+        }
+    }
+
+    fun saveTboxIPRotationSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveTboxIPRotationSetting(enabled)
         }
     }
 
@@ -670,6 +748,64 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveFloatingDashboardSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingDashboardSetting(enabled)
+        }
+    }
+
+    fun saveFloatingDashboardWidgets(config: String) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingDashboardWidgets(config)
+        }
+    }
+
+    fun saveFloatingDashboardRows(rows: Int) {
+        if (rows in 1..6) {
+            viewModelScope.launch {
+                settingsManager.saveFloatingDashboardRows(rows)
+            }
+        }
+    }
+
+    fun saveFloatingDashboardCols(cols: Int) {
+        if (cols in 1..6) {
+            viewModelScope.launch {
+                settingsManager.saveFloatingDashboardCols(cols)
+            }
+        }
+    }
+
+    fun saveFloatingDashboardWidth(width: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingDashboardWidth(width)
+        }
+    }
+
+    fun saveFloatingDashboardHeight(height: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingDashboardHeight(height)
+        }
+    }
+
+    fun saveFloatingDashboardStartX(x: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingDashboardStartX(x)
+        }
+    }
+
+    fun saveFloatingDashboardStartY(y: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingDashboardStartY(y)
+        }
+    }
+
+    fun saveFloatingDashboardBackground(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingDashboardBackground(enabled)
+        }
+    }
+
     fun saveSelectedTab(tabIndex: Int) {
         viewModelScope.launch {
             settingsManager.saveSelectedTab(tabIndex)
@@ -705,34 +841,40 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 }
 
-class WidgetViewModel : ViewModel() {
+class MainDashboardViewModel : ViewModel() {
+    val dashboardManager = DashboardManager("main")
 
-    val dashboardState: StateFlow<DashboardState> = WidgetsRepository.dashboardState
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = DashboardState()
-        )
+    // Дополнительные методы если нужно
+}
 
-    // Метод для обновления виджетов
-    fun updateDashboardWidgets(widgets: List<DashboardWidget>) {
-        viewModelScope.launch {
-            WidgetsRepository.updateDashboardWidgets(widgets)
+class FloatingDashboardViewModel : ViewModel() {
+    val dashboardManager = DashboardManager("floating")
+
+    // Дополнительные методы если нужно
+}
+
+class DashboardManager(
+    private val dashboardId: String
+) {
+    private val _dashboardState = MutableStateFlow(DashboardState())
+    val dashboardState: StateFlow<DashboardState> = _dashboardState.asStateFlow()
+
+    private val _widgetHistory = MutableStateFlow<Map<Int, List<Float>>>(emptyMap())
+
+    private val historyFlows = mutableMapOf<Int, StateFlow<List<Float>>>()
+
+    fun updateWidgets(widgets: List<DashboardWidget>) {
+        _dashboardState.update { currentState ->
+            currentState.copy(widgets = widgets)
         }
     }
 
-    private val _widgetHistory = MutableStateFlow<Map<Int, List<Float>>>(emptyMap())
-    val widgetHistory: StateFlow<Map<Int, List<Float>>> = _widgetHistory
-
-    // Получение StateFlow для конкретного виджета (с кэшированием)
-    private val historyFlows = mutableMapOf<Int, StateFlow<List<Float>>>()
-
     fun getWidgetHistoryFlow(widgetId: Int): StateFlow<List<Float>> {
         return historyFlows.getOrPut(widgetId) {
-            widgetHistory
+            _widgetHistory
                 .map { it[widgetId] ?: emptyList() }
                 .stateIn(
-                    scope = viewModelScope,
+                    scope = CoroutineScope(Dispatchers.Default),
                     started = SharingStarted.WhileSubscribed(5000),
                     initialValue = emptyList()
                 )
@@ -748,17 +890,14 @@ class WidgetViewModel : ViewModel() {
     }
 
     fun clearWidgetHistory(widgetId: Int) {
-        val currentMap = _widgetHistory.value
-        _widgetHistory.value = currentMap - widgetId
+        _widgetHistory.update { currentMap ->
+            currentMap - widgetId
+        }
     }
-
 }
 
 object WidgetsRepository {
-    private val _dashboardState = MutableStateFlow(DashboardState())
-    val dashboardState: StateFlow<DashboardState> = _dashboardState.asStateFlow()
-
-    // Соответствие ключей заголовкам и единицам измерения
+    // Только статические данные - заголовки и единицы измерения
     private data class DataTitle(val title: String, val unit: String)
 
     private val dataKeyTitles = mapOf(
@@ -807,6 +946,10 @@ object WidgetsRepository {
         "netStatus" to DataTitle("Тип сети", ""),
         "regStatus" to DataTitle("Регистрация в сети", ""),
         "simStatus" to DataTitle("Состояние SIM", ""),
+        "netWidget" to DataTitle("Виджет сигнала сети", ""),
+        "locWidget" to DataTitle("Виджет навигации", ""),
+        "voltage+engineTemperatureWidget" to DataTitle("Виджет напряжения и температуры двигателя", ""),
+        "gearBoxWidget" to DataTitle("Виджет режима КПП с текущей передачей и температурой", ""),
     )
 
     fun getTitleForDataKey(dataKey: String): String {
@@ -823,12 +966,6 @@ object WidgetsRepository {
             "${getTitleForDataKey(dataKey)}, $unit"
         } else {
             getTitleForDataKey(dataKey)
-        }
-    }
-
-    fun updateDashboardWidgets(widgets: List<DashboardWidget>) {
-        _dashboardState.update { currentState ->
-            currentState.copy(widgets = widgets)
         }
     }
 
@@ -861,6 +998,7 @@ fun valueToString(value: Any?, accuracy: Int = 1, booleanTrue: String = "да", 
         is Int -> value.toString()
         is UInt -> value.toString()
         is Float, is Double -> when (accuracy) {
+            0 -> String.format(Locale.getDefault(), "%.0f", value)
             1 -> String.format(Locale.getDefault(), "%.1f", value)
             2 -> String.format(Locale.getDefault(), "%.2f", value)
             3 -> String.format(Locale.getDefault(), "%.3f", value)
