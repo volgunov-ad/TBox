@@ -230,6 +230,15 @@ object TboxRepository {
     private val _frontRightSeatMode = MutableStateFlow<UInt?>(null)
     val frontRightSeatMode: StateFlow<UInt?> = _frontRightSeatMode.asStateFlow()
 
+    private val _outsideTemperature = MutableStateFlow<Float?>(null)
+    val outsideTemperature: StateFlow<Float?> = _outsideTemperature.asStateFlow()
+
+    private val _insideTemperature = MutableStateFlow<Float?>(null)
+    val insideTemperature: StateFlow<Float?> = _insideTemperature.asStateFlow()
+
+    private val _isWindowsBlocked = MutableStateFlow<Boolean?>(null)
+    val isWindowsBlocked: StateFlow<Boolean?> = _isWindowsBlocked.asStateFlow()
+
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
@@ -292,6 +301,9 @@ object TboxRepository {
 
     private val _canFramesStructured = MutableStateFlow<Map<String, List<CanFrame>>>(emptyMap())
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = _canFramesStructured.asStateFlow()
+
+    private val _floatingDashboardShown = MutableStateFlow(false)
+    val floatingDashboardShown: StateFlow<Boolean> = _floatingDashboardShown.asStateFlow()
 
     private const val MAX_LOGS = 100
     private const val MAX_CAN_FRAMES = 5
@@ -537,6 +549,18 @@ object TboxRepository {
         _frontRightSeatMode.value = newValue
     }
 
+    fun updateOutsideTemperature(newValue: Float?) {
+        _outsideTemperature.value = newValue
+    }
+
+    fun updateInsideTemperature(newValue: Float?) {
+        _insideTemperature.value = newValue
+    }
+
+    fun updateIsWindowsBlocked(newValue: Boolean) {
+        _isWindowsBlocked.value = newValue
+    }
+
     fun updateIPList(value: List<String>) {
         _ipList.value = value
     }
@@ -589,5 +613,9 @@ object TboxRepository {
         _preventRestartSend.value = false
         _suspendTboxAppSend.value = false
         _tboxAppStoped.value = false
+    }
+
+    fun updateFloatingDashboardShown(newValue: Boolean) {
+        _floatingDashboardShown.value = newValue
     }
 }

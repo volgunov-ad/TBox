@@ -48,33 +48,41 @@ fun DashboardWidgetItem(
     dataProvider: DataProvider,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
+    onDoubleClick: () -> Unit = {},
     dashboardManager: DashboardManager,
     dashboardChart: Boolean,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     title: Boolean = true,
     units: Boolean = true,
-    backgroundTransparent: Boolean = false
+    backgroundTransparent: Boolean = false,
+    textColor: Color? = null
 ) {
+    val onlyText: Boolean
+
     val widgetHistory by dashboardManager.getWidgetHistoryFlow(widget.id).collectAsState()
 
     val valueFlow = remember(widget.dataKey) {
         dataProvider.getValueFlow(widget.dataKey)
     }
-
     val valueString by valueFlow.collectAsStateWithLifecycle()
 
-    val currentValue by rememberUpdatedState(valueString.replace(",", ".").toFloatOrNull())
+    if (widget.dataKey == "restartTbox") {
+        onlyText = true
+    } else {
+        val currentValue by rememberUpdatedState(valueString.replace(",", ".").toFloatOrNull())
 
-    LaunchedEffect(widget.id) {
-        while (true) {
-            delay(1000L)
-            if (dashboardChart) {
-                currentValue?.let {
-                    dashboardManager.updateWidgetHistory(widget.id, it)
+        LaunchedEffect(widget.id) {
+            while (true) {
+                delay(1000L)
+                if (dashboardChart) {
+                    currentValue?.let {
+                        dashboardManager.updateWidgetHistory(widget.id, it)
+                    }
                 }
             }
         }
+        onlyText = false
     }
 
     Card(
@@ -82,7 +90,8 @@ fun DashboardWidgetItem(
             .fillMaxSize()
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onLongClick,
+                onDoubleClick = onDoubleClick
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
@@ -98,7 +107,7 @@ fun DashboardWidgetItem(
                 shape = RoundedCornerShape(shape)
             )
         ) {
-            if (!widgetHistory.checkValues() && dashboardChart) {
+            if (!widgetHistory.checkValues() && dashboardChart && !onlyText) {
                 HistoryLineChart(
                     values = widgetHistory,
                     modifier = Modifier
@@ -112,63 +121,71 @@ fun DashboardWidgetItem(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(6.dp)
+                    .padding(4.dp)
                     .wrapContentHeight(Alignment.CenterVertically),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = if (title) widget.title else "",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    softWrap = true,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
+                if (title && !onlyText) {
+                    Text(
+                        text = widget.title,
+                        fontSize = calculateResponsiveFontSize(
+                            containerHeight = availableHeight,
+                            textType = TextType.TITLE
+                        ),
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .wrapContentHeight(Alignment.CenterVertically)
+                    )
+                }
 
                 Text(
                     text = valueString,
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
-                        textType = TextType.VALUE
+                        textType = if (widget.dataKey == "restartTbox") {
+                            TextType.TITLE
+                        } else {
+                            TextType.VALUE
+                        }
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = textColor ?: MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .weight(2f)
+                        .weight(if (title) 2f else 3f)
                         .fillMaxWidth()
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
 
-                Text(
-                    text = if (units) widget.unit else "",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.UNIT
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    softWrap = true,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
+                if (units && !onlyText) {
+                    Text(
+                        text = widget.unit,
+                        fontSize = calculateResponsiveFontSize(
+                            containerHeight = availableHeight,
+                            textType = TextType.UNIT
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .wrapContentHeight(Alignment.CenterVertically)
+                    )
+                }
             }
         }
     }
@@ -184,6 +201,8 @@ fun calculateResponsiveFontSize(
     return when (textType) {
         TextType.TITLE -> {
             when {
+                heightInDp < 20 -> 8.sp
+                heightInDp < 40 -> 10.sp
                 heightInDp < 60 -> 12.sp
                 heightInDp < 80 -> 16.sp
                 heightInDp < 100 -> 20.sp
@@ -194,6 +213,8 @@ fun calculateResponsiveFontSize(
         }
         TextType.VALUE -> {
             when {
+                heightInDp < 20 -> 10.sp
+                heightInDp < 40 -> 14.sp
                 heightInDp < 60 -> 18.sp
                 heightInDp < 80 -> 24.sp
                 heightInDp < 100 -> 30.sp
@@ -204,6 +225,8 @@ fun calculateResponsiveFontSize(
         }
         TextType.UNIT -> {
             when {
+                heightInDp < 20 -> 6.sp
+                heightInDp < 40 -> 8.sp
                 heightInDp < 60 -> 10.sp
                 heightInDp < 80 -> 14.sp
                 heightInDp < 100 -> 18.sp

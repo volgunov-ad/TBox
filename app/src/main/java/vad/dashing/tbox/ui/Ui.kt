@@ -85,7 +85,6 @@ fun TboxApp(
     onTboxApplicationCommand: (String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onATcmdSend: (String) -> Unit,
-    onFloatingDashboardChanged: (Boolean) -> Unit,
 ) {
     val viewModel: TboxViewModel = viewModel()
 
@@ -104,8 +103,7 @@ fun TboxApp(
             onSaveToFile = onSaveToFile,
             onTboxApplicationCommand = onTboxApplicationCommand,
             onMockLocationSettingChanged = onMockLocationSettingChanged,
-            onATcmdSend = onATcmdSend,
-            onFloatingDashboardChanged = onFloatingDashboardChanged
+            onATcmdSend = onATcmdSend
         )
     }
 }
@@ -135,7 +133,6 @@ fun TboxScreen(
     onTboxApplicationCommand: (String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onATcmdSend: (String) -> Unit,
-    onFloatingDashboardChanged: (Boolean) -> Unit,
 ) {
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
@@ -256,8 +253,7 @@ fun TboxScreen(
                     viewModel,
                     settingsViewModel,
                     onTboxRestart,
-                    onMockLocationSettingChanged,
-                    onFloatingDashboardChanged)
+                    onMockLocationSettingChanged)
                 5 -> if (isExpertModeEnabled) {
                     LogsTab(viewModel, settingsViewModel, onSaveToFile)
                 } else {
@@ -269,7 +265,10 @@ fun TboxScreen(
                 } else {
                     ModemTab(viewModel, onModemMode)
                 }
-                8 -> MainDashboardTab(viewModel, settingsViewModel)
+                8 -> MainDashboardTab(
+                    viewModel,
+                    settingsViewModel,
+                    onTboxRestart)
                 else -> ModemTab(viewModel, onModemMode)
             }
         }
@@ -427,8 +426,7 @@ fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onTboxRestartClick: () -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit,
-    onFloatingDashboardChanged: (Boolean) -> Unit
+    onMockLocationSettingChanged: (Boolean) -> Unit
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
@@ -573,13 +571,13 @@ fun SettingsTab(
                 if (enabled) {
                     if (Settings.canDrawOverlays(context)) {
                         settingsViewModel.saveFloatingDashboardSetting(true)
-                        onFloatingDashboardChanged(true)
+                        //onFloatingDashboardChanged(true)
                     } else {
                         showOverlayRequirementsDialog(context)
                     }
                 } else {
                     settingsViewModel.saveFloatingDashboardSetting(false)
-                    onFloatingDashboardChanged(false)
+                    //onFloatingDashboardChanged(false)
                 }
             },
             "Показывать плавающую панель",
@@ -615,6 +613,7 @@ fun SettingsTab(
             true,
             listOf(1, 2, 3, 4, 5, 6)
         )
+        FloatingDashboardPositionSizeSettings(settingsViewModel, Modifier)
 
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
@@ -1061,6 +1060,7 @@ fun InfoTab(
     val hwVersion by settingsViewModel.hwVersion.collectAsStateWithLifecycle()
     val vinCode by settingsViewModel.vinCode.collectAsStateWithLifecycle()
     val tboxIP by settingsViewModel.tboxIP.collectAsStateWithLifecycle()
+    val floatingDashboardShown by viewModel.floatingDashboardShown.collectAsStateWithLifecycle()
 
     var updateVersionButtonEnabled by remember { mutableStateOf(true) }
 
@@ -1095,6 +1095,8 @@ fun InfoTab(
                     if (preventRestartSend) "да" else "нет"
                 )
             }
+            item { StatusRow("Плавающая панель показана",
+                if (floatingDashboardShown) "да" else "нет") }
             item { StatusRow("Сохраненный IP адрес TBox", tboxIP) }
             item { StatusRow("Список возможных IP адресов TBox", ipList.joinToString("; ")) }
             item { StatusRow("Версия приложения APP", appVersion) }
@@ -1165,6 +1167,9 @@ fun CarDataTab(
     val gearBoxWork by viewModel.gearBoxWork.collectAsStateWithLifecycle()
     val frontRightSeatMode by viewModel.frontRightSeatMode.collectAsStateWithLifecycle()
     val frontLeftSeatMode by viewModel.frontLeftSeatMode.collectAsStateWithLifecycle()
+    val outsideTemperature by viewModel.outsideTemperature.collectAsStateWithLifecycle()
+    val insideTemperature by viewModel.insideTemperature.collectAsStateWithLifecycle()
+    val isWindowsBlocked by viewModel.isWindowsBlocked.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -1204,6 +1209,10 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Pressure"), valueToString(wheelsPressure.wheel4, 2)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontLeftSeatMode"), seatModeToString(frontLeftSeatMode)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontRightSeatMode"), seatModeToString(frontRightSeatMode)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("outsideTemperature"), valueToString(outsideTemperature, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("insideTemperature"), valueToString(insideTemperature, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("isWindowsBlocked"), valueToString(isWindowsBlocked,
+                booleanTrue = "заблокированы", booleanFalse = "разблокированы")) }
         }
     }
 }

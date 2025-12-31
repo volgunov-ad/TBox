@@ -91,13 +91,14 @@ class LocationMockManager(context: Context) {
 
     fun setMockLocation(locValues: LocValues) {
         try {
-            val mockProviderName = LocationManager.GPS_PROVIDER
+            //val mockProviderName = LocationManager.GPS_PROVIDER
+            val mockProviderName = "gps"
 
             if (!isTestProviderEnabled(mockProviderName)) {
                 setupMockLocationProvider(mockProviderName)
             }
 
-            if (locValues.locateStatus && locValues.latitude != 0.0 && locValues.longitude != 0.0) {
+            if (locValues.latitude != 0.0 && locValues.longitude != 0.0) {
                 val mockLocation = createMockLocation(mockProviderName, locValues)
                 locationManager.setTestProviderLocation(mockProviderName, mockLocation)
 
@@ -137,7 +138,8 @@ class LocationMockManager(context: Context) {
 
     fun stopMockLocation() {
         try {
-            val mockProviderName = LocationManager.GPS_PROVIDER
+            //val mockProviderName = LocationManager.GPS_PROVIDER
+            val mockProviderName = "gps"
             removeMockProviderIfExists(mockProviderName)
             Log.d("LocationMockManager", "Mock location stopped")
             TboxRepository.addLog("DEBUG", "LocationMockManager", "Mock location stopped")

@@ -24,12 +24,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.MainDashboardViewModel
@@ -40,7 +42,8 @@ import vad.dashing.tbox.WidgetsRepository
 @Composable
 fun MainDashboardTab(
     tboxViewModel: TboxViewModel,
-    settingsViewModel: SettingsViewModel
+    settingsViewModel: SettingsViewModel,
+    onTboxRestartClick: () -> Unit,
 ) {
     val dashboardViewModel: MainDashboardViewModel = viewModel()
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
@@ -48,6 +51,8 @@ fun MainDashboardTab(
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
+
+    val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
 
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
 
@@ -68,6 +73,15 @@ fun MainDashboardTab(
         }
 
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
+    }
+
+    var restartEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(restartEnabled) {
+        if (!restartEnabled) {
+            delay(15000) // Блокировка на 15 секунд
+            restartEnabled = true
+        }
     }
 
     val dataProvider = remember { TboxDataProvider(tboxViewModel) }
@@ -136,6 +150,47 @@ fun MainDashboardTab(
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
                                             viewModel = tboxViewModel
+                                        )
+                                    }
+                                    "wheelsPressureWidget" -> {
+                                        DashboardWheelsPressureWidgetItem(
+                                            widget = widget,
+                                            onClick = { showDialogForIndex = index },
+                                            onLongClick = {},
+                                            viewModel = tboxViewModel
+                                        )
+                                    }
+                                    "tempInOutWidget" -> {
+                                        DashboardTempInOutWidgetItem(
+                                            widget = widget,
+                                            onClick = { showDialogForIndex = index },
+                                            onLongClick = {},
+                                            viewModel = tboxViewModel
+                                        )
+                                    }
+                                    "restartTbox" -> {
+                                        DashboardWidgetItem(
+                                            widget = widget,
+                                            dataProvider = dataProvider,
+                                            onClick = { showDialogForIndex = index },
+                                            onLongClick = {},
+                                            onDoubleClick = {
+                                                if (restartEnabled) {
+                                                    restartEnabled = false
+                                                    onTboxRestartClick()
+                                                }
+                                            },
+                                            dashboardManager = dashboardViewModel.dashboardManager,
+                                            dashboardChart = false,
+                                            textColor = if (restartEnabled) {
+                                                if (tboxConnected) {
+                                                    Color(0xD900A400)
+                                                } else {
+                                                    Color(0xD9FF0000)
+                                                }
+                                            } else {
+                                                Color(0xD97E4C4C)
+                                            }
                                         )
                                     }
                                     else -> {

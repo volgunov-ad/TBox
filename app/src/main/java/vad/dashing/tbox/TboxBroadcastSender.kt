@@ -54,6 +54,7 @@ class TboxBroadcastSender(
         const val FUEL_LEVEL_PERCENTAGE_FILTERED = "fuelLevelPercentageFiltered"
         const val CRUISE_SET_SPEED = "cruiseSetSpeed"
         const val VOLTAGE = "voltage"
+        const val INSIDE_TEMPERATURE = "insideTemperature"
     }
 
     private var netStateListenerJob: Job? = null
@@ -145,10 +146,11 @@ class TboxBroadcastSender(
         }
 
         // Отправляем текущее значение
-        scope.launch {
-            delay(1000) // Задержка 1 секунда
+        sendCurrentValue(packageName, extraName, extraValue)
+        /*scope.launch {
+            delay(2000) // Задержка 2 секунды
             sendCurrentValue(packageName, extraName, extraValue)
-        }
+        }*/
     }
 
     private fun handleAddSubscriber(
@@ -248,6 +250,9 @@ class TboxBroadcastSender(
                     }
                     VOLTAGE -> {
                         sendFloat(TboxRepository.voltage.value, arrayOf(packageName, extraName, extraValue), extraValue)
+                    }
+                    INSIDE_TEMPERATURE -> {
+                        sendFloat(TboxRepository.insideTemperature.value, arrayOf(packageName, extraName, extraValue), extraValue)
                     }
                 }
             }
@@ -687,6 +692,18 @@ class TboxBroadcastSender(
                             carStateSubscribers.forEach { subscriberKey ->
                                 val subscriber = parseSubscriberKey(subscriberKey)
                                 sendFloat(voltage, subscriber, VOLTAGE)
+                            }
+                        }
+                    }
+            }
+
+            launch {
+                TboxRepository.insideTemperature
+                    .collect { insideTemperature ->
+                        if (carStateSubscribers.isNotEmpty()) {
+                            carStateSubscribers.forEach { subscriberKey ->
+                                val subscriber = parseSubscriberKey(subscriberKey)
+                                sendFloat(insideTemperature, subscriber, INSIDE_TEMPERATURE)
                             }
                         }
                     }

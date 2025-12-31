@@ -370,6 +370,27 @@ class TboxViewModel : ViewModel() {
             initialValue = null
         )
 
+    val outsideTemperature: StateFlow<Float?> = TboxRepository.outsideTemperature
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val insideTemperature: StateFlow<Float?> = TboxRepository.insideTemperature
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val isWindowsBlocked: StateFlow<Boolean?> = TboxRepository.isWindowsBlocked
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = TboxRepository.canFramesStructured
         .stateIn(
             scope = viewModelScope,
@@ -383,6 +404,19 @@ class TboxViewModel : ViewModel() {
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
+
+    val floatingDashboardShown: StateFlow<Boolean> = TboxRepository.floatingDashboardShown
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    fun updateFloatingDashboardShown(config: Boolean) {
+        viewModelScope.launch {
+            TboxRepository.updateFloatingDashboardShown(config)
+        }
+    }
 }
 
 class SettingsViewModel(private val settingsManager: SettingsManager) : ViewModel() {
@@ -946,10 +980,16 @@ object WidgetsRepository {
         "netStatus" to DataTitle("Тип сети", ""),
         "regStatus" to DataTitle("Регистрация в сети", ""),
         "simStatus" to DataTitle("Состояние SIM", ""),
+        "outsideTemperature" to DataTitle("Температура на улице", "°C"),
+        "insideTemperature" to DataTitle("Температура в машине", "°C"),
+        "isWindowsBlocked" to DataTitle("Блокировка окон", ""),
         "netWidget" to DataTitle("Виджет сигнала сети", ""),
         "locWidget" to DataTitle("Виджет навигации", ""),
         "voltage+engineTemperatureWidget" to DataTitle("Виджет напряжения и температуры двигателя", ""),
         "gearBoxWidget" to DataTitle("Виджет режима КПП с текущей передачей и температурой", ""),
+        "wheelsPressureWidget" to DataTitle("Виджет давления в шинах", "бар"),
+        "tempInOutWidget" to DataTitle("Виджет температуры снаружи и внутри", ""),
+        "restartTbox" to DataTitle("Кнопка перезагрузки TBox", ""),
     )
 
     fun getTitleForDataKey(dataKey: String): String {
@@ -990,9 +1030,15 @@ data class DashboardState(
     val availableDataKeys: List<String> = emptyList()
 )
 
-fun valueToString(value: Any?, accuracy: Int = 1, booleanTrue: String = "да", booleanFalse: String = "нет"): String {
+fun valueToString(
+    value: Any?,
+    accuracy: Int = 1,
+    booleanTrue: String = "да",
+    booleanFalse: String = "нет",
+    default: String = ""
+): String {
     if (value == null) {
-        return ""
+        return default
     }
     return when (value) {
         is Int -> value.toString()

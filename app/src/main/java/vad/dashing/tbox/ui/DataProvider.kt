@@ -74,6 +74,10 @@ class TboxDataProvider(private val viewModel: TboxViewModel) : DataProvider {
             val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
             it?.let { locationUpdateTime -> timeFormat.format(locationUpdateTime) } ?: ""
         }
+        "outsideTemperature" -> viewModel.outsideTemperature.mapState { valueToString(it, 1) }
+        "insideTemperature" -> viewModel.insideTemperature.mapState { valueToString(it, 1) }
+        "isWindowsBlocked" -> viewModel.isWindowsBlocked.mapState { valueToString(it, booleanTrue = "заблокированы", booleanFalse = "разблокированы") }
+        "restartTbox" -> MutableStateFlow("TBox").asStateFlow()
         else -> MutableStateFlow("").asStateFlow()
     }
 

@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -24,7 +26,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -39,11 +44,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.CanFrame
+import vad.dashing.tbox.SettingsViewModel
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -492,4 +502,168 @@ fun ATLogsCard(
             }
         }
     }
+}
+
+@Composable
+fun FloatingDashboardPositionSizeSettings(
+    settingsViewModel: SettingsViewModel,
+    modifier: Modifier = Modifier
+) {
+    val floatingDashboardHeight by settingsViewModel.floatingDashboardHeight.collectAsStateWithLifecycle()
+    val floatingDashboardWidth by settingsViewModel.floatingDashboardWidth.collectAsStateWithLifecycle()
+    val floatingDashboardStartX by settingsViewModel.floatingDashboardStartX.collectAsStateWithLifecycle()
+    val floatingDashboardStartY by settingsViewModel.floatingDashboardStartY.collectAsStateWithLifecycle()
+
+    Column(modifier = modifier) {
+        // Строка для ширины и высоты
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Поле для ширины
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "Ширина плавающей панели (px)",
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = floatingDashboardWidth,
+                    onValueChange = { newValue ->
+                        if (newValue >= 50) {
+                            settingsViewModel.saveFloatingDashboardWidth(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // Поле для высоты
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "Высота плавающей панели (px)",
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = floatingDashboardHeight,
+                    onValueChange = { newValue ->
+                        if (newValue >= 50) {
+                            settingsViewModel.saveFloatingDashboardHeight(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        // Строка для X и Y координат
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Поле для X координаты
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "Позиция X плавающей панели (px)",
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = floatingDashboardStartX,
+                    onValueChange = { newValue ->
+                        if (newValue >= 0) {
+                            settingsViewModel.saveFloatingDashboardStartX(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // Поле для Y координаты
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "Позиция Y плавающей панели (px)",
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = floatingDashboardStartY,
+                    onValueChange = { newValue ->
+                        if (newValue >= -100) {
+                            settingsViewModel.saveFloatingDashboardStartY(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+        Text(
+            text = "Чтобы изменения размера и положения вступили в силу, выключите и снова включите плавающую панель",
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+    }
+}
+
+// Компонент для ввода целых чисел
+@Composable
+fun IntInputField(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    fontSize: TextUnit = 24.sp
+) {
+    var textValue by remember { mutableStateOf(value.toString()) }
+    var isError by remember { mutableStateOf(false) }
+
+    LaunchedEffect(value) {
+        textValue = value.toString()
+    }
+
+    OutlinedTextField(
+        value = textValue,
+        onValueChange = { newText ->
+            textValue = newText
+            if (newText.isEmpty()) {
+                onValueChange(0)
+                isError = false
+            } else {
+                val intValue = newText.toIntOrNull()
+                if (intValue != null) {
+                    onValueChange(intValue)
+                    isError = false
+                } else {
+                    isError = true
+                }
+            }
+        },
+        modifier = modifier,
+        singleLine = true,
+        isError = isError,
+        textStyle = LocalTextStyle.current.copy(fontSize = fontSize),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Number,
+            imeAction = ImeAction.Done
+        ),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+            errorBorderColor = MaterialTheme.colorScheme.error
+        ),
+        shape = RoundedCornerShape(8.dp)
+    )
 }

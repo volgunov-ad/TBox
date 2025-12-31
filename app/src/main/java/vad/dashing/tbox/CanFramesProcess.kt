@@ -71,20 +71,7 @@ object CanFramesProcess {
                         gearBoxCurrentGear = 0
                     }
 
-                    val gearBoxChangeGearByte = singleData[1].getLeftNibble()
-                    val gearBoxChangeGear = when (gearBoxChangeGearByte) {
-                        0xB -> {
-                            false
-                        }
-
-                        0xF -> {
-                            true
-                        }
-
-                        else -> {
-                            false
-                        }
-                    }
+                    val gearBoxChangeGear = singleData[1].extractBitsToUInt(6, 1) == 1u
 
                     val gearBoxDriveModeByte = singleData[1].getRightNibble()
                     val gearBoxDriveMode = when (gearBoxDriveModeByte) {
@@ -167,7 +154,8 @@ object CanFramesProcess {
                     if (carType != "1.6") {
                         if (singleData[1].toInt() == 1) {
                             val cruiseSpeed =
-                                singleData[4].toUInt() - 3u + if (singleData[5].toUInt() >= 192u) 1u else 0u
+                                //singleData[4].toUInt() - 3u + if (singleData[5].toUInt() >= 192u) 1u else 0u
+                                singleData[4].toUInt()
                             TboxRepository.updateCruiseSetSpeed(cruiseSpeed)
                         } else if (singleData[1].toInt() == 0) {
                             TboxRepository.updateCruiseSetSpeed(0u)
@@ -219,11 +207,27 @@ object CanFramesProcess {
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x30))) {
                     val distanceToFuelEmpty = singleData.copyOfRange(2, 4).toUInt16BigEndian()
                     TboxRepository.updateDistanceToFuelEmpty(distanceToFuelEmpty)
+                } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x35))) {
+                    val insideTemperature = singleData[5].toUInt().toFloat() * 0.5f - 40f
+                    val outsideTemperature = singleData[6].toUInt().toFloat() * 0.5f - 40f
+                    if (outsideTemperature >= -40f && outsideTemperature <= 60f) {
+                        TboxRepository.updateOutsideTemperature(outsideTemperature)
+                    } else {
+                        TboxRepository.updateOutsideTemperature(null)
+                    }
+                    if (insideTemperature >= -40f && insideTemperature <= 60f) {
+                        TboxRepository.updateInsideTemperature(insideTemperature)
+                    } else {
+                        TboxRepository.updateInsideTemperature(null)
+                    }
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
                     val frontLeftSeatMode = singleData[4].extractBitsToUInt(3, 3)
                     val frontRightSeatMode = singleData[4].extractBitsToUInt(0, 3)
                     TboxRepository.updateFrontLeftSeatMode(frontLeftSeatMode)
                     TboxRepository.updateFrontRightSeatMode(frontRightSeatMode)
+                } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xFF.toByte()))) {
+                    val isWindowsBlocked = singleData[4].extractBitsToUInt(0, 1) == 1u
+                    TboxRepository.updateIsWindowsBlocked(isWindowsBlocked)
                 }
             } catch (e: Exception) {
                 TboxRepository.addLog(

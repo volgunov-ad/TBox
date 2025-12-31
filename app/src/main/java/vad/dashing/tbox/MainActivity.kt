@@ -90,9 +90,6 @@ class MainActivity : ComponentActivity() {
                     },
                     onATcmdSend = { cmd ->
                         atCmdSend(cmd)
-                    },
-                    onFloatingDashboardChanged = { enabled ->
-                        handleFloatingDashboardChanged(enabled)
                     }
                 )
             }

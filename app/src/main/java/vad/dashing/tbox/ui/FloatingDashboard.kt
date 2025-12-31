@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -25,6 +24,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -64,6 +64,18 @@ fun FloatingDashboardUI(
     val tboxViewModel: TboxViewModel = viewModel()
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(settingsManager))
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
+
+    // Эффект при появлении окна
+    LaunchedEffect(Unit) {
+        tboxViewModel.updateFloatingDashboardShown(true)
+    }
+
+    // Эффект при закрытии окна
+    DisposableEffect(Unit) {
+        onDispose {
+            tboxViewModel.updateFloatingDashboardShown(false)
+        }
+    }
 
     TboxAppTheme(theme = currentTheme) {
         Surface(
@@ -151,27 +163,6 @@ fun FloatingDashboard(
         }
     }
 
-    // Автоматический выход из режима редактирования
-    LaunchedEffect(isEditMode) {
-        if (isEditMode) {
-            delay(300000) // Выход из режима редактирования через 5 минут
-            isEditMode = false
-        }
-    }
-
-    // Сохранение настроек при выходе из режима редактирования
-    LaunchedEffect(isEditMode) {
-        if (!isEditMode) {
-            // Сохраняем настройки при выходе из режима редактирования
-            settingsViewModel.saveFloatingDashboardStartX(windowParams.x)
-            settingsViewModel.saveFloatingDashboardStartY(windowParams.y)
-            settingsViewModel.saveFloatingDashboardWidth(windowParams.width)
-            settingsViewModel.saveFloatingDashboardHeight(windowParams.height)
-            isDraggingMode = false
-            isResizingMode = false
-        }
-    }
-
     val dataProvider = remember { TboxDataProvider(tboxViewModel) }
 
     LaunchedEffect(widgetsConfig, dashboardRows, dashboardCols) {
@@ -191,6 +182,15 @@ fun FloatingDashboard(
         }
 
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
+    }
+
+    var restartEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(restartEnabled) {
+        if (!restartEnabled) {
+            delay(15000) // Блокировка на 15 секунд
+            restartEnabled = true
+        }
     }
 
     Box(
@@ -235,13 +235,13 @@ fun FloatingDashboard(
                             onDrag = { change, dragAmount ->
                                 change.consume()
 
-                                if (showDialogForIndex == null && isDraggingMode && dragStartPosition != null) {
+                                if (isEditMode && showDialogForIndex == null && isDraggingMode && dragStartPosition != null) {
                                     // Обновляем положение окна
-                                    val newX = windowParams.x + dragAmount.x.toInt()
-                                    val newY = windowParams.y + dragAmount.y.toInt()
+                                    val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
+                                    val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
                                     service.updateWindowPosition(newX, newY)
 
-                                } else if (showDialogForIndex == null && isResizingMode && resizeStartPosition != null) {
+                                } else if (isEditMode && showDialogForIndex == null && isResizingMode && resizeStartPosition != null) {
                                     // Обновляем размер окна
                                     val newWidth = (windowParams.width + dragAmount.x).toInt()
                                         .coerceAtLeast(50)
@@ -251,11 +251,23 @@ fun FloatingDashboard(
                                 }
                             },
                             onDragEnd = {
-                                // Сбрасываем режимы после завершения жеста
-                                isDraggingMode = false
-                                isResizingMode = false
-                                dragStartPosition = null
-                                resizeStartPosition = null
+                                if (isEditMode && isDraggingMode) {
+                                    settingsViewModel.saveFloatingDashboardStartX(windowParams.x)
+                                    settingsViewModel.saveFloatingDashboardStartY(windowParams.y)
+                                    // Сбрасываем режимы после завершения жеста
+                                    isDraggingMode = false
+                                    isResizingMode = false
+                                    dragStartPosition = null
+                                    resizeStartPosition = null
+                                } else if (isEditMode && isResizingMode) {
+                                    settingsViewModel.saveFloatingDashboardWidth(windowParams.width)
+                                    settingsViewModel.saveFloatingDashboardHeight(windowParams.height)
+                                    // Сбрасываем режимы после завершения жеста
+                                    isDraggingMode = false
+                                    isResizingMode = false
+                                    dragStartPosition = null
+                                    resizeStartPosition = null
+                                }
                             }
                         )
                     }
@@ -264,7 +276,7 @@ fun FloatingDashboard(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(0.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (dashboardState.widgets.isEmpty()) {
                         Box(
@@ -282,13 +294,23 @@ fun FloatingDashboard(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 for (col in 0 until dashboardCols) {
                                     val index = row * dashboardCols + col
                                     val widget = dashboardState.widgets.getOrNull(index) ?: continue
 
                                     Box(modifier = Modifier.weight(1f)) {
+                                        if (isEditMode) {
+                                            Canvas(
+                                                modifier = Modifier.matchParentSize()
+                                            ) {
+                                                drawRect(
+                                                    color = Color(0x7E00BCD4),
+                                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                                                )
+                                            }
+                                        }
                                         when (widget.dataKey) {
                                             "netWidget" -> {
                                                 DashboardNetWidgetItem(
@@ -297,11 +319,14 @@ fun FloatingDashboard(
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
                                                         } else {
+                                                            settingsViewModel.saveSelectedTab(0)
                                                             openMainActivity(context)
                                                         }
                                                     },
                                                     onLongClick = {
                                                         isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
                                                     },
                                                     viewModel = tboxViewModel,
                                                     elevation = 0.dp,
@@ -316,11 +341,14 @@ fun FloatingDashboard(
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
                                                         } else {
+                                                            settingsViewModel.saveSelectedTab(2)
                                                             openMainActivity(context)
                                                         }
                                                     },
                                                     onLongClick = {
                                                         isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
                                                     },
                                                     viewModel = tboxViewModel,
                                                     elevation = 0.dp,
@@ -340,6 +368,8 @@ fun FloatingDashboard(
                                                     },
                                                     onLongClick = {
                                                         isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
                                                     },
                                                     viewModel = tboxViewModel,
                                                     elevation = 0.dp,
@@ -359,11 +389,92 @@ fun FloatingDashboard(
                                                     },
                                                     onLongClick = {
                                                         isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
                                                     },
                                                     viewModel = tboxViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true
+                                                )
+                                            }
+                                            "wheelsPressureWidget" -> {
+                                                DashboardWheelsPressureWidgetItem(
+                                                    widget = widget,
+                                                    onClick = {
+                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                            showDialogForIndex = index
+                                                        } else {
+                                                            openMainActivity(context)
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
+                                                    },
+                                                    viewModel = tboxViewModel,
+                                                    elevation = 0.dp,
+                                                    shape = 0.dp,
+                                                    backgroundTransparent = true
+                                                )
+                                            }
+                                            "tempInOutWidget" -> {
+                                                DashboardTempInOutWidgetItem(
+                                                    widget = widget,
+                                                    onClick = {
+                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                            showDialogForIndex = index
+                                                        } else {
+                                                            openMainActivity(context)
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
+                                                    },
+                                                    viewModel = tboxViewModel,
+                                                    elevation = 0.dp,
+                                                    shape = 0.dp,
+                                                    backgroundTransparent = true
+                                                )
+                                            }
+                                            "restartTbox" -> {
+                                                DashboardWidgetItem(
+                                                    widget = widget,
+                                                    dataProvider = dataProvider,
+                                                    onClick = {
+                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                            showDialogForIndex = index
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
+                                                    },
+                                                    onDoubleClick = {
+                                                        if (restartEnabled) {
+                                                            restartEnabled = false
+                                                            service.crtRebootTbox()
+                                                        }
+                                                    },
+                                                    dashboardManager = dashboardViewModel.dashboardManager,
+                                                    dashboardChart = false,
+                                                    elevation = 0.dp,
+                                                    shape = 0.dp,
+                                                    title = false,
+                                                    backgroundTransparent = true,
+                                                    textColor = if (restartEnabled) {
+                                                        if (tboxConnected) {
+                                                            Color(0xD900A400)
+                                                        } else {
+                                                            Color(0xD9FF0000)
+                                                        }
+                                                    } else {
+                                                        Color(0xD97E4C4C)
+                                                    }
                                                 )
                                             }
                                             else -> {
@@ -379,6 +490,8 @@ fun FloatingDashboard(
                                                     },
                                                     onLongClick = {
                                                         isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
                                                     },
                                                     dashboardManager = dashboardViewModel.dashboardManager,
                                                     dashboardChart = false,

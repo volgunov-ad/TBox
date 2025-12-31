@@ -196,7 +196,7 @@ fun DashboardNetWidgetItem(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(6.dp)
+                    .padding(4.dp)
                     .wrapContentHeight(Alignment.CenterVertically),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
