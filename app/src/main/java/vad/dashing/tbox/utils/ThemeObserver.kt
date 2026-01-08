@@ -1,4 +1,4 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.utils
 
 import android.content.Context
 import android.database.ContentObserver

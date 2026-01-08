@@ -1,4 +1,4 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.utils
 
 class FuelLevelBuffer(private val bufferSize: Int = 10) {
     private val buffer = ArrayDeque<UInt>()
@@ -23,5 +23,26 @@ class FuelLevelBuffer(private val bufferSize: Int = 10) {
         // Проверяем, что все значения в буфере равны первому
         val firstValue = buffer.first()
         return buffer.all { it == firstValue }
+    }
+}
+
+class MotorHoursBuffer(private val maxDif: Float = 0.02f) {
+    private var lastTime = System.currentTimeMillis()
+    private var lastRPM = 0f
+
+    fun updateValue(rpm: Float): Float {
+        if (rpm < 200f && lastRPM < 200f) {
+            lastRPM = rpm
+            lastTime = System.currentTimeMillis()
+            return 0f
+        }
+        lastRPM = rpm
+        val newHours = (System.currentTimeMillis() - lastTime) / 3600000.0f
+        if (newHours >= maxDif) {
+            lastTime = System.currentTimeMillis()
+            return newHours
+        } else {
+            return 0f
+        }
     }
 }

@@ -1,9 +1,11 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.utils
 
 import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresPermission
 
 class IPManager(private val context: Context, initialIP: String = "192.168.225.1") {
@@ -44,14 +46,14 @@ class IPManager(private val context: Context, initialIP: String = "192.168.225.1
                     }
                 } else {
                     // Если нет разрешений - оставляем только initialIP и DEFAULT_IP
-                    android.util.Log.d(TAG, "No network state permission, using only initial and default IPs")
+                    Log.d(TAG, "No network state permission, using only initial and default IPs")
                     // Удаляем все кроме initialIP и DEFAULT_IP
                     val allowedIPs = listOf(initialIP, DEFAULT_IP).filter { isValidIP(it) }
                     newList.removeAll { it !in allowedIPs }
                 }
             } catch (e: SecurityException) {
                 // Если возникла SecurityException - оставляем только initialIP и DEFAULT_IP
-                android.util.Log.w(TAG, "Security exception, using only initial and default IPs")
+                Log.w(TAG, "Security exception, using only initial and default IPs")
                 val allowedIPs = listOf(initialIP, DEFAULT_IP).filter { isValidIP(it) }
                 newList.removeAll { it !in allowedIPs }
             }
@@ -61,13 +63,13 @@ class IPManager(private val context: Context, initialIP: String = "192.168.225.1
             currentIndex = 0
             isFirstCall = true
 
-            android.util.Log.d(TAG, "Updated IP list: $ipList")
+            Log.d(TAG, "Updated IP list: $ipList")
         }
     }
 
     private fun hasNetworkStatePermission(): Boolean {
         return context.checkSelfPermission(Manifest.permission.ACCESS_NETWORK_STATE) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
+                PackageManager.PERMISSION_GRANTED
     }
 
     @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
@@ -110,7 +112,7 @@ class IPManager(private val context: Context, initialIP: String = "192.168.225.1
                 })
             }
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error getting gateway IPs", e)
+            Log.e(TAG, "Error getting gateway IPs", e)
         }
 
         return gatewayIPs

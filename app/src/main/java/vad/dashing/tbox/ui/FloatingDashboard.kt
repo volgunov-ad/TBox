@@ -44,7 +44,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import vad.dashing.tbox.AppDataManager
+import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.SettingsManager
@@ -52,17 +56,27 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.MainActivity
+import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
 fun FloatingDashboardUI(
     settingsManager: SettingsManager,
+    appDataManager: AppDataManager,
     service: BackgroundService,
     params: WindowManager.LayoutParams
 ) {
     val tboxViewModel: TboxViewModel = viewModel()
-    val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(settingsManager))
+    val canViewModel: CanDataViewModel = viewModel()
+    val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(
+        settingsManager
+    )
+    )
+    val appDataViewModel: AppDataViewModel = viewModel(factory = AppDataViewModelFactory(
+        appDataManager
+    )
+    )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
 
     // Эффект при появлении окна
@@ -84,7 +98,9 @@ fun FloatingDashboardUI(
         ) {
             FloatingDashboard(
                 tboxViewModel = tboxViewModel,
+                canViewModel = canViewModel,
                 settingsViewModel = settingsViewModel,
+                appDataViewModel = appDataViewModel,
                 service = service,
                 windowParams = params
             )
@@ -95,7 +111,9 @@ fun FloatingDashboardUI(
 @Composable
 fun FloatingDashboard(
     tboxViewModel: TboxViewModel,
+    canViewModel: CanDataViewModel,
     settingsViewModel: SettingsViewModel,
+    appDataViewModel: AppDataViewModel,
     service: BackgroundService,
     windowParams: WindowManager.LayoutParams
 ) {
@@ -107,6 +125,7 @@ fun FloatingDashboard(
     val dashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val dashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
 
+    val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
     val isFloatingDashboardBackground by settingsViewModel.isFloatingDashboardBackground.collectAsStateWithLifecycle()
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
@@ -163,14 +182,14 @@ fun FloatingDashboard(
         }
     }
 
-    val dataProvider = remember { TboxDataProvider(tboxViewModel) }
+    val dataProvider = remember { TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel) }
 
     LaunchedEffect(widgetsConfig, dashboardRows, dashboardCols) {
         val totalWidgets = dashboardRows * dashboardCols
 
         // Всегда загружаем/создаем виджеты при изменении зависимостей
         val widgets = if (widgetsConfig.isNotEmpty()) {
-            loadWidgetsFromConfig(widgetsConfig, totalWidgets, false)
+            loadWidgetsFromConfig(widgetsConfig, totalWidgets)
         } else {
             List(totalWidgets) { index ->
                 DashboardWidget(
@@ -318,7 +337,7 @@ fun FloatingDashboard(
                                                     onClick = {
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
-                                                        } else {
+                                                        } else if (isFloatingDashboardClickAction) {
                                                             settingsViewModel.saveSelectedTab(0)
                                                             openMainActivity(context)
                                                         }
@@ -340,7 +359,7 @@ fun FloatingDashboard(
                                                     onClick = {
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
-                                                        } else {
+                                                        } else if (isFloatingDashboardClickAction) {
                                                             settingsViewModel.saveSelectedTab(2)
                                                             openMainActivity(context)
                                                         }
@@ -362,7 +381,7 @@ fun FloatingDashboard(
                                                     onClick = {
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
-                                                        } else {
+                                                        } else if (isFloatingDashboardClickAction) {
                                                             openMainActivity(context)
                                                         }
                                                     },
@@ -371,7 +390,7 @@ fun FloatingDashboard(
                                                         isDraggingMode = false
                                                         isResizingMode = false
                                                     },
-                                                    viewModel = tboxViewModel,
+                                                    canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true
@@ -383,7 +402,7 @@ fun FloatingDashboard(
                                                     onClick = {
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
-                                                        } else {
+                                                        } else if (isFloatingDashboardClickAction) {
                                                             openMainActivity(context)
                                                         }
                                                     },
@@ -392,7 +411,7 @@ fun FloatingDashboard(
                                                         isDraggingMode = false
                                                         isResizingMode = false
                                                     },
-                                                    viewModel = tboxViewModel,
+                                                    canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true
@@ -404,7 +423,7 @@ fun FloatingDashboard(
                                                     onClick = {
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
-                                                        } else {
+                                                        } else if (isFloatingDashboardClickAction) {
                                                             openMainActivity(context)
                                                         }
                                                     },
@@ -413,7 +432,7 @@ fun FloatingDashboard(
                                                         isDraggingMode = false
                                                         isResizingMode = false
                                                     },
-                                                    viewModel = tboxViewModel,
+                                                    canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true
@@ -425,7 +444,7 @@ fun FloatingDashboard(
                                                     onClick = {
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
-                                                        } else {
+                                                        } else if (isFloatingDashboardClickAction) {
                                                             openMainActivity(context)
                                                         }
                                                     },
@@ -434,7 +453,7 @@ fun FloatingDashboard(
                                                         isDraggingMode = false
                                                         isResizingMode = false
                                                     },
-                                                    viewModel = tboxViewModel,
+                                                    canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true
@@ -447,6 +466,8 @@ fun FloatingDashboard(
                                                     onClick = {
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
+                                                        } else if (isFloatingDashboardClickAction) {
+                                                            openMainActivity(context)
                                                         }
                                                     },
                                                     onLongClick = {
@@ -484,7 +505,7 @@ fun FloatingDashboard(
                                                     onClick = {
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
-                                                        } else {
+                                                        } else if (isFloatingDashboardClickAction) {
                                                             openMainActivity(context)
                                                         }
                                                     },
@@ -492,6 +513,11 @@ fun FloatingDashboard(
                                                         isEditMode = !isEditMode
                                                         isDraggingMode = false
                                                         isResizingMode = false
+                                                    },
+                                                    onDoubleClick = {
+                                                        if (widget.dataKey == "motorHours") {
+                                                            appDataViewModel.setMotorHours(0f)
+                                                        }
                                                     },
                                                     dashboardManager = dashboardViewModel.dashboardManager,
                                                     dashboardChart = false,

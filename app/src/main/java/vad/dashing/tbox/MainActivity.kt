@@ -23,6 +23,7 @@ import vad.dashing.tbox.ui.TboxApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.AppDataManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,11 +64,13 @@ class MainActivity : ComponentActivity() {
     private var isMockLocationSettingPending = false
 
     private lateinit var settingsManager: SettingsManager
+    private lateinit var appDataManager: AppDataManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         settingsManager = SettingsManager(this)
+        appDataManager = AppDataManager(this)
 
         setContent {
             Surface(
@@ -75,6 +78,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 TboxApp(
                     settingsManager = settingsManager,
+                    appDataManager = appDataManager,
                     onTboxRestart = { rebootTBox() },
                     onModemCheck = { modemCheck() },
                     onModemMode = { mode -> setModemMode(mode) },

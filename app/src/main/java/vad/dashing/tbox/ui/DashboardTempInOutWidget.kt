@@ -24,8 +24,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
-import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.valueToString
 
 @Composable
@@ -33,13 +33,13 @@ fun DashboardTempInOutWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    viewModel: TboxViewModel,
+    canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false
 ) {
-    val insideTemperature by viewModel.insideTemperature.collectAsStateWithLifecycle()
-    val outsideTemperature by viewModel.outsideTemperature.collectAsStateWithLifecycle()
+    val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
+    val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
 
     Card(
         modifier = Modifier

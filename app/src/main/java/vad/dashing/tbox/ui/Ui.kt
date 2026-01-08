@@ -55,8 +55,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import vad.dashing.tbox.SettingsManager
@@ -65,18 +63,22 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.seatModeToString
 import kotlinx.coroutines.delay
+import vad.dashing.tbox.AppDataManager
+import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.AppDataViewModelFactory
+import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.SettingsViewModelFactory
 import java.text.SimpleDateFormat
 import java.util.Locale
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 import vad.dashing.tbox.utils.MockLocationUtils
 import vad.dashing.tbox.utils.canUseMockLocation
 import vad.dashing.tbox.valueToString
-import kotlin.collections.component1
-import kotlin.collections.component2
 
 @Composable
 fun TboxApp(
     settingsManager: SettingsManager,
+    appDataManager: AppDataManager,
     onTboxRestart: () -> Unit,
     onModemCheck: () -> Unit,
     onModemMode: (String) -> Unit,
@@ -87,15 +89,25 @@ fun TboxApp(
     onATcmdSend: (String) -> Unit,
 ) {
     val viewModel: TboxViewModel = viewModel()
+    val canViewModel: CanDataViewModel = viewModel()
 
-    val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(settingsManager))
+    val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(
+        settingsManager
+    )
+    )
+    val appDataViewModel: AppDataViewModel = viewModel(factory = AppDataViewModelFactory(
+        appDataManager
+    )
+    )
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
 
     TboxAppTheme(theme = currentTheme) {
         TboxScreen(
             viewModel = viewModel,
+            canViewModel = canViewModel,
             settingsViewModel = settingsViewModel,
+            appDataViewModel = appDataViewModel,
             onTboxRestart = onTboxRestart,
             onModemCheck = onModemCheck,
             onModemMode = onModemMode,
@@ -108,23 +120,13 @@ fun TboxApp(
     }
 }
 
-// Factory для SettingsViewModel
-class SettingsViewModelFactory(private val settingsManager: SettingsManager) :
-    ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return SettingsViewModel(settingsManager) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class")
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TboxScreen(
     viewModel: TboxViewModel,
+    canViewModel: CanDataViewModel,
     settingsViewModel: SettingsViewModel,
+    appDataViewModel: AppDataViewModel,
     onTboxRestart: () -> Unit,
     onModemCheck: () -> Unit,
     onModemMode: (String) -> Unit,
@@ -248,7 +250,7 @@ fun TboxScreen(
                     ModemTab(viewModel, onModemMode)
                 }
                 2 -> LocationTab(viewModel, settingsViewModel, onTboxApplicationCommand)
-                3 -> CarDataTab(viewModel)
+                3 -> CarDataTab(canViewModel, appDataViewModel)
                 4 -> SettingsTab(
                     viewModel,
                     settingsViewModel,
@@ -261,13 +263,15 @@ fun TboxScreen(
                 }
                 6 -> InfoTab(viewModel, settingsViewModel, onUpdateInfoClick)
                 7 -> if (isExpertModeEnabled) {
-                    CanTab(viewModel, onSaveToFile)
+                    CanTab(viewModel, canViewModel, onSaveToFile)
                 } else {
                     ModemTab(viewModel, onModemMode)
                 }
                 8 -> MainDashboardTab(
                     viewModel,
+                    canViewModel,
                     settingsViewModel,
+                    appDataViewModel,
                     onTboxRestart)
                 else -> ModemTab(viewModel, onModemMode)
             }
@@ -1140,36 +1144,39 @@ fun InfoTab(
 
 @Composable
 fun CarDataTab(
-    viewModel: TboxViewModel,
+    canViewModel: CanDataViewModel,
+    appDataViewModel: AppDataViewModel,
 ) {
-    val odometer by viewModel.odometer.collectAsStateWithLifecycle()
-    val distanceToNextMaintenance by viewModel.distanceToNextMaintenance.collectAsStateWithLifecycle()
-    val distanceToFuelEmpty by viewModel.distanceToFuelEmpty.collectAsStateWithLifecycle()
-    val breakingForce by viewModel.breakingForce.collectAsStateWithLifecycle()
-    val engineRPM by viewModel.engineRPM.collectAsStateWithLifecycle()
-    val voltage by viewModel.voltage.collectAsStateWithLifecycle()
-    val fuelLevelPercentage by viewModel.fuelLevelPercentage.collectAsStateWithLifecycle()
-    val fuelLevelPercentageFiltered by viewModel.fuelLevelPercentageFiltered.collectAsStateWithLifecycle()
-    val carSpeed by viewModel.carSpeed.collectAsStateWithLifecycle()
-    val carSpeedAccurate by viewModel.carSpeedAccurate.collectAsStateWithLifecycle()
-    val wheelsSpeed by viewModel.wheelsSpeed.collectAsStateWithLifecycle()
-    val wheelsPressure by viewModel.wheelsPressure.collectAsStateWithLifecycle()
-    val cruiseSetSpeed by viewModel.cruiseSetSpeed.collectAsStateWithLifecycle()
-    val steerAngle by viewModel.steerAngle.collectAsStateWithLifecycle()
-    val steerSpeed by viewModel.steerSpeed.collectAsStateWithLifecycle()
-    val engineTemperature by viewModel.engineTemperature.collectAsStateWithLifecycle()
-    val gearBoxMode by viewModel.gearBoxMode.collectAsStateWithLifecycle()
-    val gearBoxCurrentGear by viewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
-    val gearBoxPreparedGear by viewModel.gearBoxPreparedGear.collectAsStateWithLifecycle()
-    val gearBoxChangeGear by viewModel.gearBoxChangeGear.collectAsStateWithLifecycle()
-    val gearBoxOilTemperature by viewModel.gearBoxOilTemperature.collectAsStateWithLifecycle()
-    val gearBoxDriveMode by viewModel.gearBoxDriveMode.collectAsStateWithLifecycle()
-    val gearBoxWork by viewModel.gearBoxWork.collectAsStateWithLifecycle()
-    val frontRightSeatMode by viewModel.frontRightSeatMode.collectAsStateWithLifecycle()
-    val frontLeftSeatMode by viewModel.frontLeftSeatMode.collectAsStateWithLifecycle()
-    val outsideTemperature by viewModel.outsideTemperature.collectAsStateWithLifecycle()
-    val insideTemperature by viewModel.insideTemperature.collectAsStateWithLifecycle()
-    val isWindowsBlocked by viewModel.isWindowsBlocked.collectAsStateWithLifecycle()
+    val odometer by canViewModel.odometer.collectAsStateWithLifecycle()
+    val distanceToNextMaintenance by canViewModel.distanceToNextMaintenance.collectAsStateWithLifecycle()
+    val distanceToFuelEmpty by canViewModel.distanceToFuelEmpty.collectAsStateWithLifecycle()
+    val breakingForce by canViewModel.breakingForce.collectAsStateWithLifecycle()
+    val engineRPM by canViewModel.engineRPM.collectAsStateWithLifecycle()
+    val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
+    val fuelLevelPercentage by canViewModel.fuelLevelPercentage.collectAsStateWithLifecycle()
+    val fuelLevelPercentageFiltered by canViewModel.fuelLevelPercentageFiltered.collectAsStateWithLifecycle()
+    val carSpeed by canViewModel.carSpeed.collectAsStateWithLifecycle()
+    val carSpeedAccurate by canViewModel.carSpeedAccurate.collectAsStateWithLifecycle()
+    val wheelsSpeed by canViewModel.wheelsSpeed.collectAsStateWithLifecycle()
+    val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
+    val cruiseSetSpeed by canViewModel.cruiseSetSpeed.collectAsStateWithLifecycle()
+    val steerAngle by canViewModel.steerAngle.collectAsStateWithLifecycle()
+    val steerSpeed by canViewModel.steerSpeed.collectAsStateWithLifecycle()
+    val engineTemperature by canViewModel.engineTemperature.collectAsStateWithLifecycle()
+    val gearBoxMode by canViewModel.gearBoxMode.collectAsStateWithLifecycle()
+    val gearBoxCurrentGear by canViewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
+    val gearBoxPreparedGear by canViewModel.gearBoxPreparedGear.collectAsStateWithLifecycle()
+    val gearBoxChangeGear by canViewModel.gearBoxChangeGear.collectAsStateWithLifecycle()
+    val gearBoxOilTemperature by canViewModel.gearBoxOilTemperature.collectAsStateWithLifecycle()
+    val gearBoxDriveMode by canViewModel.gearBoxDriveMode.collectAsStateWithLifecycle()
+    val gearBoxWork by canViewModel.gearBoxWork.collectAsStateWithLifecycle()
+    val frontRightSeatMode by canViewModel.frontRightSeatMode.collectAsStateWithLifecycle()
+    val frontLeftSeatMode by canViewModel.frontLeftSeatMode.collectAsStateWithLifecycle()
+    val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
+    val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
+    val isWindowsBlocked by canViewModel.isWindowsBlocked.collectAsStateWithLifecycle()
+
+    val motorHours by appDataViewModel.motorHours.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -1213,6 +1220,7 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("insideTemperature"), valueToString(insideTemperature, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("isWindowsBlocked"), valueToString(isWindowsBlocked,
                 booleanTrue = "заблокированы", booleanFalse = "разблокированы")) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHours"), valueToString(motorHours, 1)) }
         }
     }
 }
@@ -1397,9 +1405,10 @@ fun LogsTab(
 @Composable
 fun CanTab(
     viewModel: TboxViewModel,
+    canViewModel: CanDataViewModel,
     onSaveToFile: (String, List<String>) -> Unit
 ) {
-    val canFramesStructured by viewModel.canFramesStructured.collectAsStateWithLifecycle()
+    val canFramesStructured by canViewModel.canFramesStructured.collectAsStateWithLifecycle()
     val canFrameTime by viewModel.canFrameTime.collectAsStateWithLifecycle()
 
     var showSaveDialog by remember { mutableStateOf(false) }

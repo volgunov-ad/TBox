@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.seatModeToString
 import vad.dashing.tbox.valueToString
@@ -19,41 +21,45 @@ interface DataProvider {
     fun getValueFlow(key: String): StateFlow<String>
 }
 
-class TboxDataProvider(private val viewModel: TboxViewModel) : DataProvider {
+class TboxDataProvider(
+    private val viewModel: TboxViewModel,
+    private val canViewModel: CanDataViewModel,
+    private val appDataViewModel: AppDataViewModel,
+) : DataProvider {
     override fun getValueFlow(key: String): StateFlow<String> = when (key) {
-        "voltage" -> viewModel.voltage.mapState { valueToString(it, 1) }
-        "steerAngle" -> viewModel.steerAngle.mapState { valueToString(it, 1) }
-        "steerSpeed" -> viewModel.steerSpeed.mapState { valueToString(it) }
-        "engineRPM" -> viewModel.engineRPM.mapState { valueToString(it, 1) }
-        "carSpeed" -> viewModel.carSpeed.mapState { valueToString(it, 1) }
-        "carSpeedAccurate" -> viewModel.carSpeedAccurate.mapState { valueToString(it, 1) }
-        "wheel1Speed" -> viewModel.wheelsSpeed.mapState { valueToString(it.wheel1, 1) }
-        "wheel2Speed" -> viewModel.wheelsSpeed.mapState { valueToString(it.wheel2, 1) }
-        "wheel3Speed" -> viewModel.wheelsSpeed.mapState { valueToString(it.wheel3, 1) }
-        "wheel4Speed" -> viewModel.wheelsSpeed.mapState { valueToString(it.wheel4, 1) }
-        "wheel1Pressure" -> viewModel.wheelsPressure.mapState { valueToString(it.wheel1, 2) }
-        "wheel2Pressure" -> viewModel.wheelsPressure.mapState { valueToString(it.wheel2, 2) }
-        "wheel3Pressure" -> viewModel.wheelsPressure.mapState { valueToString(it.wheel3, 2) }
-        "wheel4Pressure" -> viewModel.wheelsPressure.mapState { valueToString(it.wheel4, 2) }
-        "cruiseSetSpeed" -> viewModel.cruiseSetSpeed.mapState { valueToString(it) }
-        "odometer" -> viewModel.odometer.mapState { valueToString(it) }
-        "distanceToNextMaintenance" -> viewModel.distanceToNextMaintenance.mapState { valueToString(it) }
-        "distanceToFuelEmpty" -> viewModel.distanceToFuelEmpty.mapState { valueToString(it) }
-        "breakingForce" -> viewModel.breakingForce.mapState { valueToString(it) }
-        "fuelLevelPercentage" -> viewModel.fuelLevelPercentage.mapState { valueToString(it) }
-        "fuelLevelPercentageFiltered" -> viewModel.fuelLevelPercentageFiltered.mapState { valueToString(it) }
-        "engineTemperature" -> viewModel.engineTemperature.mapState { valueToString(it, 1) }
-        "gearBoxOilTemperature" -> viewModel.gearBoxOilTemperature.mapState { valueToString(it) }
-        "gearBoxCurrentGear" -> viewModel.gearBoxCurrentGear.mapState { valueToString(it) }
-        "gearBoxPreparedGear" -> viewModel.gearBoxPreparedGear.mapState { valueToString(it) }
-        "gearBoxChangeGear" -> viewModel.gearBoxChangeGear.mapState {
+        "voltage" -> canViewModel.voltage.mapState { valueToString(it, 1) }
+        "steerAngle" -> canViewModel.steerAngle.mapState { valueToString(it, 1) }
+        "steerSpeed" -> canViewModel.steerSpeed.mapState { valueToString(it) }
+        "engineRPM" -> canViewModel.engineRPM.mapState { valueToString(it, 1) }
+        "carSpeed" -> canViewModel.carSpeed.mapState { valueToString(it, 1) }
+        "carSpeedAccurate" -> canViewModel.carSpeedAccurate.mapState { valueToString(it, 1) }
+        "wheel1Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel1, 1) }
+        "wheel2Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel2, 1) }
+        "wheel3Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel3, 1) }
+        "wheel4Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel4, 1) }
+        "wheel1Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel1, 2) }
+        "wheel2Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel2, 2) }
+        "wheel3Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel3, 2) }
+        "wheel4Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel4, 2) }
+        "cruiseSetSpeed" -> canViewModel.cruiseSetSpeed.mapState { valueToString(it) }
+        "odometer" -> canViewModel.odometer.mapState { valueToString(it) }
+        "distanceToNextMaintenance" -> canViewModel.distanceToNextMaintenance.mapState { valueToString(it) }
+        "distanceToFuelEmpty" -> canViewModel.distanceToFuelEmpty.mapState { valueToString(it) }
+        "breakingForce" -> canViewModel.breakingForce.mapState { valueToString(it) }
+        "fuelLevelPercentage" -> canViewModel.fuelLevelPercentage.mapState { valueToString(it) }
+        "fuelLevelPercentageFiltered" -> canViewModel.fuelLevelPercentageFiltered.mapState { valueToString(it) }
+        "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, 1) }
+        "gearBoxOilTemperature" -> canViewModel.gearBoxOilTemperature.mapState { valueToString(it) }
+        "gearBoxCurrentGear" -> canViewModel.gearBoxCurrentGear.mapState { valueToString(it) }
+        "gearBoxPreparedGear" -> canViewModel.gearBoxPreparedGear.mapState { valueToString(it) }
+        "gearBoxChangeGear" -> canViewModel.gearBoxChangeGear.mapState {
             valueToString(it, booleanTrue = "переключение", booleanFalse = "нет")
         }
-        "gearBoxMode" -> viewModel.gearBoxMode
-        "gearBoxDriveMode" -> viewModel.gearBoxDriveMode
-        "gearBoxWork" -> viewModel.gearBoxWork
-        "frontRightSeatMode" -> viewModel.frontRightSeatMode.mapState { seatModeToString(it) }
-        "frontLeftSeatMode" -> viewModel.frontLeftSeatMode.mapState { seatModeToString(it) }
+        "gearBoxMode" -> canViewModel.gearBoxMode
+        "gearBoxDriveMode" -> canViewModel.gearBoxDriveMode
+        "gearBoxWork" -> canViewModel.gearBoxWork
+        "frontRightSeatMode" -> canViewModel.frontRightSeatMode.mapState { seatModeToString(it) }
+        "frontLeftSeatMode" -> canViewModel.frontLeftSeatMode.mapState { seatModeToString(it) }
         "signalLevel" -> viewModel.netState.mapState { valueToString(it.signalLevel) }
         "netStatus" -> viewModel.netState.mapState { it.netStatus }
         "regStatus" -> viewModel.netState.mapState { it.regStatus }
@@ -74,9 +80,10 @@ class TboxDataProvider(private val viewModel: TboxViewModel) : DataProvider {
             val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
             it?.let { locationUpdateTime -> timeFormat.format(locationUpdateTime) } ?: ""
         }
-        "outsideTemperature" -> viewModel.outsideTemperature.mapState { valueToString(it, 1) }
-        "insideTemperature" -> viewModel.insideTemperature.mapState { valueToString(it, 1) }
-        "isWindowsBlocked" -> viewModel.isWindowsBlocked.mapState { valueToString(it, booleanTrue = "заблокированы", booleanFalse = "разблокированы") }
+        "outsideTemperature" -> canViewModel.outsideTemperature.mapState { valueToString(it, 1) }
+        "insideTemperature" -> canViewModel.insideTemperature.mapState { valueToString(it, 1) }
+        "isWindowsBlocked" -> canViewModel.isWindowsBlocked.mapState { valueToString(it, booleanTrue = "заблокированы", booleanFalse = "разблокированы") }
+        "motorHours" -> appDataViewModel.motorHours.mapState { valueToString(it, 1) }
         "restartTbox" -> MutableStateFlow("TBox").asStateFlow()
         else -> MutableStateFlow("").asStateFlow()
     }

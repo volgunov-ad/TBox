@@ -1,4 +1,9 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.utils
+
+import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.toHexString
 
 object CanFramesProcess {
 
@@ -12,11 +17,12 @@ object CanFramesProcess {
 
     private val fuelLevelPercentageBuffer = FuelLevelBuffer(10)
 
+    private var carType: String = "1.5_6MT"
+
     fun process(data: ByteArray) {
         TboxRepository.updateCanFrameTime()
         val rawValue = data.copyOfRange(4, data.size)
-        var carType = "1.5"
-        //TboxRepository.addCanFrame(toHexString(rawValue))
+        //CanDataRepository.addCanFrame(toHexString(rawValue))
         for (i in 0 until rawValue.size step 17) {
             try {
                 val rawFrame = rawValue.copyOfRange(i, i + 17)
@@ -29,7 +35,7 @@ object CanFramesProcess {
                     continue
                 }
 
-                TboxRepository.addCanFrameStructured(
+                CanDataRepository.addCanFrameStructured(
                     toHexString(canID),
                     singleData
                 )
@@ -38,18 +44,21 @@ object CanFramesProcess {
                     val angle =
                         (singleData.copyOfRange(0, 2).toFloat("UINT16_BE") - 32768f) * 6f / 100f
                     val speed = singleData[2].toInt()
-                    TboxRepository.updateSteerAngle(angle)
-                    TboxRepository.updateSteerSpeed(speed)
+                    CanDataRepository.updateSteerAngle(angle)
+                    CanDataRepository.updateSteerSpeed(speed)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xFA.toByte()))) {
                     val rpm = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 4f
-                    TboxRepository.updateEngineRPM(rpm)
+                    CanDataRepository.updateEngineRPM(rpm)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0x87.toByte()))) {
                     val distanceToNextMaintenance = singleData.copyOfRange(4, 6).toUInt16BigEndian()
-                    TboxRepository.updateDistanceToNextMaintenance(distanceToNextMaintenance)
+                    CanDataRepository.updateDistanceToNextMaintenance(distanceToNextMaintenance)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0xE9.toByte()))) {
                     val breakingForce = singleData[2].toUInt()
-                    TboxRepository.updateBreakingForce(breakingForce)
+                    CanDataRepository.updateBreakingForce(breakingForce)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x00))) {
+                    if (carType != "1.6") {
+                        carType = "1.5_6DCT"
+                    }
                     val gearBoxMode: String
                     val gearBoxCurrentGear: Int
                     val gearBoxPreparedGear: Int
@@ -120,55 +129,62 @@ object CanFramesProcess {
                         toHexString(byteArrayOf(singleData[5]))
                     }
 
-                    TboxRepository.updateGearBoxMode(gearBoxMode)
-                    TboxRepository.updateGearBoxCurrentGear(gearBoxCurrentGear)
-                    TboxRepository.updateGearBoxPreparedGear(gearBoxPreparedGear)
-                    TboxRepository.updateGearBoxChangeGear(gearBoxChangeGear)
-                    TboxRepository.updateGearBoxOilTemperature(gearBoxOilTemperature)
-                    TboxRepository.updateGearBoxDriveMode(gearBoxDriveMode)
-                    TboxRepository.updateGearBoxWork(gearBoxWork)
+                    CanDataRepository.updateGearBoxMode(gearBoxMode)
+                    CanDataRepository.updateGearBoxCurrentGear(gearBoxCurrentGear)
+                    CanDataRepository.updateGearBoxPreparedGear(gearBoxPreparedGear)
+                    CanDataRepository.updateGearBoxChangeGear(gearBoxChangeGear)
+                    CanDataRepository.updateGearBoxOilTemperature(gearBoxOilTemperature)
+                    CanDataRepository.updateGearBoxDriveMode(gearBoxDriveMode)
+                    CanDataRepository.updateGearBoxWork(gearBoxWork)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x05))) {
                     carType = "1.6"
                     val cruiseSpeed = singleData[0].toUInt()
-                    TboxRepository.updateCruiseSetSpeed(cruiseSpeed)
+                    CanDataRepository.updateCruiseSetSpeed(cruiseSpeed)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x10))) {
                     val speed1 = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") * 0.065f
                     val speed2 = singleData.copyOfRange(2, 4).toFloat("UINT16_BE") * 0.065f
                     val speed3 = singleData.copyOfRange(4, 6).toFloat("UINT16_BE") * 0.065f
                     val speed4 = singleData.copyOfRange(6, 8).toFloat("UINT16_BE") * 0.065f
-                    TboxRepository.updateWheelsSpeed(Wheels(speed1, speed2, speed3, speed4))
+                    CanDataRepository.updateWheelsSpeed(Wheels(speed1, speed2, speed3, speed4))
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x04, 0x30))) {
                     val speed = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 16f
                     val voltage = singleData[2].toUInt().toFloat() / 10f
                     val fuelLevelPercentage = singleData[4].toUInt()
                     val odometer = singleData.copyOfRange(5, 8).toUInt20FromNibbleBigEndian()
-                    TboxRepository.updateCarSpeed(speed)
-                    TboxRepository.updateOdometer(odometer)
-                    TboxRepository.updateVoltage(voltage)
-                    TboxRepository.updateFuelLevelPercentage(fuelLevelPercentage)
+                    CanDataRepository.updateCarSpeed(speed)
+                    CanDataRepository.updateOdometer(odometer)
+                    CanDataRepository.updateVoltage(voltage)
+                    CanDataRepository.updateFuelLevelPercentage(fuelLevelPercentage)
                     if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
-                        TboxRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
+                        CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
                     }
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x01))) {
                     val engineTemperature = singleData[2].toUInt().toFloat() * 0.75f - 48f
-                    if (carType != "1.6") {
+                    CanDataRepository.updateEngineTemperature(engineTemperature)
+                    if (carType == "1.5_6DCT") {
+                        if (singleData[1].toInt() == 1) {
+                            val cruiseSpeed = (singleData[4].toUInt().toDouble() * 1.60934400579).toUInt()
+                            CanDataRepository.updateCruiseSetSpeed(cruiseSpeed)
+                        } else if (singleData[1].toInt() == 0) {
+                            CanDataRepository.updateCruiseSetSpeed(0u)
+                        }
+                    } else if (carType == "1.5_6MT") {
                         if (singleData[1].toInt() == 1) {
                             val cruiseSpeed =
                                 //singleData[4].toUInt() - 3u + if (singleData[5].toUInt() >= 192u) 1u else 0u
                                 singleData[4].toUInt()
-                            TboxRepository.updateCruiseSetSpeed(cruiseSpeed)
+                            CanDataRepository.updateCruiseSetSpeed(cruiseSpeed)
                         } else if (singleData[1].toInt() == 0) {
-                            TboxRepository.updateCruiseSetSpeed(0u)
+                            CanDataRepository.updateCruiseSetSpeed(0u)
                         }
                     }
-                    TboxRepository.updateEngineTemperature(engineTemperature)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x02))) {
                     val speed = if (singleData[2] != 0x00.toByte()) {
                         singleData.copyOfRange(1, 3).toFloat("UINT16_BE") / 16f
                     } else {
                         0f
                     }
-                    TboxRepository.updateCarSpeedAccurate(speed)
+                    CanDataRepository.updateCarSpeedAccurate(speed)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x1B))) {
                     val pressure1 = if (singleData[4] != 0xFF.toByte()) {
                         singleData[4].toUInt().toFloat() / 36f
@@ -190,7 +206,7 @@ object CanFramesProcess {
                     } else {
                         null
                     }
-                    TboxRepository.updateWheelsPressure(
+                    CanDataRepository.updateWheelsPressure(
                         Wheels(
                             pressure1,
                             pressure2,
@@ -202,32 +218,32 @@ object CanFramesProcess {
                     val setTemperature = singleData[5].toUInt().toFloat() / 4f
                     if (setTemperature != 0f) {
                         val setTemperature1 = singleData[5].toUInt().toFloat() / 4f
-                        TboxRepository.updateClimateSetTemperature1(setTemperature1)
+                        CanDataRepository.updateClimateSetTemperature1(setTemperature1)
                     }
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x30))) {
                     val distanceToFuelEmpty = singleData.copyOfRange(2, 4).toUInt16BigEndian()
-                    TboxRepository.updateDistanceToFuelEmpty(distanceToFuelEmpty)
+                    CanDataRepository.updateDistanceToFuelEmpty(distanceToFuelEmpty)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x35))) {
                     val insideTemperature = singleData[5].toUInt().toFloat() * 0.5f - 40f
                     val outsideTemperature = singleData[6].toUInt().toFloat() * 0.5f - 40f
                     if (outsideTemperature >= -40f && outsideTemperature <= 60f) {
-                        TboxRepository.updateOutsideTemperature(outsideTemperature)
+                        CanDataRepository.updateOutsideTemperature(outsideTemperature)
                     } else {
-                        TboxRepository.updateOutsideTemperature(null)
+                        CanDataRepository.updateOutsideTemperature(null)
                     }
                     if (insideTemperature >= -40f && insideTemperature <= 60f) {
-                        TboxRepository.updateInsideTemperature(insideTemperature)
+                        CanDataRepository.updateInsideTemperature(insideTemperature)
                     } else {
-                        TboxRepository.updateInsideTemperature(null)
+                        CanDataRepository.updateInsideTemperature(null)
                     }
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
                     val frontLeftSeatMode = singleData[4].extractBitsToUInt(3, 3)
                     val frontRightSeatMode = singleData[4].extractBitsToUInt(0, 3)
-                    TboxRepository.updateFrontLeftSeatMode(frontLeftSeatMode)
-                    TboxRepository.updateFrontRightSeatMode(frontRightSeatMode)
+                    CanDataRepository.updateFrontLeftSeatMode(frontLeftSeatMode)
+                    CanDataRepository.updateFrontRightSeatMode(frontRightSeatMode)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xFF.toByte()))) {
                     val isWindowsBlocked = singleData[4].extractBitsToUInt(0, 1) == 1u
-                    TboxRepository.updateIsWindowsBlocked(isWindowsBlocked)
+                    CanDataRepository.updateIsWindowsBlocked(isWindowsBlocked)
                 }
             } catch (e: Exception) {
                 TboxRepository.addLog(

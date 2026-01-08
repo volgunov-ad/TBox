@@ -1,4 +1,4 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.utils
 
 object CsnOperatorResolver {
     private val operators = mapOf(

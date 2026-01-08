@@ -23,15 +23,17 @@ import vad.dashing.tbox.location.LocationMockManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.zip
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.ui.FloatingDashboardUI
 import vad.dashing.tbox.ui.MyLifecycleOwner
+import vad.dashing.tbox.utils.CanFramesProcess
+import vad.dashing.tbox.utils.CsnOperatorResolver
+import vad.dashing.tbox.utils.IPManager
+import vad.dashing.tbox.utils.MotorHoursBuffer
+import vad.dashing.tbox.utils.ThemeObserver
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -42,6 +44,7 @@ import kotlin.let
 
 class BackgroundService : Service() {
     private lateinit var settingsManager: SettingsManager
+    private lateinit var appDataManager: AppDataManager
     private lateinit var ipManager: IPManager
     private lateinit var locationMockManager: LocationMockManager
     private lateinit var scope: CoroutineScope
@@ -90,6 +93,7 @@ class BackgroundService : Service() {
     private var versionsJob: Job? = null
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
+    private var dataListenerJob: Job? = null
 
     private var netUpdateTime: Long = 5000
     private var apnUpdateTime: Long = 10000
@@ -111,6 +115,8 @@ class BackgroundService : Service() {
 
     private var overlayRetryCount = 0
     private var floatingDashboardOff = false
+
+    private var motorHoursBuffer = MotorHoursBuffer(0.02f)
 
     companion object {
         private const val MAX_OVERLAY_RETRIES = 3
@@ -181,6 +187,7 @@ class BackgroundService : Service() {
         super.onCreate()
 
         settingsManager = SettingsManager(this)
+        appDataManager = AppDataManager(this)
         locationMockManager = LocationMockManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
 
@@ -253,16 +260,18 @@ class BackgroundService : Service() {
                 registerReceiver(broadcastReceiver, filter)
             }
 
-            Log.d("BackgroundService", "TboxBroadcastReceiver registered")
+            Log.d("Background Service", "TboxBroadcastReceiver registered")
         } catch (e: Exception) {
-            Log.e("BackgroundService", "Failed to register TboxBroadcastReceiver", e)
+            TboxRepository.addLog("ERROR", "Background Service", "Failed to register TboxBroadcastReceiver")
+            Log.e("Background Service", "Failed to register TboxBroadcastReceiver", e)
         }
 
         try {
             setupThemeObserver()
-            Log.d("ThemeService", "Service created successfully")
+            Log.d("Theme Service", "Service created successfully")
         } catch (e: Exception) {
-            Log.e("ThemeService", "Failed to create service", e)
+            TboxRepository.addLog("ERROR", "Theme Service", "Failed to create service")
+            Log.e("Theme Service", "Failed to create service", e)
         }
         createNotificationChannel()
     }
@@ -274,7 +283,8 @@ class BackgroundService : Service() {
             }
             themeObserver.startObserving()
         } catch (e: Exception) {
-            Log.e("ThemeService", "Failed to setup theme observer", e)
+            TboxRepository.addLog("ERROR", "Theme Service", "Failed to setup theme observer")
+            Log.e("Theme Service", "Failed to setup theme observer", e)
             // Используем тему по умолчанию
             handleThemeChange(1)
         }
@@ -284,7 +294,8 @@ class BackgroundService : Service() {
         try {
             TboxRepository.updateCurrentTheme(themeMode)
         } catch (e: Exception) {
-            Log.e("ThemeService", "Error handling theme change", e)
+            TboxRepository.addLog("ERROR", "Theme Service", "Error handling theme change")
+            Log.e("Theme Service", "Error handling theme change", e)
         }
     }
 
@@ -295,22 +306,16 @@ class BackgroundService : Service() {
                 if (!isRunning) {
                     isRunning = true
                     TboxRepository.addLog("INFO", "Service", "Start service")
+                    startSettingsListener()
+                    startListener()
                     startNetUpdater()
                     startAPNUpdater()
-                    startListener()
                     startCheckConnection()
                     startPeriodicJob()
-                    startSettingsListener()
+                    startDataListener()
                     TboxRepository.updateServiceStartTime()
                     val notification = createNotification("Start service")
                     startForeground(NOTIFICATION_ID, notification)
-                    /*mainHandler.postDelayed({
-                        if (isFloatingDashboard.value) {
-                            TboxRepository.addLog("DEBUG", "Floating Dashboard",
-                                "Delayed overlay start (5000ms)")
-                            openOverlay()
-                        }
-                    }, 5000)*/
                 }
             }
             ACTION_STOP -> {
@@ -323,6 +328,7 @@ class BackgroundService : Service() {
                     stopCheckConnection()
                     stopPeriodicJob()
                     stopSettingsListener()
+                    stopDataListener()
                     stopStateBroadcastListener()
                     val notification = createNotification("Stop service")
                     startForeground(NOTIFICATION_ID, notification)
@@ -437,6 +443,7 @@ class BackgroundService : Service() {
                 setContent {
                     FloatingDashboardUI(
                         settingsManager = settingsManager,
+                        appDataManager = appDataManager,
                         service = this@BackgroundService,
                         params = params!!
                     )
@@ -462,7 +469,7 @@ class BackgroundService : Service() {
 
             TboxRepository.addLog("INFO", "Floating Dashboard", "Shown")
         } catch (e: Exception) {
-            Log.e("FloatingDashboard", "Error adding view", e)
+            Log.e("Floating Dashboard", "Error adding view", e)
             TboxRepository.addLog("ERROR", "Floating Dashboard", "Failed to show: ${e.message}")
             composeView = null
         }
@@ -473,7 +480,8 @@ class BackgroundService : Service() {
             try {
                 windowManager?.removeView(it)
             } catch (e: Exception) {
-                Log.e("FloatingDashboard", "Error removing view", e)
+                TboxRepository.addLog("ERROR", "Floating Dashboard", "Error removing view")
+                Log.e("Floating Dashboard", "Error removing view", e)
             }
             composeView = null
         }
@@ -566,6 +574,7 @@ class BackgroundService : Service() {
                 // Нормальная отмена - не логируем
                 throw e
             } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "Net Updater", "Fatal error in Net Updater job")
                 Log.e("Net Updater", "Fatal error in Net updater", e)
             }
         }
@@ -610,6 +619,7 @@ class BackgroundService : Service() {
                 // Нормальная отмена - не логируем
                 throw e
             } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "UDP Listener", "Fatal error in UDP Listener job")
                 Log.e("UDP Listener", "Fatal error in listener", e)
             }
         }
@@ -673,6 +683,7 @@ class BackgroundService : Service() {
                 // Нормальная отмена - не логируем
                 throw e
             } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "APN Updater", "Fatal error in APN Updater job")
                 Log.e("APN Updater", "Fatal error in APN updater", e)
             }
         }
@@ -751,6 +762,7 @@ class BackgroundService : Service() {
                 // Нормальная отмена - не логируем
                 throw e
             } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "Connection checker", "Fatal error in Connection checker job")
                 Log.e("Connection checker", "Fatal error in connection checker", e)
             }
         }
@@ -766,25 +778,36 @@ class BackgroundService : Service() {
         checkConnectionJob = null
     }
 
-    /*@OptIn(FlowPreview::class)
-    private fun startStateBroadcastListener() {
-        generalStateBroadcastJob = scope.launch {
-            combine(
-                TboxRepository.netState,
-                TboxRepository.apnState,
-                TboxRepository.apn2State,
-                TboxRepository.tboxConnected
-            ) {}
-                .debounce(100) // Задержка 100ms чтобы избежать спама
-                .collect {
-                    sendBroadcastData(BroadcastActions.ACTION_GENERAL_STATE)
-                }
-        }
-    }*/
-
     private fun stopStateBroadcastListener() {
         generalStateBroadcastJob?.cancel()
         generalStateBroadcastJob = null
+    }
+
+    private fun startDataListener() {
+        dataListenerJob = scope.launch {
+            // Запускаем коллектинг в параллельных потоках для независимой работы
+            launch {
+                CanDataRepository.engineRPM
+                    .drop(1)
+                    .collect { rpm ->
+                    try {
+                        val motorHours = motorHoursBuffer.updateValue(rpm ?: 0f)
+                        if (motorHours != 0f) {
+                            appDataManager.addMotorHours(motorHours)
+                        }
+                    } catch (e: Exception) {
+                        TboxRepository.addLog("ERROR", "Data Listener",
+                            "Fatal error in motor hours")
+                        Log.e("Data Listener", "Fatal error in motor hours", e)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopDataListener() {
+        dataListenerJob?.cancel()
+        dataListenerJob = null
     }
 
     private fun startSettingsListener() {
@@ -829,30 +852,6 @@ class BackgroundService : Service() {
                     }
                 }
             }
-
-            /*launch {
-                floatingDashboardWidth
-                    .zip(floatingDashboardHeight) { width, height -> width to height }
-                    .collect { (width, height) ->
-                        if (isFloatingDashboard.value && TboxRepository.floatingDashboardShown.value) {
-                            withContext(Dispatchers.Main) {
-                                updateWindowSize(width, height)
-                            }
-                        }
-                    }
-            }
-
-            launch {
-                floatingDashboardStartX
-                    .zip(floatingDashboardStartY) { startX, startY -> startX to startY }
-                    .collect { (startX, startY) ->
-                        if (isFloatingDashboard.value && TboxRepository.floatingDashboardShown.value) {
-                            withContext(Dispatchers.Main) {
-                                updateWindowPosition(startX, startY)
-                            }
-                        }
-                    }
-            }*/
         }
     }
 
@@ -971,7 +970,7 @@ class BackgroundService : Service() {
                             }
                         } else if (TboxRepository.locValues.value.locateStatus) {
                             if (getCanFrame.value) {
-                                TboxRepository.carSpeed.value?.let { speed ->
+                                CanDataRepository.carSpeed.value?.let { speed ->
                                     val min = speed - 10f
                                     val max = speed + 10f
                                     TboxRepository.locValues.value.speed.let { locSpeed ->
@@ -992,6 +991,17 @@ class BackgroundService : Service() {
                             }
                         }
                     }
+
+                    /*if (TboxRepository.tboxConnected.value) {
+                        if (CanDataRepository.engineRPM.value == 800f) {
+                            CanDataRepository.updateEngineRPM(850f)
+                        } else {
+                            CanDataRepository.updateEngineRPM(800f)
+                        }
+                    } else {
+                        CanDataRepository.updateEngineRPM(0f)
+                    }*/
+
                     if (TboxRepository.tboxConnected.value) {
                         if (autoSuspendTboxApp.value) {
                             // Отправка команды suspend app, если она не была подтверждена,
@@ -1077,23 +1087,13 @@ class BackgroundService : Service() {
                         }
                     }
 
-                    /*for (i in 0 until 25) {
-                        TboxRepository.addCanFrameStructured(
-                            "00 00 $i 00",
-                            byteArrayOf(0x16, 0x56, 0x41, 0x18, 0x08, 0x26, 0x0, 0x0C)
-                        )
-                        TboxRepository.addCanFrameStructured(
-                            "00 00 $i 00",
-                            byteArrayOf(0x16, 0x56, 0x41, 0x18, 0x08, 0x26, 0x0, 0x0C)
-                        )
-                    }*/
-
                     delay(1000)
                 }
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
                 throw e
             } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "1s Job", "Fatal error in periodic job")
                 Log.e("1s Job", "Fatal error in periodic job", e)
             }
         }
@@ -1143,6 +1143,7 @@ class BackgroundService : Service() {
                 // Нормальная отмена - не логируем
                 throw e
             } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "Modem mode", "Fatal error in modem mode job")
                 Log.e("Modem mode", "Fatal error in modem mode job", e)
             }
         }
@@ -1166,6 +1167,7 @@ class BackgroundService : Service() {
                 // Нормальная отмена - не логируем
                 throw e
             } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "AT command", "Fatal error in AT command job")
                 Log.e("AT command", "Fatal error in AT command job", e)
             }
         }
@@ -1185,6 +1187,7 @@ class BackgroundService : Service() {
                 // Нормальная отмена - не логируем
                 throw e
             } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "CRT command", "Fatal error in CRT command job")
                 Log.e("CRT command", "Fatal error in CRT command job", e)
             }
         }
@@ -1279,6 +1282,7 @@ class BackgroundService : Service() {
                 // Нормальная отмена - не логируем
                 throw e
             } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "Versions", "Fatal error in Versions job")
                 Log.e("Versions", "Fatal error in Versions job", e)
             }
         }
@@ -1488,6 +1492,7 @@ class BackgroundService : Service() {
         try {
             sendBroadcast(intent)
         } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "Widget", "Failed to send broadcast")
             Log.e("Widget", "Failed to send broadcast", e)
         }
     }
@@ -1497,7 +1502,7 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob
+            settingsListenerJob, dataListenerJob
         ).forEach { job ->
             job?.cancel()
         }
@@ -1515,23 +1520,26 @@ class BackgroundService : Service() {
         try {
             socket.close()
         } catch (e: Exception) {
-            Log.e("BackgroundService", "Error closing socket", e)
+            TboxRepository.addLog("ERROR", "Background Service", "Error closing socket")
+            Log.e("Background Service", "Error closing socket", e)
         }
 
         isRunning = false
 
         try {
             unregisterReceiver(broadcastReceiver)
-            Log.d("BackgroundService", "TboxBroadcastReceiver unregistered")
+            Log.d("Background Service", "TboxBroadcastReceiver unregistered")
         } catch (e: Exception) {
-            Log.e("BackgroundService", "Failed to unregister TboxBroadcastReceiver", e)
+            TboxRepository.addLog("ERROR", "Background Service", "Failed to unregister TboxBroadcastReceiver")
+            Log.e("Background Service", "Failed to unregister TboxBroadcastReceiver", e)
         }
 
         try {
             themeObserver.stopObserving()
-            Log.d("ThemeService", "Service destroyed")
+            Log.d("Theme Service", "Service destroyed")
         } catch (e: Exception) {
-            Log.e("ThemeService", "Error during service destruction", e)
+            TboxRepository.addLog("ERROR", "Theme Service", "Error during service destruction")
+            Log.e("Theme Service", "Error during service destruction", e)
         }
 
         // Очищаем ссылки

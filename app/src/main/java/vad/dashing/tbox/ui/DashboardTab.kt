@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.MainDashboardViewModel
@@ -42,7 +44,9 @@ import vad.dashing.tbox.WidgetsRepository
 @Composable
 fun MainDashboardTab(
     tboxViewModel: TboxViewModel,
+    canViewModel: CanDataViewModel,
     settingsViewModel: SettingsViewModel,
+    appDataViewModel: AppDataViewModel,
     onTboxRestartClick: () -> Unit,
 ) {
     val dashboardViewModel: MainDashboardViewModel = viewModel()
@@ -61,7 +65,7 @@ fun MainDashboardTab(
 
         // Всегда загружаем/создаем виджеты при изменении зависимостей
         val widgets = if (widgetsConfig.isNotEmpty()) {
-            loadWidgetsFromConfig(widgetsConfig, totalWidgets, true)
+            loadWidgetsFromConfig(widgetsConfig, totalWidgets)
         } else {
             List(totalWidgets) { index ->
                 DashboardWidget(
@@ -84,7 +88,7 @@ fun MainDashboardTab(
         }
     }
 
-    val dataProvider = remember { TboxDataProvider(tboxViewModel) }
+    val dataProvider = remember { TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel) }
 
     Column(
         modifier = Modifier
@@ -141,7 +145,7 @@ fun MainDashboardTab(
                                             widget = widget,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
-                                            viewModel = tboxViewModel
+                                            canViewModel = canViewModel
                                         )
                                     }
                                     "gearBoxWidget" -> {
@@ -149,7 +153,7 @@ fun MainDashboardTab(
                                             widget = widget,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
-                                            viewModel = tboxViewModel
+                                            canViewModel = canViewModel
                                         )
                                     }
                                     "wheelsPressureWidget" -> {
@@ -157,7 +161,7 @@ fun MainDashboardTab(
                                             widget = widget,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
-                                            viewModel = tboxViewModel
+                                            canViewModel = canViewModel
                                         )
                                     }
                                     "tempInOutWidget" -> {
@@ -165,7 +169,7 @@ fun MainDashboardTab(
                                             widget = widget,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
-                                            viewModel = tboxViewModel
+                                            canViewModel = canViewModel
                                         )
                                     }
                                     "restartTbox" -> {
@@ -199,6 +203,11 @@ fun MainDashboardTab(
                                             dataProvider = dataProvider,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
+                                            onDoubleClick = {
+                                                if (widget.dataKey == "motorHours") {
+                                                    appDataViewModel.setMotorHours(0f)
+                                                }
+                                            },
                                             dashboardManager = dashboardViewModel.dashboardManager,
                                             dashboardChart = dashboardChart
                                         )
@@ -351,7 +360,7 @@ fun WidgetSelectionDialogImpl(
 
 
 // Функция для загрузки виджетов из конфигурации
-fun loadWidgetsFromConfig(config: String, widgetCount: Int, isMainDashboard: Boolean = true): List<DashboardWidget> {
+fun loadWidgetsFromConfig(config: String, widgetCount: Int): List<DashboardWidget> {
     val dataKeys = if (config.isNotEmpty()) {
         config.split("|")
     } else {
@@ -362,14 +371,14 @@ fun loadWidgetsFromConfig(config: String, widgetCount: Int, isMainDashboard: Boo
         val dataKey = dataKeys.getOrNull(index) ?: ""
         if (dataKey.isNotEmpty() && dataKey != "null") {
             DashboardWidget(
-                id = if (isMainDashboard) index else -index - 1,
+                id = index,
                 title = WidgetsRepository.getTitleForDataKey(dataKey),
                 unit = WidgetsRepository.getUnitForDataKey(dataKey),
                 dataKey = dataKey
             )
         } else {
             DashboardWidget(
-                id = if (isMainDashboard) index else -index - 1,
+                id = index,
                 title = "",
                 dataKey = ""
             )

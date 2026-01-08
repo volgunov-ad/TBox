@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -67,6 +68,7 @@ class SettingsManager(private val context: Context) {
         private val FLOATING_DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_rows")
         private val FLOATING_DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_cols")
         private val FLOATING_DASHBOARD_BACKGROUND_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard_background")
+        private val FLOATING_DASHBOARD_CLICK_ACTION_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard_click_action")
     }
 
     // Flow для конфигурации виджетов
@@ -110,6 +112,10 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[FLOATING_DASHBOARD_BACKGROUND_KEY] ?: false }
         .distinctUntilChanged()
 
+    val floatingDashboardClickActionFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_DASHBOARD_CLICK_ACTION_KEY] ?: true }
+        .distinctUntilChanged()
+
     val autoModemRestartFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_MODEM_RESTART_KEY] ?: false }
         .distinctUntilChanged()
@@ -147,7 +153,7 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     val getCanFrameFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[GET_CAN_FRAME_KEY] ?: false }
+        .map { preferences -> preferences[GET_CAN_FRAME_KEY] ?: true }
         .distinctUntilChanged()
 
     val getCycleSignalFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -155,7 +161,7 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     val getLocDataFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[GET_LOC_DATA_KEY] ?: false }
+        .map { preferences -> preferences[GET_LOC_DATA_KEY] ?: true }
         .distinctUntilChanged()
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -340,6 +346,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveFloatingDashboardClickAction(config: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_DASHBOARD_CLICK_ACTION_KEY] = config
+        }
+    }
+
     suspend fun saveTboxIP(value: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[TBOX_IP_KEY] = value
@@ -412,9 +424,9 @@ class SettingsManager(private val context: Context) {
             preferences[AUTO_SUSPEND_TBOX_APP_KEY] = false
             preferences[AUTO_PREVENT_TBOX_RESTART_KEY] = false
             preferences[GET_VOLTAGES_KEY] = false
-            preferences[GET_CAN_FRAME_KEY] = false
+            preferences[GET_CAN_FRAME_KEY] = true
             preferences[GET_CYCLE_SIGNAL_KEY] = false
-            preferences[GET_LOC_DATA_KEY] = false
+            preferences[GET_LOC_DATA_KEY] = true
             preferences[MOCK_LOCATION] = false
             preferences[WIDGET_SHOW_INDICATOR] = false
             preferences[WIDGET_SHOW_LOC_INDICATOR] = false

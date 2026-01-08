@@ -27,8 +27,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
-import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.valueToString
 
 @Composable
@@ -36,12 +36,12 @@ fun DashboardWheelsPressureWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    viewModel: TboxViewModel,
+    canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false
 ) {
-    val wheelsPressure by viewModel.wheelsPressure.collectAsStateWithLifecycle()
+    val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
 
     Card(
         modifier = Modifier
