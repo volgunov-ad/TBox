@@ -68,8 +68,6 @@ class SettingsManager(private val context: Context) {
         // Значения по умолчанию
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
-        private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
-        private const val DEFAULT_FLOATING_DASHBOARD_NAME = "Panel 1"
         private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_COLS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_WIDTH = 100
@@ -148,12 +146,7 @@ class SettingsManager(private val context: Context) {
     val floatingDashboardsFlow: Flow<List<FloatingDashboardConfig>> = context.settingsDataStore.data
         .map { preferences ->
             val rawJson = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
-            val parsed = parseFloatingDashboardsJson(rawJson)
-            if (parsed.isNotEmpty()) {
-                parsed
-            } else {
-                listOf(legacyFloatingDashboardConfig(preferences))
-            }
+            parseFloatingDashboardsJson(rawJson)
         }
         .distinctUntilChanged()
 
@@ -461,27 +454,6 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[DASHBOARD_CHART_KEY] = config
         }
-    }
-
-    private fun legacyFloatingDashboardConfig(preferences: Preferences): FloatingDashboardConfig {
-        return FloatingDashboardConfig(
-            id = DEFAULT_FLOATING_DASHBOARD_ID,
-            name = DEFAULT_FLOATING_DASHBOARD_NAME,
-            enabled = preferences[FLOATING_DASHBOARD_KEY] ?: DEFAULT_FLOATING_DASHBOARD_ENABLED,
-            widgetsConfig = preferences[FLOATING_DASHBOARD_WIDGETS_KEY] ?: DEFAULT_FLOATING_DASHBOARD_WIDGETS,
-            rows = (preferences[FLOATING_DASHBOARD_ROWS_KEY] ?: DEFAULT_FLOATING_DASHBOARD_ROWS)
-                .coerceIn(1, 6),
-            cols = (preferences[FLOATING_DASHBOARD_COLS_KEY] ?: DEFAULT_FLOATING_DASHBOARD_COLS)
-                .coerceIn(1, 6),
-            width = preferences[FLOATING_DASHBOARD_WIDTH_KEY] ?: DEFAULT_FLOATING_DASHBOARD_WIDTH,
-            height = preferences[FLOATING_DASHBOARD_HEIGHT_KEY] ?: DEFAULT_FLOATING_DASHBOARD_HEIGHT,
-            startX = preferences[FLOATING_DASHBOARD_START_X_KEY] ?: DEFAULT_FLOATING_DASHBOARD_START_X,
-            startY = preferences[FLOATING_DASHBOARD_START_Y_KEY] ?: DEFAULT_FLOATING_DASHBOARD_START_Y,
-            background = preferences[FLOATING_DASHBOARD_BACKGROUND_KEY]
-                ?: DEFAULT_FLOATING_DASHBOARD_BACKGROUND,
-            clickAction = preferences[FLOATING_DASHBOARD_CLICK_ACTION_KEY]
-                ?: DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
-        )
     }
 
     private fun parseFloatingDashboardsJson(json: String): List<FloatingDashboardConfig> {
