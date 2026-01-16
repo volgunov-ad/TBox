@@ -55,6 +55,7 @@ import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.FloatingDashboardViewModel
+import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.WidgetsRepository
@@ -65,6 +66,7 @@ fun FloatingDashboardUI(
     settingsManager: SettingsManager,
     appDataManager: AppDataManager,
     service: BackgroundService,
+    panelId: String,
     params: WindowManager.LayoutParams
 ) {
     val tboxViewModel: TboxViewModel = viewModel()
@@ -80,14 +82,14 @@ fun FloatingDashboardUI(
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
 
     // Эффект при появлении окна
-    LaunchedEffect(Unit) {
-        tboxViewModel.updateFloatingDashboardShown(true)
+    LaunchedEffect(panelId) {
+        tboxViewModel.updateFloatingDashboardShown(panelId, true)
     }
 
     // Эффект при закрытии окна
-    DisposableEffect(Unit) {
+    DisposableEffect(panelId) {
         onDispose {
-            tboxViewModel.updateFloatingDashboardShown(false)
+            tboxViewModel.updateFloatingDashboardShown(panelId, false)
         }
     }
 
@@ -101,6 +103,7 @@ fun FloatingDashboardUI(
                 canViewModel = canViewModel,
                 settingsViewModel = settingsViewModel,
                 appDataViewModel = appDataViewModel,
+                panelId = panelId,
                 service = service,
                 windowParams = params
             )
@@ -114,19 +117,24 @@ fun FloatingDashboard(
     canViewModel: CanDataViewModel,
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
+    panelId: String,
     service: BackgroundService,
     windowParams: WindowManager.LayoutParams
 ) {
     val context = LocalContext.current
 
-    val dashboardViewModel: FloatingDashboardViewModel = viewModel()
+    val dashboardViewModel: FloatingDashboardViewModel = viewModel(
+        key = "floating-$panelId",
+        factory = FloatingDashboardViewModelFactory(panelId)
+    )
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
-    val widgetsConfig by settingsViewModel.floatingDashboardWidgetsConfig.collectAsStateWithLifecycle()
-    val dashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
-    val dashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
+    val panelConfig by settingsViewModel.floatingDashboardConfig(panelId).collectAsStateWithLifecycle()
+    val widgetsConfig = panelConfig.widgetsConfig
+    val dashboardRows = panelConfig.rows
+    val dashboardCols = panelConfig.cols
 
-    val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
-    val isFloatingDashboardBackground by settingsViewModel.isFloatingDashboardBackground.collectAsStateWithLifecycle()
+    val isFloatingDashboardClickAction = panelConfig.clickAction
+    val isFloatingDashboardBackground = panelConfig.background
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
 
@@ -169,16 +177,16 @@ fun FloatingDashboard(
             val newWidth = dialogWidth.coerceAtMost(containerSize.width)
             val newHeight = dialogHeight.coerceAtMost(containerSize.height - 100)
 
-            service.updateWindowSize(newWidth, newHeight)
+            service.updateWindowSize(panelId, newWidth, newHeight)
 
             // Центрируем окно
             val centerX = (containerSize.width - newWidth) / 2
             val centerY = (containerSize.height - newHeight) / 2
-            service.updateWindowPosition(centerX, centerY)
+            service.updateWindowPosition(panelId, centerX, centerY)
         } else {
             // Восстанавливаем оригинальные размеры и положение
-            service.updateWindowSize(originalWidth.intValue, originalHeight.intValue)
-            service.updateWindowPosition(originalX.intValue, originalY.intValue)
+            service.updateWindowSize(panelId, originalWidth.intValue, originalHeight.intValue)
+            service.updateWindowPosition(panelId, originalX.intValue, originalY.intValue)
         }
     }
 
@@ -258,7 +266,7 @@ fun FloatingDashboard(
                                     // Обновляем положение окна
                                     val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
                                     val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
-                                    service.updateWindowPosition(newX, newY)
+                                    service.updateWindowPosition(panelId, newX, newY)
 
                                 } else if (isEditMode && showDialogForIndex == null && isResizingMode && resizeStartPosition != null) {
                                     // Обновляем размер окна
@@ -266,21 +274,21 @@ fun FloatingDashboard(
                                         .coerceAtLeast(50)
                                     val newHeight = (windowParams.height + dragAmount.y).toInt()
                                         .coerceAtLeast(50)
-                                    service.updateWindowSize(newWidth, newHeight)
+                                    service.updateWindowSize(panelId, newWidth, newHeight)
                                 }
                             },
                             onDragEnd = {
                                 if (isEditMode && isDraggingMode) {
-                                    settingsViewModel.saveFloatingDashboardStartX(windowParams.x)
-                                    settingsViewModel.saveFloatingDashboardStartY(windowParams.y)
+                                    settingsViewModel.saveFloatingDashboardStartX(panelId, windowParams.x)
+                                    settingsViewModel.saveFloatingDashboardStartY(panelId, windowParams.y)
                                     // Сбрасываем режимы после завершения жеста
                                     isDraggingMode = false
                                     isResizingMode = false
                                     dragStartPosition = null
                                     resizeStartPosition = null
                                 } else if (isEditMode && isResizingMode) {
-                                    settingsViewModel.saveFloatingDashboardWidth(windowParams.width)
-                                    settingsViewModel.saveFloatingDashboardHeight(windowParams.height)
+                                    settingsViewModel.saveFloatingDashboardWidth(panelId, windowParams.width)
+                                    settingsViewModel.saveFloatingDashboardHeight(panelId, windowParams.height)
                                     // Сбрасываем режимы после завершения жеста
                                     isDraggingMode = false
                                     isResizingMode = false
@@ -611,6 +619,7 @@ fun FloatingDashboard(
         // Показываем кастомный диалог когда есть showDialogForIndex
         showDialogForIndex?.let { index ->
             OverlayWidgetSelectionDialog(
+                panelId = panelId,
                 widgetIndex = index,
                 currentWidgets = dashboardState.widgets,
                 settingsViewModel = settingsViewModel,
@@ -623,6 +632,7 @@ fun FloatingDashboard(
 
 @Composable
 fun OverlayWidgetSelectionDialog(
+    panelId: String,
     widgetIndex: Int,
     currentWidgets: List<DashboardWidget>,
     settingsViewModel: SettingsViewModel,
@@ -741,7 +751,7 @@ fun OverlayWidgetSelectionDialog(
 
                         dashboardManager.updateWidgets(updatedWidgets)
                         val config = updatedWidgets.joinToString("|") { it.dataKey }
-                        settingsViewModel.saveFloatingDashboardWidgets(config)
+                        settingsViewModel.saveFloatingDashboardWidgets(panelId, config)
                         dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
 
                         onDismiss()

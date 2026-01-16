@@ -449,6 +449,7 @@ fun SettingsTab(
     val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
+    val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
 
     val isTboxIPRotation by settingsViewModel.tboxIPRotation.collectAsStateWithLifecycle()
 
@@ -569,6 +570,13 @@ fun SettingsTab(
             maxLines = 1,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Left
+        )
+        FloatingDashboardProfileSelector(
+            selectedId = activeFloatingDashboardId,
+            onSelect = { panelId ->
+                settingsViewModel.saveSelectedFloatingDashboardId(panelId)
+            },
+            modifier = Modifier.padding(bottom = 8.dp)
         )
         SettingSwitch(
             isFloatingDashboardEnabled,

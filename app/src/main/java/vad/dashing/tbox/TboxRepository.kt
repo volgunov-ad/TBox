@@ -179,8 +179,8 @@ object TboxRepository {
     private val _didDataCSV = MutableStateFlow<List<String>>(emptyList())
     val didDataCSV: StateFlow<List<String>> = _didDataCSV.asStateFlow()
 
-    private val _floatingDashboardShown = MutableStateFlow(false)
-    val floatingDashboardShown: StateFlow<Boolean> = _floatingDashboardShown.asStateFlow()
+    private val _floatingDashboardShownIds = MutableStateFlow<Set<String>>(emptySet())
+    val floatingDashboardShownIds: StateFlow<Set<String>> = _floatingDashboardShownIds.asStateFlow()
 
     private const val MAX_LOGS = 100
 
@@ -326,7 +326,14 @@ object TboxRepository {
         _tboxAppStoped.value = false
     }
 
-    fun updateFloatingDashboardShown(newValue: Boolean) {
-        _floatingDashboardShown.value = newValue
+    fun updateFloatingDashboardShown(panelId: String, isShown: Boolean) {
+        if (panelId.isBlank()) return
+        _floatingDashboardShownIds.update { current ->
+            if (isShown) {
+                current + panelId
+            } else {
+                current - panelId
+            }
+        }
     }
 }

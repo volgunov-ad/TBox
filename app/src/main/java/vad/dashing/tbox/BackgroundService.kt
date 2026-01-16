@@ -415,6 +415,7 @@ class BackgroundService : Service() {
                         settingsManager = settingsManager,
                         appDataManager = appDataManager,
                         service = this@BackgroundService,
+                        panelId = config.id,
                         params = layoutParams
                     )
                 }

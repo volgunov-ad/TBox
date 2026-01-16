@@ -26,6 +26,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -501,6 +502,50 @@ fun ATLogsCard(
 }
 
 @Composable
+fun FloatingDashboardProfileSelector(
+    selectedId: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val options = listOf(
+        "floating-1" to "1",
+        "floating-2" to "2",
+        "floating-3" to "3"
+    )
+    Column(modifier = modifier) {
+        Text(
+            text = "Пакет настроек плавающей панели",
+            fontSize = 24.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            options.forEach { (id, label) ->
+                val isSelected = id == selectedId
+                if (isSelected) {
+                    Button(
+                        onClick = { onSelect(id) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(text = label, fontSize = 22.sp)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onSelect(id) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(text = label, fontSize = 22.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun FloatingDashboardPositionSizeSettings(
     settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier
@@ -607,7 +652,7 @@ fun FloatingDashboardPositionSizeSettings(
             }
         }
         Text(
-            text = "Чтобы изменения размера и положения вступили в силу, выключите и снова включите плавающую панель",
+            text = "Чтобы изменения размера и положения вступили в силу, выключите и снова включите выбранную панель",
             fontSize = 20.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp)
