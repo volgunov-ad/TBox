@@ -41,6 +41,10 @@ class TboxDataProvider(
         "wheel2Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel2, 2) }
         "wheel3Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel3, 2) }
         "wheel4Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel4, 2) }
+        "wheel1Temperature" -> canViewModel.wheelsTemperature.mapState { valueToString(it.wheel1, 2) }
+        "wheel2Temperature" -> canViewModel.wheelsTemperature.mapState { valueToString(it.wheel2, 2) }
+        "wheel3Temperature" -> canViewModel.wheelsTemperature.mapState { valueToString(it.wheel3, 2) }
+        "wheel4Temperature" -> canViewModel.wheelsTemperature.mapState { valueToString(it.wheel4, 2) }
         "cruiseSetSpeed" -> canViewModel.cruiseSetSpeed.mapState { valueToString(it) }
         "odometer" -> canViewModel.odometer.mapState { valueToString(it) }
         "distanceToNextMaintenance" -> canViewModel.distanceToNextMaintenance.mapState { valueToString(it) }

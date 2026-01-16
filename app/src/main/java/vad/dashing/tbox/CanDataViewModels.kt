@@ -100,6 +100,13 @@ class CanDataViewModel : ViewModel() {
             initialValue = Wheels()
         )
 
+    val wheelsTemperature: StateFlow<Wheels> = CanDataRepository.wheelsTemperature
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Wheels()
+        )
+
     val steerAngle: StateFlow<Float?> = CanDataRepository.steerAngle
         .stateIn(
             scope = viewModelScope,

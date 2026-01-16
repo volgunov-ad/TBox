@@ -175,12 +175,6 @@ class BackgroundService : Service() {
         const val ACTION_LOC_UNSUBSCRIBE = "vad.dashing.tbox.LOC_UNSUBSCRIBE"
         const val ACTION_GET_CAN_FRAME = "vad.dashing.tbox.GET_CAN_FRAME"
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
-        const val ACTION_LIGHT_SHOW_START = "vad.dashing.tbox.LIGHT_SHOW_START"
-        const val ACTION_LIGHT_SHOW_STOP = "vad.dashing.tbox.LIGHT_SHOW_STOP"
-
-        const val ACTION_SHOW_FLOATING_FROM_SERVICE = "vad.dashing.tbox.SHOW_FLOATING_FROM_SERVICE"
-        const val ACTION_SHOW_FLOATING = "vad.dashing.tbox.SHOW_FLOATING"
-        const val ACTION_HIDE_FLOATING = "vad.dashing.tbox.HIDE_FLOATING"
     }
 
     override fun onCreate() {
@@ -375,11 +369,6 @@ class BackgroundService : Service() {
                     this[0] = 0x02
                     this[9] = 0x01 },
                 "Open", "INFO")
-            ACTION_LIGHT_SHOW_START -> humLightShowReq(byteArrayOf(1, 0, 0, 0, 0, 0, 0, 0, 0))
-            ACTION_LIGHT_SHOW_STOP -> humLightShowReq(byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0))
-            ACTION_SHOW_FLOATING_FROM_SERVICE -> openOverlay(true)
-            ACTION_SHOW_FLOATING -> openOverlay()
-            ACTION_HIDE_FLOATING -> closeOverlay()
         }
         return START_STICKY
     }

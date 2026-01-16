@@ -49,6 +49,9 @@ object CanDataRepository {
     private val _wheelsPressure = MutableStateFlow(Wheels())
     val wheelsPressure: StateFlow<Wheels> = _wheelsPressure.asStateFlow()
 
+    private val _wheelsTemperature = MutableStateFlow(Wheels())
+    val wheelsTemperature: StateFlow<Wheels> = _wheelsTemperature.asStateFlow()
+
     private val _climateSetTemperature1 = MutableStateFlow<Float?>(null)
     val climateSetTemperature1: StateFlow<Float?> = _climateSetTemperature1.asStateFlow()
 
@@ -193,6 +196,10 @@ object CanDataRepository {
 
     fun updateWheelsPressure(newValue: Wheels) {
         _wheelsPressure.value = newValue
+    }
+
+    fun updateWheelsTemperature(newValue: Wheels) {
+        _wheelsTemperature.value = newValue
     }
 
     fun updateEngineRPM(newValue: Float) {

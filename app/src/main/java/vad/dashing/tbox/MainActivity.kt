@@ -164,21 +164,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                "HUM" -> {
-                    action = when (command) {
-                        "lightShowStart" -> {
-                            BackgroundService.ACTION_LIGHT_SHOW_START
-                        }
-
-                        "lightShowStop" -> {
-                            BackgroundService.ACTION_LIGHT_SHOW_STOP
-                        }
-
-                        else -> {
-                            null
-                        }
-                    }
-                }
                 "LOC" -> {
                     action = when (command) {
                         "suspend" -> {
@@ -446,19 +431,5 @@ class MainActivity : ComponentActivity() {
     private fun hasLocationPermissions(): Boolean {
         return (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-    }
-
-    private fun handleFloatingDashboardChanged(enabled: Boolean) {
-        val intent = Intent(this, BackgroundService::class.java).apply {
-            action = when (enabled) {
-                true -> {
-                    BackgroundService.ACTION_SHOW_FLOATING
-                }
-                else -> {
-                    BackgroundService.ACTION_HIDE_FLOATING
-                }
-            }
-        }
-        startServiceSafely(intent)
     }
 }

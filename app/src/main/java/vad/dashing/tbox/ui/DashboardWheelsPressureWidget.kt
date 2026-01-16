@@ -144,7 +144,7 @@ fun PressureText(
             textType = TextType.VALUE
         ),
         fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = if ((value ?: 0f) >= 1.92f) MaterialTheme.colorScheme.onSurface else Color(0xD9FF0000),
         textAlign = TextAlign.Center,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

@@ -163,7 +163,8 @@ object CanFramesProcess {
                     CanDataRepository.updateEngineTemperature(engineTemperature)
                     if (carType == "1.5_6DCT") {
                         if (singleData[1].toInt() == 1) {
-                            val cruiseSpeed = (singleData[4].toUInt().toDouble() * 1.60934400579).toUInt()
+                            //val cruiseSpeed = (singleData[4].toUInt().toDouble() * 1.60934400579).toUInt()
+                            val cruiseSpeed = singleData[4].toUInt()
                             CanDataRepository.updateCruiseSetSpeed(cruiseSpeed)
                         } else if (singleData[1].toInt() == 0) {
                             CanDataRepository.updateCruiseSetSpeed(0u)
@@ -186,6 +187,27 @@ object CanFramesProcess {
                     }
                     CanDataRepository.updateCarSpeedAccurate(speed)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x1B))) {
+                    val temperature = if (singleData[3] != 0xFF.toByte()) {
+                        singleData[3].toUInt().toFloat() * 0.75f - 45f
+                    } else {
+                        null
+                    }
+
+                    val wheelsTemperature = CanDataRepository.wheelsTemperature.value
+                    val wheelIndex = singleData[2].toInt()
+
+                    val newWheelsTemperature = when (wheelIndex) {
+                        0 -> wheelsTemperature.copy(wheel1 = temperature)
+                        1 -> wheelsTemperature.copy(wheel2 = temperature)
+                        2 -> wheelsTemperature.copy(wheel3 = temperature)
+                        3 -> wheelsTemperature.copy(wheel4 = temperature)
+                        else -> null
+                    }
+
+                    newWheelsTemperature?.let {
+                        CanDataRepository.updateWheelsTemperature(it)
+                    }
+
                     val pressure1 = if (singleData[4] != 0xFF.toByte()) {
                         singleData[4].toUInt().toFloat() / 36f
                     } else {
@@ -237,8 +259,8 @@ object CanFramesProcess {
                         CanDataRepository.updateInsideTemperature(null)
                     }
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
-                    val frontLeftSeatMode = singleData[4].extractBitsToUInt(3, 3)
-                    val frontRightSeatMode = singleData[4].extractBitsToUInt(0, 3)
+                    val frontRightSeatMode = singleData[4].extractBitsToUInt(3, 3)
+                    val frontLeftSeatMode = singleData[4].extractBitsToUInt(0, 3)
                     CanDataRepository.updateFrontLeftSeatMode(frontLeftSeatMode)
                     CanDataRepository.updateFrontRightSeatMode(frontRightSeatMode)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xFF.toByte()))) {

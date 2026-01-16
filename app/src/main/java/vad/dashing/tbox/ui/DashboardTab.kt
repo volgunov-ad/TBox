@@ -221,8 +221,8 @@ fun MainDashboardTab(
         }
 
         showDialogForIndex?.let { index ->
-            MainWidgetSelectionDialog(
-                dashboardViewModel = dashboardViewModel,
+            WidgetSelectionDialog(
+                dashboardManager = dashboardViewModel.dashboardManager,
                 settingsViewModel = settingsViewModel,
                 widgetIndex = index,
                 currentWidgets = dashboardState.widgets,
@@ -233,31 +233,12 @@ fun MainDashboardTab(
 }
 
 @Composable
-fun MainWidgetSelectionDialog(
-    dashboardViewModel: MainDashboardViewModel,
-    settingsViewModel: SettingsViewModel,
-    widgetIndex: Int,
-    currentWidgets: List<DashboardWidget>,
-    onDismiss: () -> Unit
-) {
-    WidgetSelectionDialogImpl(
-        dashboardManager = dashboardViewModel.dashboardManager,
-        settingsViewModel = settingsViewModel,
-        widgetIndex = widgetIndex,
-        currentWidgets = currentWidgets,
-        onDismiss = onDismiss,
-        isMainDashboard = true
-    )
-}
-
-@Composable
-fun WidgetSelectionDialogImpl(
+fun WidgetSelectionDialog(
     dashboardManager: DashboardManager,
     settingsViewModel: SettingsViewModel,
     widgetIndex: Int,
     currentWidgets: List<DashboardWidget>,
-    onDismiss: () -> Unit,
-    isMainDashboard: Boolean
+    onDismiss: () -> Unit
 ) {
     var selectedDataKey by remember {
         mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
@@ -335,11 +316,7 @@ fun WidgetSelectionDialogImpl(
                     // Сохраняем конфигурацию
                     val config = updatedWidgets.joinToString("|") { it.dataKey }
 
-                    if (isMainDashboard) {
-                        settingsViewModel.saveDashboardWidgets(config)
-                    } else {
-                        settingsViewModel.saveFloatingDashboardWidgets(config)
-                    }
+                    settingsViewModel.saveDashboardWidgets(config)
 
                     // Очищаем историю
                     dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)

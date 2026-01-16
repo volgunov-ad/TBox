@@ -446,6 +446,7 @@ fun SettingsTab(
 
     val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
     val isFloatingDashboardBackground by settingsViewModel.isFloatingDashboardBackground.collectAsStateWithLifecycle()
+    val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
 
@@ -595,6 +596,15 @@ fun SettingsTab(
             },
             "Включить фон плавающей панели",
             "Если выключено, то фон будет прозрачный",
+            true
+        )
+        SettingSwitch(
+            isFloatingDashboardClickAction,
+            { enabled ->
+                settingsViewModel.saveFloatingDashboardClickAction(enabled)
+            },
+            "Открывать окно программы при одиночном нажатии на элемент плавающей панели",
+            "",
             true
         )
         SettingDropdownGeneric(
@@ -942,22 +952,6 @@ fun LocationTab(
                         textAlign = TextAlign.Center
                     )
                 }
-                Button(
-                    onClick = {
-                        if (commandButtonsEnabled) {
-                            commandButtonsEnabled = false
-                            onTboxApplicationCommand("LOC", "stop")
-                        }
-                    },
-                    enabled = commandButtonsEnabled && tboxConnected
-                ) {
-                    Text(
-                        text = "Остановить LOC",
-                        fontSize = 24.sp,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center
-                    )
-                }
             }
 
             /*Row(
@@ -994,46 +988,6 @@ fun LocationTab(
                 ) {
                     Text(
                         text = "Открыть",
-                        fontSize = 24.sp,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = {
-                        if (commandButtonsEnabled) {
-                            commandButtonsEnabled = false
-                            onTboxApplicationCommand("HUM", "lightShowStart")
-                        }
-                    },
-                    enabled = commandButtonsEnabled && tboxConnected
-                ) {
-                    Text(
-                        text = "Световое шоу - старт",
-                        fontSize = 24.sp,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                Button(
-                    onClick = {
-                        if (commandButtonsEnabled) {
-                            commandButtonsEnabled = false
-                            onTboxApplicationCommand("HUM", "lightShowStop")
-                        }
-                    },
-                    enabled = commandButtonsEnabled && tboxConnected
-                ) {
-                    Text(
-                        text = "Световое шоу - стоп",
                         fontSize = 24.sp,
                         maxLines = 2,
                         textAlign = TextAlign.Center
@@ -1159,6 +1113,7 @@ fun CarDataTab(
     val carSpeedAccurate by canViewModel.carSpeedAccurate.collectAsStateWithLifecycle()
     val wheelsSpeed by canViewModel.wheelsSpeed.collectAsStateWithLifecycle()
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
+    val wheelsTemperature by canViewModel.wheelsTemperature.collectAsStateWithLifecycle()
     val cruiseSetSpeed by canViewModel.cruiseSetSpeed.collectAsStateWithLifecycle()
     val steerAngle by canViewModel.steerAngle.collectAsStateWithLifecycle()
     val steerSpeed by canViewModel.steerSpeed.collectAsStateWithLifecycle()
@@ -1194,6 +1149,14 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Speed"), valueToString(wheelsSpeed.wheel2, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Speed"), valueToString(wheelsSpeed.wheel3, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Speed"), valueToString(wheelsSpeed.wheel4, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Pressure"), valueToString(wheelsPressure.wheel1, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Pressure"), valueToString(wheelsPressure.wheel2, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Pressure"), valueToString(wheelsPressure.wheel3, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Pressure"), valueToString(wheelsPressure.wheel4, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Temperature"), valueToString(wheelsTemperature.wheel1, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Temperature"), valueToString(wheelsTemperature.wheel2, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Temperature"), valueToString(wheelsTemperature.wheel3, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Temperature"), valueToString(wheelsTemperature.wheel4, 2)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("cruiseSetSpeed"), valueToString(cruiseSetSpeed)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("odometer"), valueToString(odometer)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("distanceToNextMaintenance"), valueToString(distanceToNextMaintenance)) }
@@ -1210,10 +1173,6 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxPreparedGear"), valueToString(gearBoxPreparedGear)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxChangeGear"),
                 valueToString(gearBoxChangeGear, booleanTrue = "переключение", booleanFalse = "нет")) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Pressure"), valueToString(wheelsPressure.wheel1, 2)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Pressure"), valueToString(wheelsPressure.wheel2, 2)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Pressure"), valueToString(wheelsPressure.wheel3, 2)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Pressure"), valueToString(wheelsPressure.wheel4, 2)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontLeftSeatMode"), seatModeToString(frontLeftSeatMode)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontRightSeatMode"), seatModeToString(frontRightSeatMode)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("outsideTemperature"), valueToString(outsideTemperature, 1)) }

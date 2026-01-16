@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -406,40 +405,6 @@ class SettingsManager(private val context: Context) {
     suspend fun saveDashboardChart(config: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[DASHBOARD_CHART_KEY] = config
-        }
-    }
-
-    suspend fun clearAllSettings() {
-        context.settingsDataStore.edit { preferences ->
-            preferences.clear()
-        }
-    }
-
-    suspend fun resetToDefaults() {
-        context.settingsDataStore.edit { preferences ->
-            // Boolean настройки сбрасываются в false
-            preferences[AUTO_MODEM_RESTART_KEY] = false
-            preferences[AUTO_TBOX_REBOOT_KEY] = false
-            preferences[AUTO_STOP_TBOX_APP_KEY] = false
-            preferences[AUTO_SUSPEND_TBOX_APP_KEY] = false
-            preferences[AUTO_PREVENT_TBOX_RESTART_KEY] = false
-            preferences[GET_VOLTAGES_KEY] = false
-            preferences[GET_CAN_FRAME_KEY] = true
-            preferences[GET_CYCLE_SIGNAL_KEY] = false
-            preferences[GET_LOC_DATA_KEY] = true
-            preferences[MOCK_LOCATION] = false
-            preferences[WIDGET_SHOW_INDICATOR] = false
-            preferences[WIDGET_SHOW_LOC_INDICATOR] = false
-
-            // String настройки сбрасываются в значения по умолчанию
-            preferences[LOG_LEVEL_KEY] = DEFAULT_LOG_LEVEL
-            preferences[TBOX_IP_KEY] = DEFAULT_TBOX_IP
-
-            preferences[DASHBOARD_WIDGETS_KEY] = ""
-
-            preferences[DASHBOARD_ROWS_KEY] = 3
-            preferences[DASHBOARD_COLS_KEY] = 4
-            preferences[DASHBOARD_CHART_KEY] = false
         }
     }
 }
