@@ -11,6 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -79,6 +80,11 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
         private const val DEFAULT_FLOATING_DASHBOARD_WIDGETS = ""
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
+        private const val FLOATING_DASHBOARD_SELECTED_KEY = "floating_dashboard_selected"
+        private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
+        private const val DEFAULT_FLOATING_DASHBOARD_NAME_1 = "Панель 1"
+        private const val DEFAULT_FLOATING_DASHBOARD_NAME_2 = "Панель 2"
+        private const val DEFAULT_FLOATING_DASHBOARD_NAME_3 = "Панель 3"
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
@@ -399,6 +405,25 @@ class SettingsManager(private val context: Context) {
         saveCustomString(FLOATING_DASHBOARDS_LIST_KEY, serializeFloatingDashboards(normalized))
     }
 
+    suspend fun ensureDefaultFloatingDashboards() {
+        val preferences = context.settingsDataStore.data.first()
+        val rawJson = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
+        val configs = parseFloatingDashboardsJson(rawJson)
+        val ensured = ensureDefaultFloatingDashboards(configs)
+        if (ensured != configs) {
+            saveFloatingDashboards(ensured)
+        }
+
+        val selectedKey = getStringKey(FLOATING_DASHBOARD_SELECTED_KEY)
+        val selectedId = preferences[selectedKey] ?: DEFAULT_FLOATING_DASHBOARD_ID
+        val resolvedId = ensured.firstOrNull { it.id == selectedId }?.id
+            ?: ensured.firstOrNull()?.id
+            ?: DEFAULT_FLOATING_DASHBOARD_ID
+        if (resolvedId != selectedId) {
+            saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, resolvedId)
+        }
+    }
+
     suspend fun saveTboxIP(value: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[TBOX_IP_KEY] = value
@@ -470,6 +495,46 @@ class SettingsManager(private val context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    private fun ensureDefaultFloatingDashboards(
+        configs: List<FloatingDashboardConfig>
+    ): List<FloatingDashboardConfig> {
+        if (configs.isEmpty()) return defaultFloatingDashboards()
+        val existingIds = configs.map { it.id }.toSet()
+        val missing = defaultFloatingDashboards().filter { it.id !in existingIds }
+        return if (missing.isEmpty()) configs else configs + missing
+    }
+
+    private fun defaultFloatingDashboards(): List<FloatingDashboardConfig> {
+        return listOf(
+            createDefaultFloatingDashboard(
+                DEFAULT_FLOATING_DASHBOARD_ID,
+                DEFAULT_FLOATING_DASHBOARD_NAME_1
+            ),
+            createDefaultFloatingDashboard("floating-2", DEFAULT_FLOATING_DASHBOARD_NAME_2),
+            createDefaultFloatingDashboard("floating-3", DEFAULT_FLOATING_DASHBOARD_NAME_3)
+        )
+    }
+
+    private fun createDefaultFloatingDashboard(
+        id: String,
+        name: String
+    ): FloatingDashboardConfig {
+        return FloatingDashboardConfig(
+            id = id,
+            name = name,
+            enabled = DEFAULT_FLOATING_DASHBOARD_ENABLED,
+            widgetsConfig = DEFAULT_FLOATING_DASHBOARD_WIDGETS,
+            rows = DEFAULT_FLOATING_DASHBOARD_ROWS,
+            cols = DEFAULT_FLOATING_DASHBOARD_COLS,
+            width = DEFAULT_FLOATING_DASHBOARD_WIDTH,
+            height = DEFAULT_FLOATING_DASHBOARD_HEIGHT,
+            startX = DEFAULT_FLOATING_DASHBOARD_START_X,
+            startY = DEFAULT_FLOATING_DASHBOARD_START_Y,
+            background = DEFAULT_FLOATING_DASHBOARD_BACKGROUND,
+            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
+        )
     }
 
     private fun parseFloatingDashboardConfig(obj: JSONObject): FloatingDashboardConfig? {

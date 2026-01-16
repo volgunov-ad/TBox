@@ -180,6 +180,10 @@ class BackgroundService : Service() {
         locationMockManager = LocationMockManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
 
+        scope.launch {
+            settingsManager.ensureDefaultFloatingDashboards()
+        }
+
         //windowManager = getSystemService(WindowManager::class.java)
 
         autoModemRestart = settingsManager.autoModemRestartFlow
