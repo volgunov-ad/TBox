@@ -176,6 +176,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val floatingDashboards = settingsManager.floatingDashboardsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     val logLevel = settingsManager.logLevelFlow
         .stateIn(
             scope = viewModelScope,
@@ -439,6 +446,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveFloatingDashboardClickAction(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveFloatingDashboardClickAction(enabled)
+        }
+    }
+
+    fun saveFloatingDashboards(configs: List<FloatingDashboardConfig>) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingDashboards(configs)
         }
     }
 

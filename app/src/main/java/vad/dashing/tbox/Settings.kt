@@ -11,11 +11,28 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import org.json.JSONArray
+import org.json.JSONObject
 
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
 // Используем extension property для DataStore
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
+
+data class FloatingDashboardConfig(
+    val id: String,
+    val name: String,
+    val enabled: Boolean,
+    val widgetsConfig: String,
+    val rows: Int,
+    val cols: Int,
+    val width: Int,
+    val height: Int,
+    val startX: Int,
+    val startY: Int,
+    val background: Boolean,
+    val clickAction: Boolean
+)
 
 class SettingsManager(private val context: Context) {
 
@@ -51,6 +68,19 @@ class SettingsManager(private val context: Context) {
         // Значения по умолчанию
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
+        private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
+        private const val DEFAULT_FLOATING_DASHBOARD_NAME = "Panel 1"
+        private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
+        private const val DEFAULT_FLOATING_DASHBOARD_COLS = 1
+        private const val DEFAULT_FLOATING_DASHBOARD_WIDTH = 100
+        private const val DEFAULT_FLOATING_DASHBOARD_HEIGHT = 100
+        private const val DEFAULT_FLOATING_DASHBOARD_START_X = 50
+        private const val DEFAULT_FLOATING_DASHBOARD_START_Y = 50
+        private const val DEFAULT_FLOATING_DASHBOARD_ENABLED = false
+        private const val DEFAULT_FLOATING_DASHBOARD_BACKGROUND = false
+        private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
+        private const val DEFAULT_FLOATING_DASHBOARD_WIDGETS = ""
+        private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
@@ -113,6 +143,18 @@ class SettingsManager(private val context: Context) {
 
     val floatingDashboardClickActionFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[FLOATING_DASHBOARD_CLICK_ACTION_KEY] ?: true }
+        .distinctUntilChanged()
+
+    val floatingDashboardsFlow: Flow<List<FloatingDashboardConfig>> = context.settingsDataStore.data
+        .map { preferences ->
+            val rawJson = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
+            val parsed = parseFloatingDashboardsJson(rawJson)
+            if (parsed.isNotEmpty()) {
+                parsed
+            } else {
+                listOf(legacyFloatingDashboardConfig(preferences))
+            }
+        }
         .distinctUntilChanged()
 
     val autoModemRestartFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -351,6 +393,19 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveFloatingDashboards(configs: List<FloatingDashboardConfig>) {
+        val normalized = configs
+            .filter { it.id.isNotBlank() }
+            .distinctBy { it.id }
+            .map {
+                it.copy(
+                    rows = it.rows.coerceIn(1, 6),
+                    cols = it.cols.coerceIn(1, 6)
+                )
+            }
+        saveCustomString(FLOATING_DASHBOARDS_LIST_KEY, serializeFloatingDashboards(normalized))
+    }
+
     suspend fun saveTboxIP(value: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[TBOX_IP_KEY] = value
@@ -406,5 +461,83 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[DASHBOARD_CHART_KEY] = config
         }
+    }
+
+    private fun legacyFloatingDashboardConfig(preferences: Preferences): FloatingDashboardConfig {
+        return FloatingDashboardConfig(
+            id = DEFAULT_FLOATING_DASHBOARD_ID,
+            name = DEFAULT_FLOATING_DASHBOARD_NAME,
+            enabled = preferences[FLOATING_DASHBOARD_KEY] ?: DEFAULT_FLOATING_DASHBOARD_ENABLED,
+            widgetsConfig = preferences[FLOATING_DASHBOARD_WIDGETS_KEY] ?: DEFAULT_FLOATING_DASHBOARD_WIDGETS,
+            rows = (preferences[FLOATING_DASHBOARD_ROWS_KEY] ?: DEFAULT_FLOATING_DASHBOARD_ROWS)
+                .coerceIn(1, 6),
+            cols = (preferences[FLOATING_DASHBOARD_COLS_KEY] ?: DEFAULT_FLOATING_DASHBOARD_COLS)
+                .coerceIn(1, 6),
+            width = preferences[FLOATING_DASHBOARD_WIDTH_KEY] ?: DEFAULT_FLOATING_DASHBOARD_WIDTH,
+            height = preferences[FLOATING_DASHBOARD_HEIGHT_KEY] ?: DEFAULT_FLOATING_DASHBOARD_HEIGHT,
+            startX = preferences[FLOATING_DASHBOARD_START_X_KEY] ?: DEFAULT_FLOATING_DASHBOARD_START_X,
+            startY = preferences[FLOATING_DASHBOARD_START_Y_KEY] ?: DEFAULT_FLOATING_DASHBOARD_START_Y,
+            background = preferences[FLOATING_DASHBOARD_BACKGROUND_KEY]
+                ?: DEFAULT_FLOATING_DASHBOARD_BACKGROUND,
+            clickAction = preferences[FLOATING_DASHBOARD_CLICK_ACTION_KEY]
+                ?: DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
+        )
+    }
+
+    private fun parseFloatingDashboardsJson(json: String): List<FloatingDashboardConfig> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            val array = JSONArray(json)
+            val configs = mutableListOf<FloatingDashboardConfig>()
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                val config = parseFloatingDashboardConfig(obj) ?: continue
+                configs.add(config)
+            }
+            configs
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun parseFloatingDashboardConfig(obj: JSONObject): FloatingDashboardConfig? {
+        val id = obj.optString("id").trim()
+        if (id.isEmpty()) return null
+        val name = obj.optString("name").ifBlank { id }
+        return FloatingDashboardConfig(
+            id = id,
+            name = name,
+            enabled = obj.optBoolean("enabled", DEFAULT_FLOATING_DASHBOARD_ENABLED),
+            widgetsConfig = obj.optString("widgetsConfig", DEFAULT_FLOATING_DASHBOARD_WIDGETS),
+            rows = obj.optInt("rows", DEFAULT_FLOATING_DASHBOARD_ROWS).coerceIn(1, 6),
+            cols = obj.optInt("cols", DEFAULT_FLOATING_DASHBOARD_COLS).coerceIn(1, 6),
+            width = obj.optInt("width", DEFAULT_FLOATING_DASHBOARD_WIDTH),
+            height = obj.optInt("height", DEFAULT_FLOATING_DASHBOARD_HEIGHT),
+            startX = obj.optInt("startX", DEFAULT_FLOATING_DASHBOARD_START_X),
+            startY = obj.optInt("startY", DEFAULT_FLOATING_DASHBOARD_START_Y),
+            background = obj.optBoolean("background", DEFAULT_FLOATING_DASHBOARD_BACKGROUND),
+            clickAction = obj.optBoolean("clickAction", DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION)
+        )
+    }
+
+    private fun serializeFloatingDashboards(configs: List<FloatingDashboardConfig>): String {
+        val array = JSONArray()
+        configs.forEach { config ->
+            val obj = JSONObject()
+            obj.put("id", config.id)
+            obj.put("name", config.name)
+            obj.put("enabled", config.enabled)
+            obj.put("widgetsConfig", config.widgetsConfig)
+            obj.put("rows", config.rows)
+            obj.put("cols", config.cols)
+            obj.put("width", config.width)
+            obj.put("height", config.height)
+            obj.put("startX", config.startX)
+            obj.put("startY", config.startY)
+            obj.put("background", config.background)
+            obj.put("clickAction", config.clickAction)
+            array.put(obj)
+        }
+        return array.toString()
     }
 }
