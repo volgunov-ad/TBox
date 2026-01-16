@@ -144,6 +144,18 @@ fun FloatingDashboard(
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
 
+    LaunchedEffect(isEditMode) {
+        if (isEditMode) {
+            delay(300000)
+            if (isEditMode) {
+                isEditMode = false
+                isDraggingMode = false
+                isResizingMode = false
+                showDialogForIndex = null
+            }
+        }
+    }
+
     // Для определения области перетаскивания/изменения размера
     var dragStartPosition by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
     var resizeStartPosition by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
