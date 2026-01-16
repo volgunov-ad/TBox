@@ -188,7 +188,7 @@ object CanFramesProcess {
                     CanDataRepository.updateCarSpeedAccurate(speed)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x1B))) {
                     val temperature = if (singleData[3] != 0xFF.toByte()) {
-                        singleData[3].toUInt().toFloat() * 0.75f - 45f
+                        singleData[3].toUInt().toFloat() - 60f
                     } else {
                         null
                     }
