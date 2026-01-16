@@ -279,16 +279,22 @@ fun FloatingDashboard(
                             },
                             onDragEnd = {
                                 if (isEditMode && isDraggingMode) {
-                                    settingsViewModel.saveFloatingDashboardStartX(panelId, windowParams.x)
-                                    settingsViewModel.saveFloatingDashboardStartY(panelId, windowParams.y)
+                                    settingsViewModel.saveFloatingDashboardPosition(
+                                        panelId,
+                                        windowParams.x,
+                                        windowParams.y
+                                    )
                                     // Сбрасываем режимы после завершения жеста
                                     isDraggingMode = false
                                     isResizingMode = false
                                     dragStartPosition = null
                                     resizeStartPosition = null
                                 } else if (isEditMode && isResizingMode) {
-                                    settingsViewModel.saveFloatingDashboardWidth(panelId, windowParams.width)
-                                    settingsViewModel.saveFloatingDashboardHeight(panelId, windowParams.height)
+                                    settingsViewModel.saveFloatingDashboardSize(
+                                        panelId,
+                                        windowParams.width,
+                                        windowParams.height
+                                    )
                                     // Сбрасываем режимы после завершения жеста
                                     isDraggingMode = false
                                     isResizingMode = false

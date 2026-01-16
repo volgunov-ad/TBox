@@ -616,6 +616,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateFloatingDashboard(panelId) { it.copy(height = height) }
     }
 
+    fun saveFloatingDashboardSize(width: Int, height: Int) {
+        updateSelectedFloatingDashboard { it.copy(width = width, height = height) }
+    }
+
+    fun saveFloatingDashboardSize(panelId: String, width: Int, height: Int) {
+        updateFloatingDashboard(panelId) { it.copy(width = width, height = height) }
+    }
+
     fun saveFloatingDashboardStartX(x: Int) {
         updateSelectedFloatingDashboard { it.copy(startX = x) }
     }
@@ -630,6 +638,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveFloatingDashboardStartY(panelId: String, y: Int) {
         updateFloatingDashboard(panelId) { it.copy(startY = y) }
+    }
+
+    fun saveFloatingDashboardPosition(x: Int, y: Int) {
+        updateSelectedFloatingDashboard { it.copy(startX = x, startY = y) }
+    }
+
+    fun saveFloatingDashboardPosition(panelId: String, x: Int, y: Int) {
+        updateFloatingDashboard(panelId) { it.copy(startX = x, startY = y) }
     }
 
     fun saveFloatingDashboardBackground(enabled: Boolean) {
