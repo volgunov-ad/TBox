@@ -58,6 +58,9 @@ object CanDataRepository {
     private val _engineRPM = MutableStateFlow<Float?>(null)
     val engineRPM: StateFlow<Float?> = _engineRPM.asStateFlow()
 
+    private val _param1 = MutableStateFlow<Float?>(null)
+    val param1: StateFlow<Float?> = _param1.asStateFlow()
+
     private val _steerAngle = MutableStateFlow<Float?>(null)
     val steerAngle: StateFlow<Float?> = _steerAngle.asStateFlow()
 
@@ -204,6 +207,10 @@ object CanDataRepository {
 
     fun updateEngineRPM(newValue: Float) {
         _engineRPM.value = newValue
+    }
+
+    fun updateParam1(newValue: Float) {
+        _param1.value = newValue
     }
 
     fun updateSteerAngle(newValue: Float) {

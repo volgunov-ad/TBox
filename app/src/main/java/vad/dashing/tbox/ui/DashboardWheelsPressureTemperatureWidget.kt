@@ -132,7 +132,7 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                                 textType = TextType.UNIT
                             ),
                             color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Left,
+                            textAlign = TextAlign.Center,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )

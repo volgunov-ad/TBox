@@ -293,6 +293,7 @@ object WidgetsRepository {
         "steerAngle" to DataTitle("Угол поворота руля", "°"),
         "steerSpeed" to DataTitle("Скорость вращения руля", ""),
         "engineRPM" to DataTitle("Обороты двигателя", "об/мин"),
+        "param1" to DataTitle("Параметр 1", ""),
         "carSpeed" to DataTitle("Скорость автомобиля", "км/ч"),
         "carSpeedAccurate" to DataTitle("Точная скорость автомобиля", "км/ч"),
         "wheel1Speed" to DataTitle("Скорость колеса 1", "км/ч"),

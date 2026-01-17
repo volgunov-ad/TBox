@@ -1122,6 +1122,7 @@ fun CarDataTab(
     val distanceToFuelEmpty by canViewModel.distanceToFuelEmpty.collectAsStateWithLifecycle()
     val breakingForce by canViewModel.breakingForce.collectAsStateWithLifecycle()
     val engineRPM by canViewModel.engineRPM.collectAsStateWithLifecycle()
+    val param1 by canViewModel.param1.collectAsStateWithLifecycle()
     val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
     val fuelLevelPercentage by canViewModel.fuelLevelPercentage.collectAsStateWithLifecycle()
     val fuelLevelPercentageFiltered by canViewModel.fuelLevelPercentageFiltered.collectAsStateWithLifecycle()
@@ -1159,6 +1160,7 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("steerAngle"), valueToString(steerAngle, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("steerSpeed"), valueToString(steerSpeed)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("engineRPM"), valueToString(engineRPM, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("param1"), valueToString(param1, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("carSpeed"), valueToString(carSpeed, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("carSpeedAccurate"), valueToString(carSpeedAccurate, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Speed"), valueToString(wheelsSpeed.wheel1, 1)) }

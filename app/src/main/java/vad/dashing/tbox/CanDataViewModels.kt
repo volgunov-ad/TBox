@@ -44,6 +44,13 @@ class CanDataViewModel : ViewModel() {
             initialValue = null
         )
 
+    val param1: StateFlow<Float?> = CanDataRepository.param1
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     val carSpeed: StateFlow<Float?> = CanDataRepository.carSpeed
         .stateIn(
             scope = viewModelScope,
