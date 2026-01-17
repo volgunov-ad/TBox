@@ -464,6 +464,27 @@ fun FloatingDashboard(
                                                     backgroundTransparent = true
                                                 )
                                             }
+                                            "wheelsPressureTemperatureWidget" -> {
+                                                DashboardWheelsPressureTemperatureWidgetItem(
+                                                    widget = widget,
+                                                    onClick = {
+                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                            showDialogForIndex = index
+                                                        } else if (isFloatingDashboardClickAction) {
+                                                            openMainActivity(context)
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
+                                                    },
+                                                    canViewModel = canViewModel,
+                                                    elevation = 0.dp,
+                                                    shape = 0.dp,
+                                                    backgroundTransparent = true
+                                                )
+                                            }
                                             "tempInOutWidget" -> {
                                                 DashboardTempInOutWidgetItem(
                                                     widget = widget,

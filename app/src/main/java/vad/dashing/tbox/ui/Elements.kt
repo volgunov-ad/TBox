@@ -651,12 +651,6 @@ fun FloatingDashboardPositionSizeSettings(
                 )
             }
         }
-        Text(
-            text = "Чтобы изменения размера и положения вступили в силу, выключите и снова включите выбранную панель",
-            fontSize = 20.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
     }
 }
 
