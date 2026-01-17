@@ -165,7 +165,7 @@ fun TboxScreen(
             TabItem("Геопозиция", Icons.Filled.Place),
             TabItem("Данные авто", Icons.Filled.Build),
             TabItem("Настройки", Icons.Filled.Settings),
-            TabItem("Журнал", Icons.Filled.List),
+            TabItem("Журнал", Icons.Filled.Menu),
             TabItem("Информация", Icons.Filled.Info),
             TabItem("CAN", Icons.Filled.Share),
             TabItem("Плитки", Icons.Filled.Home)
