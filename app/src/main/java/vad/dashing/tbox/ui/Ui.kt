@@ -564,7 +564,7 @@ fun SettingsTab(
         )
 
         Text(
-            text = "Настройки виджетов",
+            text = "Настройки плавающих панелей",
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
@@ -637,6 +637,14 @@ fun SettingsTab(
         )
         FloatingDashboardPositionSizeSettings(settingsViewModel, Modifier)
 
+        Text(
+            text = "Настройки виджетов для Overlays",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Left
+        )
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
             { enabled ->
