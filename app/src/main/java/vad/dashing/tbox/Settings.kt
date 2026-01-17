@@ -54,6 +54,7 @@ class SettingsManager(private val context: Context) {
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
+        private val LEFT_MENU_VISIBLE = booleanPreferencesKey("${KEY_PREFIX}left_menu_visible")
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
@@ -208,6 +209,10 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[EXPERT_MODE] ?: false }
         .distinctUntilChanged()
 
+    val leftMenuVisibleFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[LEFT_MENU_VISIBLE] ?: true }
+        .distinctUntilChanged()
+
     // String flows
     val logLevelFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[LOG_LEVEL_KEY] ?: DEFAULT_LOG_LEVEL }
@@ -329,6 +334,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveExpertModeSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[EXPERT_MODE] = enabled
+        }
+    }
+
+    suspend fun saveLeftMenuVisibleSetting(visible: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LEFT_MENU_VISIBLE] = visible
         }
     }
 

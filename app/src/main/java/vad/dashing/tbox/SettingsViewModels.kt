@@ -130,6 +130,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val isLeftMenuVisible = settingsManager.leftMenuVisibleFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     val floatingDashboards = settingsManager.floatingDashboardsFlow
         .map { configs -> ensureDefaultFloatingDashboards(configs) }
         .stateIn(
@@ -550,6 +557,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveExpertModeSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveExpertModeSetting(enabled)
+        }
+    }
+
+    fun saveLeftMenuVisibleSetting(visible: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveLeftMenuVisibleSetting(visible)
         }
     }
 

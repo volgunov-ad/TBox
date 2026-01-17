@@ -48,7 +48,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -149,7 +148,7 @@ fun TboxScreen(
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
-    var isMenuVisible by rememberSaveable { mutableStateOf(true) }
+    val isMenuVisible by settingsViewModel.isLeftMenuVisible.collectAsStateWithLifecycle()
 
     // Используем remember для форматтеров даты
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -248,7 +247,7 @@ fun TboxScreen(
                     }
 
                     IconButton(
-                        onClick = { isMenuVisible = false },
+                        onClick = { settingsViewModel.saveLeftMenuVisibleSetting(false) },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(4.dp)
@@ -310,7 +309,7 @@ fun TboxScreen(
                     .padding(8.dp)
             ) {
                 Box(modifier = Modifier.wrapContentSize()) {
-                    IconButton(onClick = { isMenuVisible = true }) {
+                    IconButton(onClick = { settingsViewModel.saveLeftMenuVisibleSetting(true) }) {
                         Icon(
                             imageVector = Icons.Filled.Menu,
                             contentDescription = "Показать меню"
