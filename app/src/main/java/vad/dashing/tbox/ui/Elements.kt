@@ -202,7 +202,7 @@ fun TabMenuItem(
     } else {
         MaterialTheme.colorScheme.onBackground
     }
-    val iconSize = if (showText) 28.dp else 32.dp
+    val iconSize = 34.dp
 
     Box(
         modifier = Modifier
@@ -210,23 +210,23 @@ fun TabMenuItem(
             .clickable(onClick = onClick)
             .background(backgroundColor)
             .padding(
-                vertical = if (showText) 16.dp else 12.dp,
-                horizontal = if (showText) 8.dp else 0.dp
+                vertical = 16.dp,
+                horizontal = 8.dp
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (showText) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = textColor,
-                    modifier = Modifier.size(iconSize)
-                )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = if (showText) Arrangement.Start else Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = textColor,
+                modifier = Modifier.size(iconSize)
+            )
+            if (showText) {
                 Text(
                     text = title,
                     color = textColor,
@@ -236,17 +236,24 @@ fun TabMenuItem(
                     modifier = Modifier.padding(start = 12.dp)
                 )
             }
-        } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = textColor,
-                modifier = Modifier.size(iconSize)
-            )
         }
     }
 }
 
+@Composable
+fun SettingsTitle(
+    text:String
+) {
+    Text(
+        modifier = Modifier.padding(top=10.dp),
+        text = text,
+        fontSize = 24.sp,
+        fontWeight = FontWeight.Medium,
+        maxLines = 1,
+        color = MaterialTheme.colorScheme.onSurface,
+        textAlign = TextAlign.Left
+    )
+}
 
 @Composable
 fun SettingSwitch(
@@ -544,12 +551,6 @@ fun FloatingDashboardProfileSelector(
         "floating-3" to "3"
     )
     Column(modifier = modifier) {
-        Text(
-            text = "Пакет настроек плавающей панели",
-            fontSize = 24.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)

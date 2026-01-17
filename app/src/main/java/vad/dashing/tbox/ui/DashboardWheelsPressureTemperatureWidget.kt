@@ -122,21 +122,19 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                         .fillMaxWidth()
                         .weight(1f)
                         .wrapContentHeight(Alignment.CenterVertically),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "бар / °C",
-                            fontSize = calculateResponsiveFontSize(
-                                containerHeight = availableHeight,
-                                textType = TextType.UNIT
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Text(
+                        text = "бар / °C",
+                        fontSize = calculateResponsiveFontSize(
+                            containerHeight = availableHeight,
+                            textType = TextType.UNIT
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
                 Row(
@@ -218,7 +216,7 @@ private fun TemperatureText(
             textType = TextType.TITLE
         ),
         fontWeight = FontWeight.Medium,
-        color = if ((value ?: 0f) >= 85f) MaterialTheme.colorScheme.onSurface else Color(0xD9FF0000),
+        color = if ((value ?: 90f) <= 85f) MaterialTheme.colorScheme.onSurface else Color(0xD9FF0000),
         textAlign = align,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis

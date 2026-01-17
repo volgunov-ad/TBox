@@ -182,7 +182,8 @@ object TboxRepository {
     private val _floatingDashboardShownIds = MutableStateFlow<Set<String>>(emptySet())
     val floatingDashboardShownIds: StateFlow<Set<String>> = _floatingDashboardShownIds.asStateFlow()
 
-    private const val MAX_LOGS = 100
+    private const val MAX_LOGS = 150
+    private const val MAX_DIDS = 100
 
     private val timeFormat: ThreadLocal<SimpleDateFormat> = ThreadLocal.withInitial {
         SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -218,7 +219,7 @@ object TboxRepository {
         val entry = "$did;$rawValue;$value"
 
         _didDataCSV.update { currentData ->
-            (currentData + entry)
+            (currentData + entry).takeLast(MAX_DIDS)
         }
     }
 

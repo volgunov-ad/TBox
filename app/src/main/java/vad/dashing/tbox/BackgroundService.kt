@@ -2253,7 +2253,7 @@ class BackgroundService : Service() {
             return false
         }
         if (data.size >= 7) {
-            val buffer = ByteBuffer.wrap(data.copyOfRange(4, 6)).order(ByteOrder.LITTLE_ENDIAN)
+            val buffer = ByteBuffer.wrap(data.copyOfRange(4, 7)).order(ByteOrder.LITTLE_ENDIAN)
 
             val isPower = buffer.get().toInt() and 0xFF != 0
             val isIgnition = buffer.get().toInt() and 0xFF != 0

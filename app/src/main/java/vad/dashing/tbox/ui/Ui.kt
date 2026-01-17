@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,23 +20,18 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -63,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -81,6 +76,7 @@ import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -139,6 +135,23 @@ fun TboxApp(
     }
 }
 
+object TabItems {
+    @Composable
+    fun getItems(): List<TabItem> {
+        return listOf(
+            TabItem("Модем", ImageVector.vectorResource(R.drawable.menu_icon_modem)),
+            TabItem("AT команды", ImageVector.vectorResource(R.drawable.menu_icon_at)),
+            TabItem("Геопозиция", Icons.Filled.Place),
+            TabItem("Данные авто", Icons.Filled.Build),
+            TabItem("Настройки", Icons.Filled.Settings),
+            TabItem("Журнал", ImageVector.vectorResource(R.drawable.menu_icon_log)),
+            TabItem("Информация", Icons.Filled.Info),
+            TabItem("CAN", ImageVector.vectorResource(R.drawable.menu_icon_data)),
+            TabItem("Плитки", ImageVector.vectorResource(R.drawable.menu_icon_widgets))
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TboxScreen(
@@ -158,19 +171,8 @@ fun TboxScreen(
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
 
-    val tabs = remember {
-        listOf(
-            TabItem("Модем", Icons.Filled.Call),
-            TabItem("AT команды", Icons.Filled.Email),
-            TabItem("Геопозиция", Icons.Filled.Place),
-            TabItem("Данные авто", Icons.Filled.Build),
-            TabItem("Настройки", Icons.Filled.Settings),
-            TabItem("Журнал", Icons.Filled.Menu),
-            TabItem("Информация", Icons.Filled.Info),
-            TabItem("CAN", Icons.Filled.Share),
-            TabItem("Плитки", Icons.Filled.Home)
-        )
-    }
+    val tabs = TabItems.getItems()
+
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
@@ -186,7 +188,8 @@ fun TboxScreen(
     val versionName = remember { packageInfo.versionName }
 
     val scrollState = rememberScrollState()
-    val menuIconSize = 48.dp
+
+    val menuIconSize = 28.dp
     val menuButtonSize = 64.dp
 
     // Показываем loading пока загружается сохраненная вкладка
@@ -210,17 +213,63 @@ fun TboxScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxSize()) {
-            if (isMenuVisible) {
-                Box(
-                    modifier = Modifier
-                        .width(300.dp)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.background)
+            Box(
+                modifier = Modifier
+                    .width(if (isMenuVisible) 300.dp else menuButtonSize)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceBetween,
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                vertical = 16.dp,
+                                horizontal = 8.dp
+                            ),
+                        contentAlignment = Alignment.CenterEnd
                     ) {
+                        Icon(
+                            imageVector = if (isMenuVisible) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = if (isMenuVisible) "Скрыть меню" else "Показать меню",
+                            modifier = Modifier
+                                .size(menuIconSize)
+                                .clickable(onClick = {
+                                    if (isMenuVisible) {
+                                        settingsViewModel.saveLeftMenuVisibleSetting(false)
+                                    } else {
+                                        settingsViewModel.saveLeftMenuVisibleSetting(true)
+                                    }
+                                })
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(scrollState),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        tabs.forEachIndexed { index, tab ->
+                            if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
+                                TabMenuItem(
+                                    title = tab.title,
+                                    icon = tab.icon,
+                                    selected = selectedTab == index,
+                                    showText = isMenuVisible,
+                                    onClick = {
+                                        // Сохраняем выбор вкладки через ViewModel
+                                        settingsViewModel.saveSelectedTab(index)
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    if (isMenuVisible) {
                         Text(
                             text = if (tboxConnected) "TBox подключен в $conTime"
                             else "TBox отключен в $conTime",
@@ -242,33 +291,20 @@ fun TboxScreen(
                                 .align(Alignment.CenterHorizontally)
                                 .padding(horizontal = 8.dp)
                         )
-
-                        Column(
+                    } else {
+                        Text(
+                            text = "TBox",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
+                            textAlign = TextAlign.Center,
                             modifier = Modifier
-                                .weight(1f)
-                                .verticalScroll(scrollState),
-                            verticalArrangement = if (isMenuVisible) {
-                                Arrangement.Center
-                            } else {
-                                Arrangement.Top
-                            }
-                        ) {
-                            tabs.forEachIndexed { index, tab ->
-                                if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
-                                    TabMenuItem(
-                                        title = tab.title,
-                                        icon = tab.icon,
-                                        selected = selectedTab == index,
-                                        showText = isMenuVisible,
-                                        onClick = {
-                                            // Сохраняем выбор вкладки через ViewModel
-                                            settingsViewModel.saveSelectedTab(index)
-                                        }
-                                    )
-                                }
-                            }
-                        }
+                                .align(Alignment.CenterHorizontally)
+                                .padding(start = 8.dp, end = 8.dp, top = 8.dp)
+                        )
+                    }
 
+                    if (isMenuVisible) {
                         Text(
                             text = "Версия программы $versionName",
                             fontSize = 16.sp,
@@ -279,81 +315,9 @@ fun TboxScreen(
                                 .padding(horizontal = 8.dp)
                         )
                     }
+                }
 
-                    IconButton(
-                        onClick = { settingsViewModel.saveLeftMenuVisibleSetting(false) },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .size(menuButtonSize)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Скрыть меню",
-                            modifier = Modifier.size(menuIconSize)
-                        )
-                    }
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .width(menuButtonSize)
-                        .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Top,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 8.dp)
-                                .wrapContentSize()
-                        ) {
-                            IconButton(
-                                onClick = { settingsViewModel.saveLeftMenuVisibleSetting(true) },
-                                modifier = Modifier.size(menuButtonSize)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Menu,
-                                    contentDescription = "Показать меню",
-                                    modifier = Modifier.size(menuIconSize)
-                                )
-                            }
-                            if (!tboxConnected) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .offset(x = 2.dp, y = 2.dp)
-                                        .size(10.dp)
-                                        .background(MaterialTheme.colorScheme.error, CircleShape)
-                                )
-                            }
-                        }
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(top = 8.dp)
-                                .verticalScroll(scrollState),
-                            verticalArrangement = Arrangement.Top
-                        ) {
-                            tabs.forEachIndexed { index, tab ->
-                                if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
-                                    TabMenuItem(
-                                        title = tab.title,
-                                        icon = tab.icon,
-                                        selected = selectedTab == index,
-                                        showText = false,
-                                        onClick = {
-                                            settingsViewModel.saveSelectedTab(index)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+
             }
 
             // Содержимое справа
@@ -601,14 +565,7 @@ fun SettingsTab(
             .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
-        Text(
-            text = "Настройки контроля сети",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Left
-        )
+        SettingsTitle("Настройки контроля сети")
         SettingSwitch(
             isAutoRestartEnabled,
             { enabled ->
@@ -636,14 +593,7 @@ fun SettingsTab(
             isAutoRestartEnabled
         )
 
-        Text(
-            text = "Настройки предотвращения перезагрузки",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Left
-        )
+        SettingsTitle("Настройки предотвращения перезагрузки")
         SettingSwitch(
             isAutoSuspendTboxAppEnabled,
             { enabled ->
@@ -685,14 +635,7 @@ fun SettingsTab(
             true
         )
 
-        Text(
-            text = "Настройки плавающих панелей",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Left
-        )
+        SettingsTitle("Настройки плавающих панелей")
         FloatingDashboardProfileSelector(
             selectedId = activeFloatingDashboardId,
             onSelect = { panelId ->
@@ -759,14 +702,7 @@ fun SettingsTab(
         )
         FloatingDashboardPositionSizeSettings(settingsViewModel, Modifier)
 
-        Text(
-            text = "Настройки виджетов для Overlays",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Left
-        )
+        SettingsTitle("Настройки виджетов для Overlays")
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
             { enabled ->
@@ -792,14 +728,7 @@ fun SettingsTab(
             isGetLocDataEnabled
         )
 
-        Text(
-            text = "Настройки экрана Плитки",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Left
-        )
+        SettingsTitle("Настройки экрана Плитки")
         SettingSwitch(
             dashboardChart,
             { enabled ->
@@ -830,14 +759,7 @@ fun SettingsTab(
             listOf(1, 2, 3, 4, 5, 6)
         )
 
-        Text(
-            text = "Получение данных от TBox",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Left
-        )
+        SettingsTitle("Получение данных от TBox")
         SettingSwitch(
             isGetCanFrameEnabled,
             { enabled ->
@@ -857,6 +779,7 @@ fun SettingsTab(
             true
         )
 
+        SettingsTitle("Прочее")
         SettingSwitch(
             isExpertModeEnabled,
             { enabled ->
@@ -914,7 +837,7 @@ fun SettingsTab(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp),
+                .padding(top = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
