@@ -137,19 +137,6 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
-                        Text(
-                            text = "бар / °C",
-                            fontSize = calculateResponsiveFontSize(
-                                containerHeight = availableHeight,
-                                textType = TextType.UNIT
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Right,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                 }
 
                 Row(
