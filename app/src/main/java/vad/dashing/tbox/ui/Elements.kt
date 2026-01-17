@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +25,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -183,7 +186,9 @@ fun ModeButton(
 @Composable
 fun TabMenuItem(
     title: String,
+    icon: ImageVector,
     selected: Boolean,
+    showText: Boolean,
     onClick: () -> Unit
 ) {
     val backgroundColor = if (selected) {
@@ -197,22 +202,48 @@ fun TabMenuItem(
     } else {
         MaterialTheme.colorScheme.onBackground
     }
+    val iconSize = if (showText) 28.dp else 32.dp
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .background(backgroundColor)
-            .padding(vertical = 16.dp, horizontal = 8.dp),
+            .padding(
+                vertical = if (showText) 16.dp else 12.dp,
+                horizontal = if (showText) 8.dp else 0.dp
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = title,
-            color = textColor,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            textAlign = TextAlign.Left,
-            fontSize = 34.sp
-        )
+        if (showText) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = textColor,
+                    modifier = Modifier.size(iconSize)
+                )
+                Text(
+                    text = title,
+                    color = textColor,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    textAlign = TextAlign.Left,
+                    fontSize = 34.sp,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+            }
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = textColor,
+                modifier = Modifier.size(iconSize)
+            )
+        }
     }
 }
 

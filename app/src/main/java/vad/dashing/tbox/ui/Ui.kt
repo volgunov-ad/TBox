@@ -27,8 +27,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -52,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -79,6 +88,11 @@ import vad.dashing.tbox.ui.theme.TboxAppTheme
 import vad.dashing.tbox.utils.MockLocationUtils
 import vad.dashing.tbox.utils.canUseMockLocation
 import vad.dashing.tbox.valueToString
+
+data class TabItem(
+    val title: String,
+    val icon: ImageVector
+)
 
 @Composable
 fun TboxApp(
@@ -144,7 +158,19 @@ fun TboxScreen(
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
 
-    val tabs = listOf("Модем", "AT команды", "Геопозиция", "Данные авто", "Настройки", "Журнал", "Информация", "CAN", "Плитки")
+    val tabs = remember {
+        listOf(
+            TabItem("Модем", Icons.Filled.Call),
+            TabItem("AT команды", Icons.Filled.Email),
+            TabItem("Геопозиция", Icons.Filled.Place),
+            TabItem("Данные авто", Icons.Filled.Build),
+            TabItem("Настройки", Icons.Filled.Settings),
+            TabItem("Журнал", Icons.Filled.List),
+            TabItem("Информация", Icons.Filled.Info),
+            TabItem("CAN", Icons.Filled.Share),
+            TabItem("Плитки", Icons.Filled.Home)
+        )
+    }
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
@@ -221,13 +247,19 @@ fun TboxScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .verticalScroll(scrollState),
-                            verticalArrangement = Arrangement.Center
+                            verticalArrangement = if (isMenuVisible) {
+                                Arrangement.Center
+                            } else {
+                                Arrangement.Top
+                            }
                         ) {
-                            tabs.forEachIndexed { index, title ->
+                            tabs.forEachIndexed { index, tab ->
                                 if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
                                     TabMenuItem(
-                                        title = title,
+                                        title = tab.title,
+                                        icon = tab.icon,
                                         selected = selectedTab == index,
+                                        showText = isMenuVisible,
                                         onClick = {
                                             // Сохраняем выбор вкладки через ViewModel
                                             settingsViewModel.saveSelectedTab(index)
@@ -267,32 +299,58 @@ fun TboxScreen(
                     modifier = Modifier
                         .width(menuButtonSize)
                         .fillMaxHeight()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.TopCenter
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 8.dp)
-                            .wrapContentSize()
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Top,
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        IconButton(
-                            onClick = { settingsViewModel.saveLeftMenuVisibleSetting(true) },
-                            modifier = Modifier.size(menuButtonSize)
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 8.dp)
+                                .wrapContentSize()
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.Menu,
-                                contentDescription = "Показать меню",
-                                modifier = Modifier.size(menuIconSize)
-                            )
+                            IconButton(
+                                onClick = { settingsViewModel.saveLeftMenuVisibleSetting(true) },
+                                modifier = Modifier.size(menuButtonSize)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Menu,
+                                    contentDescription = "Показать меню",
+                                    modifier = Modifier.size(menuIconSize)
+                                )
+                            }
+                            if (!tboxConnected) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .offset(x = 2.dp, y = 2.dp)
+                                        .size(10.dp)
+                                        .background(MaterialTheme.colorScheme.error, CircleShape)
+                                )
+                            }
                         }
-                        if (!tboxConnected) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .offset(x = 2.dp, y = 2.dp)
-                                    .size(10.dp)
-                                    .background(MaterialTheme.colorScheme.error, CircleShape)
-                            )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(top = 8.dp)
+                                .verticalScroll(scrollState),
+                            verticalArrangement = Arrangement.Top
+                        ) {
+                            tabs.forEachIndexed { index, tab ->
+                                if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
+                                    TabMenuItem(
+                                        title = tab.title,
+                                        icon = tab.icon,
+                                        selected = selectedTab == index,
+                                        showText = false,
+                                        onClick = {
+                                            settingsViewModel.saveSelectedTab(index)
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
