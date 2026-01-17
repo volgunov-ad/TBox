@@ -27,9 +27,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -160,6 +160,8 @@ fun TboxScreen(
     val versionName = remember { packageInfo.versionName }
 
     val scrollState = rememberScrollState()
+    val menuIconSize = 48.dp
+    val menuButtonSize = 64.dp
 
     // Показываем loading пока загружается сохраненная вкладка
     if (selectedTab == null) {
@@ -251,11 +253,47 @@ fun TboxScreen(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(4.dp)
+                            .size(menuButtonSize)
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.ArrowBack,
-                            contentDescription = "Скрыть меню"
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Скрыть меню",
+                            modifier = Modifier.size(menuIconSize)
                         )
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .width(menuButtonSize)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .wrapContentSize()
+                    ) {
+                        IconButton(
+                            onClick = { settingsViewModel.saveLeftMenuVisibleSetting(true) },
+                            modifier = Modifier.size(menuButtonSize)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Menu,
+                                contentDescription = "Показать меню",
+                                modifier = Modifier.size(menuIconSize)
+                            )
+                        }
+                        if (!tboxConnected) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = 2.dp, y = 2.dp)
+                                    .size(10.dp)
+                                    .background(MaterialTheme.colorScheme.error, CircleShape)
+                            )
+                        }
                     }
                 }
             }
@@ -302,31 +340,6 @@ fun TboxScreen(
             }
         }
 
-        if (!isMenuVisible) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-            ) {
-                Box(modifier = Modifier.wrapContentSize()) {
-                    IconButton(onClick = { settingsViewModel.saveLeftMenuVisibleSetting(true) }) {
-                        Icon(
-                            imageVector = Icons.Filled.Menu,
-                            contentDescription = "Показать меню"
-                        )
-                    }
-                    if (!tboxConnected) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .offset(x = 2.dp, y = 2.dp)
-                                .size(10.dp)
-                                .background(MaterialTheme.colorScheme.error, CircleShape)
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
