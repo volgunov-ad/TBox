@@ -27,7 +27,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
@@ -202,7 +202,7 @@ fun TboxScreen(
                             textAlign = TextAlign.Center,
                             modifier = Modifier
                                 .align(Alignment.CenterHorizontally)
-                                .padding(horizontal = 8.dp, top = 8.dp)
+                                .padding(start = 8.dp, end = 8.dp, top = 8.dp)
                         )
                         Text(
                             text = "Служба запущена в $serviceTime",
@@ -253,7 +253,7 @@ fun TboxScreen(
                             .padding(4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.ChevronLeft,
+                            imageVector = Icons.Filled.ArrowBack,
                             contentDescription = "Скрыть меню"
                         )
                     }
