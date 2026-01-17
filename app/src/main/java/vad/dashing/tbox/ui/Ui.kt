@@ -13,18 +13,23 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -43,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -143,6 +149,7 @@ fun TboxScreen(
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
+    var isMenuVisible by rememberSaveable { mutableStateOf(true) }
 
     // Используем remember для форматтеров даты
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -174,106 +181,151 @@ fun TboxScreen(
         }
     }
 
-    Row(modifier = Modifier.fillMaxSize()) {
-        // Меню слева
-        Column(
-            modifier = Modifier
-                .width(300.dp)
-                .fillMaxHeight()
-                .background(MaterialTheme.colorScheme.background),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = if (tboxConnected) "TBox подключен в $conTime"
-                else "TBox отключен в $conTime",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(horizontal = 8.dp)
-            )
-            Text(
-                text = "Служба запущена в $serviceTime",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(horizontal = 8.dp)
-            )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (isMenuVisible) {
+                Box(
+                    modifier = Modifier
+                        .width(300.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = if (tboxConnected) "TBox подключен в $conTime"
+                            else "TBox отключен в $conTime",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(horizontal = 8.dp, top = 8.dp)
+                        )
+                        Text(
+                            text = "Служба запущена в $serviceTime",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(horizontal = 8.dp)
+                        )
 
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(scrollState),
-                verticalArrangement = Arrangement.Center
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
-                        TabMenuItem(
-                            title = title,
-                            selected = selectedTab == index,
-                            onClick = {
-                                // Сохраняем выбор вкладки через ViewModel
-                                settingsViewModel.saveSelectedTab(index)
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(scrollState),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            tabs.forEachIndexed { index, title ->
+                                if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
+                                    TabMenuItem(
+                                        title = title,
+                                        selected = selectedTab == index,
+                                        onClick = {
+                                            // Сохраняем выбор вкладки через ViewModel
+                                            settingsViewModel.saveSelectedTab(index)
+                                        }
+                                    )
+                                }
                             }
+                        }
+
+                        Text(
+                            text = "Версия программы $versionName",
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(horizontal = 8.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { isMenuVisible = false },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.ChevronLeft,
+                            contentDescription = "Скрыть меню"
                         )
                     }
                 }
             }
 
-            Text(
-                text = "Версия программы $versionName",
-                fontSize = 16.sp,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurface,
+            // Содержимое справа
+            Box(
                 modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(horizontal = 8.dp)
-            )
+                    .weight(1f)
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                when (selectedTab) {
+                    0 -> ModemTab(viewModel, onModemMode)
+                    1 -> if (isExpertModeEnabled) {
+                        ATcmdTab (viewModel, onATcmdSend)
+                    } else {
+                        ModemTab(viewModel, onModemMode)
+                    }
+                    2 -> LocationTab(viewModel, settingsViewModel, onTboxApplicationCommand)
+                    3 -> CarDataTab(canViewModel, appDataViewModel)
+                    4 -> SettingsTab(
+                        viewModel,
+                        settingsViewModel,
+                        onTboxRestart,
+                        onMockLocationSettingChanged)
+                    5 -> if (isExpertModeEnabled) {
+                        LogsTab(viewModel, settingsViewModel, onSaveToFile)
+                    } else {
+                        ModemTab(viewModel, onModemMode)
+                    }
+                    6 -> InfoTab(viewModel, settingsViewModel, onUpdateInfoClick)
+                    7 -> if (isExpertModeEnabled) {
+                        CanTab(viewModel, canViewModel, onSaveToFile)
+                    } else {
+                        ModemTab(viewModel, onModemMode)
+                    }
+                    8 -> MainDashboardTab(
+                        viewModel,
+                        canViewModel,
+                        settingsViewModel,
+                        appDataViewModel,
+                        onTboxRestart)
+                    else -> ModemTab(viewModel, onModemMode)
+                }
+            }
         }
 
-        // Содержимое справа
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            when (selectedTab) {
-                0 -> ModemTab(viewModel, onModemMode)
-                1 -> if (isExpertModeEnabled) {
-                    ATcmdTab (viewModel, onATcmdSend)
-                } else {
-                    ModemTab(viewModel, onModemMode)
+        if (!isMenuVisible) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+            ) {
+                Box(modifier = Modifier.wrapContentSize()) {
+                    IconButton(onClick = { isMenuVisible = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Menu,
+                            contentDescription = "Показать меню"
+                        )
+                    }
+                    if (!tboxConnected) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .offset(x = 2.dp, y = 2.dp)
+                                .size(10.dp)
+                                .background(MaterialTheme.colorScheme.error, CircleShape)
+                        )
+                    }
                 }
-                2 -> LocationTab(viewModel, settingsViewModel, onTboxApplicationCommand)
-                3 -> CarDataTab(canViewModel, appDataViewModel)
-                4 -> SettingsTab(
-                    viewModel,
-                    settingsViewModel,
-                    onTboxRestart,
-                    onMockLocationSettingChanged)
-                5 -> if (isExpertModeEnabled) {
-                    LogsTab(viewModel, settingsViewModel, onSaveToFile)
-                } else {
-                    ModemTab(viewModel, onModemMode)
-                }
-                6 -> InfoTab(viewModel, settingsViewModel, onUpdateInfoClick)
-                7 -> if (isExpertModeEnabled) {
-                    CanTab(viewModel, canViewModel, onSaveToFile)
-                } else {
-                    ModemTab(viewModel, onModemMode)
-                }
-                8 -> MainDashboardTab(
-                    viewModel,
-                    canViewModel,
-                    settingsViewModel,
-                    appDataViewModel,
-                    onTboxRestart)
-                else -> ModemTab(viewModel, onModemMode)
             }
         }
     }
