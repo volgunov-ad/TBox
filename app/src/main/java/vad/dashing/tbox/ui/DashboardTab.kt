@@ -164,6 +164,14 @@ fun MainDashboardTab(
                                             canViewModel = canViewModel
                                         )
                                     }
+                                    "wheelsPressureTemperatureWidget" -> {
+                                        DashboardWheelsPressureTemperatureWidgetItem(
+                                            widget = widget,
+                                            onClick = { showDialogForIndex = index },
+                                            onLongClick = {},
+                                            canViewModel = canViewModel
+                                        )
+                                    }
                                     "tempInOutWidget" -> {
                                         DashboardTempInOutWidgetItem(
                                             widget = widget,

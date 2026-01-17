@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -194,16 +195,24 @@ class TboxViewModel : ViewModel() {
             initialValue = null
         )
 
-    val floatingDashboardShown: StateFlow<Boolean> = TboxRepository.floatingDashboardShown
+    val floatingDashboardShownIds: StateFlow<Set<String>> = TboxRepository.floatingDashboardShownIds
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
+
+    val floatingDashboardShown: StateFlow<Boolean> = floatingDashboardShownIds
+        .map { it.isNotEmpty() }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
         )
 
-    fun updateFloatingDashboardShown(config: Boolean) {
+    fun updateFloatingDashboardShown(panelId: String, isShown: Boolean) {
         viewModelScope.launch {
-            TboxRepository.updateFloatingDashboardShown(config)
+            TboxRepository.updateFloatingDashboardShown(panelId, isShown)
         }
     }
 }
@@ -214,10 +223,22 @@ class MainDashboardViewModel : ViewModel() {
     // Дополнительные методы если нужно
 }
 
-class FloatingDashboardViewModel : ViewModel() {
-    val dashboardManager = DashboardManager("floating")
+class FloatingDashboardViewModel(private val dashboardId: String) : ViewModel() {
+    val dashboardManager = DashboardManager(dashboardId)
 
     // Дополнительные методы если нужно
+}
+
+class FloatingDashboardViewModelFactory(
+    private val dashboardId: String
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(FloatingDashboardViewModel::class.java)) {
+            @Suppress("UNCHECKED_CAST")
+            return FloatingDashboardViewModel(dashboardId) as T
+        }
+        throw IllegalArgumentException("Unknown FloatingDashboard ViewModel class")
+    }
 }
 
 class DashboardManager(
@@ -325,7 +346,8 @@ object WidgetsRepository {
         "locWidget" to DataTitle("Виджет навигации", ""),
         "voltage+engineTemperatureWidget" to DataTitle("Виджет напряжения и температуры двигателя", ""),
         "gearBoxWidget" to DataTitle("Виджет режима КПП с текущей передачей и температурой", ""),
-        "wheelsPressureWidget" to DataTitle("Виджет давления в шинах", "бар"),
+        "wheelsPressureWidget" to DataTitle("Виджет давления в шинах", ""),
+        "wheelsPressureTemperatureWidget" to DataTitle("Виджет давления и температуры в шинах", ""),
         "tempInOutWidget" to DataTitle("Виджет температуры снаружи и внутри", ""),
         "restartTbox" to DataTitle("Кнопка перезагрузки TBox", ""),
     )

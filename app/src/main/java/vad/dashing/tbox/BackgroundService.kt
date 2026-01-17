@@ -63,11 +63,7 @@ class BackgroundService : Service() {
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
-    private lateinit var isFloatingDashboard: StateFlow<Boolean>
-    private lateinit var floatingDashboardHeight: StateFlow<Int?>
-    private lateinit var floatingDashboardWidth: StateFlow<Int?>
-    private lateinit var floatingDashboardStartX: StateFlow<Int?>
-    private lateinit var floatingDashboardStartY: StateFlow<Int?>
+    private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
 
     private val serverPort = 50047
     private var currentIP: String? = null
@@ -109,12 +105,11 @@ class BackgroundService : Service() {
     lateinit var broadcastSender: TboxBroadcastSender
 
     private var windowManager: WindowManager? = null
-    private var params: WindowManager.LayoutParams? = null
-    private var composeView: ComposeView? = null
+    private val overlayViews = linkedMapOf<String, ComposeView>()
+    private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
+    private val overlayRetryCounts = mutableMapOf<String, Int>()
+    private val overlayOffIds = mutableSetOf<String>()
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
-
-    private var overlayRetryCount = 0
-    private var floatingDashboardOff = false
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
 
@@ -185,6 +180,10 @@ class BackgroundService : Service() {
         locationMockManager = LocationMockManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
 
+        scope.launch {
+            settingsManager.ensureDefaultFloatingDashboards()
+        }
+
         //windowManager = getSystemService(WindowManager::class.java)
 
         autoModemRestart = settingsManager.autoModemRestartFlow
@@ -215,16 +214,8 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, false)
         mockLocation = settingsManager.mockLocationFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
-        isFloatingDashboard = settingsManager.floatingDashboardFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        floatingDashboardHeight = settingsManager.floatingDashboardHeightFlow
-            .stateIn(scope, SharingStarted.Eagerly, null)
-        floatingDashboardWidth = settingsManager.floatingDashboardWidthFlow
-            .stateIn(scope, SharingStarted.Eagerly, null)
-        floatingDashboardStartX = settingsManager.floatingDashboardStartXFlow
-            .stateIn(scope, SharingStarted.Eagerly, null)
-        floatingDashboardStartY = settingsManager.floatingDashboardStartYFlow
-            .stateIn(scope, SharingStarted.Eagerly, null)
+        floatingDashboards = settingsManager.floatingDashboardsFlow
+            .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
         ipManager = IPManager(this)
         ipManager.updateIPs(serverIp.value)
@@ -326,7 +317,7 @@ class BackgroundService : Service() {
                     stopStateBroadcastListener()
                     val notification = createNotification("Stop service")
                     startForeground(NOTIFICATION_ID, notification)
-                    closeOverlay()
+                    closeAllOverlays()
                 }
             }
             ACTION_SEND_AT -> {
@@ -373,7 +364,7 @@ class BackgroundService : Service() {
         return START_STICKY
     }
 
-    private fun openOverlay(checkSetting: Boolean = false) {
+    private fun openOverlay(config: FloatingDashboardConfig) {
         if (windowManager == null) {
             try {
                 windowManager = getSystemService(WindowManager::class.java)
@@ -384,13 +375,13 @@ class BackgroundService : Service() {
             }
         }
 
-        if (checkSetting && !isFloatingDashboard.value) {
-            TboxRepository.addLog("DEBUG", "Floating Dashboard", "Setting off")
+        if (!config.enabled) {
+            TboxRepository.addLog("DEBUG", "Floating Dashboard", "Setting off: ${config.id}")
             return
         }
         // Проверяем, не открыто ли уже окно
-        if (composeView != null) {
-            TboxRepository.addLog("DEBUG", "Floating Dashboard", "Already shown")
+        if (overlayViews.containsKey(config.id)) {
+            TboxRepository.addLog("DEBUG", "Floating Dashboard", "Already shown: ${config.id}")
             return
         }
 
@@ -399,15 +390,9 @@ class BackgroundService : Service() {
             return
         }
 
-        if (floatingDashboardWidth.value == null || floatingDashboardHeight.value == null ||
-            floatingDashboardStartX.value == null || floatingDashboardStartY.value == null) {
-            TboxRepository.addLog("WARN", "Floating Dashboard", "Settings not loaded")
-            return
-        }
-
-        params = WindowManager.LayoutParams(
-            floatingDashboardWidth.value!!.coerceAtLeast(50),
-            floatingDashboardHeight.value!!.coerceAtLeast(50),
+        val layoutParams = WindowManager.LayoutParams(
+            config.width.coerceAtLeast(50),
+            config.height.coerceAtLeast(50),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
@@ -415,8 +400,8 @@ class BackgroundService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = floatingDashboardStartX.value!!.coerceAtLeast(0)
-            y = floatingDashboardStartY.value!!.coerceAtLeast(-100)
+            x = config.startX.coerceAtLeast(0)
+            y = config.startY.coerceAtLeast(-100)
         }
 
         val newComposeView = ComposeView(this)
@@ -434,20 +419,21 @@ class BackgroundService : Service() {
                         settingsManager = settingsManager,
                         appDataManager = appDataManager,
                         service = this@BackgroundService,
-                        params = params!!
+                        panelId = config.id,
+                        params = layoutParams
                     )
                 }
             }
         } catch (e: Exception) {
             Log.e("FloatingDashboard", "Error creating view", e)
             TboxRepository.addLog("ERROR", "Floating Dashboard", "Failed to create: ${e.message}")
-            composeView = null
             return
         }
 
         try {
-            windowManager?.addView(newComposeView, params)
-            composeView = newComposeView
+            windowManager?.addView(newComposeView, layoutParams)
+            overlayViews[config.id] = newComposeView
+            overlayParams[config.id] = layoutParams
 
             if (!lifecycleOwner.isInitialized || lifecycleOwner.lifecycle.currentState.isAtLeast(
                     Lifecycle.State.DESTROYED
@@ -456,46 +442,142 @@ class BackgroundService : Service() {
                 lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
             }
 
-            TboxRepository.addLog("INFO", "Floating Dashboard", "Shown")
+            overlayRetryCounts[config.id] = 0
+            TboxRepository.addLog("INFO", "Floating Dashboard", "Shown: ${config.id}")
         } catch (e: Exception) {
             Log.e("Floating Dashboard", "Error adding view", e)
             TboxRepository.addLog("ERROR", "Floating Dashboard", "Failed to show: ${e.message}")
-            composeView = null
         }
     }
 
-    private fun closeOverlay() {
-        composeView?.let {
+    private fun closeOverlay(panelId: String) {
+        val view = overlayViews.remove(panelId)
+        overlayParams.remove(panelId)
+        if (view != null) {
             try {
-                windowManager?.removeView(it)
+                windowManager?.removeView(view)
             } catch (e: Exception) {
                 TboxRepository.addLog("ERROR", "Floating Dashboard", "Error removing view")
                 Log.e("Floating Dashboard", "Error removing view", e)
             }
-            composeView = null
         }
 
-        TboxRepository.addLog("INFO", "Floating Dashboard", "Closed")
+        overlayRetryCounts.remove(panelId)
+        overlayOffIds.remove(panelId)
+
+        TboxRepository.addLog("INFO", "Floating Dashboard", "Closed: $panelId")
+    }
+
+    private fun closeAllOverlays() {
+        val ids = overlayViews.keys.toList()
+        ids.forEach { closeOverlay(it) }
+    }
+
+    fun updateWindowPosition(panelId: String, x: Int, y: Int) {
+        val params = overlayParams[panelId] ?: return
+        if (params.x == x && params.y == y) return
+        params.x = x.coerceAtLeast(0)
+        params.y = y.coerceAtLeast(-100)
+        overlayViews[panelId]?.let { view ->
+            windowManager?.updateViewLayout(view, params)
+        }
     }
 
     fun updateWindowPosition(x: Int, y: Int) {
-        params?.let { currentParams ->
-            if (currentParams.x == x && currentParams.y == y) return
-            currentParams.x = x.coerceAtLeast(0)
-            currentParams.y = y.coerceAtLeast(-100)
-            composeView?.let { view ->
-                windowManager?.updateViewLayout(view, currentParams)
-            }
+        val panelId = getSingleOverlayId() ?: return
+        updateWindowPosition(panelId, x, y)
+    }
+
+    fun updateWindowSize(panelId: String, width: Int, height: Int) {
+        val params = overlayParams[panelId] ?: return
+        if (params.width == width && params.height == height) return
+        params.width = width.coerceAtLeast(50)
+        params.height = height.coerceAtLeast(50)
+        overlayViews[panelId]?.let { view ->
+            windowManager?.updateViewLayout(view, params)
         }
     }
 
     fun updateWindowSize(width: Int, height: Int) {
-        params?.let { currentParams ->
-            if (currentParams.width == width && currentParams.height == height) return
-            currentParams.width = width.coerceAtLeast(50)
-            currentParams.height = height.coerceAtLeast(50)
-            composeView?.let { view ->
-                windowManager?.updateViewLayout(view, currentParams)
+        val panelId = getSingleOverlayId() ?: return
+        updateWindowSize(panelId, width, height)
+    }
+
+    private fun updateOverlayLayout(config: FloatingDashboardConfig) {
+        val params = overlayParams[config.id] ?: return
+        val newWidth = config.width.coerceAtLeast(50)
+        val newHeight = config.height.coerceAtLeast(50)
+        val newX = config.startX.coerceAtLeast(0)
+        val newY = config.startY.coerceAtLeast(-100)
+        if (params.width == newWidth &&
+            params.height == newHeight &&
+            params.x == newX &&
+            params.y == newY
+        ) {
+            return
+        }
+        params.width = newWidth
+        params.height = newHeight
+        params.x = newX
+        params.y = newY
+        overlayViews[config.id]?.let { view ->
+            windowManager?.updateViewLayout(view, params)
+        }
+    }
+
+    private fun getSingleOverlayId(): String? {
+        return if (overlayViews.size == 1) overlayViews.keys.firstOrNull() else null
+    }
+
+    private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
+        val configMap = configs.associateBy { it.id }
+        val enabledConfigs = configs.filter { it.enabled }
+        val enabledIds = enabledConfigs.map { it.id }.toSet()
+        val existingIds = overlayViews.keys.toSet()
+
+        val removedIds = overlayRetryCounts.keys - configMap.keys
+        removedIds.forEach { id ->
+            overlayRetryCounts.remove(id)
+            overlayOffIds.remove(id)
+        }
+
+        val toClose = existingIds - enabledIds
+        toClose.forEach { closeOverlay(it) }
+
+        enabledConfigs.forEach { config ->
+            overlayOffIds.remove(config.id)
+            if (overlayViews.containsKey(config.id)) {
+                updateOverlayLayout(config)
+            } else {
+                openOverlay(config)
+            }
+        }
+
+        val disabledIds = configMap.keys - enabledIds
+        disabledIds.forEach { id ->
+            overlayRetryCounts.remove(id)
+            overlayOffIds.remove(id)
+        }
+    }
+
+    private suspend fun ensureFloatingDashboards() {
+        withContext(Dispatchers.Main) {
+            val enabledConfigs = floatingDashboards.value.filter { it.enabled }
+            enabledConfigs.forEach { config ->
+                if (overlayOffIds.contains(config.id)) return@forEach
+                if (overlayViews.containsKey(config.id)) {
+                    overlayRetryCounts[config.id] = 0
+                    return@forEach
+                }
+                val retryCount = overlayRetryCounts[config.id] ?: 0
+                if (retryCount >= MAX_OVERLAY_RETRIES * 2) {
+                    TboxRepository.addLog("ERROR", "Floating Dashboard",
+                        "Can't show: ${config.id}")
+                    overlayOffIds.add(config.id)
+                    return@forEach
+                }
+                overlayRetryCounts[config.id] = retryCount + 1
+                openOverlay(config)
             }
         }
     }
@@ -823,21 +905,11 @@ class BackgroundService : Service() {
             }
 
             launch {
-                isFloatingDashboard
+                floatingDashboards
                     .drop(1) // Пропускаем начальное значение
-                    .collect { showFloating ->
-                    if (showFloating) {
-                        overlayRetryCount = 1
-                        floatingDashboardOff = false
-                        withContext(Dispatchers.Main) {
-                            openOverlay()
-                        }
-                    } else {
-                        withContext(Dispatchers.Main) {
-                            closeOverlay()
-                        }
-                        overlayRetryCount = 0
-                        floatingDashboardOff = false
+                    .collect { configs ->
+                    withContext(Dispatchers.Main) {
+                        syncFloatingDashboards(configs)
                     }
                 }
             }
@@ -855,12 +927,7 @@ class BackgroundService : Service() {
             try {
                 Log.d("1s Job", "Start periodic job")
                 delay(5000)
-                if (!TboxRepository.floatingDashboardShown.value && isFloatingDashboard.value) {
-                    overlayRetryCount++
-                    withContext(Dispatchers.Main) {
-                        openOverlay()
-                    }
-                }
+                ensureFloatingDashboards()
                 sendWidgetUpdate()
                 var widgetUpdateTime = System.currentTimeMillis()
                 var floatingDashboardCheckTime = System.currentTimeMillis()
@@ -894,26 +961,9 @@ class BackgroundService : Service() {
                         widgetUpdateTime = System.currentTimeMillis()
                     }
 
-                    if (!floatingDashboardOff && (System.currentTimeMillis() - floatingDashboardCheckTime > 5000)) {
+                    if (System.currentTimeMillis() - floatingDashboardCheckTime > 5000) {
                         floatingDashboardCheckTime = System.currentTimeMillis()
-                        if (isFloatingDashboard.value) {
-                            if (overlayRetryCount >= MAX_OVERLAY_RETRIES * 2) {
-                                TboxRepository.addLog("ERROR", "Floating Dashboard", "Can't show")
-                                floatingDashboardOff = true
-                            } else if (overlayRetryCount >= MAX_OVERLAY_RETRIES) {
-                                withContext(Dispatchers.Main) {
-                                    closeOverlay()
-                                }
-                            }
-                            if (!TboxRepository.floatingDashboardShown.value) {
-                                overlayRetryCount++
-                                withContext(Dispatchers.Main) {
-                                    openOverlay()
-                                }
-                            } else {
-                                overlayRetryCount = 0
-                            }
-                        }
+                        ensureFloatingDashboards()
                     }
 
                     val currentTime = Date().time
@@ -1535,7 +1585,7 @@ class BackgroundService : Service() {
         address = null
         currentIP = null
 
-        closeOverlay()
+        closeAllOverlays()
         // Устанавливаем состояние DESTROYED для lifecycle
         lifecycleOwner.setCurrentState(Lifecycle.State.DESTROYED)
     }
