@@ -19,6 +19,7 @@ class TboxBroadcastSender(
     private val gearBoxStateSubscribers = CopyOnWriteArraySet<String>()
     private val locationStateSubscribers = CopyOnWriteArraySet<String>()
     private val carStateSubscribers = CopyOnWriteArraySet<String>()
+    private val canIDSubscribers = CopyOnWriteArraySet<String>()
 
     companion object {
         private const val TAG = "TboxBroadcastSender"
@@ -55,6 +56,8 @@ class TboxBroadcastSender(
         const val CRUISE_SET_SPEED = "cruiseSetSpeed"
         const val VOLTAGE = "voltage"
         const val INSIDE_TEMPERATURE = "insideTemperature"
+
+        const val CAN_ID = "canID"
     }
 
     private var netStateListenerJob: Job? = null
@@ -63,6 +66,7 @@ class TboxBroadcastSender(
     private var gearBoxStateListenerJob: Job? = null
     private var locationStateListenerJob: Job? = null
     private var carStateListenerJob: Job? = null
+    private var canIDListenerJob: Job? = null
 
     private fun sendResponse(
         sender: String,
@@ -80,6 +84,7 @@ class TboxBroadcastSender(
                     is Boolean -> putExtra(RETURN_EXTRA_VALUE_1, returnExtraValue1)
                     is Date -> putExtra(RETURN_EXTRA_VALUE_1, returnExtraValue1.time)
                     is Float -> putExtra(RETURN_EXTRA_VALUE_1, returnExtraValue1)
+                    is ByteArray -> putExtra(RETURN_EXTRA_VALUE_1, returnExtraValue1)
                 }
             }
 
@@ -141,6 +146,14 @@ class TboxBroadcastSender(
                 listenerJob = carStateListenerJob,
                 startListener = ::startCarStateListener,
                 logTag = "carStateSubscribers"
+            )
+            CAN_ID -> handleAddSubscriber(
+                packageName = packageName,
+                key = key,
+                subscribers = canIDSubscribers,
+                listenerJob = canIDListenerJob,
+                startListener = ::startCarStateListener,
+                logTag = "canIDSubscribers"
             )
             else -> return
         }
@@ -256,6 +269,10 @@ class TboxBroadcastSender(
                     }
                 }
             }
+
+            CAN_ID -> {
+                sendByteArray(CanDataRepository.getLastFrameForId(extraValue)?.rawValue, arrayOf(packageName, extraName, extraValue), extraValue)
+            }
         }
     }
 
@@ -306,6 +323,13 @@ class TboxBroadcastSender(
                 listenerJob = carStateListenerJob,
                 logTag = "carStateSubscribers"
             )
+            CAN_ID -> handleDeleteSubscriber(
+                packageName = packageName,
+                key = key,
+                subscribers = canIDSubscribers,
+                listenerJob = canIDListenerJob,
+                logTag = "canIDSubscribers"
+            )
         }
     }
 
@@ -338,6 +362,7 @@ class TboxBroadcastSender(
         gearBoxStateSubscribers.clear()
         locationStateSubscribers.clear()
         carStateSubscribers.clear()
+        canIDSubscribers.clear()
         stopListeners()
         Log.d(TAG, "All subscribers cleared")
     }
@@ -483,6 +508,22 @@ class TboxBroadcastSender(
     }
 
     private fun sendFloat(value: Float?, subscriber: Array<String>, extraName: String) {
+        if (value == null) return
+        try {
+            if (subscriber[2] == extraName) {
+                sendResponse(
+                    subscriber[0],
+                    TboxBroadcastReceiver.GET_STATE,
+                    subscriber[2],
+                    value
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send $extraName response", e)
+        }
+    }
+
+    private fun sendByteArray(value: ByteArray?, subscriber: Array<String>, extraName: String) {
         if (value == null) return
         try {
             if (subscriber[2] == extraName) {
@@ -755,6 +796,35 @@ class TboxBroadcastSender(
         Log.d(TAG, "Location State broadcast listener started")
     }
 
+    @OptIn(FlowPreview::class)
+    private fun startCANIDListener() {
+        if (canIDListenerJob?.isActive == true) {
+            Log.d(TAG, "CANID listener is already running")
+            return
+        }
+
+        canIDListenerJob = scope.launch(
+            CoroutineExceptionHandler { _, exception ->
+                Log.e(TAG, "CANID listener error", exception)
+                // Перезапускаем listener при ошибке
+                if (canIDSubscribers.isNotEmpty()) {
+                    startCANIDListener()
+                }
+            }
+        ) {
+            CanDataRepository.canFramesStructured
+                .collect { canFramesStructured ->
+                    if (canIDSubscribers.isNotEmpty()) {
+                        canIDSubscribers.forEach { subscriberKey ->
+                            val subscriber = parseSubscriberKey(subscriberKey)
+                            sendByteArray(CanDataRepository.getLastFrameForId(subscriber[2])?.rawValue, subscriber, subscriber[2])
+                        }
+                    }
+                }
+        }
+        Log.d(TAG, "CANID broadcast listener started")
+    }
+
     fun stopListeners() {
         netStateListenerJob?.cancel()
         netStateListenerJob = null
@@ -773,6 +843,9 @@ class TboxBroadcastSender(
 
         carStateListenerJob?.cancel()
         carStateListenerJob = null
+
+        canIDListenerJob?.cancel()
+        canIDListenerJob = null
 
         Log.d(TAG, "Listeners stopped")
     }

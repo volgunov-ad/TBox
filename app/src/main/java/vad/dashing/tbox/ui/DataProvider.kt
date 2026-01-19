@@ -32,6 +32,9 @@ class TboxDataProvider(
         "steerSpeed" -> canViewModel.steerSpeed.mapState { valueToString(it) }
         "engineRPM" -> canViewModel.engineRPM.mapState { valueToString(it, 1) }
         "param1" -> canViewModel.param1.mapState { valueToString(it, 1) }
+        "param2" -> canViewModel.param2.mapState { valueToString(it, 1) }
+        "param3" -> canViewModel.param3.mapState { valueToString(it, 1) }
+        "param4" -> canViewModel.param4.mapState { valueToString(it, 1) }
         "carSpeed" -> canViewModel.carSpeed.mapState { valueToString(it, 1) }
         "carSpeedAccurate" -> canViewModel.carSpeedAccurate.mapState { valueToString(it, 1) }
         "wheel1Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel1, 1) }

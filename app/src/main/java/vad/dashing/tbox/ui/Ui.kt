@@ -233,7 +233,7 @@ fun TboxScreen(
                         contentAlignment = Alignment.CenterEnd
                     ) {
                         Icon(
-                            imageVector = if (isMenuVisible) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
+                            imageVector = if (isMenuVisible) ImageVector.vectorResource(R.drawable.menu_icon_close) else ImageVector.vectorResource(R.drawable.menu_icon_open),
                             contentDescription = if (isMenuVisible) "Скрыть меню" else "Показать меню",
                             modifier = Modifier
                                 .size(menuIconSize)
@@ -524,6 +524,7 @@ fun SettingsTab(
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
+    val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
     val isGetLocDataEnabled by settingsViewModel.isGetLocDataEnabled.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
@@ -799,6 +800,15 @@ fun SettingsTab(
         )
 
         if (isExpertModeEnabled) {
+            SettingSwitch(
+                isGetCycleSignalEnabled,
+                { enabled ->
+                    settingsViewModel.saveGetCycleSignalSetting(enabled)
+                },
+                "Получать циклические данные",
+                "",
+                true
+            )
             SettingSwitch(
                 isTboxIPRotation,
                 { enabled ->
@@ -1079,7 +1089,6 @@ fun InfoTab(
     val hwVersion by settingsViewModel.hwVersion.collectAsStateWithLifecycle()
     val vinCode by settingsViewModel.vinCode.collectAsStateWithLifecycle()
     val tboxIP by settingsViewModel.tboxIP.collectAsStateWithLifecycle()
-    val floatingDashboardShown by viewModel.floatingDashboardShown.collectAsStateWithLifecycle()
 
     var updateVersionButtonEnabled by remember { mutableStateOf(true) }
 
@@ -1114,8 +1123,6 @@ fun InfoTab(
                     if (preventRestartSend) "да" else "нет"
                 )
             }
-            item { StatusRow("Плавающая панель показана",
-                if (floatingDashboardShown) "да" else "нет") }
             item { StatusRow("Сохраненный IP адрес TBox", tboxIP) }
             item { StatusRow("Список возможных IP адресов TBox", ipList.joinToString("; ")) }
             item { StatusRow("Версия приложения APP", appVersion) }
@@ -1168,6 +1175,9 @@ fun CarDataTab(
     val breakingForce by canViewModel.breakingForce.collectAsStateWithLifecycle()
     val engineRPM by canViewModel.engineRPM.collectAsStateWithLifecycle()
     val param1 by canViewModel.param1.collectAsStateWithLifecycle()
+    val param2 by canViewModel.param2.collectAsStateWithLifecycle()
+    val param3 by canViewModel.param3.collectAsStateWithLifecycle()
+    val param4 by canViewModel.param4.collectAsStateWithLifecycle()
     val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
     val fuelLevelPercentage by canViewModel.fuelLevelPercentage.collectAsStateWithLifecycle()
     val fuelLevelPercentageFiltered by canViewModel.fuelLevelPercentageFiltered.collectAsStateWithLifecycle()
@@ -1206,6 +1216,9 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("steerSpeed"), valueToString(steerSpeed)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("engineRPM"), valueToString(engineRPM, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("param1"), valueToString(param1, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("param2"), valueToString(param2, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("param3"), valueToString(param3, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("param4"), valueToString(param4, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("carSpeed"), valueToString(carSpeed, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("carSpeedAccurate"), valueToString(carSpeedAccurate, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Speed"), valueToString(wheelsSpeed.wheel1, 1)) }

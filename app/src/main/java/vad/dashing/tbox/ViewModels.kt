@@ -195,21 +195,6 @@ class TboxViewModel : ViewModel() {
             initialValue = null
         )
 
-    val floatingDashboardShownIds: StateFlow<Set<String>> = TboxRepository.floatingDashboardShownIds
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptySet()
-        )
-
-    val floatingDashboardShown: StateFlow<Boolean> = floatingDashboardShownIds
-        .map { it.isNotEmpty() }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
-        )
-
     fun updateFloatingDashboardShown(panelId: String, isShown: Boolean) {
         viewModelScope.launch {
             TboxRepository.updateFloatingDashboardShown(panelId, isShown)
@@ -294,6 +279,9 @@ object WidgetsRepository {
         "steerSpeed" to DataTitle("Скорость вращения руля", ""),
         "engineRPM" to DataTitle("Обороты двигателя", "об/мин"),
         "param1" to DataTitle("Параметр 1", ""),
+        "param2" to DataTitle("Параметр 2", ""),
+        "param3" to DataTitle("Параметр 3", ""),
+        "param4" to DataTitle("Параметр 4", ""),
         "carSpeed" to DataTitle("Скорость автомобиля", "км/ч"),
         "carSpeedAccurate" to DataTitle("Точная скорость автомобиля", "км/ч"),
         "wheel1Speed" to DataTitle("Скорость колеса 1", "км/ч"),

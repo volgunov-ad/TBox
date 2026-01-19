@@ -61,6 +61,15 @@ object CanDataRepository {
     private val _param1 = MutableStateFlow<Float?>(null)
     val param1: StateFlow<Float?> = _param1.asStateFlow()
 
+    private val _param2 = MutableStateFlow<Float?>(null)
+    val param2: StateFlow<Float?> = _param2.asStateFlow()
+
+    private val _param3 = MutableStateFlow<Float?>(null)
+    val param3: StateFlow<Float?> = _param3.asStateFlow()
+
+    private val _param4 = MutableStateFlow<Float?>(null)
+    val param4: StateFlow<Float?> = _param4.asStateFlow()
+
     private val _steerAngle = MutableStateFlow<Float?>(null)
     val steerAngle: StateFlow<Float?> = _steerAngle.asStateFlow()
 
@@ -211,6 +220,18 @@ object CanDataRepository {
 
     fun updateParam1(newValue: Float) {
         _param1.value = newValue
+    }
+
+    fun updateParam2(newValue: Float) {
+        _param2.value = newValue
+    }
+
+    fun updateParam3(newValue: Float) {
+        _param3.value = newValue
+    }
+
+    fun updateParam4(newValue: Float) {
+        _param4.value = newValue
     }
 
     fun updateSteerAngle(newValue: Float) {

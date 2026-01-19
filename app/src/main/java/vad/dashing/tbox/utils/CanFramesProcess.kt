@@ -48,9 +48,17 @@ object CanFramesProcess {
                     CanDataRepository.updateSteerSpeed(speed)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xFA.toByte()))) {
                     val rpm = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 4f
-                    val param1 = singleData[3].toUInt().toFloat() / 10f
+                    val param1 = singleData[3].toUInt().toFloat() / 100f
+                    val param2 = singleData.copyOfRange(4, 6).toFloat("UINT16_BE")
                     CanDataRepository.updateEngineRPM(rpm)
                     CanDataRepository.updateParam1(param1)
+                    CanDataRepository.updateParam2(param2)
+                } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0x00))) {
+                    val param3 = singleData.copyOfRange(4, 6).toFloat("UINT16_BE")
+                    CanDataRepository.updateParam3(param3)
+                } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0x78.toByte()))) {
+                    val param4 = singleData[5].toUInt().toFloat()
+                    CanDataRepository.updateParam4(param4)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x02, 0x87.toByte()))) {
                     val distanceToNextMaintenance = singleData.copyOfRange(4, 6).toUInt16BigEndian()
                     CanDataRepository.updateDistanceToNextMaintenance(distanceToNextMaintenance)

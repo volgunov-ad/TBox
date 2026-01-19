@@ -166,9 +166,6 @@ class BackgroundService : Service() {
         const val ACTION_LOC_SUSPEND = "vad.dashing.tbox.LOC_SUSPEND"
         const val ACTION_LOC_RESUME = "vad.dashing.tbox.LOC_RESUME"
         const val ACTION_LOC_STOP = "vad.dashing.tbox.LOC_STOP"
-        const val ACTION_LOC_SUBSCRIBE = "vad.dashing.tbox.LOC_SUBSCRIBE"
-        const val ACTION_LOC_UNSUBSCRIBE = "vad.dashing.tbox.LOC_UNSUBSCRIBE"
-        const val ACTION_GET_CAN_FRAME = "vad.dashing.tbox.GET_CAN_FRAME"
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
     }
 
@@ -347,9 +344,6 @@ class BackgroundService : Service() {
             ACTION_LOC_SUSPEND -> sendSuspendTboxApplication("LOC")
             ACTION_LOC_RESUME -> sendResumeTboxApplication("LOC")
             ACTION_LOC_STOP -> sendStopTboxApplication("LOC")
-            ACTION_LOC_SUBSCRIBE -> locSubscribe(true)
-            ACTION_LOC_UNSUBSCRIBE -> locSubscribe(false)
-            ACTION_GET_CAN_FRAME -> crtGetCanFrame()
             ACTION_GET_INFO -> getInfo()
             ACTION_CLOSE -> crtCmd(0x26,
                 ByteArray(45).apply {
@@ -992,7 +986,7 @@ class BackgroundService : Service() {
                         val delta = currentTime - (TboxRepository.cycleSignalTime.value?.time ?: 0)
                         if (delta > 60000) {
                             if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetCycleSignalTime > 10000) {
-                                //crtGetCycleSignal()
+                                crtGetCycleSignal()
                                 crtGetCycleSignalTime = System.currentTimeMillis()
                             }
                         }
@@ -2424,9 +2418,9 @@ class BackgroundService : Service() {
             if (getCanFrame.value) {
                 crtGetCanFrame()
             }
-            //if (getCycleSignal.value) {
-            //    crtGetCycleSignal()
-            //}
+            if (getCycleSignal.value) {
+                crtGetCycleSignal()
+            }
             if (getLocData.value) {
                 locSubscribe(true)
             }
