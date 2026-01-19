@@ -152,7 +152,7 @@ class TboxBroadcastSender(
                 key = key,
                 subscribers = canIDSubscribers,
                 listenerJob = canIDListenerJob,
-                startListener = ::startCarStateListener,
+                startListener = ::startCANIDListener,
                 logTag = "canIDSubscribers"
             )
             else -> return
