@@ -7,6 +7,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.Date
 import java.util.concurrent.CopyOnWriteArraySet
+import kotlin.collections.lastOrNull
 
 class TboxBroadcastSender(
     private val context: Context,
@@ -817,7 +818,7 @@ class TboxBroadcastSender(
                     if (canIDSubscribers.isNotEmpty()) {
                         canIDSubscribers.forEach { subscriberKey ->
                             val subscriber = parseSubscriberKey(subscriberKey)
-                            sendByteArray(CanDataRepository.getLastFrameForId(subscriber[2])?.rawValue, subscriber, subscriber[2])
+                            sendByteArray(canFramesStructured[subscriber[2]]?.lastOrNull()?.rawValue, subscriber, subscriber[2])
                         }
                     }
                 }
