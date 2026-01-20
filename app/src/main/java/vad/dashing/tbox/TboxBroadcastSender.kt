@@ -813,14 +813,38 @@ class TboxBroadcastSender(
                 }
             }
         ) {
+            var previousFrames: Map<String, List<CanFrame>> = emptyMap()
             CanDataRepository.canFramesStructured
                 .collect { canFramesStructured ->
-                    if (canIDSubscribers.isNotEmpty()) {
-                        canIDSubscribers.forEach { subscriberKey ->
-                            val subscriber = parseSubscriberKey(subscriberKey)
-                            sendByteArray(canFramesStructured[subscriber[2]]?.lastOrNull()?.rawValue, subscriber, subscriber[2])
+                    if (canIDSubscribers.isEmpty()) {
+                        previousFrames = canFramesStructured
+                        return@collect
+                    }
+
+                    val updatedCanIds = mutableSetOf<String>()
+                    canFramesStructured.forEach { (canId, frames) ->
+                        val latestFrame = frames.lastOrNull()
+                        val previousFrame = previousFrames[canId]?.lastOrNull()
+                        if (latestFrame != previousFrame && latestFrame != null) {
+                            updatedCanIds.add(canId)
                         }
                     }
+
+                    if (updatedCanIds.isNotEmpty()) {
+                        canIDSubscribers.forEach { subscriberKey ->
+                            val subscriber = parseSubscriberKey(subscriberKey)
+                            val canId = subscriber[2]
+                            if (updatedCanIds.contains(canId)) {
+                                sendByteArray(
+                                    canFramesStructured[canId]?.lastOrNull()?.rawValue,
+                                    subscriber,
+                                    canId
+                                )
+                            }
+                        }
+                    }
+
+                    previousFrames = canFramesStructured
                 }
         }
         Log.d(TAG, "CANID broadcast listener started")
