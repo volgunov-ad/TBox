@@ -30,8 +30,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -76,6 +74,7 @@ import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.CycleDataViewModel
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import java.text.SimpleDateFormat
@@ -104,7 +103,6 @@ fun TboxApp(
     onATcmdSend: (String) -> Unit,
 ) {
     val viewModel: TboxViewModel = viewModel()
-    val canViewModel: CanDataViewModel = viewModel()
 
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(
         settingsManager
@@ -120,7 +118,6 @@ fun TboxApp(
     TboxAppTheme(theme = currentTheme) {
         TboxScreen(
             viewModel = viewModel,
-            canViewModel = canViewModel,
             settingsViewModel = settingsViewModel,
             appDataViewModel = appDataViewModel,
             onTboxRestart = onTboxRestart,
@@ -156,7 +153,6 @@ object TabItems {
 @Composable
 fun TboxScreen(
     viewModel: TboxViewModel,
-    canViewModel: CanDataViewModel,
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
     onTboxRestart: () -> Unit,
@@ -168,6 +164,9 @@ fun TboxScreen(
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onATcmdSend: (String) -> Unit,
 ) {
+    val canViewModel: CanDataViewModel = viewModel()
+    val cycleViewModel: CycleDataViewModel = viewModel()
+
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
 
@@ -235,6 +234,7 @@ fun TboxScreen(
                         Icon(
                             imageVector = if (isMenuVisible) ImageVector.vectorResource(R.drawable.menu_icon_close) else ImageVector.vectorResource(R.drawable.menu_icon_open),
                             contentDescription = if (isMenuVisible) "Скрыть меню" else "Показать меню",
+                            tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier
                                 .size(menuIconSize)
                                 .clickable(onClick = {
@@ -334,7 +334,7 @@ fun TboxScreen(
                         ModemTab(viewModel, onModemMode)
                     }
                     2 -> LocationTab(viewModel, settingsViewModel, onTboxApplicationCommand)
-                    3 -> CarDataTab(canViewModel, appDataViewModel)
+                    3 -> CarDataTab(canViewModel, cycleViewModel, appDataViewModel)
                     4 -> SettingsTab(
                         viewModel,
                         settingsViewModel,
@@ -543,6 +543,8 @@ fun SettingsTab(
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
+
+    val canDataSaveCount by settingsViewModel.canDataSaveCount.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
@@ -800,6 +802,16 @@ fun SettingsTab(
         )
 
         if (isExpertModeEnabled) {
+            SettingInt(
+                canDataSaveCount,
+                {value ->
+                    settingsViewModel.saveCanDataSaveCount(value)
+                },
+                "Количество сохраняемых CAN фреймов (1...3600)",
+                "",
+                1,
+                3600
+                )
             SettingSwitch(
                 isGetCycleSignalEnabled,
                 { enabled ->
@@ -1167,6 +1179,7 @@ fun InfoTab(
 @Composable
 fun CarDataTab(
     canViewModel: CanDataViewModel,
+    cycleViewModel: CycleDataViewModel,
     appDataViewModel: AppDataViewModel,
 ) {
     val odometer by canViewModel.odometer.collectAsStateWithLifecycle()
@@ -1202,6 +1215,16 @@ fun CarDataTab(
     val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
     val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
     val isWindowsBlocked by canViewModel.isWindowsBlocked.collectAsStateWithLifecycle()
+
+    val voltageC by cycleViewModel.voltage.collectAsStateWithLifecycle()
+    val carSpeedC by cycleViewModel.carSpeed.collectAsStateWithLifecycle()
+    val lateralAccelerationC by cycleViewModel.lateralAcceleration.collectAsStateWithLifecycle()
+    val longitudinalAccelerationC by cycleViewModel.longitudinalAcceleration.collectAsStateWithLifecycle()
+    val pressure1C by cycleViewModel.pressure1.collectAsStateWithLifecycle()
+    val pressure2C by cycleViewModel.pressure2.collectAsStateWithLifecycle()
+    val pressure3C by cycleViewModel.pressure3.collectAsStateWithLifecycle()
+    val pressure4C by cycleViewModel.pressure4.collectAsStateWithLifecycle()
+    val engineRPMC by cycleViewModel.engineRPM.collectAsStateWithLifecycle()
 
     val motorHours by appDataViewModel.motorHours.collectAsStateWithLifecycle()
 
@@ -1256,6 +1279,20 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("isWindowsBlocked"), valueToString(isWindowsBlocked,
                 booleanTrue = "заблокированы", booleanFalse = "разблокированы")) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHours"), valueToString(motorHours, 1)) }
+            item { StatusRow("Cycle напряжение, В", valueToString(voltageC, 1)) }
+            item { StatusRow("Cycle скорость, км/ч", valueToString(carSpeedC, 1)) }
+            item { StatusRow("Cycle обороты двигателя, об/мин", valueToString(engineRPMC, 1)) }
+            //item { StatusRow("Cycle угловая скорость рысканья, °/с", valueToString(yawRateC, 2)) }
+            item { StatusRow("Cycle поперечное ускорение, м/с2", valueToString(lateralAccelerationC, 2)) }
+            item { StatusRow("Cycle продольное ускорение, м/с2", valueToString(longitudinalAccelerationC, 2)) }
+            item { StatusRow("Cycle давление ПЛ, бар", valueToString(pressure1C, 1)) }
+            item { StatusRow("Cycle давление ПП, бар", valueToString(pressure2C, 1)) }
+            item { StatusRow("Cycle давление ЗЛ, бар", valueToString(pressure3C, 1)) }
+            item { StatusRow("Cycle давление ЗП, бар", valueToString(pressure4C, 1)) }
+            //item { StatusRow("Cycle температура ПЛ, °C", valueToString(temperature1C, 1)) }
+            //item { StatusRow("Cycle температура ПП, °C", valueToString(temperature2C, 1)) }
+            //item { StatusRow("Cycle температура ЗП, °C", valueToString(temperature3C, 1)) }
+            //item { StatusRow("Cycle температура ЗЛ, °C", valueToString(temperature4C, 1)) }
         }
     }
 }

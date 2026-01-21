@@ -12,8 +12,8 @@ android {
         applicationId = "vad.dashing.tbox"
         minSdk = 28
         targetSdk = 36
-        versionCode = 99
-        versionName = "0.9.9"
+        versionCode = 910
+        versionName = "0.9.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

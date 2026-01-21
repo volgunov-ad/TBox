@@ -335,8 +335,8 @@ object WidgetsRepository {
         "locWidget" to DataTitle("Виджет навигации", ""),
         "voltage+engineTemperatureWidget" to DataTitle("Виджет напряжения и температуры двигателя", ""),
         "gearBoxWidget" to DataTitle("Виджет режима КПП с текущей передачей и температурой", ""),
-        "wheelsPressureWidget" to DataTitle("Виджет давления в шинах", ""),
-        "wheelsPressureTemperatureWidget" to DataTitle("Виджет давления и температуры в шинах", ""),
+        "wheelsPressureWidget" to DataTitle("Виджет давления в шинах", "бар"),
+        "wheelsPressureTemperatureWidget" to DataTitle("Виджет давления и температуры в шинах", "бар / °C"),
         "tempInOutWidget" to DataTitle("Виджет температуры снаружи и внутри", ""),
         "restartTbox" to DataTitle("Кнопка перезагрузки TBox", ""),
     )

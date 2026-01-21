@@ -19,7 +19,7 @@ object CanFramesProcess {
 
     private var carType: String = "1.5_6MT"
 
-    fun process(data: ByteArray) {
+    fun process(data: ByteArray, maxFrames: Int) {
         TboxRepository.updateCanFrameTime()
         val rawValue = data.copyOfRange(4, data.size)
         //CanDataRepository.addCanFrame(toHexString(rawValue))
@@ -37,7 +37,8 @@ object CanFramesProcess {
 
                 CanDataRepository.addCanFrameStructured(
                     toHexString(canID),
-                    singleData
+                    singleData,
+                    maxFrames
                 )
 
                 if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xC4.toByte()))) {
@@ -384,7 +385,23 @@ object CanFramesProcess {
                         (this[0].toInt() and 0xFF)
                 intValue.toFloat()
             }
-            else -> throw IllegalArgumentException("Unknown format: $format. Supported: UINT16_BE, UINT16_LE, UINT24_BE, UINT24_LE")
+            "UINT32_BE" -> {
+                require(this.size >= 4) { "ByteArray must have at least 4 bytes for UINT32_BE" }
+                val longValue = ((this[0].toLong() and 0xFF) shl 24) or
+                        ((this[1].toLong() and 0xFF) shl 16) or
+                        ((this[2].toLong() and 0xFF) shl 8) or
+                        (this[3].toLong() and 0xFF)
+                longValue.toFloat()
+            }
+            "UINT32_LE" -> {
+                require(this.size >= 4) { "ByteArray must have at least 4 bytes for UINT32_LE" }
+                val longValue = ((this[3].toLong() and 0xFF) shl 24) or
+                        ((this[2].toLong() and 0xFF) shl 16) or
+                        ((this[1].toLong() and 0xFF) shl 8) or
+                        (this[0].toLong() and 0xFF)
+                longValue.toFloat()
+            }
+            else -> throw IllegalArgumentException("Unknown format: $format. Supported: UINT16_BE, UINT16_LE, UINT24_BE, UINT24_LE, UINT32_BE, UINT32_LE")
         }
     }
 }

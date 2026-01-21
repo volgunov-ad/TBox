@@ -813,13 +813,21 @@ class TboxBroadcastSender(
                 }
             }
         ) {
+            var previousFrames: Map<String, List<CanFrame>> = emptyMap()
             CanDataRepository.canFramesStructured
                 .collect { canFramesStructured ->
                     if (canIDSubscribers.isNotEmpty()) {
                         canIDSubscribers.forEach { subscriberKey ->
                             val subscriber = parseSubscriberKey(subscriberKey)
-                            sendByteArray(canFramesStructured[subscriber[2]]?.lastOrNull()?.rawValue, subscriber, subscriber[2])
+                            val canId = subscriber[2]
+                            val current = canFramesStructured[canId]?.lastOrNull()?.rawValue
+                            val previous = previousFrames[canId]?.lastOrNull()?.rawValue
+
+                            if (current != null && !current.contentEquals(previous)) {
+                                sendByteArray(current, subscriber, canId)
+                            }
                         }
+                        previousFrames = canFramesStructured
                     }
                 }
         }

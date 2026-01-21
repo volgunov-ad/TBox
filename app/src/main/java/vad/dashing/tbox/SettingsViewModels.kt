@@ -368,6 +368,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val canDataSaveCount = settingsManager.canDataSaveCountFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 5
+        )
+
     init {
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
@@ -714,6 +721,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveDashboardChart(config: Boolean) {
         viewModelScope.launch {
             settingsManager.saveDashboardChart(config)
+        }
+    }
+
+    fun saveCanDataSaveCount(config: Int) {
+        viewModelScope.launch {
+            settingsManager.saveCanDataSaveCount(config)
         }
     }
 }

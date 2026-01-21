@@ -125,7 +125,7 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "бар / °C",
+                        text = widget.unit,
                         fontSize = calculateResponsiveFontSize(
                             containerHeight = availableHeight,
                             textType = TextType.UNIT

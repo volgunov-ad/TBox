@@ -61,6 +61,7 @@ class SettingsManager(private val context: Context) {
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
         private val DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_cols")
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
+        private val CAN_DATA_SAVE_COUNT_KEY = intPreferencesKey("${KEY_PREFIX}can_data_save_count")
 
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
@@ -86,6 +87,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FLOATING_DASHBOARD_NAME_1 = "Панель 1"
         private const val DEFAULT_FLOATING_DASHBOARD_NAME_2 = "Панель 2"
         private const val DEFAULT_FLOATING_DASHBOARD_NAME_3 = "Панель 3"
+        private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
@@ -108,46 +110,6 @@ class SettingsManager(private val context: Context) {
     // Flow для конфигурации виджетов
     val dashboardWidgetsFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[DASHBOARD_WIDGETS_KEY] ?: "" }
-        .distinctUntilChanged()
-
-    val floatingDashboardFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_KEY] ?: false }
-        .distinctUntilChanged()
-
-    val floatingDashboardWidgetsFlow: Flow<String> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_WIDGETS_KEY] ?: "" }
-        .distinctUntilChanged()
-
-    val floatingDashboardRowsFlow: Flow<Int> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_ROWS_KEY] ?: 1 }
-        .distinctUntilChanged()
-
-    val floatingDashboardColsFlow: Flow<Int> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_COLS_KEY] ?: 1 }
-        .distinctUntilChanged()
-
-    val floatingDashboardHeightFlow: Flow<Int> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_HEIGHT_KEY] ?: 100 }
-        .distinctUntilChanged()
-
-    val floatingDashboardWidthFlow: Flow<Int> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_WIDTH_KEY] ?: 100 }
-        .distinctUntilChanged()
-
-    val floatingDashboardStartXFlow: Flow<Int> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_START_X_KEY] ?: 50 }
-        .distinctUntilChanged()
-
-    val floatingDashboardStartYFlow: Flow<Int> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_START_Y_KEY] ?: 50 }
-        .distinctUntilChanged()
-
-    val floatingDashboardBackgroundFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_BACKGROUND_KEY] ?: false }
-        .distinctUntilChanged()
-
-    val floatingDashboardClickActionFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[FLOATING_DASHBOARD_CLICK_ACTION_KEY] ?: true }
         .distinctUntilChanged()
 
     val floatingDashboardsFlow: Flow<List<FloatingDashboardConfig>> = context.settingsDataStore.data
@@ -242,6 +204,10 @@ class SettingsManager(private val context: Context) {
 
     val dashboardChartFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[DASHBOARD_CHART_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val canDataSaveCountFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[CAN_DATA_SAVE_COUNT_KEY] ?: DEFAULT_CAN_DATA_SAVE_COUNT }
         .distinctUntilChanged()
 
     // Suspend функции для сохранения настроек
@@ -489,6 +455,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveDashboardChart(config: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[DASHBOARD_CHART_KEY] = config
+        }
+    }
+
+    suspend fun saveCanDataSaveCount(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CAN_DATA_SAVE_COUNT_KEY] = config
         }
     }
 

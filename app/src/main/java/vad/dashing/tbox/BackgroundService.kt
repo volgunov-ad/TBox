@@ -30,6 +30,8 @@ import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.ui.FloatingDashboardUI
 import vad.dashing.tbox.ui.MyLifecycleOwner
 import vad.dashing.tbox.utils.CanFramesProcess
+import vad.dashing.tbox.utils.CanFramesProcess.toFloat
+import vad.dashing.tbox.utils.CanFramesProcess.toUInt
 import vad.dashing.tbox.utils.CsnOperatorResolver
 import vad.dashing.tbox.utils.IPManager
 import vad.dashing.tbox.utils.MotorHoursBuffer
@@ -64,6 +66,7 @@ class BackgroundService : Service() {
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
+    private lateinit var canDataSaveCount: StateFlow<Int>
 
     private val serverPort = 50047
     private var currentIP: String? = null
@@ -213,6 +216,8 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, false)
         floatingDashboards = settingsManager.floatingDashboardsFlow
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
+        canDataSaveCount = settingsManager.canDataSaveCountFlow
+            .stateIn(scope, SharingStarted.Eagerly, 5)
 
         ipManager = IPManager(this)
         ipManager.updateIPs(serverIp.value)
@@ -2158,7 +2163,7 @@ class BackgroundService : Service() {
             return false
         }
         try {
-            CanFramesProcess.process(data)
+            CanFramesProcess.process(data, canDataSaveCount.value)
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "CRT response",
                 "Error get CAN Frame: $e")
@@ -2177,8 +2182,40 @@ class BackgroundService : Service() {
             val rawValue = data.copyOfRange(4, data.size)
             TboxRepository.addLog("DEBUG", "CRT response",
                 "Get Cycle signal: ${toHexString(rawValue)}")
-            if (rawValue.size >= 3) {
-                val voltage = rawValue.copyOfRange(1, 3).toFloat("UINT16_LE") / 1000f
+            if (rawValue.size >= 350) {
+                with(CycleDataRepository) {
+                    updateVoltage(rawValue.copyOfRange(1, 3).toFloat("UINT16_LE") / 1000f)
+                    updateOdometer(rawValue.copyOfRange(9, 13).toFloat("UINT32_LE").toUInt())
+
+                    // Давления
+                    listOf(21, 22, 23, 24).forEachIndexed { index, byteIndex ->
+                        val pressure = rawValue[byteIndex].toUInt().toFloat()
+                        when (index) {
+                            0 -> updatePressure1(pressure)
+                            1 -> updatePressure2(pressure)
+                            2 -> updatePressure3(pressure)
+                            3 -> updatePressure4(pressure)
+                        }
+                    }
+
+                    updateCarSpeed(rawValue.copyOfRange(28, 30).toFloat("UINT16_LE") / 16f)
+                    updateLateralAcceleration(rawValue.copyOfRange(30, 32).toFloat("UINT16_LE") / 1000f - 2f)
+                    updateLongitudinalAcceleration(rawValue.copyOfRange(32, 34).toFloat("UINT16_LE") / 1000f - 2f)
+                    updateEngineRPM(rawValue.copyOfRange(36, 38).toFloat("UINT16_LE") / 4f)
+
+                    // Температуры
+                    listOf(103 to 105, 106 to 108, 109 to 111, 112 to 114).forEachIndexed { index, (start, end) ->
+                        val temperature = rawValue.copyOfRange(start, end).toFloat("UINT16_LE")
+                        when (index) {
+                            0 -> updateTemperature1(temperature)
+                            1 -> updateTemperature2(temperature)
+                            2 -> updateTemperature3(temperature)
+                            3 -> updateTemperature4(temperature)
+                        }
+                    }
+
+                    updateYawRate(rawValue.copyOfRange(135, 137).toFloat("UINT16_LE") / 100f - 180f)
+                }
             }
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "CRT response",
@@ -2448,38 +2485,6 @@ class BackgroundService : Service() {
             true
         } catch (e: TimeoutCancellationException) {
             false
-        }
-    }
-
-    fun ByteArray.toFloat(format: String = "UINT16_BE"): Float {
-        return when (format) {
-            "UINT16_BE" -> {
-                require(this.size >= 2) { "ByteArray must have at least 2 bytes for UINT16_BE" }
-                val intValue = ((this[0].toInt() and 0xFF) shl 8) or
-                        (this[1].toInt() and 0xFF)
-                intValue.toFloat()
-            }
-            "UINT16_LE" -> {
-                require(this.size >= 2) { "ByteArray must have at least 2 bytes for UINT16_LE" }
-                val intValue = ((this[1].toInt() and 0xFF) shl 8) or
-                        (this[0].toInt() and 0xFF)
-                intValue.toFloat()
-            }
-            "UINT24_BE" -> {
-                require(this.size >= 3) { "ByteArray must have at least 3 bytes for UINT24_BE" }
-                val intValue = ((this[0].toInt() and 0xFF) shl 16) or
-                        ((this[1].toInt() and 0xFF) shl 8) or
-                        (this[2].toInt() and 0xFF)
-                intValue.toFloat()
-            }
-            "UINT24_LE" -> {
-                require(this.size >= 3) { "ByteArray must have at least 3 bytes for UINT24_LE" }
-                val intValue = ((this[2].toInt() and 0xFF) shl 16) or
-                        ((this[1].toInt() and 0xFF) shl 8) or
-                        (this[0].toInt() and 0xFF)
-                intValue.toFloat()
-            }
-            else -> throw IllegalArgumentException("Unknown format: $format. Supported: UINT16_BE, UINT16_LE, UINT24_BE, UINT24_LE")
         }
     }
 

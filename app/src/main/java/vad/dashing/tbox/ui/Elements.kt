@@ -277,13 +277,14 @@ fun SettingSwitch(
                 onCheckedChange(enabled)
             },
             modifier = Modifier
-                .align(Alignment.Top)
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
         )
 
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 16.dp) // ← Отступ от Switch
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
         ) {
             // Основной текст
             Text(
@@ -327,7 +328,7 @@ fun <T> SettingDropdownGeneric(
     ) {
         Box(
             modifier = Modifier
-                .align(Alignment.Top)
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
                 .wrapContentWidth()
         ) {
             ExposedDropdownMenuBox(
@@ -370,6 +371,7 @@ fun <T> SettingDropdownGeneric(
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 16.dp)
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
         ) {
             Text(
                 text = text,
@@ -379,6 +381,57 @@ fun <T> SettingDropdownGeneric(
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
 
+            if (description.isNotEmpty()) {
+                Text(
+                    text = description,
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingInt(
+    value: Int,
+    onValueChange: (value: Int) -> Unit,
+    text: String,
+    description: String,
+    minValue: Int,
+    maxValue: Int
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        IntInputField(
+            value = value,
+            onValueChange = { newValue ->
+                if (newValue >= minValue && newValue <= maxValue) {
+                    onValueChange(newValue)
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .width(140.dp)
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 16.dp)
+                .align(Alignment.CenterVertically)
+        ) {
+            Text(
+                text = text,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 0.dp)
+            )
             if (description.isNotEmpty()) {
                 Text(
                     text = description,

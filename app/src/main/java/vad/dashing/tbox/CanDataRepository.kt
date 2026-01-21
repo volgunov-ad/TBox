@@ -146,7 +146,7 @@ object CanDataRepository {
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = _canFramesStructured.asStateFlow()
 
     private const val MAX_CAN_FRAMES = 5
-    private const val MAX_FRAMES_PER_ID = 30
+    private const val MAX_FRAMES_PER_ID = 10
 
     private val timeFormat: ThreadLocal<SimpleDateFormat> = ThreadLocal.withInitial {
         SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -298,13 +298,13 @@ object CanDataRepository {
         _isWindowsBlocked.value = newValue
     }
 
-    fun addCanFrameStructured(canId: String, rawValue: ByteArray) {
+    fun addCanFrameStructured(canId: String, rawValue: ByteArray, maxFrames: Int = MAX_FRAMES_PER_ID) {
         val date = Date()
         val frame = CanFrame(date, rawValue)
 
         _canFramesStructured.update { currentMap ->
             val currentFrames = currentMap[canId] ?: emptyList()
-            val updatedFrames = (currentFrames + frame).takeLast(MAX_FRAMES_PER_ID)
+            val updatedFrames = (currentFrames + frame).takeLast(maxFrames)
 
             currentMap + (canId to updatedFrames)
         }
