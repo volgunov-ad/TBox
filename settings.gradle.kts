@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "TBox"
 include(":app")
+include(":client")
  
