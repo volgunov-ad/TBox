@@ -22,6 +22,7 @@ import androidx.compose.material3.CardDefaults.cardElevation
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -50,6 +51,7 @@ import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
@@ -134,9 +136,12 @@ fun FloatingDashboard(
     )
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
     val panelConfig by settingsViewModel.floatingDashboardConfig(panelId).collectAsStateWithLifecycle()
-    val widgetsConfig = panelConfig.widgetsConfig
+    val widgetConfigs = panelConfig.widgetsConfig
     val dashboardRows = panelConfig.rows
     val dashboardCols = panelConfig.cols
+    val hasConfiguredWidgets = widgetConfigs.any { config ->
+        config.dataKey.isNotBlank() && config.dataKey != "null"
+    }
 
     val isFloatingDashboardClickAction = panelConfig.clickAction
     val isFloatingDashboardBackground = panelConfig.background
@@ -209,21 +214,11 @@ fun FloatingDashboard(
 
     val dataProvider = remember { TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel) }
 
-    LaunchedEffect(widgetsConfig, dashboardRows, dashboardCols) {
+    LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols) {
         val totalWidgets = dashboardRows * dashboardCols
 
         // Всегда загружаем/создаем виджеты при изменении зависимостей
-        val widgets = if (widgetsConfig.isNotEmpty()) {
-            loadWidgetsFromConfig(widgetsConfig, totalWidgets)
-        } else {
-            List(totalWidgets) { index ->
-                DashboardWidget(
-                    id = index,
-                    title = "",
-                    dataKey = ""
-                )
-            }
-        }
+        val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets)
 
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
     }
@@ -363,6 +358,8 @@ fun FloatingDashboard(
                                 for (col in 0 until dashboardCols) {
                                     val index = row * dashboardCols + col
                                     val widget = dashboardState.widgets.getOrNull(index) ?: continue
+                                    val widgetConfig = widgetConfigs.getOrNull(index)
+                                        ?: FloatingDashboardWidgetConfig(dataKey = "")
 
                                     Box(modifier = Modifier.weight(1f)) {
                                         if (isEditMode) {
@@ -551,7 +548,8 @@ fun FloatingDashboard(
                                                     dashboardChart = false,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    title = false,
+                                                    title = widgetConfig.showTitle,
+                                                    units = widgetConfig.showUnit,
                                                     backgroundTransparent = true,
                                                     textColor = if (restartEnabled) {
                                                         if (tboxConnected) {
@@ -589,7 +587,8 @@ fun FloatingDashboard(
                                                     dashboardChart = false,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    title = false,
+                                                    title = widgetConfig.showTitle,
+                                                    units = widgetConfig.showUnit,
                                                     backgroundTransparent = true
                                                 )
                                             }
@@ -601,7 +600,7 @@ fun FloatingDashboard(
                     }
                 }
 
-                if (widgetsConfig.isEmpty()) {
+                if (!hasConfiguredWidgets) {
                     Box(
                         modifier = Modifier
                             .matchParentSize()
@@ -680,6 +679,7 @@ fun FloatingDashboard(
                 panelId = panelId,
                 widgetIndex = index,
                 currentWidgets = dashboardState.widgets,
+                currentWidgetConfigs = widgetConfigs,
                 settingsViewModel = settingsViewModel,
                 dashboardManager = dashboardViewModel.dashboardManager,
                 onDismiss = { showDialogForIndex = null }
@@ -693,6 +693,7 @@ fun OverlayWidgetSelectionDialog(
     panelId: String,
     widgetIndex: Int,
     currentWidgets: List<DashboardWidget>,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     settingsViewModel: SettingsViewModel,
     dashboardManager: DashboardManager,
     onDismiss: () -> Unit
@@ -700,6 +701,15 @@ fun OverlayWidgetSelectionDialog(
     var selectedDataKey by remember {
         mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
     }
+    val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
+        ?: FloatingDashboardWidgetConfig(dataKey = "")
+    var showTitle by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(initialConfig.showTitle)
+    }
+    var showUnit by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(initialConfig.showUnit)
+    }
+    val togglesEnabled = selectedDataKey.isNotEmpty()
 
     // Получаем список опций
     val availableOptions = listOf("" to "Не выбрано") +
@@ -773,6 +783,48 @@ fun OverlayWidgetSelectionDialog(
                 }
             }
 
+            Text(
+                text = "Дополнительные настройки",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Отображать название",
+                    fontSize = 22.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = showTitle,
+                    onCheckedChange = { showTitle = it },
+                    enabled = togglesEnabled
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Отображать единицу измерения",
+                    fontSize = 22.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = showUnit,
+                    onCheckedChange = { showUnit = it },
+                    enabled = togglesEnabled
+                )
+            }
+
             // Кнопки действий
             Row(
                 modifier = Modifier
@@ -808,8 +860,30 @@ fun OverlayWidgetSelectionDialog(
                         updatedWidgets[widgetIndex] = newWidget
 
                         dashboardManager.updateWidgets(updatedWidgets)
-                        val config = updatedWidgets.joinToString("|") { it.dataKey }
-                        settingsViewModel.saveFloatingDashboardWidgets(panelId, config)
+                        val normalizedConfigs = currentWidgetConfigs.toMutableList()
+                        if (normalizedConfigs.size < updatedWidgets.size) {
+                            normalizedConfigs.addAll(
+                                List(updatedWidgets.size - normalizedConfigs.size) {
+                                    FloatingDashboardWidgetConfig(dataKey = "")
+                                }
+                            )
+                        } else if (normalizedConfigs.size > updatedWidgets.size) {
+                            normalizedConfigs.subList(
+                                updatedWidgets.size,
+                                normalizedConfigs.size
+                            ).clear()
+                        }
+                        val newConfig = if (selectedDataKey.isNotEmpty()) {
+                            FloatingDashboardWidgetConfig(
+                                dataKey = selectedDataKey,
+                                showTitle = showTitle,
+                                showUnit = showUnit
+                            )
+                        } else {
+                            FloatingDashboardWidgetConfig(dataKey = "")
+                        }
+                        normalizedConfigs[widgetIndex] = newConfig
+                        settingsViewModel.saveFloatingDashboardWidgets(panelId, normalizedConfigs)
                         dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
 
                         onDismiss()
