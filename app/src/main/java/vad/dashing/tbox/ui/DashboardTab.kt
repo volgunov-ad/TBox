@@ -36,6 +36,7 @@ import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MainDashboardViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
@@ -354,6 +355,30 @@ fun loadWidgetsFromConfig(config: String, widgetCount: Int): List<DashboardWidge
 
     return (0 until widgetCount).map { index ->
         val dataKey = dataKeys.getOrNull(index) ?: ""
+        if (dataKey.isNotEmpty() && dataKey != "null") {
+            DashboardWidget(
+                id = index,
+                title = WidgetsRepository.getTitleForDataKey(dataKey),
+                unit = WidgetsRepository.getUnitForDataKey(dataKey),
+                dataKey = dataKey
+            )
+        } else {
+            DashboardWidget(
+                id = index,
+                title = "",
+                dataKey = ""
+            )
+        }
+    }
+}
+
+// Функция для загрузки виджетов из конфигурации плавающей панели
+fun loadWidgetsFromConfig(
+    configs: List<FloatingDashboardWidgetConfig>,
+    widgetCount: Int
+): List<DashboardWidget> {
+    return (0 until widgetCount).map { index ->
+        val dataKey = configs.getOrNull(index)?.dataKey ?: ""
         if (dataKey.isNotEmpty() && dataKey != "null") {
             DashboardWidget(
                 id = index,

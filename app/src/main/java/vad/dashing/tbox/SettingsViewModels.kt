@@ -28,7 +28,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_FLOATING_DASHBOARD_ENABLED = false
         private const val DEFAULT_FLOATING_DASHBOARD_BACKGROUND = false
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
-        private const val DEFAULT_FLOATING_DASHBOARD_WIDGETS = ""
+        private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
 
     private val defaultFloatingDashboards = listOf(
@@ -588,11 +588,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateFloatingDashboard(panelId) { it.copy(enabled = enabled) }
     }
 
-    fun saveFloatingDashboardWidgets(config: String) {
+    fun saveFloatingDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         updateSelectedFloatingDashboard { it.copy(widgetsConfig = config) }
     }
 
-    fun saveFloatingDashboardWidgets(panelId: String, config: String) {
+    fun saveFloatingDashboardWidgets(
+        panelId: String,
+        config: List<FloatingDashboardWidgetConfig>
+    ) {
         updateFloatingDashboard(panelId) { it.copy(widgetsConfig = config) }
     }
 
