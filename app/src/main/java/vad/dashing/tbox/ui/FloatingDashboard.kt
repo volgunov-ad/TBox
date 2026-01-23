@@ -48,6 +48,7 @@ import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
@@ -66,9 +67,7 @@ import vad.dashing.tbox.ui.theme.TboxAppTheme
 fun FloatingDashboardUI(
     settingsManager: SettingsManager,
     appDataManager: AppDataManager,
-    onUpdateWindowSize: (String, Int, Int) -> Unit,
-    onUpdateWindowPosition: (String, Int, Int) -> Unit,
-    onRebootTbox: () -> Unit,
+    service: BackgroundService,
     panelId: String,
     params: WindowManager.LayoutParams
 ) {
@@ -107,9 +106,7 @@ fun FloatingDashboardUI(
                 settingsViewModel = settingsViewModel,
                 appDataViewModel = appDataViewModel,
                 panelId = panelId,
-                onUpdateWindowSize = onUpdateWindowSize,
-                onUpdateWindowPosition = onUpdateWindowPosition,
-                onRebootTbox = onRebootTbox,
+                service = service,
                 windowParams = params
             )
         }
@@ -123,9 +120,7 @@ fun FloatingDashboard(
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
     panelId: String,
-    onUpdateWindowSize: (String, Int, Int) -> Unit,
-    onUpdateWindowPosition: (String, Int, Int) -> Unit,
-    onRebootTbox: () -> Unit,
+    service: BackgroundService,
     windowParams: WindowManager.LayoutParams
 ) {
     val context = LocalContext.current
@@ -193,22 +188,22 @@ fun FloatingDashboard(
             originalY.intValue = currentWindowParams.y
 
             // Увеличиваем окно для диалога
-            val dialogWidth = (containerSize.width * 0.5f).toInt()
+            val dialogWidth = (containerSize.width * 0.7f).toInt()
             val dialogHeight = (containerSize.height * 0.7f).toInt()
 
             val newWidth = dialogWidth.coerceAtMost(containerSize.width)
             val newHeight = dialogHeight.coerceAtMost(containerSize.height - 100)
 
-            onUpdateWindowSize(panelId, newWidth, newHeight)
+            service.updateWindowSize(panelId, newWidth, newHeight)
 
             // Центрируем окно
             val centerX = (containerSize.width - newWidth) / 2
             val centerY = (containerSize.height - newHeight) / 2
-            onUpdateWindowPosition(panelId, centerX, centerY)
+            service.updateWindowPosition(panelId, centerX, centerY)
         } else {
             // Восстанавливаем оригинальные размеры и положение
-            onUpdateWindowSize(panelId, originalWidth.intValue, originalHeight.intValue)
-            onUpdateWindowPosition(panelId, originalX.intValue, originalY.intValue)
+            service.updateWindowSize(panelId, originalWidth.intValue, originalHeight.intValue)
+            service.updateWindowPosition(panelId, originalX.intValue, originalY.intValue)
         }
     }
 
@@ -251,34 +246,20 @@ fun FloatingDashboard(
                             onDragStart = { startOffset ->
                                 if (isEditMode && showDialogForIndex == null) { // Не позволяем перетаскивать при открытом диалоге
                                     // Определяем, в какой области началось перетаскивание
-                                    val resizeOffsetX = if (size.width <= 60f) {
-                                        30f
-                                    } else if (size.width <= 100f) {
-                                        50f
-                                    } else {
-                                        60f
-                                    }
-                                    val resizeOffsetY = if (size.height <= 60f) {
-                                        30f
-                                    } else if (size.height <= 100f) {
-                                        50f
-                                    } else {
-                                        60f
-                                    }
-                                    val isNearBottomRight = startOffset.x > size.width - resizeOffsetX &&
-                                            startOffset.y > size.height - resizeOffsetY
-                                    val isNearEdge = startOffset.x < size.width * 0.3f ||
-                                            startOffset.x > size.width * 0.7f ||
-                                            startOffset.y < size.height * 0.3f ||
+                                    val isNearBottomRight = startOffset.x > size.width * 0.7f &&
                                             startOffset.y > size.height * 0.7f
+                                    val isNearEdge = startOffset.x < size.width * 0.2f ||
+                                            startOffset.x > size.width * 0.8f ||
+                                            startOffset.y < size.height * 0.2f ||
+                                            startOffset.y > size.height * 0.8f
 
                                     if (isNearBottomRight) {
                                         // Изменение размера (за правый нижний угол)
                                         isResizingMode = true
                                         isDraggingMode = false
                                         resizeStartPosition = startOffset
-                                    } else {
-                                        // Перетаскивание окна
+                                    } else if (isNearEdge) {
+                                        // Перетаскивание окна (за края)
                                         isDraggingMode = true
                                         isResizingMode = false
                                         dragStartPosition = startOffset
@@ -292,7 +273,7 @@ fun FloatingDashboard(
                                     // Обновляем положение окна
                                     val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
                                     val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
-                                    onUpdateWindowPosition(panelId, newX, newY)
+                                    service.updateWindowPosition(panelId, newX, newY)
 
                                 } else if (isEditMode && showDialogForIndex == null && isResizingMode && resizeStartPosition != null) {
                                     // Обновляем размер окна
@@ -300,7 +281,7 @@ fun FloatingDashboard(
                                         .coerceAtLeast(50)
                                     val newHeight = (windowParams.height + dragAmount.y).toInt()
                                         .coerceAtLeast(50)
-                                    onUpdateWindowSize(panelId, newWidth, newHeight)
+                                    service.updateWindowSize(panelId, newWidth, newHeight)
                                 }
                             },
                             onDragEnd = {
@@ -477,8 +458,7 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
+                                                    backgroundTransparent = true
                                                 )
                                             }
                                             "wheelsPressureTemperatureWidget" -> {
@@ -499,8 +479,7 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
+                                                    backgroundTransparent = true
                                                 )
                                             }
                                             "tempInOutWidget" -> {
@@ -543,7 +522,7 @@ fun FloatingDashboard(
                                                     onDoubleClick = {
                                                         if (restartEnabled) {
                                                             restartEnabled = false
-                                                            onRebootTbox()
+                                                            service.crtRebootTbox()
                                                         }
                                                     },
                                                     dashboardManager = dashboardViewModel.dashboardManager,
@@ -658,7 +637,7 @@ fun FloatingDashboard(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(4.dp)
+                            .padding(8.dp)
                     ) {
                         Canvas(
                             modifier = Modifier.size(16.dp)
@@ -715,7 +694,7 @@ fun OverlayWidgetSelectionDialog(
 
     // Получаем список опций
     val availableOptions = listOf("" to "Не выбрано") +
-            WidgetsRepository.getAvailableDataKeysWidgets()
+            WidgetsRepository.getAvailableDataKeys()
                 .filter { it.isNotEmpty() }
                 .map { key ->
                     key to WidgetsRepository.getTitleUnitForDataKey(key)
@@ -758,26 +737,28 @@ fun OverlayWidgetSelectionDialog(
                         .padding(12.dp)
                 ) {
                     availableOptions.forEachIndexed { index, (key, displayName) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedDataKey = key }
-                                .padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            androidx.compose.material3.RadioButton(
-                                selected = selectedDataKey == key,
-                                onClick = { selectedDataKey = key }
-                            )
-                            Text(
-                                text = displayName,
-                                fontSize = 22.sp,
+                        Column {
+                            Row(
                                 modifier = Modifier
-                                    .padding(start = 8.dp)
-                                    .weight(1f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                                    .fillMaxWidth()
+                                    .clickable { selectedDataKey = key }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = selectedDataKey == key,
+                                    onClick = { selectedDataKey = key }
+                                )
+                                Text(
+                                    text = displayName,
+                                    fontSize = 22.sp,
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .weight(1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -785,63 +766,44 @@ fun OverlayWidgetSelectionDialog(
 
             Text(
                 text = "Дополнительные настройки",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(top = 12.dp, bottom = 5.dp),
-                fontSize = 24.sp
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
             )
-            // Список опций с прокруткой
-            Box(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
-                        androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                    )
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                        .padding(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Switch(
-                            checked = showTitle,
-                            onCheckedChange = { showTitle = it },
-                            enabled = togglesEnabled
-                        )
-                        Text(
-                            text = "Отображать название",
-                            fontSize = 22.sp,
-                            modifier = Modifier.weight(1f).padding(start=8.dp)
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Switch(
-                            checked = showUnit,
-                            onCheckedChange = { showUnit = it },
-                            enabled = togglesEnabled
-                        )
-                        Text(
-                            text = "Отображать единицу измерения",
-                            fontSize = 22.sp,
-                            modifier = Modifier.weight(1f).padding(start=8.dp)
-                        )
-                    }
-                }
+                Text(
+                    text = "Отображать название",
+                    fontSize = 22.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = showTitle,
+                    onCheckedChange = { showTitle = it },
+                    enabled = togglesEnabled
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Отображать единицу измерения",
+                    fontSize = 22.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = showUnit,
+                    onCheckedChange = { showUnit = it },
+                    enabled = togglesEnabled
+                )
             }
 
             // Кнопки действий
