@@ -458,7 +458,8 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "wheelsPressureTemperatureWidget" -> {
@@ -479,7 +480,8 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "tempInOutWidget" -> {
@@ -694,7 +696,7 @@ fun OverlayWidgetSelectionDialog(
 
     // Получаем список опций
     val availableOptions = listOf("" to "Не выбрано") +
-            WidgetsRepository.getAvailableDataKeys()
+            WidgetsRepository.getAvailableDataKeysWidgets()
                 .filter { it.isNotEmpty() }
                 .map { key ->
                     key to WidgetsRepository.getTitleUnitForDataKey(key)
@@ -737,28 +739,26 @@ fun OverlayWidgetSelectionDialog(
                         .padding(12.dp)
                 ) {
                     availableOptions.forEachIndexed { index, (key, displayName) ->
-                        Column {
-                            Row(
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedDataKey = key }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            androidx.compose.material3.RadioButton(
+                                selected = selectedDataKey == key,
+                                onClick = { selectedDataKey = key }
+                            )
+                            Text(
+                                text = displayName,
+                                fontSize = 22.sp,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedDataKey = key }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                androidx.compose.material3.RadioButton(
-                                    selected = selectedDataKey == key,
-                                    onClick = { selectedDataKey = key }
-                                )
-                                Text(
-                                    text = displayName,
-                                    fontSize = 22.sp,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .weight(1f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                                    .padding(start = 8.dp)
+                                    .weight(1f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -766,44 +766,63 @@ fun OverlayWidgetSelectionDialog(
 
             Text(
                 text = "Дополнительные настройки",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(top = 12.dp, bottom = 5.dp),
+                fontSize = 24.sp
             )
-            Row(
+            // Список опций с прокруткой
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .weight(1f)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
+                        androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                    )
             ) {
-                Text(
-                    text = "Отображать название",
-                    fontSize = 22.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                Switch(
-                    checked = showTitle,
-                    onCheckedChange = { showTitle = it },
-                    enabled = togglesEnabled
-                )
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Отображать единицу измерения",
-                    fontSize = 22.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                Switch(
-                    checked = showUnit,
-                    onCheckedChange = { showUnit = it },
-                    enabled = togglesEnabled
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Switch(
+                            checked = showTitle,
+                            onCheckedChange = { showTitle = it },
+                            enabled = togglesEnabled
+                        )
+                        Text(
+                            text = "Отображать название",
+                            fontSize = 22.sp,
+                            modifier = Modifier.weight(1f).padding(start=8.dp)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Switch(
+                            checked = showUnit,
+                            onCheckedChange = { showUnit = it },
+                            enabled = togglesEnabled
+                        )
+                        Text(
+                            text = "Отображать единицу измерения",
+                            fontSize = 22.sp,
+                            modifier = Modifier.weight(1f).padding(start=8.dp)
+                        )
+                    }
+                }
             }
 
             // Кнопки действий
