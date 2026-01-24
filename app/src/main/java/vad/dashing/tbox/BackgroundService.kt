@@ -417,7 +417,9 @@ class BackgroundService : Service() {
                     FloatingDashboardUI(
                         settingsManager = settingsManager,
                         appDataManager = appDataManager,
-                        service = this@BackgroundService,
+                        onUpdateWindowSize = { panelId, width, height -> updateWindowSize(panelId, width, height) },
+                        onUpdateWindowPosition = { panelId, x, y -> updateWindowPosition(panelId, x, y) },
+                        onRebootTbox = { crtRebootTbox() },
                         panelId = config.id,
                         params = layoutParams
                     )
