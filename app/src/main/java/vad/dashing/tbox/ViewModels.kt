@@ -274,16 +274,10 @@ object WidgetsRepository {
     private data class DataTitle(val title: String, val unit: String)
 
     private val dataKeyTitles = mapOf(
-        "voltage" to DataTitle("Напряжение", "В"),
-        "steerAngle" to DataTitle("Угол поворота руля", "°"),
-        "steerSpeed" to DataTitle("Скорость вращения руля", ""),
-        "engineRPM" to DataTitle("Обороты двигателя", "об/мин"),
         "param1" to DataTitle("Параметр 1", ""),
         "param2" to DataTitle("Параметр 2", ""),
         "param3" to DataTitle("Параметр 3", ""),
         "param4" to DataTitle("Параметр 4", ""),
-        "carSpeed" to DataTitle("Скорость автомобиля", "км/ч"),
-        "carSpeedAccurate" to DataTitle("Точная скорость автомобиля", "км/ч"),
         "wheel1Speed" to DataTitle("Скорость колеса 1", "км/ч"),
         "wheel2Speed" to DataTitle("Скорость колеса 2", "км/ч"),
         "wheel3Speed" to DataTitle("Скорость колеса 3", "км/ч"),
@@ -296,6 +290,26 @@ object WidgetsRepository {
         "wheel2Temperature" to DataTitle("Температура колеса ПП", "°C"),
         "wheel3Temperature" to DataTitle("Температура колеса ЗЛ", "°C"),
         "wheel4Temperature" to DataTitle("Температура колеса ЗП", "°C"),
+        "frontLeftSeatMode" to DataTitle("Режим левого переднего сиденья", ""),
+        "frontRightSeatMode" to DataTitle("Режим правого переднего сиденья", ""),
+        "locateStatus" to DataTitle("Фиксация местоположения", ""),
+        "isLocValuesTrue" to DataTitle("Правдивость местоположения", ""),
+        "locationUpdateTime" to DataTitle("Время изменения GNSS", ""),
+        "locationRefreshTime" to DataTitle("Время получения GNSS", ""),
+        "signalLevel" to DataTitle("Уровень сигнала сети", ""),
+        "netStatus" to DataTitle("Тип сети", ""),
+        "regStatus" to DataTitle("Регистрация в сети", ""),
+        "simStatus" to DataTitle("Состояние SIM", ""),
+        "isWindowsBlocked" to DataTitle("Блокировка окон", ""),
+    )
+
+    private val dataKeyTitlesWidgets = mapOf(
+        "voltage" to DataTitle("Напряжение", "В"),
+        "steerAngle" to DataTitle("Угол поворота руля", "°"),
+        "steerSpeed" to DataTitle("Скорость вращения руля", ""),
+        "engineRPM" to DataTitle("Обороты двигателя", "об/мин"),
+        "carSpeed" to DataTitle("Скорость автомобиля", "км/ч"),
+        "carSpeedAccurate" to DataTitle("Точная скорость автомобиля", "км/ч"),
         "cruiseSetSpeed" to DataTitle("Скорость круиз-контроля", "км/ч"),
         "odometer" to DataTitle("Одометр", "км"),
         "distanceToNextMaintenance" to DataTitle("Пробег до следующего ТО", "км"),
@@ -311,25 +325,14 @@ object WidgetsRepository {
         "gearBoxMode" to DataTitle("Режим КПП", ""),
         "gearBoxDriveMode" to DataTitle("Режим движения КПП", ""),
         "gearBoxWork" to DataTitle("Работа КПП", ""),
-        "frontLeftSeatMode" to DataTitle("Режим левого переднего сиденья", ""),
-        "frontRightSeatMode" to DataTitle("Режим правого переднего сиденья", ""),
-        "locateStatus" to DataTitle("Фиксация местоположения", ""),
-        "isLocValuesTrue" to DataTitle("Правдивость местоположения", ""),
         "gnssSpeed" to DataTitle("Скорость GNSS", "км/ч"),
         "visibleSatellites" to DataTitle("Видимые спутники", ""),
         "longitude" to DataTitle("Долгота", "°"),
         "latitude" to DataTitle("Широта", "°"),
         "altitude" to DataTitle("Высота", "м"),
         "trueDirection" to DataTitle("Направление", ""),
-        "locationUpdateTime" to DataTitle("Время изменения GNSS", ""),
-        "locationRefreshTime" to DataTitle("Время получения GNSS", ""),
-        "signalLevel" to DataTitle("Уровень сигнала сети", ""),
-        "netStatus" to DataTitle("Тип сети", ""),
-        "regStatus" to DataTitle("Регистрация в сети", ""),
-        "simStatus" to DataTitle("Состояние SIM", ""),
         "outsideTemperature" to DataTitle("Температура на улице", "°C"),
         "insideTemperature" to DataTitle("Температура в машине", "°C"),
-        "isWindowsBlocked" to DataTitle("Блокировка окон", ""),
         "motorHours" to DataTitle("Моточасы двигателя", "ч"),
         "netWidget" to DataTitle("Виджет сигнала сети", ""),
         "locWidget" to DataTitle("Виджет навигации", ""),
@@ -342,11 +345,11 @@ object WidgetsRepository {
     )
 
     fun getTitleForDataKey(dataKey: String): String {
-        return dataKeyTitles[dataKey]?.title ?: ""
+        return (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]?.title ?: ""
     }
 
     fun getUnitForDataKey(dataKey: String): String {
-        return dataKeyTitles[dataKey]?.unit ?: ""
+        return (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]?.unit ?: ""
     }
 
     fun getTitleUnitForDataKey(dataKey: String): String {
@@ -359,7 +362,11 @@ object WidgetsRepository {
     }
 
     fun getAvailableDataKeys(): List<String> {
-        return dataKeyTitles.keys.toList()
+        return (dataKeyTitles + dataKeyTitlesWidgets).keys.toList()
+    }
+
+    fun getAvailableDataKeysWidgets(): List<String> {
+        return dataKeyTitlesWidgets.keys.toList()
     }
 }
 
