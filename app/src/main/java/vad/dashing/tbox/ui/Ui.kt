@@ -334,7 +334,11 @@ fun TboxScreen(
                         ModemTab(viewModel, onModemMode)
                     }
                     2 -> LocationTab(viewModel, settingsViewModel, onTboxApplicationCommand)
-                    3 -> CarDataTab(canViewModel, cycleViewModel, appDataViewModel)
+                    3 -> CarDataTab(
+                        canViewModel,
+                        cycleViewModel,
+                        appDataViewModel,
+                        settingsViewModel)
                     4 -> SettingsTab(
                         viewModel,
                         settingsViewModel,
@@ -1181,7 +1185,10 @@ fun CarDataTab(
     canViewModel: CanDataViewModel,
     cycleViewModel: CycleDataViewModel,
     appDataViewModel: AppDataViewModel,
+    settingsViewModel: SettingsViewModel,
 ) {
+    val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
+
     val odometer by canViewModel.odometer.collectAsStateWithLifecycle()
     val distanceToNextMaintenance by canViewModel.distanceToNextMaintenance.collectAsStateWithLifecycle()
     val distanceToFuelEmpty by canViewModel.distanceToFuelEmpty.collectAsStateWithLifecycle()
@@ -1224,6 +1231,10 @@ fun CarDataTab(
     val pressure2C by cycleViewModel.pressure2.collectAsStateWithLifecycle()
     val pressure3C by cycleViewModel.pressure3.collectAsStateWithLifecycle()
     val pressure4C by cycleViewModel.pressure4.collectAsStateWithLifecycle()
+    val temperature1C by cycleViewModel.temperature1.collectAsStateWithLifecycle()
+    val temperature2C by cycleViewModel.temperature2.collectAsStateWithLifecycle()
+    val temperature3C by cycleViewModel.temperature3.collectAsStateWithLifecycle()
+    val temperature4C by cycleViewModel.temperature4.collectAsStateWithLifecycle()
     val engineRPMC by cycleViewModel.engineRPM.collectAsStateWithLifecycle()
 
     val motorHours by appDataViewModel.motorHours.collectAsStateWithLifecycle()
@@ -1279,20 +1290,32 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("isWindowsBlocked"), valueToString(isWindowsBlocked,
                 booleanTrue = "заблокированы", booleanFalse = "разблокированы")) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHours"), valueToString(motorHours, 1)) }
-            item { StatusRow("Cycle напряжение, В", valueToString(voltageC, 1)) }
-            item { StatusRow("Cycle скорость, км/ч", valueToString(carSpeedC, 1)) }
-            item { StatusRow("Cycle обороты двигателя, об/мин", valueToString(engineRPMC, 1)) }
-            //item { StatusRow("Cycle угловая скорость рысканья, °/с", valueToString(yawRateC, 2)) }
-            item { StatusRow("Cycle поперечное ускорение, м/с2", valueToString(lateralAccelerationC, 2)) }
-            item { StatusRow("Cycle продольное ускорение, м/с2", valueToString(longitudinalAccelerationC, 2)) }
-            item { StatusRow("Cycle давление ПЛ, бар", valueToString(pressure1C, 1)) }
-            item { StatusRow("Cycle давление ПП, бар", valueToString(pressure2C, 1)) }
-            item { StatusRow("Cycle давление ЗЛ, бар", valueToString(pressure3C, 1)) }
-            item { StatusRow("Cycle давление ЗП, бар", valueToString(pressure4C, 1)) }
-            //item { StatusRow("Cycle температура ПЛ, °C", valueToString(temperature1C, 1)) }
-            //item { StatusRow("Cycle температура ПП, °C", valueToString(temperature2C, 1)) }
-            //item { StatusRow("Cycle температура ЗП, °C", valueToString(temperature3C, 1)) }
-            //item { StatusRow("Cycle температура ЗЛ, °C", valueToString(temperature4C, 1)) }
+            if (isGetCycleSignalEnabled) {
+                item { StatusRow("Cycle напряжение, В", valueToString(voltageC, 1)) }
+                item { StatusRow("Cycle скорость, км/ч", valueToString(carSpeedC, 1)) }
+                item { StatusRow("Cycle обороты двигателя, об/мин", valueToString(engineRPMC, 1)) }
+                //item { StatusRow("Cycle угловая скорость рысканья, °/с", valueToString(yawRateC, 2)) }
+                item {
+                    StatusRow(
+                        "Cycle поперечное ускорение, м/с2",
+                        valueToString(lateralAccelerationC, 2)
+                    )
+                }
+                item {
+                    StatusRow(
+                        "Cycle продольное ускорение, м/с2",
+                        valueToString(longitudinalAccelerationC, 2)
+                    )
+                }
+                item { StatusRow("Cycle давление ПЛ, бар", valueToString(pressure1C, 1)) }
+                item { StatusRow("Cycle давление ПП, бар", valueToString(pressure2C, 1)) }
+                item { StatusRow("Cycle давление ЗЛ, бар", valueToString(pressure3C, 1)) }
+                item { StatusRow("Cycle давление ЗП, бар", valueToString(pressure4C, 1)) }
+                item { StatusRow("Cycle температура ПЛ, °C", valueToString(temperature1C, 1)) }
+                item { StatusRow("Cycle температура ПП, °C", valueToString(temperature2C, 1)) }
+                item { StatusRow("Cycle температура ЗП, °C", valueToString(temperature3C, 1)) }
+                item { StatusRow("Cycle температура ЗЛ, °C", valueToString(temperature4C, 1)) }
+            }
         }
     }
 }
