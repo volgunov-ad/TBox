@@ -2182,39 +2182,83 @@ class BackgroundService : Service() {
             val rawValue = data.copyOfRange(4, data.size)
             TboxRepository.addLog("DEBUG", "CRT response",
                 "Get Cycle signal: ${toHexString(rawValue)}")
-            if (rawValue.size >= 350) {
+            if (rawValue.size >= 346) {
+                val offset = if (rawValue.size == 346) {
+                    -4
+                } else {
+                    0
+                }
                 with(CycleDataRepository) {
                     updateVoltage(rawValue.copyOfRange(1, 3).toFloat("UINT16_LE") / 1000f)
-                    updateOdometer(rawValue.copyOfRange(9, 13).toFloat("UINT32_LE").toUInt())
+                    updateOdometer(rawValue.copyOfRange(9 + offset, 13 + offset).toFloat("UINT32_LE").toUInt())
 
                     // Давления
                     listOf(21, 22, 23, 24).forEachIndexed { index, byteIndex ->
-                        val pressure = rawValue[byteIndex].toUInt().toFloat()
+                        val wheelPressure = if (rawValue[byteIndex + offset] != 0xFF.toByte()) {
+                            rawValue[byteIndex + offset].toUInt().toFloat() / 36f
+                        } else {
+                            null
+                        }
                         when (index) {
-                            0 -> updatePressure1(pressure)
-                            1 -> updatePressure2(pressure)
-                            2 -> updatePressure3(pressure)
-                            3 -> updatePressure4(pressure)
+                            0 -> updatePressure1(wheelPressure)
+                            1 -> updatePressure2(wheelPressure)
+                            2 -> updatePressure3(wheelPressure)
+                            3 -> updatePressure4(wheelPressure)
                         }
                     }
 
-                    updateCarSpeed(rawValue.copyOfRange(28, 30).toFloat("UINT16_LE") / 16f)
-                    updateLateralAcceleration(rawValue.copyOfRange(30, 32).toFloat("UINT16_LE") / 1000f - 2f)
-                    updateLongitudinalAcceleration(rawValue.copyOfRange(32, 34).toFloat("UINT16_LE") / 1000f - 2f)
-                    updateEngineRPM(rawValue.copyOfRange(36, 38).toFloat("UINT16_LE") / 4f)
+                    updateCarSpeed(rawValue.copyOfRange(28 + offset, 30 + offset).toFloat("UINT16_LE") / 16f)
+                    updateLateralAcceleration(rawValue.copyOfRange(30 + offset, 32 + offset).toFloat("UINT16_LE") / 1000f - 2f)
+                    updateLongitudinalAcceleration(rawValue.copyOfRange(32 + offset, 34 + offset).toFloat("UINT16_LE") / 1000f - 2f)
+                    updateEngineRPM(rawValue.copyOfRange(36 + offset, 38 + offset).toFloat("UINT16_LE") / 4f)
 
-                    // Температуры
+                    // Скорости колес
                     listOf(103 to 105, 106 to 108, 109 to 111, 112 to 114).forEachIndexed { index, (start, end) ->
-                        val temperature = rawValue.copyOfRange(start, end).toFloat("UINT16_LE")
+                        val wheelSpeed = rawValue.copyOfRange(start + offset, end + offset).toFloat("UINT16_LE")
                         when (index) {
-                            0 -> updateTemperature1(temperature)
-                            1 -> updateTemperature2(temperature)
-                            2 -> updateTemperature3(temperature)
-                            3 -> updateTemperature4(temperature)
+                            0 -> updateSpeed1(wheelSpeed)
+                            1 -> updateSpeed2(wheelSpeed)
+                            2 -> updateSpeed3(wheelSpeed)
+                            3 -> updateSpeed4(wheelSpeed)
                         }
                     }
 
-                    updateYawRate(rawValue.copyOfRange(135, 137).toFloat("UINT16_LE") / 100f - 180f)
+                    // Температуры колес
+                    listOf(240, 242, 249, 252).forEachIndexed { index, byteIndex ->
+                        val wheelTemperature = rawValue[byteIndex + offset].toUInt().toFloat()
+                        when (index) {
+                            0 -> {
+                                if (rawValue[239 + offset].toInt() == 1) {
+                                    updateTemperature1(wheelTemperature)
+                                } else {
+                                    updateTemperature1(null)
+                                }
+                            }
+                            1 -> {
+                                if (rawValue[243 + offset].toInt() == 1) {
+                                    updateTemperature2(wheelTemperature)
+                                } else {
+                                    updateTemperature2(null)
+                                }
+                            }
+                            2 -> {
+                                if (rawValue[250 + offset].toInt() == 1) {
+                                    updateTemperature3(wheelTemperature)
+                                } else {
+                                    updateTemperature3(null)
+                                }
+                            }
+                            3 -> {
+                                if (rawValue[253 + offset].toInt() == 1) {
+                                    updateTemperature4(wheelTemperature)
+                                } else {
+                                    updateTemperature4(null)
+                                }
+                            }
+                        }
+                    }
+
+                    updateYawRate(rawValue.copyOfRange(135 + offset, 137 + offset).toFloat("UINT16_LE") / 100f - 180f)
                 }
             }
         } catch (e: Exception) {

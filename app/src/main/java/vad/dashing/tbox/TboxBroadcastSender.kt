@@ -606,6 +606,7 @@ class TboxBroadcastSender(
         ) {
             launch {
                 CanDataRepository.engineTemperature
+                    .sample(1000)
                     .collect { engineTemperature ->
                         if (engineStateSubscribers.isNotEmpty()) {
                             engineStateSubscribers.forEach { subscriberKey ->
@@ -618,6 +619,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.engineRPM
+                    .sample(1000)
                     .collect { engineRPM ->
                         if (engineStateSubscribers.isNotEmpty()) {
                             engineStateSubscribers.forEach { subscriberKey ->
@@ -649,6 +651,7 @@ class TboxBroadcastSender(
         ) {
             launch {
                 CanDataRepository.gearBoxCurrentGear
+                    .sample(1000)
                     .collect { gearBoxCurrentGear ->
                         if (gearBoxStateSubscribers.isNotEmpty()) {
                             gearBoxStateSubscribers.forEach { subscriberKey ->
@@ -661,6 +664,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.gearBoxOilTemperature
+                    .sample(1000)
                     .collect { gearBoxOilTemperature ->
                         if (gearBoxStateSubscribers.isNotEmpty()) {
                             gearBoxStateSubscribers.forEach { subscriberKey ->
@@ -692,6 +696,7 @@ class TboxBroadcastSender(
         ) {
             launch {
                 CanDataRepository.fuelLevelPercentage
+                    .sample(1000)
                     .collect { fuelLevelPercentage ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -704,6 +709,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.fuelLevelPercentageFiltered
+                    .sample(1000)
                     .collect { fuelLevelPercentageFiltered ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -716,6 +722,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.cruiseSetSpeed
+                    .sample(1000)
                     .collect { cruiseSetSpeed ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -741,6 +748,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.insideTemperature
+                    .sample(1000)
                     .collect { insideTemperature ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -772,6 +780,7 @@ class TboxBroadcastSender(
         ) {
             launch {
                 TboxRepository.locValues
+                    .sample(1000)
                     .collect { locValues ->
                         if (locationStateSubscribers.isNotEmpty()) {
                             locationStateSubscribers.forEach { subscriberKey ->
@@ -784,6 +793,7 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.isLocValuesTrue
+                    .sample(1000)
                     .collect { isLocValuesTrue ->
                         if (locationStateSubscribers.isNotEmpty()) {
                             locationStateSubscribers.forEach { subscriberKey ->
