@@ -39,7 +39,8 @@ fun DashboardWheelsPressureWidgetItem(
     canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false
+    backgroundTransparent: Boolean = false,
+    units: Boolean = true
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
 
@@ -88,28 +89,30 @@ fun DashboardWheelsPressureWidgetItem(
                         PressureText(wheelsPressure.wheel2, availableHeight, Modifier)
                     }
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Text(
-                        text = widget.unit,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.UNIT
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        softWrap = true,
-                        overflow = TextOverflow.Ellipsis,
+                if (units) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .wrapContentHeight(Alignment.CenterVertically)
-                    )
+                            .weight(1f)
+                            .wrapContentHeight(Alignment.CenterVertically),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = widget.unit,
+                            fontSize = calculateResponsiveFontSize(
+                                containerHeight = availableHeight,
+                                textType = TextType.UNIT
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .wrapContentHeight(Alignment.CenterVertically)
+                        )
+                    }
                 }
                 Row(
                     modifier = Modifier

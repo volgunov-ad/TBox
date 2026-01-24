@@ -266,7 +266,7 @@ fun WidgetSelectionDialog(
                 )
 
                 val availableOptions = listOf("" to "Не выбрано") +
-                        WidgetsRepository.getAvailableDataKeys()
+                        WidgetsRepository.getAvailableDataKeysWidgets()
                             .filter { it.isNotEmpty() }
                             .map { key ->
                                 key to WidgetsRepository.getTitleUnitForDataKey(key)
