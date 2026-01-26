@@ -193,7 +193,7 @@ fun FloatingDashboard(
             originalY.intValue = currentWindowParams.y
 
             // Увеличиваем окно для диалога
-            val dialogWidth = (containerSize.width * 0.7f).toInt()
+            val dialogWidth = (containerSize.width * 0.5f).toInt()
             val dialogHeight = (containerSize.height * 0.7f).toInt()
 
             val newWidth = dialogWidth.coerceAtMost(containerSize.width)
