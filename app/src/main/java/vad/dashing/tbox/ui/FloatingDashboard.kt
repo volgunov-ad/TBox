@@ -48,7 +48,6 @@ import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
-import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
@@ -67,7 +66,9 @@ import vad.dashing.tbox.ui.theme.TboxAppTheme
 fun FloatingDashboardUI(
     settingsManager: SettingsManager,
     appDataManager: AppDataManager,
-    service: BackgroundService,
+    onUpdateWindowSize: (String, Int, Int) -> Unit,
+    onUpdateWindowPosition: (String, Int, Int) -> Unit,
+    onRebootTbox: () -> Unit,
     panelId: String,
     params: WindowManager.LayoutParams
 ) {
@@ -106,7 +107,9 @@ fun FloatingDashboardUI(
                 settingsViewModel = settingsViewModel,
                 appDataViewModel = appDataViewModel,
                 panelId = panelId,
-                service = service,
+                onUpdateWindowSize = onUpdateWindowSize,
+                onUpdateWindowPosition = onUpdateWindowPosition,
+                onRebootTbox = onRebootTbox,
                 windowParams = params
             )
         }
@@ -120,7 +123,9 @@ fun FloatingDashboard(
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
     panelId: String,
-    service: BackgroundService,
+    onUpdateWindowSize: (String, Int, Int) -> Unit,
+    onUpdateWindowPosition: (String, Int, Int) -> Unit,
+    onRebootTbox: () -> Unit,
     windowParams: WindowManager.LayoutParams
 ) {
     val context = LocalContext.current
@@ -194,16 +199,16 @@ fun FloatingDashboard(
             val newWidth = dialogWidth.coerceAtMost(containerSize.width)
             val newHeight = dialogHeight.coerceAtMost(containerSize.height - 100)
 
-            service.updateWindowSize(panelId, newWidth, newHeight)
+            onUpdateWindowSize(panelId, newWidth, newHeight)
 
             // Центрируем окно
             val centerX = (containerSize.width - newWidth) / 2
             val centerY = (containerSize.height - newHeight) / 2
-            service.updateWindowPosition(panelId, centerX, centerY)
+            onUpdateWindowPosition(panelId, centerX, centerY)
         } else {
             // Восстанавливаем оригинальные размеры и положение
-            service.updateWindowSize(panelId, originalWidth.intValue, originalHeight.intValue)
-            service.updateWindowPosition(panelId, originalX.intValue, originalY.intValue)
+            onUpdateWindowSize(panelId, originalWidth.intValue, originalHeight.intValue)
+            onUpdateWindowPosition(panelId, originalX.intValue, originalY.intValue)
         }
     }
 
@@ -246,19 +251,29 @@ fun FloatingDashboard(
                             onDragStart = { startOffset ->
                                 if (isEditMode && showDialogForIndex == null) { // Не позволяем перетаскивать при открытом диалоге
                                     // Определяем, в какой области началось перетаскивание
-                                    val isNearBottomRight = startOffset.x > size.width * 0.7f &&
-                                            startOffset.y > size.height * 0.7f
-                                    val isNearEdge = startOffset.x < size.width * 0.2f ||
-                                            startOffset.x > size.width * 0.8f ||
-                                            startOffset.y < size.height * 0.2f ||
-                                            startOffset.y > size.height * 0.8f
+                                    val resizeOffsetX = if (size.width <= 60f) {
+                                        30f
+                                    } else if (size.width <= 100f) {
+                                        50f
+                                    } else {
+                                        60f
+                                    }
+                                    val resizeOffsetY = if (size.height <= 60f) {
+                                        30f
+                                    } else if (size.height <= 100f) {
+                                        50f
+                                    } else {
+                                        60f
+                                    }
+                                    val isNearBottomRight = startOffset.x > size.width - resizeOffsetX &&
+                                            startOffset.y > size.height - resizeOffsetY
 
                                     if (isNearBottomRight) {
                                         // Изменение размера (за правый нижний угол)
                                         isResizingMode = true
                                         isDraggingMode = false
                                         resizeStartPosition = startOffset
-                                    } else if (isNearEdge) {
+                                    } else {
                                         // Перетаскивание окна (за края)
                                         isDraggingMode = true
                                         isResizingMode = false
@@ -273,7 +288,7 @@ fun FloatingDashboard(
                                     // Обновляем положение окна
                                     val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
                                     val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
-                                    service.updateWindowPosition(panelId, newX, newY)
+                                    onUpdateWindowPosition(panelId, newX, newY)
 
                                 } else if (isEditMode && showDialogForIndex == null && isResizingMode && resizeStartPosition != null) {
                                     // Обновляем размер окна
@@ -281,7 +296,7 @@ fun FloatingDashboard(
                                         .coerceAtLeast(50)
                                     val newHeight = (windowParams.height + dragAmount.y).toInt()
                                         .coerceAtLeast(50)
-                                    service.updateWindowSize(panelId, newWidth, newHeight)
+                                    onUpdateWindowSize(panelId, newWidth, newHeight)
                                 }
                             },
                             onDragEnd = {
@@ -524,7 +539,7 @@ fun FloatingDashboard(
                                                     onDoubleClick = {
                                                         if (restartEnabled) {
                                                             restartEnabled = false
-                                                            service.crtRebootTbox()
+                                                            onRebootTbox()
                                                         }
                                                     },
                                                     dashboardManager = dashboardViewModel.dashboardManager,
@@ -639,7 +654,7 @@ fun FloatingDashboard(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(8.dp)
+                            .padding(4.dp)
                     ) {
                         Canvas(
                             modifier = Modifier.size(16.dp)
