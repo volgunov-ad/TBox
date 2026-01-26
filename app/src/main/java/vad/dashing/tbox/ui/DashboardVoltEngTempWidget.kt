@@ -36,7 +36,8 @@ fun DashboardVoltEngTempWidgetItem(
     canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false
+    backgroundTransparent: Boolean = false,
+    units: Boolean = true
 ) {
     val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
     val engineTemperature by canViewModel.engineTemperature.collectAsStateWithLifecycle()
@@ -73,7 +74,7 @@ fun DashboardVoltEngTempWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "${valueToString(voltage, 1)} В",
+                    text = "${valueToString(voltage, 1)}${if (units) " В" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -88,7 +89,7 @@ fun DashboardVoltEngTempWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${valueToString(engineTemperature, 0)} °C",
+                    text = "${valueToString(engineTemperature, 0)}${if (units) " °C" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

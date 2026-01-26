@@ -202,7 +202,7 @@ fun FloatingDashboard(
             onUpdateWindowSize(panelId, newWidth, newHeight)
 
             // Центрируем окно
-            val centerX = (containerSize.width - newWidth) / 2
+            val centerX = (containerSize.width - newWidth) / 2 + 100
             val centerY = (containerSize.height - newHeight) / 2
             onUpdateWindowPosition(panelId, centerX, centerY)
         } else {
@@ -431,7 +431,8 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "gearBoxWidget" -> {
@@ -452,7 +453,8 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "wheelsPressureWidget" -> {
@@ -517,7 +519,8 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "restartTbox" -> {
@@ -741,7 +744,7 @@ fun OverlayWidgetSelectionDialog(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .weight(2f)
                     .background(
                         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
                         androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
