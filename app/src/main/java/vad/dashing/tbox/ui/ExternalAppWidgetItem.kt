@@ -3,7 +3,9 @@ package vad.dashing.tbox.ui
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.os.Bundle
+import android.view.ViewGroup
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +32,7 @@ fun ExternalAppWidgetItem(
     widgetConfig: FloatingDashboardWidgetConfig,
     appWidgetHost: AppWidgetHost,
     isEditMode: Boolean,
+    handleClick: Boolean,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     elevation: Dp = 0.dp,
@@ -62,13 +65,16 @@ fun ExternalAppWidgetItem(
         }
     }
 
+    val clickModifier = if (!isEditMode && handleClick) {
+        Modifier.clickable(onClick = onClick)
+    } else {
+        Modifier
+    }
+
     Card(
         modifier = Modifier
             .fillMaxSize()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
+            .then(clickModifier),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
             containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
@@ -95,7 +101,36 @@ fun ExternalAppWidgetItem(
                 )
             } else {
                 AndroidView(
-                    factory = { hostView },
+                    factory = { viewContext ->
+                        LongPressInterceptLayout(viewContext).apply {
+                            onLongPress = onLongClick
+                            interceptLongPress = !isEditMode
+                            if (hostView.parent != null) {
+                                (hostView.parent as? ViewGroup)?.removeView(hostView)
+                            }
+                            addView(
+                                hostView,
+                                ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                            )
+                        }
+                    },
+                    update = { layout ->
+                        layout.onLongPress = onLongClick
+                        layout.interceptLongPress = !isEditMode
+                        if (hostView.parent != layout) {
+                            (hostView.parent as? ViewGroup)?.removeView(hostView)
+                            layout.addView(
+                                hostView,
+                                ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                            )
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Color.Transparent)

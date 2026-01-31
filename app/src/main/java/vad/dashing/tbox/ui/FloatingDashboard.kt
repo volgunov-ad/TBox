@@ -578,6 +578,7 @@ fun FloatingDashboard(
                                                     widgetConfig = widgetConfig,
                                                     appWidgetHost = appWidgetHost,
                                                     isEditMode = isEditMode,
+                                                    handleClick = isFloatingDashboardClickAction,
                                                     onClick = {
                                                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                             showDialogForIndex = index
