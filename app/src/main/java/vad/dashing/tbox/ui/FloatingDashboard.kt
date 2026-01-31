@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.view.WindowManager
@@ -51,6 +52,7 @@ import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -59,6 +61,7 @@ import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.SettingsViewModelFactory
+import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
@@ -129,6 +132,13 @@ fun FloatingDashboard(
     windowParams: WindowManager.LayoutParams
 ) {
     val context = LocalContext.current
+    val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
+
+    DisposableEffect(appWidgetHost) {
+        onDispose {
+            ExternalWidgetHostManager.releaseHost()
+        }
+    }
 
     val dashboardViewModel: FloatingDashboardViewModel = viewModel(
         key = "floating-$panelId",
@@ -563,6 +573,27 @@ fun FloatingDashboard(
                                                     }
                                                 )
                                             }
+                                            WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY -> {
+                                                ExternalAppWidgetItem(
+                                                    widgetConfig = widgetConfig,
+                                                    appWidgetHost = appWidgetHost,
+                                                    onClick = {
+                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                            showDialogForIndex = index
+                                                        } else if (isFloatingDashboardClickAction) {
+                                                            openMainActivity(context)
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
+                                                    },
+                                                    elevation = 0.dp,
+                                                    shape = 0.dp,
+                                                    backgroundTransparent = true
+                                                )
+                                            }
                                             else -> {
                                                 DashboardWidgetItem(
                                                     widget = widget,
@@ -699,6 +730,7 @@ fun OverlayWidgetSelectionDialog(
     dashboardManager: DashboardManager,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var selectedDataKey by remember {
         mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
     }
@@ -710,7 +742,14 @@ fun OverlayWidgetSelectionDialog(
     var showUnit by remember(widgetIndex, currentWidgetConfigs) {
         mutableStateOf(initialConfig.showUnit)
     }
-    val togglesEnabled = selectedDataKey.isNotEmpty()
+    val isExternalWidgetSelected =
+        selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
+    val togglesEnabled = selectedDataKey.isNotEmpty() && !isExternalWidgetSelected
+    val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
+    val selectedWidgetLabel = remember(initialConfig.appWidgetId) {
+        val info = initialConfig.appWidgetId?.let { appWidgetManager.getAppWidgetInfo(it) }
+        info?.loadLabel(context.packageManager)?.toString().orEmpty()
+    }
 
     // Получаем список опций
     val availableOptions = listOf("" to "Не выбрано") +
@@ -779,6 +818,39 @@ fun OverlayWidgetSelectionDialog(
                             )
                         }
                     }
+                }
+            }
+
+            if (isExternalWidgetSelected) {
+                val label = if (selectedWidgetLabel.isNotBlank()) {
+                    selectedWidgetLabel
+                } else {
+                    "Не выбрано"
+                }
+                Text(
+                    text = "Виджет стороннего приложения",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 5.dp),
+                    fontSize = 24.sp
+                )
+                Text(
+                    text = "Выбранный виджет: $label",
+                    fontSize = 20.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                OutlinedButton(
+                    onClick = {
+                        openExternalWidgetPicker(
+                            context = context,
+                            panelId = panelId,
+                            widgetIndex = widgetIndex,
+                            showTitle = showTitle,
+                            showUnit = showUnit
+                        )
+                        onDismiss()
+                    }
+                ) {
+                    Text(text = "Выбрать виджет", fontSize = 22.sp)
                 }
             }
 
@@ -860,6 +932,25 @@ fun OverlayWidgetSelectionDialog(
 
                 Button(
                     onClick = {
+                        val isExternalSelected =
+                            selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
+                        if (isExternalSelected && initialConfig.appWidgetId == null) {
+                            openExternalWidgetPicker(
+                                context = context,
+                                panelId = panelId,
+                                widgetIndex = widgetIndex,
+                                showTitle = showTitle,
+                                showUnit = showUnit
+                            )
+                            onDismiss()
+                            return@Button
+                        }
+                        if (!isExternalSelected && initialConfig.appWidgetId != null) {
+                            ExternalWidgetHostManager.deleteAppWidgetId(
+                                context,
+                                initialConfig.appWidgetId
+                            )
+                        }
                         val updatedWidgets = currentWidgets.toMutableList()
                         val newWidget = if (selectedDataKey.isNotEmpty()) {
                             DashboardWidget(
@@ -895,7 +986,12 @@ fun OverlayWidgetSelectionDialog(
                             FloatingDashboardWidgetConfig(
                                 dataKey = selectedDataKey,
                                 showTitle = showTitle,
-                                showUnit = showUnit
+                                showUnit = showUnit,
+                                appWidgetId = if (isExternalSelected) {
+                                    initialConfig.appWidgetId
+                                } else {
+                                    null
+                                }
                             )
                         } else {
                             FloatingDashboardWidgetConfig(dataKey = "")
@@ -922,6 +1018,27 @@ private fun openMainActivity(context: Context) {
     try {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+private fun openExternalWidgetPicker(
+    context: Context,
+    panelId: String,
+    widgetIndex: Int,
+    showTitle: Boolean,
+    showUnit: Boolean
+) {
+    try {
+        val intent = Intent(context, WidgetPickerActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            putExtra(WidgetPickerActivity.EXTRA_PANEL_ID, panelId)
+            putExtra(WidgetPickerActivity.EXTRA_WIDGET_INDEX, widgetIndex)
+            putExtra(WidgetPickerActivity.EXTRA_SHOW_TITLE, showTitle)
+            putExtra(WidgetPickerActivity.EXTRA_SHOW_UNIT, showUnit)
         }
         context.startActivity(intent)
     } catch (e: Exception) {

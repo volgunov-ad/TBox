@@ -23,7 +23,8 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 data class FloatingDashboardWidgetConfig(
     val dataKey: String,
     val showTitle: Boolean = false,
-    val showUnit: Boolean = true
+    val showUnit: Boolean = true,
+    val appWidgetId: Int? = null
 )
 
 data class FloatingDashboardConfig(
@@ -564,11 +565,17 @@ class SettingsManager(private val context: Context) {
                     val dataKey = item.optString("dataKey").ifBlank {
                         item.optString("type")
                     }
+                    val appWidgetId = if (item.has("appWidgetId")) {
+                        item.optInt("appWidgetId", -1).takeIf { it != -1 }
+                    } else {
+                        null
+                    }
                     configs.add(
                         FloatingDashboardWidgetConfig(
                             dataKey = dataKey,
                             showTitle = item.optBoolean("showTitle", false),
-                            showUnit = item.optBoolean("showUnit", true)
+                            showUnit = item.optBoolean("showUnit", true),
+                            appWidgetId = appWidgetId
                         )
                     )
                 }
@@ -599,6 +606,9 @@ class SettingsManager(private val context: Context) {
             obj.put("dataKey", config.dataKey)
             obj.put("showTitle", config.showTitle)
             obj.put("showUnit", config.showUnit)
+            if (config.appWidgetId != null) {
+                obj.put("appWidgetId", config.appWidgetId)
+            }
             array.put(obj)
         }
         return array
