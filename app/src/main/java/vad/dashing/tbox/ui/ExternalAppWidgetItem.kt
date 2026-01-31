@@ -29,6 +29,7 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 fun ExternalAppWidgetItem(
     widgetConfig: FloatingDashboardWidgetConfig,
     appWidgetHost: AppWidgetHost,
+    isEditMode: Boolean,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     elevation: Dp = 0.dp,
@@ -111,6 +112,17 @@ fun ExternalAppWidgetItem(
                                 appWidgetManager.updateAppWidgetOptions(appWidgetId, options)
                             }
                         }
+                )
+            }
+
+            if (isEditMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .combinedClickable(
+                            onClick = onClick,
+                            onLongClick = onLongClick
+                        )
                 )
             }
         }
