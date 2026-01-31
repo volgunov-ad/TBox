@@ -51,6 +51,9 @@ class SettingsManager(private val context: Context) {
         private val AUTO_TBOX_REBOOT_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_tbox_reboot")
         private val AUTO_SUSPEND_TBOX_APP_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_app")
         private val AUTO_STOP_TBOX_APP_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_stop_tbox_app")
+        private val AUTO_STOP_TBOX_MDC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_stop_tbox_mdc")
+        private val AUTO_SUSPEND_TBOX_MDC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_mdc")
+        private val AUTO_SUSPEND_TBOX_SWD_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_swd")
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
         private val GET_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}get_voltages")
         private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
@@ -151,6 +154,18 @@ class SettingsManager(private val context: Context) {
 
     val autoStopTboxAppFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_STOP_TBOX_APP_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val autoSuspendTboxMdcFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_SUSPEND_TBOX_MDC_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val autoStopTboxMdcFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_STOP_TBOX_MDC_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val autoSuspendTboxSwdFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_SUSPEND_TBOX_SWD_KEY] ?: false }
         .distinctUntilChanged()
 
     val autoPreventTboxRestartFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -270,6 +285,24 @@ class SettingsManager(private val context: Context) {
     suspend fun saveAutoStopTboxAppSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[AUTO_STOP_TBOX_APP_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAutoSuspendTboxMdcSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_SUSPEND_TBOX_MDC_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAutoStopTboxMdcSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_STOP_TBOX_MDC_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAutoSuspendTboxSwdSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_SUSPEND_TBOX_SWD_KEY] = enabled
         }
     }
 

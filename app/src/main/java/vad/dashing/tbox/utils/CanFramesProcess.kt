@@ -287,7 +287,7 @@ object CanFramesProcess {
         }
         TboxRepository.addLog(
             "DEBUG", "CRT response",
-            "Get CAN Frame"
+            "Get CAN Frame ${rawValue.size} bytes"
         )
     }
 

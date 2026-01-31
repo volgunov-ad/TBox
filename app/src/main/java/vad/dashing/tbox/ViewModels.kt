@@ -69,7 +69,7 @@ class TboxViewModel : ViewModel() {
             initialValue = false
         )
 
-    val suspendTboxAppSend: StateFlow<Boolean> = TboxRepository.suspendTboxAppSend
+    val tboxAppSuspended: StateFlow<Boolean> = TboxRepository.tboxAppSuspended
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -81,6 +81,34 @@ class TboxViewModel : ViewModel() {
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
+        )
+
+    val tboxMdcSuspended: StateFlow<Boolean> = TboxRepository.tboxMdcSuspended
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val tboxMdcStoped: StateFlow<Boolean> = TboxRepository.tboxMdcStoped
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val tboxSwdSuspended: StateFlow<Boolean> = TboxRepository.tboxSwdSuspended
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val gateVersion: StateFlow<String> = TboxRepository.gateVersion
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
         )
 
     val tboxConnectionTime: StateFlow<Date> = TboxRepository.tboxConnectionTime

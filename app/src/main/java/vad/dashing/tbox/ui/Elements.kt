@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanFrame
 import vad.dashing.tbox.SettingsViewModel
 
@@ -247,7 +249,7 @@ fun SettingsTitle(
     Text(
         modifier = Modifier.padding(top=10.dp),
         text = text,
-        fontSize = 24.sp,
+        fontSize = 26.sp,
         fontWeight = FontWeight.Medium,
         maxLines = 1,
         color = MaterialTheme.colorScheme.onSurface,
@@ -786,4 +788,101 @@ fun IntInputField(
         ),
         shape = RoundedCornerShape(8.dp)
     )
+}
+
+@Composable
+fun TboxApplicationControls(
+    appName: String,
+    tboxConnected: Boolean,
+    onServiceCommand: (String, String, String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        var commandButtonsEnabled by remember { mutableStateOf(true) }
+
+        LaunchedEffect(commandButtonsEnabled) {
+            if (!commandButtonsEnabled) {
+                delay(5000) // Блокировка на 5 секунд
+                commandButtonsEnabled = true
+            }
+        }
+
+        Text(
+            text = "Приложение $appName",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1.5f)
+        )
+
+        Button(
+            onClick = {
+                if (commandButtonsEnabled) {
+                    commandButtonsEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_TBOX_APP_SUSPEND,
+                        BackgroundService.EXTRA_APP_NAME,
+                        appName
+                    )
+                }
+            },
+            enabled = commandButtonsEnabled && tboxConnected,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = "Приостановить",
+                fontSize = 24.sp,
+                maxLines = 2,
+                textAlign = TextAlign.Center
+            )
+        }
+        Button(
+            onClick = {
+                if (commandButtonsEnabled) {
+                    commandButtonsEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_TBOX_APP_RESUME,
+                        BackgroundService.EXTRA_APP_NAME,
+                        appName
+                    )
+                }
+            },
+            enabled = commandButtonsEnabled && tboxConnected,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = "Возобновить",
+                fontSize = 24.sp,
+                maxLines = 2,
+                textAlign = TextAlign.Center
+            )
+        }
+        Button(
+            onClick = {
+                if (commandButtonsEnabled) {
+                    commandButtonsEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_TBOX_APP_STOP,
+                        BackgroundService.EXTRA_APP_NAME,
+                        appName
+                    )
+                }
+            },
+            enabled = commandButtonsEnabled && tboxConnected,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = "Остановить",
+                fontSize = 24.sp,
+                maxLines = 2,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }

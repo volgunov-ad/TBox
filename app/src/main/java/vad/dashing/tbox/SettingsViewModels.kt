@@ -88,6 +88,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val isAutoSuspendTboxMdcEnabled = settingsManager.autoSuspendTboxMdcFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isAutoStopTboxMdcEnabled = settingsManager.autoStopTboxMdcFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isAutoSuspendTboxSwdEnabled = settingsManager.autoSuspendTboxSwdFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val isAutoPreventTboxRestartEnabled = settingsManager.autoPreventTboxRestartFlow
         .stateIn(
             scope = viewModelScope,
@@ -522,6 +543,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveAutoStopTboxAppSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveAutoStopTboxAppSetting(enabled)
+        }
+    }
+
+    fun saveAutoSuspendTboxMdcSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoSuspendTboxMdcSetting(enabled)
+        }
+    }
+
+    fun saveAutoStopTboxMdcSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoStopTboxMdcSetting(enabled)
+        }
+    }
+
+    fun saveAutoSuspendTboxSwdSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoSuspendTboxSwdSetting(enabled)
         }
     }
 

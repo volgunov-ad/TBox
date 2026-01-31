@@ -134,14 +134,26 @@ object TboxRepository {
     private val _preventRestartSend = MutableStateFlow(false)
     val preventRestartSend: StateFlow<Boolean> = _preventRestartSend.asStateFlow()
 
-    private val _suspendTboxAppSend = MutableStateFlow(false)
-    val suspendTboxAppSend: StateFlow<Boolean> = _suspendTboxAppSend.asStateFlow()
+    private val _tboxAppSuspended = MutableStateFlow(false)
+    val tboxAppSuspended: StateFlow<Boolean> = _tboxAppSuspended.asStateFlow()
 
     private val _tboxAppStoped = MutableStateFlow(false)
     val tboxAppStoped: StateFlow<Boolean> = _tboxAppStoped.asStateFlow()
 
+    private val _tboxMdcSuspended = MutableStateFlow(false)
+    val tboxMdcSuspended: StateFlow<Boolean> = _tboxMdcSuspended.asStateFlow()
+
+    private val _tboxMdcStoped = MutableStateFlow(false)
+    val tboxMdcStoped: StateFlow<Boolean> = _tboxMdcStoped.asStateFlow()
+
+    private val _tboxSwdSuspended = MutableStateFlow(false)
+    val tboxSwdSuspended: StateFlow<Boolean> = _tboxSwdSuspended.asStateFlow()
+
     private val _tboxAppVersionAnswer = MutableStateFlow(false)
     val tboxAppVersionAnswer: StateFlow<Boolean> = _tboxAppVersionAnswer.asStateFlow()
+
+    private val _tboxMdcVersionAnswer = MutableStateFlow(false)
+    val tboxMdcVersionAnswer: StateFlow<Boolean> = _tboxMdcVersionAnswer.asStateFlow()
 
     //private val _locationSubscribed = MutableStateFlow(false)
     //val locationSubscribed: StateFlow<Boolean> = _locationSubscribed.asStateFlow()
@@ -182,8 +194,11 @@ object TboxRepository {
     private val _floatingDashboardShownIds = MutableStateFlow<Set<String>>(emptySet())
     val floatingDashboardShownIds: StateFlow<Set<String>> = _floatingDashboardShownIds.asStateFlow()
 
+    private val _gateVersion = MutableStateFlow<String>("")
+    val gateVersion: StateFlow<String> = _gateVersion.asStateFlow()
+
     private const val MAX_LOGS = 150
-    private const val MAX_DIDS = 100
+    private const val MAX_DIDS = 300
 
     private val timeFormat: ThreadLocal<SimpleDateFormat> = ThreadLocal.withInitial {
         SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -291,16 +306,32 @@ object TboxRepository {
         _preventRestartSend.value = newValue
     }
 
-    fun updateSuspendTboxAppSend(newValue: Boolean) {
-        _suspendTboxAppSend.value = newValue
+    fun updateTboxAppSuspended(newValue: Boolean) {
+        _tboxAppSuspended.value = newValue
     }
 
     fun updateTboxAppStoped(newValue: Boolean) {
         _tboxAppStoped.value = newValue
     }
 
+    fun updateTboxMdcSuspended(newValue: Boolean) {
+        _tboxMdcSuspended.value = newValue
+    }
+
+    fun updateTboxMdcStoped(newValue: Boolean) {
+        _tboxMdcStoped.value = newValue
+    }
+
+    fun updateTboxSwdSuspended(newValue: Boolean) {
+        _tboxSwdSuspended.value = newValue
+    }
+
     fun updateTboxAppVersionAnswer(newValue: Boolean) {
         _tboxAppVersionAnswer.value = newValue
+    }
+
+    fun updateTboxMdcVersionAnswer(newValue: Boolean) {
+        _tboxMdcVersionAnswer.value = newValue
     }
 
     fun updateVoltages(newValue: VoltagesState) {
@@ -315,6 +346,10 @@ object TboxRepository {
         _ipList.value = value
     }
 
+    fun updateGateVersion(value: String) {
+        _gateVersion.value = value
+    }
+
     // Метод для сброса всех данных (при переподключении)
     fun resetConnectionData() {
         _tboxConnected.value = false
@@ -323,8 +358,12 @@ object TboxRepository {
         _apn2State.value = APNState()
         _apnStatus.value = false
         _preventRestartSend.value = false
-        _suspendTboxAppSend.value = false
+        _tboxAppSuspended.value = false
         _tboxAppStoped.value = false
+        _tboxMdcSuspended.value = false
+        _tboxMdcStoped.value = false
+        _tboxSwdSuspended.value = false
+        _gateVersion.value = ""
     }
 
     fun updateFloatingDashboardShown(panelId: String, isShown: Boolean) {
