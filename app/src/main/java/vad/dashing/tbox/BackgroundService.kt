@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
@@ -120,6 +121,7 @@ class BackgroundService : Service() {
     private val overlayRetryCounts = mutableMapOf<String, Int>()
     private val overlayOffIds = mutableSetOf<String>()
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
+    private var isKeyboardVisible = false
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
 
@@ -181,6 +183,15 @@ class BackgroundService : Service() {
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
     }
 
+    private fun shouldHideOnKeyboard(config: FloatingDashboardConfig): Boolean {
+        return isKeyboardVisible && config.hideOnKeyboard
+    }
+
+    private fun isSystemKeyboardVisible(): Boolean {
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return false
+        return imm.isAcceptingText
+    }
+
     override fun onCreate() {
         super.onCreate()
 
@@ -233,6 +244,8 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
         canDataSaveCount = settingsManager.canDataSaveCountFlow
             .stateIn(scope, SharingStarted.Eagerly, 5)
+
+        isKeyboardVisible = isSystemKeyboardVisible()
 
         ipManager = IPManager(this)
         ipManager.updateIPs(serverIp.value)
@@ -404,6 +417,10 @@ class BackgroundService : Service() {
             TboxRepository.addLog("DEBUG", "Floating Dashboard", "Setting off: ${config.id}")
             return
         }
+
+        if (shouldHideOnKeyboard(config)) {
+            return
+        }
         // Проверяем, не открыто ли уже окно
         if (overlayViews.containsKey(config.id)) {
             TboxRepository.addLog("DEBUG", "Floating Dashboard", "Already shown: ${config.id}")
@@ -558,7 +575,7 @@ class BackgroundService : Service() {
 
     private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
         val configMap = configs.associateBy { it.id }
-        val enabledConfigs = configs.filter { it.enabled }
+        val enabledConfigs = configs.filter { it.enabled && !shouldHideOnKeyboard(it) }
         val enabledIds = enabledConfigs.map { it.id }.toSet()
         val existingIds = overlayViews.keys.toSet()
 
@@ -589,7 +606,7 @@ class BackgroundService : Service() {
 
     private suspend fun ensureFloatingDashboards() {
         withContext(Dispatchers.Main) {
-            val enabledConfigs = floatingDashboards.value.filter { it.enabled }
+            val enabledConfigs = floatingDashboards.value.filter { it.enabled && !shouldHideOnKeyboard(it) }
             enabledConfigs.forEach { config ->
                 if (overlayOffIds.contains(config.id)) return@forEach
                 if (overlayViews.containsKey(config.id)) {
@@ -998,6 +1015,13 @@ class BackgroundService : Service() {
                 var tboxMdcCheckTime = System.currentTimeMillis()
                 delay(15000)
                 while (isActive) {
+                    val keyboardVisible = isSystemKeyboardVisible()
+                    if (keyboardVisible != isKeyboardVisible) {
+                        isKeyboardVisible = keyboardVisible
+                        withContext(Dispatchers.Main) {
+                            syncFloatingDashboards(floatingDashboards.value)
+                        }
+                    }
                     /*if (mockLocation.value) {
                         locationMockManager.setMockLocation(LocValues(
                             rawValue = "",

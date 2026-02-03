@@ -550,6 +550,7 @@ fun SettingsTab(
     val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
     val isFloatingDashboardBackground by settingsViewModel.isFloatingDashboardBackground.collectAsStateWithLifecycle()
     val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
+    val isFloatingDashboardHideOnKeyboard by settingsViewModel.isFloatingDashboardHideOnKeyboard.collectAsStateWithLifecycle()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
@@ -748,6 +749,15 @@ fun SettingsTab(
             },
             "Открывать окно программы при одиночном нажатии на элемент плавающей панели",
             "",
+            true
+        )
+        SettingSwitch(
+            isFloatingDashboardHideOnKeyboard,
+            { enabled ->
+                settingsViewModel.saveFloatingDashboardHideOnKeyboard(enabled)
+            },
+            "Скрывать плавающую панель при открытой клавиатуре",
+            "Панель будет скрываться при появлении системной клавиатуры",
             true
         )
         SettingDropdownGeneric(
