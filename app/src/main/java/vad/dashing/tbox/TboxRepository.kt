@@ -194,9 +194,6 @@ object TboxRepository {
     private val _floatingDashboardShownIds = MutableStateFlow<Set<String>>(emptySet())
     val floatingDashboardShownIds: StateFlow<Set<String>> = _floatingDashboardShownIds.asStateFlow()
 
-    private val _isKeyboardVisible = MutableStateFlow(false)
-    val isKeyboardVisible: StateFlow<Boolean> = _isKeyboardVisible.asStateFlow()
-
     private val _gateVersion = MutableStateFlow<String>("")
     val gateVersion: StateFlow<String> = _gateVersion.asStateFlow()
 
@@ -378,9 +375,5 @@ object TboxRepository {
                 current - panelId
             }
         }
-    }
-
-    fun updateKeyboardVisible(isVisible: Boolean) {
-        _isKeyboardVisible.value = isVisible
     }
 }

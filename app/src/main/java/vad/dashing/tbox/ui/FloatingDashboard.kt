@@ -147,7 +147,6 @@ fun FloatingDashboard(
     val isFloatingDashboardBackground = panelConfig.background
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
-    val isKeyboardVisible by tboxViewModel.isKeyboardVisible.collectAsStateWithLifecycle()
 
     // Состояния
     var isEditMode by remember { mutableStateOf(false) }
@@ -184,8 +183,6 @@ fun FloatingDashboard(
     val windowInfo = LocalWindowInfo.current
     val containerSize = windowInfo.containerSize
 
-    val hideOnKeyboard = panelConfig.hideOnKeyboard
-    var keyboardHidden by remember { mutableStateOf(false) }
 
     // Увеличиваем окно при показе диалога и возвращаем при закрытии
     LaunchedEffect(showDialogForIndex) {
@@ -216,29 +213,6 @@ fun FloatingDashboard(
         }
     }
 
-    LaunchedEffect(isKeyboardVisible, showDialogForIndex, hideOnKeyboard) {
-        if (!hideOnKeyboard) {
-            if (keyboardHidden) {
-                onUpdateWindowSize(panelId, currentWindowParams.width, currentWindowParams.height)
-                keyboardHidden = false
-            }
-            return@LaunchedEffect
-        }
-        if (showDialogForIndex != null) {
-            if (keyboardHidden) {
-                onUpdateWindowSize(panelId, currentWindowParams.width, currentWindowParams.height)
-                keyboardHidden = false
-            }
-            return@LaunchedEffect
-        }
-        if (isKeyboardVisible && !keyboardHidden) {
-            onUpdateWindowSize(panelId, 0, 0)
-            keyboardHidden = true
-        } else if (!isKeyboardVisible && keyboardHidden) {
-            onUpdateWindowSize(panelId, currentWindowParams.width, currentWindowParams.height)
-            keyboardHidden = false
-        }
-    }
 
     val dataProvider = remember { TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel) }
 
