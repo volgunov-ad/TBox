@@ -62,6 +62,13 @@ class TboxViewModel : ViewModel() {
             initialValue = false
         )
 
+    val isKeyboardVisible: StateFlow<Boolean> = TboxRepository.isKeyboardVisible
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val preventRestartSend: StateFlow<Boolean> = TboxRepository.preventRestartSend
         .stateIn(
             scope = viewModelScope,
@@ -226,6 +233,12 @@ class TboxViewModel : ViewModel() {
     fun updateFloatingDashboardShown(panelId: String, isShown: Boolean) {
         viewModelScope.launch {
             TboxRepository.updateFloatingDashboardShown(panelId, isShown)
+        }
+    }
+
+    fun updateKeyboardVisible(isVisible: Boolean) {
+        viewModelScope.launch {
+            TboxRepository.updateKeyboardVisible(isVisible)
         }
     }
 }

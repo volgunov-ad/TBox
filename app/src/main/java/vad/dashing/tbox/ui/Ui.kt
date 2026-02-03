@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -177,6 +179,13 @@ fun TboxScreen(
     val versionName = remember { packageInfo.versionName }
 
     val scrollState = rememberScrollState()
+
+    val imeInsets = WindowInsets.ime.asPaddingValues()
+    val isKeyboardVisible = imeInsets.calculateBottomPadding() > 0.dp
+
+    LaunchedEffect(isKeyboardVisible) {
+        viewModel.updateKeyboardVisible(isKeyboardVisible)
+    }
 
     val menuIconSize = 28.dp
     val menuButtonSize = 64.dp

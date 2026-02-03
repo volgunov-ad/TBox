@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -149,6 +147,7 @@ fun FloatingDashboard(
     val isFloatingDashboardBackground = panelConfig.background
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
+    val isKeyboardVisible by tboxViewModel.isKeyboardVisible.collectAsStateWithLifecycle()
 
     // Состояния
     var isEditMode by remember { mutableStateOf(false) }
@@ -185,9 +184,6 @@ fun FloatingDashboard(
     val windowInfo = LocalWindowInfo.current
     val containerSize = windowInfo.containerSize
 
-    val keyboardInsets = WindowInsets.ime.asPaddingValues()
-    val keyboardHeight = keyboardInsets.calculateBottomPadding()
-    val isKeyboardVisible = keyboardHeight > 0.dp
     val hideOnKeyboard = panelConfig.hideOnKeyboard
     var keyboardHidden by remember { mutableStateOf(false) }
 
