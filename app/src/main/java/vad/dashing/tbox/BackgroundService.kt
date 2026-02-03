@@ -12,9 +12,12 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
@@ -119,6 +122,7 @@ class BackgroundService : Service() {
     private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
     private val overlayRetryCounts = mutableMapOf<String, Int>()
     private val overlayOffIds = mutableSetOf<String>()
+    private var keyboardDetectorView: View? = null
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
@@ -416,6 +420,8 @@ class BackgroundService : Service() {
             return
         }
 
+        ensureKeyboardDetector()
+
         val layoutParams = WindowManager.LayoutParams(
             config.width.coerceAtLeast(50),
             config.height.coerceAtLeast(50),
@@ -493,6 +499,10 @@ class BackgroundService : Service() {
         overlayRetryCounts.remove(panelId)
         overlayOffIds.remove(panelId)
 
+        if (overlayViews.isEmpty()) {
+            removeKeyboardDetector()
+        }
+
         TboxRepository.addLog("INFO", "Floating Dashboard", "Closed: $panelId")
     }
 
@@ -566,6 +576,59 @@ class BackgroundService : Service() {
 
     private fun getSingleOverlayId(): String? {
         return if (overlayViews.size == 1) overlayViews.keys.firstOrNull() else null
+    }
+
+    private fun ensureKeyboardDetector() {
+        if (keyboardDetectorView != null) return
+        if (windowManager == null) {
+            try {
+                windowManager = getSystemService(WindowManager::class.java)
+            } catch (e: Exception) {
+                Log.e("FloatingDashboard", "Error creating Window manager", e)
+                return
+            }
+        }
+        val detectorView = View(this)
+        ViewCompat.setOnApplyWindowInsetsListener(detectorView) { _, insets ->
+            val visible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            TboxRepository.updateKeyboardVisible(visible)
+            insets
+        }
+        val params = WindowManager.LayoutParams(
+            1,
+            1,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        }
+        try {
+            windowManager?.addView(detectorView, params)
+            keyboardDetectorView = detectorView
+            ViewCompat.requestApplyInsets(detectorView)
+            ViewCompat.getRootWindowInsets(detectorView)?.let { insets ->
+                TboxRepository.updateKeyboardVisible(insets.isVisible(WindowInsetsCompat.Type.ime()))
+            }
+        } catch (e: Exception) {
+            Log.e("FloatingDashboard", "Error adding keyboard detector", e)
+            keyboardDetectorView = null
+        }
+    }
+
+    private fun removeKeyboardDetector() {
+        keyboardDetectorView?.let { view ->
+            try {
+                windowManager?.removeView(view)
+            } catch (e: Exception) {
+                Log.e("FloatingDashboard", "Error removing keyboard detector", e)
+            }
+        }
+        keyboardDetectorView = null
+        TboxRepository.updateKeyboardVisible(false)
     }
 
     private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
@@ -1657,6 +1720,8 @@ class BackgroundService : Service() {
 
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
+
+        removeKeyboardDetector()
 
         cancelAllJobs()
         job.cancel()
