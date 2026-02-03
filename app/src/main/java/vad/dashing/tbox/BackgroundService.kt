@@ -13,9 +13,10 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
-import android.view.inputmethod.InputMethodManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
@@ -120,6 +121,7 @@ class BackgroundService : Service() {
     private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
     private val overlayRetryCounts = mutableMapOf<String, Int>()
     private val overlayOffIds = mutableSetOf<String>()
+    private val overlayHiddenByKeyboard = mutableSetOf<String>()
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
     private var isKeyboardVisible = false
 
@@ -187,11 +189,6 @@ class BackgroundService : Service() {
         return isKeyboardVisible && config.hideOnKeyboard
     }
 
-    private fun isSystemKeyboardVisible(): Boolean {
-        val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return false
-        return imm.isAcceptingText
-    }
-
     override fun onCreate() {
         super.onCreate()
 
@@ -244,8 +241,6 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
         canDataSaveCount = settingsManager.canDataSaveCountFlow
             .stateIn(scope, SharingStarted.Eagerly, 5)
-
-        isKeyboardVisible = isSystemKeyboardVisible()
 
         ipManager = IPManager(this)
         ipManager.updateIPs(serverIp.value)
@@ -418,9 +413,6 @@ class BackgroundService : Service() {
             return
         }
 
-        if (shouldHideOnKeyboard(config)) {
-            return
-        }
         // Проверяем, не открыто ли уже окно
         if (overlayViews.containsKey(config.id)) {
             TboxRepository.addLog("DEBUG", "Floating Dashboard", "Already shown: ${config.id}")
@@ -432,6 +424,7 @@ class BackgroundService : Service() {
             return
         }
 
+        val shouldHide = shouldHideOnKeyboard(config)
         val layoutParams = WindowManager.LayoutParams(
             config.width.coerceAtLeast(50),
             config.height.coerceAtLeast(50),
@@ -444,9 +437,17 @@ class BackgroundService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = config.startX.coerceAtLeast(0)
             y = config.startY.coerceAtLeast(-100)
+            if (shouldHide) {
+                flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            }
         }
 
         val newComposeView = ComposeView(this)
+        ViewCompat.setOnApplyWindowInsetsListener(newComposeView) { _, insets ->
+            updateKeyboardVisibility(insets.isVisible(WindowInsetsCompat.Type.ime()))
+            insets
+        }
+        newComposeView.alpha = if (shouldHide) 0f else 1f
 
         try {
             // Создаем новый ComposeView каждый раз
@@ -478,6 +479,15 @@ class BackgroundService : Service() {
             windowManager?.addView(newComposeView, layoutParams)
             overlayViews[config.id] = newComposeView
             overlayParams[config.id] = layoutParams
+            if (shouldHide) {
+                overlayHiddenByKeyboard.add(config.id)
+            } else {
+                overlayHiddenByKeyboard.remove(config.id)
+            }
+            ViewCompat.requestApplyInsets(newComposeView)
+            ViewCompat.getRootWindowInsets(newComposeView)?.let { insets ->
+                updateKeyboardVisibility(insets.isVisible(WindowInsetsCompat.Type.ime()))
+            }
 
             if (!lifecycleOwner.isInitialized || lifecycleOwner.lifecycle.currentState.isAtLeast(
                     Lifecycle.State.DESTROYED
@@ -508,6 +518,7 @@ class BackgroundService : Service() {
 
         overlayRetryCounts.remove(panelId)
         overlayOffIds.remove(panelId)
+        overlayHiddenByKeyboard.remove(panelId)
 
         TboxRepository.addLog("INFO", "Floating Dashboard", "Closed: $panelId")
     }
@@ -569,13 +580,38 @@ class BackgroundService : Service() {
         }
     }
 
+    private fun updateKeyboardVisibility(isVisible: Boolean) {
+        if (isKeyboardVisible == isVisible) return
+        isKeyboardVisible = isVisible
+        scope.launch(Dispatchers.Main) {
+            syncFloatingDashboards(floatingDashboards.value)
+        }
+    }
+
+    private fun setOverlayKeyboardHidden(config: FloatingDashboardConfig, hidden: Boolean) {
+        val params = overlayParams[config.id] ?: return
+        val view = overlayViews[config.id] ?: return
+        if (hidden) {
+            overlayHiddenByKeyboard.add(config.id)
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            view.alpha = 0f
+        } else {
+            overlayHiddenByKeyboard.remove(config.id)
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            view.alpha = 1f
+        }
+        params.x = config.startX.coerceAtLeast(0)
+        params.y = config.startY.coerceAtLeast(-100)
+        windowManager?.updateViewLayout(view, params)
+    }
+
     private fun getSingleOverlayId(): String? {
         return if (overlayViews.size == 1) overlayViews.keys.firstOrNull() else null
     }
 
     private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
         val configMap = configs.associateBy { it.id }
-        val enabledConfigs = configs.filter { it.enabled && !shouldHideOnKeyboard(it) }
+        val enabledConfigs = configs.filter { it.enabled }
         val enabledIds = enabledConfigs.map { it.id }.toSet()
         val existingIds = overlayViews.keys.toSet()
 
@@ -591,7 +627,12 @@ class BackgroundService : Service() {
         enabledConfigs.forEach { config ->
             overlayOffIds.remove(config.id)
             if (overlayViews.containsKey(config.id)) {
-                updateOverlayLayout(config)
+                if (shouldHideOnKeyboard(config)) {
+                    setOverlayKeyboardHidden(config, true)
+                } else {
+                    setOverlayKeyboardHidden(config, false)
+                    updateOverlayLayout(config)
+                }
             } else {
                 openOverlay(config)
             }
@@ -606,7 +647,7 @@ class BackgroundService : Service() {
 
     private suspend fun ensureFloatingDashboards() {
         withContext(Dispatchers.Main) {
-            val enabledConfigs = floatingDashboards.value.filter { it.enabled && !shouldHideOnKeyboard(it) }
+            val enabledConfigs = floatingDashboards.value.filter { it.enabled }
             enabledConfigs.forEach { config ->
                 if (overlayOffIds.contains(config.id)) return@forEach
                 if (overlayViews.containsKey(config.id)) {
@@ -1015,13 +1056,6 @@ class BackgroundService : Service() {
                 var tboxMdcCheckTime = System.currentTimeMillis()
                 delay(15000)
                 while (isActive) {
-                    val keyboardVisible = isSystemKeyboardVisible()
-                    if (keyboardVisible != isKeyboardVisible) {
-                        isKeyboardVisible = keyboardVisible
-                        withContext(Dispatchers.Main) {
-                            syncFloatingDashboards(floatingDashboards.value)
-                        }
-                    }
                     /*if (mockLocation.value) {
                         locationMockManager.setMockLocation(LocValues(
                             rawValue = "",
