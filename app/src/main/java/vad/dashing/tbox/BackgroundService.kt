@@ -10,11 +10,16 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.graphics.Rect
 import android.util.Log
 import android.view.Gravity
+import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
@@ -119,7 +124,13 @@ class BackgroundService : Service() {
     private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
     private val overlayRetryCounts = mutableMapOf<String, Int>()
     private val overlayOffIds = mutableSetOf<String>()
+    private var keyboardDetectorView: View? = null
+    private var keyboardListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    private val keyboardHiddenIds = mutableSetOf<String>()
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
+    private var isKeyboardVisible = false
+    private var keyboardVisibleFromInsets = false
+    private var keyboardVisibleFromLayout = false
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
 
@@ -179,6 +190,33 @@ class BackgroundService : Service() {
         const val ACTION_TBOX_APP_RESUME = "vad.dashing.tbox.TBOX_APP_RESUME"
         const val ACTION_TBOX_APP_STOP = "vad.dashing.tbox.TBOX_APP_STOP"
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
+    }
+
+    private fun shouldHideOnKeyboard(config: FloatingDashboardConfig): Boolean {
+        return isKeyboardVisible && config.hideOnKeyboard
+    }
+
+    private fun updateKeyboardVisibility(isVisible: Boolean) {
+        if (isKeyboardVisible == isVisible) return
+        isKeyboardVisible = isVisible
+        scope.launch(Dispatchers.Main) {
+            syncFloatingDashboards(floatingDashboards.value)
+        }
+    }
+
+    private fun updateKeyboardVisibilityFromSources() {
+        updateKeyboardVisibility(keyboardVisibleFromInsets || keyboardVisibleFromLayout)
+    }
+
+    private fun setKeyboardHidden(config: FloatingDashboardConfig, hidden: Boolean) {
+        val wasHidden = keyboardHiddenIds.contains(config.id)
+        if (hidden && !wasHidden) {
+            keyboardHiddenIds.add(config.id)
+            updateWindowSize(config.id, 0, 0)
+        } else if (!hidden && wasHidden) {
+            keyboardHiddenIds.remove(config.id)
+            updateWindowSize(config.id, config.width, config.height)
+        }
     }
 
     override fun onCreate() {
@@ -404,6 +442,7 @@ class BackgroundService : Service() {
             TboxRepository.addLog("DEBUG", "Floating Dashboard", "Setting off: ${config.id}")
             return
         }
+
         // Проверяем, не открыто ли уже окно
         if (overlayViews.containsKey(config.id)) {
             TboxRepository.addLog("DEBUG", "Floating Dashboard", "Already shown: ${config.id}")
@@ -414,6 +453,8 @@ class BackgroundService : Service() {
             TboxRepository.addLog("ERROR", "Floating Dashboard", "Cannot draw overlay")
             return
         }
+
+        ensureKeyboardDetector()
 
         val layoutParams = WindowManager.LayoutParams(
             config.width.coerceAtLeast(50),
@@ -491,6 +532,11 @@ class BackgroundService : Service() {
 
         overlayRetryCounts.remove(panelId)
         overlayOffIds.remove(panelId)
+        keyboardHiddenIds.remove(panelId)
+
+        if (overlayViews.isEmpty()) {
+            removeKeyboardDetector()
+        }
 
         TboxRepository.addLog("INFO", "Floating Dashboard", "Closed: $panelId")
     }
@@ -517,12 +563,22 @@ class BackgroundService : Service() {
 
     fun updateWindowSize(panelId: String, width: Int, height: Int) {
         val params = overlayParams[panelId] ?: return
-        if (params.width == width && params.height == height) return
-        params.width = width.coerceAtLeast(50)
-        params.height = height.coerceAtLeast(50)
-        overlayViews[panelId]?.let { view ->
+        val view = overlayViews[panelId] ?: return
+        val isHidden = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0
+        if (width <= 0 || height <= 0) {
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            view.alpha = 0f
             windowManager?.updateViewLayout(view, params)
+            return
         }
+        val newWidth = width.coerceAtLeast(50)
+        val newHeight = height.coerceAtLeast(50)
+        if (!isHidden && params.width == newWidth && params.height == newHeight) return
+        params.width = newWidth
+        params.height = newHeight
+        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        view.alpha = 1f
+        windowManager?.updateViewLayout(view, params)
     }
 
     fun updateWindowSize(width: Int, height: Int) {
@@ -552,8 +608,83 @@ class BackgroundService : Service() {
         }
     }
 
+
     private fun getSingleOverlayId(): String? {
         return if (overlayViews.size == 1) overlayViews.keys.firstOrNull() else null
+    }
+
+    private fun ensureKeyboardDetector() {
+        if (keyboardDetectorView != null) return
+        if (windowManager == null) {
+            try {
+                windowManager = getSystemService(WindowManager::class.java)
+            } catch (e: Exception) {
+                Log.e("FloatingDashboard", "Error creating Window manager", e)
+                return
+            }
+        }
+        val detectorView = View(this)
+        ViewCompat.setOnApplyWindowInsetsListener(detectorView) { _, insets ->
+            keyboardVisibleFromInsets = insets.isVisible(WindowInsetsCompat.Type.ime())
+            updateKeyboardVisibilityFromSources()
+            insets
+        }
+        keyboardListener = ViewTreeObserver.OnGlobalLayoutListener {
+            val rect = Rect()
+            detectorView.getWindowVisibleDisplayFrame(rect)
+            val screenHeight = detectorView.rootView.height
+            if (screenHeight <= 0) {
+                return@OnGlobalLayoutListener
+            }
+            val keyboardHeight = screenHeight - rect.bottom
+            keyboardVisibleFromLayout = keyboardHeight > screenHeight * 0.15f
+            updateKeyboardVisibilityFromSources()
+        }
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        }
+        try {
+            windowManager?.addView(detectorView, params)
+            keyboardDetectorView = detectorView
+            detectorView.viewTreeObserver.addOnGlobalLayoutListener(keyboardListener)
+            ViewCompat.requestApplyInsets(detectorView)
+            ViewCompat.getRootWindowInsets(detectorView)?.let { insets ->
+                keyboardVisibleFromInsets = insets.isVisible(WindowInsetsCompat.Type.ime())
+                updateKeyboardVisibilityFromSources()
+            }
+        } catch (e: Exception) {
+            Log.e("FloatingDashboard", "Error adding keyboard detector", e)
+            keyboardDetectorView = null
+        }
+    }
+
+    private fun removeKeyboardDetector() {
+        keyboardDetectorView?.let { view ->
+            try {
+                keyboardListener?.let { listener ->
+                    if (view.viewTreeObserver.isAlive) {
+                        view.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+                    }
+                }
+                windowManager?.removeView(view)
+            } catch (e: Exception) {
+                Log.e("FloatingDashboard", "Error removing keyboard detector", e)
+            }
+        }
+        keyboardDetectorView = null
+        keyboardListener = null
+        keyboardVisibleFromInsets = false
+        keyboardVisibleFromLayout = false
+        updateKeyboardVisibility(false)
     }
 
     private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
@@ -575,8 +706,12 @@ class BackgroundService : Service() {
             overlayOffIds.remove(config.id)
             if (overlayViews.containsKey(config.id)) {
                 updateOverlayLayout(config)
+                setKeyboardHidden(config, shouldHideOnKeyboard(config))
             } else {
                 openOverlay(config)
+                if (overlayViews.containsKey(config.id)) {
+                    setKeyboardHidden(config, shouldHideOnKeyboard(config))
+                }
             }
         }
 
@@ -1645,6 +1780,8 @@ class BackgroundService : Service() {
 
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
+
+        removeKeyboardDetector()
 
         cancelAllJobs()
         job.cancel()

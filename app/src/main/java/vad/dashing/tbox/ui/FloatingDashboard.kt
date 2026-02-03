@@ -183,6 +183,7 @@ fun FloatingDashboard(
     val windowInfo = LocalWindowInfo.current
     val containerSize = windowInfo.containerSize
 
+
     // Увеличиваем окно при показе диалога и возвращаем при закрытии
     LaunchedEffect(showDialogForIndex) {
         if (showDialogForIndex != null) {
@@ -211,6 +212,7 @@ fun FloatingDashboard(
             onUpdateWindowPosition(panelId, originalX.intValue, originalY.intValue)
         }
     }
+
 
     val dataProvider = remember { TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel) }
 
