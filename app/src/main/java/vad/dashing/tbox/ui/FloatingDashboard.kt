@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -183,6 +185,12 @@ fun FloatingDashboard(
     val windowInfo = LocalWindowInfo.current
     val containerSize = windowInfo.containerSize
 
+    val keyboardInsets = WindowInsets.ime.asPaddingValues()
+    val keyboardHeight = keyboardInsets.calculateBottomPadding()
+    val isKeyboardVisible = keyboardHeight > 0.dp
+    val hideOnKeyboard = panelConfig.hideOnKeyboard
+    var keyboardHidden by remember { mutableStateOf(false) }
+
     // Увеличиваем окно при показе диалога и возвращаем при закрытии
     LaunchedEffect(showDialogForIndex) {
         if (showDialogForIndex != null) {
@@ -209,6 +217,30 @@ fun FloatingDashboard(
             // Восстанавливаем оригинальные размеры и положение
             onUpdateWindowSize(panelId, originalWidth.intValue, originalHeight.intValue)
             onUpdateWindowPosition(panelId, originalX.intValue, originalY.intValue)
+        }
+    }
+
+    LaunchedEffect(isKeyboardVisible, showDialogForIndex, hideOnKeyboard) {
+        if (!hideOnKeyboard) {
+            if (keyboardHidden) {
+                onUpdateWindowSize(panelId, currentWindowParams.width, currentWindowParams.height)
+                keyboardHidden = false
+            }
+            return@LaunchedEffect
+        }
+        if (showDialogForIndex != null) {
+            if (keyboardHidden) {
+                onUpdateWindowSize(panelId, currentWindowParams.width, currentWindowParams.height)
+                keyboardHidden = false
+            }
+            return@LaunchedEffect
+        }
+        if (isKeyboardVisible && !keyboardHidden) {
+            onUpdateWindowSize(panelId, 0, 0)
+            keyboardHidden = true
+        } else if (!isKeyboardVisible && keyboardHidden) {
+            onUpdateWindowSize(panelId, currentWindowParams.width, currentWindowParams.height)
+            keyboardHidden = false
         }
     }
 
