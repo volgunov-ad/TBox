@@ -556,6 +556,7 @@ fun SettingsTab(
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
+    val floatingDashboards by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
 
     val isTboxIPRotation by settingsViewModel.tboxIPRotation.collectAsStateWithLifecycle()
 
@@ -753,6 +754,7 @@ fun SettingsTab(
             "",
             true
         )
+        val hasEnabledDashboards = floatingDashboards.any { it.enabled }
         SettingSwitchWithAction(
             isChecked = isFloatingDashboardHideOnKeyboard,
             onCheckedChange = { enabled ->
@@ -763,9 +765,9 @@ fun SettingsTab(
             enabled = true,
             actionText = "Доступ",
             onActionClick = {
-                if (isFloatingDashboardEnabled) {
+                if (hasEnabledDashboards) {
                     showAccessibilitySettingsDialog(context) {
-                        settingsViewModel.saveFloatingDashboardSetting(false)
+                        settingsViewModel.disableAllFloatingDashboards()
                         requestCloseOverlays(context)
                         Handler(Looper.getMainLooper()).postDelayed({
                             openAccessibilitySettings(context)

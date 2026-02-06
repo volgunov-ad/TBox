@@ -637,6 +637,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateFloatingDashboard(panelId) { it.copy(enabled = enabled) }
     }
 
+    fun disableAllFloatingDashboards() {
+        val updated = floatingDashboards.value.map { it.copy(enabled = false) }
+        saveFloatingDashboards(updated)
+    }
+
     fun saveFloatingDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         updateSelectedFloatingDashboard { it.copy(widgetsConfig = config) }
     }
