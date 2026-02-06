@@ -54,6 +54,7 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.lang.reflect.Method
 import java.util.Date
 import kotlin.let
 
@@ -136,6 +137,9 @@ class BackgroundService : Service() {
     private var keyboardOverlayLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     private var keyboardMonitorJob: Job? = null
     private var inputMethodManager: InputMethodManager? = null
+    private var immVisibleHeightMethod: Method? = null
+    private var immIsShownMethod: Method? = null
+    private var immReflectionChecked = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
@@ -199,6 +203,8 @@ class BackgroundService : Service() {
         const val ACTION_TBOX_APP_STOP = "vad.dashing.tbox.TBOX_APP_STOP"
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
     }
+
+    private data class KeyboardVisibilityProbe(val visible: Boolean, val reliable: Boolean)
 
     override fun onCreate() {
         super.onCreate()
@@ -800,9 +806,14 @@ class BackgroundService : Service() {
     private fun isKeyboardVisibleByLayout(view: View): Boolean {
         val rect = Rect()
         view.getWindowVisibleDisplayFrame(rect)
-        val screenHeight = view.rootView.height
+        val screenHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager?.currentWindowMetrics?.bounds?.height()
+                ?: view.resources.displayMetrics.heightPixels
+        } else {
+            view.resources.displayMetrics.heightPixels
+        }
         if (screenHeight <= 0) return false
-        val heightDiff = screenHeight - rect.height()
+        val heightDiff = screenHeight - rect.bottom
         val minKeyboardHeight = (screenHeight * 0.15f).toInt()
         return heightDiff > minKeyboardHeight
     }
@@ -818,13 +829,45 @@ class BackgroundService : Service() {
         return isKeyboardVisibleByLayout(view)
     }
 
-    private fun resolveKeyboardVisibleFromImm(): Boolean {
-        val imm = inputMethodManager ?: return false
-        return try {
-            imm.isAcceptingText
-        } catch (e: Exception) {
-            false
+    private fun ensureImmReflection() {
+        if (immReflectionChecked) return
+        immReflectionChecked = true
+        try {
+            immVisibleHeightMethod =
+                InputMethodManager::class.java.getDeclaredMethod("getInputMethodWindowVisibleHeight")
+            immVisibleHeightMethod?.isAccessible = true
+        } catch (_: Exception) {
+            immVisibleHeightMethod = null
         }
+        try {
+            immIsShownMethod =
+                InputMethodManager::class.java.getDeclaredMethod("isInputMethodShown")
+            immIsShownMethod?.isAccessible = true
+        } catch (_: Exception) {
+            immIsShownMethod = null
+        }
+    }
+
+    private fun resolveKeyboardVisibleFromImm(): KeyboardVisibilityProbe {
+        val imm = inputMethodManager ?: return KeyboardVisibilityProbe(false, false)
+        ensureImmReflection()
+        immVisibleHeightMethod?.let { method ->
+            try {
+                val height = method.invoke(imm) as? Int ?: 0
+                return KeyboardVisibilityProbe(height > 0, true)
+            } catch (_: Exception) {
+                // Ignore and try other methods.
+            }
+        }
+        immIsShownMethod?.let { method ->
+            try {
+                val shown = method.invoke(imm) as? Boolean ?: false
+                return KeyboardVisibilityProbe(shown, true)
+            } catch (_: Exception) {
+                // Ignore and fall through.
+            }
+        }
+        return KeyboardVisibilityProbe(false, false)
     }
 
     private fun resolveKeyboardVisibleFromMetrics(view: View): Boolean {
@@ -846,8 +889,10 @@ class BackgroundService : Service() {
             while (isActive) {
                 val viewVisible = resolveKeyboardVisible(view)
                 val metricsVisible = resolveKeyboardVisibleFromMetrics(view)
-                val immVisible = resolveKeyboardVisibleFromImm()
-                updateKeyboardShown(viewVisible || metricsVisible || immVisible)
+                val immProbe = resolveKeyboardVisibleFromImm()
+                val overlayVisible = viewVisible || metricsVisible
+                val visible = if (immProbe.reliable) immProbe.visible else overlayVisible
+                updateKeyboardShown(visible)
                 delay(KEYBOARD_POLL_INTERVAL_MS)
             }
         }
@@ -868,6 +913,7 @@ class BackgroundService : Service() {
     }
 
     private fun updateKeyboardShown(isShown: Boolean) {
+        if (TboxRepository.isMainActivityVisible.value) return
         if (TboxRepository.isKeyboardShown.value == isShown) return
         TboxRepository.updateIsKeyboardShown(isShown)
     }
