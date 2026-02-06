@@ -523,6 +523,31 @@ fun FloatingDashboard(
                                                     units = widgetConfig.showUnit
                                                 )
                                             }
+                                            "motorHoursWidget" -> {
+                                                DashboardMotorHoursWidgetItem(
+                                                    widget = widget,
+                                                    dataProvider = dataProvider,
+                                                    onClick = {
+                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                            showDialogForIndex = index
+                                                        } else if (isFloatingDashboardClickAction) {
+                                                            openMainActivity(context)
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
+                                                    },
+                                                    onDoubleClick = {
+                                                        appDataViewModel.setMotorHours(0f)
+                                                    },
+                                                    elevation = 0.dp,
+                                                    shape = 0.dp,
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
+                                                )
+                                            }
                                             "restartTbox" -> {
                                                 DashboardWidgetItem(
                                                     widget = widget,

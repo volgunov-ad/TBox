@@ -254,6 +254,13 @@ class CanDataViewModel : ViewModel() {
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyMap()
         )
+
+    val motorHoursTrip: StateFlow<Float?> = CanDataRepository.motorHoursTrip
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
 }
 
 fun seatModeToString(seatMode: UInt?): String {

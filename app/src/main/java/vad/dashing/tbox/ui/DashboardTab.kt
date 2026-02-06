@@ -181,6 +181,17 @@ fun MainDashboardTab(
                                             canViewModel = canViewModel
                                         )
                                     }
+                                    "motorHoursWidget" -> {
+                                        DashboardMotorHoursWidgetItem(
+                                            widget = widget,
+                                            dataProvider = dataProvider,
+                                            onClick = { showDialogForIndex = index },
+                                            onLongClick = {},
+                                            onDoubleClick = {
+                                                appDataViewModel.setMotorHours(0f)
+                                            }
+                                        )
+                                    }
                                     "restartTbox" -> {
                                         DashboardWidgetItem(
                                             widget = widget,

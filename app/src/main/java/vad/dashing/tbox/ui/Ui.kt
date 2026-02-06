@@ -550,6 +550,7 @@ fun SettingsTab(
     val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
     val isFloatingDashboardBackground by settingsViewModel.isFloatingDashboardBackground.collectAsStateWithLifecycle()
     val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
+    val isFloatingDashboardHideOnKeyboard by settingsViewModel.isFloatingDashboardHideOnKeyboard.collectAsStateWithLifecycle()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
@@ -748,6 +749,15 @@ fun SettingsTab(
             },
             "Открывать окно программы при одиночном нажатии на элемент плавающей панели",
             "",
+            true
+        )
+        SettingSwitch(
+            isFloatingDashboardHideOnKeyboard,
+            { enabled ->
+                settingsViewModel.saveFloatingDashboardHideOnKeyboard(enabled)
+            },
+            "Скрывать плавающую панель при открытой клавиатуре",
+            "Панель будет скрываться при появлении системной клавиатуры",
             true
         )
         SettingDropdownGeneric(
@@ -1279,6 +1289,7 @@ fun CarDataTab(
     val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
     val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
     val isWindowsBlocked by canViewModel.isWindowsBlocked.collectAsStateWithLifecycle()
+    val motorHoursTrip by canViewModel.motorHoursTrip.collectAsStateWithLifecycle()
 
     val voltageC by cycleViewModel.voltage.collectAsStateWithLifecycle()
     val carSpeedC by cycleViewModel.carSpeed.collectAsStateWithLifecycle()
@@ -1347,6 +1358,7 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("isWindowsBlocked"), valueToString(isWindowsBlocked,
                 booleanTrue = "заблокированы", booleanFalse = "разблокированы")) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHours"), valueToString(motorHours, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHoursTrip"), valueToString(motorHoursTrip, 1)) }
             if (isGetCycleSignalEnabled) {
                 item { StatusRow("Cycle напряжение, В", valueToString(voltageC, 1)) }
                 item { StatusRow("Cycle скорость, км/ч", valueToString(carSpeedC, 1)) }

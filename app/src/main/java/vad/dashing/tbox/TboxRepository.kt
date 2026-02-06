@@ -101,6 +101,9 @@ data class HdmData(
 )
 
 object TboxRepository {
+    private val _isKeyboardShown = MutableStateFlow(false)
+    val isKeyboardShown: StateFlow<Boolean> = _isKeyboardShown.asStateFlow()
+
     private val _netState = MutableStateFlow(NetState())
     val netState: StateFlow<NetState> = _netState.asStateFlow()
 
@@ -202,6 +205,10 @@ object TboxRepository {
 
     private val timeFormat: ThreadLocal<SimpleDateFormat> = ThreadLocal.withInitial {
         SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    }
+
+    fun updateIsKeyboardShown(value: Boolean) {
+        _isKeyboardShown.value = value
     }
 
     fun addLog(level: String, tag: String, message: String) {

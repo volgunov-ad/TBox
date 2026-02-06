@@ -38,7 +38,10 @@ class MotorHoursBuffer(private val maxDif: Float = 0.02f) {
         }
         lastRPM = rpm
         val newHours = (System.currentTimeMillis() - lastTime) / 3600000.0f
-        if (newHours >= maxDif) {
+        if (newHours > 10 * maxDif) {
+            lastTime = System.currentTimeMillis()
+            return 0f
+        } else if (newHours >= maxDif) {
             lastTime = System.currentTimeMillis()
             return newHours
         } else {

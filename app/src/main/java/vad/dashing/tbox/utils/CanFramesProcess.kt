@@ -42,8 +42,12 @@ object CanFramesProcess {
                 )
 
                 if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xC4.toByte()))) {
-                    val angle =
-                        (singleData.copyOfRange(0, 2).toFloat("UINT16_BE") - 32768f) * 6f / 100f
+                    val angleRaw = singleData.copyOfRange(0, 2).toFloat("UINT16_BE")
+                    val angle = if (angleRaw == 65535f) {
+                        null
+                    } else {
+                        (angleRaw - 32767f) * 6f / 100f
+                    }
                     val speed = singleData[2].toInt()
                     CanDataRepository.updateSteerAngle(angle)
                     CanDataRepository.updateSteerSpeed(speed)
@@ -259,12 +263,12 @@ object CanFramesProcess {
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x35))) {
                     val insideTemperature = singleData[5].toUInt().toFloat() * 0.5f - 40f
                     val outsideTemperature = singleData[6].toUInt().toFloat() * 0.5f - 40f
-                    if (outsideTemperature >= -40f && outsideTemperature <= 60f) {
+                    if (outsideTemperature >= -40f && outsideTemperature < 87f) {
                         CanDataRepository.updateOutsideTemperature(outsideTemperature)
                     } else {
                         CanDataRepository.updateOutsideTemperature(null)
                     }
-                    if (insideTemperature >= -40f && insideTemperature <= 60f) {
+                    if (insideTemperature >= -40f && insideTemperature < 87f) {
                         CanDataRepository.updateInsideTemperature(insideTemperature)
                     } else {
                         CanDataRepository.updateInsideTemperature(null)

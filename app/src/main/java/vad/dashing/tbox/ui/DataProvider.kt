@@ -92,6 +92,7 @@ class TboxDataProvider(
         "insideTemperature" -> canViewModel.insideTemperature.mapState { valueToString(it, 1) }
         "isWindowsBlocked" -> canViewModel.isWindowsBlocked.mapState { valueToString(it, booleanTrue = "заблокированы", booleanFalse = "разблокированы") }
         "motorHours" -> appDataViewModel.motorHours.mapState { valueToString(it, 1) }
+        "motorHoursTrip" -> canViewModel.motorHoursTrip.mapState { valueToString(it, 1) }
         "restartTbox" -> MutableStateFlow("TBox").asStateFlow()
         else -> MutableStateFlow("").asStateFlow()
     }

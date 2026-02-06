@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
@@ -23,6 +24,7 @@ import vad.dashing.tbox.location.LocationMockManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
@@ -122,6 +124,7 @@ class BackgroundService : Service() {
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
+    private var motorHoursTripBuffer = MotorHoursBuffer(0.02f)
 
     companion object {
         private const val MAX_OVERLAY_RETRIES = 3
@@ -510,11 +513,6 @@ class BackgroundService : Service() {
         }
     }
 
-    fun updateWindowPosition(x: Int, y: Int) {
-        val panelId = getSingleOverlayId() ?: return
-        updateWindowPosition(panelId, x, y)
-    }
-
     fun updateWindowSize(panelId: String, width: Int, height: Int) {
         val params = overlayParams[panelId] ?: return
         if (params.width == width && params.height == height) return
@@ -523,11 +521,6 @@ class BackgroundService : Service() {
         overlayViews[panelId]?.let { view ->
             windowManager?.updateViewLayout(view, params)
         }
-    }
-
-    fun updateWindowSize(width: Int, height: Int) {
-        val panelId = getSingleOverlayId() ?: return
-        updateWindowSize(panelId, width, height)
     }
 
     private fun updateOverlayLayout(config: FloatingDashboardConfig) {
@@ -552,38 +545,96 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun getSingleOverlayId(): String? {
-        return if (overlayViews.size == 1) overlayViews.keys.firstOrNull() else null
-    }
-
-    private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
+    private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>, isKeyboardShown: Boolean) {
         val configMap = configs.associateBy { it.id }
         val enabledConfigs = configs.filter { it.enabled }
+        val hideOnKeyboardConfigs = configs.filter { it.hideOnKeyboard }
+
         val enabledIds = enabledConfigs.map { it.id }.toSet()
         val existingIds = overlayViews.keys.toSet()
+        val hideOnKeyboardIds = hideOnKeyboardConfigs.map { it.id }.toSet()
 
+        // Удаляем конфигурации, которых больше нет
         val removedIds = overlayRetryCounts.keys - configMap.keys
         removedIds.forEach { id ->
             overlayRetryCounts.remove(id)
             overlayOffIds.remove(id)
         }
 
-        val toClose = existingIds - enabledIds
-        toClose.forEach { closeOverlay(it) }
-
+        // Обрабатываем видимость оверлеев
         enabledConfigs.forEach { config ->
             overlayOffIds.remove(config.id)
-            if (overlayViews.containsKey(config.id)) {
-                updateOverlayLayout(config)
+
+            // Определяем, должен ли оверлей быть видимым
+            val shouldBeVisible = calculateOverlayVisibility(config, isKeyboardShown)
+
+            if (shouldBeVisible) {
+                // Оверлей должен быть видимым
+                if (overlayViews.containsKey(config.id)) {
+                    // Восстанавливаем, если был скрыт
+                    if (overlayViews[config.id]?.visibility == View.GONE) {
+                        restoreOverlay(config.id)
+                    }
+                    updateOverlayLayout(config)
+                } else {
+                    // Создаем новый оверлей
+                    openOverlay(config)
+                }
             } else {
-                openOverlay(config)
+                // Оверлей должен быть скрыт (из-за клавиатуры)
+                if (overlayViews.containsKey(config.id)) {
+                    hideOverlayForKeyboard(config.id)
+                }
+                // Если оверлея нет, но он должен быть скрыт - ничего не делаем
             }
         }
 
+        // Закрываем оверлеи, которые отключены или удалены
+        val idsToClose = existingIds - enabledIds
+        idsToClose.forEach { id ->
+            closeOverlay(id)
+        }
+
+        // Очищаем счетчики для отключенных конфигов
         val disabledIds = configMap.keys - enabledIds
         disabledIds.forEach { id ->
             overlayRetryCounts.remove(id)
             overlayOffIds.remove(id)
+        }
+    }
+
+    private fun calculateOverlayVisibility(config: FloatingDashboardConfig, isKeyboardShown: Boolean): Boolean {
+        if (!config.enabled) return false
+        return !(config.hideOnKeyboard && isKeyboardShown)
+    }
+
+    private fun hideOverlayForKeyboard(id: String) {
+        overlayViews[id]?.let { view ->
+            if (view.visibility != View.GONE) {
+
+                // Скрываем с анимацией
+                view.animate()
+                    .alpha(0f)
+                    .setDuration(200)
+                    .withEndAction {
+                        view.visibility = View.GONE
+                    }
+                    .start()
+            }
+        }
+    }
+
+    private fun restoreOverlay(id: String) {
+        overlayViews[id]?.let { view ->
+            // Восстанавливаем видимость с анимацией
+            view.alpha = 0f
+            view.visibility = View.VISIBLE
+
+            // Анимация появления
+            view.animate()
+                .alpha(1f)
+                .setDuration(200)
+                .start()
         }
     }
 
@@ -596,6 +647,7 @@ class BackgroundService : Service() {
                     overlayRetryCounts[config.id] = 0
                     return@forEach
                 }
+                if (config.hideOnKeyboard && TboxRepository.isKeyboardShown.value) return@forEach
                 val retryCount = overlayRetryCounts[config.id] ?: 0
                 if (retryCount >= MAX_OVERLAY_RETRIES * 2) {
                     TboxRepository.addLog("ERROR", "Floating Dashboard",
@@ -920,8 +972,12 @@ class BackgroundService : Service() {
                     .collect { rpm ->
                     try {
                         val motorHours = motorHoursBuffer.updateValue(rpm ?: 0f)
+                        val motorHoursTrip = motorHoursTripBuffer.updateValue(rpm ?: 0f)
                         if (motorHours != 0f) {
                             appDataManager.addMotorHours(motorHours)
+                        }
+                        if (motorHoursTrip != 0f) {
+                            CanDataRepository.addMotorHoursTrip(motorHoursTrip)
                         }
                     } catch (e: Exception) {
                         TboxRepository.addLog("ERROR", "Data Listener",
@@ -962,11 +1018,14 @@ class BackgroundService : Service() {
             }
 
             launch {
-                floatingDashboards
-                    .drop(1) // Пропускаем начальное значение
-                    .collect { configs ->
+                floatingDashboards.combine(TboxRepository.isKeyboardShown) { configs, isKeyboardShown ->
+                    // Создаем объединенный объект
+                    Pair(configs, isKeyboardShown)
+                }
+                .drop(1) // Пропускаем начальное значение
+                .collect { (configs, isKeyboardShown) ->
                     withContext(Dispatchers.Main) {
-                        syncFloatingDashboards(configs)
+                        syncFloatingDashboards(configs, isKeyboardShown)
                     }
                 }
             }
@@ -1019,7 +1078,7 @@ class BackgroundService : Service() {
                         widgetUpdateTime = System.currentTimeMillis()
                     }
 
-                    if (System.currentTimeMillis() - floatingDashboardCheckTime > 5000) {
+                    if (System.currentTimeMillis() - floatingDashboardCheckTime > 30000) {
                         floatingDashboardCheckTime = System.currentTimeMillis()
                         ensureFloatingDashboards()
                     }
@@ -2173,11 +2232,7 @@ class BackgroundService : Service() {
         var apnDNS1 = "-"
         var apnDNS2 = "-"
         if (data.size >= 103) {
-            apnStatus = if (data[6] == 0x01.toByte()) {
-                true
-            } else {
-                false
-            }
+            apnStatus = data[6] == 0x01.toByte()
             apnType = String(data, 7, 32, Charsets.UTF_8)
             apnIP = String(data, 39, 15, Charsets.UTF_8)
             apnGate = String(data, 87, 15, Charsets.UTF_8)
