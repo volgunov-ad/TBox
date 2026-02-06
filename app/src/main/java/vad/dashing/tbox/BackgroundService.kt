@@ -16,6 +16,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateBottomPadding
@@ -134,6 +135,7 @@ class BackgroundService : Service() {
     private var keyboardOverlayView: View? = null
     private var keyboardOverlayLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     private var keyboardMonitorJob: Job? = null
+    private var inputMethodManager: InputMethodManager? = null
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
@@ -678,6 +680,9 @@ class BackgroundService : Service() {
                 return
             }
         }
+        if (inputMethodManager == null) {
+            inputMethodManager = getSystemService(InputMethodManager::class.java)
+        }
 
         if (!Settings.canDrawOverlays(this)) {
             TboxRepository.addLog("ERROR", "Keyboard Overlay", "Cannot draw overlay")
@@ -769,6 +774,7 @@ class BackgroundService : Service() {
 
         keyboardOverlayView = null
         keyboardOverlayLayoutListener = null
+        inputMethodManager = null
         updateKeyboardShown(false)
     }
 
@@ -812,6 +818,15 @@ class BackgroundService : Service() {
         return isKeyboardVisibleByLayout(view)
     }
 
+    private fun resolveKeyboardVisibleFromImm(): Boolean {
+        val imm = inputMethodManager ?: return false
+        return try {
+            imm.isAcceptingText
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun resolveKeyboardVisibleFromMetrics(view: View): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
         val wm = windowManager ?: return false
@@ -831,7 +846,8 @@ class BackgroundService : Service() {
             while (isActive) {
                 val viewVisible = resolveKeyboardVisible(view)
                 val metricsVisible = resolveKeyboardVisibleFromMetrics(view)
-                updateKeyboardShown(viewVisible || metricsVisible)
+                val immVisible = resolveKeyboardVisibleFromImm()
+                updateKeyboardShown(viewVisible || metricsVisible || immVisible)
                 delay(KEYBOARD_POLL_INTERVAL_MS)
             }
         }
