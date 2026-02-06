@@ -127,7 +127,6 @@ class BackgroundService : Service() {
     private val overlayOffIds = mutableSetOf<String>()
     private var keyboardOverlayView: View? = null
     private var keyboardOverlayLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
-    private var lastKeyboardShown = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
@@ -774,8 +773,7 @@ class BackgroundService : Service() {
     }
 
     private fun updateKeyboardShown(isShown: Boolean) {
-        if (lastKeyboardShown == isShown) return
-        lastKeyboardShown = isShown
+        if (TboxRepository.isKeyboardShown.value == isShown) return
         TboxRepository.updateIsKeyboardShown(isShown)
     }
 
