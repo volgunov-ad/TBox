@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 
@@ -35,9 +36,15 @@ class KeyboardAccessibilityService : AccessibilityService() {
             return
         }
         val isImeVisible = windows.any { window ->
-            window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD && window.isVisible
+            window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD && isWindowVisible(window)
         }
         updateKeyboardShown(isImeVisible)
+    }
+
+    private fun isWindowVisible(window: AccessibilityWindowInfo): Boolean {
+        val rect = Rect()
+        window.getBoundsInScreen(rect)
+        return !rect.isEmpty && rect.width() > 0 && rect.height() > 0
     }
 
     private fun updateKeyboardShown(isShown: Boolean) {

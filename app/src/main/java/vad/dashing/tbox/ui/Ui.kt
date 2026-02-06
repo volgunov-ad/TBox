@@ -751,14 +751,19 @@ fun SettingsTab(
             "",
             true
         )
-        SettingSwitch(
-            isFloatingDashboardHideOnKeyboard,
-            { enabled ->
+        SettingSwitchWithAction(
+            isChecked = isFloatingDashboardHideOnKeyboard,
+            onCheckedChange = { enabled ->
                 settingsViewModel.saveFloatingDashboardHideOnKeyboard(enabled)
             },
-            "Скрывать плавающую панель при открытой клавиатуре",
-            "Панель будет скрываться при появлении системной клавиатуры",
-            true
+            text = "Скрывать плавающую панель при открытой клавиатуре",
+            description = "Панель будет скрываться при появлении системной клавиатуры",
+            enabled = true,
+            actionText = "Доступ",
+            onActionClick = {
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                context.startActivity(intent)
+            }
         )
         SettingDropdownGeneric(
             floatingDashboardRows,
