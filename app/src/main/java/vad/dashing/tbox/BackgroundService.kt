@@ -16,7 +16,11 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.core.app.NotificationCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -682,20 +686,32 @@ class BackgroundService : Service() {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
 
-        val overlayView = View(this).apply {
+        val overlayView = ComposeView(this).apply {
             alpha = 0f
             visibility = View.VISIBLE
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            setViewTreeViewModelStoreOwner(lifecycleOwner)
         }
 
-        ViewCompat.setOnApplyWindowInsetsListener(overlayView) { view, insets ->
-            updateKeyboardFromInsets(view, insets)
-            insets
+        try {
+            overlayView.setContent {
+                KeyboardAwareOverlay { isKeyboardVisible ->
+                    updateKeyboardShown(isKeyboardVisible)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("Keyboard Overlay", "Error creating view", e)
+            TboxRepository.addLog("ERROR", "Keyboard Overlay", "Failed to create: ${e.message}")
+            return
         }
 
         val layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
@@ -707,6 +723,12 @@ class BackgroundService : Service() {
             windowManager?.addView(overlayView, layoutParams)
             keyboardOverlayView = overlayView
             keyboardOverlayLayoutListener = layoutListener
+            if (!lifecycleOwner.isInitialized || lifecycleOwner.lifecycle.currentState.isAtLeast(
+                    Lifecycle.State.DESTROYED
+                )
+            ) {
+                lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
+            }
             ViewCompat.requestApplyInsets(overlayView)
             updateKeyboardFromLayout(overlayView)
             TboxRepository.addLog("INFO", "Keyboard Overlay", "Shown")
@@ -770,6 +792,16 @@ class BackgroundService : Service() {
         val heightDiff = screenHeight - rect.height()
         val minKeyboardHeight = (screenHeight * 0.15f).toInt()
         return heightDiff > minKeyboardHeight
+    }
+
+    @Composable
+    private fun KeyboardAwareOverlay(onKeyboardVisibilityChanged: (Boolean) -> Unit) {
+        val density = LocalDensity.current
+        val imeBottom = WindowInsets.ime.getBottom(density)
+        val isKeyboardVisible = imeBottom > 0
+        LaunchedEffect(isKeyboardVisible) {
+            onKeyboardVisibilityChanged(isKeyboardVisible)
+        }
     }
 
     private fun updateKeyboardShown(isShown: Boolean) {
