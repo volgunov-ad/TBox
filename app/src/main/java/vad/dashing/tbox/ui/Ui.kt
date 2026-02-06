@@ -767,8 +767,7 @@ fun SettingsTab(
             onActionClick = {
                 if (hasEnabledDashboards) {
                     showAccessibilitySettingsDialog(context) {
-                        settingsViewModel.disableAllFloatingDashboards()
-                        requestCloseOverlays(context)
+                        requestSuspendOverlays(context)
                         Handler(Looper.getMainLooper()).postDelayed({
                             openAccessibilitySettings(context)
                         }, 500)
@@ -1060,9 +1059,9 @@ private fun openAccessibilitySettings(context: Context) {
     context.startActivity(intent)
 }
 
-private fun requestCloseOverlays(context: Context) {
+private fun requestSuspendOverlays(context: Context) {
     val intent = Intent(context, BackgroundService::class.java).apply {
-        action = BackgroundService.ACTION_CLOSE_OVERLAYS
+        action = BackgroundService.ACTION_SUSPEND_OVERLAYS
     }
     context.startService(intent)
 }
@@ -1072,12 +1071,12 @@ private fun showAccessibilitySettingsDialog(
     onDisablePanels: () -> Unit
 ) {
     android.app.AlertDialog.Builder(context)
-        .setTitle("Требуется отключить панели")
+        .setTitle("Нужно временно скрыть панели")
         .setMessage(
             "Android блокирует запрос доступа, если поверх есть оверлей.\n" +
-                "Отключить плавающую панель и открыть настройки специальных возможностей?"
+                "Временно скрыть панели и открыть настройки специальных возможностей?"
         )
-        .setPositiveButton("Отключить и открыть") { _, _ ->
+        .setPositiveButton("Скрыть и открыть") { _, _ ->
             onDisablePanels()
             openAccessibilitySettings(context)
         }

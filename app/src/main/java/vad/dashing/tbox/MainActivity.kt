@@ -101,6 +101,14 @@ class MainActivity : ComponentActivity() {
         startBackgroundService()
     }
 
+    override fun onResume() {
+        super.onResume()
+        val intent = Intent(this, BackgroundService::class.java).apply {
+            action = BackgroundService.ACTION_RESUME_OVERLAYS
+        }
+        startServiceSafely(intent)
+    }
+
     private fun startBackgroundService() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_START

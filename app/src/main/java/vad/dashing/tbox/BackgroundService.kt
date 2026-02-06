@@ -121,6 +121,7 @@ class BackgroundService : Service() {
     private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
     private val overlayRetryCounts = mutableMapOf<String, Int>()
     private val overlayOffIds = mutableSetOf<String>()
+    private var overlaysSuspended = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
@@ -182,7 +183,8 @@ class BackgroundService : Service() {
         const val ACTION_TBOX_APP_RESUME = "vad.dashing.tbox.TBOX_APP_RESUME"
         const val ACTION_TBOX_APP_STOP = "vad.dashing.tbox.TBOX_APP_STOP"
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
-        const val ACTION_CLOSE_OVERLAYS = "vad.dashing.tbox.CLOSE_OVERLAYS"
+        const val ACTION_SUSPEND_OVERLAYS = "vad.dashing.tbox.SUSPEND_OVERLAYS"
+        const val ACTION_RESUME_OVERLAYS = "vad.dashing.tbox.RESUME_OVERLAYS"
     }
 
 
@@ -381,7 +383,8 @@ class BackgroundService : Service() {
                 sendControlTboxApplication(appName, "STOP")
             }
             ACTION_GET_INFO -> getInfo()
-            ACTION_CLOSE_OVERLAYS -> closeAllOverlays()
+            ACTION_SUSPEND_OVERLAYS -> suspendOverlays()
+            ACTION_RESUME_OVERLAYS -> resumeOverlays()
             ACTION_CLOSE -> crtCmd(0x26,
                 ByteArray(45).apply {
                     this[0] = 0x02 },
@@ -506,6 +509,18 @@ class BackgroundService : Service() {
         ids.forEach { closeOverlay(it) }
     }
 
+    private fun suspendOverlays() {
+        overlaysSuspended = true
+        closeAllOverlays()
+    }
+
+    private fun resumeOverlays() {
+        overlaysSuspended = false
+        scope.launch {
+            ensureFloatingDashboards()
+        }
+    }
+
     fun updateWindowPosition(panelId: String, x: Int, y: Int) {
         val params = overlayParams[panelId] ?: return
         if (params.x == x && params.y == y) return
@@ -549,6 +564,12 @@ class BackgroundService : Service() {
     }
 
     private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>, isKeyboardShown: Boolean) {
+        if (overlaysSuspended) {
+            if (overlayViews.isNotEmpty()) {
+                closeAllOverlays()
+            }
+            return
+        }
         val configMap = configs.associateBy { it.id }
         val enabledConfigs = configs.filter { it.enabled }
         val hideOnKeyboardConfigs = configs.filter { it.hideOnKeyboard }
@@ -646,6 +667,7 @@ class BackgroundService : Service() {
 
     private suspend fun ensureFloatingDashboards() {
         withContext(Dispatchers.Main) {
+            if (overlaysSuspended) return@withContext
             val currentConfigs = floatingDashboards.value
             val enabledConfigs = currentConfigs.filter { it.enabled }
             enabledConfigs.forEach { config ->
