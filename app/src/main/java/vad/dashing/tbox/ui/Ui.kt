@@ -2,6 +2,8 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -764,6 +766,10 @@ fun SettingsTab(
                 if (isFloatingDashboardEnabled) {
                     showAccessibilitySettingsDialog(context) {
                         settingsViewModel.saveFloatingDashboardSetting(false)
+                        requestCloseOverlays(context)
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            openAccessibilitySettings(context)
+                        }, 500)
                     }
                 } else {
                     openAccessibilitySettings(context)
@@ -1050,6 +1056,13 @@ private fun openAccessibilitySettings(context: Context) {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     context.startActivity(intent)
+}
+
+private fun requestCloseOverlays(context: Context) {
+    val intent = Intent(context, BackgroundService::class.java).apply {
+        action = BackgroundService.ACTION_CLOSE_OVERLAYS
+    }
+    context.startService(intent)
 }
 
 private fun showAccessibilitySettingsDialog(

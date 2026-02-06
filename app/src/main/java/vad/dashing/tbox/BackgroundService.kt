@@ -182,6 +182,7 @@ class BackgroundService : Service() {
         const val ACTION_TBOX_APP_RESUME = "vad.dashing.tbox.TBOX_APP_RESUME"
         const val ACTION_TBOX_APP_STOP = "vad.dashing.tbox.TBOX_APP_STOP"
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
+        const val ACTION_CLOSE_OVERLAYS = "vad.dashing.tbox.CLOSE_OVERLAYS"
     }
 
 
@@ -380,6 +381,7 @@ class BackgroundService : Service() {
                 sendControlTboxApplication(appName, "STOP")
             }
             ACTION_GET_INFO -> getInfo()
+            ACTION_CLOSE_OVERLAYS -> closeAllOverlays()
             ACTION_CLOSE -> crtCmd(0x26,
                 ByteArray(45).apply {
                     this[0] = 0x02 },
