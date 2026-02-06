@@ -7,26 +7,15 @@ import android.app.Service
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.PixelFormat
-import android.graphics.Rect
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.View
-import android.view.ViewTreeObserver
 import android.view.WindowManager
-import android.view.inputmethod.InputMethodManager
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.calculateBottomPadding
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
@@ -54,7 +43,6 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.lang.reflect.Method
 import java.util.Date
 import kotlin.let
 
@@ -133,13 +121,6 @@ class BackgroundService : Service() {
     private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
     private val overlayRetryCounts = mutableMapOf<String, Int>()
     private val overlayOffIds = mutableSetOf<String>()
-    private var keyboardOverlayView: View? = null
-    private var keyboardOverlayLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
-    private var keyboardMonitorJob: Job? = null
-    private var inputMethodManager: InputMethodManager? = null
-    private var immVisibleHeightMethod: Method? = null
-    private var immIsShownMethod: Method? = null
-    private var immReflectionChecked = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
@@ -147,7 +128,6 @@ class BackgroundService : Service() {
 
     companion object {
         private const val MAX_OVERLAY_RETRIES = 3
-        private const val KEYBOARD_POLL_INTERVAL_MS = 200L
 
         private const val APP_CODE = 0x2F.toByte()
         private const val MDC_CODE = 0x25.toByte()
@@ -204,7 +184,6 @@ class BackgroundService : Service() {
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
     }
 
-    private data class KeyboardVisibilityProbe(val visible: Boolean, val reliable: Boolean)
 
     override fun onCreate() {
         super.onCreate()
@@ -523,7 +502,6 @@ class BackgroundService : Service() {
     private fun closeAllOverlays() {
         val ids = overlayViews.keys.toList()
         ids.forEach { closeOverlay(it) }
-        stopKeyboardOverlay()
     }
 
     fun updateWindowPosition(panelId: String, x: Int, y: Int) {
@@ -572,7 +550,6 @@ class BackgroundService : Service() {
         val configMap = configs.associateBy { it.id }
         val enabledConfigs = configs.filter { it.enabled }
         val hideOnKeyboardConfigs = configs.filter { it.hideOnKeyboard }
-        updateKeyboardOverlayVisibility(configs)
 
         val enabledIds = enabledConfigs.map { it.id }.toSet()
         val existingIds = overlayViews.keys.toSet()
@@ -665,263 +642,9 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun updateKeyboardOverlayVisibility(configs: List<FloatingDashboardConfig>) {
-        val hasEnabledPanels = configs.any { it.enabled }
-        if (hasEnabledPanels) {
-            startKeyboardOverlay()
-        } else {
-            stopKeyboardOverlay()
-        }
-    }
-
-    private fun startKeyboardOverlay() {
-        if (keyboardOverlayView != null) return
-
-        if (windowManager == null) {
-            try {
-                windowManager = getSystemService(WindowManager::class.java)
-            } catch (e: Exception) {
-                Log.e("Keyboard Overlay", "Error creating Window manager", e)
-                TboxRepository.addLog("ERROR", "Keyboard Overlay", "Error creating Window manager: ${e.message}")
-                return
-            }
-        }
-        if (inputMethodManager == null) {
-            inputMethodManager = getSystemService(InputMethodManager::class.java)
-        }
-
-        if (!Settings.canDrawOverlays(this)) {
-            TboxRepository.addLog("ERROR", "Keyboard Overlay", "Cannot draw overlay")
-            return
-        }
-
-        val layoutParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR or
-                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
-        }
-
-        val overlayView = ComposeView(this).apply {
-            alpha = 0f
-            visibility = View.VISIBLE
-            setViewTreeLifecycleOwner(lifecycleOwner)
-            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            setViewTreeViewModelStoreOwner(lifecycleOwner)
-        }
-
-        try {
-            overlayView.setContent {
-                KeyboardAwareOverlay { isKeyboardVisible ->
-                    updateKeyboardShown(isKeyboardVisible)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("Keyboard Overlay", "Error creating view", e)
-            TboxRepository.addLog("ERROR", "Keyboard Overlay", "Failed to create: ${e.message}")
-            return
-        }
-
-        val layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
-            updateKeyboardFromLayout(overlayView)
-        }
-        overlayView.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
-
-        try {
-            windowManager?.addView(overlayView, layoutParams)
-            keyboardOverlayView = overlayView
-            keyboardOverlayLayoutListener = layoutListener
-            if (!lifecycleOwner.isInitialized || lifecycleOwner.lifecycle.currentState.isAtLeast(
-                    Lifecycle.State.DESTROYED
-                )
-            ) {
-                lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
-            }
-            ViewCompat.requestApplyInsets(overlayView)
-            updateKeyboardFromLayout(overlayView)
-            startKeyboardMonitor(overlayView)
-            TboxRepository.addLog("INFO", "Keyboard Overlay", "Shown")
-        } catch (e: Exception) {
-            Log.e("Keyboard Overlay", "Error adding view", e)
-            TboxRepository.addLog("ERROR", "Keyboard Overlay", "Failed to show: ${e.message}")
-        }
-    }
-
-    private fun stopKeyboardOverlay() {
-        val view = keyboardOverlayView ?: run {
-            updateKeyboardShown(false)
-            return
-        }
-        stopKeyboardMonitor()
-        try {
-            keyboardOverlayLayoutListener?.let { listener ->
-                if (view.viewTreeObserver.isAlive) {
-                    view.viewTreeObserver.removeOnGlobalLayoutListener(listener)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("Keyboard Overlay", "Error removing layout listener", e)
-        }
-        try {
-            windowManager?.removeView(view)
-            TboxRepository.addLog("INFO", "Keyboard Overlay", "Closed")
-        } catch (e: Exception) {
-            TboxRepository.addLog("ERROR", "Keyboard Overlay", "Error removing view")
-            Log.e("Keyboard Overlay", "Error removing view", e)
-        }
-
-        keyboardOverlayView = null
-        keyboardOverlayLayoutListener = null
-        inputMethodManager = null
-        updateKeyboardShown(false)
-    }
-
-    private fun updateKeyboardFromInsets(view: View, insets: WindowInsetsCompat) {
-        val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
-        val isImeVisible = insets.isVisible(WindowInsetsCompat.Type.ime()) || imeInsets.bottom > 0
-        if (isImeVisible) {
-            updateKeyboardShown(true)
-            return
-        }
-        updateKeyboardShown(isKeyboardVisibleByLayout(view))
-    }
-
-    private fun updateKeyboardFromLayout(view: View) {
-        val insets = ViewCompat.getRootWindowInsets(view)
-        if (insets != null) {
-            updateKeyboardFromInsets(view, insets)
-            return
-        }
-        updateKeyboardShown(isKeyboardVisibleByLayout(view))
-    }
-
-    private fun isKeyboardVisibleByLayout(view: View): Boolean {
-        val rect = Rect()
-        view.getWindowVisibleDisplayFrame(rect)
-        val screenHeight = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            windowManager?.currentWindowMetrics?.bounds?.height()
-                ?: view.resources.displayMetrics.heightPixels
-        } else {
-            view.resources.displayMetrics.heightPixels
-        }
-        if (screenHeight <= 0) return false
-        val heightDiff = screenHeight - rect.bottom
-        val minKeyboardHeight = (screenHeight * 0.15f).toInt()
-        return heightDiff > minKeyboardHeight
-    }
-
-    private fun resolveKeyboardVisible(view: View): Boolean {
-        val insets = ViewCompat.getRootWindowInsets(view)
-        if (insets != null) {
-            val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
-            if (insets.isVisible(WindowInsetsCompat.Type.ime()) || imeInsets.bottom > 0) {
-                return true
-            }
-        }
-        return isKeyboardVisibleByLayout(view)
-    }
-
-    private fun ensureImmReflection() {
-        if (immReflectionChecked) return
-        immReflectionChecked = true
-        try {
-            immVisibleHeightMethod =
-                InputMethodManager::class.java.getDeclaredMethod("getInputMethodWindowVisibleHeight")
-            immVisibleHeightMethod?.isAccessible = true
-        } catch (_: Exception) {
-            immVisibleHeightMethod = null
-        }
-        try {
-            immIsShownMethod =
-                InputMethodManager::class.java.getDeclaredMethod("isInputMethodShown")
-            immIsShownMethod?.isAccessible = true
-        } catch (_: Exception) {
-            immIsShownMethod = null
-        }
-    }
-
-    private fun resolveKeyboardVisibleFromImm(): KeyboardVisibilityProbe {
-        val imm = inputMethodManager ?: return KeyboardVisibilityProbe(false, false)
-        ensureImmReflection()
-        immVisibleHeightMethod?.let { method ->
-            try {
-                val height = method.invoke(imm) as? Int ?: 0
-                return KeyboardVisibilityProbe(height > 0, true)
-            } catch (_: Exception) {
-                // Ignore and try other methods.
-            }
-        }
-        immIsShownMethod?.let { method ->
-            try {
-                val shown = method.invoke(imm) as? Boolean ?: false
-                return KeyboardVisibilityProbe(shown, true)
-            } catch (_: Exception) {
-                // Ignore and fall through.
-            }
-        }
-        return KeyboardVisibilityProbe(false, false)
-    }
-
-    private fun resolveKeyboardVisibleFromMetrics(view: View): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
-        val wm = windowManager ?: return false
-        return try {
-            val metrics = wm.currentWindowMetrics
-            val insets = WindowInsetsCompat.toWindowInsetsCompat(metrics.windowInsets, view)
-            val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
-            insets.isVisible(WindowInsetsCompat.Type.ime()) || imeInsets.bottom > 0
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    private fun startKeyboardMonitor(view: View) {
-        if (keyboardMonitorJob?.isActive == true) return
-        keyboardMonitorJob = scope.launch(Dispatchers.Main.immediate) {
-            while (isActive) {
-                val viewVisible = resolveKeyboardVisible(view)
-                val metricsVisible = resolveKeyboardVisibleFromMetrics(view)
-                val immProbe = resolveKeyboardVisibleFromImm()
-                val overlayVisible = viewVisible || metricsVisible
-                val visible = if (immProbe.reliable) immProbe.visible else overlayVisible
-                updateKeyboardShown(visible)
-                delay(KEYBOARD_POLL_INTERVAL_MS)
-            }
-        }
-    }
-
-    private fun stopKeyboardMonitor() {
-        keyboardMonitorJob?.cancel()
-        keyboardMonitorJob = null
-    }
-
-    @Composable
-    private fun KeyboardAwareOverlay(onKeyboardVisibilityChanged: (Boolean) -> Unit) {
-        val imePadding = WindowInsets.ime.asPaddingValues()
-        val isKeyboardVisible = imePadding.calculateBottomPadding() > 0.dp
-        LaunchedEffect(isKeyboardVisible) {
-            onKeyboardVisibilityChanged(isKeyboardVisible)
-        }
-    }
-
-    private fun updateKeyboardShown(isShown: Boolean) {
-        if (TboxRepository.isMainActivityVisible.value) return
-        if (TboxRepository.isKeyboardShown.value == isShown) return
-        TboxRepository.updateIsKeyboardShown(isShown)
-    }
-
     private suspend fun ensureFloatingDashboards() {
         withContext(Dispatchers.Main) {
             val currentConfigs = floatingDashboards.value
-            updateKeyboardOverlayVisibility(currentConfigs)
             val enabledConfigs = currentConfigs.filter { it.enabled }
             enabledConfigs.forEach { config ->
                 if (overlayOffIds.contains(config.id)) return@forEach
@@ -1278,9 +1001,6 @@ class BackgroundService : Service() {
 
     private fun startSettingsListener() {
         settingsListenerJob = scope.launch {
-            withContext(Dispatchers.Main) {
-                updateKeyboardOverlayVisibility(floatingDashboards.value)
-            }
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
                 getLocData.collect { isGetLocData ->
@@ -1978,7 +1698,7 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkGateVersionJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob, keyboardMonitorJob
+            settingsListenerJob, dataListenerJob
         ).forEach { job ->
             job?.cancel()
         }

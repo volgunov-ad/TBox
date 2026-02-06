@@ -13,16 +13,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.calculateBottomPadding
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
@@ -83,23 +76,20 @@ class MainActivity : ComponentActivity() {
             Surface(
                 modifier = Modifier.fillMaxSize()
             ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    TboxApp(
-                        settingsManager = settingsManager,
-                        appDataManager = appDataManager,
-                        onTboxRestart = { rebootTBox() },
-                        onSaveToFile = { tag, dataList ->
-                            saveDataToFile(tag, dataList)
-                        },
-                        onServiceCommand = { sendAction, extraName, extraValue ->
-                            serviceCommand(sendAction, extraName, extraValue)
-                        },
-                        onMockLocationSettingChanged = { enabled ->
-                            handleMockLocationSettingChange(enabled)
-                        }
-                    )
-                    KeyboardVisibilityTracker()
-                }
+                TboxApp(
+                    settingsManager = settingsManager,
+                    appDataManager = appDataManager,
+                    onTboxRestart = { rebootTBox() },
+                    onSaveToFile = { tag, dataList ->
+                        saveDataToFile(tag, dataList)
+                    },
+                    onServiceCommand = { sendAction, extraName, extraValue ->
+                        serviceCommand(sendAction, extraName, extraValue)
+                    },
+                    onMockLocationSettingChanged = { enabled ->
+                        handleMockLocationSettingChange(enabled)
+                    }
+                )
             }
         }
 
@@ -109,16 +99,6 @@ class MainActivity : ComponentActivity() {
     override fun onRestart() {
         super.onRestart()
         startBackgroundService()
-    }
-
-    override fun onStart() {
-        super.onStart()
-        TboxRepository.updateIsMainActivityVisible(true)
-    }
-
-    override fun onStop() {
-        TboxRepository.updateIsMainActivityVisible(false)
-        super.onStop()
     }
 
     private fun startBackgroundService() {
@@ -448,14 +428,5 @@ class MainActivity : ComponentActivity() {
     private fun hasLocationPermissions(): Boolean {
         return (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-    }
-}
-
-@Composable
-private fun KeyboardVisibilityTracker() {
-    val imePadding = WindowInsets.ime.asPaddingValues()
-    val isKeyboardVisible = imePadding.calculateBottomPadding() > 0.dp
-    LaunchedEffect(isKeyboardVisible) {
-        TboxRepository.updateIsKeyboardShown(isKeyboardVisible)
     }
 }

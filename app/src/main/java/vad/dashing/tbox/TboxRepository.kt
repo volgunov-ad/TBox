@@ -103,8 +103,6 @@ data class HdmData(
 object TboxRepository {
     private val _isKeyboardShown = MutableStateFlow(false)
     val isKeyboardShown: StateFlow<Boolean> = _isKeyboardShown.asStateFlow()
-    private val _isMainActivityVisible = MutableStateFlow(false)
-    val isMainActivityVisible: StateFlow<Boolean> = _isMainActivityVisible.asStateFlow()
 
     private val _netState = MutableStateFlow(NetState())
     val netState: StateFlow<NetState> = _netState.asStateFlow()
@@ -211,10 +209,6 @@ object TboxRepository {
 
     fun updateIsKeyboardShown(value: Boolean) {
         _isKeyboardShown.value = value
-    }
-
-    fun updateIsMainActivityVisible(value: Boolean) {
-        _isMainActivityVisible.value = value
     }
 
     fun addLog(level: String, tag: String, message: String) {
