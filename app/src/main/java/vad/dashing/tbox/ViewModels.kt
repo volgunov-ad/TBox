@@ -20,6 +20,14 @@ import kotlin.Boolean
 import kotlin.collections.List
 
 class TboxViewModel : ViewModel() {
+
+    val isKeyboardShown: StateFlow<Boolean> = TboxRepository.isKeyboardShown
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val logs: StateFlow<List<String>> = TboxRepository.logs
         .stateIn(
             scope = viewModelScope,
@@ -226,6 +234,12 @@ class TboxViewModel : ViewModel() {
     fun updateFloatingDashboardShown(panelId: String, isShown: Boolean) {
         viewModelScope.launch {
             TboxRepository.updateFloatingDashboardShown(panelId, isShown)
+        }
+    }
+
+    fun updateIsKeyboardShown(value: Boolean) {
+        viewModelScope.launch {
+            TboxRepository.updateIsKeyboardShown(value)
         }
     }
 }
