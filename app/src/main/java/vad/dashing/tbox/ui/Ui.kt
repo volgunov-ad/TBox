@@ -761,8 +761,13 @@ fun SettingsTab(
             enabled = true,
             actionText = "Доступ",
             onActionClick = {
-                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                context.startActivity(intent)
+                if (isFloatingDashboardEnabled) {
+                    showAccessibilitySettingsDialog(context) {
+                        settingsViewModel.saveFloatingDashboardSetting(false)
+                    }
+                } else {
+                    openAccessibilitySettings(context)
+                }
             }
         )
         SettingDropdownGeneric(
@@ -1035,6 +1040,31 @@ private fun showOverlayRequirementsDialog(context: Context) {
                 "package:${context.packageName}".toUri()
             )
             context.startActivity(intent)
+        }
+        .setNegativeButton("Отмена", null)
+        .show()
+}
+
+private fun openAccessibilitySettings(context: Context) {
+    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(intent)
+}
+
+private fun showAccessibilitySettingsDialog(
+    context: Context,
+    onDisablePanels: () -> Unit
+) {
+    android.app.AlertDialog.Builder(context)
+        .setTitle("Требуется отключить панели")
+        .setMessage(
+            "Android блокирует запрос доступа, если поверх есть оверлей.\n" +
+                "Отключить плавающую панель и открыть настройки специальных возможностей?"
+        )
+        .setPositiveButton("Отключить и открыть") { _, _ ->
+            onDisablePanels()
+            openAccessibilitySettings(context)
         }
         .setNegativeButton("Отмена", null)
         .show()
