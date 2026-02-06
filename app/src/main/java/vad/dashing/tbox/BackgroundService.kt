@@ -17,10 +17,12 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateBottomPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -131,6 +133,7 @@ class BackgroundService : Service() {
     private val overlayOffIds = mutableSetOf<String>()
     private var keyboardOverlayView: View? = null
     private var keyboardOverlayLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    private var keyboardMonitorJob: Job? = null
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
     private var motorHoursBuffer = MotorHoursBuffer(0.02f)
@@ -138,6 +141,7 @@ class BackgroundService : Service() {
 
     companion object {
         private const val MAX_OVERLAY_RETRIES = 3
+        private const val KEYBOARD_POLL_INTERVAL_MS = 200L
 
         private const val APP_CODE = 0x2F.toByte()
         private const val MDC_CODE = 0x25.toByte()
@@ -687,6 +691,7 @@ class BackgroundService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR or
                 WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -731,6 +736,7 @@ class BackgroundService : Service() {
             }
             ViewCompat.requestApplyInsets(overlayView)
             updateKeyboardFromLayout(overlayView)
+            startKeyboardMonitor(overlayView)
             TboxRepository.addLog("INFO", "Keyboard Overlay", "Shown")
         } catch (e: Exception) {
             Log.e("Keyboard Overlay", "Error adding view", e)
@@ -743,6 +749,7 @@ class BackgroundService : Service() {
             updateKeyboardShown(false)
             return
         }
+        stopKeyboardMonitor()
         try {
             keyboardOverlayLayoutListener?.let { listener ->
                 if (view.viewTreeObserver.isAlive) {
@@ -794,11 +801,51 @@ class BackgroundService : Service() {
         return heightDiff > minKeyboardHeight
     }
 
+    private fun resolveKeyboardVisible(view: View): Boolean {
+        val insets = ViewCompat.getRootWindowInsets(view)
+        if (insets != null) {
+            val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+            if (insets.isVisible(WindowInsetsCompat.Type.ime()) || imeInsets.bottom > 0) {
+                return true
+            }
+        }
+        return isKeyboardVisibleByLayout(view)
+    }
+
+    private fun resolveKeyboardVisibleFromMetrics(view: View): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        val wm = windowManager ?: return false
+        return try {
+            val metrics = wm.currentWindowMetrics
+            val insets = WindowInsetsCompat.toWindowInsetsCompat(metrics.windowInsets, view)
+            val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+            insets.isVisible(WindowInsetsCompat.Type.ime()) || imeInsets.bottom > 0
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun startKeyboardMonitor(view: View) {
+        if (keyboardMonitorJob?.isActive == true) return
+        keyboardMonitorJob = scope.launch(Dispatchers.Main.immediate) {
+            while (isActive) {
+                val viewVisible = resolveKeyboardVisible(view)
+                val metricsVisible = resolveKeyboardVisibleFromMetrics(view)
+                updateKeyboardShown(viewVisible || metricsVisible)
+                delay(KEYBOARD_POLL_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun stopKeyboardMonitor() {
+        keyboardMonitorJob?.cancel()
+        keyboardMonitorJob = null
+    }
+
     @Composable
     private fun KeyboardAwareOverlay(onKeyboardVisibilityChanged: (Boolean) -> Unit) {
-        val density = LocalDensity.current
-        val imeBottom = WindowInsets.ime.getBottom(density)
-        val isKeyboardVisible = imeBottom > 0
+        val imePadding = WindowInsets.ime.asPaddingValues()
+        val isKeyboardVisible = imePadding.calculateBottomPadding() > 0.dp
         LaunchedEffect(isKeyboardVisible) {
             onKeyboardVisibilityChanged(isKeyboardVisible)
         }
@@ -1869,7 +1916,7 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkGateVersionJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob
+            settingsListenerJob, dataListenerJob, keyboardMonitorJob
         ).forEach { job ->
             job?.cancel()
         }
