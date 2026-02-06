@@ -59,6 +59,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name="vad.dashing.tbox.WidgetPickerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
