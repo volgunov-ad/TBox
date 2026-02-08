@@ -124,8 +124,8 @@ class BackgroundService : Service() {
     private var overlaysSuspended = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
-    private var motorHoursBuffer = MotorHoursBuffer(0.02f)
-    private var motorHoursTripBuffer = MotorHoursBuffer(0.02f)
+    private var motorHoursBuffer = MotorHoursBuffer(0.05f)
+    private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
 
     companion object {
         private const val MAX_OVERLAY_RETRIES = 3
@@ -1107,7 +1107,7 @@ class BackgroundService : Service() {
                         widgetUpdateTime = System.currentTimeMillis()
                     }
 
-                    if (System.currentTimeMillis() - floatingDashboardCheckTime > 30000) {
+                    if (System.currentTimeMillis() - floatingDashboardCheckTime > 60000) {
                         floatingDashboardCheckTime = System.currentTimeMillis()
                         ensureFloatingDashboards()
                     }

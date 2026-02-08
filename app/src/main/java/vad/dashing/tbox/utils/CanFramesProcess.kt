@@ -46,7 +46,7 @@ object CanFramesProcess {
                     val angle = if (angleRaw == 65535f) {
                         null
                     } else {
-                        (angleRaw - 32767f) * 6f / 100f
+                        (angleRaw - 32767f) / 16f
                     }
                     val speed = singleData[2].toInt()
                     CanDataRepository.updateSteerAngle(angle)
@@ -156,10 +156,10 @@ object CanFramesProcess {
                     val cruiseSpeed = singleData[0].toUInt()
                     CanDataRepository.updateCruiseSetSpeed(cruiseSpeed)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x10))) {
-                    val speed1 = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") * 0.065f
-                    val speed2 = singleData.copyOfRange(2, 4).toFloat("UINT16_BE") * 0.065f
-                    val speed3 = singleData.copyOfRange(4, 6).toFloat("UINT16_BE") * 0.065f
-                    val speed4 = singleData.copyOfRange(6, 8).toFloat("UINT16_BE") * 0.065f
+                    val speed1 = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 16f
+                    val speed2 = singleData.copyOfRange(2, 4).toFloat("UINT16_BE") / 16f
+                    val speed3 = singleData.copyOfRange(4, 6).toFloat("UINT16_BE") / 16f
+                    val speed4 = singleData.copyOfRange(6, 8).toFloat("UINT16_BE") / 16f
                     CanDataRepository.updateWheelsSpeed(Wheels(speed1, speed2, speed3, speed4))
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x04, 0x30))) {
                     val speed = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 16f

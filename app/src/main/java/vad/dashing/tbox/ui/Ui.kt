@@ -761,9 +761,11 @@ fun SettingsTab(
                 settingsViewModel.saveFloatingDashboardHideOnKeyboard(enabled)
             },
             text = "Скрывать плавающую панель при открытой клавиатуре",
-            description = "Панель будет скрываться при появлении системной клавиатуры",
+            description = "Панель будет скрываться при появлении системной клавиатуры. " +
+                    "Требуется ручное разрешение, которое можно включить только при " +
+                    "отсутствии всех Overlay на экране",
             enabled = true,
-            actionText = "Доступ",
+            actionText = "В настройки",
             onActionClick = {
                 if (hasEnabledDashboards) {
                     showAccessibilitySettingsDialog(context) {
