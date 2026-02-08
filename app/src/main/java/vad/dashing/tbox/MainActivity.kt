@@ -23,7 +23,6 @@ import vad.dashing.tbox.ui.TboxApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import vad.dashing.tbox.AppDataManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -103,10 +102,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        val intent = Intent(this, BackgroundService::class.java).apply {
-            action = BackgroundService.ACTION_RESUME_OVERLAYS
-        }
-        startServiceSafely(intent)
     }
 
     private fun startBackgroundService() {
@@ -318,7 +313,7 @@ class MainActivity : ComponentActivity() {
             val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
             intent.data = "package:$packageName".toUri()
             manageExternalStorageLauncher.launch(intent)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fallback
             val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
             manageExternalStorageLauncher.launch(intent)
@@ -357,11 +352,7 @@ class MainActivity : ComponentActivity() {
 
     private fun startServiceSafely(intent: Intent) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            startForegroundService(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка запуска сервиса", e)
             Toast.makeText(this, "Ошибка запуска службы", Toast.LENGTH_SHORT).show()

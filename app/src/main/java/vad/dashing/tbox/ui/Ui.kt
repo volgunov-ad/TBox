@@ -323,13 +323,13 @@ fun TboxScreen(
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 when (selectedTab) {
-                    0 -> ModemTab(viewModel, settingsViewModel, onServiceCommand)
+                    0 -> ModemTab(viewModel, onServiceCommand)
                     1 -> if (isExpertModeEnabled) {
                         ATcmdTab (viewModel, onServiceCommand)
                     } else {
-                        ModemTab(viewModel, settingsViewModel, onServiceCommand)
+                        ModemTab(viewModel, onServiceCommand)
                     }
-                    2 -> LocationTab(viewModel, settingsViewModel)
+                    2 -> LocationTab(viewModel)
                     3 -> CarDataTab(
                         canViewModel,
                         cycleViewModel,
@@ -344,13 +344,13 @@ fun TboxScreen(
                     5 -> if (isExpertModeEnabled) {
                         LogsTab(viewModel, settingsViewModel, onSaveToFile)
                     } else {
-                        ModemTab(viewModel, settingsViewModel, onServiceCommand)
+                        ModemTab(viewModel, onServiceCommand)
                     }
                     6 -> InfoTab(viewModel, settingsViewModel, onServiceCommand)
                     7 -> if (isExpertModeEnabled) {
                         CanTab(viewModel, canViewModel, onSaveToFile)
                     } else {
-                        ModemTab(viewModel, settingsViewModel, onServiceCommand)
+                        ModemTab(viewModel, onServiceCommand)
                     }
                     8 -> MainDashboardTab(
                         viewModel,
@@ -358,7 +358,7 @@ fun TboxScreen(
                         settingsViewModel,
                         appDataViewModel,
                         onTboxRestart)
-                    else -> ModemTab(viewModel, settingsViewModel, onServiceCommand)
+                    else -> ModemTab(viewModel, onServiceCommand)
                 }
             }
         }
@@ -369,7 +369,6 @@ fun TboxScreen(
 @Composable
 fun ModemTab(
     viewModel: TboxViewModel,
-    settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit,
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
@@ -552,7 +551,6 @@ fun SettingsTab(
     val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
     val isFloatingDashboardBackground by settingsViewModel.isFloatingDashboardBackground.collectAsStateWithLifecycle()
     val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
-    val isFloatingDashboardHideOnKeyboard by settingsViewModel.isFloatingDashboardHideOnKeyboard.collectAsStateWithLifecycle()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
@@ -755,30 +753,6 @@ fun SettingsTab(
             true
         )
         val hasEnabledDashboards = floatingDashboards.any { it.enabled }
-        SettingSwitchWithAction(
-            isChecked = isFloatingDashboardHideOnKeyboard,
-            onCheckedChange = { enabled ->
-                settingsViewModel.saveFloatingDashboardHideOnKeyboard(enabled)
-            },
-            text = "Скрывать плавающую панель при открытой клавиатуре",
-            description = "Панель будет скрываться при появлении системной клавиатуры. " +
-                    "Требуется ручное разрешение, которое можно включить только при " +
-                    "отсутствии всех Overlay на экране",
-            enabled = true,
-            actionText = "В настройки",
-            onActionClick = {
-                if (hasEnabledDashboards) {
-                    showAccessibilitySettingsDialog(context) {
-                        requestSuspendOverlays(context)
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            openAccessibilitySettings(context)
-                        }, 500)
-                    }
-                } else {
-                    openAccessibilitySettings(context)
-                }
-            }
-        )
         SettingDropdownGeneric(
             floatingDashboardRows,
             { rows ->
@@ -1054,42 +1028,9 @@ private fun showOverlayRequirementsDialog(context: Context) {
         .show()
 }
 
-private fun openAccessibilitySettings(context: Context) {
-    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-    context.startActivity(intent)
-}
-
-private fun requestSuspendOverlays(context: Context) {
-    val intent = Intent(context, BackgroundService::class.java).apply {
-        action = BackgroundService.ACTION_SUSPEND_OVERLAYS
-    }
-    context.startService(intent)
-}
-
-private fun showAccessibilitySettingsDialog(
-    context: Context,
-    onDisablePanels: () -> Unit
-) {
-    android.app.AlertDialog.Builder(context)
-        .setTitle("Нужно временно скрыть панели")
-        .setMessage(
-            "Android блокирует запрос доступа, если поверх есть оверлей.\n" +
-                "Временно скрыть панели и открыть настройки специальных возможностей?"
-        )
-        .setPositiveButton("Скрыть и открыть") { _, _ ->
-            onDisablePanels()
-            openAccessibilitySettings(context)
-        }
-        .setNegativeButton("Отмена", null)
-        .show()
-}
-
 @Composable
 fun LocationTab(
-    viewModel: TboxViewModel,
-    settingsViewModel: SettingsViewModel
+    viewModel: TboxViewModel
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()

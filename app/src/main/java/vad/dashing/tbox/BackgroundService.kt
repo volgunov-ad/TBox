@@ -12,7 +12,6 @@ import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
-import android.view.View
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
@@ -24,7 +23,6 @@ import vad.dashing.tbox.location.LocationMockManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
@@ -94,7 +92,6 @@ class BackgroundService : Service() {
     private var sendATJob: Job? = null
     private var modemModeJob: Job? = null
     private var checkConnectionJob: Job? = null
-    private var checkGateVersionJob: Job? = null
     private var versionsJob: Job? = null
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
@@ -337,7 +334,6 @@ class BackgroundService : Service() {
                     stopListener()
                     stopCheckConnection()
                     stopPeriodicJob()
-                    stopCheckGateVersion()
                     stopSettingsListener()
                     stopDataListener()
                     stopStateBroadcastListener()
@@ -429,13 +425,14 @@ class BackgroundService : Service() {
             config.height.coerceAtLeast(50),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = config.startX.coerceAtLeast(0)
-            y = config.startY.coerceAtLeast(-100)
+            y = config.startY.coerceAtLeast(0)
         }
 
         val newComposeView = ComposeView(this)
@@ -525,7 +522,7 @@ class BackgroundService : Service() {
         val params = overlayParams[panelId] ?: return
         if (params.x == x && params.y == y) return
         params.x = x.coerceAtLeast(0)
-        params.y = y.coerceAtLeast(-100)
+        params.y = y.coerceAtLeast(0)
         overlayViews[panelId]?.let { view ->
             windowManager?.updateViewLayout(view, params)
         }
@@ -546,7 +543,7 @@ class BackgroundService : Service() {
         val newWidth = config.width.coerceAtLeast(50)
         val newHeight = config.height.coerceAtLeast(50)
         val newX = config.startX.coerceAtLeast(0)
-        val newY = config.startY.coerceAtLeast(-100)
+        val newY = config.startY.coerceAtLeast(0)
         if (params.width == newWidth &&
             params.height == newHeight &&
             params.x == newX &&
@@ -563,7 +560,7 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>, isKeyboardShown: Boolean) {
+    private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
         if (overlaysSuspended) {
             if (overlayViews.isNotEmpty()) {
                 closeAllOverlays()
@@ -572,11 +569,9 @@ class BackgroundService : Service() {
         }
         val configMap = configs.associateBy { it.id }
         val enabledConfigs = configs.filter { it.enabled }
-        val hideOnKeyboardConfigs = configs.filter { it.hideOnKeyboard }
 
         val enabledIds = enabledConfigs.map { it.id }.toSet()
         val existingIds = overlayViews.keys.toSet()
-        val hideOnKeyboardIds = hideOnKeyboardConfigs.map { it.id }.toSet()
 
         // Удаляем конфигурации, которых больше нет
         val removedIds = overlayRetryCounts.keys - configMap.keys
@@ -589,28 +584,15 @@ class BackgroundService : Service() {
         enabledConfigs.forEach { config ->
             overlayOffIds.remove(config.id)
 
-            // Определяем, должен ли оверлей быть видимым
-            val shouldBeVisible = calculateOverlayVisibility(config, isKeyboardShown)
-
-            if (shouldBeVisible) {
+            if (config.enabled) {
                 // Оверлей должен быть видимым
                 val view = overlayViews[config.id]
                 if (view != null) {
-                    // Восстанавливаем, если был скрыт
-                    if (view.visibility != View.VISIBLE || view.alpha < 1f) {
-                        restoreOverlay(config.id)
-                    }
                     updateOverlayLayout(config)
                 } else {
                     // Создаем новый оверлей
                     openOverlay(config)
                 }
-            } else {
-                // Оверлей должен быть скрыт (из-за клавиатуры)
-                if (overlayViews.containsKey(config.id)) {
-                    hideOverlayForKeyboard(config.id)
-                }
-                // Если оверлея нет, но он должен быть скрыт - ничего не делаем
             }
         }
 
@@ -628,43 +610,6 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun calculateOverlayVisibility(config: FloatingDashboardConfig, isKeyboardShown: Boolean): Boolean {
-        if (!config.enabled) return false
-        return !(config.hideOnKeyboard && isKeyboardShown)
-    }
-
-    private fun hideOverlayForKeyboard(id: String) {
-        overlayViews[id]?.let { view ->
-            if (view.visibility != View.GONE) {
-                view.animate().cancel()
-
-                // Скрываем с анимацией
-                view.animate()
-                    .alpha(0f)
-                    .setDuration(200)
-                    .withEndAction {
-                        view.visibility = View.GONE
-                    }
-                    .start()
-            }
-        }
-    }
-
-    private fun restoreOverlay(id: String) {
-        overlayViews[id]?.let { view ->
-            view.animate().cancel()
-            // Восстанавливаем видимость с анимацией
-            view.alpha = 0f
-            view.visibility = View.VISIBLE
-
-            // Анимация появления
-            view.animate()
-                .alpha(1f)
-                .setDuration(200)
-                .start()
-        }
-    }
-
     private suspend fun ensureFloatingDashboards() {
         withContext(Dispatchers.Main) {
             if (overlaysSuspended) return@withContext
@@ -676,7 +621,7 @@ class BackgroundService : Service() {
                     overlayRetryCounts[config.id] = 0
                     return@forEach
                 }
-                if (config.hideOnKeyboard && TboxRepository.isKeyboardShown.value) return@forEach
+
                 val retryCount = overlayRetryCounts[config.id] ?: 0
                 if (retryCount >= MAX_OVERLAY_RETRIES * 2) {
                     TboxRepository.addLog("ERROR", "Floating Dashboard",
@@ -691,19 +636,17 @@ class BackgroundService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "TBox Service",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Background TBox monitoring"
-                setShowBadge(false)
-            }
-
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "TBox Service",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Background TBox monitoring"
+            setShowBadge(false)
         }
+
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
     }
 
     private fun createNotification(text: String?): Notification {
@@ -721,7 +664,7 @@ class BackgroundService : Service() {
     private fun getCurrentAddress(): InetAddress? {
         return try {
             InetAddress.getByName(currentIP)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             TboxRepository.addLog("ERROR", "Tbox IP address",
                 "Failed to get address for IP: $currentIP")
             null
@@ -784,7 +727,7 @@ class BackgroundService : Service() {
                                 settingsManager.saveTboxIP(currentIP!!)
                             }
                         }
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         if (TboxRepository.tboxConnected.value) {
                             errCount += 1
                             if (errCount > netUpdateTime * 2 / 1000) {
@@ -875,32 +818,6 @@ class BackgroundService : Service() {
     private fun stopAPNUpdater() {
         apnJob?.cancel()
         apnJob = null
-    }
-
-    private fun startCheckGateVersion() {
-        if (checkGateVersionJob?.isActive == true) return
-        checkGateVersionJob = scope.launch {
-            try {
-                Log.d("GATE version checker", "Start checking GATE version checker")
-                while (isActive) {
-                    delay(1000)
-                    if (!TboxRepository.tboxConnected.value) {
-                        sendControlTboxApplication("GATE", "VERSION")
-                    }
-                }
-            } catch (e: CancellationException) {
-                // Нормальная отмена - не логируем
-                throw e
-            } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", "GATE version checker", "Fatal error in GATE version checker job")
-                Log.e("GATE version checker", "Fatal error in GATE version checker", e)
-            }
-        }
-    }
-
-    private fun stopCheckGateVersion() {
-        checkGateVersionJob?.cancel()
-        checkGateVersionJob = null
     }
 
     private fun startCheckConnection() {
@@ -1047,16 +964,13 @@ class BackgroundService : Service() {
             }
 
             launch {
-                floatingDashboards.combine(TboxRepository.isKeyboardShown) { configs, isKeyboardShown ->
-                    // Создаем объединенный объект
-                    Pair(configs, isKeyboardShown)
-                }
-                .drop(1) // Пропускаем начальное значение
-                .collect { (configs, isKeyboardShown) ->
-                    withContext(Dispatchers.Main) {
-                        syncFloatingDashboards(configs, isKeyboardShown)
+                floatingDashboards
+                    .drop(1) // Пропускаем начальное значение
+                    .collect { configs ->
+                        withContext(Dispatchers.Main) {
+                            syncFloatingDashboards(configs)
+                        }
                     }
-                }
             }
         }
     }
@@ -1565,15 +1479,6 @@ class BackgroundService : Service() {
         }*/
     }
 
-    private fun ssmGetDynamicCode() {
-        if (ssmCmdJob?.isActive == true) return
-        ssmCmdJob = scope.launch {
-            TboxRepository.addLog("DEBUG", "SSM send", "Send GetDynamicCode command")
-            sendUdpMessage(socket, serverPort, 0x35, SELF_CODE, 0x06,
-                byteArrayOf(0x00, 0x00), false)
-        }
-    }
-
     private fun mdcSendAPNManage(cmd: ByteArray) {
         if (!TboxRepository.tboxConnected.value) {
             return
@@ -1636,17 +1541,6 @@ class BackgroundService : Service() {
                 sendUdpMessage(socket, serverPort, LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x00, 0x00, 0x00), false)
             }
             //TboxRepository.updateLocationSubscribed(value)
-        }
-    }
-
-    private fun humLightShowReq(value: ByteArray) {
-        if (!TboxRepository.tboxConnected.value) {
-            return
-        }
-        if (humJob?.isActive == true) return
-        humJob = scope.launch {
-            TboxRepository.addLog("DEBUG", "HUM send", "LightShowReq")
-            sendUdpMessage(socket, serverPort, HUM_CODE, SELF_CODE, 0x0F, value, false)
         }
     }
 
@@ -1721,7 +1615,7 @@ class BackgroundService : Service() {
         listOf(
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob, humJob,
-            modemModeJob, checkGateVersionJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
+            modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
             settingsListenerJob, dataListenerJob
         ).forEach { job ->
             job?.cancel()
@@ -1807,7 +1701,7 @@ class BackgroundService : Service() {
             }*/
 
             return true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             TboxRepository.addLog("ERROR", "UDP message send", "Error send message")
             return false
         }
@@ -2496,7 +2390,7 @@ class BackgroundService : Service() {
             if (data[4] == 0x01.toByte()) {
                 val value = try {
                     String(data.copyOfRange(6, data.size), charset = Charsets.UTF_8).trimEnd()
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     ""
                 }
                 TboxRepository.addDidDataCSV(
@@ -2827,7 +2721,7 @@ class BackgroundService : Service() {
                 join()
             }
             true
-        } catch (e: TimeoutCancellationException) {
+        } catch (_: TimeoutCancellationException) {
             false
         }
     }

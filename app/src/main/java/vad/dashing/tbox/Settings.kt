@@ -38,8 +38,7 @@ data class FloatingDashboardConfig(
     val startX: Int,
     val startY: Int,
     val background: Boolean,
-    val clickAction: Boolean,
-    val hideOnKeyboard: Boolean
+    val clickAction: Boolean
 )
 
 class SettingsManager(private val context: Context) {
@@ -557,8 +556,7 @@ class SettingsManager(private val context: Context) {
             startX = DEFAULT_FLOATING_DASHBOARD_START_X,
             startY = DEFAULT_FLOATING_DASHBOARD_START_Y,
             background = DEFAULT_FLOATING_DASHBOARD_BACKGROUND,
-            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION,
-            hideOnKeyboard = DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD
+            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
         )
     }
 
@@ -578,9 +576,7 @@ class SettingsManager(private val context: Context) {
             startX = obj.optInt("startX", DEFAULT_FLOATING_DASHBOARD_START_X),
             startY = obj.optInt("startY", DEFAULT_FLOATING_DASHBOARD_START_Y),
             background = obj.optBoolean("background", DEFAULT_FLOATING_DASHBOARD_BACKGROUND),
-            clickAction = obj.optBoolean("clickAction", DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION),
-            hideOnKeyboard = obj.optBoolean("hideOnKeyboard", DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD
-            )
+            clickAction = obj.optBoolean("clickAction", DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION)
         )
     }
 
@@ -658,7 +654,6 @@ class SettingsManager(private val context: Context) {
             obj.put("startY", config.startY)
             obj.put("background", config.background)
             obj.put("clickAction", config.clickAction)
-            obj.put("hideOnKeyboard", config.hideOnKeyboard)
             array.put(obj)
         }
         return array.toString()

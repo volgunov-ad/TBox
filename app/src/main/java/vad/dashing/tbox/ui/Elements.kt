@@ -793,7 +793,7 @@ fun FloatingDashboardPositionSizeSettings(
                 IntInputField(
                     value = floatingDashboardStartY,
                     onValueChange = { newValue ->
-                        if (newValue >= -100) {
+                        if (newValue >= 0) {
                             settingsViewModel.saveFloatingDashboardStartY(newValue)
                         }
                     },

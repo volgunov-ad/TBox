@@ -278,14 +278,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
         )
 
-    val isFloatingDashboardHideOnKeyboard = activeFloatingDashboardConfig
-        .map { it.hideOnKeyboard }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD
-        )
-
     val logLevel = settingsManager.logLevelFlow
         .stateIn(
             scope = viewModelScope,
@@ -458,8 +450,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             startX = DEFAULT_FLOATING_DASHBOARD_START_X,
             startY = DEFAULT_FLOATING_DASHBOARD_START_Y,
             background = DEFAULT_FLOATING_DASHBOARD_BACKGROUND,
-            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION,
-            hideOnKeyboard = DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD
+            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
         )
     }
 
@@ -734,14 +725,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveFloatingDashboardClickAction(panelId: String, enabled: Boolean) {
         updateFloatingDashboard(panelId) { it.copy(clickAction = enabled) }
-    }
-
-    fun saveFloatingDashboardHideOnKeyboard(enabled: Boolean) {
-        updateSelectedFloatingDashboard { it.copy(hideOnKeyboard = enabled) }
-    }
-
-    fun saveFloatingDashboardHideOnKeyboard(panelId: String, enabled: Boolean) {
-        updateFloatingDashboard(panelId) { it.copy(hideOnKeyboard = enabled) }
     }
 
     fun saveFloatingDashboards(configs: List<FloatingDashboardConfig>) {
