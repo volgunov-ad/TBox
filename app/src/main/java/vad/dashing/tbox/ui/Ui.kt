@@ -2,6 +2,8 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -554,6 +556,7 @@ fun SettingsTab(
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
+    val floatingDashboards by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
 
     val isTboxIPRotation by settingsViewModel.tboxIPRotation.collectAsStateWithLifecycle()
 
@@ -751,14 +754,30 @@ fun SettingsTab(
             "",
             true
         )
-        SettingSwitch(
-            isFloatingDashboardHideOnKeyboard,
-            { enabled ->
+        val hasEnabledDashboards = floatingDashboards.any { it.enabled }
+        SettingSwitchWithAction(
+            isChecked = isFloatingDashboardHideOnKeyboard,
+            onCheckedChange = { enabled ->
                 settingsViewModel.saveFloatingDashboardHideOnKeyboard(enabled)
             },
-            "Скрывать плавающую панель при открытой клавиатуре",
-            "Панель будет скрываться при появлении системной клавиатуры",
-            true
+            text = "Скрывать плавающую панель при открытой клавиатуре",
+            description = "Панель будет скрываться при появлении системной клавиатуры. " +
+                    "Требуется ручное разрешение, которое можно включить только при " +
+                    "отсутствии всех Overlay на экране",
+            enabled = true,
+            actionText = "В настройки",
+            onActionClick = {
+                if (hasEnabledDashboards) {
+                    showAccessibilitySettingsDialog(context) {
+                        requestSuspendOverlays(context)
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            openAccessibilitySettings(context)
+                        }, 500)
+                    }
+                } else {
+                    openAccessibilitySettings(context)
+                }
+            }
         )
         SettingDropdownGeneric(
             floatingDashboardRows,
@@ -1030,6 +1049,38 @@ private fun showOverlayRequirementsDialog(context: Context) {
                 "package:${context.packageName}".toUri()
             )
             context.startActivity(intent)
+        }
+        .setNegativeButton("Отмена", null)
+        .show()
+}
+
+private fun openAccessibilitySettings(context: Context) {
+    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(intent)
+}
+
+private fun requestSuspendOverlays(context: Context) {
+    val intent = Intent(context, BackgroundService::class.java).apply {
+        action = BackgroundService.ACTION_SUSPEND_OVERLAYS
+    }
+    context.startService(intent)
+}
+
+private fun showAccessibilitySettingsDialog(
+    context: Context,
+    onDisablePanels: () -> Unit
+) {
+    android.app.AlertDialog.Builder(context)
+        .setTitle("Нужно временно скрыть панели")
+        .setMessage(
+            "Android блокирует запрос доступа, если поверх есть оверлей.\n" +
+                "Временно скрыть панели и открыть настройки специальных возможностей?"
+        )
+        .setPositiveButton("Скрыть и открыть") { _, _ ->
+            onDisablePanels()
+            openAccessibilitySettings(context)
         }
         .setNegativeButton("Отмена", null)
         .show()

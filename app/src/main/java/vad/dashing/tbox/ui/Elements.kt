@@ -310,6 +310,69 @@ fun SettingSwitch(
     }
 }
 
+@Composable
+fun SettingSwitchWithAction(
+    isChecked: Boolean,
+    onCheckedChange: (enabled: Boolean) -> Unit,
+    text: String,
+    description: String,
+    enabled: Boolean,
+    actionText: String,
+    onActionClick: () -> Unit,
+    actionEnabled: Boolean = true
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Switch(
+            checked = isChecked,
+            enabled = enabled,
+            onCheckedChange = { onCheckedChange(it) },
+            modifier = Modifier
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
+        )
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 16.dp)
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
+        ) {
+            Text(
+                text = text,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
+            )
+            if (description.isNotEmpty()) {
+                Text(
+                    text = description,
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+            }
+        }
+
+        OutlinedButton(
+            onClick = onActionClick,
+            enabled = actionEnabled,
+            modifier = Modifier
+                .padding(start = 8.dp)
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
+        ) {
+            Text(
+                text = actionText,
+                fontSize = 20.sp
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> SettingDropdownGeneric(

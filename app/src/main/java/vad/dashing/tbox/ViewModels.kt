@@ -377,6 +377,7 @@ object WidgetsRepository {
         "insideTemperature" to DataTitle("Температура в машине", "°C"),
         "motorHours" to DataTitle("Моточасы двигателя", "ч"),
         "motorHoursTrip" to DataTitle("Моточасы двигателя за поездку", "ч"),
+        "motorHoursWidget" to DataTitle("Виджет моточасов", ""),
         "netWidget" to DataTitle("Виджет сигнала сети", ""),
         "locWidget" to DataTitle("Виджет навигации", ""),
         "voltage+engineTemperatureWidget" to DataTitle("Виджет напряжения и температуры двигателя", ""),
