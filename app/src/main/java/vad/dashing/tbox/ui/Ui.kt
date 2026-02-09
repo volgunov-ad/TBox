@@ -1280,6 +1280,8 @@ fun CarDataTab(
     val frontLeftSeatMode by canViewModel.frontLeftSeatMode.collectAsStateWithLifecycle()
     val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
     val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
+    val outsideAirQuality by canViewModel.outsideAirQuality.collectAsStateWithLifecycle()
+    val insideAirQuality by canViewModel.insideAirQuality.collectAsStateWithLifecycle()
     val isWindowsBlocked by canViewModel.isWindowsBlocked.collectAsStateWithLifecycle()
     val motorHoursTrip by canViewModel.motorHoursTrip.collectAsStateWithLifecycle()
 
@@ -1347,6 +1349,8 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontRightSeatMode"), seatModeToString(frontRightSeatMode)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("outsideTemperature"), valueToString(outsideTemperature, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("insideTemperature"), valueToString(insideTemperature, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("outsideAirQuality"), valueToString(outsideAirQuality)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("insideAirQuality"), valueToString(insideAirQuality)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("isWindowsBlocked"), valueToString(isWindowsBlocked,
                 booleanTrue = "заблокированы", booleanFalse = "разблокированы")) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHours"), valueToString(motorHours, 1)) }

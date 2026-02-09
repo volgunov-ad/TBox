@@ -90,6 +90,8 @@ class TboxDataProvider(
         }
         "outsideTemperature" -> canViewModel.outsideTemperature.mapState { valueToString(it, 1) }
         "insideTemperature" -> canViewModel.insideTemperature.mapState { valueToString(it, 1) }
+        "outsideAirQuality" -> canViewModel.outsideAirQuality.mapState { valueToString(it) }
+        "insideAirQuality" -> canViewModel.insideAirQuality.mapState { valueToString(it) }
         "isWindowsBlocked" -> canViewModel.isWindowsBlocked.mapState { valueToString(it, booleanTrue = "заблокированы", booleanFalse = "разблокированы") }
         "motorHours" -> appDataViewModel.motorHours.mapState { valueToString(it, 1) }
         "motorHoursTrip" -> canViewModel.motorHoursTrip.mapState { valueToString(it, 1) }

@@ -139,6 +139,12 @@ object CanDataRepository {
     private val _insideTemperature = MutableStateFlow<Float?>(null)
     val insideTemperature: StateFlow<Float?> = _insideTemperature.asStateFlow()
 
+    private val _outsideAirQuality = MutableStateFlow<UInt?>(null)
+    val outsideAirQuality: StateFlow<UInt?> = _outsideAirQuality.asStateFlow()
+
+    private val _insideAirQuality = MutableStateFlow<UInt?>(null)
+    val insideAirQuality: StateFlow<UInt?> = _insideAirQuality.asStateFlow()
+
     private val _isWindowsBlocked = MutableStateFlow<Boolean?>(null)
     val isWindowsBlocked: StateFlow<Boolean?> = _isWindowsBlocked.asStateFlow()
 
@@ -295,6 +301,14 @@ object CanDataRepository {
 
     fun updateInsideTemperature(newValue: Float?) {
         _insideTemperature.value = newValue
+    }
+
+    fun updateOutsideAirQuality(newValue: UInt?) {
+        _outsideAirQuality.value = newValue
+    }
+
+    fun updateInsideAirQuality(newValue: UInt?) {
+        _insideAirQuality.value = newValue
     }
 
     fun updateIsWindowsBlocked(newValue: Boolean) {

@@ -273,7 +273,20 @@ object CanFramesProcess {
                     } else {
                         CanDataRepository.updateInsideTemperature(null)
                     }
-                } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
+                } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x3A))) {
+                    val insideAirQuality = singleData.copyOfRange(0, 2).toUInt16BigEndian()
+                    val outsideAirQuality = singleData.copyOfRange(2, 4).toUInt16BigEndian()
+                    if (insideAirQuality > 0u && insideAirQuality < 65535u) {
+                        CanDataRepository.updateInsideAirQuality(insideAirQuality)
+                    } else {
+                        CanDataRepository.updateInsideAirQuality(null)
+                    }
+                    if (outsideAirQuality > 0u && outsideAirQuality < 65535u) {
+                        CanDataRepository.updateOutsideAirQuality(outsideAirQuality)
+                    } else {
+                        CanDataRepository.updateOutsideAirQuality(null)
+                    }
+                }  else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
                     val frontRightSeatMode = singleData[4].extractBitsToUInt(3, 3)
                     val frontLeftSeatMode = singleData[4].extractBitsToUInt(0, 3)
                     CanDataRepository.updateFrontLeftSeatMode(frontLeftSeatMode)
