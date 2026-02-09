@@ -269,12 +269,7 @@ fun WidgetSelectionDialog(
         title = { Text("Выберите данные для отображения", fontSize = 24.sp) },
         text = {
             Column {
-                Text(
-                    "Плитка ${widgetIndex + 1}",
-                    fontSize = 24.sp,
-                    modifier = Modifier.padding(bottom = 16.dp),
-                    fontWeight = FontWeight.Medium
-                )
+                SettingsTitle("Выберите данные для плитки ${widgetIndex + 1}")
 
                 val availableOptions = listOf("" to "Не выбрано") +
                         WidgetsRepository.getAvailableDataKeysWidgets()
@@ -298,7 +293,7 @@ fun WidgetSelectionDialog(
                             )
                             Text(
                                 text = displayName,
-                                fontSize = 22.sp,
+                                fontSize = 24.sp,
                                 modifier = Modifier
                                     .padding(start = 8.dp)
                                     .weight(1f),

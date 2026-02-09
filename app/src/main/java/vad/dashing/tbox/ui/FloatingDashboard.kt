@@ -757,13 +757,7 @@ fun OverlayWidgetSelectionDialog(
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
-            // Заголовок
-            Text(
-                text = "Выберите данные для плитки ${widgetIndex + 1}",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 5.dp),
-                fontSize = 24.sp
-            )
+            SettingsTitle("Выберите данные для плитки ${widgetIndex + 1}")
 
             // Список опций с прокруткой
             Box(
@@ -786,7 +780,7 @@ fun OverlayWidgetSelectionDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { selectedDataKey = key }
-                                .padding(vertical = 10.dp),
+                                .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             androidx.compose.material3.RadioButton(
@@ -795,7 +789,7 @@ fun OverlayWidgetSelectionDialog(
                             )
                             Text(
                                 text = displayName,
-                                fontSize = 22.sp,
+                                fontSize = 24.sp,
                                 modifier = Modifier
                                     .padding(start = 8.dp)
                                     .weight(1f),
@@ -807,12 +801,7 @@ fun OverlayWidgetSelectionDialog(
                 }
             }
 
-            Text(
-                text = "Дополнительные настройки",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(top = 12.dp, bottom = 5.dp),
-                fontSize = 24.sp
-            )
+            SettingsTitle("Дополнительные настройки плитки ${widgetIndex + 1}")
             // Список опций с прокруткой
             Box(
                 modifier = Modifier
@@ -829,42 +818,20 @@ fun OverlayWidgetSelectionDialog(
                         .verticalScroll(androidx.compose.foundation.rememberScrollState())
                         .padding(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Switch(
-                            checked = showTitle,
-                            onCheckedChange = { showTitle = it },
-                            enabled = togglesEnabled
-                        )
-                        Text(
-                            text = "Отображать название",
-                            fontSize = 22.sp,
-                            modifier = Modifier.weight(1f).padding(start=8.dp)
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Switch(
-                            checked = showUnit,
-                            onCheckedChange = { showUnit = it },
-                            enabled = togglesEnabled
-                        )
-                        Text(
-                            text = "Отображать единицу измерения",
-                            fontSize = 22.sp,
-                            modifier = Modifier.weight(1f).padding(start=8.dp)
-                        )
-                    }
+                    SettingSwitch(
+                        showTitle,
+                        { showTitle = it },
+                        "Отображать название",
+                        "",
+                        togglesEnabled
+                    )
+                    SettingSwitch(
+                        showUnit,
+                        { showUnit = it },
+                        "Отображать единицу измерения",
+                        "",
+                        togglesEnabled
+                    )
                 }
             }
 
