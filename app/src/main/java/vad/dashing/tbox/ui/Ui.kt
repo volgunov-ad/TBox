@@ -2,8 +2,6 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -554,7 +552,6 @@ fun SettingsTab(
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
-    val floatingDashboards by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
 
     val isTboxIPRotation by settingsViewModel.tboxIPRotation.collectAsStateWithLifecycle()
 
@@ -752,7 +749,6 @@ fun SettingsTab(
             "",
             true
         )
-        val hasEnabledDashboards = floatingDashboards.any { it.enabled }
         SettingDropdownGeneric(
             floatingDashboardRows,
             { rows ->
