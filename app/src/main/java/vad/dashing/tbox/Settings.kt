@@ -118,8 +118,10 @@ class SettingsManager(private val context: Context) {
     }
 
     // Flow для конфигурации виджетов
-    val dashboardWidgetsFlow: Flow<String> = context.settingsDataStore.data
-        .map { preferences -> preferences[DASHBOARD_WIDGETS_KEY] ?: "" }
+    val dashboardWidgetsFlow: Flow<List<FloatingDashboardWidgetConfig>> = context.settingsDataStore.data
+        .map { preferences ->
+            parseWidgetConfigsFromString(preferences[DASHBOARD_WIDGETS_KEY] ?: "")
+        }
         .distinctUntilChanged()
 
     val floatingDashboardsFlow: Flow<List<FloatingDashboardConfig>> = context.settingsDataStore.data
@@ -235,9 +237,9 @@ class SettingsManager(private val context: Context) {
     // Suspend функции для сохранения настроек
 
     // Сохранение конфигурации виджетов
-    suspend fun saveDashboardWidgets(config: String) {
+    suspend fun saveDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         context.settingsDataStore.edit { preferences ->
-            preferences[DASHBOARD_WIDGETS_KEY] = config
+            preferences[DASHBOARD_WIDGETS_KEY] = serializeWidgetConfigs(config)
         }
     }
 
@@ -357,7 +359,7 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveFloatingDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_WIDGETS_KEY] = serializeWidgetsConfig(config).toString()
+            preferences[FLOATING_DASHBOARD_WIDGETS_KEY] = serializeWidgetConfigs(config)
         }
     }
 
@@ -568,7 +570,7 @@ class SettingsManager(private val context: Context) {
             id = id,
             name = name,
             enabled = obj.optBoolean("enabled", DEFAULT_FLOATING_DASHBOARD_ENABLED),
-            widgetsConfig = parseWidgetsConfig(obj),
+            widgetsConfig = parseWidgetConfigsFromAny(obj.opt("widgetsConfig")),
             rows = obj.optInt("rows", DEFAULT_FLOATING_DASHBOARD_ROWS).coerceIn(1, 6),
             cols = obj.optInt("cols", DEFAULT_FLOATING_DASHBOARD_COLS).coerceIn(1, 6),
             width = obj.optInt("width", DEFAULT_FLOATING_DASHBOARD_WIDTH),
@@ -580,64 +582,6 @@ class SettingsManager(private val context: Context) {
         )
     }
 
-    private fun parseWidgetsConfig(obj: JSONObject): List<FloatingDashboardWidgetConfig> {
-        val raw = obj.opt("widgetsConfig") ?: return DEFAULT_FLOATING_DASHBOARD_WIDGETS
-        return when (raw) {
-            is JSONArray -> parseWidgetsConfigArray(raw)
-            is String -> parseWidgetsConfigString(raw)
-            else -> DEFAULT_FLOATING_DASHBOARD_WIDGETS
-        }
-    }
-
-    private fun parseWidgetsConfigArray(array: JSONArray): List<FloatingDashboardWidgetConfig> {
-        val configs = mutableListOf<FloatingDashboardWidgetConfig>()
-        for (i in 0 until array.length()) {
-            val item = array.opt(i)
-            when (item) {
-                is JSONObject -> {
-                    val dataKey = item.optString("dataKey").ifBlank {
-                        item.optString("type")
-                    }
-                    configs.add(
-                        FloatingDashboardWidgetConfig(
-                            dataKey = dataKey,
-                            showTitle = item.optBoolean("showTitle", false),
-                            showUnit = item.optBoolean("showUnit", true)
-                        )
-                    )
-                }
-                is String -> {
-                    configs.add(FloatingDashboardWidgetConfig(dataKey = item.trim()))
-                }
-                else -> {
-                    configs.add(FloatingDashboardWidgetConfig(dataKey = ""))
-                }
-            }
-        }
-        return configs
-    }
-
-    private fun parseWidgetsConfigString(value: String): List<FloatingDashboardWidgetConfig> {
-        if (value.isBlank()) return DEFAULT_FLOATING_DASHBOARD_WIDGETS
-        return value.split("|").map { dataKey ->
-            FloatingDashboardWidgetConfig(dataKey = dataKey.trim())
-        }
-    }
-
-    private fun serializeWidgetsConfig(
-        configs: List<FloatingDashboardWidgetConfig>
-    ): JSONArray {
-        val array = JSONArray()
-        configs.forEach { config ->
-            val obj = JSONObject()
-            obj.put("dataKey", config.dataKey)
-            obj.put("showTitle", config.showTitle)
-            obj.put("showUnit", config.showUnit)
-            array.put(obj)
-        }
-        return array
-    }
-
     private fun serializeFloatingDashboards(configs: List<FloatingDashboardConfig>): String {
         val array = JSONArray()
         configs.forEach { config ->
@@ -645,7 +589,7 @@ class SettingsManager(private val context: Context) {
             obj.put("id", config.id)
             obj.put("name", config.name)
             obj.put("enabled", config.enabled)
-            obj.put("widgetsConfig", serializeWidgetsConfig(config.widgetsConfig))
+            obj.put("widgetsConfig", serializeWidgetConfigsToJsonArray(config.widgetsConfig))
             obj.put("rows", config.rows)
             obj.put("cols", config.cols)
             obj.put("width", config.width)

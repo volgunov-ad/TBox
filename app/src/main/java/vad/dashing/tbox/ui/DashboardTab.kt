@@ -28,8 +28,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
-import org.json.JSONArray
-import org.json.JSONObject
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
@@ -39,6 +37,7 @@ import vad.dashing.tbox.MainDashboardViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.normalizeWidgetConfigs
 
 @Composable
 fun MainDashboardTab(
@@ -50,7 +49,7 @@ fun MainDashboardTab(
 ) {
     val dashboardViewModel: MainDashboardViewModel = viewModel()
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
-    val widgetsConfigRaw by settingsViewModel.dashboardWidgetsConfig.collectAsStateWithLifecycle()
+    val widgetsConfig by settingsViewModel.dashboardWidgetsConfig.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
@@ -59,8 +58,8 @@ fun MainDashboardTab(
 
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
     val totalWidgets = dashboardRows * dashboardCols
-    val widgetConfigs = remember(widgetsConfigRaw, totalWidgets) {
-        loadWidgetConfigsFromMainDashboardConfig(widgetsConfigRaw, totalWidgets)
+    val widgetConfigs = remember(widgetsConfig, totalWidgets) {
+        normalizeWidgetConfigs(widgetsConfig, totalWidgets)
     }
 
     LaunchedEffect(widgetConfigs, totalWidgets) {
@@ -385,19 +384,10 @@ fun WidgetSelectionDialog(
                     dashboardManager.updateWidgets(updatedWidgets)
 
                     // Сохраняем конфигурацию
-                    val normalizedConfigs = currentWidgetConfigs.toMutableList()
-                    if (normalizedConfigs.size < updatedWidgets.size) {
-                        normalizedConfigs.addAll(
-                            List(updatedWidgets.size - normalizedConfigs.size) {
-                                FloatingDashboardWidgetConfig(dataKey = "")
-                            }
-                        )
-                    } else if (normalizedConfigs.size > updatedWidgets.size) {
-                        normalizedConfigs.subList(
-                            updatedWidgets.size,
-                            normalizedConfigs.size
-                        ).clear()
-                    }
+                    val normalizedConfigs = normalizeWidgetConfigs(
+                        currentWidgetConfigs,
+                        updatedWidgets.size
+                    ).toMutableList()
                     normalizedConfigs[widgetIndex] = if (selectedDataKey.isNotEmpty()) {
                         FloatingDashboardWidgetConfig(
                             dataKey = selectedDataKey,
@@ -407,9 +397,7 @@ fun WidgetSelectionDialog(
                     } else {
                         FloatingDashboardWidgetConfig(dataKey = "")
                     }
-                    settingsViewModel.saveDashboardWidgets(
-                        serializeMainDashboardWidgetConfigs(normalizedConfigs)
-                    )
+                    settingsViewModel.saveDashboardWidgets(normalizedConfigs)
 
                     // Очищаем историю
                     dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
@@ -426,64 +414,6 @@ fun WidgetSelectionDialog(
             }
         }
     )
-}
-
-
-// Функция для загрузки конфигурации плиток MainDashboard.
-// Поддерживает старый формат "dataKey|..." и новый JSON-формат как у плавающих панелей.
-fun loadWidgetConfigsFromMainDashboardConfig(
-    config: String,
-    widgetCount: Int
-): List<FloatingDashboardWidgetConfig> {
-    if (widgetCount <= 0) return emptyList()
-    val defaultConfigs = List(widgetCount) { FloatingDashboardWidgetConfig(dataKey = "") }
-    if (config.isBlank()) return defaultConfigs
-
-    val parsedConfigs = if (config.trim().startsWith("[")) {
-        try {
-            val array = JSONArray(config)
-            List(array.length()) { index ->
-                when (val item = array.opt(index)) {
-                    is JSONObject -> {
-                        val dataKey = item.optString("dataKey").ifBlank {
-                            item.optString("type")
-                        }
-                        FloatingDashboardWidgetConfig(
-                            dataKey = dataKey,
-                            showTitle = item.optBoolean("showTitle", false),
-                            showUnit = item.optBoolean("showUnit", true)
-                        )
-                    }
-                    is String -> FloatingDashboardWidgetConfig(dataKey = item.trim())
-                    else -> FloatingDashboardWidgetConfig(dataKey = "")
-                }
-            }
-        } catch (_: Exception) {
-            config.split("|").map { dataKey ->
-                FloatingDashboardWidgetConfig(dataKey = dataKey.trim())
-            }
-        }
-    } else {
-        config.split("|").map { dataKey ->
-            FloatingDashboardWidgetConfig(dataKey = dataKey.trim())
-        }
-    }
-
-    return (0 until widgetCount).map { index ->
-        parsedConfigs.getOrNull(index) ?: FloatingDashboardWidgetConfig(dataKey = "")
-    }
-}
-
-fun serializeMainDashboardWidgetConfigs(configs: List<FloatingDashboardWidgetConfig>): String {
-    val array = JSONArray()
-    configs.forEach { config ->
-        val obj = JSONObject()
-        obj.put("dataKey", config.dataKey)
-        obj.put("showTitle", config.showTitle)
-        obj.put("showUnit", config.showUnit)
-        array.put(obj)
-    }
-    return array.toString()
 }
 
 // Функция для загрузки виджетов из конфигурации

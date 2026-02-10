@@ -60,6 +60,7 @@ import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
@@ -862,19 +863,10 @@ fun OverlayWidgetSelectionDialog(
                         updatedWidgets[widgetIndex] = newWidget
 
                         dashboardManager.updateWidgets(updatedWidgets)
-                        val normalizedConfigs = currentWidgetConfigs.toMutableList()
-                        if (normalizedConfigs.size < updatedWidgets.size) {
-                            normalizedConfigs.addAll(
-                                List(updatedWidgets.size - normalizedConfigs.size) {
-                                    FloatingDashboardWidgetConfig(dataKey = "")
-                                }
-                            )
-                        } else if (normalizedConfigs.size > updatedWidgets.size) {
-                            normalizedConfigs.subList(
-                                updatedWidgets.size,
-                                normalizedConfigs.size
-                            ).clear()
-                        }
+                        val normalizedConfigs = normalizeWidgetConfigs(
+                            currentWidgetConfigs,
+                            updatedWidgets.size
+                        ).toMutableList()
                         val newConfig = if (selectedDataKey.isNotEmpty()) {
                             FloatingDashboardWidgetConfig(
                                 dataKey = selectedDataKey,

@@ -366,7 +366,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ""
+            initialValue = emptyList<FloatingDashboardWidgetConfig>()
         )
 
     val dashboardRows = settingsManager.dashboardRowsFlow
@@ -739,7 +739,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun saveDashboardWidgets(config: String) {
+    fun saveDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         viewModelScope.launch {
             settingsManager.saveDashboardWidgets(config)
         }
