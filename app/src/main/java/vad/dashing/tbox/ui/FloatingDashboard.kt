@@ -60,6 +60,7 @@ import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 

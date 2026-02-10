@@ -37,6 +37,7 @@ import vad.dashing.tbox.MainDashboardViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetConfigs
 
 @Composable
@@ -416,26 +417,3 @@ fun WidgetSelectionDialog(
     )
 }
 
-// Функция для загрузки виджетов из конфигурации
-fun loadWidgetsFromConfig(
-    configs: List<FloatingDashboardWidgetConfig>,
-    widgetCount: Int
-): List<DashboardWidget> {
-    return (0 until widgetCount).map { index ->
-        val dataKey = configs.getOrNull(index)?.dataKey ?: ""
-        if (dataKey.isNotEmpty() && dataKey != "null") {
-            DashboardWidget(
-                id = index,
-                title = WidgetsRepository.getTitleForDataKey(dataKey),
-                unit = WidgetsRepository.getUnitForDataKey(dataKey),
-                dataKey = dataKey
-            )
-        } else {
-            DashboardWidget(
-                id = index,
-                title = "",
-                dataKey = ""
-            )
-        }
-    }
-}
