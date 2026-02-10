@@ -7,14 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -278,61 +275,90 @@ fun WidgetSelectionDialog(
     }
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
+    val availableOptions = listOf("" to "Не выбрано") +
+            WidgetsRepository.getAvailableDataKeysWidgets()
+                .filter { it.isNotEmpty() }
+                .map { key ->
+                    key to WidgetsRepository.getTitleUnitForDataKey(key)
+                }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {  },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp)
+            ) {
                 SettingsTitle("Выберите данные для плитки ${widgetIndex + 1}")
 
-                val availableOptions = listOf("" to "Не выбрано") +
-                        WidgetsRepository.getAvailableDataKeysWidgets()
-                            .filter { it.isNotEmpty() }
-                            .map { key ->
-                                key to WidgetsRepository.getTitleUnitForDataKey(key)
-                            }
-
-                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-                    items(availableOptions) { (key, displayName) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedDataKey = key }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedDataKey == key,
-                                onClick = { selectedDataKey = key }
-                            )
-                            Text(
-                                text = displayName,
-                                fontSize = 24.sp,
+                // Список опций с прокруткой
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(2f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        availableOptions.forEachIndexed { index, (key, displayName) ->
+                            Row(
                                 modifier = Modifier
-                                    .padding(start = 8.dp)
-                                    .weight(1f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                                    .fillMaxWidth()
+                                    .clickable { selectedDataKey = key }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = selectedDataKey == key,
+                                    onClick = { selectedDataKey = key }
+                                )
+                                Text(
+                                    text = displayName,
+                                    fontSize = 24.sp,
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .weight(1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
 
                 SettingsTitle("Дополнительные настройки плитки ${widgetIndex + 1}")
-                SettingSwitch(
-                    showTitle,
-                    { showTitle = it },
-                    "Отображать название",
-                    "",
-                    togglesEnabled
-                )
-                SettingSwitch(
-                    showUnit,
-                    { showUnit = it },
-                    "Отображать единицу измерения",
-                    "",
-                    togglesEnabled
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        SettingSwitch(
+                            showTitle,
+                            { showTitle = it },
+                            "Отображать название",
+                            "",
+                            togglesEnabled
+                        )
+                        SettingSwitch(
+                            showUnit,
+                            { showUnit = it },
+                            "Отображать единицу измерения",
+                            "",
+                            togglesEnabled
+                        )
+                    }
+                }
             }
         },
         confirmButton = {

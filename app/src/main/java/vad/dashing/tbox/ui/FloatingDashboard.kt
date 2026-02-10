@@ -764,10 +764,6 @@ fun OverlayWidgetSelectionDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(2f)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
-                        androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                    )
             ) {
                 Column(
                     modifier = Modifier
@@ -807,10 +803,6 @@ fun OverlayWidgetSelectionDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
-                        androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                    )
             ) {
                 Column(
                     modifier = Modifier

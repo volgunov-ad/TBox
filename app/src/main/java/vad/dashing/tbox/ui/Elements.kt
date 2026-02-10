@@ -112,6 +112,7 @@ fun StatusHeader(value: String) {
             fontSize = 24.sp,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
+            lineHeight = 24.sp * 1.3f,
             softWrap = true,
             overflow = TextOverflow.Visible,
             textAlign = TextAlign.Center
@@ -179,7 +180,6 @@ fun ModeButton(
         Text(
             text = text,
             fontSize = 24.sp,
-            maxLines = 2,
             textAlign = TextAlign.Center
         )
     }
@@ -251,7 +251,8 @@ fun SettingsTitle(
         text = text,
         fontSize = 26.sp,
         fontWeight = FontWeight.Medium,
-        maxLines = 1,
+        maxLines = 2,
+        lineHeight = 26.sp * 1.3f,
         color = MaterialTheme.colorScheme.onSurface,
         textAlign = TextAlign.Left
     )
@@ -878,7 +879,6 @@ fun TboxApplicationControls(
             text = "Приложение $appName",
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
-            maxLines = 2,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1.5f)
@@ -901,7 +901,6 @@ fun TboxApplicationControls(
             Text(
                 text = "Приостановить",
                 fontSize = 24.sp,
-                maxLines = 2,
                 textAlign = TextAlign.Center
             )
         }
@@ -922,7 +921,6 @@ fun TboxApplicationControls(
             Text(
                 text = "Возобновить",
                 fontSize = 24.sp,
-                maxLines = 2,
                 textAlign = TextAlign.Center
             )
         }
@@ -943,7 +941,6 @@ fun TboxApplicationControls(
             Text(
                 text = "Остановить",
                 fontSize = 24.sp,
-                maxLines = 2,
                 textAlign = TextAlign.Center
             )
         }

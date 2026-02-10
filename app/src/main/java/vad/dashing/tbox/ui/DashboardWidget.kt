@@ -166,7 +166,7 @@ fun DashboardWidgetItem(
                     maxLines = 2,
                     lineHeight = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
-                        textType = TextType.TITLE
+                        textType = TextType.VALUE
                     ) * 1.3f,
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis,
