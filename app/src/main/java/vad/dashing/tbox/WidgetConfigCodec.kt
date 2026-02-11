@@ -39,6 +39,15 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("dataKey", config.dataKey)
         obj.put("showTitle", config.showTitle)
         obj.put("showUnit", config.showUnit)
+        if (config.appWidgetId != null) {
+            obj.put("appWidgetId", config.appWidgetId)
+        }
+        if (!config.appPackageName.isNullOrBlank()) {
+            obj.put("appPackageName", config.appPackageName)
+        }
+        if (!config.appClassName.isNullOrBlank()) {
+            obj.put("appClassName", config.appClassName)
+        }
         array.put(obj)
     }
     return array
@@ -92,11 +101,21 @@ private fun parseWidgetConfigsFromJsonArray(
                 val dataKey = item.optString("dataKey").ifBlank {
                     item.optString("type")
                 }
+                val appWidgetId = if (item.has("appWidgetId")) {
+                    item.optInt("appWidgetId", -1).takeIf { it != -1 }
+                } else {
+                    null
+                }
+                val appPackageName = item.optString("appPackageName").ifBlank { null }
+                val appClassName = item.optString("appClassName").ifBlank { null }
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey.trim(),
                         showTitle = item.optBoolean("showTitle", false),
-                        showUnit = item.optBoolean("showUnit", true)
+                        showUnit = item.optBoolean("showUnit", true),
+                        appWidgetId = appWidgetId,
+                        appPackageName = appPackageName,
+                        appClassName = appClassName
                     )
                 )
             }

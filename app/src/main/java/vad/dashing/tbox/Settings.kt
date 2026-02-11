@@ -23,7 +23,10 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 data class FloatingDashboardWidgetConfig(
     val dataKey: String,
     val showTitle: Boolean = false,
-    val showUnit: Boolean = true
+    val showUnit: Boolean = true,
+    val appWidgetId: Int? = null,
+    val appPackageName: String? = null,
+    val appClassName: String? = null
 )
 
 data class FloatingDashboardConfig(

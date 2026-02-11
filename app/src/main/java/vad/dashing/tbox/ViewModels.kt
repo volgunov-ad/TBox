@@ -302,6 +302,9 @@ object WidgetsRepository {
     // Только статические данные - заголовки и единицы измерения
     private data class DataTitle(val title: String, val unit: String)
 
+    const val EXTERNAL_WIDGET_DATA_KEY = "externalAppWidget"
+    const val LAUNCH_APP_DATA_KEY = "launchAppWidget"
+
     private val dataKeyTitles = mapOf(
         "param1" to DataTitle("Параметр 1", ""),
         "param2" to DataTitle("Параметр 2", ""),
@@ -375,6 +378,8 @@ object WidgetsRepository {
         "wheelsPressureTemperatureWidget" to DataTitle("Виджет давления и температуры в шинах", "бар / °C"),
         "tempInOutWidget" to DataTitle("Виджет температуры снаружи и внутри", ""),
         "restartTbox" to DataTitle("Кнопка перезагрузки TBox", ""),
+        EXTERNAL_WIDGET_DATA_KEY to DataTitle("Виджет стороннего приложения", ""),
+        LAUNCH_APP_DATA_KEY to DataTitle("Запуск приложения", "")
     )
 
     fun getTitleForDataKey(dataKey: String): String {
