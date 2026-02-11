@@ -81,7 +81,7 @@ class SettingsManager(private val context: Context) {
         // Значения по умолчанию
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
-        private const val DEFAULT_UI_LANGUAGE = AppLanguagePreference.SYSTEM.code
+        private const val DEFAULT_UI_LANGUAGE = "system"
         private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_COLS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_WIDTH = 100
