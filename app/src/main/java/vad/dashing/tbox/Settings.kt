@@ -24,7 +24,9 @@ data class FloatingDashboardWidgetConfig(
     val dataKey: String,
     val showTitle: Boolean = false,
     val showUnit: Boolean = true,
-    val appWidgetId: Int? = null
+    val appWidgetId: Int? = null,
+    val appPackageName: String? = null,
+    val appClassName: String? = null
 )
 
 data class FloatingDashboardConfig(
@@ -570,12 +572,16 @@ class SettingsManager(private val context: Context) {
                     } else {
                         null
                     }
+                    val appPackageName = item.optString("appPackageName").ifBlank { null }
+                    val appClassName = item.optString("appClassName").ifBlank { null }
                     configs.add(
                         FloatingDashboardWidgetConfig(
                             dataKey = dataKey,
                             showTitle = item.optBoolean("showTitle", false),
                             showUnit = item.optBoolean("showUnit", true),
-                            appWidgetId = appWidgetId
+                            appWidgetId = appWidgetId,
+                            appPackageName = appPackageName,
+                            appClassName = appClassName
                         )
                     )
                 }
@@ -608,6 +614,12 @@ class SettingsManager(private val context: Context) {
             obj.put("showUnit", config.showUnit)
             if (config.appWidgetId != null) {
                 obj.put("appWidgetId", config.appWidgetId)
+            }
+            if (!config.appPackageName.isNullOrBlank()) {
+                obj.put("appPackageName", config.appPackageName)
+            }
+            if (!config.appClassName.isNullOrBlank()) {
+                obj.put("appClassName", config.appClassName)
             }
             array.put(obj)
         }

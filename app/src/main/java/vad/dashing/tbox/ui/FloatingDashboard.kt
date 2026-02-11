@@ -1,6 +1,7 @@
 package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.view.WindowManager
@@ -49,6 +50,7 @@ import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
+import vad.dashing.tbox.AppPickerActivity
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
@@ -596,6 +598,31 @@ fun FloatingDashboard(
                                                     backgroundTransparent = true
                                                 )
                                             }
+                                            WidgetsRepository.LAUNCH_APP_DATA_KEY -> {
+                                                AppLauncherWidgetItem(
+                                                    appPackageName = widgetConfig.appPackageName,
+                                                    appClassName = widgetConfig.appClassName,
+                                                    onClick = {
+                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                            showDialogForIndex = index
+                                                        } else {
+                                                            openSelectedApp(
+                                                                context = context,
+                                                                packageName = widgetConfig.appPackageName,
+                                                                className = widgetConfig.appClassName
+                                                            )
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
+                                                    },
+                                                    elevation = 0.dp,
+                                                    shape = 0.dp,
+                                                    backgroundTransparent = true
+                                                )
+                                            }
                                             else -> {
                                                 DashboardWidgetItem(
                                                     widget = widget,
@@ -746,11 +773,47 @@ fun OverlayWidgetSelectionDialog(
     }
     val isExternalWidgetSelected =
         selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
-    val togglesEnabled = selectedDataKey.isNotEmpty() && !isExternalWidgetSelected
+    val isAppLaunchSelected =
+        selectedDataKey == WidgetsRepository.LAUNCH_APP_DATA_KEY
+    val togglesEnabled =
+        selectedDataKey.isNotEmpty() && !isExternalWidgetSelected && !isAppLaunchSelected
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
     val selectedWidgetLabel = remember(initialConfig.appWidgetId) {
         val info = initialConfig.appWidgetId?.let { appWidgetManager.getAppWidgetInfo(it) }
         info?.loadLabel(context.packageManager)?.toString().orEmpty()
+    }
+    val selectedAppLabel = remember(initialConfig.appPackageName, initialConfig.appClassName) {
+        val packageManager = context.packageManager
+        if (initialConfig.appPackageName.isNullOrBlank()) {
+            ""
+        } else {
+            val component = if (!initialConfig.appClassName.isNullOrBlank()) {
+                ComponentName(
+                    initialConfig.appPackageName,
+                    initialConfig.appClassName
+                )
+            } else {
+                null
+            }
+            try {
+                if (component != null) {
+                    val info = packageManager.getActivityInfo(component, 0)
+                    info.loadLabel(packageManager)?.toString().orEmpty()
+                } else {
+                    ""
+                }
+            } catch (_: Exception) {
+                try {
+                    val appInfo = packageManager.getApplicationInfo(
+                        initialConfig.appPackageName,
+                        0
+                    )
+                    appInfo.loadLabel(packageManager)?.toString().orEmpty()
+                } catch (_: Exception) {
+                    ""
+                }
+            }
+        }
     }
 
     // Получаем список опций
@@ -856,6 +919,39 @@ fun OverlayWidgetSelectionDialog(
                 }
             }
 
+            if (isAppLaunchSelected) {
+                val label = if (selectedAppLabel.isNotBlank()) {
+                    selectedAppLabel
+                } else {
+                    "Не выбрано"
+                }
+                Text(
+                    text = "Запуск приложения",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 5.dp),
+                    fontSize = 24.sp
+                )
+                Text(
+                    text = "Выбранное приложение: $label",
+                    fontSize = 20.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                OutlinedButton(
+                    onClick = {
+                        openAppPicker(
+                            context = context,
+                            panelId = panelId,
+                            widgetIndex = widgetIndex,
+                            showTitle = showTitle,
+                            showUnit = showUnit
+                        )
+                        onDismiss()
+                    }
+                ) {
+                    Text(text = "Выбрать приложение", fontSize = 22.sp)
+                }
+            }
+
             Text(
                 text = "Дополнительные настройки",
                 style = MaterialTheme.typography.headlineSmall,
@@ -936,8 +1032,23 @@ fun OverlayWidgetSelectionDialog(
                     onClick = {
                         val isExternalSelected =
                             selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
+                        val isAppLaunchSelected =
+                            selectedDataKey == WidgetsRepository.LAUNCH_APP_DATA_KEY
                         if (isExternalSelected && initialConfig.appWidgetId == null) {
                             openExternalWidgetPicker(
+                                context = context,
+                                panelId = panelId,
+                                widgetIndex = widgetIndex,
+                                showTitle = showTitle,
+                                showUnit = showUnit
+                            )
+                            onDismiss()
+                            return@Button
+                        }
+                        if (isAppLaunchSelected &&
+                            initialConfig.appPackageName.isNullOrBlank()
+                        ) {
+                            openAppPicker(
                                 context = context,
                                 panelId = panelId,
                                 widgetIndex = widgetIndex,
@@ -993,6 +1104,16 @@ fun OverlayWidgetSelectionDialog(
                                     initialConfig.appWidgetId
                                 } else {
                                     null
+                                },
+                                appPackageName = if (isAppLaunchSelected) {
+                                    initialConfig.appPackageName
+                                } else {
+                                    null
+                                },
+                                appClassName = if (isAppLaunchSelected) {
+                                    initialConfig.appClassName
+                                } else {
+                                    null
                                 }
                             )
                         } else {
@@ -1027,6 +1148,28 @@ private fun openMainActivity(context: Context) {
     }
 }
 
+private fun openSelectedApp(
+    context: Context,
+    packageName: String?,
+    className: String?
+) {
+    if (packageName.isNullOrBlank()) return
+    val intent = if (!className.isNullOrBlank()) {
+        Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            component = ComponentName(packageName, className)
+        }
+    } else {
+        context.packageManager.getLaunchIntentForPackage(packageName)
+    } ?: return
+    try {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
 private fun openExternalWidgetPicker(
     context: Context,
     panelId: String,
@@ -1041,6 +1184,27 @@ private fun openExternalWidgetPicker(
             putExtra(WidgetPickerActivity.EXTRA_WIDGET_INDEX, widgetIndex)
             putExtra(WidgetPickerActivity.EXTRA_SHOW_TITLE, showTitle)
             putExtra(WidgetPickerActivity.EXTRA_SHOW_UNIT, showUnit)
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+private fun openAppPicker(
+    context: Context,
+    panelId: String,
+    widgetIndex: Int,
+    showTitle: Boolean,
+    showUnit: Boolean
+) {
+    try {
+        val intent = Intent(context, AppPickerActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            putExtra(AppPickerActivity.EXTRA_PANEL_ID, panelId)
+            putExtra(AppPickerActivity.EXTRA_WIDGET_INDEX, widgetIndex)
+            putExtra(AppPickerActivity.EXTRA_SHOW_TITLE, showTitle)
+            putExtra(AppPickerActivity.EXTRA_SHOW_UNIT, showUnit)
         }
         context.startActivity(intent)
     } catch (e: Exception) {

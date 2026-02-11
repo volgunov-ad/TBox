@@ -269,7 +269,8 @@ fun WidgetSelectionDialog(
                         WidgetsRepository.getAvailableDataKeysWidgets()
                             .filter {
                                 it.isNotEmpty() &&
-                                    it != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
+                                    it != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY &&
+                                    it != WidgetsRepository.LAUNCH_APP_DATA_KEY
                             }
                             .map { key ->
                                 key to WidgetsRepository.getTitleUnitForDataKey(key)
