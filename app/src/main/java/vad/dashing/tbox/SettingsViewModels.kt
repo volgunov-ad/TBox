@@ -33,9 +33,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     private val defaultFloatingDashboards = listOf(
-        createDefaultFloatingDashboard("floating-1", "Панель 1"),
-        createDefaultFloatingDashboard("floating-2", "Панель 2"),
-        createDefaultFloatingDashboard("floating-3", "Панель 3")
+        createDefaultFloatingDashboard("floating-1", selectLanguageText("Панель 1", "Panel 1")),
+        createDefaultFloatingDashboard("floating-2", selectLanguageText("Панель 2", "Panel 2")),
+        createDefaultFloatingDashboard("floating-3", selectLanguageText("Панель 3", "Panel 3"))
     )
     private val floatingDashboardConfigStates =
         mutableMapOf<String, StateFlow<FloatingDashboardConfig>>()
@@ -355,6 +355,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val uiLanguage = settingsManager.uiLanguageFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = AppLanguagePreference.SYSTEM.code
+        )
+
     val selectedTab = settingsManager.selectedTabFlow
         .stateIn(
             scope = viewModelScope,
@@ -532,6 +539,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockLocationSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockLocationSetting(enabled)
+        }
+    }
+
+    fun saveUiLanguage(languageCode: String) {
+        viewModelScope.launch {
+            settingsManager.saveUiLanguage(languageCode)
         }
     }
 

@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.localizedTextC
 import vad.dashing.tbox.valueToString
 
 @Composable
@@ -74,7 +75,7 @@ fun DashboardVoltEngTempWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "${valueToString(voltage, 1)}${if (units) " В" else ""}",
+                    text = "${valueToString(voltage, 1)}${if (units) " ${localizedTextC("В")}" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

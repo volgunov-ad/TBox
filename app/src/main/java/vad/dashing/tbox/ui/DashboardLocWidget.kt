@@ -33,6 +33,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.localizedTextC
+import vad.dashing.tbox.selectLanguageTextC
 
 @Composable
 fun DashboardLocWidgetItem(
@@ -105,7 +107,10 @@ fun DashboardLocWidgetItem(
                 // Отображаем иконку навигации с вращением по направлению
                 Image(
                     painter = painterResource(id = locIndicatorDrawable),
-                    contentDescription = "Location fixed: ${locValues.locateStatus}, values true: $isLocValuesTrue",
+                    contentDescription = selectLanguageTextC(
+                        "Фиксация местоположения: ${locValues.locateStatus}, данные корректны: $isLocValuesTrue",
+                        "Location fixed: ${locValues.locateStatus}, values true: $isLocValuesTrue"
+                    ),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .rotate(degrees = -locValues.trueDirection)
@@ -114,7 +119,7 @@ fun DashboardLocWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${locValues.speed} км/ч",
+                    text = "${locValues.speed} ${localizedTextC("км/ч")}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE

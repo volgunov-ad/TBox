@@ -378,11 +378,13 @@ object WidgetsRepository {
     )
 
     fun getTitleForDataKey(dataKey: String): String {
-        return (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]?.title ?: ""
+        val sourceTitle = (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]?.title ?: ""
+        return localizedText(sourceTitle)
     }
 
     fun getUnitForDataKey(dataKey: String): String {
-        return (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]?.unit ?: ""
+        val sourceUnit = (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]?.unit ?: ""
+        return localizedText(sourceUnit)
     }
 
     fun getTitleUnitForDataKey(dataKey: String): String {
@@ -442,8 +444,8 @@ fun valueToString(
             6 -> String.format(Locale.getDefault(), "%.6f", value)
             else -> String.format(Locale.getDefault(), "%.1f", value)
         }
-        is Boolean -> if (value) booleanTrue else booleanFalse
-        is String -> value
+        is Boolean -> if (value) localizedText(booleanTrue) else localizedText(booleanFalse)
+        is String -> localizedText(value)
         else -> ""
     }
 }

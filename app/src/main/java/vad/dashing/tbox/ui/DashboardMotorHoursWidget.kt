@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.localizedTextC
 
 @Composable
 fun DashboardMotorHoursWidgetItem(
@@ -77,7 +78,7 @@ fun DashboardMotorHoursWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "$motorHoursString ${if (units) " ч" else ""}",
+                    text = "$motorHoursString ${if (units) localizedTextC("ч") else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -92,7 +93,7 @@ fun DashboardMotorHoursWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "$motorHoursTripString ${if (units) " ч" else ""}",
+                    text = "$motorHoursTripString ${if (units) localizedTextC("ч") else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

@@ -24,6 +24,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -189,6 +190,8 @@ class BackgroundService : Service() {
         super.onCreate()
 
         settingsManager = SettingsManager(this)
+        val languageCode = runBlocking { settingsManager.uiLanguageFlow.first() }
+        AppLanguageManager.applyLanguage(this, languageCode)
         appDataManager = AppDataManager(this)
         locationMockManager = LocationMockManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
@@ -321,7 +324,7 @@ class BackgroundService : Service() {
                     startPeriodicJob()
                     startDataListener()
                     TboxRepository.updateServiceStartTime()
-                    val notification = createNotification("Start service")
+                    val notification = createNotification("Запуск службы")
                     startForeground(NOTIFICATION_ID, notification)
                 }
             }
@@ -337,7 +340,7 @@ class BackgroundService : Service() {
                     stopSettingsListener()
                     stopDataListener()
                     stopStateBroadcastListener()
-                    val notification = createNotification("Stop service")
+                    val notification = createNotification("Остановка службы")
                     startForeground(NOTIFICATION_ID, notification)
                     closeAllOverlays()
                 }
@@ -638,10 +641,13 @@ class BackgroundService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "TBox Service",
+            selectLanguageText("Служба TBox", "TBox Service"),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Background TBox monitoring"
+            description = selectLanguageText(
+                "Фоновый мониторинг состояния TBox",
+                "Background TBox monitoring"
+            )
             setShowBadge(false)
         }
 
@@ -651,8 +657,8 @@ class BackgroundService : Service() {
 
     private fun createNotification(text: String?): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("TBox Monitor")
-            .setContentText(text)
+            .setContentTitle(selectLanguageText("Монитор TBox", "TBox Monitor"))
+            .setContentText(text?.let { localizedText(it) })
             .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -2700,13 +2706,13 @@ class BackgroundService : Service() {
                 locSubscribe(true)
             }
             //crtGetHdmData()
-            val notification = createNotification("TBox connected")
+            val notification = createNotification("TBox подключен")
             startForeground(NOTIFICATION_ID, notification)
         }
         else {
             TboxRepository.addLog("WARN", "UDP Listener", "TBox disconnected")
             TboxRepository.resetConnectionData()
-            val notification = createNotification("TBox disconnected")
+            val notification = createNotification("TBox отключен")
             startForeground(NOTIFICATION_ID, notification)
         }
         TboxRepository.updateTboxConnectionTime()
