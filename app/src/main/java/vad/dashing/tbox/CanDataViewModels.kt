@@ -241,6 +241,20 @@ class CanDataViewModel : ViewModel() {
             initialValue = null
         )
 
+    val outsideAirQuality: StateFlow<UInt?> = CanDataRepository.outsideAirQuality
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val insideAirQuality: StateFlow<UInt?> = CanDataRepository.insideAirQuality
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     val isWindowsBlocked: StateFlow<Boolean?> = CanDataRepository.isWindowsBlocked
         .stateIn(
             scope = viewModelScope,
@@ -253,6 +267,13 @@ class CanDataViewModel : ViewModel() {
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyMap()
+        )
+
+    val motorHoursTrip: StateFlow<Float?> = CanDataRepository.motorHoursTrip
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
         )
 }
 

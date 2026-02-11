@@ -137,6 +137,10 @@ fun DashboardWidgetItem(
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
+                        lineHeight = calculateResponsiveFontSize(
+                            containerHeight = availableHeight,
+                            textType = TextType.TITLE
+                        ) * 1.3f,
                         softWrap = true,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
@@ -147,7 +151,7 @@ fun DashboardWidgetItem(
                 }
 
                 Text(
-                    text = valueString,
+                    text = "$valueString ${if (units && !onlyText) " ${widget.unit.replace("/", "\u2060/\u2060")}" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = if (widget.dataKey == "restartTbox") {
@@ -160,6 +164,10 @@ fun DashboardWidgetItem(
                     color = textColor ?: MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
+                    lineHeight = calculateResponsiveFontSize(
+                        containerHeight = availableHeight,
+                        textType = TextType.VALUE
+                    ) * 1.3f,
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
@@ -168,7 +176,7 @@ fun DashboardWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
 
-                if (units && !onlyText) {
+                /*if (units && !onlyText) {
                     Text(
                         text = widget.unit,
                         fontSize = calculateResponsiveFontSize(
@@ -185,7 +193,7 @@ fun DashboardWidgetItem(
                             .fillMaxWidth()
                             .wrapContentHeight(Alignment.CenterVertically)
                     )
-                }
+                }*/
             }
         }
     }

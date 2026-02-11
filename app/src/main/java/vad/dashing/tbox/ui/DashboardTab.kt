@@ -7,14 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,6 +37,8 @@ import vad.dashing.tbox.MainDashboardViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.normalizeWidgetConfigs
 
 @Composable
 fun MainDashboardTab(
@@ -60,23 +58,13 @@ fun MainDashboardTab(
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
 
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
+    val totalWidgets = dashboardRows * dashboardCols
+    val widgetConfigs = remember(widgetsConfig, totalWidgets) {
+        normalizeWidgetConfigs(widgetsConfig, totalWidgets)
+    }
 
-    LaunchedEffect(widgetsConfig, dashboardRows, dashboardCols) {
-        val totalWidgets = dashboardRows * dashboardCols
-
-        // Всегда загружаем/создаем виджеты при изменении зависимостей
-        val widgets = if (widgetsConfig.isNotEmpty()) {
-            loadWidgetsFromConfig(widgetsConfig, totalWidgets)
-        } else {
-            List(totalWidgets) { index ->
-                DashboardWidget(
-                    id = index,
-                    title = "",
-                    dataKey = ""
-                )
-            }
-        }
-
+    LaunchedEffect(widgetConfigs, totalWidgets) {
+        val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets)
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
     }
 
@@ -122,6 +110,8 @@ fun MainDashboardTab(
                         for (col in 0 until dashboardCols) {
                             val index = row * dashboardCols + col
                             val widget = dashboardState.widgets.getOrNull(index) ?: continue
+                            val widgetConfig = widgetConfigs.getOrNull(index)
+                                ?: FloatingDashboardWidgetConfig(dataKey = "")
 
                             Box(modifier = Modifier.weight(1f)) {
                                 when (widget.dataKey) {
@@ -146,7 +136,8 @@ fun MainDashboardTab(
                                             widget = widget,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
-                                            canViewModel = canViewModel
+                                            canViewModel = canViewModel,
+                                            units = widgetConfig.showUnit
                                         )
                                     }
                                     "gearBoxWidget" -> {
@@ -154,7 +145,8 @@ fun MainDashboardTab(
                                             widget = widget,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
-                                            canViewModel = canViewModel
+                                            canViewModel = canViewModel,
+                                            units = widgetConfig.showUnit
                                         )
                                     }
                                     "wheelsPressureWidget" -> {
@@ -162,7 +154,8 @@ fun MainDashboardTab(
                                             widget = widget,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
-                                            canViewModel = canViewModel
+                                            canViewModel = canViewModel,
+                                            units = widgetConfig.showUnit
                                         )
                                     }
                                     "wheelsPressureTemperatureWidget" -> {
@@ -170,7 +163,8 @@ fun MainDashboardTab(
                                             widget = widget,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
-                                            canViewModel = canViewModel
+                                            canViewModel = canViewModel,
+                                            units = widgetConfig.showUnit
                                         )
                                     }
                                     "tempInOutWidget" -> {
@@ -178,7 +172,20 @@ fun MainDashboardTab(
                                             widget = widget,
                                             onClick = { showDialogForIndex = index },
                                             onLongClick = {},
-                                            canViewModel = canViewModel
+                                            canViewModel = canViewModel,
+                                            units = widgetConfig.showUnit
+                                        )
+                                    }
+                                    "motorHoursWidget" -> {
+                                        DashboardMotorHoursWidgetItem(
+                                            widget = widget,
+                                            dataProvider = dataProvider,
+                                            onClick = { showDialogForIndex = index },
+                                            onLongClick = {},
+                                            onDoubleClick = {
+                                                appDataViewModel.setMotorHours(0f)
+                                            },
+                                            units = widgetConfig.showUnit
                                         )
                                     }
                                     "restartTbox" -> {
@@ -195,6 +202,8 @@ fun MainDashboardTab(
                                             },
                                             dashboardManager = dashboardViewModel.dashboardManager,
                                             dashboardChart = false,
+                                            title = widgetConfig.showTitle,
+                                            units = widgetConfig.showUnit,
                                             textColor = if (restartEnabled) {
                                                 if (tboxConnected) {
                                                     Color(0xD900A400)
@@ -218,7 +227,9 @@ fun MainDashboardTab(
                                                 }
                                             },
                                             dashboardManager = dashboardViewModel.dashboardManager,
-                                            dashboardChart = dashboardChart
+                                            dashboardChart = dashboardChart,
+                                            title = widgetConfig.showTitle,
+                                            units = widgetConfig.showUnit
                                         )
                                     }
                                 }
@@ -235,6 +246,7 @@ fun MainDashboardTab(
                 settingsViewModel = settingsViewModel,
                 widgetIndex = index,
                 currentWidgets = dashboardState.widgets,
+                currentWidgetConfigs = widgetConfigs,
                 onDismiss = { showDialogForIndex = null }
             )
         }
@@ -247,58 +259,108 @@ fun WidgetSelectionDialog(
     settingsViewModel: SettingsViewModel,
     widgetIndex: Int,
     currentWidgets: List<DashboardWidget>,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     onDismiss: () -> Unit
 ) {
     var selectedDataKey by remember {
         mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
     }
+    val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
+        ?: FloatingDashboardWidgetConfig(dataKey = "")
+    var showTitle by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(initialConfig.showTitle)
+    }
+    var showUnit by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(initialConfig.showUnit)
+    }
+    val togglesEnabled = selectedDataKey.isNotEmpty()
+
+    val availableOptions = listOf("" to "Не выбрано") +
+            WidgetsRepository.getAvailableDataKeysWidgets()
+                .filter {
+                    it.isNotEmpty() &&
+                        it != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY &&
+                        it != WidgetsRepository.LAUNCH_APP_DATA_KEY
+                }
+                .map { key ->
+                    key to WidgetsRepository.getTitleUnitForDataKey(key)
+                }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Выберите данные для отображения", fontSize = 24.sp) },
+        title = {  },
         text = {
-            Column {
-                Text(
-                    "Плитка ${widgetIndex + 1}",
-                    fontSize = 24.sp,
-                    modifier = Modifier.padding(bottom = 16.dp),
-                    fontWeight = FontWeight.Medium
-                )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp)
+            ) {
+                SettingsTitle("Выберите данные для плитки ${widgetIndex + 1}")
 
-                val availableOptions = listOf("" to "Не выбрано") +
-                        WidgetsRepository.getAvailableDataKeysWidgets()
-                            .filter {
-                                it.isNotEmpty() &&
-                                    it != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY &&
-                                    it != WidgetsRepository.LAUNCH_APP_DATA_KEY
-                            }
-                            .map { key ->
-                                key to WidgetsRepository.getTitleUnitForDataKey(key)
-                            }
-
-                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-                    items(availableOptions) { (key, displayName) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedDataKey = key }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedDataKey == key,
-                                onClick = { selectedDataKey = key }
-                            )
-                            Text(
-                                text = displayName,
-                                fontSize = 22.sp,
+                // Список опций с прокруткой
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(2f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        availableOptions.forEachIndexed { index, (key, displayName) ->
+                            Row(
                                 modifier = Modifier
-                                    .padding(start = 8.dp)
-                                    .weight(1f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                                    .fillMaxWidth()
+                                    .clickable { selectedDataKey = key }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = selectedDataKey == key,
+                                    onClick = { selectedDataKey = key }
+                                )
+                                Text(
+                                    text = displayName,
+                                    fontSize = 24.sp,
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .weight(1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
+                    }
+                }
+
+                SettingsTitle("Дополнительные настройки плитки ${widgetIndex + 1}")
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        SettingSwitch(
+                            showTitle,
+                            { showTitle = it },
+                            "Отображать название",
+                            "",
+                            togglesEnabled
+                        )
+                        SettingSwitch(
+                            showUnit,
+                            { showUnit = it },
+                            "Отображать единицу измерения",
+                            "",
+                            togglesEnabled
+                        )
                     }
                 }
             }
@@ -327,9 +389,20 @@ fun WidgetSelectionDialog(
                     dashboardManager.updateWidgets(updatedWidgets)
 
                     // Сохраняем конфигурацию
-                    val config = updatedWidgets.joinToString("|") { it.dataKey }
-
-                    settingsViewModel.saveDashboardWidgets(config)
+                    val normalizedConfigs = normalizeWidgetConfigs(
+                        currentWidgetConfigs,
+                        updatedWidgets.size
+                    ).toMutableList()
+                    normalizedConfigs[widgetIndex] = if (selectedDataKey.isNotEmpty()) {
+                        FloatingDashboardWidgetConfig(
+                            dataKey = selectedDataKey,
+                            showTitle = showTitle,
+                            showUnit = showUnit
+                        )
+                    } else {
+                        FloatingDashboardWidgetConfig(dataKey = "")
+                    }
+                    settingsViewModel.saveDashboardWidgets(normalizedConfigs)
 
                     // Очищаем историю
                     dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
@@ -348,54 +421,3 @@ fun WidgetSelectionDialog(
     )
 }
 
-
-// Функция для загрузки виджетов из конфигурации
-fun loadWidgetsFromConfig(config: String, widgetCount: Int): List<DashboardWidget> {
-    val dataKeys = if (config.isNotEmpty()) {
-        config.split("|")
-    } else {
-        List(widgetCount) { "" }
-    }
-
-    return (0 until widgetCount).map { index ->
-        val dataKey = dataKeys.getOrNull(index) ?: ""
-        if (dataKey.isNotEmpty() && dataKey != "null") {
-            DashboardWidget(
-                id = index,
-                title = WidgetsRepository.getTitleForDataKey(dataKey),
-                unit = WidgetsRepository.getUnitForDataKey(dataKey),
-                dataKey = dataKey
-            )
-        } else {
-            DashboardWidget(
-                id = index,
-                title = "",
-                dataKey = ""
-            )
-        }
-    }
-}
-
-// Функция для загрузки виджетов из конфигурации плавающей панели
-fun loadWidgetsFromConfig(
-    configs: List<FloatingDashboardWidgetConfig>,
-    widgetCount: Int
-): List<DashboardWidget> {
-    return (0 until widgetCount).map { index ->
-        val dataKey = configs.getOrNull(index)?.dataKey ?: ""
-        if (dataKey.isNotEmpty() && dataKey != "null") {
-            DashboardWidget(
-                id = index,
-                title = WidgetsRepository.getTitleForDataKey(dataKey),
-                unit = WidgetsRepository.getUnitForDataKey(dataKey),
-                dataKey = dataKey
-            )
-        } else {
-            DashboardWidget(
-                id = index,
-                title = "",
-                dataKey = ""
-            )
-        }
-    }
-}

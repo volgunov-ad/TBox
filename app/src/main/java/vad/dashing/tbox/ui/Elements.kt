@@ -54,6 +54,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanFrame
 import vad.dashing.tbox.SettingsViewModel
 
@@ -110,6 +112,7 @@ fun StatusHeader(value: String) {
             fontSize = 24.sp,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
+            lineHeight = 24.sp * 1.3f,
             softWrap = true,
             overflow = TextOverflow.Visible,
             textAlign = TextAlign.Center
@@ -177,7 +180,6 @@ fun ModeButton(
         Text(
             text = text,
             fontSize = 24.sp,
-            maxLines = 2,
             textAlign = TextAlign.Center
         )
     }
@@ -247,9 +249,10 @@ fun SettingsTitle(
     Text(
         modifier = Modifier.padding(top=10.dp),
         text = text,
-        fontSize = 24.sp,
+        fontSize = 26.sp,
         fontWeight = FontWeight.Medium,
-        maxLines = 1,
+        maxLines = 2,
+        lineHeight = 26.sp * 1.3f,
         color = MaterialTheme.colorScheme.onSurface,
         textAlign = TextAlign.Left
     )
@@ -304,6 +307,69 @@ fun SettingSwitch(
                     lineHeight = 20.sp
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun SettingSwitchWithAction(
+    isChecked: Boolean,
+    onCheckedChange: (enabled: Boolean) -> Unit,
+    text: String,
+    description: String,
+    enabled: Boolean,
+    actionText: String,
+    onActionClick: () -> Unit,
+    actionEnabled: Boolean = true
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Switch(
+            checked = isChecked,
+            enabled = enabled,
+            onCheckedChange = { onCheckedChange(it) },
+            modifier = Modifier
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
+        )
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 16.dp)
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
+        ) {
+            Text(
+                text = text,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
+            )
+            if (description.isNotEmpty()) {
+                Text(
+                    text = description,
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+            }
+        }
+
+        OutlinedButton(
+            onClick = onActionClick,
+            enabled = actionEnabled,
+            modifier = Modifier
+                .padding(start = 8.dp)
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
+        ) {
+            Text(
+                text = actionText,
+                fontSize = 20.sp
+            )
         }
     }
 }
@@ -728,7 +794,7 @@ fun FloatingDashboardPositionSizeSettings(
                 IntInputField(
                     value = floatingDashboardStartY,
                     onValueChange = { newValue ->
-                        if (newValue >= -100) {
+                        if (newValue >= 0) {
                             settingsViewModel.saveFloatingDashboardStartY(newValue)
                         }
                     },
@@ -786,4 +852,97 @@ fun IntInputField(
         ),
         shape = RoundedCornerShape(8.dp)
     )
+}
+
+@Composable
+fun TboxApplicationControls(
+    appName: String,
+    tboxConnected: Boolean,
+    onServiceCommand: (String, String, String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        var commandButtonsEnabled by remember { mutableStateOf(true) }
+
+        LaunchedEffect(commandButtonsEnabled) {
+            if (!commandButtonsEnabled) {
+                delay(5000) // Блокировка на 5 секунд
+                commandButtonsEnabled = true
+            }
+        }
+
+        Text(
+            text = "Приложение $appName",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.weight(1.5f)
+        )
+
+        Button(
+            onClick = {
+                if (commandButtonsEnabled) {
+                    commandButtonsEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_TBOX_APP_SUSPEND,
+                        BackgroundService.EXTRA_APP_NAME,
+                        appName
+                    )
+                }
+            },
+            enabled = commandButtonsEnabled && tboxConnected,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = "Приостановить",
+                fontSize = 24.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+        Button(
+            onClick = {
+                if (commandButtonsEnabled) {
+                    commandButtonsEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_TBOX_APP_RESUME,
+                        BackgroundService.EXTRA_APP_NAME,
+                        appName
+                    )
+                }
+            },
+            enabled = commandButtonsEnabled && tboxConnected,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = "Возобновить",
+                fontSize = 24.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+        Button(
+            onClick = {
+                if (commandButtonsEnabled) {
+                    commandButtonsEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_TBOX_APP_STOP,
+                        BackgroundService.EXTRA_APP_NAME,
+                        appName
+                    )
+                }
+            },
+            enabled = commandButtonsEnabled && tboxConnected,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = "Остановить",
+                fontSize = 24.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }

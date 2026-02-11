@@ -20,6 +20,7 @@ import kotlin.Boolean
 import kotlin.collections.List
 
 class TboxViewModel : ViewModel() {
+
     val logs: StateFlow<List<String>> = TboxRepository.logs
         .stateIn(
             scope = viewModelScope,
@@ -69,7 +70,7 @@ class TboxViewModel : ViewModel() {
             initialValue = false
         )
 
-    val suspendTboxAppSend: StateFlow<Boolean> = TboxRepository.suspendTboxAppSend
+    val tboxAppSuspended: StateFlow<Boolean> = TboxRepository.tboxAppSuspended
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -81,6 +82,34 @@ class TboxViewModel : ViewModel() {
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
+        )
+
+    val tboxMdcSuspended: StateFlow<Boolean> = TboxRepository.tboxMdcSuspended
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val tboxMdcStoped: StateFlow<Boolean> = TboxRepository.tboxMdcStoped
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val tboxSwdSuspended: StateFlow<Boolean> = TboxRepository.tboxSwdSuspended
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val gateVersion: StateFlow<String> = TboxRepository.gateVersion
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
         )
 
     val tboxConnectionTime: StateFlow<Date> = TboxRepository.tboxConnectionTime
@@ -336,7 +365,11 @@ object WidgetsRepository {
         "trueDirection" to DataTitle("Направление", ""),
         "outsideTemperature" to DataTitle("Температура на улице", "°C"),
         "insideTemperature" to DataTitle("Температура в машине", "°C"),
+        "outsideAirQuality" to DataTitle("Качество воздуха на улице", ""),
+        "insideAirQuality" to DataTitle("Качество воздуха в машине", ""),
         "motorHours" to DataTitle("Моточасы двигателя", "ч"),
+        "motorHoursTrip" to DataTitle("Моточасы двигателя за поездку", "ч"),
+        "motorHoursWidget" to DataTitle("Виджет моточасов", ""),
         "netWidget" to DataTitle("Виджет сигнала сети", ""),
         "locWidget" to DataTitle("Виджет навигации", ""),
         "voltage+engineTemperatureWidget" to DataTitle("Виджет напряжения и температуры двигателя", ""),

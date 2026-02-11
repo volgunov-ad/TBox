@@ -3,7 +3,6 @@ package vad.dashing.tbox
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 
 class BootCompleteReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
@@ -23,10 +22,6 @@ class BootCompleteReceiver : BroadcastReceiver() {
         }
 
         // Для Android 8+ используем startForegroundService
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
-        }
+        context.startForegroundService(intent)
     }
 }

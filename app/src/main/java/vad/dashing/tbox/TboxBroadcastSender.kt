@@ -378,6 +378,7 @@ class TboxBroadcastSender(
         netStateListenerJob = scope.launch {
             launch {
                 TboxRepository.netState
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 10000)
                     .collect { netState ->
                         if (netStateSubscribers.isNotEmpty()) {
                             netStateSubscribers.forEach { subscriberKey ->
@@ -390,6 +391,7 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.apnStatus
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 20000)
                     .collect { apnStatus ->
                         if (netStateSubscribers.isNotEmpty()) {
                             netStateSubscribers.forEach { subscriberKey ->
@@ -441,6 +443,7 @@ class TboxBroadcastSender(
         generalStateListenerJob = scope.launch {
             launch {
                 TboxRepository.tboxConnected
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 60000)
                     .collect { tboxConnected ->
                         if (generalStateSubscribers.isNotEmpty()) {
                             generalStateSubscribers.forEach { subscriberKey ->
@@ -453,6 +456,7 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.tboxConnectionTime
+                    .sampleWithTimeout(periodMillis = 5000, timeoutMillis = 120000)
                     .collect { tboxConnectionTime ->
                         if (generalStateSubscribers.isNotEmpty()) {
                             generalStateSubscribers.forEach { subscriberKey ->
@@ -465,6 +469,7 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.serviceStartTime
+                    .sampleWithTimeout(periodMillis = 5000, timeoutMillis = 120000)
                     .collect { serviceStartTime ->
                         if (generalStateSubscribers.isNotEmpty()) {
                             generalStateSubscribers.forEach { subscriberKey ->
@@ -606,7 +611,7 @@ class TboxBroadcastSender(
         ) {
             launch {
                 CanDataRepository.engineTemperature
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 10000)
                     .collect { engineTemperature ->
                         if (engineStateSubscribers.isNotEmpty()) {
                             engineStateSubscribers.forEach { subscriberKey ->
@@ -619,7 +624,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.engineRPM
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 10000)
                     .collect { engineRPM ->
                         if (engineStateSubscribers.isNotEmpty()) {
                             engineStateSubscribers.forEach { subscriberKey ->
@@ -651,7 +656,7 @@ class TboxBroadcastSender(
         ) {
             launch {
                 CanDataRepository.gearBoxCurrentGear
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 10000)
                     .collect { gearBoxCurrentGear ->
                         if (gearBoxStateSubscribers.isNotEmpty()) {
                             gearBoxStateSubscribers.forEach { subscriberKey ->
@@ -664,7 +669,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.gearBoxOilTemperature
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 10000)
                     .collect { gearBoxOilTemperature ->
                         if (gearBoxStateSubscribers.isNotEmpty()) {
                             gearBoxStateSubscribers.forEach { subscriberKey ->
@@ -696,7 +701,7 @@ class TboxBroadcastSender(
         ) {
             launch {
                 CanDataRepository.fuelLevelPercentage
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 5000, timeoutMillis = 60000)
                     .collect { fuelLevelPercentage ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -709,7 +714,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.fuelLevelPercentageFiltered
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 5000, timeoutMillis = 60000)
                     .collect { fuelLevelPercentageFiltered ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -722,7 +727,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.cruiseSetSpeed
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 10000)
                     .collect { cruiseSetSpeed ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -735,7 +740,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.voltage
-                    .sample(2000)
+                    .sampleWithTimeout(periodMillis = 2000, timeoutMillis = 10000)
                     .collect { voltage ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -748,7 +753,7 @@ class TboxBroadcastSender(
 
             launch {
                 CanDataRepository.insideTemperature
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 10000)
                     .collect { insideTemperature ->
                         if (carStateSubscribers.isNotEmpty()) {
                             carStateSubscribers.forEach { subscriberKey ->
@@ -780,7 +785,7 @@ class TboxBroadcastSender(
         ) {
             launch {
                 TboxRepository.locValues
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 900, timeoutMillis = 10000)
                     .collect { locValues ->
                         if (locationStateSubscribers.isNotEmpty()) {
                             locationStateSubscribers.forEach { subscriberKey ->
@@ -793,7 +798,7 @@ class TboxBroadcastSender(
 
             launch {
                 TboxRepository.isLocValuesTrue
-                    .sample(1000)
+                    .sampleWithTimeout(periodMillis = 2000, timeoutMillis = 10000)
                     .collect { isLocValuesTrue ->
                         if (locationStateSubscribers.isNotEmpty()) {
                             locationStateSubscribers.forEach { subscriberKey ->
@@ -825,6 +830,7 @@ class TboxBroadcastSender(
         ) {
             var previousFrames: Map<String, List<CanFrame>> = emptyMap()
             CanDataRepository.canFramesStructured
+                .sampleWithTimeout(periodMillis = 900, timeoutMillis = 10000)
                 .collect { canFramesStructured ->
                     if (canIDSubscribers.isNotEmpty()) {
                         canIDSubscribers.forEach { subscriberKey ->
@@ -881,5 +887,41 @@ class TboxBroadcastSender(
         return subscribers.map { key ->
             parseSubscriberKey(key)[0] // packageName - первый элемент
         }.toSet()
+    }
+}
+
+private fun <T> Flow<T>.sampleWithTimeout(
+    periodMillis: Long,
+    timeoutMillis: Long
+): Flow<T> = channelFlow {
+    var lastValue: T? = null
+    var lastEmittedTime = System.currentTimeMillis()
+
+    // Коллектим оригинальный поток
+    launch {
+        collect { value ->
+            lastValue = value
+            val currentTime = System.currentTimeMillis()
+
+            // Отправляем если прошло больше periodMillis
+            if (currentTime - lastEmittedTime >= periodMillis && lastValue != null) {
+                send(lastValue!!)
+                lastEmittedTime = currentTime
+            }
+        }
+    }
+
+    // Таймер для гарантированной отправки
+    launch {
+        while (true) {
+            delay(timeoutMillis)
+            val currentTime = System.currentTimeMillis()
+
+            // Если есть значение и прошло больше таймаута с последней отправки
+            if (lastValue != null && currentTime - lastEmittedTime >= timeoutMillis) {
+                send(lastValue!!)
+                lastEmittedTime = currentTime
+            }
+        }
     }
 }

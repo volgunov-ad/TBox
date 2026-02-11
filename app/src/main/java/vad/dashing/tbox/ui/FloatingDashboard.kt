@@ -65,6 +65,8 @@ import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
@@ -535,6 +537,31 @@ fun FloatingDashboard(
                                                     units = widgetConfig.showUnit
                                                 )
                                             }
+                                            "motorHoursWidget" -> {
+                                                DashboardMotorHoursWidgetItem(
+                                                    widget = widget,
+                                                    dataProvider = dataProvider,
+                                                    onClick = {
+                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                            showDialogForIndex = index
+                                                        } else if (isFloatingDashboardClickAction) {
+                                                            openMainActivity(context)
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
+                                                    },
+                                                    onDoubleClick = {
+                                                        appDataViewModel.setMotorHours(0f)
+                                                    },
+                                                    elevation = 0.dp,
+                                                    shape = 0.dp,
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
+                                                )
+                                            }
                                             "restartTbox" -> {
                                                 DashboardWidgetItem(
                                                     widget = widget,
@@ -836,23 +863,13 @@ fun OverlayWidgetSelectionDialog(
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
-            // Заголовок
-            Text(
-                text = "Выберите данные для плитки ${widgetIndex + 1}",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 5.dp),
-                fontSize = 24.sp
-            )
+            SettingsTitle("Выберите данные для плитки ${widgetIndex + 1}")
 
             // Список опций с прокруткой
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(2f)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
-                        androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                    )
             ) {
                 Column(
                     modifier = Modifier
@@ -865,7 +882,7 @@ fun OverlayWidgetSelectionDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { selectedDataKey = key }
-                                .padding(vertical = 10.dp),
+                                .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             androidx.compose.material3.RadioButton(
@@ -874,7 +891,7 @@ fun OverlayWidgetSelectionDialog(
                             )
                             Text(
                                 text = displayName,
-                                fontSize = 22.sp,
+                                fontSize = 24.sp,
                                 modifier = Modifier
                                     .padding(start = 8.dp)
                                     .weight(1f),
@@ -892,12 +909,7 @@ fun OverlayWidgetSelectionDialog(
                 } else {
                     "Не выбрано"
                 }
-                Text(
-                    text = "Виджет стороннего приложения",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 5.dp),
-                    fontSize = 24.sp
-                )
+                SettingsTitle("Виджет стороннего приложения")
                 Text(
                     text = "Выбранный виджет: $label",
                     fontSize = 20.sp,
@@ -925,12 +937,7 @@ fun OverlayWidgetSelectionDialog(
                 } else {
                     "Не выбрано"
                 }
-                Text(
-                    text = "Запуск приложения",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 5.dp),
-                    fontSize = 24.sp
-                )
+                SettingsTitle("Запуск приложения")
                 Text(
                     text = "Выбранное приложение: $label",
                     fontSize = 20.sp,
@@ -952,21 +959,12 @@ fun OverlayWidgetSelectionDialog(
                 }
             }
 
-            Text(
-                text = "Дополнительные настройки",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(top = 12.dp, bottom = 5.dp),
-                fontSize = 24.sp
-            )
+            SettingsTitle("Дополнительные настройки плитки ${widgetIndex + 1}")
             // Список опций с прокруткой
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
-                        androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                    )
             ) {
                 Column(
                     modifier = Modifier
@@ -974,42 +972,20 @@ fun OverlayWidgetSelectionDialog(
                         .verticalScroll(androidx.compose.foundation.rememberScrollState())
                         .padding(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Switch(
-                            checked = showTitle,
-                            onCheckedChange = { showTitle = it },
-                            enabled = togglesEnabled
-                        )
-                        Text(
-                            text = "Отображать название",
-                            fontSize = 22.sp,
-                            modifier = Modifier.weight(1f).padding(start=8.dp)
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Switch(
-                            checked = showUnit,
-                            onCheckedChange = { showUnit = it },
-                            enabled = togglesEnabled
-                        )
-                        Text(
-                            text = "Отображать единицу измерения",
-                            fontSize = 22.sp,
-                            modifier = Modifier.weight(1f).padding(start=8.dp)
-                        )
-                    }
+                    SettingSwitch(
+                        showTitle,
+                        { showTitle = it },
+                        "Отображать название",
+                        "",
+                        togglesEnabled
+                    )
+                    SettingSwitch(
+                        showUnit,
+                        { showUnit = it },
+                        "Отображать единицу измерения",
+                        "",
+                        togglesEnabled
+                    )
                 }
             }
 
@@ -1082,19 +1058,10 @@ fun OverlayWidgetSelectionDialog(
                         updatedWidgets[widgetIndex] = newWidget
 
                         dashboardManager.updateWidgets(updatedWidgets)
-                        val normalizedConfigs = currentWidgetConfigs.toMutableList()
-                        if (normalizedConfigs.size < updatedWidgets.size) {
-                            normalizedConfigs.addAll(
-                                List(updatedWidgets.size - normalizedConfigs.size) {
-                                    FloatingDashboardWidgetConfig(dataKey = "")
-                                }
-                            )
-                        } else if (normalizedConfigs.size > updatedWidgets.size) {
-                            normalizedConfigs.subList(
-                                updatedWidgets.size,
-                                normalizedConfigs.size
-                            ).clear()
-                        }
+                        val normalizedConfigs = normalizeWidgetConfigs(
+                            currentWidgetConfigs,
+                            updatedWidgets.size
+                        ).toMutableList()
                         val newConfig = if (selectedDataKey.isNotEmpty()) {
                             FloatingDashboardWidgetConfig(
                                 dataKey = selectedDataKey,

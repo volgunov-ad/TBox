@@ -135,6 +135,10 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
+                            lineHeight = calculateResponsiveFontSize(
+                                containerHeight = availableHeight,
+                                textType = TextType.TITLE
+                            ) * 1.3f,
                             overflow = TextOverflow.Ellipsis
                         )
                     }

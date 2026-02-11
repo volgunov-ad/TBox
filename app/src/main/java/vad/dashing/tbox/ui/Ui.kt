@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -73,6 +74,7 @@ import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.CycleDataViewModel
 import vad.dashing.tbox.R
@@ -94,13 +96,9 @@ fun TboxApp(
     settingsManager: SettingsManager,
     appDataManager: AppDataManager,
     onTboxRestart: () -> Unit,
-    onModemCheck: () -> Unit,
-    onModemMode: (String) -> Unit,
-    onUpdateInfoClick: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
-    onTboxApplicationCommand: (String, String) -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit,
-    onATcmdSend: (String) -> Unit,
+    onServiceCommand: (String, String, String) -> Unit,
+    onMockLocationSettingChanged: (Boolean) -> Unit
 ) {
     val viewModel: TboxViewModel = viewModel()
 
@@ -121,13 +119,9 @@ fun TboxApp(
             settingsViewModel = settingsViewModel,
             appDataViewModel = appDataViewModel,
             onTboxRestart = onTboxRestart,
-            onModemCheck = onModemCheck,
-            onModemMode = onModemMode,
-            onUpdateInfoClick = onUpdateInfoClick,
             onSaveToFile = onSaveToFile,
-            onTboxApplicationCommand = onTboxApplicationCommand,
-            onMockLocationSettingChanged = onMockLocationSettingChanged,
-            onATcmdSend = onATcmdSend
+            onServiceCommand = onServiceCommand,
+            onMockLocationSettingChanged = onMockLocationSettingChanged
         )
     }
 }
@@ -156,13 +150,9 @@ fun TboxScreen(
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
     onTboxRestart: () -> Unit,
-    onModemCheck: () -> Unit,
-    onModemMode: (String) -> Unit,
-    onUpdateInfoClick: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
-    onTboxApplicationCommand: (String, String) -> Unit,
+    onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
-    onATcmdSend: (String) -> Unit,
 ) {
     val canViewModel: CanDataViewModel = viewModel()
     val cycleViewModel: CycleDataViewModel = viewModel()
@@ -206,7 +196,11 @@ fun TboxScreen(
 
     LaunchedEffect(selectedTab) {
         if (selectedTab == 0) {
-            onModemCheck()
+            onServiceCommand(
+                BackgroundService.ACTION_MODEM_CHECK,
+                "",
+                ""
+            )
         }
     }
 
@@ -327,13 +321,13 @@ fun TboxScreen(
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 when (selectedTab) {
-                    0 -> ModemTab(viewModel, onModemMode)
+                    0 -> ModemTab(viewModel, onServiceCommand)
                     1 -> if (isExpertModeEnabled) {
-                        ATcmdTab (viewModel, onATcmdSend)
+                        ATcmdTab (viewModel, onServiceCommand)
                     } else {
-                        ModemTab(viewModel, onModemMode)
+                        ModemTab(viewModel, onServiceCommand)
                     }
-                    2 -> LocationTab(viewModel, settingsViewModel, onTboxApplicationCommand)
+                    2 -> LocationTab(viewModel)
                     3 -> CarDataTab(
                         canViewModel,
                         cycleViewModel,
@@ -343,17 +337,18 @@ fun TboxScreen(
                         viewModel,
                         settingsViewModel,
                         onTboxRestart,
-                        onMockLocationSettingChanged)
+                        onMockLocationSettingChanged,
+                        onServiceCommand)
                     5 -> if (isExpertModeEnabled) {
                         LogsTab(viewModel, settingsViewModel, onSaveToFile)
                     } else {
-                        ModemTab(viewModel, onModemMode)
+                        ModemTab(viewModel, onServiceCommand)
                     }
-                    6 -> InfoTab(viewModel, settingsViewModel, onUpdateInfoClick)
+                    6 -> InfoTab(viewModel, settingsViewModel, onServiceCommand)
                     7 -> if (isExpertModeEnabled) {
                         CanTab(viewModel, canViewModel, onSaveToFile)
                     } else {
-                        ModemTab(viewModel, onModemMode)
+                        ModemTab(viewModel, onServiceCommand)
                     }
                     8 -> MainDashboardTab(
                         viewModel,
@@ -361,7 +356,7 @@ fun TboxScreen(
                         settingsViewModel,
                         appDataViewModel,
                         onTboxRestart)
-                    else -> ModemTab(viewModel, onModemMode)
+                    else -> ModemTab(viewModel, onServiceCommand)
                 }
             }
         }
@@ -372,7 +367,7 @@ fun TboxScreen(
 @Composable
 fun ModemTab(
     viewModel: TboxViewModel,
-    onModemMode: (String) -> Unit,
+    onServiceCommand: (String, String, String) -> Unit,
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
     val netValues by viewModel.netValues.collectAsStateWithLifecycle()
@@ -434,7 +429,7 @@ fun ModemTab(
 
         ModemModeSelector(
             selectedMode = modemStatus,
-            onModemMode = onModemMode,
+            onServiceCommand = onServiceCommand,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -443,7 +438,7 @@ fun ModemTab(
 @Composable
 fun ModemModeSelector(
     selectedMode: Int,
-    onModemMode: (String) -> Unit,
+    onServiceCommand: (String, String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var buttonsEnabled by remember { mutableStateOf(true) }
@@ -475,7 +470,11 @@ fun ModemModeSelector(
                 onClick = {
                     if (buttonsEnabled) {
                         buttonsEnabled = false
-                        onModemMode("on")
+                        onServiceCommand(
+                            BackgroundService.ACTION_MODEM_ON,
+                            "",
+                            ""
+                        )
                     }
                 },
                 enabled = buttonsEnabled,
@@ -490,7 +489,11 @@ fun ModemModeSelector(
                 onClick = {
                     if (buttonsEnabled) {
                         buttonsEnabled = false
-                        onModemMode("fly")
+                        onServiceCommand(
+                            BackgroundService.ACTION_MODEM_FLY,
+                            "",
+                            ""
+                        )
                     }
                 },
                 enabled = buttonsEnabled,
@@ -505,7 +508,11 @@ fun ModemModeSelector(
                 onClick = {
                     if (buttonsEnabled) {
                         buttonsEnabled = false
-                        onModemMode("off")
+                        onServiceCommand(
+                            BackgroundService.ACTION_MODEM_OFF,
+                            "",
+                            ""
+                        )
                     }
                 },
                 enabled = buttonsEnabled,
@@ -520,12 +527,16 @@ fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     onTboxRestartClick: () -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit
+    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onServiceCommand: (String, String, String) -> Unit,
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
     val isAutoSuspendTboxAppEnabled by settingsViewModel.isAutoSuspendTboxAppEnabled.collectAsStateWithLifecycle()
+    val isAutoSuspendTboxMdcEnabled by settingsViewModel.isAutoSuspendTboxMdcEnabled.collectAsStateWithLifecycle()
+    val isAutoSuspendTboxSwdEnabled by settingsViewModel.isAutoSuspendTboxSwdEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
+    val isAutoStopTboxMdcEnabled by settingsViewModel.isAutoStopTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
     val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
@@ -607,13 +618,16 @@ fun SettingsTab(
                 settingsViewModel.saveAutoSuspendTboxAppSetting(enabled)
                 if (enabled && isAutoStopTboxAppEnabled) {
                     settingsViewModel.saveAutoStopTboxAppSetting(false)
-                    showAlertDialog("ПРЕДУПРЕЖДЕНИЕ", "Требуется ручная перезагрузка TBox", context)
+                    showAlertDialog(
+                        "ПРЕДУПРЕЖДЕНИЕ",
+                        "При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox",
+                        context)
                 }
             },
             "Автоматическая отправка команды SUSPEND приложению APP в TBox",
             "Приостановка приложения APP " +
                     "позволяет избежать периодической перезагрузки TBox, " +
-                    "но может происходить регулярное переподключение модема, если установлена SIM-карта",
+                    "но может происходить регулярное переподключение модема, если установлена SIM-карта на TBox HW 0.0.5",
             true
         )
         SettingSwitch(
@@ -622,15 +636,63 @@ fun SettingsTab(
                 settingsViewModel.saveAutoStopTboxAppSetting(enabled)
                 if (enabled && isAutoSuspendTboxAppEnabled) {
                     settingsViewModel.saveAutoSuspendTboxAppSetting(false)
-                    showAlertDialog("ПРЕДУПРЕЖДЕНИЕ", "Требуется ручная перезагрузка TBox", context)
+                    showAlertDialog(
+                        "ПРЕДУПРЕЖДЕНИЕ",
+                        "При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox",
+                        context)
                 }
             },
             "Автоматическая отправка команды STOP приложению APP в TBox",
             "Полное отключение приложения APP " +
                     "позволяет избежать периодической перезагрузки TBox и переподключения модема. " +
-                    "После включения опции может произойти однократная перезагрузка TBox",
+                    "После включения опции может произойти однократная перезагрузка TBox.\n" +
+                    "Не рекомендуется использовать данную опцию на TBox HW 0.0.1, 0.0.4",
             true
         )
+
+        SettingSwitch(
+            isAutoSuspendTboxMdcEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoSuspendTboxMdcSetting(enabled)
+                if (enabled && isAutoStopTboxMdcEnabled) {
+                    settingsViewModel.saveAutoStopTboxMdcSetting(false)
+                    showAlertDialog(
+                        "ПРЕДУПРЕЖДЕНИЕ",
+                        "При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox",
+                        context)
+                }
+            },
+            "Автоматическая отправка команды SUSPEND приложению MDC в TBox",
+            "Не рекомендуется включать данную опцию, если в TBox установлена SIM карта",
+            true
+        )
+        SettingSwitch(
+            isAutoStopTboxMdcEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoStopTboxMdcSetting(enabled)
+                if (enabled && isAutoSuspendTboxMdcEnabled) {
+                    settingsViewModel.saveAutoSuspendTboxMdcSetting(false)
+                    showAlertDialog(
+                        "ПРЕДУПРЕЖДЕНИЕ",
+                        "При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox",
+                        context)
+                }
+            },
+            "Автоматическая отправка команды STOP приложению MDC в TBox",
+            "Не рекомендуется включать данную опцию, если в TBox установлена SIM карта",
+            true
+        )
+
+        SettingSwitch(
+            isAutoSuspendTboxSwdEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoSuspendTboxSwdSetting(enabled)
+            },
+            "Автоматическая отправка команды SUSPEND приложению SWD в TBox",
+            "",
+            true
+        )
+
         SettingSwitch(
             isAutoPreventTboxRestartEnabled,
             { enabled ->
@@ -816,7 +878,7 @@ fun SettingsTab(
                 1,
                 3600
                 )
-            SettingSwitch(
+            /*SettingSwitch(
                 isGetCycleSignalEnabled,
                 { enabled ->
                     settingsViewModel.saveGetCycleSignalSetting(enabled)
@@ -824,7 +886,7 @@ fun SettingsTab(
                 "Получать циклические данные",
                 "",
                 true
-            )
+            )*/
             SettingSwitch(
                 isTboxIPRotation,
                 { enabled ->
@@ -858,6 +920,30 @@ fun SettingsTab(
                         .padding(top = 4.dp)
                 )
             }
+
+            /*SettingsTitle("Управление приложениями TBox")
+            Text(
+                text = "Используйте эти кнопки с осторожностью. В первую очередь они предназначены для отладки",
+                fontSize = 20.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 20.sp
+            )
+            TboxApplicationControls(
+                "APP",
+                tboxConnected,
+                onServiceCommand)
+            TboxApplicationControls(
+                "LOC",
+                tboxConnected,
+                onServiceCommand)
+            TboxApplicationControls(
+                "MDC",
+                tboxConnected,
+                onServiceCommand)
+            TboxApplicationControls(
+                "SWD",
+                tboxConnected,
+                onServiceCommand)*/
         }
 
         Row(
@@ -940,16 +1026,11 @@ private fun showOverlayRequirementsDialog(context: Context) {
 
 @Composable
 fun LocationTab(
-    viewModel: TboxViewModel,
-    settingsViewModel: SettingsViewModel,
-    onTboxApplicationCommand: (String, String) -> Unit,
+    viewModel: TboxViewModel
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
-    val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
-
-    val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
 
     // Используем remember для форматтера
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -966,15 +1047,6 @@ fun LocationTab(
         locationUpdateTime?.let { locationUpdateTime ->
             timeFormat.format(locationUpdateTime)
         } ?: ""
-    }
-
-    var commandButtonsEnabled by remember { mutableStateOf(true) }
-
-    LaunchedEffect(commandButtonsEnabled) {
-        if (!commandButtonsEnabled) {
-            delay(5000) // Блокировка на 5 секунд
-            commandButtonsEnabled = true
-        }
     }
 
     Column(
@@ -999,48 +1071,6 @@ fun LocationTab(
             item { StatusRow("Сырые данные", locValues.rawValue) }
         }
 
-        if (isExpertModeEnabled) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = {
-                        if (commandButtonsEnabled) {
-                            commandButtonsEnabled = false
-                            onTboxApplicationCommand("LOC", "suspend")
-                        }
-                    },
-                    enabled = commandButtonsEnabled && tboxConnected
-                ) {
-                    Text(
-                        text = "Приостановить LOC",
-                        fontSize = 24.sp,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center
-                    )
-                }
-                Button(
-                    onClick = {
-                        if (commandButtonsEnabled) {
-                            commandButtonsEnabled = false
-                            onTboxApplicationCommand("LOC", "resume")
-                        }
-                    },
-                    enabled = commandButtonsEnabled && tboxConnected
-                ) {
-                    Text(
-                        text = "Возобновить LOC",
-                        fontSize = 24.sp,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
             /*Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1052,7 +1082,7 @@ fun LocationTab(
                     onClick = {
                         if (commandButtonsEnabled) {
                             commandButtonsEnabled = false
-                            onTboxApplicationCommand("CRT", "close")
+                            onServiceCommand("CRT", "close")
                         }
                     },
                     enabled = commandButtonsEnabled && tboxConnected
@@ -1068,7 +1098,7 @@ fun LocationTab(
                     onClick = {
                         if (commandButtonsEnabled) {
                             commandButtonsEnabled = false
-                            onTboxApplicationCommand("CRT", "open")
+                            onServiceCommand("CRT", "open")
                         }
                     },
                     enabled = commandButtonsEnabled && tboxConnected
@@ -1081,7 +1111,6 @@ fun LocationTab(
                     )
                 }
             }*/
-        }
     }
 }
 
@@ -1089,13 +1118,17 @@ fun LocationTab(
 fun InfoTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
-    onUpdateInfoClick: () -> Unit,
+    onServiceCommand: (String, String, String) -> Unit
 ) {
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
-    val suspendTboxAppSend by viewModel.suspendTboxAppSend.collectAsStateWithLifecycle()
+    val tboxAppSuspended by viewModel.tboxAppSuspended.collectAsStateWithLifecycle()
+    val tboxMdcSuspended by viewModel.tboxMdcSuspended.collectAsStateWithLifecycle()
+    val tboxSwdSuspended by viewModel.tboxSwdSuspended.collectAsStateWithLifecycle()
     val tboxAppStoped by viewModel.tboxAppStoped.collectAsStateWithLifecycle()
+    val tboxMdcStoped by viewModel.tboxMdcStoped.collectAsStateWithLifecycle()
     val ipList by viewModel.ipList.collectAsStateWithLifecycle()
+
     val appVersion by settingsViewModel.appVersion.collectAsStateWithLifecycle()
     val mdcVersion by settingsViewModel.mdcVersion.collectAsStateWithLifecycle()
     val swdVersion by settingsViewModel.swdVersion.collectAsStateWithLifecycle()
@@ -1124,13 +1157,31 @@ fun InfoTab(
             item {
                 StatusRow(
                     "Подтверждение команды SUSPEND приложению APP",
-                    if (suspendTboxAppSend) "да" else "нет"
+                    if (tboxAppSuspended) "да" else "нет"
+                )
+            }
+            item {
+                StatusRow(
+                    "Подтверждение команды SUSPEND приложению MDC",
+                    if (tboxMdcSuspended) "да" else "нет"
+                )
+            }
+            item {
+                StatusRow(
+                    "Подтверждение команды SUSPEND приложению SWD",
+                    if (tboxSwdSuspended) "да" else "нет"
                 )
             }
             item {
                 StatusRow(
                     "Подтверждение команды STOP приложению APP",
                     if (tboxAppStoped) "да" else "нет"
+                )
+            }
+            item {
+                StatusRow(
+                    "Подтверждение команды STOP приложению MDC",
+                    if (tboxMdcStoped) "да" else "нет"
                 )
             }
             item {
@@ -1162,7 +1213,11 @@ fun InfoTab(
                         onClick = {
                             if (updateVersionButtonEnabled) {
                                 updateVersionButtonEnabled = false
-                                onUpdateInfoClick()
+                                onServiceCommand(
+                                    BackgroundService.ACTION_GET_INFO,
+                                    "",
+                                    ""
+                                )
                             }
                         },
                         enabled = updateVersionButtonEnabled && tboxConnected
@@ -1221,7 +1276,10 @@ fun CarDataTab(
     val frontLeftSeatMode by canViewModel.frontLeftSeatMode.collectAsStateWithLifecycle()
     val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
     val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
+    val outsideAirQuality by canViewModel.outsideAirQuality.collectAsStateWithLifecycle()
+    val insideAirQuality by canViewModel.insideAirQuality.collectAsStateWithLifecycle()
     val isWindowsBlocked by canViewModel.isWindowsBlocked.collectAsStateWithLifecycle()
+    val motorHoursTrip by canViewModel.motorHoursTrip.collectAsStateWithLifecycle()
 
     val voltageC by cycleViewModel.voltage.collectAsStateWithLifecycle()
     val carSpeedC by cycleViewModel.carSpeed.collectAsStateWithLifecycle()
@@ -1287,9 +1345,12 @@ fun CarDataTab(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontRightSeatMode"), seatModeToString(frontRightSeatMode)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("outsideTemperature"), valueToString(outsideTemperature, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("insideTemperature"), valueToString(insideTemperature, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("outsideAirQuality"), valueToString(outsideAirQuality)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("insideAirQuality"), valueToString(insideAirQuality)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("isWindowsBlocked"), valueToString(isWindowsBlocked,
                 booleanTrue = "заблокированы", booleanFalse = "разблокированы")) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHours"), valueToString(motorHours, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHoursTrip"), valueToString(motorHoursTrip, 1)) }
             if (isGetCycleSignalEnabled) {
                 item { StatusRow("Cycle напряжение, В", valueToString(voltageC, 1)) }
                 item { StatusRow("Cycle скорость, км/ч", valueToString(carSpeedC, 1)) }
@@ -1352,6 +1413,7 @@ fun LogsTab(
         ) {
             OutlinedTextField(
                 value = searchText,
+                textStyle = TextStyle(fontSize = 20.sp),
                 onValueChange = { newText ->
                     searchText = newText
                 },
@@ -1361,13 +1423,13 @@ fun LogsTab(
                 label = {
                     Text(
                         text = "Фильтр по тексту (минимум 3 символа)",
-                        fontSize = 16.sp
+                        fontSize = 20.sp
                     )
                 },
                 placeholder = {
                     Text(
                         text = "Введите текст для поиска...",
-                        fontSize = 16.sp
+                        fontSize = 18.sp
                     )
                 },
                 singleLine = true,
@@ -1624,7 +1686,7 @@ fun CanTab(
 @Composable
 fun ATcmdTab(
     viewModel: TboxViewModel,
-    onATcmdSend: (String) -> Unit
+    onServiceCommand: (String, String, String) -> Unit
 ) {
     val atLogs by viewModel.atLogs.collectAsStateWithLifecycle()
 
@@ -1646,6 +1708,7 @@ fun ATcmdTab(
         ) {
             OutlinedTextField(
                 value = atCmdText,
+                textStyle = TextStyle(fontSize = 20.sp),
                 onValueChange = { newText ->
                     atCmdText = newText
                 },
@@ -1655,13 +1718,13 @@ fun ATcmdTab(
                 label = {
                     Text(
                         text = "AT команда",
-                        fontSize = 16.sp
+                        fontSize = 20.sp
                     )
                 },
                 placeholder = {
                     Text(
                         text = "Введите AT команду",
-                        fontSize = 16.sp
+                        fontSize = 18.sp
                     )
                 },
                 singleLine = true,
@@ -1683,7 +1746,11 @@ fun ATcmdTab(
                 keyboardActions = KeyboardActions(
                     onSend = {
                         if (atCmdText.isNotEmpty()) {
-                            onATcmdSend(atCmdText)
+                            onServiceCommand(
+                                BackgroundService.ACTION_SEND_AT,
+                                BackgroundService.EXTRA_AT_CMD,
+                                atCmdText
+                            )
                             atCmdText = ""
                         }
                         focusManager.clearFocus()
@@ -1694,7 +1761,11 @@ fun ATcmdTab(
                 Button(
                     onClick = {
                         if (atCmdText != "") {
-                            onATcmdSend(atCmdText)
+                            onServiceCommand(
+                                BackgroundService.ACTION_SEND_AT,
+                                BackgroundService.EXTRA_AT_CMD,
+                                atCmdText
+                            )
                             atCmdText = ""
                         }
                     },

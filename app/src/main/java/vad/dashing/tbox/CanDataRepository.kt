@@ -139,11 +139,20 @@ object CanDataRepository {
     private val _insideTemperature = MutableStateFlow<Float?>(null)
     val insideTemperature: StateFlow<Float?> = _insideTemperature.asStateFlow()
 
+    private val _outsideAirQuality = MutableStateFlow<UInt?>(null)
+    val outsideAirQuality: StateFlow<UInt?> = _outsideAirQuality.asStateFlow()
+
+    private val _insideAirQuality = MutableStateFlow<UInt?>(null)
+    val insideAirQuality: StateFlow<UInt?> = _insideAirQuality.asStateFlow()
+
     private val _isWindowsBlocked = MutableStateFlow<Boolean?>(null)
     val isWindowsBlocked: StateFlow<Boolean?> = _isWindowsBlocked.asStateFlow()
 
     private val _canFramesStructured = MutableStateFlow<Map<String, List<CanFrame>>>(emptyMap())
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = _canFramesStructured.asStateFlow()
+
+    private val _motorHoursTrip = MutableStateFlow<Float?>(null)
+    val motorHoursTrip: StateFlow<Float?> = _motorHoursTrip.asStateFlow()
 
     private const val MAX_CAN_FRAMES = 5
     private const val MAX_FRAMES_PER_ID = 10
@@ -234,7 +243,7 @@ object CanDataRepository {
         _param4.value = newValue
     }
 
-    fun updateSteerAngle(newValue: Float) {
+    fun updateSteerAngle(newValue: Float?) {
         _steerAngle.value = newValue
     }
 
@@ -294,8 +303,20 @@ object CanDataRepository {
         _insideTemperature.value = newValue
     }
 
+    fun updateOutsideAirQuality(newValue: UInt?) {
+        _outsideAirQuality.value = newValue
+    }
+
+    fun updateInsideAirQuality(newValue: UInt?) {
+        _insideAirQuality.value = newValue
+    }
+
     fun updateIsWindowsBlocked(newValue: Boolean) {
         _isWindowsBlocked.value = newValue
+    }
+
+    fun addMotorHoursTrip(newValue: Float) {
+        _motorHoursTrip.value = (_motorHoursTrip.value ?: 0f) + newValue
     }
 
     fun addCanFrameStructured(canId: String, rawValue: ByteArray, maxFrames: Int = MAX_FRAMES_PER_ID) {

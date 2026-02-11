@@ -28,6 +28,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_FLOATING_DASHBOARD_ENABLED = false
         private const val DEFAULT_FLOATING_DASHBOARD_BACKGROUND = false
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
+        private const val DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD = false
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
 
@@ -82,6 +83,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val isAutoStopTboxAppEnabled = settingsManager.autoStopTboxAppFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isAutoSuspendTboxMdcEnabled = settingsManager.autoSuspendTboxMdcFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isAutoStopTboxMdcEnabled = settingsManager.autoStopTboxMdcFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isAutoSuspendTboxSwdEnabled = settingsManager.autoSuspendTboxSwdFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -344,7 +366,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ""
+            initialValue = emptyList<FloatingDashboardWidgetConfig>()
         )
 
     val dashboardRows = settingsManager.dashboardRowsFlow
@@ -525,6 +547,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveAutoSuspendTboxMdcSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoSuspendTboxMdcSetting(enabled)
+        }
+    }
+
+    fun saveAutoStopTboxMdcSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoStopTboxMdcSetting(enabled)
+        }
+    }
+
+    fun saveAutoSuspendTboxSwdSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoSuspendTboxSwdSetting(enabled)
+        }
+    }
+
     fun saveAutoPreventTboxRestartSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveAutoPreventTboxRestartSetting(enabled)
@@ -699,7 +739,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun saveDashboardWidgets(config: String) {
+    fun saveDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         viewModelScope.launch {
             settingsManager.saveDashboardWidgets(config)
         }

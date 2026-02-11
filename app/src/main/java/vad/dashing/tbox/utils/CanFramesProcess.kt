@@ -42,8 +42,12 @@ object CanFramesProcess {
                 )
 
                 if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0xC4.toByte()))) {
-                    val angle =
-                        (singleData.copyOfRange(0, 2).toFloat("UINT16_BE") - 32768f) * 6f / 100f
+                    val angleRaw = singleData.copyOfRange(0, 2).toFloat("UINT16_BE")
+                    val angle = if (angleRaw == 65535f) {
+                        null
+                    } else {
+                        (angleRaw - 32767f) / 16f
+                    }
                     val speed = singleData[2].toInt()
                     CanDataRepository.updateSteerAngle(angle)
                     CanDataRepository.updateSteerSpeed(speed)
@@ -152,10 +156,10 @@ object CanFramesProcess {
                     val cruiseSpeed = singleData[0].toUInt()
                     CanDataRepository.updateCruiseSetSpeed(cruiseSpeed)
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x03, 0x10))) {
-                    val speed1 = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") * 0.065f
-                    val speed2 = singleData.copyOfRange(2, 4).toFloat("UINT16_BE") * 0.065f
-                    val speed3 = singleData.copyOfRange(4, 6).toFloat("UINT16_BE") * 0.065f
-                    val speed4 = singleData.copyOfRange(6, 8).toFloat("UINT16_BE") * 0.065f
+                    val speed1 = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 16f
+                    val speed2 = singleData.copyOfRange(2, 4).toFloat("UINT16_BE") / 16f
+                    val speed3 = singleData.copyOfRange(4, 6).toFloat("UINT16_BE") / 16f
+                    val speed4 = singleData.copyOfRange(6, 8).toFloat("UINT16_BE") / 16f
                     CanDataRepository.updateWheelsSpeed(Wheels(speed1, speed2, speed3, speed4))
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x04, 0x30))) {
                     val speed = singleData.copyOfRange(0, 2).toFloat("UINT16_BE") / 16f
@@ -259,17 +263,30 @@ object CanFramesProcess {
                 } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x35))) {
                     val insideTemperature = singleData[5].toUInt().toFloat() * 0.5f - 40f
                     val outsideTemperature = singleData[6].toUInt().toFloat() * 0.5f - 40f
-                    if (outsideTemperature >= -40f && outsideTemperature <= 60f) {
+                    if (outsideTemperature >= -40f && outsideTemperature < 87f) {
                         CanDataRepository.updateOutsideTemperature(outsideTemperature)
                     } else {
                         CanDataRepository.updateOutsideTemperature(null)
                     }
-                    if (insideTemperature >= -40f && insideTemperature <= 60f) {
+                    if (insideTemperature >= -40f && insideTemperature < 87f) {
                         CanDataRepository.updateInsideTemperature(insideTemperature)
                     } else {
                         CanDataRepository.updateInsideTemperature(null)
                     }
-                } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
+                } else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0x3A))) {
+                    val insideAirQuality = singleData.copyOfRange(0, 2).toUInt16BigEndian()
+                    val outsideAirQuality = singleData.copyOfRange(2, 4).toUInt16BigEndian()
+                    if (insideAirQuality > 0u && insideAirQuality < 65535u) {
+                        CanDataRepository.updateInsideAirQuality(insideAirQuality)
+                    } else {
+                        CanDataRepository.updateInsideAirQuality(null)
+                    }
+                    if (outsideAirQuality > 0u && outsideAirQuality < 65535u) {
+                        CanDataRepository.updateOutsideAirQuality(outsideAirQuality)
+                    } else {
+                        CanDataRepository.updateOutsideAirQuality(null)
+                    }
+                }  else if (canID.contentEquals(byteArrayOf(0x00, 0x00, 0x05, 0xC4.toByte()))) {
                     val frontRightSeatMode = singleData[4].extractBitsToUInt(3, 3)
                     val frontLeftSeatMode = singleData[4].extractBitsToUInt(0, 3)
                     CanDataRepository.updateFrontLeftSeatMode(frontLeftSeatMode)
@@ -287,7 +304,7 @@ object CanFramesProcess {
         }
         TboxRepository.addLog(
             "DEBUG", "CRT response",
-            "Get CAN Frame"
+            "Get CAN Frame ${rawValue.size} bytes"
         )
     }
 
