@@ -40,6 +40,20 @@ class LongPressInterceptLayout(context: Context) : FrameLayout(context) {
         if (!interceptLongPress) {
             return false
         }
+        return intercepting
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!interceptLongPress) {
+            return false
+        }
+        return intercepting
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (!interceptLongPress) {
+            return super.dispatchTouchEvent(ev)
+        }
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 isDown = true
@@ -62,19 +76,10 @@ class LongPressInterceptLayout(context: Context) : FrameLayout(context) {
                 cancelLongPressCheck()
             }
         }
-        return intercepting
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!interceptLongPress) {
-            return false
+        if (intercepting) {
+            return true
         }
-        when (event.actionMasked) {
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                cancelLongPressCheck()
-            }
-        }
-        return intercepting
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onDetachedFromWindow() {
