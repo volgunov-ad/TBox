@@ -50,6 +50,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -383,7 +384,8 @@ fun <T> SettingDropdownGeneric(
     text: String,
     description: String,
     enabled: Boolean = true,
-    options: List<T>
+    options: List<T>,
+    selectorWidth: Dp = 140.dp
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -401,7 +403,7 @@ fun <T> SettingDropdownGeneric(
             ExposedDropdownMenuBox(
                 expanded = expanded,
                 onExpandedChange = { expanded = !expanded },
-                modifier = Modifier.width(140.dp)
+                modifier = Modifier.width(selectorWidth)
             ) {
                 TextField(
                     value = selectedValue.toString(),

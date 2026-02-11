@@ -603,8 +603,8 @@ fun SettingsTab(
         LanguageOption(
             AppLanguagePreference.SYSTEM.code,
             selectLanguageTextC(
-                "Системный (русский только при системном русском)",
-                "System (Russian only when system language is Russian)"
+                "Системный",
+                "System"
             )
         ),
         LanguageOption(
@@ -908,7 +908,8 @@ fun SettingsTab(
             text = "Язык интерфейса",
             description = "По умолчанию язык берется из системы: русский только для системного русского, иначе английский",
             enabled = true,
-            options = languageOptions
+            options = languageOptions,
+            selectorWidth = 200.dp
         )
         SettingSwitch(
             isExpertModeEnabled,
