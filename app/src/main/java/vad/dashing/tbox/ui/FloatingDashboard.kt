@@ -61,6 +61,7 @@ import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.localizedTextC
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
@@ -343,7 +344,7 @@ fun FloatingDashboard(
                                 .background(color = Color.Transparent),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Загрузка...")
+                            Text(localizedTextC("Загрузка..."))
                         }
                     } else {
                         for (row in 0 until dashboardRows) {
@@ -740,7 +741,7 @@ fun OverlayWidgetSelectionDialog(
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
     // Получаем список опций
-    val availableOptions = listOf("" to "Не выбрано") +
+    val availableOptions = listOf("" to localizedTextC("Не выбрано")) +
             WidgetsRepository.getAvailableDataKeysWidgets()
                 .filter { it.isNotEmpty() }
                 .map { key ->
@@ -841,7 +842,7 @@ fun OverlayWidgetSelectionDialog(
                     onClick = onDismiss,
                     modifier = Modifier.padding(end = 12.dp)
                 ) {
-                    Text(text = "Отмена", fontSize = 24.sp)
+                    Text(text = localizedTextC("Отмена"), fontSize = 24.sp)
                 }
 
                 Button(
@@ -885,7 +886,7 @@ fun OverlayWidgetSelectionDialog(
                     }
                 ) {
                     Text(
-                        text = "Сохранить",
+                        text = localizedTextC("Сохранить"),
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         fontSize = 24.sp
                     )

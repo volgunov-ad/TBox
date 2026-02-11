@@ -16,13 +16,17 @@ import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
 import vad.dashing.tbox.ui.TboxApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -64,11 +68,15 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var settingsManager: SettingsManager
     private lateinit var appDataManager: AppDataManager
+    private var appliedLanguage: ResolvedAppLanguage? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         settingsManager = SettingsManager(this)
+        val initialLanguageCode = runBlocking { settingsManager.uiLanguageFlow.first() }
+        appliedLanguage = AppLanguageManager.applyLanguage(this, initialLanguageCode)
+        observeUiLanguageChanges()
         appDataManager = AppDataManager(this)
 
         setContent {
@@ -280,12 +288,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            Toast.makeText(this, "Сохранено в: ${dataFile.absolutePath}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                selectLanguageText(
+                    "Сохранено в: ${dataFile.absolutePath}",
+                    "Saved to: ${dataFile.absolutePath}"
+                ),
+                Toast.LENGTH_LONG
+            ).show()
             Log.d(TAG, "Файл сохранен: ${dataFile.absolutePath}")
 
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка сохранения файла", e)
-            Toast.makeText(this, "Ошибка сохранения: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                selectLanguageText(
+                    "Ошибка сохранения: ${e.message}",
+                    "Save error: ${e.message}"
+                ),
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -345,7 +367,10 @@ class MainActivity : ComponentActivity() {
     private fun onStoragePermissionsDenied() {
         Log.w(TAG, "Storage permissions denied")
         Toast.makeText(this,
-            "Не удалось сохранить файл: нет разрешений на запись",
+            selectLanguageText(
+                "Не удалось сохранить файл: нет разрешений на запись",
+                "Could not save file: no write permissions"
+            ),
             Toast.LENGTH_LONG).show()
         pendingDataToSave = null
     }
@@ -355,7 +380,11 @@ class MainActivity : ComponentActivity() {
             startForegroundService(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка запуска сервиса", e)
-            Toast.makeText(this, "Ошибка запуска службы", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this,
+                selectLanguageText("Ошибка запуска службы", "Service start error"),
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -372,9 +401,26 @@ class MainActivity : ComponentActivity() {
             disableMockLocation()
             Toast.makeText(
                 this,
-                "Для подмены местоположения нужны разрешения геолокации",
+                selectLanguageText(
+                    "Для подмены местоположения нужны разрешения геолокации",
+                    "Location permissions are required for mock location"
+                ),
                 Toast.LENGTH_LONG
             ).show()
+        }
+    }
+
+    private fun observeUiLanguageChanges() {
+        lifecycleScope.launch {
+            settingsManager.uiLanguageFlow.collect { languageCode ->
+                val resolved = AppLanguageManager.applyLanguage(this@MainActivity, languageCode)
+                if (appliedLanguage != null && appliedLanguage != resolved) {
+                    appliedLanguage = resolved
+                    recreate()
+                } else {
+                    appliedLanguage = resolved
+                }
+            }
         }
     }
 

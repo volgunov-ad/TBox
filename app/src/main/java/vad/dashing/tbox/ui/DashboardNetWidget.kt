@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.selectLanguageTextC
 
 @Composable
 fun DashboardNetWidgetItem(
@@ -204,7 +205,10 @@ fun DashboardNetWidgetItem(
                 // Отображаем иконку сигнала
                 Image(
                     painter = painterResource(id = imageRes),
-                    contentDescription = "Signal level: $netState.signalLevel, Network: $netState.netStatus",
+                    contentDescription = selectLanguageTextC(
+                        "Уровень сигнала: ${netState.signalLevel}, сеть: ${netState.netStatus}",
+                        "Signal level: ${netState.signalLevel}, network: ${netState.netStatus}"
+                    ),
                     contentScale = ContentScale.Fit
                 )
             }

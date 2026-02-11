@@ -76,10 +76,12 @@ class SettingsManager(private val context: Context) {
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
         private val TBOX_IP_KEY = stringPreferencesKey("${KEY_PREFIX}tbox_ip")
         private val TBOX_IP_ROTATION_KEY = booleanPreferencesKey("${KEY_PREFIX}tbox_ip_rotation")
+        private val UI_LANGUAGE_KEY = stringPreferencesKey("${KEY_PREFIX}ui_language")
 
         // Значения по умолчанию
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
+        private const val DEFAULT_UI_LANGUAGE = AppLanguagePreference.SYSTEM.code
         private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_COLS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_WIDTH = 100
@@ -210,6 +212,10 @@ class SettingsManager(private val context: Context) {
 
     val tboxIPRotationFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[TBOX_IP_ROTATION_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val uiLanguageFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[UI_LANGUAGE_KEY] ?: DEFAULT_UI_LANGUAGE }
         .distinctUntilChanged()
 
     val selectedTabFlow: Flow<Int> = context.settingsDataStore.data
@@ -455,6 +461,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveUiLanguage(languageCode: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[UI_LANGUAGE_KEY] = AppLanguagePreference.fromCode(languageCode).code
+        }
+    }
+
     // Улучшенные методы для кастомных строк
     suspend fun saveCustomString(key: String, value: String) {
         val preferencesKey = getStringKey(key)
@@ -535,10 +547,16 @@ class SettingsManager(private val context: Context) {
         return listOf(
             createDefaultFloatingDashboard(
                 DEFAULT_FLOATING_DASHBOARD_ID,
-                DEFAULT_FLOATING_DASHBOARD_NAME_1
+                selectLanguageText(DEFAULT_FLOATING_DASHBOARD_NAME_1, "Panel 1")
             ),
-            createDefaultFloatingDashboard("floating-2", DEFAULT_FLOATING_DASHBOARD_NAME_2),
-            createDefaultFloatingDashboard("floating-3", DEFAULT_FLOATING_DASHBOARD_NAME_3)
+            createDefaultFloatingDashboard(
+                "floating-2",
+                selectLanguageText(DEFAULT_FLOATING_DASHBOARD_NAME_2, "Panel 2")
+            ),
+            createDefaultFloatingDashboard(
+                "floating-3",
+                selectLanguageText(DEFAULT_FLOATING_DASHBOARD_NAME_3, "Panel 3")
+            )
         )
     }
 

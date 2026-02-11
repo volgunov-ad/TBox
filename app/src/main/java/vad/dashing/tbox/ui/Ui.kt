@@ -72,6 +72,7 @@ import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.seatModeToString
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataManager
+import vad.dashing.tbox.AppLanguagePreference
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.BackgroundService
@@ -84,12 +85,23 @@ import java.util.Locale
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 import vad.dashing.tbox.utils.MockLocationUtils
 import vad.dashing.tbox.utils.canUseMockLocation
+import vad.dashing.tbox.localizedText
+import vad.dashing.tbox.localizedTextC
+import vad.dashing.tbox.selectLanguageText
+import vad.dashing.tbox.selectLanguageTextC
 import vad.dashing.tbox.valueToString
 
 data class TabItem(
     val title: String,
     val icon: ImageVector
 )
+
+private class LanguageOption(
+    val code: String,
+    private val label: String
+) {
+    override fun toString(): String = label
+}
 
 @Composable
 fun TboxApp(
@@ -189,7 +201,7 @@ fun TboxScreen(
                 .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center
         ) {
-            Text("Загрузка...", fontSize = 18.sp)
+            Text(localizedTextC("Загрузка..."), fontSize = 18.sp)
         }
         return
     }
@@ -227,7 +239,11 @@ fun TboxScreen(
                     ) {
                         Icon(
                             imageVector = if (isMenuVisible) ImageVector.vectorResource(R.drawable.menu_icon_close) else ImageVector.vectorResource(R.drawable.menu_icon_open),
-                            contentDescription = if (isMenuVisible) "Скрыть меню" else "Показать меню",
+                            contentDescription = if (isMenuVisible) {
+                                localizedTextC("Скрыть меню")
+                            } else {
+                                localizedTextC("Показать меню")
+                            },
                             tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier
                                 .size(menuIconSize)
@@ -265,8 +281,17 @@ fun TboxScreen(
 
                     if (isMenuVisible) {
                         Text(
-                            text = if (tboxConnected) "TBox подключен в $conTime"
-                            else "TBox отключен в $conTime",
+                            text = if (tboxConnected) {
+                                selectLanguageTextC(
+                                    "TBox подключен в $conTime",
+                                    "TBox connected at $conTime"
+                                )
+                            } else {
+                                selectLanguageTextC(
+                                    "TBox отключен в $conTime",
+                                    "TBox disconnected at $conTime"
+                                )
+                            },
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
@@ -276,7 +301,10 @@ fun TboxScreen(
                                 .padding(start = 8.dp, end = 8.dp, top = 8.dp)
                         )
                         Text(
-                            text = "Служба запущена в $serviceTime",
+                            text = selectLanguageTextC(
+                                "Служба запущена в $serviceTime",
+                                "Service started at $serviceTime"
+                            ),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
@@ -300,7 +328,10 @@ fun TboxScreen(
 
                     if (isMenuVisible) {
                         Text(
-                            text = "Версия программы $versionName",
+                            text = selectLanguageTextC(
+                                "Версия программы $versionName",
+                                "App version $versionName"
+                            ),
                             fontSize = 16.sp,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -452,7 +483,7 @@ fun ModemModeSelector(
 
     Column(modifier = modifier) {
         Text(
-            text = "Режим модема",
+            text = localizedTextC("Режим модема"),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -554,6 +585,7 @@ fun SettingsTab(
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
 
     val isTboxIPRotation by settingsViewModel.tboxIPRotation.collectAsStateWithLifecycle()
+    val uiLanguage by settingsViewModel.uiLanguage.collectAsStateWithLifecycle()
 
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
@@ -567,6 +599,25 @@ fun SettingsTab(
 
     val context = LocalContext.current
     val canUseMockLocation = remember { context.canUseMockLocation() }
+    val languageOptions = listOf(
+        LanguageOption(
+            AppLanguagePreference.SYSTEM.code,
+            selectLanguageTextC(
+                "Системный (русский только при системном русском)",
+                "System (Russian only when system language is Russian)"
+            )
+        ),
+        LanguageOption(
+            AppLanguagePreference.RUSSIAN.code,
+            selectLanguageTextC("Русский", "Russian")
+        ),
+        LanguageOption(
+            AppLanguagePreference.ENGLISH.code,
+            "English"
+        )
+    )
+    val selectedLanguageOption = languageOptions.firstOrNull { it.code == uiLanguage }
+        ?: languageOptions.first()
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
@@ -849,6 +900,16 @@ fun SettingsTab(
         )
 
         SettingsTitle("Прочее")
+        SettingDropdownGeneric(
+            selectedValue = selectedLanguageOption,
+            onValueChange = { option ->
+                settingsViewModel.saveUiLanguage(option.code)
+            },
+            text = "Язык интерфейса",
+            description = "По умолчанию язык берется из системы: русский только для системного русского, иначе английский",
+            enabled = true,
+            options = languageOptions
+        )
         SettingSwitch(
             isExpertModeEnabled,
             { enabled ->
@@ -912,7 +973,7 @@ fun SettingsTab(
 
             if (!canUseMockLocation) {
                 Text(
-                    text = "Нажмите для просмотра требований к фиктивным местоположениям",
+                    text = localizedTextC("Нажмите для просмотра требований к фиктивным местоположениям"),
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
@@ -963,7 +1024,7 @@ fun SettingsTab(
                 enabled = restartButtonEnabled && tboxConnected
             ) {
                 Text(
-                    text = "Перезагрузка TBox",
+                    text = localizedTextC("Перезагрузка TBox"),
                     fontSize = 24.sp,
                     maxLines = 2,
                     textAlign = TextAlign.Center
@@ -975,9 +1036,9 @@ fun SettingsTab(
 
 private fun showAlertDialog(title: String, message: String, context: Context) {
     android.app.AlertDialog.Builder(context)
-        .setTitle(title)
-        .setMessage(message)
-        .setNeutralButton("Закрыть", null)
+        .setTitle(localizedText(title))
+        .setMessage(localizedText(message))
+        .setNeutralButton(localizedText("Закрыть"), null)
         .show()
 }
 
@@ -986,41 +1047,45 @@ private fun showLocationRequirementsDialog(context: Context) {
 
     val requirements = buildString {
         if (!status.hasLocationPermissions) {
-            append("Нет разрешения на доступ к местоположению\n")
+            append(localizedText("Нет разрешения на доступ к местоположению\n"))
         }
         if (!status.isMockLocationEnabled) {
-            append("Не включена mock-локация в настройках разработчика\n")
+            append(localizedText("Не включена mock-локация в настройках разработчика\n"))
         }
         if (!status.canAddTestProvider) {
-            append("Не удается добавить приложение в список провайдеров фиктивных местоположений\n")
+            append(localizedText("Не удается добавить приложение в список провайдеров фиктивных местоположений\n"))
         }
     }
 
     android.app.AlertDialog.Builder(context)
-        .setTitle("Требования для mock-локации (Настройки разработчика)")
+        .setTitle(localizedText("Требования для mock-локации (Настройки разработчика)"))
         .setMessage(requirements)
-        .setPositiveButton("Настроить") { dialog, _ ->
+        .setPositiveButton(localizedText("Настроить")) { dialog, _ ->
             // Открываем настройки разработчика
             val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
             context.startActivity(intent)
         }
-        .setNegativeButton("Отмена", null)
+        .setNegativeButton(localizedText("Отмена"), null)
         .show()
 }
 
 private fun showOverlayRequirementsDialog(context: Context) {
     android.app.AlertDialog.Builder(context)
-        .setTitle("Требуется разрешение")
-        .setMessage("Для работы приложения необходимо разрешение\n" +
-                "«Отображение поверх других приложений»")
-        .setPositiveButton("Настроить") { dialog, _ ->
+        .setTitle(localizedText("Требуется разрешение"))
+        .setMessage(
+            localizedText(
+                "Для работы приложения необходимо разрешение\n" +
+                    "«Отображение поверх других приложений»"
+            )
+        )
+        .setPositiveButton(localizedText("Настроить")) { dialog, _ ->
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 "package:${context.packageName}".toUri()
             )
             context.startActivity(intent)
         }
-        .setNegativeButton("Отмена", null)
+        .setNegativeButton(localizedText("Отмена"), null)
         .show()
 }
 
@@ -1223,7 +1288,7 @@ fun InfoTab(
                         enabled = updateVersionButtonEnabled && tboxConnected
                     ) {
                         Text(
-                            text = "Запросить информацию из TBox",
+                            text = localizedTextC("Запросить информацию из TBox"),
                             fontSize = 24.sp,
                             maxLines = 2,
                             textAlign = TextAlign.Center
@@ -1422,13 +1487,13 @@ fun LogsTab(
                     .padding(end = 8.dp),
                 label = {
                     Text(
-                        text = "Фильтр по тексту (минимум 3 символа)",
+                        text = localizedTextC("Фильтр по тексту (минимум 3 символа)"),
                         fontSize = 20.sp
                     )
                 },
                 placeholder = {
                     Text(
-                        text = "Введите текст для поиска...",
+                        text = localizedTextC("Введите текст для поиска..."),
                         fontSize = 18.sp
                     )
                 },
@@ -1440,7 +1505,7 @@ fun LogsTab(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
-                                contentDescription = "Очистить"
+                                contentDescription = localizedTextC("Очистить")
                             )
                         }
                     }
@@ -1468,7 +1533,11 @@ fun LogsTab(
                     )
                     Icon(
                         imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = if (expanded) "Свернуть" else "Развернуть"
+                        contentDescription = if (expanded) {
+                            localizedTextC("Свернуть")
+                        } else {
+                            localizedTextC("Развернуть")
+                        }
                     )
                 }
 
@@ -1512,7 +1581,7 @@ fun LogsTab(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Сохранить в файл",
+                    text = localizedTextC("Сохранить в файл"),
                     fontSize = 24.sp,
                     maxLines = 2,
                     textAlign = TextAlign.Center
@@ -1522,9 +1591,9 @@ fun LogsTab(
             if (showSaveDialog) {
                 AlertDialog(
                     onDismissRequest = { showSaveDialog = false },
-                    title = { Text("Сохранение файла") },
+                    title = { Text(localizedTextC("Сохранение файла")) },
                     text = {
-                        Text("Сохранить журнал в папку Загрузки")
+                        Text(localizedTextC("Сохранить журнал в папку Загрузки"))
                     },
                     confirmButton = {
                         Button(
@@ -1537,14 +1606,14 @@ fun LogsTab(
                                 showSaveDialog = false
                             }
                         ) {
-                            Text("Сохранить")
+                            Text(localizedTextC("Сохранить"))
                         }
                     },
                     dismissButton = {
                         OutlinedButton(
                             onClick = { showSaveDialog = false }
                         ) {
-                            Text("Отмена")
+                            Text(localizedTextC("Отмена"))
                         }
                     }
                 )
@@ -1575,7 +1644,7 @@ fun CanTab(
     val dateTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
 
     val formattedTime = remember(canFrameTime) {
-        canFrameTime?.let { timeFormat.format(it) } ?: "нет данных"
+        canFrameTime?.let { timeFormat.format(it) } ?: localizedText("нет данных")
     }
 
     Column(
@@ -1588,8 +1657,10 @@ fun CanTab(
         }
 
         Text(
-            text = "CAN ID (${sortedCanEntries.size}). " +
-                    "Последние данные: $formattedTime",
+            text = selectLanguageTextC(
+                "CAN ID (${sortedCanEntries.size}). Последние данные: $formattedTime",
+                "CAN ID (${sortedCanEntries.size}). Last data: $formattedTime"
+            ),
             modifier = Modifier.padding(6.dp),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
@@ -1608,7 +1679,7 @@ fun CanTab(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Сохранить текущие CAN данные в файл",
+                    text = localizedTextC("Сохранить текущие CAN данные в файл"),
                     fontSize = 24.sp,
                     maxLines = 2,
                     textAlign = TextAlign.Center
@@ -1618,9 +1689,14 @@ fun CanTab(
             if (showSaveDialog) {
                 AlertDialog(
                     onDismissRequest = { showSaveDialog = false },
-                    title = { Text("Сохранение файла") },
+                    title = { Text(localizedTextC("Сохранение файла")) },
                     text = {
-                        Text("Сохранить ${sortedCanEntries.size} CAN ID в папку Загрузки")
+                        Text(
+                            selectLanguageTextC(
+                                "Сохранить ${sortedCanEntries.size} CAN ID в папку Загрузки",
+                                "Save ${sortedCanEntries.size} CAN IDs to Downloads folder"
+                            )
+                        )
                     },
                     confirmButton = {
                         Button(
@@ -1644,14 +1720,14 @@ fun CanTab(
                                 showSaveDialog = false
                             }
                         ) {
-                            Text("Сохранить")
+                            Text(localizedTextC("Сохранить"))
                         }
                     },
                     dismissButton = {
                         OutlinedButton(
                             onClick = { showSaveDialog = false }
                         ) {
-                            Text("Отмена")
+                            Text(localizedTextC("Отмена"))
                         }
                     }
                 )
@@ -1717,13 +1793,13 @@ fun ATcmdTab(
                     .padding(end = 8.dp),
                 label = {
                     Text(
-                        text = "AT команда",
+                        text = localizedTextC("AT команда"),
                         fontSize = 20.sp
                     )
                 },
                 placeholder = {
                     Text(
-                        text = "Введите AT команду",
+                        text = localizedTextC("Введите AT команду"),
                         fontSize = 18.sp
                     )
                 },
@@ -1735,7 +1811,7 @@ fun ATcmdTab(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
-                                contentDescription = "Очистить"
+                                contentDescription = localizedTextC("Очистить")
                             )
                         }
                     }
@@ -1772,7 +1848,7 @@ fun ATcmdTab(
                     modifier = Modifier.width(200.dp)
                 ) {
                     Text(
-                        text = "Отправить",
+                        text = localizedTextC("Отправить"),
                         fontSize = 24.sp,
                         maxLines = 2,
                         textAlign = TextAlign.Center

@@ -39,6 +39,7 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.localizedTextC
 
 @Composable
 fun MainDashboardTab(
@@ -91,7 +92,7 @@ fun MainDashboardTab(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Загрузка...")
+                Text(localizedTextC("Загрузка..."))
             }
         } else {
             Column(
@@ -275,7 +276,7 @@ fun WidgetSelectionDialog(
     }
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
-    val availableOptions = listOf("" to "Не выбрано") +
+    val availableOptions = listOf("" to localizedTextC("Не выбрано")) +
             WidgetsRepository.getAvailableDataKeysWidgets()
                 .filter { it.isNotEmpty() }
                 .map { key ->
@@ -406,12 +407,12 @@ fun WidgetSelectionDialog(
                     onDismiss()
                 }
             ) {
-                Text(text = "Сохранить", fontSize = 24.sp)
+                Text(text = localizedTextC("Сохранить"), fontSize = 24.sp)
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
-                Text(text = "Отмена", fontSize = 24.sp)
+                Text(text = localizedTextC("Отмена"), fontSize = 24.sp)
             }
         }
     )

@@ -58,6 +58,7 @@ import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanFrame
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.localizedTextC
 
 @Composable
 fun StatusRow(label: String, value: String) {
@@ -67,7 +68,7 @@ fun StatusRow(label: String, value: String) {
             .padding(vertical = 6.dp)
     ) {
         Text(
-            text = label,
+            text = localizedTextC(label),
             modifier = Modifier
                 .weight(1f)
                 .padding(end = 8.dp),
@@ -78,7 +79,7 @@ fun StatusRow(label: String, value: String) {
             overflow = TextOverflow.Visible
         )
         Text(
-            text = value,
+            text = localizedTextC(value),
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 8.dp),
@@ -105,7 +106,7 @@ fun StatusHeader(value: String) {
             .padding(vertical = 6.dp)
     ) {
         Text(
-            text = value,
+            text = localizedTextC(value),
             modifier = Modifier
                 .weight(1f)
                 .padding(top = 10.dp),
@@ -178,7 +179,7 @@ fun ModeButton(
         }
     ) {
         Text(
-            text = text,
+            text = localizedTextC(text),
             fontSize = 24.sp,
             textAlign = TextAlign.Center
         )
@@ -224,13 +225,13 @@ fun TabMenuItem(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = title,
+                contentDescription = localizedTextC(title),
                 tint = textColor,
                 modifier = Modifier.size(iconSize)
             )
             if (showText) {
                 Text(
-                    text = title,
+                    text = localizedTextC(title),
                     color = textColor,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Left,
@@ -248,7 +249,7 @@ fun SettingsTitle(
 ) {
     Text(
         modifier = Modifier.padding(top=10.dp),
-        text = text,
+        text = localizedTextC(text),
         fontSize = 26.sp,
         fontWeight = FontWeight.Medium,
         maxLines = 2,
@@ -291,7 +292,7 @@ fun SettingSwitch(
         ) {
             // Основной текст
             Text(
-                text = text,
+                text = localizedTextC(text),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -301,7 +302,7 @@ fun SettingSwitch(
             // Описание (только под текстом, не под Switch)
             if (description.isNotEmpty()) {
                 Text(
-                    text = description,
+                    text = localizedTextC(description),
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 20.sp
@@ -343,7 +344,7 @@ fun SettingSwitchWithAction(
                 .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
         ) {
             Text(
-                text = text,
+                text = localizedTextC(text),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -351,7 +352,7 @@ fun SettingSwitchWithAction(
             )
             if (description.isNotEmpty()) {
                 Text(
-                    text = description,
+                    text = localizedTextC(description),
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 20.sp
@@ -367,7 +368,7 @@ fun SettingSwitchWithAction(
                 .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
         ) {
             Text(
-                text = actionText,
+                text = localizedTextC(actionText),
                 fontSize = 20.sp
             )
         }
@@ -440,7 +441,7 @@ fun <T> SettingDropdownGeneric(
                 .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
         ) {
             Text(
-                text = text,
+                text = localizedTextC(text),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -449,7 +450,7 @@ fun <T> SettingDropdownGeneric(
 
             if (description.isNotEmpty()) {
                 Text(
-                    text = description,
+                    text = localizedTextC(description),
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 20.sp
@@ -492,7 +493,7 @@ fun SettingInt(
                 .align(Alignment.CenterVertically)
         ) {
             Text(
-                text = text,
+                text = localizedTextC(text),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -500,7 +501,7 @@ fun SettingInt(
             )
             if (description.isNotEmpty()) {
                 Text(
-                    text = description,
+                    text = localizedTextC(description),
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 20.sp
@@ -518,7 +519,7 @@ fun CanIdEntry(
     // CAN ID
     Column() {
         Text(
-            text = "CAN ID: $canId",
+            text = localizedTextC("CAN ID: $canId"),
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
@@ -544,7 +545,7 @@ fun CanIdEntry(
                 color = MaterialTheme.colorScheme.onSurface
             )
         } ?: Text(
-            text = "  Нет данных",
+            text = localizedTextC("  Нет данных"),
             fontSize = 22.sp,
             color = MaterialTheme.colorScheme.outline
         )
@@ -717,7 +718,7 @@ fun FloatingDashboardPositionSizeSettings(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Ширина плавающей панели (px)",
+                    text = localizedTextC("Ширина плавающей панели (px)"),
                     fontSize = 24.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -738,7 +739,7 @@ fun FloatingDashboardPositionSizeSettings(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Высота плавающей панели (px)",
+                    text = localizedTextC("Высота плавающей панели (px)"),
                     fontSize = 24.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -765,7 +766,7 @@ fun FloatingDashboardPositionSizeSettings(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Позиция X плавающей панели (px)",
+                    text = localizedTextC("Позиция X плавающей панели (px)"),
                     fontSize = 24.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -786,7 +787,7 @@ fun FloatingDashboardPositionSizeSettings(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Позиция Y плавающей панели (px)",
+                    text = localizedTextC("Позиция Y плавающей панели (px)"),
                     fontSize = 24.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -876,7 +877,7 @@ fun TboxApplicationControls(
         }
 
         Text(
-            text = "Приложение $appName",
+            text = localizedTextC("Приложение $appName"),
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -899,7 +900,7 @@ fun TboxApplicationControls(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = "Приостановить",
+                text = localizedTextC("Приостановить"),
                 fontSize = 24.sp,
                 textAlign = TextAlign.Center
             )
@@ -919,7 +920,7 @@ fun TboxApplicationControls(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = "Возобновить",
+                text = localizedTextC("Возобновить"),
                 fontSize = 24.sp,
                 textAlign = TextAlign.Center
             )
@@ -939,7 +940,7 @@ fun TboxApplicationControls(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = "Остановить",
+                text = localizedTextC("Остановить"),
                 fontSize = 24.sp,
                 textAlign = TextAlign.Center
             )
