@@ -15,17 +15,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardElevation
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -46,9 +42,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -756,14 +749,7 @@ fun OverlayWidgetSelectionDialog(
     var scale by remember(widgetIndex, currentWidgetConfigs) {
         mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
     }
-    var scaleInput by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(normalizeWidgetScale(initialConfig.scale).toString())
-    }
     val togglesEnabled = selectedDataKey.isNotEmpty()
-    val parsedScale = scaleInput.trim().replace(',', '.').toFloatOrNull()
-    val scaleOutOfRange = togglesEnabled && parsedScale != null &&
-        (parsedScale < 0.1f || parsedScale > 2.0f)
-    val scaleInputError = togglesEnabled && (parsedScale == null || scaleOutOfRange)
 
     // Получаем список опций
     val availableOptions = listOf("" to "Не выбрано") +
@@ -852,59 +838,31 @@ fun OverlayWidgetSelectionDialog(
                         "",
                         togglesEnabled
                     )
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.Top
+                            .padding(vertical = 8.dp)
                     ) {
-                        OutlinedTextField(
-                            value = scaleInput,
-                            onValueChange = { newValue ->
-                                scaleInput = newValue
-                                val parsed = newValue.trim().replace(',', '.').toFloatOrNull()
-                                if (parsed != null) {
-                                    scale = normalizeWidgetScale(parsed)
-                                }
-                            },
-                            enabled = togglesEnabled,
-                            modifier = Modifier.width(140.dp),
-                            singleLine = true,
-                            isError = scaleInputError,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 24.sp),
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Decimal,
-                                imeAction = ImeAction.Done
-                            ),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                errorBorderColor = MaterialTheme.colorScheme.error
-                            )
-                        )
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 16.dp)
-                        ) {
-                            Text(
-                                text = "Масштаб виджета",
-                                fontSize = 24.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "0.1..2.0 (1.0 = 100%)",
-                                fontSize = 20.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Start
-                            )
-                        }
-                    }
-                    if (scaleInputError) {
                         Text(
-                            text = "Введите число от 0.1 до 2.0",
-                            fontSize = 18.sp,
-                            color = MaterialTheme.colorScheme.error
+                            text = "Масштаб виджета: ${scale}x",
+                            fontSize = 24.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "0.1..2.0 (1.0 = 100%)",
+                            fontSize = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = scale,
+                            onValueChange = { newValue ->
+                                scale = normalizeWidgetScale(newValue)
+                            },
+                            valueRange = 0.1f..2.0f,
+                            steps = 18,
+                            enabled = togglesEnabled,
+                            modifier = Modifier
+                                .padding(top = 6.dp)
                         )
                     }
                 }
@@ -926,11 +884,9 @@ fun OverlayWidgetSelectionDialog(
                 }
 
                 Button(
-                    enabled = !scaleInputError,
                     onClick = {
-                        val normalizedScale = normalizeWidgetScale(parsedScale ?: scale)
+                        val normalizedScale = normalizeWidgetScale(scale)
                         scale = normalizedScale
-                        scaleInput = normalizedScale.toString()
                         val updatedWidgets = currentWidgets.toMutableList()
                         val newWidget = if (selectedDataKey.isNotEmpty()) {
                             DashboardWidget(
