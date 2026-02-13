@@ -25,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -66,7 +66,7 @@ import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
-private val WIDGET_SCALE_OPTIONS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+private val WIDGET_SCALE_OPTIONS = (5..20).map { it / 10f }
 
 @Composable
 fun FloatingDashboardUI(
@@ -362,7 +362,7 @@ fun FloatingDashboard(
                                     val widget = dashboardState.widgets.getOrNull(index) ?: continue
                                     val widgetConfig = widgetConfigs.getOrNull(index)
                                         ?: FloatingDashboardWidgetConfig(dataKey = "")
-                                    val widgetScale = normalizeWidgetScale(widgetConfig.scale)
+                                    val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
 
                                     Box(modifier = Modifier.weight(1f)) {
                                         if (isEditMode) {
@@ -375,14 +375,8 @@ fun FloatingDashboard(
                                                 )
                                             }
                                         }
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .graphicsLayer(
-                                                    scaleX = widgetScale,
-                                                    scaleY = widgetScale,
-                                                    clip = true
-                                                )
+                                        CompositionLocalProvider(
+                                            LocalWidgetTextScale provides widgetTextScale
                                         ) {
                                             when (widget.dataKey) {
                                             "netWidget" -> {
