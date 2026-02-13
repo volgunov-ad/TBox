@@ -24,7 +24,7 @@ data class FloatingDashboardWidgetConfig(
     val dataKey: String,
     val showTitle: Boolean = false,
     val showUnit: Boolean = true,
-    val scale: Float = 0.1f
+    val scale: Float = 1.0f
 )
 
 data class FloatingDashboardConfig(
