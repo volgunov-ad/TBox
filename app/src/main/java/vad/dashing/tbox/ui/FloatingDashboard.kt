@@ -762,7 +762,7 @@ fun OverlayWidgetSelectionDialog(
     val togglesEnabled = selectedDataKey.isNotEmpty()
     val parsedScale = scaleInput.trim().replace(',', '.').toFloatOrNull()
     val scaleOutOfRange = togglesEnabled && parsedScale != null &&
-        (parsedScale < 0.5f || parsedScale > 2.0f)
+        (parsedScale < 0.1f || parsedScale > 2.0f)
     val scaleInputError = togglesEnabled && (parsedScale == null || scaleOutOfRange)
 
     // Получаем список опций
@@ -893,7 +893,7 @@ fun OverlayWidgetSelectionDialog(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "0.5..2.0 (1.0 = 100%)",
+                                text = "0.1..2.0 (1.0 = 100%)",
                                 fontSize = 20.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Start
@@ -902,7 +902,7 @@ fun OverlayWidgetSelectionDialog(
                     }
                     if (scaleInputError) {
                         Text(
-                            text = "Введите число от 0.5 до 2.0",
+                            text = "Введите число от 0.1 до 2.0",
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.error
                         )
