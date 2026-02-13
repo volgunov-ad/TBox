@@ -1451,7 +1451,7 @@ fun LogsTab(
                 )
             )
 
-            TboxDropdownSelector(
+            GenericDropdownSelector(
                 selectedValue = logLevel,
                 options = logLevels,
                 onValueChange = { settingsViewModel.saveLogLevel(it) },

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -394,7 +395,7 @@ fun <T> SettingDropdownGeneric(
                 .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
                 .wrapContentWidth()
         ) {
-            TboxDropdownSelector(
+            GenericDropdownSelector(
                 selectedValue = selectedValue,
                 options = options,
                 onValueChange = onValueChange,
@@ -432,7 +433,7 @@ fun <T> SettingDropdownGeneric(
 }
 
 @Composable
-fun <T> TboxDropdownSelector(
+fun <T> GenericDropdownSelector(
     selectedValue: T,
     options: List<T>,
     onValueChange: (T) -> Unit,
