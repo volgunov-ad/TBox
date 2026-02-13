@@ -2,8 +2,18 @@ package vad.dashing.tbox
 
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 private const val LEGACY_WIDGETS_SEPARATOR = "|"
+const val DEFAULT_WIDGET_SCALE = 1.0f
+private const val MIN_WIDGET_SCALE = 0.5f
+private const val MAX_WIDGET_SCALE = 2f
+
+fun normalizeWidgetScale(rawScale: Float): Float {
+    if (!rawScale.isFinite()) return DEFAULT_WIDGET_SCALE
+    val normalized = rawScale.coerceIn(MIN_WIDGET_SCALE, MAX_WIDGET_SCALE)
+    return (normalized * 10f).roundToInt() / 10f
+}
 
 fun parseWidgetConfigsFromAny(rawValue: Any?): List<FloatingDashboardWidgetConfig> {
     return when (rawValue) {
@@ -39,6 +49,7 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("dataKey", config.dataKey)
         obj.put("showTitle", config.showTitle)
         obj.put("showUnit", config.showUnit)
+        obj.put("scale", normalizeWidgetScale(config.scale))
         array.put(obj)
     }
     return array
@@ -96,7 +107,10 @@ private fun parseWidgetConfigsFromJsonArray(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey.trim(),
                         showTitle = item.optBoolean("showTitle", false),
-                        showUnit = item.optBoolean("showUnit", true)
+                        showUnit = item.optBoolean("showUnit", true),
+                        scale = normalizeWidgetScale(
+                            item.optDouble("scale", DEFAULT_WIDGET_SCALE.toDouble()).toFloat()
+                        )
                     )
                 )
             }

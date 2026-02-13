@@ -24,7 +24,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
@@ -34,8 +33,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -1391,7 +1388,6 @@ fun LogsTab(
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val logLevel by settingsViewModel.logLevel.collectAsStateWithLifecycle()
 
-    var expanded by remember { mutableStateOf(false) }
     val logLevels = listOf("DEBUG", "INFO", "WARN", "ERROR")
     var searchText by remember { mutableStateOf("") }
 
@@ -1455,49 +1451,14 @@ fun LogsTab(
                 )
             )
 
-            Box(modifier = Modifier.wrapContentSize()) {
-                OutlinedButton(
-                    onClick = { expanded = true },
-                    modifier = Modifier.width(200.dp)
-                ) {
-                    Text(
-                        text = logLevel,
-                        fontSize = 20.sp,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center
-                    )
-                    Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = if (expanded) "Свернуть" else "Развернуть"
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false },
-                    modifier = Modifier.width(200.dp)
-                ) {
-                    logLevels.forEach { level ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = level,
-                                    fontSize = 20.sp,
-                                    color = if (level == logLevel) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    }
-                                )
-                            },
-                            onClick = {
-                                settingsViewModel.saveLogLevel(level)
-                                expanded = false
-                            }
-                        )
-                    }
-                }
-            }
+            GenericDropdownSelector(
+                selectedValue = logLevel,
+                options = logLevels,
+                onValueChange = { settingsViewModel.saveLogLevel(it) },
+                width = 200.dp,
+                valueFontSize = 20.sp,
+                itemFontSize = 20.sp
+            )
         }
 
         Row(

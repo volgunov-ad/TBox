@@ -21,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -37,10 +38,14 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.DEFAULT_WIDGET_SCALE
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.normalizeWidgetScale
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
 import kotlin.math.abs
+
+val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
 
 @Composable
 fun DashboardWidgetItem(
@@ -205,8 +210,9 @@ fun calculateResponsiveFontSize(
     textType: TextType = TextType.VALUE
 ): TextUnit {
     val heightInDp = containerHeight.value
+    val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
 
-    return when (textType) {
+    val baseSize = when (textType) {
         TextType.TITLE -> {
             when {
                 heightInDp < 20 -> 8.sp
@@ -244,6 +250,7 @@ fun calculateResponsiveFontSize(
             }
         }
     }
+    return baseSize * textScale
 }
 
 enum class TextType {
