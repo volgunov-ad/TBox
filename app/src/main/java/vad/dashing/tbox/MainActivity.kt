@@ -56,7 +56,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Переменная для хранения данных, которые нужно сохранить после получения разрешений
+    // Переменные для хранения данных/тега, которые нужно сохранить после получения разрешений
+    private var pendingSaveTag: String? = null
     private var pendingDataToSave: List<String>? = null
 
     // Флаг для отслеживания состояния переключателя mock-локации
@@ -249,6 +250,7 @@ class MainActivity : ComponentActivity() {
             performFileSave(tag, dataList)
         } else {
             // Если разрешений нет - сохраняем данные и запрашиваем разрешения
+            pendingSaveTag = tag
             pendingDataToSave = dataList
             requestStoragePermissions()
         }
@@ -337,7 +339,9 @@ class MainActivity : ComponentActivity() {
         Log.d(TAG, "Storage permissions granted")
         // Если есть ожидающие данные для сохранения - сохраняем их
         pendingDataToSave?.let { data ->
-            performFileSave("data", data)
+            val tag = pendingSaveTag ?: "data"
+            performFileSave(tag, data)
+            pendingSaveTag = null
             pendingDataToSave = null
         }
     }
@@ -347,6 +351,7 @@ class MainActivity : ComponentActivity() {
         Toast.makeText(this,
             "Не удалось сохранить файл: нет разрешений на запись",
             Toast.LENGTH_LONG).show()
+        pendingSaveTag = null
         pendingDataToSave = null
     }
 

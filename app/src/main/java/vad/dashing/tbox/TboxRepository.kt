@@ -204,6 +204,12 @@ object TboxRepository {
         SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     }
 
+    private fun <T> MutableStateFlow<T>.setIfChanged(newValue: T) {
+        if (value != newValue) {
+            value = newValue
+        }
+    }
+
     fun addLog(level: String, tag: String, message: String) {
         val timestamp = timeFormat.get()?.format(Date())
         val logEntry = "[$timestamp] $level: $tag. $message"
@@ -247,7 +253,7 @@ object TboxRepository {
     }
 
     fun updateTboxConnected(value: Boolean) {
-        _tboxConnected.value = value
+        _tboxConnected.setIfChanged(value)
     }
 
     /*fun updateLocationSubscribed(value: Boolean) {
@@ -267,87 +273,87 @@ object TboxRepository {
     }
 
     fun updateModemStatus(value: Int) {
-        _modemStatus.value = value
+        _modemStatus.setIfChanged(value)
     }
 
     fun updateCurrentTheme(value: Int) {
-        _currentTheme.value = value
+        _currentTheme.setIfChanged(value)
     }
 
     fun updateNetState(newState: NetState) {
-        _netState.value = newState
+        _netState.setIfChanged(newState)
     }
 
     fun updateNetValues(newValues: NetValues) {
-        _netValues.value = newValues
+        _netValues.setIfChanged(newValues)
     }
 
     fun updateAPNState(newState: APNState) {
-        _apnState.value = newState
+        _apnState.setIfChanged(newState)
     }
 
     fun updateAPN2State(newState: APNState) {
-        _apn2State.value = newState
+        _apn2State.setIfChanged(newState)
     }
 
     fun updateAPNStatus(value: Boolean) {
-        _apnStatus.value = value
+        _apnStatus.setIfChanged(value)
     }
 
     fun updateLocValues(newValues: LocValues) {
-        _locValues.value = newValues
+        _locValues.setIfChanged(newValues)
     }
 
     fun updateIsLocValuesTrue(newValues: Boolean) {
-        _isLocValuesTrue.value = newValues
+        _isLocValuesTrue.setIfChanged(newValues)
     }
 
     fun updatePreventRestartSend(newValue: Boolean) {
-        _preventRestartSend.value = newValue
+        _preventRestartSend.setIfChanged(newValue)
     }
 
     fun updateTboxAppSuspended(newValue: Boolean) {
-        _tboxAppSuspended.value = newValue
+        _tboxAppSuspended.setIfChanged(newValue)
     }
 
     fun updateTboxAppStoped(newValue: Boolean) {
-        _tboxAppStoped.value = newValue
+        _tboxAppStoped.setIfChanged(newValue)
     }
 
     fun updateTboxMdcSuspended(newValue: Boolean) {
-        _tboxMdcSuspended.value = newValue
+        _tboxMdcSuspended.setIfChanged(newValue)
     }
 
     fun updateTboxMdcStoped(newValue: Boolean) {
-        _tboxMdcStoped.value = newValue
+        _tboxMdcStoped.setIfChanged(newValue)
     }
 
     fun updateTboxSwdSuspended(newValue: Boolean) {
-        _tboxSwdSuspended.value = newValue
+        _tboxSwdSuspended.setIfChanged(newValue)
     }
 
     fun updateTboxAppVersionAnswer(newValue: Boolean) {
-        _tboxAppVersionAnswer.value = newValue
+        _tboxAppVersionAnswer.setIfChanged(newValue)
     }
 
     fun updateTboxMdcVersionAnswer(newValue: Boolean) {
-        _tboxMdcVersionAnswer.value = newValue
+        _tboxMdcVersionAnswer.setIfChanged(newValue)
     }
 
     fun updateVoltages(newValue: VoltagesState) {
-        _voltages.value = newValue
+        _voltages.setIfChanged(newValue)
     }
 
     fun updateHdm(newValue: HdmData) {
-        _hdm.value = newValue
+        _hdm.setIfChanged(newValue)
     }
 
     fun updateIPList(value: List<String>) {
-        _ipList.value = value
+        _ipList.setIfChanged(value)
     }
 
     fun updateGateVersion(value: String) {
-        _gateVersion.value = value
+        _gateVersion.setIfChanged(value)
     }
 
     // Метод для сброса всех данных (при переподключении)

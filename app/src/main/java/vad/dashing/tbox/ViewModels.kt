@@ -1,11 +1,9 @@
 package vad.dashing.tbox
 
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -232,13 +230,13 @@ class TboxViewModel : ViewModel() {
 }
 
 class MainDashboardViewModel : ViewModel() {
-    val dashboardManager = DashboardManager("main")
+    val dashboardManager = DashboardManager("main", viewModelScope)
 
     // Дополнительные методы если нужно
 }
 
 class FloatingDashboardViewModel(private val dashboardId: String) : ViewModel() {
-    val dashboardManager = DashboardManager(dashboardId)
+    val dashboardManager = DashboardManager(dashboardId, viewModelScope)
 
     // Дополнительные методы если нужно
 }
@@ -256,7 +254,8 @@ class FloatingDashboardViewModelFactory(
 }
 
 class DashboardManager(
-    private val dashboardId: String
+    private val dashboardId: String,
+    private val scope: CoroutineScope
 ) {
     private val _dashboardState = MutableStateFlow(DashboardState())
     val dashboardState: StateFlow<DashboardState> = _dashboardState.asStateFlow()
@@ -276,7 +275,7 @@ class DashboardManager(
             _widgetHistory
                 .map { it[widgetId] ?: emptyList() }
                 .stateIn(
-                    scope = CoroutineScope(Dispatchers.Default),
+                    scope = scope,
                     started = SharingStarted.WhileSubscribed(5000),
                     initialValue = emptyList()
                 )
