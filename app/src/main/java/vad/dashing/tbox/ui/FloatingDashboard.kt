@@ -15,12 +15,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardElevation
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -41,6 +46,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,8 +74,6 @@ import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ui.theme.TboxAppTheme
-
-private val WIDGET_SCALE_OPTIONS = (5..20).map { it / 10f }
 
 @Composable
 fun FloatingDashboardUI(
@@ -750,7 +756,14 @@ fun OverlayWidgetSelectionDialog(
     var scale by remember(widgetIndex, currentWidgetConfigs) {
         mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
     }
+    var scaleInput by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(normalizeWidgetScale(initialConfig.scale).toString())
+    }
     val togglesEnabled = selectedDataKey.isNotEmpty()
+    val parsedScale = scaleInput.trim().replace(',', '.').toFloatOrNull()
+    val scaleOutOfRange = togglesEnabled && parsedScale != null &&
+        (parsedScale < 0.5f || parsedScale > 2.0f)
+    val scaleInputError = togglesEnabled && (parsedScale == null || scaleOutOfRange)
 
     // Получаем список опций
     val availableOptions = listOf("" to "Не выбрано") +
@@ -839,15 +852,61 @@ fun OverlayWidgetSelectionDialog(
                         "",
                         togglesEnabled
                     )
-                    SettingDropdownGeneric(
-                        selectedValue = scale,
-                        onValueChange = { scale = normalizeWidgetScale(it) },
-                        text = "Масштаб виджета",
-                        description = "1.0 = 100%",
-                        enabled = togglesEnabled,
-                        options = WIDGET_SCALE_OPTIONS,
-                        popupFocusable = false
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        OutlinedTextField(
+                            value = scaleInput,
+                            onValueChange = { newValue ->
+                                scaleInput = newValue
+                                val parsed = newValue.trim().replace(',', '.').toFloatOrNull()
+                                if (parsed != null) {
+                                    scale = normalizeWidgetScale(parsed)
+                                }
+                            },
+                            enabled = togglesEnabled,
+                            modifier = Modifier.width(140.dp),
+                            singleLine = true,
+                            isError = scaleInputError,
+                            textStyle = LocalTextStyle.current.copy(fontSize = 24.sp),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                                imeAction = ImeAction.Done
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                                errorBorderColor = MaterialTheme.colorScheme.error
+                            )
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 16.dp)
+                        ) {
+                            Text(
+                                text = "Масштаб виджета",
+                                fontSize = 24.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "0.5..2.0 (1.0 = 100%)",
+                                fontSize = 20.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Start
+                            )
+                        }
+                    }
+                    if (scaleInputError) {
+                        Text(
+                            text = "Введите число от 0.5 до 2.0",
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
 
@@ -867,7 +926,11 @@ fun OverlayWidgetSelectionDialog(
                 }
 
                 Button(
+                    enabled = !scaleInputError,
                     onClick = {
+                        val normalizedScale = normalizeWidgetScale(parsedScale ?: scale)
+                        scale = normalizedScale
+                        scaleInput = normalizedScale.toString()
                         val updatedWidgets = currentWidgets.toMutableList()
                         val newWidget = if (selectedDataKey.isNotEmpty()) {
                             DashboardWidget(
@@ -895,7 +958,7 @@ fun OverlayWidgetSelectionDialog(
                                 dataKey = selectedDataKey,
                                 showTitle = showTitle,
                                 showUnit = showUnit,
-                                scale = normalizeWidgetScale(scale)
+                                scale = normalizedScale
                             )
                         } else {
                             FloatingDashboardWidgetConfig(dataKey = "")
