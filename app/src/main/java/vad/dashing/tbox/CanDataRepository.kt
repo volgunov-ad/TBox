@@ -155,6 +155,7 @@ object CanDataRepository {
     val motorHoursTrip: StateFlow<Float?> = _motorHoursTrip.asStateFlow()
 
     private const val MAX_CAN_FRAMES = 5
+    private const val MAX_CAN_IDS = 500
     private const val MAX_FRAMES_PER_ID = 10
 
     private val timeFormat: ThreadLocal<SimpleDateFormat> = ThreadLocal.withInitial {
@@ -330,10 +331,17 @@ object CanDataRepository {
         val frame = CanFrame(date, rawValue)
 
         _canFramesStructured.update { currentMap ->
-            val currentFrames = currentMap[canId] ?: emptyList()
+            // Use insertion-ordered map so we can evict the oldest CAN IDs.
+            val limitedMap = LinkedHashMap(currentMap)
+            val currentFrames = limitedMap.remove(canId) ?: emptyList()
             val updatedFrames = (currentFrames + frame).takeLast(maxFrames)
+            limitedMap[canId] = updatedFrames
 
-            currentMap + (canId to updatedFrames)
+            while (limitedMap.size > MAX_CAN_IDS) {
+                val oldestCanId = limitedMap.keys.firstOrNull() ?: break
+                limitedMap.remove(oldestCanId)
+            }
+            limitedMap
         }
     }
 

@@ -8,6 +8,15 @@ android {
     namespace = "vad.dashing.tbox"
     compileSdk = 36
 
+    val releaseStoreFile = providers.gradleProperty("TBOX_RELEASE_STORE_FILE")
+    val releaseStorePassword = providers.gradleProperty("TBOX_RELEASE_STORE_PASSWORD")
+    val releaseKeyAlias = providers.gradleProperty("TBOX_RELEASE_KEY_ALIAS")
+    val releaseKeyPassword = providers.gradleProperty("TBOX_RELEASE_KEY_PASSWORD")
+    val hasReleaseSigning = releaseStoreFile.isPresent &&
+        releaseStorePassword.isPresent &&
+        releaseKeyAlias.isPresent &&
+        releaseKeyPassword.isPresent
+
     defaultConfig {
         applicationId = "vad.dashing.tbox"
         minSdk = 28
@@ -18,16 +27,28 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(releaseStoreFile.get())
+                storePassword = releaseStorePassword.get()
+                keyAlias = releaseKeyAlias.get()
+                keyPassword = releaseKeyPassword.get()
+            }
+        }
+    }
+
     buildTypes {
         release {
-            //isMinifyEnabled = true
-            //isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
+            isShrinkResources = true
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             isMinifyEnabled = false
@@ -35,11 +56,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
     buildFeatures {
         compose = true
