@@ -79,14 +79,20 @@ fun DashboardWheelsPressureWidgetItem(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1.5f)
-                        .wrapContentHeight(Alignment.CenterVertically),
+                        .wrapContentHeight(Alignment.Top),
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
-                        PressureText(wheelsPressure.wheel1, availableHeight, Modifier)
+                        PressureText(
+                            wheelsPressure.wheel1,
+                            availableHeight,
+                            TextAlign.Left)
                     }
                     Box(modifier = Modifier.weight(1f)) {
-                        PressureText(wheelsPressure.wheel2, availableHeight, Modifier)
+                        PressureText(
+                            wheelsPressure.wheel1,
+                            availableHeight,
+                            TextAlign.Right)
                     }
                 }
                 if (units) {
@@ -118,41 +124,23 @@ fun DashboardWheelsPressureWidgetItem(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1.5f)
-                        .wrapContentHeight(Alignment.CenterVertically),
+                        .wrapContentHeight(Alignment.Bottom),
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
-                        PressureText(wheelsPressure.wheel3, availableHeight, Modifier)
+                        PressureText(
+                            wheelsPressure.wheel3,
+                            availableHeight,
+                            TextAlign.Left)
                     }
                     Box(modifier = Modifier.weight(1f)) {
-                        PressureText(wheelsPressure.wheel4, availableHeight, Modifier)
+                        PressureText(
+                            wheelsPressure.wheel4,
+                            availableHeight,
+                            TextAlign.Right)
                     }
                 }
             }
         }
     }
-}
-
-// Функция для отрисовки одного значения давления
-@Composable
-private fun PressureText(
-    value: Float?,
-    availableHeight: Dp,
-    modifier: Modifier = Modifier
-) {
-    Text(
-        text = valueToString(value, 1, default = "-"),
-        fontSize = calculateResponsiveFontSize(
-            containerHeight = availableHeight,
-            textType = TextType.VALUE
-        ),
-        fontWeight = FontWeight.Medium,
-        color = if ((value ?: 0f) >= 1.92f) MaterialTheme.colorScheme.onSurface else Color(0xD9FF0000),
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier
-            .wrapContentHeight(Alignment.CenterVertically)
-            .fillMaxWidth()
-    )
 }

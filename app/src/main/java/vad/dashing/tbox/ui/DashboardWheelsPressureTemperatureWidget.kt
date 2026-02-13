@@ -191,7 +191,7 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
 
 // Функция для отрисовки одного значения давления
 @Composable
-private fun PressureText(
+fun PressureText(
     value: Float?,
     availableHeight: Dp,
     align: TextAlign
