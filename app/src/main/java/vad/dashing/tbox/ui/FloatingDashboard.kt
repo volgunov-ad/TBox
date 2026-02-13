@@ -29,6 +29,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -747,7 +748,7 @@ fun OverlayWidgetSelectionDialog(
         mutableStateOf(initialConfig.showUnit)
     }
     var scale by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(normalizeWidgetScale(initialConfig.scale))
+        mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
     }
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
