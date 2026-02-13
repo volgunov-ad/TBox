@@ -845,7 +845,8 @@ fun OverlayWidgetSelectionDialog(
                         text = "Масштаб виджета",
                         description = "1.0 = 100%",
                         enabled = togglesEnabled,
-                        options = WIDGET_SCALE_OPTIONS
+                        options = WIDGET_SCALE_OPTIONS,
+                        popupFocusable = false
                     )
                 }
             }
