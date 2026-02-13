@@ -8,15 +8,6 @@ android {
     namespace = "vad.dashing.tbox"
     compileSdk = 36
 
-    val releaseStoreFile = providers.gradleProperty("TBOX_RELEASE_STORE_FILE")
-    val releaseStorePassword = providers.gradleProperty("TBOX_RELEASE_STORE_PASSWORD")
-    val releaseKeyAlias = providers.gradleProperty("TBOX_RELEASE_KEY_ALIAS")
-    val releaseKeyPassword = providers.gradleProperty("TBOX_RELEASE_KEY_PASSWORD")
-    val hasReleaseSigning = releaseStoreFile.isPresent &&
-        releaseStorePassword.isPresent &&
-        releaseKeyAlias.isPresent &&
-        releaseKeyPassword.isPresent
-
     defaultConfig {
         applicationId = "vad.dashing.tbox"
         minSdk = 28
@@ -26,18 +17,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
-    if (hasReleaseSigning) {
-        signingConfigs {
-            create("release") {
-                storeFile = file(releaseStoreFile.get())
-                storePassword = releaseStorePassword.get()
-                keyAlias = releaseKeyAlias.get()
-                keyPassword = releaseKeyPassword.get()
-            }
-        }
-    }
-
     buildTypes {
         release {
             proguardFiles(
@@ -46,9 +25,7 @@ android {
             )
             isMinifyEnabled = true
             isShrinkResources = true
-            if (hasReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             isMinifyEnabled = false
