@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -380,8 +383,6 @@ fun <T> SettingDropdownGeneric(
     enabled: Boolean = true,
     options: List<T>
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -393,43 +394,15 @@ fun <T> SettingDropdownGeneric(
                 .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
                 .wrapContentWidth()
         ) {
-            OutlinedTextField(
-                value = selectedValue.toString(),
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = {
-                    Text(
-                        text = if (expanded) "▲" else "▼",
-                        fontSize = 16.sp
-                    )
-                },
-                modifier = Modifier
-                    .width(140.dp)
-                    .clickable(enabled = enabled) { expanded = true },
+            TboxDropdownSelector(
+                selectedValue = selectedValue,
+                options = options,
+                onValueChange = onValueChange,
+                width = 140.dp,
                 enabled = enabled,
-                textStyle = TextStyle(fontSize = 24.sp),
-                colors = OutlinedTextFieldDefaults.colors()
+                valueFontSize = 24.sp,
+                itemFontSize = 24.sp
             )
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.width(140.dp)
-            ) {
-                options.forEach { option ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = option.toString(),
-                                style = TextStyle(fontSize = 24.sp)
-                            )
-                        },
-                        onClick = {
-                            onValueChange(option)
-                            expanded = false
-                        }
-                    )
-                }
-            }
         }
 
         Column(
@@ -452,6 +425,64 @@ fun <T> SettingDropdownGeneric(
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 20.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun <T> TboxDropdownSelector(
+    selectedValue: T,
+    options: List<T>,
+    onValueChange: (T) -> Unit,
+    width: Dp,
+    enabled: Boolean = true,
+    valueFontSize: TextUnit = 24.sp,
+    itemFontSize: TextUnit = 24.sp,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.wrapContentSize()) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            enabled = enabled,
+            modifier = Modifier.width(width)
+        ) {
+            Text(
+                text = selectedValue.toString(),
+                fontSize = valueFontSize,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center
+            )
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = if (expanded) "Свернуть" else "Развернуть"
+            )
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.width(width)
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = option.toString(),
+                            fontSize = itemFontSize,
+                            color = if (option == selectedValue) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    },
+                    onClick = {
+                        onValueChange(option)
+                        expanded = false
+                    }
                 )
             }
         }
