@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -61,8 +62,11 @@ import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ui.theme.TboxAppTheme
+
+private val WIDGET_SCALE_OPTIONS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
 @Composable
 fun FloatingDashboardUI(
@@ -358,6 +362,7 @@ fun FloatingDashboard(
                                     val widget = dashboardState.widgets.getOrNull(index) ?: continue
                                     val widgetConfig = widgetConfigs.getOrNull(index)
                                         ?: FloatingDashboardWidgetConfig(dataKey = "")
+                                    val widgetScale = normalizeWidgetScale(widgetConfig.scale)
 
                                     Box(modifier = Modifier.weight(1f)) {
                                         if (isEditMode) {
@@ -370,7 +375,16 @@ fun FloatingDashboard(
                                                 )
                                             }
                                         }
-                                        when (widget.dataKey) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .graphicsLayer(
+                                                    scaleX = widgetScale,
+                                                    scaleY = widgetScale,
+                                                    clip = true
+                                                )
+                                        ) {
+                                            when (widget.dataKey) {
                                             "netWidget" -> {
                                                 DashboardNetWidgetItem(
                                                     widget = widget,
@@ -620,6 +634,7 @@ fun FloatingDashboard(
                                                     backgroundTransparent = true
                                                 )
                                             }
+                                            }
                                         }
                                     }
                                 }
@@ -737,6 +752,9 @@ fun OverlayWidgetSelectionDialog(
     var showUnit by remember(widgetIndex, currentWidgetConfigs) {
         mutableStateOf(initialConfig.showUnit)
     }
+    var scale by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(normalizeWidgetScale(initialConfig.scale))
+    }
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
     // Получаем список опций
@@ -826,6 +844,14 @@ fun OverlayWidgetSelectionDialog(
                         "",
                         togglesEnabled
                     )
+                    SettingDropdownGeneric(
+                        selectedValue = scale,
+                        onValueChange = { scale = normalizeWidgetScale(it) },
+                        text = "Масштаб виджета",
+                        description = "1.0 = 100%",
+                        enabled = togglesEnabled,
+                        options = WIDGET_SCALE_OPTIONS
+                    )
                 }
             }
 
@@ -872,7 +898,8 @@ fun OverlayWidgetSelectionDialog(
                             FloatingDashboardWidgetConfig(
                                 dataKey = selectedDataKey,
                                 showTitle = showTitle,
-                                showUnit = showUnit
+                                showUnit = showUnit,
+                                scale = normalizeWidgetScale(scale)
                             )
                         } else {
                             FloatingDashboardWidgetConfig(dataKey = "")

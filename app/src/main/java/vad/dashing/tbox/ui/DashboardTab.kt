@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,7 +39,10 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
+
+private val WIDGET_SCALE_OPTIONS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
 @Composable
 fun MainDashboardTab(
@@ -112,125 +116,136 @@ fun MainDashboardTab(
                             val widget = dashboardState.widgets.getOrNull(index) ?: continue
                             val widgetConfig = widgetConfigs.getOrNull(index)
                                 ?: FloatingDashboardWidgetConfig(dataKey = "")
+                            val widgetScale = normalizeWidgetScale(widgetConfig.scale)
 
                             Box(modifier = Modifier.weight(1f)) {
-                                when (widget.dataKey) {
-                                    "netWidget" -> {
-                                        DashboardNetWidgetItem(
-                                            widget = widget,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            viewModel = tboxViewModel
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .graphicsLayer(
+                                            scaleX = widgetScale,
+                                            scaleY = widgetScale,
+                                            clip = true
                                         )
-                                    }
-                                    "locWidget" -> {
-                                        DashboardLocWidgetItem(
-                                            widget = widget,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            viewModel = tboxViewModel
-                                        )
-                                    }
-                                    "voltage+engineTemperatureWidget" -> {
-                                        DashboardVoltEngTempWidgetItem(
-                                            widget = widget,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            canViewModel = canViewModel,
-                                            units = widgetConfig.showUnit
-                                        )
-                                    }
-                                    "gearBoxWidget" -> {
-                                        DashboardGearBoxWidgetItem(
-                                            widget = widget,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            canViewModel = canViewModel,
-                                            units = widgetConfig.showUnit
-                                        )
-                                    }
-                                    "wheelsPressureWidget" -> {
-                                        DashboardWheelsPressureWidgetItem(
-                                            widget = widget,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            canViewModel = canViewModel,
-                                            units = widgetConfig.showUnit
-                                        )
-                                    }
-                                    "wheelsPressureTemperatureWidget" -> {
-                                        DashboardWheelsPressureTemperatureWidgetItem(
-                                            widget = widget,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            canViewModel = canViewModel,
-                                            units = widgetConfig.showUnit
-                                        )
-                                    }
-                                    "tempInOutWidget" -> {
-                                        DashboardTempInOutWidgetItem(
-                                            widget = widget,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            canViewModel = canViewModel,
-                                            units = widgetConfig.showUnit
-                                        )
-                                    }
-                                    "motorHoursWidget" -> {
-                                        DashboardMotorHoursWidgetItem(
-                                            widget = widget,
-                                            dataProvider = dataProvider,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            onDoubleClick = {
-                                                appDataViewModel.setMotorHours(0f)
-                                            },
-                                            units = widgetConfig.showUnit
-                                        )
-                                    }
-                                    "restartTbox" -> {
-                                        DashboardWidgetItem(
-                                            widget = widget,
-                                            dataProvider = dataProvider,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            onDoubleClick = {
-                                                if (restartEnabled) {
-                                                    restartEnabled = false
-                                                    onTboxRestartClick()
-                                                }
-                                            },
-                                            dashboardManager = dashboardViewModel.dashboardManager,
-                                            dashboardChart = false,
-                                            title = widgetConfig.showTitle,
-                                            units = widgetConfig.showUnit,
-                                            textColor = if (restartEnabled) {
-                                                if (tboxConnected) {
-                                                    Color(0xD900A400)
-                                                } else {
-                                                    Color(0xD9FF0000)
-                                                }
-                                            } else {
-                                                Color(0xD97E4C4C)
-                                            }
-                                        )
-                                    }
-                                    else -> {
-                                        DashboardWidgetItem(
-                                            widget = widget,
-                                            dataProvider = dataProvider,
-                                            onClick = { showDialogForIndex = index },
-                                            onLongClick = {},
-                                            onDoubleClick = {
-                                                if (widget.dataKey == "motorHours") {
+                                ) {
+                                    when (widget.dataKey) {
+                                        "netWidget" -> {
+                                            DashboardNetWidgetItem(
+                                                widget = widget,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                viewModel = tboxViewModel
+                                            )
+                                        }
+                                        "locWidget" -> {
+                                            DashboardLocWidgetItem(
+                                                widget = widget,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                viewModel = tboxViewModel
+                                            )
+                                        }
+                                        "voltage+engineTemperatureWidget" -> {
+                                            DashboardVoltEngTempWidgetItem(
+                                                widget = widget,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                canViewModel = canViewModel,
+                                                units = widgetConfig.showUnit
+                                            )
+                                        }
+                                        "gearBoxWidget" -> {
+                                            DashboardGearBoxWidgetItem(
+                                                widget = widget,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                canViewModel = canViewModel,
+                                                units = widgetConfig.showUnit
+                                            )
+                                        }
+                                        "wheelsPressureWidget" -> {
+                                            DashboardWheelsPressureWidgetItem(
+                                                widget = widget,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                canViewModel = canViewModel,
+                                                units = widgetConfig.showUnit
+                                            )
+                                        }
+                                        "wheelsPressureTemperatureWidget" -> {
+                                            DashboardWheelsPressureTemperatureWidgetItem(
+                                                widget = widget,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                canViewModel = canViewModel,
+                                                units = widgetConfig.showUnit
+                                            )
+                                        }
+                                        "tempInOutWidget" -> {
+                                            DashboardTempInOutWidgetItem(
+                                                widget = widget,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                canViewModel = canViewModel,
+                                                units = widgetConfig.showUnit
+                                            )
+                                        }
+                                        "motorHoursWidget" -> {
+                                            DashboardMotorHoursWidgetItem(
+                                                widget = widget,
+                                                dataProvider = dataProvider,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                onDoubleClick = {
                                                     appDataViewModel.setMotorHours(0f)
+                                                },
+                                                units = widgetConfig.showUnit
+                                            )
+                                        }
+                                        "restartTbox" -> {
+                                            DashboardWidgetItem(
+                                                widget = widget,
+                                                dataProvider = dataProvider,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                onDoubleClick = {
+                                                    if (restartEnabled) {
+                                                        restartEnabled = false
+                                                        onTboxRestartClick()
+                                                    }
+                                                },
+                                                dashboardManager = dashboardViewModel.dashboardManager,
+                                                dashboardChart = false,
+                                                title = widgetConfig.showTitle,
+                                                units = widgetConfig.showUnit,
+                                                textColor = if (restartEnabled) {
+                                                    if (tboxConnected) {
+                                                        Color(0xD900A400)
+                                                    } else {
+                                                        Color(0xD9FF0000)
+                                                    }
+                                                } else {
+                                                    Color(0xD97E4C4C)
                                                 }
-                                            },
-                                            dashboardManager = dashboardViewModel.dashboardManager,
-                                            dashboardChart = dashboardChart,
-                                            title = widgetConfig.showTitle,
-                                            units = widgetConfig.showUnit
-                                        )
+                                            )
+                                        }
+                                        else -> {
+                                            DashboardWidgetItem(
+                                                widget = widget,
+                                                dataProvider = dataProvider,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                onDoubleClick = {
+                                                    if (widget.dataKey == "motorHours") {
+                                                        appDataViewModel.setMotorHours(0f)
+                                                    }
+                                                },
+                                                dashboardManager = dashboardViewModel.dashboardManager,
+                                                dashboardChart = dashboardChart,
+                                                title = widgetConfig.showTitle,
+                                                units = widgetConfig.showUnit
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -272,6 +287,9 @@ fun WidgetSelectionDialog(
     }
     var showUnit by remember(widgetIndex, currentWidgetConfigs) {
         mutableStateOf(initialConfig.showUnit)
+    }
+    var scale by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(normalizeWidgetScale(initialConfig.scale))
     }
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
@@ -357,6 +375,14 @@ fun WidgetSelectionDialog(
                             "",
                             togglesEnabled
                         )
+                        SettingDropdownGeneric(
+                            selectedValue = scale,
+                            onValueChange = { scale = normalizeWidgetScale(it) },
+                            text = "Масштаб виджета",
+                            description = "1.0 = 100%",
+                            enabled = togglesEnabled,
+                            options = WIDGET_SCALE_OPTIONS
+                        )
                     }
                 }
             }
@@ -393,7 +419,8 @@ fun WidgetSelectionDialog(
                         FloatingDashboardWidgetConfig(
                             dataKey = selectedDataKey,
                             showTitle = showTitle,
-                            showUnit = showUnit
+                            showUnit = showUnit,
+                            scale = normalizeWidgetScale(scale)
                         )
                     } else {
                         FloatingDashboardWidgetConfig(dataKey = "")
