@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -21,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
-import vad.dashing.tbox.valueToString
 
 @Composable
 fun DashboardWheelsPressureWidgetItem(
@@ -78,9 +77,9 @@ fun DashboardWheelsPressureWidgetItem(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1.5f)
+                        .weight(1f)
                         .wrapContentHeight(Alignment.Top),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
                         PressureText(
@@ -88,9 +87,9 @@ fun DashboardWheelsPressureWidgetItem(
                             availableHeight,
                             TextAlign.Left)
                     }
-                    Box(modifier = Modifier.weight(1f)) {
+                    Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
-                            wheelsPressure.wheel1,
+                            wheelsPressure.wheel2,
                             availableHeight,
                             TextAlign.Right)
                     }
@@ -101,7 +100,7 @@ fun DashboardWheelsPressureWidgetItem(
                             .fillMaxWidth()
                             .weight(1f)
                             .wrapContentHeight(Alignment.CenterVertically),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
                             text = widget.unit,
@@ -112,20 +111,16 @@ fun DashboardWheelsPressureWidgetItem(
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             maxLines = 1,
-                            softWrap = true,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight(Alignment.CenterVertically)
                         )
                     }
                 }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1.5f)
+                        .weight(1f)
                         .wrapContentHeight(Alignment.Bottom),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
                         PressureText(
@@ -133,7 +128,7 @@ fun DashboardWheelsPressureWidgetItem(
                             availableHeight,
                             TextAlign.Left)
                     }
-                    Box(modifier = Modifier.weight(1f)) {
+                    Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel4,
                             availableHeight,

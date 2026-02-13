@@ -137,7 +137,7 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                             maxLines = 2,
                             lineHeight = calculateResponsiveFontSize(
                                 containerHeight = availableHeight,
-                                textType = TextType.TITLE
+                                textType = TextType.UNIT
                             ) * 1.3f,
                             overflow = TextOverflow.Ellipsis
                         )
