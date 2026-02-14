@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -42,8 +44,6 @@ import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
-
-private val WIDGET_SCALE_OPTIONS = (5..20).map { it / 10f }
 
 @Composable
 fun MainDashboardTab(
@@ -370,14 +370,32 @@ fun WidgetSelectionDialog(
                             "",
                             togglesEnabled
                         )
-                        SettingDropdownGeneric(
-                            selectedValue = scale,
-                            onValueChange = { scale = normalizeWidgetScale(it) },
-                            text = "Масштаб виджета",
-                            description = "1.0 = 100%",
-                            enabled = togglesEnabled,
-                            options = WIDGET_SCALE_OPTIONS
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "Масштаб виджета: ${scale}x",
+                                fontSize = 24.sp
+                            )
+                            Text(
+                                text = "0.1..2.0 (1.0 = 100%)",
+                                fontSize = 20.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Slider(
+                                value = scale,
+                                onValueChange = { newValue ->
+                                    scale = normalizeWidgetScale(newValue)
+                                },
+                                valueRange = 0.1f..2.0f,
+                                steps = 18,
+                                enabled = togglesEnabled,
+                                modifier = Modifier
+                                    .padding(top = 6.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -385,6 +403,8 @@ fun WidgetSelectionDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    val normalizedScale = normalizeWidgetScale(scale)
+                    scale = normalizedScale
                     val updatedWidgets = currentWidgets.toMutableList()
                     val newWidget = if (selectedDataKey.isNotEmpty()) {
                         DashboardWidget(
@@ -415,7 +435,7 @@ fun WidgetSelectionDialog(
                             dataKey = selectedDataKey,
                             showTitle = showTitle,
                             showUnit = showUnit,
-                            scale = normalizeWidgetScale(scale)
+                            scale = normalizedScale
                         )
                     } else {
                         FloatingDashboardWidgetConfig(dataKey = "")

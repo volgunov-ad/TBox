@@ -6,7 +6,7 @@ import kotlin.math.roundToInt
 
 private const val LEGACY_WIDGETS_SEPARATOR = "|"
 const val DEFAULT_WIDGET_SCALE = 1.0f
-private const val MIN_WIDGET_SCALE = 0.5f
+private const val MIN_WIDGET_SCALE = 0.1f
 private const val MAX_WIDGET_SCALE = 2f
 
 fun normalizeWidgetScale(rawScale: Float): Float {

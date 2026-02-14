@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
@@ -382,7 +383,8 @@ fun <T> SettingDropdownGeneric(
     text: String,
     description: String,
     enabled: Boolean = true,
-    options: List<T>
+    options: List<T>,
+    popupFocusable: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -402,7 +404,8 @@ fun <T> SettingDropdownGeneric(
                 width = 140.dp,
                 enabled = enabled,
                 valueFontSize = 24.sp,
-                itemFontSize = 24.sp
+                itemFontSize = 24.sp,
+                popupFocusable = popupFocusable
             )
         }
 
@@ -441,6 +444,7 @@ fun <T> GenericDropdownSelector(
     enabled: Boolean = true,
     valueFontSize: TextUnit = 24.sp,
     itemFontSize: TextUnit = 24.sp,
+    popupFocusable: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -465,7 +469,10 @@ fun <T> GenericDropdownSelector(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.width(width)
+            modifier = Modifier.width(width),
+            properties = PopupProperties(
+                focusable = popupFocusable
+            )
         ) {
             options.forEach { option ->
                 DropdownMenuItem(
