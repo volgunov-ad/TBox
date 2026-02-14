@@ -85,13 +85,15 @@ fun DashboardWheelsPressureWidgetItem(
                         PressureText(
                             wheelsPressure.wheel1,
                             availableHeight,
-                            TextAlign.Left)
+                            TextAlign.Left,
+                            TextType.VALUE)
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel2,
                             availableHeight,
-                            TextAlign.Right)
+                            TextAlign.Right,
+                            TextType.VALUE)
                     }
                 }
                 if (units) {
@@ -126,13 +128,15 @@ fun DashboardWheelsPressureWidgetItem(
                         PressureText(
                             wheelsPressure.wheel3,
                             availableHeight,
-                            TextAlign.Left)
+                            TextAlign.Left,
+                            TextType.VALUE)
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel4,
                             availableHeight,
-                            TextAlign.Right)
+                            TextAlign.Right,
+                            TextType.VALUE)
                     }
                 }
             }

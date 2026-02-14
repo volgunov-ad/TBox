@@ -88,13 +88,15 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                         PressureText(
                             wheelsPressure.wheel1,
                             availableHeight,
-                            TextAlign.Left)
+                            TextAlign.Left,
+                            TextType.TITLE)
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel2,
                             availableHeight,
-                            TextAlign.Right)
+                            TextAlign.Right,
+                            TextType.TITLE)
                     }
                 }
                 Row(
@@ -155,13 +157,15 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                         PressureText(
                             wheelsPressure.wheel3,
                             availableHeight,
-                            TextAlign.Left)
+                            TextAlign.Left,
+                            TextType.TITLE)
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel4,
                             availableHeight,
-                            TextAlign.Right)
+                            TextAlign.Right,
+                            TextType.TITLE)
                     }
                 }
                 Row(
@@ -194,13 +198,14 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
 fun PressureText(
     value: Float?,
     availableHeight: Dp,
-    align: TextAlign
+    align: TextAlign,
+    textType: TextType
 ) {
     Text(
         text = valueToString(value, 1, default = "-"),
         fontSize = calculateResponsiveFontSize(
             containerHeight = availableHeight,
-            textType = TextType.TITLE
+            textType = textType
         ),
         fontWeight = FontWeight.Medium,
         color = if ((value ?: 0f) >= 1.92f) MaterialTheme.colorScheme.onSurface else Color(0xD9FF0000),
