@@ -1086,7 +1086,7 @@ class BackgroundService : Service() {
                     return@launch
                 }
                 mdcSendAT("AT+CMGF=1".toByteArray())
-                delay(1000)
+                delay(2000)
                 if (!sendATJob.awaitCompletionWithTimeout(5000)) {
                     return@launch
                 }
