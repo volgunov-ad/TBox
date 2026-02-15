@@ -156,7 +156,7 @@ fun DashboardWidgetItem(
                 }
 
                 Text(
-                    text = "$valueString ${if (units && !onlyText) "\u2009${widget.unit.replace("/", "\u2060/\u2060")}" else ""}",
+                    text = "$valueString\u2009${if (units && !onlyText) widget.unit.replace("/", "\u2060/\u2060") else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = if (widget.dataKey == "restartTbox") {
