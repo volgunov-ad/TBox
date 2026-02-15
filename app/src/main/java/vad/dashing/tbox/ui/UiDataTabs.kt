@@ -530,7 +530,7 @@ fun ATcmdTabContent(
                                 BackgroundService.EXTRA_AT_CMD,
                                 atCmdText
                             )
-                            atCmdText = ""
+                            //atCmdText = ""
                         }
                         focusManager.clearFocus()
                     }
@@ -545,13 +545,32 @@ fun ATcmdTabContent(
                                 BackgroundService.EXTRA_AT_CMD,
                                 atCmdText
                             )
-                            atCmdText = ""
+                            //atCmdText = ""
                         }
                     },
                     modifier = Modifier.width(200.dp)
                 ) {
                     Text(
                         text = "Отправить",
+                        fontSize = 24.sp,
+                        maxLines = 2,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            Box(modifier = Modifier.wrapContentSize()) {
+                Button(
+                    onClick = {
+                        onServiceCommand(
+                            BackgroundService.ACTION_READ_ALL_SMS,
+                            "",
+                            ""
+                        )
+                    },
+                    modifier = Modifier.width(200.dp)
+                ) {
+                    Text(
+                        text = "Получить все SMS",
                         fontSize = 24.sp,
                         maxLines = 2,
                         textAlign = TextAlign.Center

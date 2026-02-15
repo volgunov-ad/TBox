@@ -197,7 +197,7 @@ object TboxRepository {
     private val _gateVersion = MutableStateFlow<String>("")
     val gateVersion: StateFlow<String> = _gateVersion.asStateFlow()
 
-    private const val MAX_LOGS = 150
+    private const val MAX_LOGS = 300
     private const val MAX_DIDS = 300
 
     private val timeFormat: ThreadLocal<SimpleDateFormat> = ThreadLocal.withInitial {

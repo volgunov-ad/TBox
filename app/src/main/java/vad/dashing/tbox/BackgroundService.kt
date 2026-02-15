@@ -85,6 +85,7 @@ class BackgroundService : Service() {
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
+    private var getSMSJob: Job? = null
 
     private var netUpdateTime: Long = 5000
     private var apnUpdateTime: Long = 10000
@@ -106,6 +107,8 @@ class BackgroundService : Service() {
 
     private var motorHoursBuffer = MotorHoursBuffer(0.05f)
     private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
+
+    private var isLastSMS: Boolean = false
 
     companion object {
         private const val APP_CODE = 0x2F.toByte()
@@ -163,6 +166,7 @@ class BackgroundService : Service() {
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
         const val ACTION_SUSPEND_OVERLAYS = "vad.dashing.tbox.SUSPEND_OVERLAYS"
         const val ACTION_RESUME_OVERLAYS = "vad.dashing.tbox.RESUME_OVERLAYS"
+        const val ACTION_READ_ALL_SMS = "vad.dashing.tbox.READ_ALL_SMS"
     }
 
 
@@ -324,6 +328,7 @@ class BackgroundService : Service() {
                     stopSettingsListener()
                     stopDataListener()
                     stopStateBroadcastListener()
+                    stopReadAllSMS()
                     val notification = createNotification("Stop service")
                     startForeground(NOTIFICATION_ID, notification)
                     overlayController.closeAllOverlays()
@@ -382,6 +387,7 @@ class BackgroundService : Service() {
                     this[0] = 0x02
                     this[9] = 0x01 },
                 "Open", "INFO")
+            ACTION_READ_ALL_SMS -> readAllSMS()
         }
         return START_STICKY
     }
@@ -1068,6 +1074,49 @@ class BackgroundService : Service() {
         }
     }
 
+    private fun readAllSMS() {
+        if (!TboxRepository.tboxConnected.value) {
+            return
+        }
+        if (getSMSJob?.isActive == true) return
+        getSMSJob = scope.launch {
+            isLastSMS = false
+            try {
+                if (!sendATJob.awaitCompletionWithTimeout(5000)) {
+                    return@launch
+                }
+                mdcSendAT("AT+CMGF=1".toByteArray())
+                delay(1000)
+                if (!sendATJob.awaitCompletionWithTimeout(5000)) {
+                    return@launch
+                }
+                mdcSendAT("AT+CSCS=\"UCS2\"".toByteArray())
+                delay(1000)
+
+                for (i in 0 until 50) {
+                    delay(2000)
+                    if (isLastSMS) return@launch
+
+                    if (!sendATJob.awaitCompletionWithTimeout(5000)) {
+                        return@launch
+                    }
+                    mdcSendAT("AT+CMGR=$i".toByteArray())
+                }
+            } catch (e: CancellationException) {
+                // Нормальная отмена - не логируем
+                throw e
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "AT command", "Fatal error in AT command job")
+                Log.e("AT command", "Fatal error in AT command job", e)
+            }
+        }
+    }
+
+    private fun stopReadAllSMS() {
+        getSMSJob?.cancel()
+        getSMSJob = null
+    }
+
     private fun crtCmd (cmd: Byte, data: ByteArray, description: String, logLevel: String = "DEBUG") {
         if (!TboxRepository.tboxConnected.value) {
             return
@@ -1367,7 +1416,7 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob
+            settingsListenerJob, dataListenerJob, getSMSJob
         ).forEach { job ->
             job?.cancel()
         }
@@ -1967,23 +2016,87 @@ class BackgroundService : Service() {
             TboxRepository.addATLog("Receive: ERROR")
             return false
         }
-        val ans = String(data.copyOfRange(10, data.size), charset = Charsets.UTF_8).trimEnd()
+        val ans = try {
+            String(data.copyOfRange(10, data.size), charset = Charsets.UTF_8).trimEnd()
+        } catch (_: Exception) {
+            toHexString(data.copyOfRange(10, data.size))
+        }
 
         TboxRepository.addATLog("Receive: $ans")
 
         if ("ERROR" in ans) {
             TboxRepository.addLog("ERROR", "MDC AT response", "AT command error: $ans")
-            return false
+        } else {
+            TboxRepository.addLog("DEBUG", "MDC AT response", "AT command answer: $ans")
         }
-        TboxRepository.addLog("DEBUG", "MDC AT response", "AT command answer: $ans")
+
         if ("+CFUN: 0" in ans || ("AT+CFUN=0" in ans && "OK" in ans)) {
             TboxRepository.updateModemStatus(0)
         } else if ("+CFUN: 1" in ans || ("AT+CFUN=1" in ans && "OK" in ans)) {
             TboxRepository.updateModemStatus(1)
         } else if ("+CFUN: 4" in ans || ("AT+CFUN=4" in ans && "OK" in ans)) {
             TboxRepository.updateModemStatus(4)
+        } else if ("+CMGR: \"REC" in ans && "OK" in ans) {
+            val ansList = ans.split("\n")
+            if (ansList.size >= 4) {
+                val messageNumber = try {
+                    ansList[0].split("=")[1].trim().toInt()
+                } catch (_: Exception) {
+                    -1
+                }
+                val infoList = ansList[1].replace("\"", "").split(",")
+                val from: String
+                val dateTime: String
+                if (infoList.size >= 4) {
+                    from = try {
+                        decodeFlexibleUcs2(infoList[1])
+                    } catch (_: Exception) {
+                        "n/a"
+                    }
+                    dateTime = "${infoList[3]} ${infoList[4]}"
+                } else {
+                    from = "?"
+                    dateTime = "?"
+                }
+
+                val message = try {
+                    decodeFlexibleUcs2(ansList[2])
+                } catch (_: Exception){
+                    "?"
+                }
+
+                TboxRepository.addATLog("SMS $messageNumber from ($from) $dateTime: $message")
+            } else {
+                TboxRepository.addATLog(toHexString(data.copyOfRange(10, data.size)))
+            }
+        } else if ("at+cmgr=" in ans.lowercase() && "ERROR" in ans){
+            isLastSMS = true
         }
-        return true
+
+        return "ERROR" !in ans
+    }
+
+    fun decodeFlexibleUcs2(hexString: String, littleEndian: Boolean = false): String {
+        return try {
+            val cleanHex = hexString.replace(Regex("[^0-9a-fA-F]"), "")
+
+            val bytes = cleanHex.chunked(2)
+                .mapNotNull { hexPair ->
+                    try {
+                        if (hexPair.length == 2) hexPair.toInt(16).toByte() else null
+                    } catch (_: NumberFormatException) {
+                        null
+                    }
+                }
+                .toByteArray()
+
+            if (bytes.isEmpty()) return ""
+
+            String(bytes, if (littleEndian) Charsets.UTF_16LE else Charsets.UTF_16BE)
+        } catch (_: Exception) {
+            // В случае любой ошибки возвращаем пустую строку
+            ""
+        }
     }
 
     private fun ansCRTPowVol(data: ByteArray): Boolean {
