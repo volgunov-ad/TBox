@@ -90,7 +90,7 @@ fun DashboardGearBoxWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${valueToString(gearBoxOilTemperature, 0)}${if (units) " °C" else ""}",
+                    text = "${valueToString(gearBoxOilTemperature, 0)}${if (units) "\u2009°C" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

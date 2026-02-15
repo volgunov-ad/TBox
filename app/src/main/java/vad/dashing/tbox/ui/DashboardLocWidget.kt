@@ -114,7 +114,7 @@ fun DashboardLocWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${locValues.speed} км/ч",
+                    text = "${locValues.speed}\u2009км/ч",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE

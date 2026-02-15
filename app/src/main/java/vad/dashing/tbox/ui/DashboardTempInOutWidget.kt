@@ -74,7 +74,7 @@ fun DashboardTempInOutWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "${valueToString(outsideTemperature, 1)}${if (units) " °C" else ""}",
+                    text = "${valueToString(outsideTemperature, 1)}${if (units) "\u2009°C" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -89,7 +89,7 @@ fun DashboardTempInOutWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${valueToString(insideTemperature, 1)}${if (units) " °C" else ""}",
+                    text = "${valueToString(insideTemperature, 1)}${if (units) "\u2009°C" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

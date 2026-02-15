@@ -74,7 +74,7 @@ fun DashboardVoltEngTempWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "${valueToString(voltage, 1)}${if (units) " В" else ""}",
+                    text = "${valueToString(voltage, 1)}${if (units) "\u2009В" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -89,7 +89,7 @@ fun DashboardVoltEngTempWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${valueToString(engineTemperature, 0)}${if (units) " °C" else ""}",
+                    text = "${valueToString(engineTemperature, 0)}${if (units) "\u2009°C" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

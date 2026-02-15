@@ -77,7 +77,7 @@ fun DashboardMotorHoursWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "$motorHoursString ${if (units) " ч" else ""}",
+                    text = "$motorHoursString ${if (units) "\u2009ч" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -92,7 +92,7 @@ fun DashboardMotorHoursWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "$motorHoursTripString ${if (units) " ч" else ""}",
+                    text = "$motorHoursTripString ${if (units) "\u2009ч" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
