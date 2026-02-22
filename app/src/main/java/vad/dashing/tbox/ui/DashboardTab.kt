@@ -26,6 +26,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,6 +40,7 @@ import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MainDashboardViewModel
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
@@ -53,6 +56,7 @@ fun MainDashboardTab(
     appDataViewModel: AppDataViewModel,
     onTboxRestartClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val dashboardViewModel: MainDashboardViewModel = viewModel()
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
     val widgetsConfig by settingsViewModel.dashboardWidgetsConfig.collectAsStateWithLifecycle()
@@ -68,8 +72,8 @@ fun MainDashboardTab(
         normalizeWidgetConfigs(widgetsConfig, totalWidgets)
     }
 
-    LaunchedEffect(widgetConfigs, totalWidgets) {
-        val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets)
+    LaunchedEffect(widgetConfigs, totalWidgets, context) {
+        val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets, context)
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
     }
 
@@ -82,7 +86,9 @@ fun MainDashboardTab(
         }
     }
 
-    val dataProvider = remember { TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel) }
+    val dataProvider = remember(context) {
+        TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, context)
+    }
 
     Column(
         modifier = Modifier
@@ -96,7 +102,7 @@ fun MainDashboardTab(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Загрузка...")
+                Text(stringResource(R.string.loading))
             }
         } else {
             Column(
@@ -272,6 +278,7 @@ fun WidgetSelectionDialog(
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var selectedDataKey by remember {
         mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
     }
@@ -288,11 +295,11 @@ fun WidgetSelectionDialog(
     }
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
-    val availableOptions = listOf("" to "Не выбрано") +
+    val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
             WidgetsRepository.getAvailableDataKeysWidgets()
                 .filter { it.isNotEmpty() }
                 .map { key ->
-                    key to WidgetsRepository.getTitleUnitForDataKey(key)
+                    key to WidgetsRepository.getTitleUnitForDataKey(context, key)
                 }
 
     AlertDialog(
@@ -304,7 +311,7 @@ fun WidgetSelectionDialog(
                     .fillMaxSize()
                     .padding(8.dp)
             ) {
-                SettingsTitle("Выберите данные для плитки ${widgetIndex + 1}")
+                SettingsTitle(stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1))
 
                 // Список опций с прокруткой
                 Box(
@@ -344,7 +351,7 @@ fun WidgetSelectionDialog(
                     }
                 }
 
-                SettingsTitle("Дополнительные настройки плитки ${widgetIndex + 1}")
+                SettingsTitle(stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -359,14 +366,14 @@ fun WidgetSelectionDialog(
                         SettingSwitch(
                             showTitle,
                             { showTitle = it },
-                            "Отображать название",
+                            stringResource(R.string.widget_show_title),
                             "",
                             togglesEnabled
                         )
                         SettingSwitch(
                             showUnit,
                             { showUnit = it },
-                            "Отображать единицу измерения",
+                            stringResource(R.string.widget_show_unit),
                             "",
                             togglesEnabled
                         )
@@ -376,11 +383,11 @@ fun WidgetSelectionDialog(
                                 .padding(vertical = 8.dp)
                         ) {
                             Text(
-                                text = "Масштаб виджета: ${scale}x",
+                                text = stringResource(R.string.widget_scale, scale),
                                 fontSize = 24.sp
                             )
                             Text(
-                                text = "0.1..2.0 (1.0 = 100%)",
+                                text = stringResource(R.string.widget_scale_hint),
                                 fontSize = 20.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -409,8 +416,8 @@ fun WidgetSelectionDialog(
                     val newWidget = if (selectedDataKey.isNotEmpty()) {
                         DashboardWidget(
                             id = currentWidgets[widgetIndex].id,
-                            title = WidgetsRepository.getTitleForDataKey(selectedDataKey),
-                            unit = WidgetsRepository.getUnitForDataKey(selectedDataKey),
+                            title = WidgetsRepository.getTitleForDataKey(context, selectedDataKey),
+                            unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
                             dataKey = selectedDataKey
                         )
                     } else {
@@ -448,12 +455,12 @@ fun WidgetSelectionDialog(
                     onDismiss()
                 }
             ) {
-                Text(text = "Сохранить", fontSize = 24.sp)
+                Text(text = stringResource(R.string.action_save), fontSize = 24.sp)
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
-                Text(text = "Отмена", fontSize = 24.sp)
+                Text(text = stringResource(R.string.action_cancel), fontSize = 24.sp)
             }
         }
     )

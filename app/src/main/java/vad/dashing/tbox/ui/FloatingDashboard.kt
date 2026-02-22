@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,6 +62,7 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainActivity
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.loadWidgetsFromConfig
@@ -218,13 +220,15 @@ fun FloatingDashboard(
         }
     }
 
-    val dataProvider = remember { TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel) }
+    val dataProvider = remember(context) {
+        TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, context)
+    }
 
-    LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols) {
+    LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols, context) {
         val totalWidgets = dashboardRows * dashboardCols
 
         // Всегда загружаем/создаем виджеты при изменении зависимостей
-        val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets)
+        val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets, context)
 
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
     }
@@ -347,7 +351,7 @@ fun FloatingDashboard(
                                 .background(color = Color.Transparent),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Загрузка...")
+                            Text(stringResource(R.string.loading))
                         }
                     } else {
                         for (row in 0 until dashboardRows) {
@@ -735,6 +739,7 @@ fun OverlayWidgetSelectionDialog(
     dashboardManager: DashboardManager,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var selectedDataKey by remember {
         mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
     }
@@ -752,11 +757,11 @@ fun OverlayWidgetSelectionDialog(
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
     // Получаем список опций
-    val availableOptions = listOf("" to "Не выбрано") +
+    val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
             WidgetsRepository.getAvailableDataKeysWidgets()
                 .filter { it.isNotEmpty() }
                 .map { key ->
-                    key to WidgetsRepository.getTitleUnitForDataKey(key)
+                    key to WidgetsRepository.getTitleUnitForDataKey(context, key)
                 }
 
     Card(
@@ -771,7 +776,7 @@ fun OverlayWidgetSelectionDialog(
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
-            SettingsTitle("Выберите данные для плитки ${widgetIndex + 1}")
+            SettingsTitle(stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1))
 
             // Список опций с прокруткой
             Box(
@@ -811,7 +816,7 @@ fun OverlayWidgetSelectionDialog(
                 }
             }
 
-            SettingsTitle("Дополнительные настройки плитки ${widgetIndex + 1}")
+            SettingsTitle(stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1))
             // Список опций с прокруткой
             Box(
                 modifier = Modifier
@@ -827,14 +832,14 @@ fun OverlayWidgetSelectionDialog(
                     SettingSwitch(
                         showTitle,
                         { showTitle = it },
-                        "Отображать название",
+                        stringResource(R.string.widget_show_title),
                         "",
                         togglesEnabled
                     )
                     SettingSwitch(
                         showUnit,
                         { showUnit = it },
-                        "Отображать единицу измерения",
+                        stringResource(R.string.widget_show_unit),
                         "",
                         togglesEnabled
                     )
@@ -844,12 +849,12 @@ fun OverlayWidgetSelectionDialog(
                             .padding(vertical = 8.dp)
                     ) {
                         Text(
-                            text = "Масштаб виджета: ${scale}x",
+                            text = stringResource(R.string.widget_scale, scale),
                             fontSize = 24.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "0.1..2.0 (1.0 = 100%)",
+                            text = stringResource(R.string.widget_scale_hint),
                             fontSize = 20.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -880,7 +885,7 @@ fun OverlayWidgetSelectionDialog(
                     onClick = onDismiss,
                     modifier = Modifier.padding(end = 12.dp)
                 ) {
-                    Text(text = "Отмена", fontSize = 24.sp)
+                    Text(text = stringResource(R.string.action_cancel), fontSize = 24.sp)
                 }
 
                 Button(
@@ -891,8 +896,8 @@ fun OverlayWidgetSelectionDialog(
                         val newWidget = if (selectedDataKey.isNotEmpty()) {
                             DashboardWidget(
                                 id = currentWidgets[widgetIndex].id,
-                                title = WidgetsRepository.getTitleForDataKey(selectedDataKey),
-                                unit = WidgetsRepository.getUnitForDataKey(selectedDataKey),
+                                title = WidgetsRepository.getTitleForDataKey(context, selectedDataKey),
+                                unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
                                 dataKey = selectedDataKey
                             )
                         } else {
@@ -927,7 +932,7 @@ fun OverlayWidgetSelectionDialog(
                     }
                 ) {
                     Text(
-                        text = "Сохранить",
+                        text = stringResource(R.string.action_save),
                         fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                         fontSize = 24.sp
                     )

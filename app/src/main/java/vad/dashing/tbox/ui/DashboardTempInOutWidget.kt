@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.R
 import vad.dashing.tbox.valueToString
 
 @Composable
@@ -41,6 +43,7 @@ fun DashboardTempInOutWidgetItem(
 ) {
     val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
     val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
+    val celsiusUnit = stringResource(R.string.unit_celsius)
 
     Card(
         modifier = Modifier
@@ -74,7 +77,7 @@ fun DashboardTempInOutWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "${valueToString(outsideTemperature, 1)}${if (units) "\u2009°C" else ""}",
+                    text = "${valueToString(outsideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -89,7 +92,7 @@ fun DashboardTempInOutWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${valueToString(insideTemperature, 1)}${if (units) "\u2009°C" else ""}",
+                    text = "${valueToString(insideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

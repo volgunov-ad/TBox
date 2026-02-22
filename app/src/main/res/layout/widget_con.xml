@@ -7,7 +7,7 @@
 
     <ImageView
         android:id="@+id/status_indicator"
-        android:contentDescription="connection"
+        android:contentDescription="@string/widget_desc_connection"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="fitCenter"

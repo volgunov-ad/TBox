@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -98,15 +99,15 @@ object TabItems {
     @Composable
     fun getItems(): List<TabItem> {
         return listOf(
-            TabItem("Модем", ImageVector.vectorResource(R.drawable.menu_icon_modem)),
-            TabItem("AT команды", ImageVector.vectorResource(R.drawable.menu_icon_at)),
-            TabItem("Геопозиция", Icons.Filled.Place),
-            TabItem("Данные авто", Icons.Filled.Build),
-            TabItem("Настройки", Icons.Filled.Settings),
-            TabItem("Журнал", ImageVector.vectorResource(R.drawable.menu_icon_log)),
-            TabItem("Информация", Icons.Filled.Info),
-            TabItem("CAN", ImageVector.vectorResource(R.drawable.menu_icon_data)),
-            TabItem("Плитки", ImageVector.vectorResource(R.drawable.menu_icon_widgets))
+            TabItem(stringResource(R.string.tab_modem), ImageVector.vectorResource(R.drawable.menu_icon_modem)),
+            TabItem(stringResource(R.string.tab_at_commands), ImageVector.vectorResource(R.drawable.menu_icon_at)),
+            TabItem(stringResource(R.string.tab_geoposition), Icons.Filled.Place),
+            TabItem(stringResource(R.string.tab_car_data), Icons.Filled.Build),
+            TabItem(stringResource(R.string.tab_settings), Icons.Filled.Settings),
+            TabItem(stringResource(R.string.tab_logs), ImageVector.vectorResource(R.drawable.menu_icon_log)),
+            TabItem(stringResource(R.string.tab_info), Icons.Filled.Info),
+            TabItem(stringResource(R.string.tab_can), ImageVector.vectorResource(R.drawable.menu_icon_data)),
+            TabItem(stringResource(R.string.tab_widgets), ImageVector.vectorResource(R.drawable.menu_icon_widgets))
         )
     }
 }
@@ -157,7 +158,7 @@ fun TboxScreen(
                 .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center
         ) {
-            Text("Загрузка...", fontSize = 18.sp)
+            Text(stringResource(R.string.loading), fontSize = 18.sp)
         }
         return
     }
@@ -195,7 +196,7 @@ fun TboxScreen(
                     ) {
                         Icon(
                             imageVector = if (isMenuVisible) ImageVector.vectorResource(R.drawable.menu_icon_close) else ImageVector.vectorResource(R.drawable.menu_icon_open),
-                            contentDescription = if (isMenuVisible) "Скрыть меню" else "Показать меню",
+                            contentDescription = if (isMenuVisible) stringResource(R.string.menu_hide) else stringResource(R.string.menu_show),
                             tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier
                                 .size(menuIconSize)
@@ -233,8 +234,11 @@ fun TboxScreen(
 
                     if (isMenuVisible) {
                         Text(
-                            text = if (tboxConnected) "TBox подключен в $conTime"
-                            else "TBox отключен в $conTime",
+                            text = if (tboxConnected) {
+                                stringResource(R.string.tbox_connected_at, conTime)
+                            } else {
+                                stringResource(R.string.tbox_disconnected_at, conTime)
+                            },
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
@@ -244,7 +248,7 @@ fun TboxScreen(
                                 .padding(start = 8.dp, end = 8.dp, top = 8.dp)
                         )
                         Text(
-                            text = "Служба запущена в $serviceTime",
+                            text = stringResource(R.string.service_started_at, serviceTime),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
@@ -255,7 +259,7 @@ fun TboxScreen(
                         )
                     } else {
                         Text(
-                            text = "TBox",
+                            text = stringResource(R.string.tbox_short),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
@@ -268,7 +272,7 @@ fun TboxScreen(
 
                     if (isMenuVisible) {
                         Text(
-                            text = "Версия программы $versionName",
+                            text = stringResource(R.string.program_version, versionName),
                             fontSize = 16.sp,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurface,

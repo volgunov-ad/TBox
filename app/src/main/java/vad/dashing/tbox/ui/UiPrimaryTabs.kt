@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.valueToString
@@ -57,14 +59,17 @@ fun ModemTabContent(
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
-    val formattedConnectionChangeTime = remember(netState.connectionChangeTime) {
-        netState.connectionChangeTime?.let { timeFormat.format(it) } ?: "нет данных"
+    val noDataLabel = stringResource(R.string.value_no_data)
+    val connectedLabel = stringResource(R.string.value_connected)
+    val disconnectedLabel = stringResource(R.string.value_disconnected)
+    val formattedConnectionChangeTime = remember(netState.connectionChangeTime, noDataLabel) {
+        netState.connectionChangeTime?.let { timeFormat.format(it) } ?: noDataLabel
     }
-    val formattedAPN1ChangeTime = remember(apn1State.changeTime) {
-        apn1State.changeTime?.let { timeFormat.format(it) } ?: "нет данных"
+    val formattedAPN1ChangeTime = remember(apn1State.changeTime, noDataLabel) {
+        apn1State.changeTime?.let { timeFormat.format(it) } ?: noDataLabel
     }
-    val formattedAPN2ChangeTime = remember(apn2State.changeTime) {
-        apn2State.changeTime?.let { timeFormat.format(it) } ?: "нет данных"
+    val formattedAPN2ChangeTime = remember(apn2State.changeTime, noDataLabel) {
+        apn2State.changeTime?.let { timeFormat.format(it) } ?: noDataLabel
     }
 
     Column(
@@ -73,55 +78,55 @@ fun ModemTabContent(
             .padding(16.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
-            item { StatusHeader("Данные модема и SIM") }
-            item { StatusRow("IMEI", netValues.imei) }
-            item { StatusRow("ICCID", netValues.iccid) }
-            item { StatusRow("IMSI", netValues.imsi) }
-            item { StatusRow("Оператор", netValues.operator) }
+            item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
+            item { StatusRow(stringResource(R.string.status_imei), netValues.imei) }
+            item { StatusRow(stringResource(R.string.status_iccid), netValues.iccid) }
+            item { StatusRow(stringResource(R.string.status_imsi), netValues.imsi) }
+            item { StatusRow(stringResource(R.string.status_operator), netValues.operator) }
 
-            item { StatusHeader("Данные подключения") }
-            item { StatusRow("CSQ", if (netState.csq != 99) netState.csq.toString() else "-") }
-            item { StatusRow("Регистрация", netState.regStatus) }
-            item { StatusRow("SIM статус", netState.simStatus) }
-            item { StatusRow("Сеть", netState.netStatus) }
-            item { StatusRow("APN", if (apnStatus) "подключен" else "отключен") }
-            item { StatusRow("Время подключения", formattedConnectionChangeTime) }
+            item { StatusHeader(stringResource(R.string.connection_data_header)) }
+            item { StatusRow(stringResource(R.string.status_csq), if (netState.csq != 99) netState.csq.toString() else "-") }
+            item { StatusRow(stringResource(R.string.status_registration), netState.regStatus) }
+            item { StatusRow(stringResource(R.string.status_sim), netState.simStatus) }
+            item { StatusRow(stringResource(R.string.status_network), netState.netStatus) }
+            item { StatusRow(stringResource(R.string.status_apn), if (apnStatus) connectedLabel else disconnectedLabel) }
+            item { StatusRow(stringResource(R.string.status_connection_time), formattedConnectionChangeTime) }
 
-            item { StatusHeader("APN 1") }
+            item { StatusHeader(stringResource(R.string.status_apn_1_header)) }
             item {
                 StatusRow(
-                    "APN",
+                    stringResource(R.string.status_apn_value),
                     valueToString(
                         apn1State.apnStatus,
-                        booleanTrue = "подключен",
-                        booleanFalse = "отключен"
+                        booleanTrue = connectedLabel,
+                        booleanFalse = disconnectedLabel
                     )
                 )
             }
-            item { StatusRow("Тип APN", apn1State.apnType) }
-            item { StatusRow("IP APN", apn1State.apnIP) }
-            item { StatusRow("Шлюз APN", apn1State.apnGate) }
-            item { StatusRow("DNS1 APN", apn1State.apnDNS1) }
-            item { StatusRow("DNS2 APN", apn1State.apnDNS2) }
-            item { StatusRow("Время изменения", formattedAPN1ChangeTime) }
+            item { StatusRow(stringResource(R.string.status_apn_type), apn1State.apnType) }
+            item { StatusRow(stringResource(R.string.status_ip_apn), apn1State.apnIP) }
+            item { StatusRow(stringResource(R.string.status_apn_gateway), apn1State.apnGate) }
+            item { StatusRow(stringResource(R.string.status_dns1_apn), apn1State.apnDNS1) }
+            item { StatusRow(stringResource(R.string.status_dns2_apn), apn1State.apnDNS2) }
+            item { StatusRow(stringResource(R.string.status_change_time), formattedAPN1ChangeTime) }
 
-            item { StatusHeader("APN 2") }
+            item { StatusHeader(stringResource(R.string.status_apn_2_header)) }
             item {
                 StatusRow(
-                    "APN2",
+                    stringResource(R.string.status_apn2_value),
                     valueToString(
                         apn2State.apnStatus,
-                        booleanTrue = "подключен",
-                        booleanFalse = "отключен"
+                        booleanTrue = connectedLabel,
+                        booleanFalse = disconnectedLabel
                     )
                 )
             }
-            item { StatusRow("Тип APN2", apn2State.apnType) }
-            item { StatusRow("IP APN2", apn2State.apnIP) }
-            item { StatusRow("Шлюз APN2", apn2State.apnGate) }
-            item { StatusRow("DNS1 APN2", apn2State.apnDNS1) }
-            item { StatusRow("DNS2 APN2", apn2State.apnDNS2) }
-            item { StatusRow("Время изменения", formattedAPN2ChangeTime) }
+            item { StatusRow(stringResource(R.string.status_apn2_type), apn2State.apnType) }
+            item { StatusRow(stringResource(R.string.status_ip_apn2), apn2State.apnIP) }
+            item { StatusRow(stringResource(R.string.status_apn2_gateway), apn2State.apnGate) }
+            item { StatusRow(stringResource(R.string.status_dns1_apn2), apn2State.apnDNS1) }
+            item { StatusRow(stringResource(R.string.status_dns2_apn2), apn2State.apnDNS2) }
+            item { StatusRow(stringResource(R.string.status_change_time), formattedAPN2ChangeTime) }
         }
 
         ModemModeSelectorContent(
@@ -149,7 +154,7 @@ fun ModemModeSelectorContent(
 
     Column(modifier = modifier) {
         Text(
-            text = "Режим модема",
+            text = stringResource(R.string.modem_mode_title),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -162,7 +167,7 @@ fun ModemModeSelectorContent(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             ModeButton(
-                text = "Включен",
+                text = stringResource(R.string.modem_mode_enabled),
                 isSelected = selectedMode == 1,
                 onClick = {
                     if (buttonsEnabled) {
@@ -181,7 +186,7 @@ fun ModemModeSelectorContent(
             Spacer(modifier = Modifier.width(8.dp))
 
             ModeButton(
-                text = "Режим полета",
+                text = stringResource(R.string.modem_mode_flight),
                 isSelected = selectedMode == 4,
                 onClick = {
                     if (buttonsEnabled) {
@@ -200,7 +205,7 @@ fun ModemModeSelectorContent(
             Spacer(modifier = Modifier.width(8.dp))
 
             ModeButton(
-                text = "Выключен",
+                text = stringResource(R.string.modem_mode_disabled),
                 isSelected = selectedMode == 0,
                 onClick = {
                     if (buttonsEnabled) {
@@ -264,6 +269,9 @@ fun SettingsTabContent(
 
     val context = LocalContext.current
     val canUseMockLocation = remember { context.canUseMockLocation() }
+    val warningTitle = stringResource(R.string.warning_title)
+    val warningSuspendStop = stringResource(R.string.warning_suspend_stop_manual_reboot)
+    val expertModeWarning = stringResource(R.string.settings_expert_mode_warning_desc)
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
@@ -280,18 +288,14 @@ fun SettingsTabContent(
             .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
-        SettingsTitle("Настройки контроля сети")
+        SettingsTitle(stringResource(R.string.settings_network_control_title))
         SettingSwitch(
             isAutoRestartEnabled,
             { enabled ->
                 settingsViewModel.saveAutoRestartSetting(enabled)
             },
-            "Автоматический перезапуск модема",
-            "Автоматически перезапускать модем при потере подключения к сети. " +
-                "Проверка происходит с периодичностью 10 секунд в первый раз и " +
-                "5 минут в последующие разы " +
-                "(сброс таймера до 10 секунд происходит при " +
-                "подключении сети)",
+            stringResource(R.string.settings_auto_modem_restart_title),
+            stringResource(R.string.settings_auto_modem_restart_desc),
             true
         )
         SettingSwitch(
@@ -299,16 +303,12 @@ fun SettingsTabContent(
             { enabled ->
                 settingsViewModel.saveAutoTboxRebootSetting(enabled)
             },
-            "Автоматическая перезагрузка TBox",
-            "Автоматически презагружать TBox, если перезапуск модема не помогает. " +
-                "Перезагрузка просходит через 60 секунд после попытки перезапуска модема, " +
-                "если это не помогло, в первый раз. " +
-                "Далее таймер устанавливается на 30 минут " +
-                "(сброс таймера до 60 секунд происходит при подключении сети)",
+            stringResource(R.string.settings_auto_tbox_reboot_title),
+            stringResource(R.string.settings_auto_tbox_reboot_desc),
             isAutoRestartEnabled
         )
 
-        SettingsTitle("Настройки предотвращения перезагрузки")
+        SettingsTitle(stringResource(R.string.settings_prevent_reboot_title))
         SettingSwitch(
             isAutoSuspendTboxAppEnabled,
             { enabled ->
@@ -316,16 +316,14 @@ fun SettingsTabContent(
                 if (enabled && isAutoStopTboxAppEnabled) {
                     settingsViewModel.saveAutoStopTboxAppSetting(false)
                     showAlertDialog(
-                        "ПРЕДУПРЕЖДЕНИЕ",
-                        "При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox",
+                        warningTitle,
+                        warningSuspendStop,
                         context
                     )
                 }
             },
-            "Автоматическая отправка команды SUSPEND приложению APP в TBox",
-            "Приостановка приложения APP " +
-                "позволяет избежать периодической перезагрузки TBox, " +
-                "но может происходить регулярное переподключение модема, если установлена SIM-карта на TBox HW 0.0.5",
+            stringResource(R.string.settings_auto_suspend_app_title),
+            stringResource(R.string.settings_auto_suspend_app_desc),
             true
         )
         SettingSwitch(
@@ -335,17 +333,14 @@ fun SettingsTabContent(
                 if (enabled && isAutoSuspendTboxAppEnabled) {
                     settingsViewModel.saveAutoSuspendTboxAppSetting(false)
                     showAlertDialog(
-                        "ПРЕДУПРЕЖДЕНИЕ",
-                        "При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox",
+                        warningTitle,
+                        warningSuspendStop,
                         context
                     )
                 }
             },
-            "Автоматическая отправка команды STOP приложению APP в TBox",
-            "Полное отключение приложения APP " +
-                "позволяет избежать периодической перезагрузки TBox и переподключения модема. " +
-                "После включения опции может произойти однократная перезагрузка TBox.\n" +
-                "Не рекомендуется использовать данную опцию на TBox HW 0.0.1, 0.0.4",
+            stringResource(R.string.settings_auto_stop_app_title),
+            stringResource(R.string.settings_auto_stop_app_desc),
             true
         )
 
@@ -356,14 +351,14 @@ fun SettingsTabContent(
                 if (enabled && isAutoStopTboxMdcEnabled) {
                     settingsViewModel.saveAutoStopTboxMdcSetting(false)
                     showAlertDialog(
-                        "ПРЕДУПРЕЖДЕНИЕ",
-                        "При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox",
+                        warningTitle,
+                        warningSuspendStop,
                         context
                     )
                 }
             },
-            "Автоматическая отправка команды SUSPEND приложению MDC в TBox",
-            "Не рекомендуется включать данную опцию, если в TBox установлена SIM карта",
+            stringResource(R.string.settings_auto_suspend_mdc_title),
+            stringResource(R.string.settings_auto_suspend_mdc_desc),
             true
         )
         SettingSwitch(
@@ -373,14 +368,14 @@ fun SettingsTabContent(
                 if (enabled && isAutoSuspendTboxMdcEnabled) {
                     settingsViewModel.saveAutoSuspendTboxMdcSetting(false)
                     showAlertDialog(
-                        "ПРЕДУПРЕЖДЕНИЕ",
-                        "При переключении опций SUSPEND и STOP требуется ручная перезагрузка TBox",
+                        warningTitle,
+                        warningSuspendStop,
                         context
                     )
                 }
             },
-            "Автоматическая отправка команды STOP приложению MDC в TBox",
-            "Не рекомендуется включать данную опцию, если в TBox установлена SIM карта",
+            stringResource(R.string.settings_auto_stop_mdc_title),
+            stringResource(R.string.settings_auto_stop_mdc_desc),
             true
         )
 
@@ -389,7 +384,7 @@ fun SettingsTabContent(
             { enabled ->
                 settingsViewModel.saveAutoSuspendTboxSwdSetting(enabled)
             },
-            "Автоматическая отправка команды SUSPEND приложению SWD в TBox",
+            stringResource(R.string.settings_auto_suspend_swd_title),
             "",
             true
         )
@@ -399,13 +394,12 @@ fun SettingsTabContent(
             { enabled ->
                 settingsViewModel.saveAutoPreventTboxRestartSetting(enabled)
             },
-            "Автоматическая отправка команды PREVENT RESTART приложению SWD в TBox",
-            "Отключение проверки состояния сети и аномалий в работе TBox. " +
-                "Эти проверки могут приводить к лишним перезагрузкам",
+            stringResource(R.string.settings_auto_prevent_restart_swd_title),
+            stringResource(R.string.settings_auto_prevent_restart_swd_desc),
             true
         )
 
-        SettingsTitle("Настройки плавающих панелей")
+        SettingsTitle(stringResource(R.string.settings_floating_panels_title))
         FloatingDashboardProfileSelector(
             selectedId = activeFloatingDashboardId,
             onSelect = { panelId ->
@@ -426,7 +420,7 @@ fun SettingsTabContent(
                     settingsViewModel.saveFloatingDashboardSetting(false)
                 }
             },
-            "Показывать плавающую панель",
+            stringResource(R.string.settings_show_floating_panel_title),
             "",
             true
         )
@@ -435,8 +429,8 @@ fun SettingsTabContent(
             { enabled ->
                 settingsViewModel.saveFloatingDashboardBackground(enabled)
             },
-            "Включить фон плавающей панели",
-            "Если выключено, то фон будет прозрачный",
+            stringResource(R.string.settings_enable_floating_bg_title),
+            stringResource(R.string.settings_enable_floating_bg_desc),
             true
         )
         SettingSwitch(
@@ -444,7 +438,7 @@ fun SettingsTabContent(
             { enabled ->
                 settingsViewModel.saveFloatingDashboardClickAction(enabled)
             },
-            "Открывать окно программы при одиночном нажатии на элемент плавающей панели",
+            stringResource(R.string.settings_open_app_on_panel_click_title),
             "",
             true
         )
@@ -453,7 +447,7 @@ fun SettingsTabContent(
             { rows ->
                 settingsViewModel.saveFloatingDashboardRows(rows)
             },
-            "Количество строк плиток плавающей панели",
+            stringResource(R.string.settings_floating_rows_title),
             "",
             true,
             listOf(1, 2, 3, 4, 5, 6)
@@ -463,24 +457,21 @@ fun SettingsTabContent(
             { cols ->
                 settingsViewModel.saveFloatingDashboardCols(cols)
             },
-            "Количество столбцов плиток плавающей панели",
+            stringResource(R.string.settings_floating_cols_title),
             "",
             true,
             listOf(1, 2, 3, 4, 5, 6)
         )
         FloatingDashboardPositionSizeSettings(settingsViewModel, Modifier)
 
-        SettingsTitle("Настройки виджетов для Overlays")
+        SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
             { enabled ->
                 settingsViewModel.saveWidgetShowIndicatorSetting(enabled)
             },
-            "Показывать индикатор подключения TBox в виджете",
-            "Индикатор в виджете в виде круга может иметь 3 цвета: \n" +
-                "- красный - нет данных от фоновой службы;\n" +
-                "- желтый - нет связи с TBox;\n" +
-                "- зеленый - есть связь с TBox",
+            stringResource(R.string.settings_widget_connection_indicator_title),
+            stringResource(R.string.settings_widget_connection_indicator_desc),
             true
         )
         SettingSwitch(
@@ -488,21 +479,18 @@ fun SettingsTabContent(
             { enabled ->
                 settingsViewModel.saveWidgetShowLocIndicatorSetting(enabled)
             },
-            "Показывать индикатор состояния геопозиции в виджете",
-            "Индикатор в виджете в виде стрелки может иметь 3 цвета: \n" +
-                "- красный - нет фиксации местоположения;\n" +
-                "- желтый - данные о реальной скорости сильно не совпадают с данными со спутников;\n" +
-                "- зеленый - есть фиксация местоположения, данные в норме",
+            stringResource(R.string.settings_widget_location_indicator_title),
+            stringResource(R.string.settings_widget_location_indicator_desc),
             isGetLocDataEnabled
         )
 
-        SettingsTitle("Настройки экрана Плитки")
+        SettingsTitle(stringResource(R.string.settings_dashboard_screen_title))
         SettingSwitch(
             dashboardChart,
             { enabled ->
                 settingsViewModel.saveDashboardChart(enabled)
             },
-            "Показывать графики изменения величин на плитках",
+            stringResource(R.string.settings_dashboard_chart_title),
             "",
             true
         )
@@ -511,7 +499,7 @@ fun SettingsTabContent(
             { rows ->
                 settingsViewModel.saveDashboardRows(rows)
             },
-            "Количество строк плиток",
+            stringResource(R.string.settings_dashboard_rows_title),
             "",
             true,
             listOf(1, 2, 3, 4, 5, 6)
@@ -521,19 +509,19 @@ fun SettingsTabContent(
             { cols ->
                 settingsViewModel.saveDashboardCols(cols)
             },
-            "Количество столбцов плиток",
+            stringResource(R.string.settings_dashboard_cols_title),
             "",
             true,
             listOf(1, 2, 3, 4, 5, 6)
         )
 
-        SettingsTitle("Получение данных от TBox")
+        SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
         SettingSwitch(
             isGetCanFrameEnabled,
             { enabled ->
                 settingsViewModel.saveGetCanFrameSetting(enabled)
             },
-            "Получать данные CAN от TBox",
+            stringResource(R.string.settings_get_can_data_title),
             "",
             true
         )
@@ -542,12 +530,12 @@ fun SettingsTabContent(
             { enabled ->
                 settingsViewModel.saveGetLocDataSetting(enabled)
             },
-            "Получать данные о геопозиции от TBox",
+            stringResource(R.string.settings_get_geo_data_title),
             "",
             true
         )
 
-        SettingsTitle("Прочее")
+        SettingsTitle(stringResource(R.string.settings_misc_title))
         SettingSwitch(
             isExpertModeEnabled,
             { enabled ->
@@ -556,15 +544,13 @@ fun SettingsTabContent(
                     settingsViewModel.saveMockLocationSetting(false)
                 } else {
                     showAlertDialog(
-                        "ПРЕДУПРЕЖДЕНИЕ",
-                        "Все изменения в экспертном режиме вы делаете на свой страх и " +
-                            "риск.\nНо к необратимым последствиям ваши действия в этом " +
-                            "режиме привести не могут",
+                        warningTitle,
+                        expertModeWarning,
                         context
                     )
                 }
             },
-            "Экспертный режим",
+            stringResource(R.string.settings_expert_mode_title),
             "",
             true
         )
@@ -575,7 +561,7 @@ fun SettingsTabContent(
                 { value ->
                     settingsViewModel.saveCanDataSaveCount(value)
                 },
-                "Количество сохраняемых CAN фреймов (1...3600)",
+                stringResource(R.string.settings_can_frames_count_title),
                 "",
                 1,
                 3600
@@ -585,7 +571,7 @@ fun SettingsTabContent(
                 { enabled ->
                     settingsViewModel.saveTboxIPRotationSetting(enabled)
                 },
-                "Искать другие IP адреса TBox",
+                stringResource(R.string.settings_search_other_ip_title),
                 "",
                 true
             )
@@ -594,18 +580,18 @@ fun SettingsTabContent(
                 { enabled ->
                     onMockLocationSettingChanged(enabled)
                 },
-                "Подменять системные данные о геопозиции (Фиктивные местоположения)",
+                stringResource(R.string.settings_mock_location_title),
                 if (canUseMockLocation) {
-                    "Готово к использованию"
+                    stringResource(R.string.settings_mock_location_ready)
                 } else {
-                    "Требует настройки разрешений и настройки фиктивных местоположений"
+                    stringResource(R.string.settings_mock_location_requirements)
                 },
                 true
             )
 
             if (!canUseMockLocation) {
                 Text(
-                    text = "Нажмите для просмотра требований к фиктивным местоположениям",
+                    text = stringResource(R.string.settings_mock_location_requirements_link),
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
@@ -632,7 +618,7 @@ fun SettingsTabContent(
                 enabled = restartButtonEnabled && tboxConnected
             ) {
                 Text(
-                    text = "Перезагрузка TBox",
+                    text = stringResource(R.string.button_reboot_tbox),
                     fontSize = 24.sp,
                     maxLines = 2,
                     textAlign = TextAlign.Center
@@ -646,7 +632,7 @@ private fun showAlertDialog(title: String, message: String, context: Context) {
     android.app.AlertDialog.Builder(context)
         .setTitle(title)
         .setMessage(message)
-        .setNeutralButton("Закрыть", null)
+        .setNeutralButton(context.getString(R.string.action_close), null)
         .show()
 }
 
@@ -655,42 +641,39 @@ private fun showLocationRequirementsDialog(context: Context) {
 
     val requirements = buildString {
         if (!status.hasLocationPermissions) {
-            append("Нет разрешения на доступ к местоположению\n")
+            append(context.getString(R.string.dialog_mock_location_missing_permission))
         }
         if (!status.isMockLocationEnabled) {
-            append("Не включена mock-локация в настройках разработчика\n")
+            append(context.getString(R.string.dialog_mock_location_not_enabled))
         }
         if (!status.canAddTestProvider) {
-            append("Не удается добавить приложение в список провайдеров фиктивных местоположений\n")
+            append(context.getString(R.string.dialog_mock_location_provider_missing))
         }
     }
 
     android.app.AlertDialog.Builder(context)
-        .setTitle("Требования для mock-локации (Настройки разработчика)")
+        .setTitle(context.getString(R.string.dialog_mock_location_requirements_title))
         .setMessage(requirements)
-        .setPositiveButton("Настроить") { _, _ ->
+        .setPositiveButton(context.getString(R.string.action_configure)) { _, _ ->
             val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
             context.startActivity(intent)
         }
-        .setNegativeButton("Отмена", null)
+        .setNegativeButton(context.getString(R.string.action_cancel), null)
         .show()
 }
 
 private fun showOverlayRequirementsDialog(context: Context) {
     android.app.AlertDialog.Builder(context)
-        .setTitle("Требуется разрешение")
-        .setMessage(
-            "Для работы приложения необходимо разрешение\n" +
-                "«Отображение поверх других приложений»"
-        )
-        .setPositiveButton("Настроить") { _, _ ->
+        .setTitle(context.getString(R.string.dialog_overlay_permission_required_title))
+        .setMessage(context.getString(R.string.dialog_overlay_permission_required_message))
+        .setPositiveButton(context.getString(R.string.action_configure)) { _, _ ->
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 "package:${context.packageName}".toUri()
             )
             context.startActivity(intent)
         }
-        .setNegativeButton("Отмена", null)
+        .setNegativeButton(context.getString(R.string.action_cancel), null)
         .show()
 }
 
@@ -698,6 +681,8 @@ private fun showOverlayRequirementsDialog(context: Context) {
 fun LocationTabContent(
     viewModel: TboxViewModel
 ) {
+    val yesLabel = stringResource(R.string.value_yes)
+    val noLabel = stringResource(R.string.value_no)
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
@@ -724,20 +709,20 @@ fun LocationTabContent(
             .padding(16.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
-            item { StatusRow("Последнее обновление", lastRefresh) }
-            item { StatusRow("Последнее изменение", lastUpdate) }
-            item { StatusRow("Фиксация местоположения", if (locValues.locateStatus) {"да"} else {"нет"}) }
-            item { StatusRow("Правдивость местоположения", if (isLocValuesTrue) {"да"} else {"нет"}) }
-            item { StatusRow("Долгота", locValues.longitude.toString()) }
-            item { StatusRow("Широта", locValues.latitude.toString()) }
-            item { StatusRow("Высота, м", locValues.altitude.toString()) }
-            item { StatusRow("Видимые спутники", locValues.visibleSatellites.toString()) }
-            item { StatusRow("Используемые спутники", locValues.usingSatellites.toString()) }
-            item { StatusRow("Скорость, км/ч", String.format(Locale.getDefault(), "%.1f", locValues.speed)) }
-            item { StatusRow("Истинное направление", String.format(Locale.getDefault(), "%.1f", locValues.trueDirection)) }
-            item { StatusRow("Магнитное направление", String.format(Locale.getDefault(), "%.1f", locValues.magneticDirection)) }
-            item { StatusRow("Дата и время UTC", dateTime) }
-            item { StatusRow("Сырые данные", locValues.rawValue) }
+            item { StatusRow(stringResource(R.string.location_last_update), lastRefresh) }
+            item { StatusRow(stringResource(R.string.location_last_change), lastUpdate) }
+            item { StatusRow(stringResource(R.string.location_fixation), if (locValues.locateStatus) yesLabel else noLabel) }
+            item { StatusRow(stringResource(R.string.location_truth), if (isLocValuesTrue) yesLabel else noLabel) }
+            item { StatusRow(stringResource(R.string.location_longitude), locValues.longitude.toString()) }
+            item { StatusRow(stringResource(R.string.location_latitude), locValues.latitude.toString()) }
+            item { StatusRow(stringResource(R.string.location_altitude), locValues.altitude.toString()) }
+            item { StatusRow(stringResource(R.string.location_visible_satellites), locValues.visibleSatellites.toString()) }
+            item { StatusRow(stringResource(R.string.location_used_satellites), locValues.usingSatellites.toString()) }
+            item { StatusRow(stringResource(R.string.location_speed), String.format(Locale.getDefault(), "%.1f", locValues.speed)) }
+            item { StatusRow(stringResource(R.string.location_true_direction), String.format(Locale.getDefault(), "%.1f", locValues.trueDirection)) }
+            item { StatusRow(stringResource(R.string.location_magnetic_direction), String.format(Locale.getDefault(), "%.1f", locValues.magneticDirection)) }
+            item { StatusRow(stringResource(R.string.location_utc), dateTime) }
+            item { StatusRow(stringResource(R.string.location_raw_data), locValues.rawValue) }
         }
     }
 }
@@ -748,6 +733,8 @@ fun InfoTabContent(
     settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit
 ) {
+    val yesLabel = stringResource(R.string.value_yes)
+    val noLabel = stringResource(R.string.value_no)
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
     val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
     val tboxAppSuspended by viewModel.tboxAppSuspended.collectAsStateWithLifecycle()
@@ -784,50 +771,50 @@ fun InfoTabContent(
         LazyColumn(modifier = Modifier.weight(1f)) {
             item {
                 StatusRow(
-                    "Подтверждение команды SUSPEND приложению APP",
-                    if (tboxAppSuspended) "да" else "нет"
+                    stringResource(R.string.info_confirm_suspend_app),
+                    if (tboxAppSuspended) yesLabel else noLabel
                 )
             }
             item {
                 StatusRow(
-                    "Подтверждение команды SUSPEND приложению MDC",
-                    if (tboxMdcSuspended) "да" else "нет"
+                    stringResource(R.string.info_confirm_suspend_mdc),
+                    if (tboxMdcSuspended) yesLabel else noLabel
                 )
             }
             item {
                 StatusRow(
-                    "Подтверждение команды SUSPEND приложению SWD",
-                    if (tboxSwdSuspended) "да" else "нет"
+                    stringResource(R.string.info_confirm_suspend_swd),
+                    if (tboxSwdSuspended) yesLabel else noLabel
                 )
             }
             item {
                 StatusRow(
-                    "Подтверждение команды STOP приложению APP",
-                    if (tboxAppStoped) "да" else "нет"
+                    stringResource(R.string.info_confirm_stop_app),
+                    if (tboxAppStoped) yesLabel else noLabel
                 )
             }
             item {
                 StatusRow(
-                    "Подтверждение команды STOP приложению MDC",
-                    if (tboxMdcStoped) "да" else "нет"
+                    stringResource(R.string.info_confirm_stop_mdc),
+                    if (tboxMdcStoped) yesLabel else noLabel
                 )
             }
             item {
                 StatusRow(
-                    "Подтверждение команды PREVENT RESTART приложению SWD",
-                    if (preventRestartSend) "да" else "нет"
+                    stringResource(R.string.info_confirm_prevent_restart_swd),
+                    if (preventRestartSend) yesLabel else noLabel
                 )
             }
-            item { StatusRow("Сохраненный IP адрес TBox", tboxIP) }
-            item { StatusRow("Список возможных IP адресов TBox", ipList.joinToString("; ")) }
-            item { StatusRow("Версия приложения APP", appVersion) }
-            item { StatusRow("Версия приложения CRT", crtVersion) }
-            item { StatusRow("Версия приложения LOC", locVersion) }
-            item { StatusRow("Версия приложения MDC", mdcVersion) }
-            item { StatusRow("Версия приложения SWD", swdVersion) }
-            item { StatusRow("Версия SW", swVersion) }
-            item { StatusRow("Версия HW", hwVersion) }
-            item { StatusRow("VIN код", vinCode) }
+            item { StatusRow(stringResource(R.string.info_saved_tbox_ip), tboxIP) }
+            item { StatusRow(stringResource(R.string.info_possible_tbox_ips), ipList.joinToString("; ")) }
+            item { StatusRow(stringResource(R.string.info_app_version_app), appVersion) }
+            item { StatusRow(stringResource(R.string.info_app_version_crt), crtVersion) }
+            item { StatusRow(stringResource(R.string.info_app_version_loc), locVersion) }
+            item { StatusRow(stringResource(R.string.info_app_version_mdc), mdcVersion) }
+            item { StatusRow(stringResource(R.string.info_app_version_swd), swdVersion) }
+            item { StatusRow(stringResource(R.string.info_sw_version), swVersion) }
+            item { StatusRow(stringResource(R.string.info_hw_version), hwVersion) }
+            item { StatusRow(stringResource(R.string.info_vin), vinCode) }
 
             item {
                 Row(
@@ -851,7 +838,7 @@ fun InfoTabContent(
                         enabled = updateVersionButtonEnabled && tboxConnected
                     ) {
                         Text(
-                            text = "Запросить информацию из TBox",
+                            text = stringResource(R.string.button_request_tbox_info),
                             fontSize = 24.sp,
                             maxLines = 2,
                             textAlign = TextAlign.Center

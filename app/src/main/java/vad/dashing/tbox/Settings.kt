@@ -95,9 +95,6 @@ class SettingsManager(private val context: Context) {
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val FLOATING_DASHBOARD_SELECTED_KEY = "floating_dashboard_selected"
         private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
-        private const val DEFAULT_FLOATING_DASHBOARD_NAME_1 = "Панель 1"
-        private const val DEFAULT_FLOATING_DASHBOARD_NAME_2 = "Панель 2"
-        private const val DEFAULT_FLOATING_DASHBOARD_NAME_3 = "Панель 3"
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
 
         // Кэш ключей для производительности
@@ -536,11 +533,15 @@ class SettingsManager(private val context: Context) {
         return listOf(
             createDefaultFloatingDashboard(
                 DEFAULT_FLOATING_DASHBOARD_ID,
-                DEFAULT_FLOATING_DASHBOARD_NAME_1
+                context.getString(R.string.floating_dashboard_name_1)
             ),
-            createDefaultFloatingDashboard("floating-2", DEFAULT_FLOATING_DASHBOARD_NAME_2),
-            createDefaultFloatingDashboard("floating-3", DEFAULT_FLOATING_DASHBOARD_NAME_3)
+            createDefaultFloatingDashboard("floating-2", context.getString(R.string.floating_dashboard_name_2)),
+            createDefaultFloatingDashboard("floating-3", context.getString(R.string.floating_dashboard_name_3))
         )
+    }
+
+    fun getDefaultFloatingDashboards(): List<FloatingDashboardConfig> {
+        return defaultFloatingDashboards()
     }
 
     private fun createDefaultFloatingDashboard(
