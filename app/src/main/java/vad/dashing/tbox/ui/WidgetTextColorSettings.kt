@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,16 +41,16 @@ import vad.dashing.tbox.R
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private val colorPalette = listOf(
-    0xFFFFFFFF.toInt(),
-    0xFFFF0000.toInt(),
-    0xFFFFFF00.toInt(),
-    0xFF00FF00.toInt(),
-    0xFF00FFFF.toInt(),
-    0xFF0000FF.toInt(),
-    0xFFFF00FF.toInt(),
-    0xFF000000.toInt()
+private val huePalette = listOf(
+    Color(0xFFFF0000),
+    Color(0xFFFFFF00),
+    Color(0xFF00FF00),
+    Color(0xFF00FFFF),
+    Color(0xFF0000FF),
+    Color(0xFFFF00FF)
 )
+private const val MAX_HUE_DEGREES = 300f
+private const val MID_TONE_POSITION = 0.5f
 
 fun DashboardWidget.resolveTextColorForTheme(currentTheme: Int): Color {
     return Color(if (currentTheme == 2) textColorDark else textColorLight)
@@ -63,12 +64,24 @@ fun WidgetTextColorSetting(
     onColorChange: (Int) -> Unit
 ) {
     var localColorValue by remember { mutableIntStateOf(colorValue) }
+    var hueSliderPosition by remember {
+        mutableFloatStateOf(hueSliderFromColor(colorValue))
+    }
+    var toneSliderPosition by remember {
+        mutableFloatStateOf(toneSliderFromColor(colorValue))
+    }
+    var alphaChannel by remember {
+        mutableIntStateOf(colorAlpha(colorValue))
+    }
     var textValue by remember { mutableStateOf(localColorValue.asColorInputText()) }
     var isInputError by remember { mutableStateOf(false) }
 
     LaunchedEffect(colorValue) {
         if (localColorValue != colorValue) {
             localColorValue = colorValue
+            hueSliderPosition = hueSliderFromColor(colorValue, hueSliderPosition)
+            toneSliderPosition = toneSliderFromColor(colorValue)
+            alphaChannel = colorAlpha(colorValue)
         }
     }
 
@@ -108,6 +121,9 @@ fun WidgetTextColorSetting(
                     if (parsedColor != null) {
                         if (parsedColor != localColorValue) {
                             localColorValue = parsedColor
+                            hueSliderPosition = hueSliderFromColor(parsedColor, hueSliderPosition)
+                            toneSliderPosition = toneSliderFromColor(parsedColor)
+                            alphaChannel = colorAlpha(parsedColor)
                             onColorChange(parsedColor)
                         }
                     }
@@ -156,16 +172,18 @@ fun WidgetTextColorSetting(
                     .clip(RoundedCornerShape(6.dp))
             ) {
                 drawRect(
-                    brush = Brush.horizontalGradient(colorPalette.map { Color(it) })
+                    brush = Brush.horizontalGradient(huePalette)
                 )
             }
 
             Slider(
-                value = colorSliderPosition(localColorValue),
-                onValueChange = { palettePosition ->
-                    val updatedColor = colorFromPalette(
-                        position = palettePosition,
-                        alpha = colorAlpha(localColorValue)
+                value = hueSliderPosition,
+                onValueChange = { newPosition ->
+                    hueSliderPosition = newPosition.coerceIn(0f, 1f)
+                    val updatedColor = colorFromSliders(
+                        huePosition = hueSliderPosition,
+                        tonePosition = toneSliderPosition,
+                        alpha = alphaChannel
                     )
                     if (updatedColor != localColorValue) {
                         localColorValue = updatedColor
@@ -182,7 +200,55 @@ fun WidgetTextColorSetting(
             )
         }
 
-        val alphaPercent = ((colorAlpha(localColorValue) / 255f) * 100f).roundToInt()
+        val pureHueColor = colorFromSliders(
+            huePosition = hueSliderPosition,
+            tonePosition = MID_TONE_POSITION,
+            alpha = 255
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(6.dp))
+            ) {
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color.White, Color(pureHueColor), Color.Black)
+                    )
+                )
+            }
+
+            Slider(
+                value = toneSliderPosition,
+                onValueChange = { newTone ->
+                    toneSliderPosition = newTone.coerceIn(0f, 1f)
+                    val updatedColor = colorFromSliders(
+                        huePosition = hueSliderPosition,
+                        tonePosition = toneSliderPosition,
+                        alpha = alphaChannel
+                    )
+                    if (updatedColor != localColorValue) {
+                        localColorValue = updatedColor
+                        onColorChange(updatedColor)
+                    }
+                },
+                valueRange = 0f..1f,
+                enabled = enabled,
+                colors = SliderDefaults.colors(
+                    activeTrackColor = Color.Transparent,
+                    inactiveTrackColor = Color.Transparent
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        val alphaPercent = ((alphaChannel / 255f) * 100f).roundToInt()
         Text(
             text = stringResource(R.string.widget_color_alpha, alphaPercent),
             fontSize = 20.sp,
@@ -213,9 +279,14 @@ fun WidgetTextColorSetting(
             }
 
             Slider(
-                value = colorAlpha(localColorValue).toFloat(),
+                value = alphaChannel.toFloat(),
                 onValueChange = { newAlpha ->
-                    val updatedColor = withAlpha(localColorValue, newAlpha.roundToInt())
+                    alphaChannel = newAlpha.roundToInt().coerceIn(0, 255)
+                    val updatedColor = colorFromSliders(
+                        huePosition = hueSliderPosition,
+                        tonePosition = toneSliderPosition,
+                        alpha = alphaChannel
+                    )
                     if (updatedColor != localColorValue) {
                         localColorValue = updatedColor
                         onColorChange(updatedColor)
@@ -234,64 +305,81 @@ fun WidgetTextColorSetting(
     }
 }
 
-private fun colorFromPalette(position: Float, alpha: Int): Int {
-    val clampedPosition = position.coerceIn(0f, 1f)
-    val lastIndex = colorPalette.lastIndex
-    val scaled = clampedPosition * lastIndex
-    val startIndex = scaled.toInt().coerceIn(0, lastIndex)
-    val endIndex = (startIndex + 1).coerceAtMost(lastIndex)
-    val fraction = scaled - startIndex
+private fun colorFromSliders(
+    huePosition: Float,
+    tonePosition: Float,
+    alpha: Int
+): Int {
+    val hue = (huePosition.coerceIn(0f, 1f) * MAX_HUE_DEGREES)
+    val clampedTone = tonePosition.coerceIn(0f, 1f)
+    val saturation: Float
+    val value: Float
 
-    val startColor = colorPalette[startIndex]
-    val endColor = colorPalette[endIndex]
-
-    val red = lerpChannel(
-        android.graphics.Color.red(startColor),
-        android.graphics.Color.red(endColor),
-        fraction
-    )
-    val green = lerpChannel(
-        android.graphics.Color.green(startColor),
-        android.graphics.Color.green(endColor),
-        fraction
-    )
-    val blue = lerpChannel(
-        android.graphics.Color.blue(startColor),
-        android.graphics.Color.blue(endColor),
-        fraction
-    )
-
-    return android.graphics.Color.argb(alpha.coerceIn(0, 255), red, green, blue)
-}
-
-private fun colorSliderPosition(colorValue: Int): Float {
-    val targetColor = withAlpha(colorValue, 255)
-    var bestPosition = 0f
-    var bestDistance = Int.MAX_VALUE
-    val samples = 200
-
-    for (index in 0..samples) {
-        val candidatePosition = index / samples.toFloat()
-        val candidateColor = withAlpha(colorFromPalette(candidatePosition, 255), 255)
-        val distance = colorDistanceSquared(targetColor, candidateColor)
-        if (distance < bestDistance) {
-            bestDistance = distance
-            bestPosition = candidatePosition
-        }
+    if (clampedTone <= MID_TONE_POSITION) {
+        saturation = (clampedTone / MID_TONE_POSITION).coerceIn(0f, 1f)
+        value = 1f
+    } else {
+        saturation = 1f
+        value = ((1f - clampedTone) / MID_TONE_POSITION).coerceIn(0f, 1f)
     }
 
-    return bestPosition
+    return android.graphics.Color.HSVToColor(
+        alpha.coerceIn(0, 255),
+        floatArrayOf(hue, saturation, value)
+    )
 }
 
-private fun colorDistanceSquared(firstColor: Int, secondColor: Int): Int {
-    val redDiff = android.graphics.Color.red(firstColor) - android.graphics.Color.red(secondColor)
-    val greenDiff = android.graphics.Color.green(firstColor) - android.graphics.Color.green(secondColor)
-    val blueDiff = android.graphics.Color.blue(firstColor) - android.graphics.Color.blue(secondColor)
-    return redDiff * redDiff + greenDiff * greenDiff + blueDiff * blueDiff
+private fun hueSliderFromColor(colorValue: Int, fallback: Float = 0f): Float {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(colorValue, hsv)
+    if (hsv[1] < 0.01f) {
+        return fallback.coerceIn(0f, 1f)
+    }
+    val clampedHue = hsv[0].coerceIn(0f, MAX_HUE_DEGREES)
+    return (clampedHue / MAX_HUE_DEGREES).coerceIn(0f, 1f)
 }
 
-private fun lerpChannel(start: Int, end: Int, fraction: Float): Int {
-    return (start + (end - start) * fraction).roundToInt().coerceIn(0, 255)
+private fun toneSliderFromColor(colorValue: Int): Float {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(colorValue, hsv)
+    return toneFromSaturationValue(
+        saturation = hsv[1].coerceIn(0f, 1f),
+        value = hsv[2].coerceIn(0f, 1f)
+    )
+}
+
+private fun toneFromSaturationValue(saturation: Float, value: Float): Float {
+    if (value <= 0.001f) return 1f
+    if (saturation <= 0.001f && value >= 0.999f) return 0f
+
+    val upperCandidate = (saturation * MID_TONE_POSITION).coerceIn(0f, MID_TONE_POSITION)
+    val lowerCandidate = (1f - value * MID_TONE_POSITION).coerceIn(MID_TONE_POSITION, 1f)
+
+    val upperDistance = saturationValueDistance(
+        saturation,
+        value,
+        expectedSaturation = (upperCandidate / MID_TONE_POSITION).coerceIn(0f, 1f),
+        expectedValue = 1f
+    )
+    val lowerDistance = saturationValueDistance(
+        saturation,
+        value,
+        expectedSaturation = 1f,
+        expectedValue = ((1f - lowerCandidate) / MID_TONE_POSITION).coerceIn(0f, 1f)
+    )
+
+    return if (upperDistance <= lowerDistance) upperCandidate else lowerCandidate
+}
+
+private fun saturationValueDistance(
+    saturation: Float,
+    value: Float,
+    expectedSaturation: Float,
+    expectedValue: Float
+): Float {
+    val saturationDiff = saturation - expectedSaturation
+    val valueDiff = value - expectedValue
+    return saturationDiff * saturationDiff + valueDiff * valueDiff
 }
 
 private fun parseColorInput(value: String): Int? {
