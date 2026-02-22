@@ -61,6 +61,7 @@
     <string name="widget_text_color_dark">Цвет текста (тёмная тема)</string>
     <string name="widget_color_value_label">Значение цвета</string>
     <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
+    <string name="widget_color_alpha">Прозрачность: %1$d%%</string>
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
     <string name="logs_filter_placeholder">Введите текст для поиска...</string>

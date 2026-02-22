@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private val huePalette = listOf(
     Color(0xFFFF0000),
@@ -59,11 +61,18 @@ fun WidgetTextColorSetting(
     enabled: Boolean,
     onColorChange: (Int) -> Unit
 ) {
-    var textValue by remember { mutableStateOf(colorValue.asColorInputText()) }
+    var localColorValue by remember { mutableIntStateOf(colorValue) }
+    var textValue by remember { mutableStateOf(localColorValue.asColorInputText()) }
     var isInputError by remember { mutableStateOf(false) }
 
     LaunchedEffect(colorValue) {
-        val normalizedText = colorValue.asColorInputText()
+        if (localColorValue != colorValue) {
+            localColorValue = colorValue
+        }
+    }
+
+    LaunchedEffect(localColorValue) {
+        val normalizedText = localColorValue.asColorInputText()
         if (!textValue.equals(normalizedText, ignoreCase = true)) {
             textValue = normalizedText
         }
@@ -96,7 +105,10 @@ fun WidgetTextColorSetting(
                     val parsedColor = parseColorInput(newText)
                     isInputError = parsedColor == null
                     if (parsedColor != null) {
-                        onColorChange(parsedColor)
+                        if (parsedColor != localColorValue) {
+                            localColorValue = parsedColor
+                            onColorChange(parsedColor)
+                        }
                     }
                 },
                 modifier = Modifier.weight(1f),
@@ -115,7 +127,7 @@ fun WidgetTextColorSetting(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(colorValue))
+                    .background(Color(localColorValue))
                     .border(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.outline,
@@ -148,11 +160,65 @@ fun WidgetTextColorSetting(
             }
 
             Slider(
-                value = colorHue(colorValue),
+                value = colorHue(localColorValue),
                 onValueChange = { newHue ->
-                    onColorChange(updateColorHue(colorValue, newHue))
+                    val updatedColor = updateColorHue(localColorValue, newHue)
+                    if (updatedColor != localColorValue) {
+                        localColorValue = updatedColor
+                        onColorChange(updatedColor)
+                    }
                 },
                 valueRange = 0f..360f,
+                enabled = enabled,
+                colors = SliderDefaults.colors(
+                    activeTrackColor = Color.Transparent,
+                    inactiveTrackColor = Color.Transparent
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        val alphaPercent = ((colorAlpha(localColorValue) / 255f) * 100f).roundToInt()
+        Text(
+            text = stringResource(R.string.widget_color_alpha, alphaPercent),
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        val opaqueColor = withAlpha(localColorValue, 255)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(6.dp))
+            ) {
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        listOf(
+                            Color(opaqueColor).copy(alpha = 0f),
+                            Color(opaqueColor).copy(alpha = 1f)
+                        )
+                    )
+                )
+            }
+
+            Slider(
+                value = colorAlpha(localColorValue).toFloat(),
+                onValueChange = { newAlpha ->
+                    val updatedColor = withAlpha(localColorValue, newAlpha.roundToInt())
+                    if (updatedColor != localColorValue) {
+                        localColorValue = updatedColor
+                        onColorChange(updatedColor)
+                    }
+                },
+                valueRange = 0f..255f,
+                steps = 254,
                 enabled = enabled,
                 colors = SliderDefaults.colors(
                     activeTrackColor = Color.Transparent,
@@ -174,9 +240,11 @@ private fun updateColorHue(colorValue: Int, newHue: Float): Int {
     val hsv = FloatArray(3)
     android.graphics.Color.colorToHSV(colorValue, hsv)
     hsv[0] = newHue.coerceIn(0f, 360f)
-    if (hsv[1] <= 0f) hsv[1] = 1f
-    if (hsv[2] <= 0f) hsv[2] = 1f
-    return android.graphics.Color.HSVToColor(android.graphics.Color.alpha(colorValue), hsv)
+    // Ensure hue slider always produces visible color changes,
+    // even when source color is nearly grayscale.
+    hsv[1] = hsv[1].coerceAtLeast(0.35f)
+    hsv[2] = hsv[2].coerceAtLeast(0.35f)
+    return android.graphics.Color.HSVToColor(colorAlpha(colorValue), hsv)
 }
 
 private fun parseColorInput(value: String): Int? {
@@ -206,4 +274,13 @@ private fun parseHexColor(rawHex: String): Int? {
 
 private fun Int.asColorInputText(): String {
     return String.format(Locale.US, "#%08X", this)
+}
+
+private fun colorAlpha(colorValue: Int): Int {
+    return android.graphics.Color.alpha(colorValue)
+}
+
+private fun withAlpha(colorValue: Int, alpha: Int): Int {
+    val clampedAlpha = alpha.coerceIn(0, 255)
+    return (colorValue and 0x00FFFFFF) or (clampedAlpha shl 24)
 }
