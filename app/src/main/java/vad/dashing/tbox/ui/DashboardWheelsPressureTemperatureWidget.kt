@@ -41,7 +41,8 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
-    units: Boolean = true
+    units: Boolean = true,
+    textColor: Color? = null
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
     val wheelsTemperature by canViewModel.wheelsTemperature.collectAsStateWithLifecycle()
@@ -68,6 +69,7 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                 )
         ) {
             val availableHeight = maxHeight
+            val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
             // Основной контент
             Column(
                 modifier = Modifier
@@ -89,14 +91,18 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                             wheelsPressure.wheel1,
                             availableHeight,
                             TextAlign.Left,
-                            TextType.TITLE)
+                            TextType.TITLE,
+                            textColor = resolvedTextColor
+                        )
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel2,
                             availableHeight,
                             TextAlign.Right,
-                            TextType.TITLE)
+                            TextType.TITLE,
+                            textColor = resolvedTextColor
+                        )
                     }
                 }
                 Row(
@@ -110,13 +116,17 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                         TemperatureText(
                             wheelsTemperature.wheel1,
                             availableHeight,
-                            TextAlign.Left)
+                            TextAlign.Left,
+                            textColor = resolvedTextColor
+                        )
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         TemperatureText(
                             wheelsTemperature.wheel2,
                             availableHeight,
-                            TextAlign.Right)
+                            TextAlign.Right,
+                            textColor = resolvedTextColor
+                        )
                     }
                 }
 
@@ -134,7 +144,7 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                                 containerHeight = availableHeight,
                                 textType = TextType.UNIT
                             ),
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = resolvedTextColor,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
                             lineHeight = calculateResponsiveFontSize(
@@ -158,14 +168,18 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                             wheelsPressure.wheel3,
                             availableHeight,
                             TextAlign.Left,
-                            TextType.TITLE)
+                            TextType.TITLE,
+                            textColor = resolvedTextColor
+                        )
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel4,
                             availableHeight,
                             TextAlign.Right,
-                            TextType.TITLE)
+                            TextType.TITLE,
+                            textColor = resolvedTextColor
+                        )
                     }
                 }
                 Row(
@@ -179,13 +193,17 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                         TemperatureText(
                             wheelsTemperature.wheel3,
                             availableHeight,
-                            TextAlign.Left)
+                            TextAlign.Left,
+                            textColor = resolvedTextColor
+                        )
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         TemperatureText(
                             wheelsTemperature.wheel4,
                             availableHeight,
-                            TextAlign.Right)
+                            TextAlign.Right,
+                            textColor = resolvedTextColor
+                        )
                     }
                 }
             }
@@ -199,8 +217,10 @@ fun PressureText(
     value: Float?,
     availableHeight: Dp,
     align: TextAlign,
-    textType: TextType
+    textType: TextType,
+    textColor: Color? = null
 ) {
+    val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     Text(
         text = valueToString(value, 1, default = "-"),
         fontSize = calculateResponsiveFontSize(
@@ -208,7 +228,7 @@ fun PressureText(
             textType = textType
         ),
         fontWeight = FontWeight.Medium,
-        color = if ((value ?: 0f) >= 1.92f) MaterialTheme.colorScheme.onSurface else Color(0xD9FF0000),
+        color = if ((value ?: 0f) >= 1.92f) resolvedTextColor else Color(0xD9FF0000),
         textAlign = align,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
@@ -219,8 +239,10 @@ fun PressureText(
 private fun TemperatureText(
     value: Float?,
     availableHeight: Dp,
-    align: TextAlign
+    align: TextAlign,
+    textColor: Color? = null
 ) {
+    val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     Text(
         text = valueToString(value, 0, default = "-"),
         fontSize = calculateResponsiveFontSize(
@@ -228,7 +250,7 @@ private fun TemperatureText(
             textType = TextType.TITLE
         ),
         fontWeight = FontWeight.Medium,
-        color = if ((value ?: 90f) <= 85f) MaterialTheme.colorScheme.onSurface else Color(0xD9FF0000),
+        color = if ((value ?: 90f) <= 85f) resolvedTextColor else Color(0xD9FF0000),
         textAlign = align,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis

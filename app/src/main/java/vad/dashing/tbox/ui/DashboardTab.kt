@@ -20,6 +20,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -65,6 +66,7 @@ fun MainDashboardTab(
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
+    val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
 
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
     val totalWidgets = dashboardRows * dashboardCols
@@ -124,6 +126,7 @@ fun MainDashboardTab(
                             val widgetConfig = widgetConfigs.getOrNull(index)
                                 ?: FloatingDashboardWidgetConfig(dataKey = "")
                             val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
+                            val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
 
                             Box(modifier = Modifier.weight(1f)) {
                                 CompositionLocalProvider(
@@ -143,7 +146,8 @@ fun MainDashboardTab(
                                                 widget = widget,
                                                 onClick = { showDialogForIndex = index },
                                                 onLongClick = {},
-                                                viewModel = tboxViewModel
+                                                viewModel = tboxViewModel,
+                                                textColor = widgetTextColor
                                             )
                                         }
                                         "voltage+engineTemperatureWidget" -> {
@@ -152,7 +156,8 @@ fun MainDashboardTab(
                                                 onClick = { showDialogForIndex = index },
                                                 onLongClick = {},
                                                 canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit
+                                                units = widgetConfig.showUnit,
+                                                textColor = widgetTextColor
                                             )
                                         }
                                         "gearBoxWidget" -> {
@@ -161,7 +166,8 @@ fun MainDashboardTab(
                                                 onClick = { showDialogForIndex = index },
                                                 onLongClick = {},
                                                 canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit
+                                                units = widgetConfig.showUnit,
+                                                textColor = widgetTextColor
                                             )
                                         }
                                         "wheelsPressureWidget" -> {
@@ -170,7 +176,8 @@ fun MainDashboardTab(
                                                 onClick = { showDialogForIndex = index },
                                                 onLongClick = {},
                                                 canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit
+                                                units = widgetConfig.showUnit,
+                                                textColor = widgetTextColor
                                             )
                                         }
                                         "wheelsPressureTemperatureWidget" -> {
@@ -179,7 +186,8 @@ fun MainDashboardTab(
                                                 onClick = { showDialogForIndex = index },
                                                 onLongClick = {},
                                                 canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit
+                                                units = widgetConfig.showUnit,
+                                                textColor = widgetTextColor
                                             )
                                         }
                                         "tempInOutWidget" -> {
@@ -188,7 +196,8 @@ fun MainDashboardTab(
                                                 onClick = { showDialogForIndex = index },
                                                 onLongClick = {},
                                                 canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit
+                                                units = widgetConfig.showUnit,
+                                                textColor = widgetTextColor
                                             )
                                         }
                                         "motorHoursWidget" -> {
@@ -200,7 +209,8 @@ fun MainDashboardTab(
                                                 onDoubleClick = {
                                                     appDataViewModel.setMotorHours(0f)
                                                 },
-                                                units = widgetConfig.showUnit
+                                                units = widgetConfig.showUnit,
+                                                textColor = widgetTextColor
                                             )
                                         }
                                         "restartTbox" -> {
@@ -244,7 +254,8 @@ fun MainDashboardTab(
                                                 dashboardManager = dashboardViewModel.dashboardManager,
                                                 dashboardChart = dashboardChart,
                                                 title = widgetConfig.showTitle,
-                                                units = widgetConfig.showUnit
+                                                units = widgetConfig.showUnit,
+                                                textColor = widgetTextColor
                                             )
                                         }
                                     }
@@ -292,6 +303,12 @@ fun WidgetSelectionDialog(
     }
     var scale by remember(widgetIndex, currentWidgetConfigs) {
         mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
+    }
+    var textColorLight by remember(widgetIndex, currentWidgetConfigs) {
+        mutableIntStateOf(initialConfig.textColorLight)
+    }
+    var textColorDark by remember(widgetIndex, currentWidgetConfigs) {
+        mutableIntStateOf(initialConfig.textColorDark)
     }
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
@@ -403,6 +420,18 @@ fun WidgetSelectionDialog(
                                     .padding(top = 6.dp)
                             )
                         }
+                        WidgetTextColorSetting(
+                            title = stringResource(R.string.widget_text_color_light),
+                            colorValue = textColorLight,
+                            enabled = togglesEnabled,
+                            onColorChange = { textColorLight = it }
+                        )
+                        WidgetTextColorSetting(
+                            title = stringResource(R.string.widget_text_color_dark),
+                            colorValue = textColorDark,
+                            enabled = togglesEnabled,
+                            onColorChange = { textColorDark = it }
+                        )
                     }
                 }
             }
@@ -418,13 +447,17 @@ fun WidgetSelectionDialog(
                             id = currentWidgets[widgetIndex].id,
                             title = WidgetsRepository.getTitleForDataKey(context, selectedDataKey),
                             unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
-                            dataKey = selectedDataKey
+                            dataKey = selectedDataKey,
+                            textColorLight = textColorLight,
+                            textColorDark = textColorDark
                         )
                     } else {
                         DashboardWidget(
                             id = currentWidgets[widgetIndex].id,
                             title = "",
-                            dataKey = ""
+                            dataKey = "",
+                            textColorLight = textColorLight,
+                            textColorDark = textColorDark
                         )
                     }
                     updatedWidgets[widgetIndex] = newWidget
@@ -442,7 +475,9 @@ fun WidgetSelectionDialog(
                             dataKey = selectedDataKey,
                             showTitle = showTitle,
                             showUnit = showUnit,
-                            scale = normalizedScale
+                            scale = normalizedScale,
+                            textColorLight = textColorLight,
+                            textColorDark = textColorDark
                         )
                     } else {
                         FloatingDashboardWidgetConfig(dataKey = "")

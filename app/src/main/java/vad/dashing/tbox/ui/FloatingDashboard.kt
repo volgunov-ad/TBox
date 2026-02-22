@@ -155,6 +155,7 @@ fun FloatingDashboard(
     val isFloatingDashboardBackground = panelConfig.background
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
+    val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
 
     // Состояния
     var isEditMode by remember { mutableStateOf(false) }
@@ -367,6 +368,7 @@ fun FloatingDashboard(
                                     val widgetConfig = widgetConfigs.getOrNull(index)
                                         ?: FloatingDashboardWidgetConfig(dataKey = "")
                                     val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
+                                    val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
 
                                     Box(modifier = Modifier.weight(1f)) {
                                         if (isEditMode) {
@@ -424,7 +426,8 @@ fun FloatingDashboard(
                                                     viewModel = tboxViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    textColor = widgetTextColor
                                                 )
                                             }
                                             "voltage+engineTemperatureWidget" -> {
@@ -446,7 +449,8 @@ fun FloatingDashboard(
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
+                                                    units = widgetConfig.showUnit,
+                                                    textColor = widgetTextColor
                                                 )
                                             }
                                             "gearBoxWidget" -> {
@@ -468,7 +472,8 @@ fun FloatingDashboard(
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
+                                                    units = widgetConfig.showUnit,
+                                                    textColor = widgetTextColor
                                                 )
                                             }
                                             "wheelsPressureWidget" -> {
@@ -490,7 +495,8 @@ fun FloatingDashboard(
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
+                                                    units = widgetConfig.showUnit,
+                                                    textColor = widgetTextColor
                                                 )
                                             }
                                             "wheelsPressureTemperatureWidget" -> {
@@ -512,7 +518,8 @@ fun FloatingDashboard(
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
+                                                    units = widgetConfig.showUnit,
+                                                    textColor = widgetTextColor
                                                 )
                                             }
                                             "tempInOutWidget" -> {
@@ -534,7 +541,8 @@ fun FloatingDashboard(
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
+                                                    units = widgetConfig.showUnit,
+                                                    textColor = widgetTextColor
                                                 )
                                             }
                                             "motorHoursWidget" -> {
@@ -559,7 +567,8 @@ fun FloatingDashboard(
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
                                                     backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
+                                                    units = widgetConfig.showUnit,
+                                                    textColor = widgetTextColor
                                                 )
                                             }
                                             "restartTbox" -> {
@@ -629,7 +638,8 @@ fun FloatingDashboard(
                                                     shape = 0.dp,
                                                     title = widgetConfig.showTitle,
                                                     units = widgetConfig.showUnit,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    textColor = widgetTextColor
                                                 )
                                             }
                                             }
@@ -754,6 +764,12 @@ fun OverlayWidgetSelectionDialog(
     var scale by remember(widgetIndex, currentWidgetConfigs) {
         mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
     }
+    var textColorLight by remember(widgetIndex, currentWidgetConfigs) {
+        mutableIntStateOf(initialConfig.textColorLight)
+    }
+    var textColorDark by remember(widgetIndex, currentWidgetConfigs) {
+        mutableIntStateOf(initialConfig.textColorDark)
+    }
     val togglesEnabled = selectedDataKey.isNotEmpty()
 
     // Получаем список опций
@@ -870,6 +886,18 @@ fun OverlayWidgetSelectionDialog(
                                 .padding(top = 6.dp)
                         )
                     }
+                    WidgetTextColorSetting(
+                        title = stringResource(R.string.widget_text_color_light),
+                        colorValue = textColorLight,
+                        enabled = togglesEnabled,
+                        onColorChange = { textColorLight = it }
+                    )
+                    WidgetTextColorSetting(
+                        title = stringResource(R.string.widget_text_color_dark),
+                        colorValue = textColorDark,
+                        enabled = togglesEnabled,
+                        onColorChange = { textColorDark = it }
+                    )
                 }
             }
 
@@ -898,13 +926,17 @@ fun OverlayWidgetSelectionDialog(
                                 id = currentWidgets[widgetIndex].id,
                                 title = WidgetsRepository.getTitleForDataKey(context, selectedDataKey),
                                 unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
-                                dataKey = selectedDataKey
+                                dataKey = selectedDataKey,
+                                textColorLight = textColorLight,
+                                textColorDark = textColorDark
                             )
                         } else {
                             DashboardWidget(
                                 id = currentWidgets[widgetIndex].id,
                                 title = "",
-                                dataKey = ""
+                                dataKey = "",
+                                textColorLight = textColorLight,
+                                textColorDark = textColorDark
                             )
                         }
                         updatedWidgets[widgetIndex] = newWidget
@@ -919,7 +951,9 @@ fun OverlayWidgetSelectionDialog(
                                 dataKey = selectedDataKey,
                                 showTitle = showTitle,
                                 showUnit = showUnit,
-                                scale = normalizedScale
+                                scale = normalizedScale,
+                                textColorLight = textColorLight,
+                                textColorDark = textColorDark
                             )
                         } else {
                             FloatingDashboardWidgetConfig(dataKey = "")

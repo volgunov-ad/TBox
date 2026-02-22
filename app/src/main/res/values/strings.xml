@@ -57,6 +57,10 @@
     <string name="widget_show_unit">Отображать единицу измерения</string>
     <string name="widget_scale">Масштаб виджета: %1$.1fx</string>
     <string name="widget_scale_hint">0.1..2.0 (1.0 = 100%%)</string>
+    <string name="widget_text_color_light">Цвет текста (светлая тема)</string>
+    <string name="widget_text_color_dark">Цвет текста (тёмная тема)</string>
+    <string name="widget_color_value_label">Значение цвета</string>
+    <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
     <string name="logs_filter_placeholder">Введите текст для поиска...</string>
