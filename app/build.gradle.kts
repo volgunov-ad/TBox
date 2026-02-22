@@ -1,5 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -19,13 +17,15 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
-    // Optional: build APK with only one locale, e.g. -PappLocale=ru
-    val appLocale = providers.gradleProperty("appLocale").orNull
-    if (!appLocale.isNullOrBlank()) {
-        @Suppress("UnstableApiUsage")
-        androidResources {
-            localeFilters += appLocale
+    flavorDimensions += "language"
+    productFlavors {
+        create("ru") {
+            dimension = "language"
+            versionNameSuffix = "-ru"
+        }
+        create("en") {
+            dimension = "language"
+            versionNameSuffix = "-en"
         }
     }
     buildTypes {

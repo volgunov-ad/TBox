@@ -1,0 +1,251 @@
+<resources>
+    <string name="app_name">TBox Monitor</string>
+    <string name="keyboard_accessibility_description">Track keyboard visibility for floating panels</string>
+
+    <string name="loading">Loading...</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_clear">Clear</string>
+    <string name="action_close">Close</string>
+    <string name="action_configure">Configure</string>
+    <string name="action_send">Send</string>
+    <string name="action_get_all_sms">Get all SMS</string>
+
+    <string name="value_yes">yes</string>
+    <string name="value_no">no</string>
+    <string name="value_connected">connected</string>
+    <string name="value_disconnected">disconnected</string>
+    <string name="value_no_data">no data</string>
+    <string name="value_switching">switching</string>
+    <string name="value_blocked">locked</string>
+    <string name="value_unblocked">unlocked</string>
+
+    <string name="unit_kmh">km/h</string>
+    <string name="unit_hours">h</string>
+    <string name="unit_volt">V</string>
+    <string name="unit_celsius">°C</string>
+    <string name="unit_bar">bar</string>
+    <string name="unit_degree">°</string>
+    <string name="unit_rpm">rpm</string>
+    <string name="unit_km">km</string>
+    <string name="unit_percent">%%</string>
+    <string name="unit_meter">m</string>
+    <string name="unit_bar_celsius">bar / °C</string>
+    <string name="title_with_unit">%1$s, %2$s</string>
+
+    <string name="tab_modem">Modem</string>
+    <string name="tab_at_commands">AT commands</string>
+    <string name="tab_geoposition">Location</string>
+    <string name="tab_car_data">Car data</string>
+    <string name="tab_settings">Settings</string>
+    <string name="tab_logs">Logs</string>
+    <string name="tab_info">Info</string>
+    <string name="tab_can">CAN</string>
+    <string name="tab_widgets">Tiles</string>
+    <string name="menu_hide">Hide menu</string>
+    <string name="menu_show">Show menu</string>
+    <string name="tbox_connected_at">TBox connected at %1$s</string>
+    <string name="tbox_disconnected_at">TBox disconnected at %1$s</string>
+    <string name="service_started_at">Service started at %1$s</string>
+    <string name="program_version">App version %1$s</string>
+    <string name="tbox_short">TBox</string>
+
+    <string name="widget_option_not_selected">Not selected</string>
+    <string name="widget_select_data_for_tile">Select data for tile %1$d</string>
+    <string name="widget_additional_settings_for_tile">Additional settings for tile %1$d</string>
+    <string name="widget_show_title">Show title</string>
+    <string name="widget_show_unit">Show unit</string>
+    <string name="widget_scale">Widget scale: %1$.1fx</string>
+    <string name="widget_scale_hint">0.1..2.0 (1.0 = 100%%)</string>
+
+    <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
+    <string name="logs_filter_placeholder">Enter text to search...</string>
+    <string name="button_save_to_file">Save to file</string>
+    <string name="dialog_file_saving_title">Save file</string>
+    <string name="dialog_save_logs_downloads">Save log to Downloads folder</string>
+    <string name="button_save_can_to_file">Save current CAN data to file</string>
+    <string name="dialog_save_can_downloads">Save %1$d CAN IDs to Downloads folder</string>
+    <string name="can_id_last_data">CAN ID (%1$d). Last data: %2$s</string>
+    <string name="at_command_label">AT command</string>
+    <string name="at_command_placeholder">Enter AT command</string>
+    <string name="can_id_entry">CAN ID: %1$s</string>
+    <string name="can_raw_value_entry">  %1$s -&gt; %2$s</string>
+    <string name="can_no_data">  No data</string>
+
+    <string name="dropdown_expand">Expand</string>
+    <string name="dropdown_collapse">Collapse</string>
+    <string name="floating_panel_width_px">Floating panel width (px)</string>
+    <string name="floating_panel_height_px">Floating panel height (px)</string>
+    <string name="floating_panel_pos_x_px">Floating panel X position (px)</string>
+    <string name="floating_panel_pos_y_px">Floating panel Y position (px)</string>
+    <string name="application_label">Application %1$s</string>
+    <string name="button_suspend">Suspend</string>
+    <string name="button_resume">Resume</string>
+    <string name="button_stop">Stop</string>
+
+    <string name="modem_sim_data_header">Modem and SIM data</string>
+    <string name="connection_data_header">Connection data</string>
+    <string name="status_imei">IMEI</string>
+    <string name="status_iccid">ICCID</string>
+    <string name="status_imsi">IMSI</string>
+    <string name="status_csq">CSQ</string>
+    <string name="status_operator">Operator</string>
+    <string name="status_registration">Registration</string>
+    <string name="status_sim">SIM status</string>
+    <string name="status_network">Network</string>
+    <string name="status_apn">APN</string>
+    <string name="status_apn_1_header">APN 1</string>
+    <string name="status_apn_2_header">APN 2</string>
+    <string name="status_apn_value">APN</string>
+    <string name="status_apn2_value">APN2</string>
+    <string name="status_connection_time">Connection time</string>
+    <string name="status_apn_type">APN type</string>
+    <string name="status_apn2_type">APN2 type</string>
+    <string name="status_ip_apn">APN IP</string>
+    <string name="status_ip_apn2">APN2 IP</string>
+    <string name="status_apn_gateway">APN gateway</string>
+    <string name="status_apn2_gateway">APN2 gateway</string>
+    <string name="status_dns1_apn">APN DNS1</string>
+    <string name="status_dns2_apn">APN DNS2</string>
+    <string name="status_dns1_apn2">APN2 DNS1</string>
+    <string name="status_dns2_apn2">APN2 DNS2</string>
+    <string name="status_change_time">Change time</string>
+    <string name="modem_mode_title">Modem mode</string>
+    <string name="modem_mode_enabled">Enabled</string>
+    <string name="modem_mode_flight">Flight mode</string>
+    <string name="modem_mode_disabled">Disabled</string>
+
+    <string name="settings_network_control_title">Network control settings</string>
+    <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
+    <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
+    <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>
+    <string name="settings_auto_tbox_reboot_desc">Automatically reboot TBox if modem restart does not help. First reboot is after 60 seconds from modem restart attempt, then timer is set to 30 minutes (timer resets to 60 seconds when network reconnects).</string>
+    <string name="settings_prevent_reboot_title">Reboot prevention settings</string>
+    <string name="warning_title">WARNING</string>
+    <string name="warning_suspend_stop_manual_reboot">Switching SUSPEND and STOP options requires manual TBox reboot</string>
+    <string name="settings_auto_suspend_app_title">Automatically send SUSPEND command to APP on TBox</string>
+    <string name="settings_auto_suspend_app_desc">Suspending APP helps avoid periodic TBox reboots, but regular modem reconnects may occur if SIM is installed on TBox HW 0.0.5</string>
+    <string name="settings_auto_stop_app_title">Automatically send STOP command to APP on TBox</string>
+    <string name="settings_auto_stop_app_desc">Stopping APP helps avoid periodic TBox reboots and modem reconnects. After enabling, one-time TBox reboot may happen.\nNot recommended for TBox HW 0.0.1, 0.0.4</string>
+    <string name="settings_auto_suspend_mdc_title">Automatically send SUSPEND command to MDC on TBox</string>
+    <string name="settings_auto_suspend_mdc_desc">Not recommended if SIM card is installed in TBox</string>
+    <string name="settings_auto_stop_mdc_title">Automatically send STOP command to MDC on TBox</string>
+    <string name="settings_auto_stop_mdc_desc">Not recommended if SIM card is installed in TBox</string>
+    <string name="settings_auto_suspend_swd_title">Automatically send SUSPEND command to SWD on TBox</string>
+    <string name="settings_auto_prevent_restart_swd_title">Automatically send PREVENT RESTART command to SWD on TBox</string>
+    <string name="settings_auto_prevent_restart_swd_desc">Disables network and anomaly checks in TBox operation. These checks can cause extra reboots.</string>
+
+    <string name="settings_floating_panels_title">Floating panels settings</string>
+    <string name="settings_show_floating_panel_title">Show floating panel</string>
+    <string name="settings_enable_floating_bg_title">Enable floating panel background</string>
+    <string name="settings_enable_floating_bg_desc">If disabled, the background is transparent</string>
+    <string name="settings_open_app_on_panel_click_title">Open app window on single tap on floating panel element</string>
+    <string name="settings_floating_rows_title">Number of tile rows in floating panel</string>
+    <string name="settings_floating_cols_title">Number of tile columns in floating panel</string>
+
+    <string name="settings_overlay_widgets_title">Overlay widget settings</string>
+    <string name="settings_widget_connection_indicator_title">Show TBox connection indicator in widget</string>
+    <string name="settings_widget_connection_indicator_desc">Widget circle indicator has 3 colors: \n- red - no data from background service;\n- yellow - no connection to TBox;\n- green - connected to TBox</string>
+    <string name="settings_widget_location_indicator_title">Show location status indicator in widget</string>
+    <string name="settings_widget_location_indicator_desc">Widget arrow indicator has 3 colors: \n- red - no location fix;\n- yellow - real speed data strongly differs from satellite data;\n- green - location fix exists, data is normal</string>
+
+    <string name="settings_dashboard_screen_title">Tiles screen settings</string>
+    <string name="settings_dashboard_chart_title">Show value change charts on tiles</string>
+    <string name="settings_dashboard_rows_title">Number of tile rows</string>
+    <string name="settings_dashboard_cols_title">Number of tile columns</string>
+
+    <string name="settings_data_from_tbox_title">Receiving data from TBox</string>
+    <string name="settings_get_can_data_title">Receive CAN data from TBox</string>
+    <string name="settings_get_geo_data_title">Receive location data from TBox</string>
+
+    <string name="settings_misc_title">Misc</string>
+    <string name="settings_expert_mode_title">Expert mode</string>
+    <string name="settings_expert_mode_warning_desc">All changes in expert mode are made at your own risk.\nHowever, your actions in this mode cannot lead to irreversible consequences.</string>
+    <string name="settings_can_frames_count_title">Number of stored CAN frames (1...3600)</string>
+    <string name="settings_search_other_ip_title">Search for other TBox IP addresses</string>
+    <string name="settings_mock_location_title">Inject system location data (Mock locations)</string>
+    <string name="settings_mock_location_ready">Ready to use</string>
+    <string name="settings_mock_location_requirements">Requires permission and mock location setup</string>
+    <string name="settings_mock_location_requirements_link">Tap to view requirements for mock locations</string>
+    <string name="button_reboot_tbox">Reboot TBox</string>
+
+    <string name="dialog_mock_location_requirements_title">Mock location requirements (Developer options)</string>
+    <string name="dialog_mock_location_missing_permission">No location permission granted\n</string>
+    <string name="dialog_mock_location_not_enabled">Mock location is not enabled in developer settings\n</string>
+    <string name="dialog_mock_location_provider_missing">Cannot add app to mock location providers list\n</string>
+    <string name="dialog_overlay_permission_required_title">Permission required</string>
+    <string name="dialog_overlay_permission_required_message">App requires permission\nDisplay over other apps</string>
+
+    <string name="location_last_update">Last refresh</string>
+    <string name="location_last_change">Last change</string>
+    <string name="location_fixation">Location fix</string>
+    <string name="location_truth">Location validity</string>
+    <string name="location_longitude">Longitude</string>
+    <string name="location_latitude">Latitude</string>
+    <string name="location_altitude">Altitude, m</string>
+    <string name="location_visible_satellites">Visible satellites</string>
+    <string name="location_used_satellites">Used satellites</string>
+    <string name="location_speed">Speed, km/h</string>
+    <string name="location_true_direction">True direction</string>
+    <string name="location_magnetic_direction">Magnetic direction</string>
+    <string name="location_utc">UTC date and time</string>
+    <string name="location_raw_data">Raw data</string>
+
+    <string name="info_confirm_suspend_app">Confirm SUSPEND command for APP</string>
+    <string name="info_confirm_suspend_mdc">Confirm SUSPEND command for MDC</string>
+    <string name="info_confirm_suspend_swd">Confirm SUSPEND command for SWD</string>
+    <string name="info_confirm_stop_app">Confirm STOP command for APP</string>
+    <string name="info_confirm_stop_mdc">Confirm STOP command for MDC</string>
+    <string name="info_confirm_prevent_restart_swd">Confirm PREVENT RESTART command for SWD</string>
+    <string name="info_saved_tbox_ip">Saved TBox IP address</string>
+    <string name="info_possible_tbox_ips">Possible TBox IP list</string>
+    <string name="info_app_version_app">APP version</string>
+    <string name="info_app_version_crt">CRT version</string>
+    <string name="info_app_version_loc">LOC version</string>
+    <string name="info_app_version_mdc">MDC version</string>
+    <string name="info_app_version_swd">SWD version</string>
+    <string name="info_sw_version">SW version</string>
+    <string name="info_hw_version">HW version</string>
+    <string name="info_vin">VIN code</string>
+    <string name="button_request_tbox_info">Request info from TBox</string>
+
+    <string name="dashboard_loc_content_desc">Fix: %1$b, data valid: %2$b</string>
+    <string name="dashboard_net_content_desc">Signal level: %1$d, network: %2$s</string>
+
+    <string name="toast_saved_to">Saved to: %1$s</string>
+    <string name="toast_save_error">Save error: %1$s</string>
+    <string name="toast_storage_permission_denied">Could not save file: no write permission</string>
+    <string name="toast_service_start_error">Service start error</string>
+    <string name="toast_mock_location_permissions_required">Location permissions are required for mock location</string>
+
+    <string name="widget_text_tbox">TBox</string>
+    <string name="widget_text_res">RES</string>
+    <string name="widget_desc_location">location</string>
+    <string name="widget_desc_net">network</string>
+    <string name="widget_desc_connection">connection</string>
+    <string name="floating_dashboard_name_1">Panel 1</string>
+    <string name="floating_dashboard_name_2">Panel 2</string>
+    <string name="floating_dashboard_name_3">Panel 3</string>
+
+    <string name="seat_mode_off">off</string>
+    <string name="seat_mode_heat_1">heating 1</string>
+    <string name="seat_mode_heat_2">heating 2</string>
+    <string name="seat_mode_heat_3">heating 3</string>
+    <string name="seat_mode_vent_1">ventilation 1</string>
+    <string name="seat_mode_vent_2">ventilation 2</string>
+    <string name="seat_mode_vent_3">ventilation 3</string>
+
+    <string name="cycle_voltage">Cycle voltage, V</string>
+    <string name="cycle_speed">Cycle speed, km/h</string>
+    <string name="cycle_engine_rpm">Cycle engine rpm, rpm</string>
+    <string name="cycle_lateral_acceleration">Cycle lateral acceleration, m/s2</string>
+    <string name="cycle_longitudinal_acceleration">Cycle longitudinal acceleration, m/s2</string>
+    <string name="cycle_pressure_fl">Cycle pressure FL, bar</string>
+    <string name="cycle_pressure_fr">Cycle pressure FR, bar</string>
+    <string name="cycle_pressure_rl">Cycle pressure RL, bar</string>
+    <string name="cycle_pressure_rr">Cycle pressure RR, bar</string>
+    <string name="cycle_temperature_fl">Cycle temperature FL, °C</string>
+    <string name="cycle_temperature_fr">Cycle temperature FR, °C</string>
+    <string name="cycle_temperature_rr">Cycle temperature RR, °C</string>
+    <string name="cycle_temperature_rl">Cycle temperature RL, °C</string>
+</resources>
