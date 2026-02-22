@@ -1,3 +1,5 @@
+@file:Suppress("UnstableApiUsage")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -21,6 +23,7 @@ android {
     // Optional: build APK with only one locale, e.g. -PappLocale=ru
     val appLocale = providers.gradleProperty("appLocale").orNull
     if (!appLocale.isNullOrBlank()) {
+        @Suppress("UnstableApiUsage")
         androidResources {
             localeFilters += appLocale
         }

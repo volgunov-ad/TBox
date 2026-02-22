@@ -143,7 +143,7 @@ fun TboxScreen(
 
     val context = LocalContext.current
     val packageInfo = remember { context.packageManager.getPackageInfo(context.packageName, 0) }
-    val versionName = remember { packageInfo.versionName }
+    val versionName = remember { packageInfo.versionName.orEmpty() }
 
     val scrollState = rememberScrollState()
 
