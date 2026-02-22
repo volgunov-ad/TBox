@@ -3,8 +3,6 @@ package vad.dashing.tbox.ui.theme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import vad.dashing.tbox.DARK_THEME_ON_SURFACE_COLOR_INT
-import vad.dashing.tbox.LIGHT_THEME_ON_SURFACE_COLOR_INT
 
 @Composable
 fun TboxAppTheme(
