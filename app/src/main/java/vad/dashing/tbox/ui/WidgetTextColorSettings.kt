@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -110,6 +111,7 @@ fun WidgetTextColorSetting(
         ) {
             OutlinedTextField(
                 value = textValue,
+                textStyle = TextStyle(fontSize = 20.sp),
                 onValueChange = { newText ->
                     textValue = newText
                     if (newText.isBlank()) {
@@ -134,7 +136,8 @@ fun WidgetTextColorSetting(
                 isError = isInputError,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 label = {
-                    Text(stringResource(R.string.widget_color_value_label))
+                    Text(stringResource(R.string.widget_color_value_label),
+                        fontSize = 20.sp)
                 }
             )
 

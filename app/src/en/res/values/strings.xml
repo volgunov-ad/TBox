@@ -2,7 +2,7 @@
     <string name="app_name">TBox Monitor</string>
     <string name="keyboard_accessibility_description">Track keyboard visibility for floating panels</string>
 
-    <string name="loading">Loading...</string>
+    <string name="loading">Loading…</string>
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_clear">Clear</string>
@@ -28,7 +28,7 @@
     <string name="unit_degree">°</string>
     <string name="unit_rpm">rpm</string>
     <string name="unit_km">km</string>
-    <string name="unit_percent">%%</string>
+    <string name="unit_percent" formatted="false">%</string>
     <string name="unit_meter">m</string>
     <string name="unit_bar_celsius">bar / °C</string>
     <string name="title_with_unit">%1$s, %2$s</string>
@@ -56,10 +56,15 @@
     <string name="widget_show_title">Show title</string>
     <string name="widget_show_unit">Show unit</string>
     <string name="widget_scale">Widget scale: %1$.1fx</string>
-    <string name="widget_scale_hint">0.1..2.0 (1.0 = 100%%)</string>
+    <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
+    <string name="widget_text_color_light">Text color (light theme)</string>
+    <string name="widget_text_color_dark">Text color (dark theme)</string>
+    <string name="widget_color_value_label">Color value</string>
+    <string name="widget_color_value_hint">Format: #AARRGGBB, #RRGGBB, 0xAARRGGBB or Int</string>
+    <string name="widget_color_alpha">Alpha: %1$d%%</string>
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
-    <string name="logs_filter_placeholder">Enter text to search...</string>
+    <string name="logs_filter_placeholder">Enter text to search…</string>
     <string name="button_save_to_file">Save to file</string>
     <string name="dialog_file_saving_title">Save file</string>
     <string name="dialog_save_logs_downloads">Save log to Downloads folder</string>
@@ -161,7 +166,7 @@
     <string name="settings_misc_title">Misc</string>
     <string name="settings_expert_mode_title">Expert mode</string>
     <string name="settings_expert_mode_warning_desc">All changes in expert mode are made at your own risk.\nHowever, your actions in this mode cannot lead to irreversible consequences.</string>
-    <string name="settings_can_frames_count_title">Number of stored CAN frames (1...3600)</string>
+    <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>
     <string name="settings_search_other_ip_title">Search for other TBox IP addresses</string>
     <string name="settings_mock_location_title">Inject system location data (Mock locations)</string>
     <string name="settings_mock_location_ready">Ready to use</string>

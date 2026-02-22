@@ -2,7 +2,7 @@
     <string name="app_name">TBox Monitor</string>
     <string name="keyboard_accessibility_description">Track keyboard visibility for floating panels</string>
 
-    <string name="loading">Загрузка...</string>
+    <string name="loading">Загрузка…</string>
     <string name="action_save">Сохранить</string>
     <string name="action_cancel">Отмена</string>
     <string name="action_clear">Очистить</string>
@@ -28,7 +28,7 @@
     <string name="unit_degree">°</string>
     <string name="unit_rpm">об/мин</string>
     <string name="unit_km">км</string>
-    <string name="unit_percent">%%</string>
+    <string name="unit_percent" formatted="false">%</string>
     <string name="unit_meter">м</string>
     <string name="unit_bar_celsius">бар / °C</string>
     <string name="title_with_unit">%1$s, %2$s</string>
@@ -56,7 +56,7 @@
     <string name="widget_show_title">Отображать название</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
     <string name="widget_scale">Масштаб виджета: %1$.1fx</string>
-    <string name="widget_scale_hint">0.1..2.0 (1.0 = 100%%)</string>
+    <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_text_color_light">Цвет текста (светлая тема)</string>
     <string name="widget_text_color_dark">Цвет текста (тёмная тема)</string>
     <string name="widget_color_value_label">Значение цвета</string>
@@ -64,7 +64,7 @@
     <string name="widget_color_alpha">Прозрачность: %1$d%%</string>
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
-    <string name="logs_filter_placeholder">Введите текст для поиска...</string>
+    <string name="logs_filter_placeholder">Введите текст для поиска…</string>
     <string name="button_save_to_file">Сохранить в файл</string>
     <string name="dialog_file_saving_title">Сохранение файла</string>
     <string name="dialog_save_logs_downloads">Сохранить журнал в папку Загрузки</string>
@@ -166,7 +166,7 @@
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_expert_mode_title">Экспертный режим</string>
     <string name="settings_expert_mode_warning_desc">Все изменения в экспертном режиме вы делаете на свой страх и риск.\nНо к необратимым последствиям ваши действия в этом режиме привести не могут</string>
-    <string name="settings_can_frames_count_title">Количество сохраняемых CAN фреймов (1...3600)</string>
+    <string name="settings_can_frames_count_title">Количество сохраняемых CAN фреймов (1…3600)</string>
     <string name="settings_search_other_ip_title">Искать другие IP адреса TBox</string>
     <string name="settings_mock_location_title">Подменять системные данные о геопозиции (Фиктивные местоположения)</string>
     <string name="settings_mock_location_ready">Готово к использованию</string>

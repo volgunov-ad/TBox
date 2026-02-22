@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -32,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
@@ -322,6 +324,10 @@ fun WidgetSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {  },
+        modifier = Modifier.fillMaxWidth(0.8f), // Модификатор для всего диалога
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false // Отключает стандартную ширину платформы
+        ),
         text = {
             Column(
                 modifier = Modifier
@@ -334,7 +340,7 @@ fun WidgetSelectionDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(2f)
+                        .weight(10f)
                 ) {
                     Column(
                         modifier = Modifier
@@ -372,7 +378,7 @@ fun WidgetSelectionDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .weight(8f)
                 ) {
                     Column(
                         modifier = Modifier

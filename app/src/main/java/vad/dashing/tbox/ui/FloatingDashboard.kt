@@ -202,17 +202,17 @@ fun FloatingDashboard(
             originalY.intValue = currentWindowParams.y
 
             // Увеличиваем окно для диалога
-            val dialogWidth = (containerSize.width * 0.5f).toInt()
-            val dialogHeight = (containerSize.height * 0.7f).toInt()
+            val dialogWidth = (containerSize.width * 0.6f).toInt()
+            val dialogHeight = (containerSize.height * 0.8f).toInt()
 
             val newWidth = dialogWidth.coerceAtMost(containerSize.width)
-            val newHeight = dialogHeight.coerceAtMost(containerSize.height - 100)
+            val newHeight = dialogHeight.coerceAtMost(containerSize.height)
 
             onUpdateWindowSize(panelId, newWidth, newHeight)
 
             // Центрируем окно
             val centerX = (containerSize.width - newWidth) / 2 + 100
-            val centerY = (containerSize.height - newHeight) / 2
+            val centerY = (containerSize.height - newHeight) / 2 + 100
             onUpdateWindowPosition(panelId, centerX, centerY)
         } else {
             // Восстанавливаем оригинальные размеры и положение
@@ -798,7 +798,7 @@ fun OverlayWidgetSelectionDialog(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(2f)
+                    .weight(10f)
             ) {
                 Column(
                     modifier = Modifier
@@ -837,7 +837,7 @@ fun OverlayWidgetSelectionDialog(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .weight(8f)
             ) {
                 Column(
                     modifier = Modifier
