@@ -422,8 +422,8 @@ object WidgetsRepository {
     }
 }
 
-const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = 0xFF1A1C1E.toInt()
-const val DEFAULT_WIDGET_TEXT_COLOR_DARK = 0xFFE2E2E6.toInt()
+const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = LIGHT_THEME_ON_SURFACE_COLOR_INT
+const val DEFAULT_WIDGET_TEXT_COLOR_DARK = DARK_THEME_ON_SURFACE_COLOR_INT
 
 // Модель для виджета панели
 data class DashboardWidget(
