@@ -324,4 +324,17 @@
     <string name="cycle_temperature_fr">Cycle температура ПП, °C</string>
     <string name="cycle_temperature_rr">Cycle температура ЗП, °C</string>
     <string name="cycle_temperature_rl">Cycle температура ЗЛ, °C</string>
+
+    <string name="sim_no">нет SIM</string>
+    <string name="sim_ready">SIM готова</string>
+    <string name="sim_pin_need">требуется PIN</string>
+    <string name="sim_error">ошибка SIM</string>
+
+    <string name="reg_no">нет регистрации</string>
+    <string name="reg_home">домашняя сеть</string>
+    <string name="reg_search">поиск сети</string>
+    <string name="reg_reject">регистрация отклонена</string>
+    <string name="reg_roaming">роуминг</string>
+
+    <string name="net_no">нет сети</string>
 </resources>

@@ -324,4 +324,17 @@
     <string name="cycle_temperature_fr">Cycle temperature FR, °C</string>
     <string name="cycle_temperature_rr">Cycle temperature RR, °C</string>
     <string name="cycle_temperature_rl">Cycle temperature RL, °C</string>
+
+    <string name="sim_no">no SIM</string>
+    <string name="sim_ready">SIM ready</string>
+    <string name="sim_pin_need">need PIN</string>
+    <string name="sim_error">SIM error</string>
+
+    <string name="reg_no">no registration</string>
+    <string name="reg_home">home network</string>
+    <string name="reg_search">searching network</string>
+    <string name="reg_reject">registration rejected</string>
+    <string name="reg_roaming">roaming</string>
+
+    <string name="net_no">no network</string>
 </resources>
