@@ -32,11 +32,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
 
-    private val defaultFloatingDashboards = listOf(
-        createDefaultFloatingDashboard("floating-1", "Панель 1"),
-        createDefaultFloatingDashboard("floating-2", "Панель 2"),
-        createDefaultFloatingDashboard("floating-3", "Панель 3")
-    )
+    private val defaultFloatingDashboards = settingsManager.getDefaultFloatingDashboards()
     private val floatingDashboardConfigStates =
         mutableMapOf<String, StateFlow<FloatingDashboardConfig>>()
 

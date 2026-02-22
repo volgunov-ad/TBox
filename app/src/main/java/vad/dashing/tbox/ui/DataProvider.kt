@@ -1,5 +1,7 @@
 package vad.dashing.tbox.ui
 
+import android.content.Context
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -8,9 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import androidx.lifecycle.viewModelScope
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.seatModeToString
 import vad.dashing.tbox.valueToString
@@ -25,9 +27,15 @@ class TboxDataProvider(
     private val viewModel: TboxViewModel,
     private val canViewModel: CanDataViewModel,
     private val appDataViewModel: AppDataViewModel,
+    private val context: Context,
 ) : DataProvider {
     private val flowCache = mutableMapOf<String, StateFlow<String>>()
-    private val restartFlow = MutableStateFlow("TBox").asStateFlow()
+    private val yesLabel = context.getString(R.string.value_yes)
+    private val noLabel = context.getString(R.string.value_no)
+    private val switchingLabel = context.getString(R.string.value_switching)
+    private val blockedLabel = context.getString(R.string.value_blocked)
+    private val unblockedLabel = context.getString(R.string.value_unblocked)
+    private val restartFlow = MutableStateFlow(context.getString(R.string.tbox_short)).asStateFlow()
     private val emptyFlow = MutableStateFlow("").asStateFlow()
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
@@ -72,19 +80,23 @@ class TboxDataProvider(
         "gearBoxCurrentGear" -> canViewModel.gearBoxCurrentGear.mapState { valueToString(it) }
         "gearBoxPreparedGear" -> canViewModel.gearBoxPreparedGear.mapState { valueToString(it) }
         "gearBoxChangeGear" -> canViewModel.gearBoxChangeGear.mapState {
-            valueToString(it, booleanTrue = "переключение", booleanFalse = "нет")
+            valueToString(it, booleanTrue = switchingLabel, booleanFalse = noLabel)
         }
         "gearBoxMode" -> canViewModel.gearBoxMode
         "gearBoxDriveMode" -> canViewModel.gearBoxDriveMode
         "gearBoxWork" -> canViewModel.gearBoxWork
-        "frontRightSeatMode" -> canViewModel.frontRightSeatMode.mapState { seatModeToString(it) }
-        "frontLeftSeatMode" -> canViewModel.frontLeftSeatMode.mapState { seatModeToString(it) }
+        "frontRightSeatMode" -> canViewModel.frontRightSeatMode.mapState { seatModeToString(context, it) }
+        "frontLeftSeatMode" -> canViewModel.frontLeftSeatMode.mapState { seatModeToString(context, it) }
         "signalLevel" -> viewModel.netState.mapState { valueToString(it.signalLevel) }
         "netStatus" -> viewModel.netState.mapState { it.netStatus }
         "regStatus" -> viewModel.netState.mapState { it.regStatus }
         "simStatus" -> viewModel.netState.mapState { it.simStatus }
-        "locateStatus" -> viewModel.locValues.mapState { valueToString(it.locateStatus) }
-        "isLocValuesTrue" -> viewModel.isLocValuesTrue.mapState { valueToString(it) }
+        "locateStatus" -> viewModel.locValues.mapState {
+            valueToString(it.locateStatus, booleanTrue = yesLabel, booleanFalse = noLabel)
+        }
+        "isLocValuesTrue" -> viewModel.isLocValuesTrue.mapState {
+            valueToString(it, booleanTrue = yesLabel, booleanFalse = noLabel)
+        }
         "gnssSpeed" -> viewModel.locValues.mapState { valueToString(it.speed, 1) }
         "longitude" -> viewModel.locValues.mapState { valueToString(it.longitude, 6) }
         "latitude" -> viewModel.locValues.mapState { valueToString(it.latitude, 6) }
@@ -102,7 +114,7 @@ class TboxDataProvider(
         "outsideAirQuality" -> canViewModel.outsideAirQuality.mapState { valueToString(it) }
         "insideAirQuality" -> canViewModel.insideAirQuality.mapState { valueToString(it) }
         "isWindowsBlocked" -> canViewModel.isWindowsBlocked.mapState {
-            valueToString(it, booleanTrue = "заблокированы", booleanFalse = "разблокированы")
+            valueToString(it, booleanTrue = blockedLabel, booleanFalse = unblockedLabel)
         }
         "motorHours" -> appDataViewModel.motorHours.mapState { valueToString(it, 1) }
         "motorHoursTrip" -> canViewModel.motorHoursTrip.mapState { valueToString(it, 1) }

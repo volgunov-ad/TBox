@@ -1,5 +1,6 @@
 package vad.dashing.tbox
 
+import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
@@ -71,15 +72,16 @@ fun normalizeWidgetConfigs(
 
 fun loadWidgetsFromConfig(
     configs: List<FloatingDashboardWidgetConfig>,
-    widgetCount: Int
+    widgetCount: Int,
+    context: Context
 ): List<DashboardWidget> {
     return (0 until widgetCount).map { index ->
         val dataKey = configs.getOrNull(index)?.dataKey ?: ""
         if (dataKey.isNotEmpty() && dataKey != "null") {
             DashboardWidget(
                 id = index,
-                title = WidgetsRepository.getTitleForDataKey(dataKey),
-                unit = WidgetsRepository.getUnitForDataKey(dataKey),
+                title = WidgetsRepository.getTitleForDataKey(context, dataKey),
+                unit = WidgetsRepository.getUnitForDataKey(context, dataKey),
                 dataKey = dataKey
             )
         } else {

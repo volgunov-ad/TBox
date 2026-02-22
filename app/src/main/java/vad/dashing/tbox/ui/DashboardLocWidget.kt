@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -105,7 +106,11 @@ fun DashboardLocWidgetItem(
                 // Отображаем иконку навигации с вращением по направлению
                 Image(
                     painter = painterResource(id = locIndicatorDrawable),
-                    contentDescription = "Location fixed: ${locValues.locateStatus}, values true: $isLocValuesTrue",
+                    contentDescription = stringResource(
+                        R.string.dashboard_loc_content_desc,
+                        locValues.locateStatus,
+                        isLocValuesTrue
+                    ),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .rotate(degrees = -locValues.trueDirection)
@@ -114,7 +119,7 @@ fun DashboardLocWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${locValues.speed}\u2009км/ч",
+                    text = "${locValues.speed}\u2009${stringResource(R.string.unit_kmh)}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE

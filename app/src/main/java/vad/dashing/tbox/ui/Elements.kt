@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -59,6 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanFrame
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 
 @Composable
@@ -462,7 +464,11 @@ fun <T> GenericDropdownSelector(
             )
             Icon(
                 imageVector = Icons.Default.ArrowDropDown,
-                contentDescription = if (expanded) "Свернуть" else "Развернуть"
+                contentDescription = if (expanded) {
+                    stringResource(R.string.dropdown_collapse)
+                } else {
+                    stringResource(R.string.dropdown_expand)
+                }
             )
         }
 
@@ -556,7 +562,7 @@ fun CanIdEntry(
     // CAN ID
     Column() {
         Text(
-            text = "CAN ID: $canId",
+            text = stringResource(R.string.can_id_entry, canId),
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
@@ -577,12 +583,12 @@ fun CanIdEntry(
                     "%-3d".format(it.toInt() and 0xFF)
                 }
             Text(
-                text = "  $rawValueHex -> $rawValueDec",
+                text = stringResource(R.string.can_raw_value_entry, rawValueHex, rawValueDec),
                 fontSize = 22.sp,
                 color = MaterialTheme.colorScheme.onSurface
             )
         } ?: Text(
-            text = "  Нет данных",
+            text = stringResource(R.string.can_no_data),
             fontSize = 22.sp,
             color = MaterialTheme.colorScheme.outline
         )
@@ -755,7 +761,7 @@ fun FloatingDashboardPositionSizeSettings(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Ширина плавающей панели (px)",
+                    text = stringResource(R.string.floating_panel_width_px),
                     fontSize = 24.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -776,7 +782,7 @@ fun FloatingDashboardPositionSizeSettings(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Высота плавающей панели (px)",
+                    text = stringResource(R.string.floating_panel_height_px),
                     fontSize = 24.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -803,7 +809,7 @@ fun FloatingDashboardPositionSizeSettings(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Позиция X плавающей панели (px)",
+                    text = stringResource(R.string.floating_panel_pos_x_px),
                     fontSize = 24.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -824,7 +830,7 @@ fun FloatingDashboardPositionSizeSettings(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Позиция Y плавающей панели (px)",
+                    text = stringResource(R.string.floating_panel_pos_y_px),
                     fontSize = 24.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -914,7 +920,7 @@ fun TboxApplicationControls(
         }
 
         Text(
-            text = "Приложение $appName",
+            text = stringResource(R.string.application_label, appName),
             fontSize = 24.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -937,7 +943,7 @@ fun TboxApplicationControls(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = "Приостановить",
+                text = stringResource(R.string.button_suspend),
                 fontSize = 24.sp,
                 textAlign = TextAlign.Center
             )
@@ -957,7 +963,7 @@ fun TboxApplicationControls(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = "Возобновить",
+                text = stringResource(R.string.button_resume),
                 fontSize = 24.sp,
                 textAlign = TextAlign.Center
             )
@@ -977,7 +983,7 @@ fun TboxApplicationControls(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = "Остановить",
+                text = stringResource(R.string.button_stop),
                 fontSize = 24.sp,
                 textAlign = TextAlign.Center
             )

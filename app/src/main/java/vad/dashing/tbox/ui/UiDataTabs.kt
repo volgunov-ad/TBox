@@ -33,7 +33,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -45,6 +47,7 @@ import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.CycleDataViewModel
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
@@ -60,6 +63,7 @@ fun CarDataTabContent(
     appDataViewModel: AppDataViewModel,
     settingsViewModel: SettingsViewModel,
 ) {
+    val context = LocalContext.current
     val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
 
     val odometer by canViewModel.odometer.collectAsStateWithLifecycle()
@@ -120,80 +124,92 @@ fun CarDataTabContent(
             .fillMaxSize()
             .padding(18.dp)
     ) {
+        val switchingLabel = stringResource(R.string.value_switching)
+        val noLabel = stringResource(R.string.value_no)
+        val blockedLabel = stringResource(R.string.value_blocked)
+        val unblockedLabel = stringResource(R.string.value_unblocked)
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("voltage"), valueToString(voltage, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("steerAngle"), valueToString(steerAngle, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("steerSpeed"), valueToString(steerSpeed)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("engineRPM"), valueToString(engineRPM, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("param1"), valueToString(param1, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("param2"), valueToString(param2, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("param3"), valueToString(param3, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("param4"), valueToString(param4, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("carSpeed"), valueToString(carSpeed, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("carSpeedAccurate"), valueToString(carSpeedAccurate, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Speed"), valueToString(wheelsSpeed.wheel1, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Speed"), valueToString(wheelsSpeed.wheel2, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Speed"), valueToString(wheelsSpeed.wheel3, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Speed"), valueToString(wheelsSpeed.wheel4, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Pressure"), valueToString(wheelsPressure.wheel1, 2)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Pressure"), valueToString(wheelsPressure.wheel2, 2)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Pressure"), valueToString(wheelsPressure.wheel3, 2)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Pressure"), valueToString(wheelsPressure.wheel4, 2)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel1Temperature"), valueToString(wheelsTemperature.wheel1, 0)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel2Temperature"), valueToString(wheelsTemperature.wheel2, 0)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel3Temperature"), valueToString(wheelsTemperature.wheel3, 0)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("wheel4Temperature"), valueToString(wheelsTemperature.wheel4, 0)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("cruiseSetSpeed"), valueToString(cruiseSetSpeed)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("odometer"), valueToString(odometer)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("distanceToNextMaintenance"), valueToString(distanceToNextMaintenance)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("distanceToFuelEmpty"), valueToString(distanceToFuelEmpty)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("fuelLevelPercentage"), valueToString(fuelLevelPercentage)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("fuelLevelPercentageFiltered"), valueToString(fuelLevelPercentageFiltered)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("breakingForce"), valueToString(breakingForce)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("engineTemperature"), valueToString(engineTemperature, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxOilTemperature"), valueToString(gearBoxOilTemperature)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxMode"), gearBoxMode) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxDriveMode"), gearBoxDriveMode) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxWork"), gearBoxWork) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxCurrentGear"), valueToString(gearBoxCurrentGear)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxPreparedGear"), valueToString(gearBoxPreparedGear)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("gearBoxChangeGear"),
-                valueToString(gearBoxChangeGear, booleanTrue = "переключение", booleanFalse = "нет")) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontLeftSeatMode"), seatModeToString(frontLeftSeatMode)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("frontRightSeatMode"), seatModeToString(frontRightSeatMode)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("outsideTemperature"), valueToString(outsideTemperature, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("insideTemperature"), valueToString(insideTemperature, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("outsideAirQuality"), valueToString(outsideAirQuality)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("insideAirQuality"), valueToString(insideAirQuality)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("isWindowsBlocked"), valueToString(isWindowsBlocked,
-                booleanTrue = "заблокированы", booleanFalse = "разблокированы")) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHours"), valueToString(motorHours, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey("motorHoursTrip"), valueToString(motorHoursTrip, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "voltage"), valueToString(voltage, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "steerAngle"), valueToString(steerAngle, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "steerSpeed"), valueToString(steerSpeed)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "engineRPM"), valueToString(engineRPM, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param1"), valueToString(param1, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param2"), valueToString(param2, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param3"), valueToString(param3, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param4"), valueToString(param4, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "carSpeed"), valueToString(carSpeed, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "carSpeedAccurate"), valueToString(carSpeedAccurate, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel1Speed"), valueToString(wheelsSpeed.wheel1, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel2Speed"), valueToString(wheelsSpeed.wheel2, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel3Speed"), valueToString(wheelsSpeed.wheel3, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel4Speed"), valueToString(wheelsSpeed.wheel4, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel1Pressure"), valueToString(wheelsPressure.wheel1, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel2Pressure"), valueToString(wheelsPressure.wheel2, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel3Pressure"), valueToString(wheelsPressure.wheel3, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel4Pressure"), valueToString(wheelsPressure.wheel4, 2)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel1Temperature"), valueToString(wheelsTemperature.wheel1, 0)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel2Temperature"), valueToString(wheelsTemperature.wheel2, 0)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel3Temperature"), valueToString(wheelsTemperature.wheel3, 0)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel4Temperature"), valueToString(wheelsTemperature.wheel4, 0)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "cruiseSetSpeed"), valueToString(cruiseSetSpeed)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "odometer"), valueToString(odometer)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "distanceToNextMaintenance"), valueToString(distanceToNextMaintenance)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "distanceToFuelEmpty"), valueToString(distanceToFuelEmpty)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "fuelLevelPercentage"), valueToString(fuelLevelPercentage)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "fuelLevelPercentageFiltered"), valueToString(fuelLevelPercentageFiltered)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "breakingForce"), valueToString(breakingForce)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "engineTemperature"), valueToString(engineTemperature, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxOilTemperature"), valueToString(gearBoxOilTemperature)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxMode"), gearBoxMode) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxDriveMode"), gearBoxDriveMode) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxWork"), gearBoxWork) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxCurrentGear"), valueToString(gearBoxCurrentGear)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxPreparedGear"), valueToString(gearBoxPreparedGear)) }
+            item {
+                StatusRow(
+                    WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxChangeGear"),
+                    valueToString(gearBoxChangeGear, booleanTrue = switchingLabel, booleanFalse = noLabel)
+                )
+            }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "frontLeftSeatMode"), seatModeToString(context, frontLeftSeatMode)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "frontRightSeatMode"), seatModeToString(context, frontRightSeatMode)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "outsideTemperature"), valueToString(outsideTemperature, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "insideTemperature"), valueToString(insideTemperature, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "outsideAirQuality"), valueToString(outsideAirQuality)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "insideAirQuality"), valueToString(insideAirQuality)) }
+            item {
+                StatusRow(
+                    WidgetsRepository.getTitleUnitForDataKey(context, "isWindowsBlocked"),
+                    valueToString(isWindowsBlocked, booleanTrue = blockedLabel, booleanFalse = unblockedLabel)
+                )
+            }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "motorHours"), valueToString(motorHours, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "motorHoursTrip"), valueToString(motorHoursTrip, 1)) }
             if (isGetCycleSignalEnabled) {
-                item { StatusRow("Cycle напряжение, В", valueToString(voltageC, 1)) }
-                item { StatusRow("Cycle скорость, км/ч", valueToString(carSpeedC, 1)) }
-                item { StatusRow("Cycle обороты двигателя, об/мин", valueToString(engineRPMC, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_voltage), valueToString(voltageC, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_speed), valueToString(carSpeedC, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_engine_rpm), valueToString(engineRPMC, 1)) }
                 //item { StatusRow("Cycle угловая скорость рысканья, °/с", valueToString(yawRateC, 2)) }
                 item {
                     StatusRow(
-                        "Cycle поперечное ускорение, м/с2",
+                        stringResource(R.string.cycle_lateral_acceleration),
                         valueToString(lateralAccelerationC, 2)
                     )
                 }
                 item {
                     StatusRow(
-                        "Cycle продольное ускорение, м/с2",
+                        stringResource(R.string.cycle_longitudinal_acceleration),
                         valueToString(longitudinalAccelerationC, 2)
                     )
                 }
-                item { StatusRow("Cycle давление ПЛ, бар", valueToString(pressure1C, 1)) }
-                item { StatusRow("Cycle давление ПП, бар", valueToString(pressure2C, 1)) }
-                item { StatusRow("Cycle давление ЗЛ, бар", valueToString(pressure3C, 1)) }
-                item { StatusRow("Cycle давление ЗП, бар", valueToString(pressure4C, 1)) }
-                item { StatusRow("Cycle температура ПЛ, °C", valueToString(temperature1C, 1)) }
-                item { StatusRow("Cycle температура ПП, °C", valueToString(temperature2C, 1)) }
-                item { StatusRow("Cycle температура ЗП, °C", valueToString(temperature3C, 1)) }
-                item { StatusRow("Cycle температура ЗЛ, °C", valueToString(temperature4C, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_pressure_fl), valueToString(pressure1C, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_pressure_fr), valueToString(pressure2C, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_pressure_rl), valueToString(pressure3C, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_pressure_rr), valueToString(pressure4C, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_temperature_fl), valueToString(temperature1C, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_temperature_fr), valueToString(temperature2C, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_temperature_rr), valueToString(temperature3C, 1)) }
+                item { StatusRow(stringResource(R.string.cycle_temperature_rl), valueToString(temperature4C, 1)) }
             }
         }
     }
@@ -239,13 +255,13 @@ fun LogsTabContent(
                     .padding(end = 8.dp),
                 label = {
                     Text(
-                        text = "Фильтр по тексту (минимум 3 символа)",
+                        text = stringResource(R.string.logs_filter_label),
                         fontSize = 20.sp
                     )
                 },
                 placeholder = {
                     Text(
-                        text = "Введите текст для поиска...",
+                        text = stringResource(R.string.logs_filter_placeholder),
                         fontSize = 18.sp
                     )
                 },
@@ -257,7 +273,7 @@ fun LogsTabContent(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
-                                contentDescription = "Очистить"
+                                contentDescription = stringResource(R.string.action_clear)
                             )
                         }
                     }
@@ -294,7 +310,7 @@ fun LogsTabContent(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Сохранить в файл",
+                    text = stringResource(R.string.button_save_to_file),
                     fontSize = 24.sp,
                     maxLines = 2,
                     textAlign = TextAlign.Center
@@ -304,9 +320,9 @@ fun LogsTabContent(
             if (showSaveDialog) {
                 AlertDialog(
                     onDismissRequest = { showSaveDialog = false },
-                    title = { Text("Сохранение файла") },
+                    title = { Text(stringResource(R.string.dialog_file_saving_title)) },
                     text = {
-                        Text("Сохранить журнал в папку Загрузки")
+                        Text(stringResource(R.string.dialog_save_logs_downloads))
                     },
                     confirmButton = {
                         Button(
@@ -319,14 +335,14 @@ fun LogsTabContent(
                                 showSaveDialog = false
                             }
                         ) {
-                            Text("Сохранить")
+                            Text(stringResource(R.string.action_save))
                         }
                     },
                     dismissButton = {
                         OutlinedButton(
                             onClick = { showSaveDialog = false }
                         ) {
-                            Text("Отмена")
+                            Text(stringResource(R.string.action_cancel))
                         }
                     }
                 )
@@ -355,8 +371,9 @@ fun CanTabContent(
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
     val dateTimeFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
 
-    val formattedTime = remember(canFrameTime) {
-        canFrameTime?.let { timeFormat.format(it) } ?: "нет данных"
+    val noDataLabel = stringResource(R.string.value_no_data)
+    val formattedTime = remember(canFrameTime, noDataLabel) {
+        canFrameTime?.let { timeFormat.format(it) } ?: noDataLabel
     }
 
     Column(
@@ -369,8 +386,7 @@ fun CanTabContent(
         }
 
         Text(
-            text = "CAN ID (${sortedCanEntries.size}). " +
-                "Последние данные: $formattedTime",
+            text = stringResource(R.string.can_id_last_data, sortedCanEntries.size, formattedTime),
             modifier = Modifier.padding(6.dp),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
@@ -389,7 +405,7 @@ fun CanTabContent(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Сохранить текущие CAN данные в файл",
+                    text = stringResource(R.string.button_save_can_to_file),
                     fontSize = 24.sp,
                     maxLines = 2,
                     textAlign = TextAlign.Center
@@ -399,9 +415,9 @@ fun CanTabContent(
             if (showSaveDialog) {
                 AlertDialog(
                     onDismissRequest = { showSaveDialog = false },
-                    title = { Text("Сохранение файла") },
+                    title = { Text(stringResource(R.string.dialog_file_saving_title)) },
                     text = {
-                        Text("Сохранить ${sortedCanEntries.size} CAN ID в папку Загрузки")
+                        Text(stringResource(R.string.dialog_save_can_downloads, sortedCanEntries.size))
                     },
                     confirmButton = {
                         Button(
@@ -423,14 +439,14 @@ fun CanTabContent(
                                 showSaveDialog = false
                             }
                         ) {
-                            Text("Сохранить")
+                            Text(stringResource(R.string.action_save))
                         }
                     },
                     dismissButton = {
                         OutlinedButton(
                             onClick = { showSaveDialog = false }
                         ) {
-                            Text("Отмена")
+                            Text(stringResource(R.string.action_cancel))
                         }
                     }
                 )
@@ -496,13 +512,13 @@ fun ATcmdTabContent(
                     .padding(end = 8.dp),
                 label = {
                     Text(
-                        text = "AT команда",
+                        text = stringResource(R.string.at_command_label),
                         fontSize = 20.sp
                     )
                 },
                 placeholder = {
                     Text(
-                        text = "Введите AT команду",
+                        text = stringResource(R.string.at_command_placeholder),
                         fontSize = 18.sp
                     )
                 },
@@ -514,7 +530,7 @@ fun ATcmdTabContent(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
-                                contentDescription = "Очистить"
+                                contentDescription = stringResource(R.string.action_clear)
                             )
                         }
                     }
@@ -551,7 +567,7 @@ fun ATcmdTabContent(
                     modifier = Modifier.width(200.dp)
                 ) {
                     Text(
-                        text = "Отправить",
+                        text = stringResource(R.string.action_send),
                         fontSize = 24.sp,
                         maxLines = 2,
                         textAlign = TextAlign.Center
@@ -570,7 +586,7 @@ fun ATcmdTabContent(
                     modifier = Modifier.width(200.dp)
                 ) {
                     Text(
-                        text = "Получить все SMS",
+                        text = stringResource(R.string.action_get_all_sms),
                         fontSize = 24.sp,
                         maxLines = 2,
                         textAlign = TextAlign.Center

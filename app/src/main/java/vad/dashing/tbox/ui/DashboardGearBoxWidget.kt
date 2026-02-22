@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.R
 import vad.dashing.tbox.valueToString
 
 @Composable
@@ -42,6 +44,7 @@ fun DashboardGearBoxWidgetItem(
     val gearBoxMode by canViewModel.gearBoxMode.collectAsStateWithLifecycle()
     val gearBoxCurrentGear by canViewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
     val gearBoxOilTemperature by canViewModel.gearBoxOilTemperature.collectAsStateWithLifecycle()
+    val celsiusUnit = stringResource(R.string.unit_celsius)
 
     Card(
         modifier = Modifier
@@ -90,7 +93,7 @@ fun DashboardGearBoxWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${valueToString(gearBoxOilTemperature, 0)}${if (units) "\u2009°C" else ""}",
+                    text = "${valueToString(gearBoxOilTemperature, 0)}${if (units) "\u2009$celsiusUnit" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

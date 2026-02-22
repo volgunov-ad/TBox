@@ -17,7 +17,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="TBox"
+            android:text="@string/widget_text_tbox"
             android:textColor="@color/status_err"
             android:textStyle="bold"
             android:lineSpacingExtra="2sp" />
@@ -28,7 +28,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="RES"
+            android:text="@string/widget_text_res"
             android:textColor="@color/on_light_background"
             android:textStyle="bold"
             android:lineSpacingExtra="2sp" />
@@ -37,7 +37,7 @@
 
     <ImageView
         android:id="@+id/location_indicator"
-        android:contentDescription="location"
+        android:contentDescription="@string/widget_desc_location"
         android:layout_width="14dp"
         android:layout_height="14dp"
         android:scaleType="fitCenter"

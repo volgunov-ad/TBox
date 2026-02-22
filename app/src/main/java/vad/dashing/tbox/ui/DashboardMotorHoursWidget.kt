@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.R
 
 @Composable
 fun DashboardMotorHoursWidgetItem(
@@ -43,6 +45,7 @@ fun DashboardMotorHoursWidgetItem(
 
     val motorHoursTripFlow = dataProvider.getValueFlow("motorHoursTrip")
     val motorHoursTripString by motorHoursTripFlow.collectAsStateWithLifecycle()
+    val hourUnit = stringResource(R.string.unit_hours)
 
     Card(
         modifier = Modifier
@@ -77,7 +80,7 @@ fun DashboardMotorHoursWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "$motorHoursString ${if (units) "\u2009ч" else ""}",
+                    text = "$motorHoursString ${if (units) "\u2009$hourUnit" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -92,7 +95,7 @@ fun DashboardMotorHoursWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "$motorHoursTripString ${if (units) "\u2009ч" else ""}",
+                    text = "$motorHoursTripString ${if (units) "\u2009$hourUnit" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
