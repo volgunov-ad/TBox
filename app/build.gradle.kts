@@ -16,11 +16,13 @@ android {
         versionName = "0.11.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
-        // Optional: build APK with only one locale, e.g. -PappLocale=ru
-        val appLocale = providers.gradleProperty("appLocale").orNull
-        if (!appLocale.isNullOrBlank()) {
-            resourceConfigurations += appLocale
+    // Optional: build APK with only one locale, e.g. -PappLocale=ru
+    val appLocale = providers.gradleProperty("appLocale").orNull
+    if (!appLocale.isNullOrBlank()) {
+        androidResources {
+            localeFilters += appLocale
         }
     }
     buildTypes {
