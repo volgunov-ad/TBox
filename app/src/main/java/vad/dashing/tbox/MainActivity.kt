@@ -23,7 +23,6 @@ import vad.dashing.tbox.ui.TboxApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import vad.dashing.tbox.AppDataManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -57,7 +56,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Переменная для хранения данных, которые нужно сохранить после получения разрешений
+    // Переменные для хранения данных/тега, которые нужно сохранить после получения разрешений
+    private var pendingSaveTag: String? = null
     private var pendingDataToSave: List<String>? = null
 
     // Флаг для отслеживания состояния переключателя mock-локации
@@ -80,20 +80,14 @@ class MainActivity : ComponentActivity() {
                     settingsManager = settingsManager,
                     appDataManager = appDataManager,
                     onTboxRestart = { rebootTBox() },
-                    onModemCheck = { modemCheck() },
-                    onModemMode = { mode -> setModemMode(mode) },
-                    onUpdateInfoClick = { updateInfo() },
                     onSaveToFile = { tag, dataList ->
                         saveDataToFile(tag, dataList)
                     },
-                    onTboxApplicationCommand = { app, command ->
-                        tboxApplicationCommand(app, command)
+                    onServiceCommand = { sendAction, extraName, extraValue ->
+                        serviceCommand(sendAction, extraName, extraValue)
                     },
                     onMockLocationSettingChanged = { enabled ->
                         handleMockLocationSettingChange(enabled)
-                    },
-                    onATcmdSend = { cmd ->
-                        atCmdSend(cmd)
                     }
                 )
             }
@@ -107,6 +101,10 @@ class MainActivity : ComponentActivity() {
         startBackgroundService()
     }
 
+    override fun onResume() {
+        super.onResume()
+    }
+
     private fun startBackgroundService() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_START
@@ -114,22 +112,22 @@ class MainActivity : ComponentActivity() {
         startServiceSafely(intent)
     }
 
-    private fun modemCheck() {
+    /*private fun modemCheck() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_MODEM_CHECK
         }
         startServiceSafely(intent)
-    }
+    }*/
 
-    private fun atCmdSend(cmd: String) {
+    /*private fun atCmdSend(cmd: String) {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_SEND_AT
             putExtra(BackgroundService.EXTRA_AT_CMD, cmd)
         }
         startService(intent)
-    }
+    }*/
 
-    private fun setModemMode(mode: String = "on") {
+    /*private fun setModemMode(mode: String = "on") {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = when (mode) {
                 "off" -> {
@@ -144,50 +142,53 @@ class MainActivity : ComponentActivity() {
             }
         }
         startServiceSafely(intent)
-    }
+    }*/
 
-    private fun tboxApplicationCommand(app: String, command: String) {
+    private fun serviceCommand(sendAction: String, extraName:String, extraValue: String) {
         val intent = Intent(this, BackgroundService::class.java).apply {
-            when (app) {
-                "CRT" -> {
-                    action = when (command) {
-                        "close" -> {
-                            BackgroundService.ACTION_CLOSE
-                        }
-
-                        "open" -> {
-                            BackgroundService.ACTION_OPEN
-                        }
-
-                        else -> {
-                            null
-                        }
-                    }
+            action = sendAction
+            if (extraName != "" && extraValue != "") {
+                putExtra(extraName, extraValue)
+            }
+            /*when (command) {
+                "suspend" -> {
+                    action = BackgroundService.ACTION_TBOX_APP_SUSPEND
+                    putExtra(BackgroundService.EXTRA_APP_NAME, app)
                 }
-                "LOC" -> {
-                    action = when (command) {
-                        "suspend" -> {
-                            BackgroundService.ACTION_LOC_SUSPEND
-                        }
 
-                        "resume" -> {
-                            BackgroundService.ACTION_LOC_RESUME
-                        }
-
-                        "stop" -> {
-                            BackgroundService.ACTION_LOC_STOP
-                        }
-
-                        else -> {
-                            null
-                        }
-                    }
+                "resume" -> {
+                    action = BackgroundService.ACTION_TBOX_APP_RESUME
+                    putExtra(BackgroundService.EXTRA_APP_NAME, app)
                 }
+
+                "stop" -> {
+                    action = BackgroundService.ACTION_TBOX_APP_STOP
+                    putExtra(BackgroundService.EXTRA_APP_NAME, app)
+                }
+
                 else -> {
-                    action = null
+                    action = when (app) {
+                        "CRT" -> {
+                            when (command) {
+                                "close" -> {
+                                    BackgroundService.ACTION_CLOSE
+                                }
+
+                                "open" -> {
+                                    BackgroundService.ACTION_OPEN
+                                }
+
+                                else -> {
+                                    null
+                                }
+                            }
+                        }
+
+                        else -> { null }
+                    }
                 }
             }
-            if (action == null) return
+            if (action == null) return*/
         }
         startServiceSafely(intent)
     }
@@ -199,7 +200,7 @@ class MainActivity : ComponentActivity() {
         startServiceSafely(intent)
     }
 
-    private fun apnManage(number: Int, cmd: String) {
+    /*private fun apnManage(number: Int, cmd: String) {
         val intent = Intent(this, BackgroundService::class.java).apply {
             when (cmd) {
                 "restart" -> {
@@ -229,9 +230,9 @@ class MainActivity : ComponentActivity() {
             }
         }
         startServiceSafely(intent)
-    }
+    }*/
 
-    private fun updateInfo() {
+    /*private fun updateInfo() {
         val intent = Intent(this, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_GET_INFO
         }
@@ -240,7 +241,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-    }
+    }*/
 
     private fun saveDataToFile(tag: String, dataList: List<String>) {
         // Проверяем есть ли уже разрешения
@@ -249,6 +250,7 @@ class MainActivity : ComponentActivity() {
             performFileSave(tag, dataList)
         } else {
             // Если разрешений нет - сохраняем данные и запрашиваем разрешения
+            pendingSaveTag = tag
             pendingDataToSave = dataList
             requestStoragePermissions()
         }
@@ -313,7 +315,7 @@ class MainActivity : ComponentActivity() {
             val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
             intent.data = "package:$packageName".toUri()
             manageExternalStorageLauncher.launch(intent)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fallback
             val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
             manageExternalStorageLauncher.launch(intent)
@@ -337,7 +339,9 @@ class MainActivity : ComponentActivity() {
         Log.d(TAG, "Storage permissions granted")
         // Если есть ожидающие данные для сохранения - сохраняем их
         pendingDataToSave?.let { data ->
-            performFileSave("data", data)
+            val tag = pendingSaveTag ?: "data"
+            performFileSave(tag, data)
+            pendingSaveTag = null
             pendingDataToSave = null
         }
     }
@@ -347,16 +351,13 @@ class MainActivity : ComponentActivity() {
         Toast.makeText(this,
             "Не удалось сохранить файл: нет разрешений на запись",
             Toast.LENGTH_LONG).show()
+        pendingSaveTag = null
         pendingDataToSave = null
     }
 
     private fun startServiceSafely(intent: Intent) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            startForegroundService(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка запуска сервиса", e)
             Toast.makeText(this, "Ошибка запуска службы", Toast.LENGTH_SHORT).show()

@@ -21,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -37,10 +38,14 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.DEFAULT_WIDGET_SCALE
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.normalizeWidgetScale
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
 import kotlin.math.abs
+
+val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
 
 @Composable
 fun DashboardWidgetItem(
@@ -137,6 +142,10 @@ fun DashboardWidgetItem(
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
+                        lineHeight = calculateResponsiveFontSize(
+                            containerHeight = availableHeight,
+                            textType = TextType.TITLE
+                        ) * 1.3f,
                         softWrap = true,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
@@ -147,7 +156,7 @@ fun DashboardWidgetItem(
                 }
 
                 Text(
-                    text = valueString,
+                    text = "$valueString\u2009${if (units && !onlyText) widget.unit.replace("/", "\u2060/\u2060") else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = if (widget.dataKey == "restartTbox") {
@@ -160,6 +169,10 @@ fun DashboardWidgetItem(
                     color = textColor ?: MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
+                    lineHeight = calculateResponsiveFontSize(
+                        containerHeight = availableHeight,
+                        textType = TextType.VALUE
+                    ) * 1.3f,
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
@@ -168,7 +181,7 @@ fun DashboardWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
 
-                if (units && !onlyText) {
+                /*if (units && !onlyText) {
                     Text(
                         text = widget.unit,
                         fontSize = calculateResponsiveFontSize(
@@ -185,7 +198,7 @@ fun DashboardWidgetItem(
                             .fillMaxWidth()
                             .wrapContentHeight(Alignment.CenterVertically)
                     )
-                }
+                }*/
             }
         }
     }
@@ -197,8 +210,9 @@ fun calculateResponsiveFontSize(
     textType: TextType = TextType.VALUE
 ): TextUnit {
     val heightInDp = containerHeight.value
+    val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
 
-    return when (textType) {
+    val baseSize = when (textType) {
         TextType.TITLE -> {
             when {
                 heightInDp < 20 -> 8.sp
@@ -236,6 +250,7 @@ fun calculateResponsiveFontSize(
             }
         }
     }
+    return baseSize * textScale
 }
 
 enum class TextType {

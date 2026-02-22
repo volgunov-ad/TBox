@@ -36,7 +36,8 @@ fun DashboardGearBoxWidgetItem(
     canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false
+    backgroundTransparent: Boolean = false,
+    units: Boolean = true
 ) {
     val gearBoxMode by canViewModel.gearBoxMode.collectAsStateWithLifecycle()
     val gearBoxCurrentGear by canViewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
@@ -89,7 +90,7 @@ fun DashboardGearBoxWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${valueToString(gearBoxOilTemperature, 0)} °C",
+                    text = "${valueToString(gearBoxOilTemperature, 0)}${if (units) "\u2009°C" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

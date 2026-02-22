@@ -21,12 +21,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardElevation
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,10 +51,10 @@ import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
-import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
@@ -59,13 +63,18 @@ import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.normalizeWidgetScale
+import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
 fun FloatingDashboardUI(
     settingsManager: SettingsManager,
     appDataManager: AppDataManager,
-    service: BackgroundService,
+    onUpdateWindowSize: (String, Int, Int) -> Unit,
+    onUpdateWindowPosition: (String, Int, Int) -> Unit,
+    onRebootTbox: () -> Unit,
     panelId: String,
     params: WindowManager.LayoutParams
 ) {
@@ -104,7 +113,9 @@ fun FloatingDashboardUI(
                 settingsViewModel = settingsViewModel,
                 appDataViewModel = appDataViewModel,
                 panelId = panelId,
-                service = service,
+                onUpdateWindowSize = onUpdateWindowSize,
+                onUpdateWindowPosition = onUpdateWindowPosition,
+                onRebootTbox = onRebootTbox,
                 windowParams = params
             )
         }
@@ -118,7 +129,9 @@ fun FloatingDashboard(
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
     panelId: String,
-    service: BackgroundService,
+    onUpdateWindowSize: (String, Int, Int) -> Unit,
+    onUpdateWindowPosition: (String, Int, Int) -> Unit,
+    onRebootTbox: () -> Unit,
     windowParams: WindowManager.LayoutParams
 ) {
     val context = LocalContext.current
@@ -129,9 +142,12 @@ fun FloatingDashboard(
     )
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
     val panelConfig by settingsViewModel.floatingDashboardConfig(panelId).collectAsStateWithLifecycle()
-    val widgetsConfig = panelConfig.widgetsConfig
+    val widgetConfigs = panelConfig.widgetsConfig
     val dashboardRows = panelConfig.rows
     val dashboardCols = panelConfig.cols
+    val hasConfiguredWidgets = widgetConfigs.any { config ->
+        config.dataKey.isNotBlank() && config.dataKey != "null"
+    }
 
     val isFloatingDashboardClickAction = panelConfig.clickAction
     val isFloatingDashboardBackground = panelConfig.background
@@ -183,42 +199,32 @@ fun FloatingDashboard(
             originalY.intValue = currentWindowParams.y
 
             // Увеличиваем окно для диалога
-            val dialogWidth = (containerSize.width * 0.7f).toInt()
+            val dialogWidth = (containerSize.width * 0.5f).toInt()
             val dialogHeight = (containerSize.height * 0.7f).toInt()
 
             val newWidth = dialogWidth.coerceAtMost(containerSize.width)
             val newHeight = dialogHeight.coerceAtMost(containerSize.height - 100)
 
-            service.updateWindowSize(panelId, newWidth, newHeight)
+            onUpdateWindowSize(panelId, newWidth, newHeight)
 
             // Центрируем окно
-            val centerX = (containerSize.width - newWidth) / 2
+            val centerX = (containerSize.width - newWidth) / 2 + 100
             val centerY = (containerSize.height - newHeight) / 2
-            service.updateWindowPosition(panelId, centerX, centerY)
+            onUpdateWindowPosition(panelId, centerX, centerY)
         } else {
             // Восстанавливаем оригинальные размеры и положение
-            service.updateWindowSize(panelId, originalWidth.intValue, originalHeight.intValue)
-            service.updateWindowPosition(panelId, originalX.intValue, originalY.intValue)
+            onUpdateWindowSize(panelId, originalWidth.intValue, originalHeight.intValue)
+            onUpdateWindowPosition(panelId, originalX.intValue, originalY.intValue)
         }
     }
 
     val dataProvider = remember { TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel) }
 
-    LaunchedEffect(widgetsConfig, dashboardRows, dashboardCols) {
+    LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols) {
         val totalWidgets = dashboardRows * dashboardCols
 
         // Всегда загружаем/создаем виджеты при изменении зависимостей
-        val widgets = if (widgetsConfig.isNotEmpty()) {
-            loadWidgetsFromConfig(widgetsConfig, totalWidgets)
-        } else {
-            List(totalWidgets) { index ->
-                DashboardWidget(
-                    id = index,
-                    title = "",
-                    dataKey = ""
-                )
-            }
-        }
+        val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets)
 
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
     }
@@ -251,19 +257,29 @@ fun FloatingDashboard(
                             onDragStart = { startOffset ->
                                 if (isEditMode && showDialogForIndex == null) { // Не позволяем перетаскивать при открытом диалоге
                                     // Определяем, в какой области началось перетаскивание
-                                    val isNearBottomRight = startOffset.x > size.width * 0.7f &&
-                                            startOffset.y > size.height * 0.7f
-                                    val isNearEdge = startOffset.x < size.width * 0.2f ||
-                                            startOffset.x > size.width * 0.8f ||
-                                            startOffset.y < size.height * 0.2f ||
-                                            startOffset.y > size.height * 0.8f
+                                    val resizeOffsetX = if (size.width <= 60f) {
+                                        30f
+                                    } else if (size.width <= 100f) {
+                                        50f
+                                    } else {
+                                        60f
+                                    }
+                                    val resizeOffsetY = if (size.height <= 60f) {
+                                        30f
+                                    } else if (size.height <= 100f) {
+                                        50f
+                                    } else {
+                                        60f
+                                    }
+                                    val isNearBottomRight = startOffset.x > size.width - resizeOffsetX &&
+                                            startOffset.y > size.height - resizeOffsetY
 
                                     if (isNearBottomRight) {
                                         // Изменение размера (за правый нижний угол)
                                         isResizingMode = true
                                         isDraggingMode = false
                                         resizeStartPosition = startOffset
-                                    } else if (isNearEdge) {
+                                    } else {
                                         // Перетаскивание окна (за края)
                                         isDraggingMode = true
                                         isResizingMode = false
@@ -278,7 +294,7 @@ fun FloatingDashboard(
                                     // Обновляем положение окна
                                     val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
                                     val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
-                                    service.updateWindowPosition(panelId, newX, newY)
+                                    onUpdateWindowPosition(panelId, newX, newY)
 
                                 } else if (isEditMode && showDialogForIndex == null && isResizingMode && resizeStartPosition != null) {
                                     // Обновляем размер окна
@@ -286,7 +302,7 @@ fun FloatingDashboard(
                                         .coerceAtLeast(50)
                                     val newHeight = (windowParams.height + dragAmount.y).toInt()
                                         .coerceAtLeast(50)
-                                    service.updateWindowSize(panelId, newWidth, newHeight)
+                                    onUpdateWindowSize(panelId, newWidth, newHeight)
                                 }
                             },
                             onDragEnd = {
@@ -344,6 +360,9 @@ fun FloatingDashboard(
                                 for (col in 0 until dashboardCols) {
                                     val index = row * dashboardCols + col
                                     val widget = dashboardState.widgets.getOrNull(index) ?: continue
+                                    val widgetConfig = widgetConfigs.getOrNull(index)
+                                        ?: FloatingDashboardWidgetConfig(dataKey = "")
+                                    val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
 
                                     Box(modifier = Modifier.weight(1f)) {
                                         if (isEditMode) {
@@ -356,7 +375,10 @@ fun FloatingDashboard(
                                                 )
                                             }
                                         }
-                                        when (widget.dataKey) {
+                                        CompositionLocalProvider(
+                                            LocalWidgetTextScale provides widgetTextScale
+                                        ) {
+                                            when (widget.dataKey) {
                                             "netWidget" -> {
                                                 DashboardNetWidgetItem(
                                                     widget = widget,
@@ -419,7 +441,8 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "gearBoxWidget" -> {
@@ -440,7 +463,8 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "wheelsPressureWidget" -> {
@@ -461,7 +485,8 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "wheelsPressureTemperatureWidget" -> {
@@ -482,7 +507,8 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "tempInOutWidget" -> {
@@ -503,7 +529,33 @@ fun FloatingDashboard(
                                                     canViewModel = canViewModel,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    backgroundTransparent = true
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
+                                                )
+                                            }
+                                            "motorHoursWidget" -> {
+                                                DashboardMotorHoursWidgetItem(
+                                                    widget = widget,
+                                                    dataProvider = dataProvider,
+                                                    onClick = {
+                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                            showDialogForIndex = index
+                                                        } else if (isFloatingDashboardClickAction) {
+                                                            openMainActivity(context)
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        isEditMode = !isEditMode
+                                                        isDraggingMode = false
+                                                        isResizingMode = false
+                                                    },
+                                                    onDoubleClick = {
+                                                        appDataViewModel.setMotorHours(0f)
+                                                    },
+                                                    elevation = 0.dp,
+                                                    shape = 0.dp,
+                                                    backgroundTransparent = true,
+                                                    units = widgetConfig.showUnit
                                                 )
                                             }
                                             "restartTbox" -> {
@@ -525,14 +577,15 @@ fun FloatingDashboard(
                                                     onDoubleClick = {
                                                         if (restartEnabled) {
                                                             restartEnabled = false
-                                                            service.crtRebootTbox()
+                                                            onRebootTbox()
                                                         }
                                                     },
                                                     dashboardManager = dashboardViewModel.dashboardManager,
                                                     dashboardChart = false,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    title = false,
+                                                    title = widgetConfig.showTitle,
+                                                    units = widgetConfig.showUnit,
                                                     backgroundTransparent = true,
                                                     textColor = if (restartEnabled) {
                                                         if (tboxConnected) {
@@ -570,9 +623,11 @@ fun FloatingDashboard(
                                                     dashboardChart = false,
                                                     elevation = 0.dp,
                                                     shape = 0.dp,
-                                                    title = false,
+                                                    title = widgetConfig.showTitle,
+                                                    units = widgetConfig.showUnit,
                                                     backgroundTransparent = true
                                                 )
+                                            }
                                             }
                                         }
                                     }
@@ -582,7 +637,7 @@ fun FloatingDashboard(
                     }
                 }
 
-                if (widgetsConfig.isEmpty()) {
+                if (!hasConfiguredWidgets) {
                     Box(
                         modifier = Modifier
                             .matchParentSize()
@@ -638,7 +693,7 @@ fun FloatingDashboard(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(8.dp)
+                            .padding(4.dp)
                     ) {
                         Canvas(
                             modifier = Modifier.size(16.dp)
@@ -661,6 +716,7 @@ fun FloatingDashboard(
                 panelId = panelId,
                 widgetIndex = index,
                 currentWidgets = dashboardState.widgets,
+                currentWidgetConfigs = widgetConfigs,
                 settingsViewModel = settingsViewModel,
                 dashboardManager = dashboardViewModel.dashboardManager,
                 onDismiss = { showDialogForIndex = null }
@@ -674,6 +730,7 @@ fun OverlayWidgetSelectionDialog(
     panelId: String,
     widgetIndex: Int,
     currentWidgets: List<DashboardWidget>,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     settingsViewModel: SettingsViewModel,
     dashboardManager: DashboardManager,
     onDismiss: () -> Unit
@@ -681,10 +738,22 @@ fun OverlayWidgetSelectionDialog(
     var selectedDataKey by remember {
         mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
     }
+    val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
+        ?: FloatingDashboardWidgetConfig(dataKey = "")
+    var showTitle by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(initialConfig.showTitle)
+    }
+    var showUnit by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(initialConfig.showUnit)
+    }
+    var scale by remember(widgetIndex, currentWidgetConfigs) {
+        mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
+    }
+    val togglesEnabled = selectedDataKey.isNotEmpty()
 
     // Получаем список опций
     val availableOptions = listOf("" to "Не выбрано") +
-            WidgetsRepository.getAvailableDataKeys()
+            WidgetsRepository.getAvailableDataKeysWidgets()
                 .filter { it.isNotEmpty() }
                 .map { key ->
                     key to WidgetsRepository.getTitleUnitForDataKey(key)
@@ -702,23 +771,13 @@ fun OverlayWidgetSelectionDialog(
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
-            // Заголовок
-            Text(
-                text = "Выберите данные для плитки ${widgetIndex + 1}",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 5.dp),
-                fontSize = 24.sp
-            )
+            SettingsTitle("Выберите данные для плитки ${widgetIndex + 1}")
 
             // Список опций с прокруткой
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
-                        androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                    )
+                    .weight(2f)
             ) {
                 Column(
                     modifier = Modifier
@@ -727,29 +786,84 @@ fun OverlayWidgetSelectionDialog(
                         .padding(12.dp)
                 ) {
                     availableOptions.forEachIndexed { index, (key, displayName) ->
-                        Column {
-                            Row(
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedDataKey = key }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            androidx.compose.material3.RadioButton(
+                                selected = selectedDataKey == key,
+                                onClick = { selectedDataKey = key }
+                            )
+                            Text(
+                                text = displayName,
+                                fontSize = 24.sp,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedDataKey = key }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                androidx.compose.material3.RadioButton(
-                                    selected = selectedDataKey == key,
-                                    onClick = { selectedDataKey = key }
-                                )
-                                Text(
-                                    text = displayName,
-                                    fontSize = 22.sp,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .weight(1f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                                    .padding(start = 8.dp)
+                                    .weight(1f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
+                    }
+                }
+            }
+
+            SettingsTitle("Дополнительные настройки плитки ${widgetIndex + 1}")
+            // Список опций с прокруткой
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                        .padding(12.dp)
+                ) {
+                    SettingSwitch(
+                        showTitle,
+                        { showTitle = it },
+                        "Отображать название",
+                        "",
+                        togglesEnabled
+                    )
+                    SettingSwitch(
+                        showUnit,
+                        { showUnit = it },
+                        "Отображать единицу измерения",
+                        "",
+                        togglesEnabled
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "Масштаб виджета: ${scale}x",
+                            fontSize = 24.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "0.1..2.0 (1.0 = 100%)",
+                            fontSize = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = scale,
+                            onValueChange = { newValue ->
+                                scale = normalizeWidgetScale(newValue)
+                            },
+                            valueRange = 0.1f..2.0f,
+                            steps = 18,
+                            enabled = togglesEnabled,
+                            modifier = Modifier
+                                .padding(top = 6.dp)
+                        )
                     }
                 }
             }
@@ -771,6 +885,8 @@ fun OverlayWidgetSelectionDialog(
 
                 Button(
                     onClick = {
+                        val normalizedScale = normalizeWidgetScale(scale)
+                        scale = normalizedScale
                         val updatedWidgets = currentWidgets.toMutableList()
                         val newWidget = if (selectedDataKey.isNotEmpty()) {
                             DashboardWidget(
@@ -789,8 +905,22 @@ fun OverlayWidgetSelectionDialog(
                         updatedWidgets[widgetIndex] = newWidget
 
                         dashboardManager.updateWidgets(updatedWidgets)
-                        val config = updatedWidgets.joinToString("|") { it.dataKey }
-                        settingsViewModel.saveFloatingDashboardWidgets(panelId, config)
+                        val normalizedConfigs = normalizeWidgetConfigs(
+                            currentWidgetConfigs,
+                            updatedWidgets.size
+                        ).toMutableList()
+                        val newConfig = if (selectedDataKey.isNotEmpty()) {
+                            FloatingDashboardWidgetConfig(
+                                dataKey = selectedDataKey,
+                                showTitle = showTitle,
+                                showUnit = showUnit,
+                                scale = normalizedScale
+                            )
+                        } else {
+                            FloatingDashboardWidgetConfig(dataKey = "")
+                        }
+                        normalizedConfigs[widgetIndex] = newConfig
+                        settingsViewModel.saveFloatingDashboardWidgets(panelId, normalizedConfigs)
                         dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
 
                         onDismiss()

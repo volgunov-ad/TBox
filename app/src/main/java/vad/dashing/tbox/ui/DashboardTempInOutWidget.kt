@@ -36,7 +36,8 @@ fun DashboardTempInOutWidgetItem(
     canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false
+    backgroundTransparent: Boolean = false,
+    units: Boolean = true
 ) {
     val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
     val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
@@ -73,7 +74,7 @@ fun DashboardTempInOutWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "${valueToString(outsideTemperature, 1)} °C",
+                    text = "${valueToString(outsideTemperature, 1)}${if (units) "\u2009°C" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -88,7 +89,7 @@ fun DashboardTempInOutWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${valueToString(insideTemperature, 1)} °C",
+                    text = "${valueToString(insideTemperature, 1)}${if (units) "\u2009°C" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE

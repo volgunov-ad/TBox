@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -21,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
-import vad.dashing.tbox.valueToString
 
 @Composable
 fun DashboardWheelsPressureWidgetItem(
@@ -39,7 +38,8 @@ fun DashboardWheelsPressureWidgetItem(
     canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false
+    backgroundTransparent: Boolean = false,
+    units: Boolean = true
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
 
@@ -77,79 +77,69 @@ fun DashboardWheelsPressureWidgetItem(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1.5f)
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        .weight(1f)
+                        .wrapContentHeight(Alignment.Top),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
-                        PressureText(wheelsPressure.wheel1, availableHeight, Modifier)
+                        PressureText(
+                            wheelsPressure.wheel1,
+                            availableHeight,
+                            TextAlign.Left,
+                            TextType.VALUE)
                     }
-                    Box(modifier = Modifier.weight(1f)) {
-                        PressureText(wheelsPressure.wheel2, availableHeight, Modifier)
+                    Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
+                        PressureText(
+                            wheelsPressure.wheel2,
+                            availableHeight,
+                            TextAlign.Right,
+                            TextType.VALUE)
+                    }
+                }
+                if (units) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .wrapContentHeight(Alignment.CenterVertically),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = widget.unit,
+                            fontSize = calculateResponsiveFontSize(
+                                containerHeight = availableHeight,
+                                textType = TextType.UNIT
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Text(
-                        text = widget.unit,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.UNIT
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        softWrap = true,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .wrapContentHeight(Alignment.CenterVertically)
-                    )
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1.5f)
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        .wrapContentHeight(Alignment.Bottom),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
-                        PressureText(wheelsPressure.wheel3, availableHeight, Modifier)
+                        PressureText(
+                            wheelsPressure.wheel3,
+                            availableHeight,
+                            TextAlign.Left,
+                            TextType.VALUE)
                     }
-                    Box(modifier = Modifier.weight(1f)) {
-                        PressureText(wheelsPressure.wheel4, availableHeight, Modifier)
+                    Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
+                        PressureText(
+                            wheelsPressure.wheel4,
+                            availableHeight,
+                            TextAlign.Right,
+                            TextType.VALUE)
                     }
                 }
             }
         }
     }
-}
-
-// Функция для отрисовки одного значения давления
-@Composable
-private fun PressureText(
-    value: Float?,
-    availableHeight: Dp,
-    modifier: Modifier = Modifier
-) {
-    Text(
-        text = valueToString(value, 1, default = "-"),
-        fontSize = calculateResponsiveFontSize(
-            containerHeight = availableHeight,
-            textType = TextType.VALUE
-        ),
-        fontWeight = FontWeight.Medium,
-        color = if ((value ?: 0f) >= 1.92f) MaterialTheme.colorScheme.onSurface else Color(0xD9FF0000),
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier
-            .wrapContentHeight(Alignment.CenterVertically)
-            .fillMaxWidth()
-    )
 }

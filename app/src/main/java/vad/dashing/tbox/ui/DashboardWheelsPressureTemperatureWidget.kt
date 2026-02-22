@@ -40,7 +40,8 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
     canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false
+    backgroundTransparent: Boolean = false,
+    units: Boolean = true
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
     val wheelsTemperature by canViewModel.wheelsTemperature.collectAsStateWithLifecycle()
@@ -87,13 +88,15 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                         PressureText(
                             wheelsPressure.wheel1,
                             availableHeight,
-                            TextAlign.Left)
+                            TextAlign.Left,
+                            TextType.TITLE)
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel2,
                             availableHeight,
-                            TextAlign.Right)
+                            TextAlign.Right,
+                            TextType.TITLE)
                     }
                 }
                 Row(
@@ -117,24 +120,30 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                     }
                 }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = widget.unit,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.UNIT
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                if (units) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .wrapContentHeight(Alignment.CenterVertically),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = widget.unit,
+                            fontSize = calculateResponsiveFontSize(
+                                containerHeight = availableHeight,
+                                textType = TextType.UNIT
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            lineHeight = calculateResponsiveFontSize(
+                                containerHeight = availableHeight,
+                                textType = TextType.UNIT
+                            ) * 1.3f,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
                 Row(
@@ -148,13 +157,15 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                         PressureText(
                             wheelsPressure.wheel3,
                             availableHeight,
-                            TextAlign.Left)
+                            TextAlign.Left,
+                            TextType.TITLE)
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel4,
                             availableHeight,
-                            TextAlign.Right)
+                            TextAlign.Right,
+                            TextType.TITLE)
                     }
                 }
                 Row(
@@ -184,16 +195,17 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
 
 // Функция для отрисовки одного значения давления
 @Composable
-private fun PressureText(
+fun PressureText(
     value: Float?,
     availableHeight: Dp,
-    align: TextAlign
+    align: TextAlign,
+    textType: TextType
 ) {
     Text(
         text = valueToString(value, 1, default = "-"),
         fontSize = calculateResponsiveFontSize(
             containerHeight = availableHeight,
-            textType = TextType.TITLE
+            textType = textType
         ),
         fontWeight = FontWeight.Medium,
         color = if ((value ?: 0f) >= 1.92f) MaterialTheme.colorScheme.onSurface else Color(0xD9FF0000),

@@ -36,6 +36,18 @@ object CycleDataRepository {
     private val _pressure4 = MutableStateFlow<Float?>(null)
     val pressure4: StateFlow<Float?> = _pressure4.asStateFlow()
 
+    private val _speed1 = MutableStateFlow<Float?>(null)
+    val speed1: StateFlow<Float?> = _speed1.asStateFlow()
+
+    private val _speed2 = MutableStateFlow<Float?>(null)
+    val speed2: StateFlow<Float?> = _speed2.asStateFlow()
+
+    private val _speed3 = MutableStateFlow<Float?>(null)
+    val speed3: StateFlow<Float?> = _speed3.asStateFlow()
+
+    private val _speed4 = MutableStateFlow<Float?>(null)
+    val speed4: StateFlow<Float?> = _speed4.asStateFlow()
+
     private val _temperature1 = MutableStateFlow<Float?>(null)
     val temperature1: StateFlow<Float?> = _temperature1.asStateFlow()
 
@@ -75,35 +87,51 @@ object CycleDataRepository {
         _yawRate.value = newValue
     }
 
-    fun updatePressure1(newValue: Float) {
+    fun updatePressure1(newValue: Float?) {
         _pressure1.value = newValue
     }
 
-    fun updatePressure2(newValue: Float) {
+    fun updatePressure2(newValue: Float?) {
         _pressure2.value = newValue
     }
 
-    fun updatePressure3(newValue: Float) {
+    fun updatePressure3(newValue: Float?) {
         _pressure3.value = newValue
     }
 
-    fun updatePressure4(newValue: Float) {
+    fun updatePressure4(newValue: Float?) {
         _pressure4.value = newValue
     }
 
-    fun updateTemperature1(newValue: Float) {
+    fun updateSpeed1(newValue: Float) {
+        _speed1.value = newValue
+    }
+
+    fun updateSpeed2(newValue: Float) {
+        _speed2.value = newValue
+    }
+
+    fun updateSpeed3(newValue: Float) {
+        _speed3.value = newValue
+    }
+
+    fun updateSpeed4(newValue: Float) {
+        _speed4.value = newValue
+    }
+
+    fun updateTemperature1(newValue: Float?) {
         _temperature1.value = newValue
     }
 
-    fun updateTemperature2(newValue: Float) {
+    fun updateTemperature2(newValue: Float?) {
         _temperature2.value = newValue
     }
 
-    fun updateTemperature3(newValue: Float) {
+    fun updateTemperature3(newValue: Float?) {
         _temperature3.value = newValue
     }
 
-    fun updateTemperature4(newValue: Float) {
+    fun updateTemperature4(newValue: Float?) {
         _temperature4.value = newValue
     }
 

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.utils
 
+import android.os.SystemClock
+
 class FuelLevelBuffer(private val bufferSize: Int = 10) {
     private val buffer = ArrayDeque<UInt>()
 
@@ -27,19 +29,22 @@ class FuelLevelBuffer(private val bufferSize: Int = 10) {
 }
 
 class MotorHoursBuffer(private val maxDif: Float = 0.02f) {
-    private var lastTime = System.currentTimeMillis()
+    private var lastTime = SystemClock.elapsedRealtime()
     private var lastRPM = 0f
 
     fun updateValue(rpm: Float): Float {
-        if (rpm < 200f && lastRPM < 200f) {
+        if (rpm < 100f && lastRPM < 100f) {
             lastRPM = rpm
-            lastTime = System.currentTimeMillis()
+            lastTime = SystemClock.elapsedRealtime()
             return 0f
         }
         lastRPM = rpm
-        val newHours = (System.currentTimeMillis() - lastTime) / 3600000.0f
-        if (newHours >= maxDif) {
-            lastTime = System.currentTimeMillis()
+        val newHours = (SystemClock.elapsedRealtime() - lastTime) / 3600000.0f
+        if (newHours > 10 * maxDif) {
+            lastTime = SystemClock.elapsedRealtime()
+            return 0f
+        } else if (newHours >= maxDif) {
+            lastTime = SystemClock.elapsedRealtime()
             return newHours
         } else {
             return 0f

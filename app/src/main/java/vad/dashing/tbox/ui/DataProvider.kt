@@ -1,14 +1,14 @@
 package vad.dashing.tbox.ui
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import androidx.lifecycle.viewModelScope
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.TboxViewModel
@@ -26,7 +26,18 @@ class TboxDataProvider(
     private val canViewModel: CanDataViewModel,
     private val appDataViewModel: AppDataViewModel,
 ) : DataProvider {
-    override fun getValueFlow(key: String): StateFlow<String> = when (key) {
+    private val flowCache = mutableMapOf<String, StateFlow<String>>()
+    private val restartFlow = MutableStateFlow("TBox").asStateFlow()
+    private val emptyFlow = MutableStateFlow("").asStateFlow()
+    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+    override fun getValueFlow(key: String): StateFlow<String> {
+        return flowCache.getOrPut(key) {
+            createFlowForKey(key)
+        }
+    }
+
+    private fun createFlowForKey(key: String): StateFlow<String> = when (key) {
         "voltage" -> canViewModel.voltage.mapState { valueToString(it, 1) }
         "steerAngle" -> canViewModel.steerAngle.mapState { valueToString(it, 1) }
         "steerSpeed" -> canViewModel.steerSpeed.mapState { valueToString(it) }
@@ -81,25 +92,29 @@ class TboxDataProvider(
         "visibleSatellites" -> viewModel.locValues.mapState { valueToString(it.visibleSatellites) }
         "trueDirection" -> viewModel.locValues.mapState { valueToString(it.trueDirection, 1) }
         "locationUpdateTime" -> viewModel.locValues.mapState {
-            val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
             it.updateTime?.let { updateTime -> timeFormat.format(updateTime) } ?: ""
         }
         "locationRefreshTime" -> viewModel.locationUpdateTime.mapState {
-            val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
             it?.let { locationUpdateTime -> timeFormat.format(locationUpdateTime) } ?: ""
         }
         "outsideTemperature" -> canViewModel.outsideTemperature.mapState { valueToString(it, 1) }
         "insideTemperature" -> canViewModel.insideTemperature.mapState { valueToString(it, 1) }
-        "isWindowsBlocked" -> canViewModel.isWindowsBlocked.mapState { valueToString(it, booleanTrue = "заблокированы", booleanFalse = "разблокированы") }
+        "outsideAirQuality" -> canViewModel.outsideAirQuality.mapState { valueToString(it) }
+        "insideAirQuality" -> canViewModel.insideAirQuality.mapState { valueToString(it) }
+        "isWindowsBlocked" -> canViewModel.isWindowsBlocked.mapState {
+            valueToString(it, booleanTrue = "заблокированы", booleanFalse = "разблокированы")
+        }
         "motorHours" -> appDataViewModel.motorHours.mapState { valueToString(it, 1) }
-        "restartTbox" -> MutableStateFlow("TBox").asStateFlow()
-        else -> MutableStateFlow("").asStateFlow()
+        "motorHoursTrip" -> canViewModel.motorHoursTrip.mapState { valueToString(it, 1) }
+        "restartTbox" -> restartFlow
+        else -> emptyFlow
     }
 
     private fun <T> Flow<T>.mapState(transform: (T) -> String): StateFlow<String> {
         return this.map { transform(it) }
+            .distinctUntilChanged()
             .stateIn(
-                scope = CoroutineScope(Dispatchers.Main),
+                scope = viewModel.viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = ""
             )

@@ -20,11 +20,18 @@ private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 // Используем extension property для DataStore
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
 
+data class FloatingDashboardWidgetConfig(
+    val dataKey: String,
+    val showTitle: Boolean = false,
+    val showUnit: Boolean = true,
+    val scale: Float = 1.0f
+)
+
 data class FloatingDashboardConfig(
     val id: String,
     val name: String,
     val enabled: Boolean,
-    val widgetsConfig: String,
+    val widgetsConfig: List<FloatingDashboardWidgetConfig>,
     val rows: Int,
     val cols: Int,
     val width: Int,
@@ -45,6 +52,9 @@ class SettingsManager(private val context: Context) {
         private val AUTO_TBOX_REBOOT_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_tbox_reboot")
         private val AUTO_SUSPEND_TBOX_APP_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_app")
         private val AUTO_STOP_TBOX_APP_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_stop_tbox_app")
+        private val AUTO_STOP_TBOX_MDC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_stop_tbox_mdc")
+        private val AUTO_SUSPEND_TBOX_MDC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_mdc")
+        private val AUTO_SUSPEND_TBOX_SWD_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_swd")
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
         private val GET_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}get_voltages")
         private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
@@ -80,7 +90,8 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FLOATING_DASHBOARD_ENABLED = false
         private const val DEFAULT_FLOATING_DASHBOARD_BACKGROUND = false
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
-        private const val DEFAULT_FLOATING_DASHBOARD_WIDGETS = ""
+        private const val DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD = false
+        private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val FLOATING_DASHBOARD_SELECTED_KEY = "floating_dashboard_selected"
         private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
@@ -108,8 +119,10 @@ class SettingsManager(private val context: Context) {
     }
 
     // Flow для конфигурации виджетов
-    val dashboardWidgetsFlow: Flow<String> = context.settingsDataStore.data
-        .map { preferences -> preferences[DASHBOARD_WIDGETS_KEY] ?: "" }
+    val dashboardWidgetsFlow: Flow<List<FloatingDashboardWidgetConfig>> = context.settingsDataStore.data
+        .map { preferences ->
+            parseWidgetConfigsFromString(preferences[DASHBOARD_WIDGETS_KEY] ?: "")
+        }
         .distinctUntilChanged()
 
     val floatingDashboardsFlow: Flow<List<FloatingDashboardConfig>> = context.settingsDataStore.data
@@ -145,6 +158,18 @@ class SettingsManager(private val context: Context) {
 
     val autoStopTboxAppFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_STOP_TBOX_APP_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val autoSuspendTboxMdcFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_SUSPEND_TBOX_MDC_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val autoStopTboxMdcFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_STOP_TBOX_MDC_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val autoSuspendTboxSwdFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_SUSPEND_TBOX_SWD_KEY] ?: false }
         .distinctUntilChanged()
 
     val autoPreventTboxRestartFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -213,9 +238,9 @@ class SettingsManager(private val context: Context) {
     // Suspend функции для сохранения настроек
 
     // Сохранение конфигурации виджетов
-    suspend fun saveDashboardWidgets(config: String) {
+    suspend fun saveDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         context.settingsDataStore.edit { preferences ->
-            preferences[DASHBOARD_WIDGETS_KEY] = config
+            preferences[DASHBOARD_WIDGETS_KEY] = serializeWidgetConfigs(config)
         }
     }
 
@@ -267,6 +292,24 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveAutoSuspendTboxMdcSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_SUSPEND_TBOX_MDC_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAutoStopTboxMdcSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_STOP_TBOX_MDC_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAutoSuspendTboxSwdSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_SUSPEND_TBOX_SWD_KEY] = enabled
+        }
+    }
+
     suspend fun saveAutoPreventTboxRestartSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[AUTO_PREVENT_TBOX_RESTART_KEY] = enabled
@@ -315,9 +358,9 @@ class SettingsManager(private val context: Context) {
         }
     }
 
-    suspend fun saveFloatingDashboardWidgets(config: String) {
+    suspend fun saveFloatingDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_WIDGETS_KEY] = config
+            preferences[FLOATING_DASHBOARD_WIDGETS_KEY] = serializeWidgetConfigs(config)
         }
     }
 
@@ -528,7 +571,7 @@ class SettingsManager(private val context: Context) {
             id = id,
             name = name,
             enabled = obj.optBoolean("enabled", DEFAULT_FLOATING_DASHBOARD_ENABLED),
-            widgetsConfig = obj.optString("widgetsConfig", DEFAULT_FLOATING_DASHBOARD_WIDGETS),
+            widgetsConfig = parseWidgetConfigsFromAny(obj.opt("widgetsConfig")),
             rows = obj.optInt("rows", DEFAULT_FLOATING_DASHBOARD_ROWS).coerceIn(1, 6),
             cols = obj.optInt("cols", DEFAULT_FLOATING_DASHBOARD_COLS).coerceIn(1, 6),
             width = obj.optInt("width", DEFAULT_FLOATING_DASHBOARD_WIDTH),
@@ -547,7 +590,7 @@ class SettingsManager(private val context: Context) {
             obj.put("id", config.id)
             obj.put("name", config.name)
             obj.put("enabled", config.enabled)
-            obj.put("widgetsConfig", config.widgetsConfig)
+            obj.put("widgetsConfig", serializeWidgetConfigsToJsonArray(config.widgetsConfig))
             obj.put("rows", config.rows)
             obj.put("cols", config.cols)
             obj.put("width", config.width)

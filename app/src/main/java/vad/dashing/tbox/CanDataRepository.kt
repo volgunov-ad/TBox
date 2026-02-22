@@ -139,17 +139,33 @@ object CanDataRepository {
     private val _insideTemperature = MutableStateFlow<Float?>(null)
     val insideTemperature: StateFlow<Float?> = _insideTemperature.asStateFlow()
 
+    private val _outsideAirQuality = MutableStateFlow<UInt?>(null)
+    val outsideAirQuality: StateFlow<UInt?> = _outsideAirQuality.asStateFlow()
+
+    private val _insideAirQuality = MutableStateFlow<UInt?>(null)
+    val insideAirQuality: StateFlow<UInt?> = _insideAirQuality.asStateFlow()
+
     private val _isWindowsBlocked = MutableStateFlow<Boolean?>(null)
     val isWindowsBlocked: StateFlow<Boolean?> = _isWindowsBlocked.asStateFlow()
 
     private val _canFramesStructured = MutableStateFlow<Map<String, List<CanFrame>>>(emptyMap())
     val canFramesStructured: StateFlow<Map<String, List<CanFrame>>> = _canFramesStructured.asStateFlow()
 
+    private val _motorHoursTrip = MutableStateFlow<Float?>(null)
+    val motorHoursTrip: StateFlow<Float?> = _motorHoursTrip.asStateFlow()
+
     private const val MAX_CAN_FRAMES = 5
+    private const val MAX_CAN_IDS = 500
     private const val MAX_FRAMES_PER_ID = 10
 
     private val timeFormat: ThreadLocal<SimpleDateFormat> = ThreadLocal.withInitial {
         SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    }
+
+    private fun <T> MutableStateFlow<T>.setIfChanged(newValue: T) {
+        if (value != newValue) {
+            value = newValue
+        }
     }
 
     /*fun addCanFrame(rawValue: String) {
@@ -163,139 +179,151 @@ object CanDataRepository {
     }*/
 
     fun updateVoltage(newValue: Float) {
-        _voltage.value = newValue
+        _voltage.setIfChanged(newValue)
     }
 
     fun updateCarSpeed(newValue: Float) {
-        _carSpeed.value = newValue
+        _carSpeed.setIfChanged(newValue)
     }
 
     fun updateCarSpeedAccurate(newValue: Float) {
-        _carSpeedAccurate.value = newValue
+        _carSpeedAccurate.setIfChanged(newValue)
     }
 
     fun updateOdometer(newValue: UInt) {
-        _odometer.value = newValue
+        _odometer.setIfChanged(newValue)
     }
 
     fun updateDistanceToNextMaintenance(newValue: UInt) {
-        _distanceToNextMaintenance.value = newValue
+        _distanceToNextMaintenance.setIfChanged(newValue)
     }
 
     fun updateDistanceToFuelEmpty(newValue: UInt) {
-        _distanceToFuelEmpty.value = newValue
+        _distanceToFuelEmpty.setIfChanged(newValue)
     }
 
     fun updateBreakingForce(newValue: UInt) {
-        _breakingForce.value = newValue
+        _breakingForce.setIfChanged(newValue)
     }
 
     fun updateFuelLevelPercentage(newValue: UInt) {
-        _fuelLevelPercentage.value = newValue
+        _fuelLevelPercentage.setIfChanged(newValue)
     }
 
     fun updateFuelLevelPercentageFiltered(newValue: UInt) {
-        _fuelLevelPercentageFiltered.value = newValue
+        _fuelLevelPercentageFiltered.setIfChanged(newValue)
     }
 
     fun updateCruiseSetSpeed(newValue: UInt) {
-        _cruiseSetSpeed.value = newValue
+        _cruiseSetSpeed.setIfChanged(newValue)
     }
 
     fun updateWheelsSpeed(newValue: Wheels) {
-        _wheelsSpeed.value = newValue
+        _wheelsSpeed.setIfChanged(newValue)
     }
 
     fun updateWheelsPressure(newValue: Wheels) {
-        _wheelsPressure.value = newValue
+        _wheelsPressure.setIfChanged(newValue)
     }
 
     fun updateWheelsTemperature(newValue: Wheels) {
-        _wheelsTemperature.value = newValue
+        _wheelsTemperature.setIfChanged(newValue)
     }
 
     fun updateEngineRPM(newValue: Float) {
-        _engineRPM.value = newValue
+        _engineRPM.setIfChanged(newValue)
     }
 
     fun updateParam1(newValue: Float) {
-        _param1.value = newValue
+        _param1.setIfChanged(newValue)
     }
 
     fun updateParam2(newValue: Float) {
-        _param2.value = newValue
+        _param2.setIfChanged(newValue)
     }
 
     fun updateParam3(newValue: Float) {
-        _param3.value = newValue
+        _param3.setIfChanged(newValue)
     }
 
     fun updateParam4(newValue: Float) {
-        _param4.value = newValue
+        _param4.setIfChanged(newValue)
     }
 
-    fun updateSteerAngle(newValue: Float) {
-        _steerAngle.value = newValue
+    fun updateSteerAngle(newValue: Float?) {
+        _steerAngle.setIfChanged(newValue)
     }
 
     fun updateSteerSpeed(newValue: Int) {
-        _steerSpeed.value = newValue
+        _steerSpeed.setIfChanged(newValue)
     }
 
     fun updateClimateSetTemperature1(newValue: Float) {
-        _climateSetTemperature1.value = newValue
+        _climateSetTemperature1.setIfChanged(newValue)
     }
 
     fun updateEngineTemperature(newValue: Float) {
-        _engineTemperature.value = newValue
+        _engineTemperature.setIfChanged(newValue)
     }
 
     fun updateGearBoxMode(newValue: String) {
-        _gearBoxMode.value = newValue
+        _gearBoxMode.setIfChanged(newValue)
     }
 
     fun updateGearBoxCurrentGear(newValue: Int) {
-        _gearBoxCurrentGear.value = newValue
+        _gearBoxCurrentGear.setIfChanged(newValue)
     }
 
     fun updateGearBoxChangeGear(newValue: Boolean) {
-        _gearBoxChangeGear.value = newValue
+        _gearBoxChangeGear.setIfChanged(newValue)
     }
 
     fun updateGearBoxPreparedGear(newValue: Int) {
-        _gearBoxPreparedGear.value = newValue
+        _gearBoxPreparedGear.setIfChanged(newValue)
     }
 
     fun updateGearBoxOilTemperature(newValue: Int) {
-        _gearBoxOilTemperature.value = newValue
+        _gearBoxOilTemperature.setIfChanged(newValue)
     }
 
     fun updateGearBoxDriveMode(newValue: String) {
-        _gearBoxDriveMode.value = newValue
+        _gearBoxDriveMode.setIfChanged(newValue)
     }
 
     fun updateGearBoxWork(newValue: String) {
-        _gearBoxWork.value = newValue
+        _gearBoxWork.setIfChanged(newValue)
     }
 
     fun updateFrontLeftSeatMode(newValue: UInt) {
-        _frontLeftSeatMode.value = newValue
+        _frontLeftSeatMode.setIfChanged(newValue)
     }
 
     fun updateFrontRightSeatMode(newValue: UInt) {
-        _frontRightSeatMode.value = newValue
+        _frontRightSeatMode.setIfChanged(newValue)
     }
 
     fun updateOutsideTemperature(newValue: Float?) {
-        _outsideTemperature.value = newValue
+        _outsideTemperature.setIfChanged(newValue)
     }
 
     fun updateInsideTemperature(newValue: Float?) {
-        _insideTemperature.value = newValue
+        _insideTemperature.setIfChanged(newValue)
+    }
+
+    fun updateOutsideAirQuality(newValue: UInt?) {
+        _outsideAirQuality.setIfChanged(newValue)
+    }
+
+    fun updateInsideAirQuality(newValue: UInt?) {
+        _insideAirQuality.setIfChanged(newValue)
     }
 
     fun updateIsWindowsBlocked(newValue: Boolean) {
-        _isWindowsBlocked.value = newValue
+        _isWindowsBlocked.setIfChanged(newValue)
+    }
+
+    fun addMotorHoursTrip(newValue: Float) {
+        _motorHoursTrip.value = (_motorHoursTrip.value ?: 0f) + newValue
     }
 
     fun addCanFrameStructured(canId: String, rawValue: ByteArray, maxFrames: Int = MAX_FRAMES_PER_ID) {
@@ -303,10 +331,17 @@ object CanDataRepository {
         val frame = CanFrame(date, rawValue)
 
         _canFramesStructured.update { currentMap ->
-            val currentFrames = currentMap[canId] ?: emptyList()
+            // Use insertion-ordered map so we can evict the oldest CAN IDs.
+            val limitedMap = LinkedHashMap(currentMap)
+            val currentFrames = limitedMap.remove(canId) ?: emptyList()
             val updatedFrames = (currentFrames + frame).takeLast(maxFrames)
+            limitedMap[canId] = updatedFrames
 
-            currentMap + (canId to updatedFrames)
+            while (limitedMap.size > MAX_CAN_IDS) {
+                val oldestCanId = limitedMap.keys.firstOrNull() ?: break
+                limitedMap.remove(oldestCanId)
+            }
+            limitedMap
         }
     }
 

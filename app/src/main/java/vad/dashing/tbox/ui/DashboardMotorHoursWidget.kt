@@ -24,30 +24,33 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
-import vad.dashing.tbox.valueToString
 
 @Composable
-fun DashboardVoltEngTempWidgetItem(
+fun DashboardMotorHoursWidgetItem(
     widget: DashboardWidget,
+    dataProvider: DataProvider,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    canViewModel: CanDataViewModel,
+    onDoubleClick: () -> Unit = {},
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
     units: Boolean = true
 ) {
-    val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
-    val engineTemperature by canViewModel.engineTemperature.collectAsStateWithLifecycle()
+    val motorHoursFlow = dataProvider.getValueFlow("motorHours")
+    val motorHoursString by motorHoursFlow.collectAsStateWithLifecycle()
+
+    val motorHoursTripFlow = dataProvider.getValueFlow("motorHoursTrip")
+    val motorHoursTripString by motorHoursTripFlow.collectAsStateWithLifecycle()
 
     Card(
         modifier = Modifier
             .fillMaxSize()
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onLongClick,
+                onDoubleClick = onDoubleClick
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
@@ -74,7 +77,7 @@ fun DashboardVoltEngTempWidgetItem(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "${valueToString(voltage, 1)}${if (units) "\u2009В" else ""}",
+                    text = "$motorHoursString ${if (units) "\u2009ч" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -89,7 +92,7 @@ fun DashboardVoltEngTempWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Text(
-                    text = "${valueToString(engineTemperature, 0)}${if (units) "\u2009°C" else ""}",
+                    text = "$motorHoursTripString ${if (units) "\u2009ч" else ""}",
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
