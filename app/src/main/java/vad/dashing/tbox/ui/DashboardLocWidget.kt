@@ -43,7 +43,8 @@ fun DashboardLocWidgetItem(
     viewModel: TboxViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false
+    backgroundTransparent: Boolean = false,
+    textColor: Color? = null
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
@@ -79,6 +80,7 @@ fun DashboardLocWidgetItem(
                 )
         ) {
             val availableHeight = maxHeight
+            val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
             // Основной контент
             Column(
                 modifier = Modifier
@@ -95,7 +97,7 @@ fun DashboardLocWidgetItem(
                         textType = TextType.TITLE
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -125,7 +127,7 @@ fun DashboardLocWidgetItem(
                         textType = TextType.TITLE
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     softWrap = true,

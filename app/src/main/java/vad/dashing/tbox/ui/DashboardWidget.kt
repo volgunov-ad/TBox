@@ -122,6 +122,7 @@ fun DashboardWidgetItem(
             }
 
             val availableHeight = maxHeight
+            val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
 
             Column(
                 modifier = Modifier
@@ -139,7 +140,7 @@ fun DashboardWidgetItem(
                             textType = TextType.TITLE
                         ),
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = resolvedTextColor,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
                         lineHeight = calculateResponsiveFontSize(
@@ -166,7 +167,7 @@ fun DashboardWidgetItem(
                         }
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     lineHeight = calculateResponsiveFontSize(

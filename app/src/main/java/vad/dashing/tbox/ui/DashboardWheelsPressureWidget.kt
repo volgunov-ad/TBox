@@ -39,7 +39,8 @@ fun DashboardWheelsPressureWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
-    units: Boolean = true
+    units: Boolean = true,
+    textColor: Color? = null
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
 
@@ -65,6 +66,7 @@ fun DashboardWheelsPressureWidgetItem(
                 )
         ) {
             val availableHeight = maxHeight
+            val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
             // Основной контент
             Column(
                 modifier = Modifier
@@ -86,14 +88,18 @@ fun DashboardWheelsPressureWidgetItem(
                             wheelsPressure.wheel1,
                             availableHeight,
                             TextAlign.Left,
-                            TextType.VALUE)
+                            TextType.VALUE,
+                            textColor = resolvedTextColor
+                        )
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel2,
                             availableHeight,
                             TextAlign.Right,
-                            TextType.VALUE)
+                            TextType.VALUE,
+                            textColor = resolvedTextColor
+                        )
                     }
                 }
                 if (units) {
@@ -110,7 +116,7 @@ fun DashboardWheelsPressureWidgetItem(
                                 containerHeight = availableHeight,
                                 textType = TextType.UNIT
                             ),
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = resolvedTextColor,
                             textAlign = TextAlign.Center,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -129,14 +135,18 @@ fun DashboardWheelsPressureWidgetItem(
                             wheelsPressure.wheel3,
                             availableHeight,
                             TextAlign.Left,
-                            TextType.VALUE)
+                            TextType.VALUE,
+                            textColor = resolvedTextColor
+                        )
                     }
                     Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                         PressureText(
                             wheelsPressure.wheel4,
                             availableHeight,
                             TextAlign.Right,
-                            TextType.VALUE)
+                            TextType.VALUE,
+                            textColor = resolvedTextColor
+                        )
                     }
                 }
             }

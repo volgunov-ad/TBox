@@ -51,6 +51,8 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("showTitle", config.showTitle)
         obj.put("showUnit", config.showUnit)
         obj.put("scale", normalizeWidgetScale(config.scale))
+        obj.put("textColorLight", config.textColorLight)
+        obj.put("textColorDark", config.textColorDark)
         array.put(obj)
     }
     return array
@@ -76,19 +78,25 @@ fun loadWidgetsFromConfig(
     context: Context
 ): List<DashboardWidget> {
     return (0 until widgetCount).map { index ->
-        val dataKey = configs.getOrNull(index)?.dataKey ?: ""
+        val widgetConfig = configs.getOrNull(index)
+            ?: FloatingDashboardWidgetConfig(dataKey = "")
+        val dataKey = widgetConfig.dataKey
         if (dataKey.isNotEmpty() && dataKey != "null") {
             DashboardWidget(
                 id = index,
                 title = WidgetsRepository.getTitleForDataKey(context, dataKey),
                 unit = WidgetsRepository.getUnitForDataKey(context, dataKey),
-                dataKey = dataKey
+                dataKey = dataKey,
+                textColorLight = widgetConfig.textColorLight,
+                textColorDark = widgetConfig.textColorDark
             )
         } else {
             DashboardWidget(
                 id = index,
                 title = "",
-                dataKey = ""
+                dataKey = "",
+                textColorLight = widgetConfig.textColorLight,
+                textColorDark = widgetConfig.textColorDark
             )
         }
     }
@@ -112,6 +120,14 @@ private fun parseWidgetConfigsFromJsonArray(
                         showUnit = item.optBoolean("showUnit", true),
                         scale = normalizeWidgetScale(
                             item.optDouble("scale", DEFAULT_WIDGET_SCALE.toDouble()).toFloat()
+                        ),
+                        textColorLight = item.optInt(
+                            "textColorLight",
+                            DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+                        ),
+                        textColorDark = item.optInt(
+                            "textColorDark",
+                            DEFAULT_WIDGET_TEXT_COLOR_DARK
                         )
                     )
                 )

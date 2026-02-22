@@ -39,7 +39,8 @@ fun DashboardGearBoxWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
-    units: Boolean = true
+    units: Boolean = true,
+    textColor: Color? = null
 ) {
     val gearBoxMode by canViewModel.gearBoxMode.collectAsStateWithLifecycle()
     val gearBoxCurrentGear by canViewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
@@ -68,6 +69,7 @@ fun DashboardGearBoxWidgetItem(
                 )
         ) {
             val availableHeight = maxHeight
+            val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
             // Основной контент
             Column(
                 modifier = Modifier
@@ -84,7 +86,7 @@ fun DashboardGearBoxWidgetItem(
                         textType = TextType.VALUE
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -99,7 +101,7 @@ fun DashboardGearBoxWidgetItem(
                         textType = TextType.VALUE
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

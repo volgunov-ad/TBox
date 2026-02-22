@@ -39,7 +39,8 @@ fun DashboardVoltEngTempWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
-    units: Boolean = true
+    units: Boolean = true,
+    textColor: Color? = null
 ) {
     val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
     val engineTemperature by canViewModel.engineTemperature.collectAsStateWithLifecycle()
@@ -68,6 +69,7 @@ fun DashboardVoltEngTempWidgetItem(
                 )
         ) {
             val availableHeight = maxHeight
+            val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
             // Основной контент
             Column(
                 modifier = Modifier
@@ -84,7 +86,7 @@ fun DashboardVoltEngTempWidgetItem(
                         textType = TextType.VALUE
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -99,7 +101,7 @@ fun DashboardVoltEngTempWidgetItem(
                         textType = TextType.VALUE
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

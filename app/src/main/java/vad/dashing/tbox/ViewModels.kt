@@ -422,6 +422,9 @@ object WidgetsRepository {
     }
 }
 
+const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = LIGHT_THEME_ON_SURFACE_COLOR_INT
+const val DEFAULT_WIDGET_TEXT_COLOR_DARK = DARK_THEME_ON_SURFACE_COLOR_INT
+
 // Модель для виджета панели
 data class DashboardWidget(
     val id: Int,
@@ -429,7 +432,9 @@ data class DashboardWidget(
     val unit: String = "",
     val dataKey: String = "", // Ключ для идентификации данных
     val maxValue: Float? = null,
-    val minValue: Float? = null
+    val minValue: Float? = null,
+    val textColorLight: Int = DEFAULT_WIDGET_TEXT_COLOR_LIGHT,
+    val textColorDark: Int = DEFAULT_WIDGET_TEXT_COLOR_DARK
 )
 
 // Состояние панели виджетов

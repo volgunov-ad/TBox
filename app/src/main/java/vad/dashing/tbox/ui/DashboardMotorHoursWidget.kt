@@ -38,7 +38,8 @@ fun DashboardMotorHoursWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
-    units: Boolean = true
+    units: Boolean = true,
+    textColor: Color? = null
 ) {
     val motorHoursFlow = dataProvider.getValueFlow("motorHours")
     val motorHoursString by motorHoursFlow.collectAsStateWithLifecycle()
@@ -70,6 +71,7 @@ fun DashboardMotorHoursWidgetItem(
                 )
         ) {
             val availableHeight = maxHeight
+            val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
             // Основной контент
             Column(
                 modifier = Modifier
@@ -86,7 +88,7 @@ fun DashboardMotorHoursWidgetItem(
                         textType = TextType.VALUE
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -101,7 +103,7 @@ fun DashboardMotorHoursWidgetItem(
                         textType = TextType.VALUE
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
