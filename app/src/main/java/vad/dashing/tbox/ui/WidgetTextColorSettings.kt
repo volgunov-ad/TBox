@@ -40,14 +40,15 @@ import vad.dashing.tbox.R
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private val huePalette = listOf(
-    Color(0xFFFF0000),
-    Color(0xFFFFFF00),
-    Color(0xFF00FF00),
-    Color(0xFF00FFFF),
-    Color(0xFF0000FF),
-    Color(0xFFFF00FF),
-    Color(0xFFFF0000)
+private val colorPalette = listOf(
+    0xFFFFFFFF.toInt(),
+    0xFFFF0000.toInt(),
+    0xFFFFFF00.toInt(),
+    0xFF00FF00.toInt(),
+    0xFF00FFFF.toInt(),
+    0xFF0000FF.toInt(),
+    0xFFFF00FF.toInt(),
+    0xFF000000.toInt()
 )
 
 fun DashboardWidget.resolveTextColorForTheme(currentTheme: Int): Color {
@@ -155,20 +156,23 @@ fun WidgetTextColorSetting(
                     .clip(RoundedCornerShape(6.dp))
             ) {
                 drawRect(
-                    brush = Brush.horizontalGradient(huePalette)
+                    brush = Brush.horizontalGradient(colorPalette.map { Color(it) })
                 )
             }
 
             Slider(
-                value = colorHue(localColorValue),
-                onValueChange = { newHue ->
-                    val updatedColor = updateColorHue(localColorValue, newHue)
+                value = colorSliderPosition(localColorValue),
+                onValueChange = { palettePosition ->
+                    val updatedColor = colorFromPalette(
+                        position = palettePosition,
+                        alpha = colorAlpha(localColorValue)
+                    )
                     if (updatedColor != localColorValue) {
                         localColorValue = updatedColor
                         onColorChange(updatedColor)
                     }
                 },
-                valueRange = 0f..360f,
+                valueRange = 0f..1f,
                 enabled = enabled,
                 colors = SliderDefaults.colors(
                     activeTrackColor = Color.Transparent,
@@ -230,21 +234,64 @@ fun WidgetTextColorSetting(
     }
 }
 
-private fun colorHue(colorValue: Int): Float {
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(colorValue, hsv)
-    return hsv[0].coerceIn(0f, 360f)
+private fun colorFromPalette(position: Float, alpha: Int): Int {
+    val clampedPosition = position.coerceIn(0f, 1f)
+    val lastIndex = colorPalette.lastIndex
+    val scaled = clampedPosition * lastIndex
+    val startIndex = scaled.toInt().coerceIn(0, lastIndex)
+    val endIndex = (startIndex + 1).coerceAtMost(lastIndex)
+    val fraction = scaled - startIndex
+
+    val startColor = colorPalette[startIndex]
+    val endColor = colorPalette[endIndex]
+
+    val red = lerpChannel(
+        android.graphics.Color.red(startColor),
+        android.graphics.Color.red(endColor),
+        fraction
+    )
+    val green = lerpChannel(
+        android.graphics.Color.green(startColor),
+        android.graphics.Color.green(endColor),
+        fraction
+    )
+    val blue = lerpChannel(
+        android.graphics.Color.blue(startColor),
+        android.graphics.Color.blue(endColor),
+        fraction
+    )
+
+    return android.graphics.Color.argb(alpha.coerceIn(0, 255), red, green, blue)
 }
 
-private fun updateColorHue(colorValue: Int, newHue: Float): Int {
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(colorValue, hsv)
-    hsv[0] = newHue.coerceIn(0f, 360f)
-    // Ensure hue slider always produces visible color changes,
-    // even when source color is nearly grayscale.
-    hsv[1] = hsv[1].coerceAtLeast(0.35f)
-    hsv[2] = hsv[2].coerceAtLeast(0.35f)
-    return android.graphics.Color.HSVToColor(colorAlpha(colorValue), hsv)
+private fun colorSliderPosition(colorValue: Int): Float {
+    val targetColor = withAlpha(colorValue, 255)
+    var bestPosition = 0f
+    var bestDistance = Int.MAX_VALUE
+    val samples = 200
+
+    for (index in 0..samples) {
+        val candidatePosition = index / samples.toFloat()
+        val candidateColor = withAlpha(colorFromPalette(candidatePosition, 255), 255)
+        val distance = colorDistanceSquared(targetColor, candidateColor)
+        if (distance < bestDistance) {
+            bestDistance = distance
+            bestPosition = candidatePosition
+        }
+    }
+
+    return bestPosition
+}
+
+private fun colorDistanceSquared(firstColor: Int, secondColor: Int): Int {
+    val redDiff = android.graphics.Color.red(firstColor) - android.graphics.Color.red(secondColor)
+    val greenDiff = android.graphics.Color.green(firstColor) - android.graphics.Color.green(secondColor)
+    val blueDiff = android.graphics.Color.blue(firstColor) - android.graphics.Color.blue(secondColor)
+    return redDiff * redDiff + greenDiff * greenDiff + blueDiff * blueDiff
+}
+
+private fun lerpChannel(start: Int, end: Int, fraction: Float): Int {
+    return (start + (end - start) * fraction).roundToInt().coerceIn(0, 255)
 }
 
 private fun parseColorInput(value: String): Int? {
