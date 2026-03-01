@@ -95,6 +95,7 @@ object CanFramesProcess {
                     val param3 = readUInt16BigEndian(rawValue, payloadStart + 4).toFloat()
                     CanDataRepository.updateParam3(param3)
                 } else if (canId == CAN_ID_PARAM_4) {
+                    val engineTemperature = unsignedByte(b0).toFloat() * 0.75f - 48f
                     val param4 = unsignedByte(b5).toFloat()
                     CanDataRepository.updateParam4(param4)
                 } else if (canId == CAN_ID_DISTANCE_TO_MAINTENANCE) {
@@ -210,7 +211,15 @@ object CanFramesProcess {
                 } else if (canId == CAN_ID_ENGINE_TEMP) {
                     val engineTemperature = unsignedByte(b2).toFloat() * 0.75f - 48f
                     CanDataRepository.updateEngineTemperature(engineTemperature)
-                    if (carType == "1.5_6DCT") {
+
+                    val throttlePosition = unsignedByte(b4).toFloat() * 0.5f
+                    if (throttlePosition <= 100f && throttlePosition >= 0f) {
+                        CanDataRepository.updateThrottlePosition(throttlePosition)
+                    } else {
+                        CanDataRepository.updateThrottlePosition(null)
+                    }
+
+                    /*if (carType == "1.5_6DCT") {
                         if (b1.toInt() == 1) {
                             val cruiseSpeed = unsignedByte(b4).toUInt()
                             CanDataRepository.updateCruiseSetSpeed(cruiseSpeed)
@@ -224,10 +233,10 @@ object CanFramesProcess {
                         } else if (b1.toInt() == 0) {
                             CanDataRepository.updateCruiseSetSpeed(0u)
                         }
-                    }
+                    }*/
                 } else if (canId == CAN_ID_SPEED_ACCURATE) {
                     val speed = if (b2 != 0x00.toByte()) {
-                        readUInt16BigEndian(rawValue, payloadStart + 1).toFloat() / 16f
+                        readUInt12FromNibbleBigEndian(rawValue, payloadStart + 1).toFloat() / 16f
                     } else {
                         0f
                     }
@@ -345,6 +354,11 @@ object CanFramesProcess {
             (unsignedByte(data[offset + 1]) shl 16) or
             (unsignedByte(data[offset + 2]) shl 8) or
             unsignedByte(data[offset + 3])
+    }
+
+    private fun readUInt12FromNibbleBigEndian(data: ByteArray, offset: Int): UInt {
+        return (((unsignedByte(data[offset]) and 0x0F) shl 8) or
+                unsignedByte(data[offset + 1])).toUInt()
     }
 
     private fun readUInt16BigEndian(data: ByteArray, offset: Int): Int {
