@@ -140,7 +140,8 @@ fun MainDashboardTab(
                                                 widget = widget,
                                                 onClick = { showDialogForIndex = index },
                                                 onLongClick = {},
-                                                viewModel = tboxViewModel
+                                                viewModel = tboxViewModel,
+                                                scale = widgetConfig.scale
                                             )
                                         }
                                         "netWidgetNew" -> {
@@ -168,7 +169,8 @@ fun MainDashboardTab(
                                                 onClick = { showDialogForIndex = index },
                                                 onLongClick = {},
                                                 viewModel = tboxViewModel,
-                                                textColor = widgetTextColor
+                                                textColor = widgetTextColor,
+                                                scale = widgetConfig.scale
                                             )
                                         }
                                         "voltage+engineTemperatureWidget" -> {

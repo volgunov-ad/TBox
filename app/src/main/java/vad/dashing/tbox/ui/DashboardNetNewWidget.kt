@@ -3,13 +3,9 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -17,12 +13,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -94,24 +90,20 @@ fun DashboardNetNewWidgetItem(
     if (color == null) {
         when (netState.signalLevel) {
             1 -> {
-                imageColorSignal = Color.Red
-                imageColorNet = Color.Red
+                imageColorSignal = Color(colorResource(R.color.status_err).hashCode())
+                imageColorNet = Color(colorResource(R.color.status_err).hashCode())
             }
             2 -> {
-                imageColorSignal = Color.Yellow
-                imageColorNet = Color.Yellow
+                imageColorSignal = Color(colorResource(R.color.status_warn).hashCode())
+                imageColorNet = Color(colorResource(R.color.status_warn).hashCode())
             }
-            3 -> {
-                imageColorSignal = Color.Green
-                imageColorNet = Color.Green
-            }
-            4 -> {
-                imageColorSignal = Color.Green
-                imageColorNet = Color.Green
+            in 3..4 -> {
+                imageColorSignal = Color(colorResource(R.color.status_ok).hashCode())
+                imageColorNet = Color(colorResource(R.color.status_ok).hashCode())
             }
             else -> {
-                imageColorSignal = Color.Red
-                imageColorNet = Color.Red
+                imageColorSignal = Color(colorResource(R.color.status_err).hashCode())
+                imageColorNet = Color(colorResource(R.color.status_err).hashCode())
             }
         }
     } else {
@@ -159,7 +151,9 @@ fun DashboardNetNewWidgetItem(
                         contentDescription = netState.signalLevel.toString(),
                         contentScale = ContentScale.Fit,
                         colorFilter = imageColorNet.let { ColorFilter.tint(it) },
-                        modifier = Modifier.matchParentSize().scale(scale)
+                        modifier = Modifier
+                            .matchParentSize()
+                            .scale(scale)
                     )
                 }
             }

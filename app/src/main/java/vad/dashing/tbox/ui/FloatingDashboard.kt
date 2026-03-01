@@ -404,7 +404,8 @@ fun FloatingDashboard(
                                                         viewModel = tboxViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true
+                                                        backgroundTransparent = true,
+                                                        scale = widgetConfig.scale
                                                     )
                                                 }
                                                 "netWidgetNew" -> {
@@ -474,7 +475,8 @@ fun FloatingDashboard(
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
                                                         backgroundTransparent = true,
-                                                        textColor = widgetTextColor
+                                                        textColor = widgetTextColor,
+                                                        scale = widgetConfig.scale
                                                     )
                                                 }
                                                 "voltage+engineTemperatureWidget" -> {

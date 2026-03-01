@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -44,7 +45,8 @@ fun DashboardLocWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
-    textColor: Color? = null
+    textColor: Color? = null,
+    scale: Float = 1f
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
@@ -119,6 +121,7 @@ fun DashboardLocWidgetItem(
                         .weight(2f)
                         .padding(4.dp)
                         .wrapContentHeight(Alignment.CenterVertically)
+                        .scale(scale)
                 )
                 Text(
                     text = "${locValues.speed}\u2009${stringResource(R.string.unit_kmh)}",

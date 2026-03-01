@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -37,7 +38,8 @@ fun DashboardNetWidgetItem(
     viewModel: TboxViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false
+    backgroundTransparent: Boolean = false,
+    scale: Float = 1f
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
     val apnStatus by viewModel.apnStatus.collectAsStateWithLifecycle()
@@ -202,7 +204,9 @@ fun DashboardNetWidgetItem(
                     netState.netStatus
                 ),
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.matchParentSize()
+                modifier = Modifier
+                    .matchParentSize()
+                    .scale(scale)
             )
         }
     }
