@@ -131,7 +131,7 @@
     <string name="settings_auto_suspend_app_title">Автоматическая отправка команды SUSPEND приложению APP в TBox</string>
     <string name="settings_auto_suspend_app_desc">Приостановка приложения APP позволяет избежать периодической перезагрузки TBox, но может происходить регулярное переподключение модема, если установлена SIM-карта на TBox HW 0.0.5</string>
     <string name="settings_auto_stop_app_title">Автоматическая отправка команды STOP приложению APP в TBox</string>
-    <string name="settings_auto_stop_app_desc">Полное отключение приложения APP позволяет избежать периодической перезагрузки TBox и переподключения модема. После включения опции может произойти однократная перезагрузка TBox.\nНе рекомендуется использовать данную опцию на TBox HW 0.0.1, 0.0.4</string>
+    <string name="settings_auto_stop_app_desc">Полное отключение приложения APP позволяет избежать периодической перезагрузки TBox и переподключения модема. После включения опции может произойти однократная перезагрузка TBox на TBox HW 0.0.5. На TBox HW 0.0.1, 0.0.4 включение этой опции без опции SUSPEND SWD приведет  к непрерывным перезагрузкам</string>
     <string name="settings_auto_suspend_mdc_title">Автоматическая отправка команды SUSPEND приложению MDC в TBox</string>
     <string name="settings_auto_suspend_mdc_desc">Не рекомендуется включать данную опцию, если в TBox установлена SIM карта</string>
     <string name="settings_auto_stop_mdc_title">Автоматическая отправка команды STOP приложению MDC в TBox</string>
@@ -304,6 +304,8 @@
     <string name="data_title_motor_hours_trip">Моточасы двигателя за поездку</string>
     <string name="data_title_motor_hours_widget">Виджет моточасов</string>
     <string name="data_title_net_widget">Виджет сигнала сети</string>
+    <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>
+    <string name="data_title_net_widget_colored">Виджет сигнала сети (цветной)</string>
     <string name="data_title_loc_widget">Виджет навигации</string>
     <string name="data_title_voltage_engine_temperature_widget">Виджет напряжения и температуры двигателя</string>
     <string name="data_title_gearbox_widget">Виджет режима КПП с текущей передачей и температурой</string>
@@ -311,6 +313,7 @@
     <string name="data_title_wheels_pressure_temperature_widget">Виджет давления и температуры в шинах</string>
     <string name="data_title_temp_in_out_widget">Виджет температуры снаружи и внутри</string>
     <string name="data_title_restart_tbox">Кнопка перезагрузки TBox</string>
+    <string name="data_title_music_widget">Виджет управления музыкой</string>
 
     <string name="cycle_voltage">Cycle напряжение, В</string>
     <string name="cycle_speed">Cycle скорость, км/ч</string>

@@ -385,263 +385,310 @@ fun FloatingDashboard(
                                             LocalWidgetTextScale provides widgetTextScale
                                         ) {
                                             when (widget.dataKey) {
-                                            "netWidget" -> {
-                                                DashboardNetWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            settingsViewModel.saveSelectedTab(0)
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    viewModel = tboxViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true
-                                                )
-                                            }
-                                            "locWidget" -> {
-                                                DashboardLocWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            settingsViewModel.saveSelectedTab(2)
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    viewModel = tboxViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    textColor = widgetTextColor
-                                                )
-                                            }
-                                            "voltage+engineTemperatureWidget" -> {
-                                                DashboardVoltEngTempWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit,
-                                                    textColor = widgetTextColor
-                                                )
-                                            }
-                                            "gearBoxWidget" -> {
-                                                DashboardGearBoxWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit,
-                                                    textColor = widgetTextColor
-                                                )
-                                            }
-                                            "wheelsPressureWidget" -> {
-                                                DashboardWheelsPressureWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit,
-                                                    textColor = widgetTextColor
-                                                )
-                                            }
-                                            "wheelsPressureTemperatureWidget" -> {
-                                                DashboardWheelsPressureTemperatureWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit,
-                                                    textColor = widgetTextColor
-                                                )
-                                            }
-                                            "tempInOutWidget" -> {
-                                                DashboardTempInOutWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit,
-                                                    textColor = widgetTextColor
-                                                )
-                                            }
-                                            "motorHoursWidget" -> {
-                                                DashboardMotorHoursWidgetItem(
-                                                    widget = widget,
-                                                    dataProvider = dataProvider,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    onDoubleClick = {
-                                                        appDataViewModel.setMotorHours(0f)
-                                                    },
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit,
-                                                    textColor = widgetTextColor
-                                                )
-                                            }
-                                            "restartTbox" -> {
-                                                DashboardWidgetItem(
-                                                    widget = widget,
-                                                    dataProvider = dataProvider,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    onDoubleClick = {
-                                                        if (restartEnabled) {
-                                                            restartEnabled = false
-                                                            onRebootTbox()
-                                                        }
-                                                    },
-                                                    dashboardManager = dashboardViewModel.dashboardManager,
-                                                    dashboardChart = false,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    title = widgetConfig.showTitle,
-                                                    units = widgetConfig.showUnit,
-                                                    backgroundTransparent = true,
-                                                    textColor = if (restartEnabled) {
-                                                        if (tboxConnected) {
-                                                            Color(0xD900A400)
-                                                        } else {
-                                                            Color(0xD9FF0000)
-                                                        }
-                                                    } else {
-                                                        Color(0xD97E4C4C)
-                                                    }
-                                                )
-                                            }
-                                            else -> {
-                                                DashboardWidgetItem(
-                                                    widget = widget,
-                                                    dataProvider = dataProvider,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    onDoubleClick = {
-                                                        if (widget.dataKey == "motorHours") {
+                                                "netWidget" -> {
+                                                    DashboardNetWidgetItem(
+                                                        widget = widget,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                settingsViewModel.saveSelectedTab(0)
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        viewModel = tboxViewModel,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true
+                                                    )
+                                                }
+                                                "netWidgetNew" -> {
+                                                    DashboardNetNewWidgetItem(
+                                                        widget = widget,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                settingsViewModel.saveSelectedTab(0)
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        viewModel = tboxViewModel,
+                                                        color = widgetTextColor,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        scale = widgetConfig.scale
+                                                    )
+                                                }
+                                                "netWidgetColored" -> {
+                                                    DashboardNetNewWidgetItem(
+                                                        widget = widget,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                settingsViewModel.saveSelectedTab(0)
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        viewModel = tboxViewModel,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        scale = widgetConfig.scale
+                                                    )
+                                                }
+                                                "locWidget" -> {
+                                                    DashboardLocWidgetItem(
+                                                        widget = widget,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                settingsViewModel.saveSelectedTab(2)
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        viewModel = tboxViewModel,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        textColor = widgetTextColor
+                                                    )
+                                                }
+                                                "voltage+engineTemperatureWidget" -> {
+                                                    DashboardVoltEngTempWidgetItem(
+                                                        widget = widget,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        canViewModel = canViewModel,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        units = widgetConfig.showUnit,
+                                                        textColor = widgetTextColor
+                                                    )
+                                                }
+                                                "gearBoxWidget" -> {
+                                                    DashboardGearBoxWidgetItem(
+                                                        widget = widget,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        canViewModel = canViewModel,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        units = widgetConfig.showUnit,
+                                                        textColor = widgetTextColor
+                                                    )
+                                                }
+                                                "wheelsPressureWidget" -> {
+                                                    DashboardWheelsPressureWidgetItem(
+                                                        widget = widget,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        canViewModel = canViewModel,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        units = widgetConfig.showUnit,
+                                                        textColor = widgetTextColor
+                                                    )
+                                                }
+                                                "wheelsPressureTemperatureWidget" -> {
+                                                    DashboardWheelsPressureTemperatureWidgetItem(
+                                                        widget = widget,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        canViewModel = canViewModel,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        units = widgetConfig.showUnit,
+                                                        textColor = widgetTextColor
+                                                    )
+                                                }
+                                                "tempInOutWidget" -> {
+                                                    DashboardTempInOutWidgetItem(
+                                                        widget = widget,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        canViewModel = canViewModel,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        units = widgetConfig.showUnit,
+                                                        textColor = widgetTextColor
+                                                    )
+                                                }
+                                                "motorHoursWidget" -> {
+                                                    DashboardMotorHoursWidgetItem(
+                                                        widget = widget,
+                                                        dataProvider = dataProvider,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        onDoubleClick = {
                                                             appDataViewModel.setMotorHours(0f)
+                                                        },
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        units = widgetConfig.showUnit,
+                                                        textColor = widgetTextColor
+                                                    )
+                                                }
+                                                "restartTbox" -> {
+                                                    DashboardWidgetItem(
+                                                        widget = widget,
+                                                        dataProvider = dataProvider,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        onDoubleClick = {
+                                                            if (restartEnabled) {
+                                                                restartEnabled = false
+                                                                onRebootTbox()
+                                                            }
+                                                        },
+                                                        dashboardManager = dashboardViewModel.dashboardManager,
+                                                        dashboardChart = false,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        title = widgetConfig.showTitle,
+                                                        units = widgetConfig.showUnit,
+                                                        backgroundTransparent = true,
+                                                        textColor = if (restartEnabled) {
+                                                            if (tboxConnected) {
+                                                                Color(0xD900A400)
+                                                            } else {
+                                                                Color(0xD9FF0000)
+                                                            }
+                                                        } else {
+                                                            Color(0xD97E4C4C)
                                                         }
-                                                    },
-                                                    dashboardManager = dashboardViewModel.dashboardManager,
-                                                    dashboardChart = false,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    title = widgetConfig.showTitle,
-                                                    units = widgetConfig.showUnit,
-                                                    backgroundTransparent = true,
-                                                    textColor = widgetTextColor
-                                                )
-                                            }
+                                                    )
+                                                }
+                                                else -> {
+                                                    DashboardWidgetItem(
+                                                        widget = widget,
+                                                        dataProvider = dataProvider,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        onDoubleClick = {
+                                                            if (widget.dataKey == "motorHours") {
+                                                                appDataViewModel.setMotorHours(0f)
+                                                            }
+                                                        },
+                                                        dashboardManager = dashboardViewModel.dashboardManager,
+                                                        dashboardChart = false,
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        title = widgetConfig.showTitle,
+                                                        units = widgetConfig.showUnit,
+                                                        backgroundTransparent = true,
+                                                        textColor = widgetTextColor
+                                                    )
+                                                }
                                             }
                                         }
                                     }

@@ -193,26 +193,17 @@ fun DashboardNetWidgetItem(
                     shape = RoundedCornerShape(shape)
                 )
         ) {
-            // Основной контент
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(4.dp)
-                    .wrapContentHeight(Alignment.CenterVertically),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Отображаем иконку сигнала
-                Image(
-                    painter = painterResource(id = imageRes),
-                    contentDescription = stringResource(
-                        R.string.dashboard_net_content_desc,
-                        netState.signalLevel,
-                        netState.netStatus
-                    ),
-                    contentScale = ContentScale.Fit
-                )
-            }
+            // Отображаем иконку сигнала
+            Image(
+                painter = painterResource(id = imageRes),
+                contentDescription = stringResource(
+                    R.string.dashboard_net_content_desc,
+                    netState.signalLevel,
+                    netState.netStatus
+                ),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.matchParentSize()
+            )
         }
     }
 }

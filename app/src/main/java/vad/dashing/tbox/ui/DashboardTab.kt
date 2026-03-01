@@ -143,6 +143,25 @@ fun MainDashboardTab(
                                                 viewModel = tboxViewModel
                                             )
                                         }
+                                        "netWidgetNew" -> {
+                                            DashboardNetNewWidgetItem(
+                                                widget = widget,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                viewModel = tboxViewModel,
+                                                color = widgetTextColor,
+                                                scale = widgetConfig.scale
+                                            )
+                                        }
+                                        "netWidgetColored" -> {
+                                            DashboardNetNewWidgetItem(
+                                                widget = widget,
+                                                onClick = { showDialogForIndex = index },
+                                                onLongClick = {},
+                                                viewModel = tboxViewModel,
+                                                scale = widgetConfig.scale
+                                            )
+                                        }
                                         "locWidget" -> {
                                             DashboardLocWidgetItem(
                                                 widget = widget,
