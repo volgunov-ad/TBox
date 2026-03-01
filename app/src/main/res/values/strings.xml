@@ -272,6 +272,7 @@
     <string name="data_title_steer_angle">Угол поворота руля</string>
     <string name="data_title_steer_speed">Скорость вращения руля</string>
     <string name="data_title_engine_rpm">Обороты двигателя</string>
+    <string name="data_title_throttle_position">Положение дросселя</string>
     <string name="data_title_car_speed">Скорость автомобиля</string>
     <string name="data_title_car_speed_accurate">Точная скорость автомобиля</string>
     <string name="data_title_cruise_set_speed">Скорость круиз-контроля</string>

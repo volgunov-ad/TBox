@@ -165,6 +165,13 @@ class CanDataViewModel : ViewModel() {
             initialValue = null
         )
 
+    val throttlePosition: StateFlow<Float?> = CanDataRepository.throttlePosition
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
 
     val gearBoxMode: StateFlow<String> = CanDataRepository.gearBoxMode
         .stateIn(

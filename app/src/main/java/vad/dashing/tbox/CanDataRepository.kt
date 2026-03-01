@@ -58,6 +58,9 @@ object CanDataRepository {
     private val _engineRPM = MutableStateFlow<Float?>(null)
     val engineRPM: StateFlow<Float?> = _engineRPM.asStateFlow()
 
+    private val _throttlePosition = MutableStateFlow<Float?>(null)
+    val throttlePosition: StateFlow<Float?> = _throttlePosition.asStateFlow()
+
     private val _param1 = MutableStateFlow<Float?>(null)
     val param1: StateFlow<Float?> = _param1.asStateFlow()
 
@@ -232,6 +235,10 @@ object CanDataRepository {
 
     fun updateEngineRPM(newValue: Float) {
         _engineRPM.setIfChanged(newValue)
+    }
+
+    fun updateThrottlePosition(newValue: Float?) {
+        _throttlePosition.setIfChanged(newValue)
     }
 
     fun updateParam1(newValue: Float) {

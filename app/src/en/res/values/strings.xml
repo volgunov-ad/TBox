@@ -272,6 +272,7 @@
     <string name="data_title_steer_angle">Steering wheel angle</string>
     <string name="data_title_steer_speed">Steering wheel speed</string>
     <string name="data_title_engine_rpm">Engine RPM</string>
+    <string name="data_title_throttle_position">Throttle Position</string>
     <string name="data_title_car_speed">Vehicle speed</string>
     <string name="data_title_car_speed_accurate">Precise vehicle speed</string>
     <string name="data_title_cruise_set_speed">Cruise control set speed</string>

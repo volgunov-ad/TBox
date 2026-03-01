@@ -71,6 +71,7 @@ fun CarDataTabContent(
     val distanceToFuelEmpty by canViewModel.distanceToFuelEmpty.collectAsStateWithLifecycle()
     val breakingForce by canViewModel.breakingForce.collectAsStateWithLifecycle()
     val engineRPM by canViewModel.engineRPM.collectAsStateWithLifecycle()
+    val throttlePosition by canViewModel.throttlePosition.collectAsStateWithLifecycle()
     val param1 by canViewModel.param1.collectAsStateWithLifecycle()
     val param2 by canViewModel.param2.collectAsStateWithLifecycle()
     val param3 by canViewModel.param3.collectAsStateWithLifecycle()
@@ -133,6 +134,7 @@ fun CarDataTabContent(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "steerAngle"), valueToString(steerAngle, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "steerSpeed"), valueToString(steerSpeed)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "engineRPM"), valueToString(engineRPM, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "throttlePosition"), valueToString(throttlePosition, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param1"), valueToString(param1, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param2"), valueToString(param2, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param3"), valueToString(param3, 1)) }
