@@ -6,6 +6,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.provider.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,7 +49,8 @@ data class MediaWidgetState(
     val artist: String = "",
     val track: String = "",
     val isPlaying: Boolean = false,
-    val controlsAvailable: Boolean = false
+    val controlsAvailable: Boolean = false,
+    val notificationAccessGranted: Boolean = false
 )
 
 fun normalizeMediaPlayerPackages(rawPackages: Collection<String>): Set<String> {
@@ -89,6 +91,7 @@ object SharedMediaControlService {
     private var mediaSessionManager: MediaSessionManager? = null
     private var activeSessionsListenerRegistered: Boolean = false
     private var listenerComponent: ComponentName? = null
+    private var notificationAccessGranted: Boolean = false
 
     private val sourceSelections = mutableMapOf<String, Set<String>>()
     private var requestedPackages: Set<String> = emptySet()
@@ -138,10 +141,26 @@ object SharedMediaControlService {
         selectedPackages: Set<String>,
         currentStates: Map<String, MediaPlayerState> = playerStates.value
     ): MediaWidgetState {
+        val refreshedStates = synchronized(this) {
+            updateNotificationAccessLocked()
+            if (requestedPackages.isNotEmpty() && notificationAccessGranted) {
+                startMonitoringLocked()
+                syncControllersLocked()
+                publishPlayerStatesLocked()
+            }
+            _playerStates.value
+        }
+        val effectiveStates = if (refreshedStates.isNotEmpty() || currentStates.isEmpty()) {
+            refreshedStates
+        } else {
+            currentStates
+        }
         val orderedSelected = orderedMediaPlayerPackages(selectedPackages)
-        if (orderedSelected.isEmpty()) return MediaWidgetState()
+        if (orderedSelected.isEmpty()) {
+            return MediaWidgetState(notificationAccessGranted = isNotificationAccessGranted())
+        }
 
-        val candidates = orderedSelected.mapNotNull { currentStates[it] }
+        val candidates = orderedSelected.mapNotNull { effectiveStates[it] }
         val selectedState = candidates.firstOrNull { it.isPlaying }
             ?: candidates.firstOrNull { it.track.isNotBlank() || it.artist.isNotBlank() }
             ?: candidates.firstOrNull { it.hasSession }
@@ -154,18 +173,21 @@ object SharedMediaControlService {
             artist = selectedState?.artist.orEmpty(),
             track = selectedState?.track.orEmpty(),
             isPlaying = selectedState?.isPlaying == true,
-            controlsAvailable = selectedState?.hasSession == true
+            controlsAvailable = selectedState?.hasSession == true,
+            notificationAccessGranted = isNotificationAccessGranted()
         )
     }
 
     fun skipToPrevious(selectedPackages: Set<String>) {
         synchronized(this) {
+            syncControllersLocked()
             resolveControllerLocked(selectedPackages)?.transportControls?.skipToPrevious()
         }
     }
 
     fun playPause(selectedPackages: Set<String>) {
         synchronized(this) {
+            syncControllersLocked()
             val controller = resolveControllerLocked(selectedPackages) ?: return
             val isPlaying = controller.playbackState.isPlayingState()
             if (isPlaying) {
@@ -178,6 +200,7 @@ object SharedMediaControlService {
 
     fun skipToNext(selectedPackages: Set<String>) {
         synchronized(this) {
+            syncControllersLocked()
             resolveControllerLocked(selectedPackages)?.transportControls?.skipToNext()
         }
     }
@@ -193,12 +216,14 @@ object SharedMediaControlService {
         if (listenerComponent == null) {
             listenerComponent = ComponentName(contextRef, MediaControlNotificationListenerService::class.java)
         }
+        updateNotificationAccessLocked()
     }
 
     private fun refreshRequestedPackagesLocked() {
         requestedPackages = sourceSelections.values
             .flatMap { it }
             .toSet()
+        updateNotificationAccessLocked()
 
         if (requestedPackages.isEmpty()) {
             stopMonitoringLocked()
@@ -212,6 +237,7 @@ object SharedMediaControlService {
 
     private fun startMonitoringLocked() {
         if (activeSessionsListenerRegistered) return
+        if (!notificationAccessGranted) return
         val manager = mediaSessionManager ?: return
         val component = listenerComponent ?: return
         try {
@@ -262,6 +288,8 @@ object SharedMediaControlService {
     }
 
     private fun queryActiveControllersLocked(): List<MediaController> {
+        updateNotificationAccessLocked()
+        if (!notificationAccessGranted) return emptyList()
         val manager = mediaSessionManager ?: return emptyList()
         val component = listenerComponent ?: return emptyList()
         return try {
@@ -348,6 +376,20 @@ object SharedMediaControlService {
 
         _playerStates.value = updatedStates
     }
+
+    private fun isNotificationAccessGranted(): Boolean {
+        return synchronized(this) { notificationAccessGranted }
+    }
+
+    private fun updateNotificationAccessLocked() {
+        val context = appContext
+        val component = listenerComponent
+        notificationAccessGranted = if (context == null || component == null) {
+            false
+        } else {
+            hasNotificationListenerAccess(context, component)
+        }
+    }
 }
 
 private fun PlaybackState?.isPlayingState(): Boolean {
@@ -371,4 +413,20 @@ private fun MediaMetadata?.extractArtistName(): String {
     val artist = getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
     if (artist.isNotBlank()) return artist
     return getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
+}
+
+private fun hasNotificationListenerAccess(
+    context: Context,
+    listenerComponent: ComponentName
+): Boolean {
+    val enabledListeners = Settings.Secure.getString(
+        context.contentResolver,
+        "enabled_notification_listeners"
+    ).orEmpty()
+    if (enabledListeners.isBlank()) return false
+
+    return enabledListeners
+        .split(':')
+        .mapNotNull { ComponentName.unflattenFromString(it) }
+        .any { it == listenerComponent }
 }

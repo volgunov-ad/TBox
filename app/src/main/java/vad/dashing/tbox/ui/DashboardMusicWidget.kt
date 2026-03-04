@@ -1,5 +1,8 @@
 package vad.dashing.tbox.ui
 
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -25,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +54,7 @@ fun DashboardMusicWidgetItem(
     backgroundTransparent: Boolean = false,
     textColor: Color? = null
 ) {
+    val context = LocalContext.current
     val selectedPlayers = remember(widget.dataKey, widgetConfig.mediaPlayers) {
         resolveMediaPlayersForWidget(widgetConfig)
     }
@@ -149,6 +155,27 @@ fun DashboardMusicWidgetItem(
                     )
                 }
 
+                if (!mediaState.notificationAccessGranted) {
+                    Text(
+                        text = stringResource(R.string.widget_music_access_required),
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = calculateResponsiveFontSize(
+                            containerHeight = availableHeight,
+                            textType = TextType.TITLE
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    TextButton(
+                        onClick = { openNotificationListenerSettings(context) }
+                    ) {
+                        Text(
+                            text = stringResource(R.string.widget_music_open_access_settings),
+                            color = resolvedTextColor
+                        )
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -187,5 +214,14 @@ fun DashboardMusicWidgetItem(
                 }
             }
         }
+    }
+}
+
+private fun openNotificationListenerSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching {
+        context.startActivity(intent)
     }
 }

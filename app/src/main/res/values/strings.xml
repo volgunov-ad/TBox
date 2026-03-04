@@ -72,6 +72,8 @@
     <string name="widget_music_action_previous">Предыдущий трек</string>
     <string name="widget_music_action_play_pause">Воспроизвести или пауза</string>
     <string name="widget_music_action_next">Следующий трек</string>
+    <string name="widget_music_access_required">Нужен доступ к уведомлениям для чтения трека и управления</string>
+    <string name="widget_music_open_access_settings">Открыть доступ</string>
     <string name="media_player_yandex_music">Я.Музыка</string>
     <string name="media_player_poweramp">Poweramp</string>
 
