@@ -62,6 +62,18 @@
     <string name="widget_color_value_label">Значение цвета</string>
     <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
     <string name="widget_color_alpha">Прозрачность: %1$d%%</string>
+    <string name="widget_music_players">Плееры для виджета музыки</string>
+    <string name="widget_music_players_hint">Выберите один или несколько плееров</string>
+    <string name="widget_music_players_required">Выберите минимум один плеер</string>
+    <string name="widget_music_no_artist">Исполнитель не определён</string>
+    <string name="widget_music_no_track">Трек не определён</string>
+    <string name="widget_music_player_none">Плеер не найден</string>
+    <string name="widget_music_player_icon">Тип плеера</string>
+    <string name="widget_music_action_previous">Предыдущий трек</string>
+    <string name="widget_music_action_play_pause">Воспроизвести или пауза</string>
+    <string name="widget_music_action_next">Следующий трек</string>
+    <string name="media_player_yandex_music">Я.Музыка</string>
+    <string name="media_player_poweramp">Poweramp</string>
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
     <string name="logs_filter_placeholder">Введите текст для поиска…</string>

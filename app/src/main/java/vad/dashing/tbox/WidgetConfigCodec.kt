@@ -53,6 +53,10 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("scale", normalizeWidgetScale(config.scale))
         obj.put("textColorLight", config.textColorLight)
         obj.put("textColorDark", config.textColorDark)
+        val mediaPlayers = orderedMediaPlayerPackages(config.mediaPlayers)
+        if (mediaPlayers.isNotEmpty()) {
+            obj.put("mediaPlayers", JSONArray(mediaPlayers))
+        }
         array.put(obj)
     }
     return array
@@ -128,7 +132,8 @@ private fun parseWidgetConfigsFromJsonArray(
                         textColorDark = item.optInt(
                             "textColorDark",
                             DEFAULT_WIDGET_TEXT_COLOR_DARK
-                        )
+                        ),
+                        mediaPlayers = parseMediaPlayers(item)
                     )
                 )
             }
@@ -148,4 +153,21 @@ private fun parseLegacyWidgetConfigs(rawValue: String): List<FloatingDashboardWi
     return rawValue.split(LEGACY_WIDGETS_SEPARATOR).map { dataKey ->
         FloatingDashboardWidgetConfig(dataKey = dataKey.trim())
     }
+}
+
+private fun parseMediaPlayers(item: JSONObject): List<String> {
+    val rawPlayers = mutableListOf<String>()
+    val playersArray = item.optJSONArray("mediaPlayers")
+    if (playersArray != null) {
+        for (idx in 0 until playersArray.length()) {
+            rawPlayers.add(playersArray.optString(idx))
+        }
+    } else {
+        val legacyPlayer = item.optString("mediaPlayer")
+        if (legacyPlayer.isNotBlank()) {
+            rawPlayers.add(legacyPlayer)
+        }
+    }
+
+    return orderedMediaPlayerPackages(rawPlayers)
 }

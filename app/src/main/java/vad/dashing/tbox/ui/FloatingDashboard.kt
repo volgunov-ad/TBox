@@ -56,6 +56,7 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
@@ -64,7 +65,9 @@ import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
+import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
@@ -147,6 +150,10 @@ fun FloatingDashboard(
     val widgetConfigs = panelConfig.widgetsConfig
     val dashboardRows = panelConfig.rows
     val dashboardCols = panelConfig.cols
+    val mediaSourceId = remember(panelId) { "floating-dashboard-$panelId" }
+    val requestedMediaPlayers = remember(widgetConfigs) {
+        collectMediaPlayersFromWidgetConfigs(widgetConfigs)
+    }
     val hasConfiguredWidgets = widgetConfigs.any { config ->
         config.dataKey.isNotBlank() && config.dataKey != "null"
     }
@@ -232,6 +239,18 @@ fun FloatingDashboard(
         val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets, context)
 
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
+    }
+    LaunchedEffect(mediaSourceId, requestedMediaPlayers, context) {
+        SharedMediaControlService.updateSourceSelection(
+            context = context,
+            sourceId = mediaSourceId,
+            mediaPackages = requestedMediaPlayers
+        )
+    }
+    DisposableEffect(mediaSourceId) {
+        onDispose {
+            SharedMediaControlService.clearSourceSelection(mediaSourceId)
+        }
     }
 
     var restartEnabled by remember { mutableStateOf(true) }
@@ -594,6 +613,28 @@ fun FloatingDashboard(
                                                         textColor = widgetTextColor
                                                     )
                                                 }
+                                                "musicWidget" -> {
+                                                    DashboardMusicWidgetItem(
+                                                        widget = widget,
+                                                        widgetConfig = widgetConfig,
+                                                        onClick = {
+                                                            if (isEditMode && !isDraggingMode && !isResizingMode) {
+                                                                showDialogForIndex = index
+                                                            } else if (isFloatingDashboardClickAction) {
+                                                                openMainActivity(context)
+                                                            }
+                                                        },
+                                                        onLongClick = {
+                                                            isEditMode = !isEditMode
+                                                            isDraggingMode = false
+                                                            isResizingMode = false
+                                                        },
+                                                        elevation = 0.dp,
+                                                        shape = 0.dp,
+                                                        backgroundTransparent = true,
+                                                        textColor = widgetTextColor
+                                                    )
+                                                }
                                                 "motorHoursWidget" -> {
                                                     DashboardMotorHoursWidgetItem(
                                                         widget = widget,
@@ -819,7 +860,18 @@ fun OverlayWidgetSelectionDialog(
     var textColorDark by remember(widgetIndex, currentWidgetConfigs) {
         mutableIntStateOf(initialConfig.textColorDark)
     }
+    var selectedMediaPlayers by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(
+            if (initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY) {
+                normalizeMediaPlayersSelection(initialConfig.mediaPlayers)
+            } else {
+                emptySet()
+            }
+        )
+    }
+    val isMusicWidgetSelected = selectedDataKey == MUSIC_WIDGET_DATA_KEY
     val togglesEnabled = selectedDataKey.isNotEmpty()
+    val canSaveSelection = !isMusicWidgetSelected || selectedMediaPlayers.isNotEmpty()
 
     // Получаем список опций
     val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
@@ -894,6 +946,20 @@ fun OverlayWidgetSelectionDialog(
                         .verticalScroll(androidx.compose.foundation.rememberScrollState())
                         .padding(12.dp)
                 ) {
+                    if (isMusicWidgetSelected) {
+                        MediaPlayersInlineSelection(
+                            selectedPlayers = selectedMediaPlayers,
+                            onSelectionChange = { selectedMediaPlayers = it },
+                            enabled = togglesEnabled
+                        )
+                        if (selectedMediaPlayers.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.widget_music_players_required),
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 20.sp
+                            )
+                        }
+                    }
                     SettingSwitch(
                         showTitle,
                         { showTitle = it },
@@ -966,6 +1032,7 @@ fun OverlayWidgetSelectionDialog(
                 }
 
                 Button(
+                    enabled = canSaveSelection,
                     onClick = {
                         val normalizedScale = normalizeWidgetScale(scale)
                         scale = normalizedScale
@@ -1002,7 +1069,12 @@ fun OverlayWidgetSelectionDialog(
                                 showUnit = showUnit,
                                 scale = normalizedScale,
                                 textColorLight = textColorLight,
-                                textColorDark = textColorDark
+                                textColorDark = textColorDark,
+                                mediaPlayers = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                                    orderedMediaPlayersForStorage(selectedMediaPlayers)
+                                } else {
+                                    emptyList()
+                                }
                             )
                         } else {
                             FloatingDashboardWidgetConfig(dataKey = "")

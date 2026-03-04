@@ -392,6 +392,7 @@ object WidgetsRepository {
             R.string.unit_bar_celsius
         ),
         "tempInOutWidget" to DataTitle(R.string.data_title_temp_in_out_widget),
+        "musicWidget" to DataTitle(R.string.data_title_music_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
     )
 
