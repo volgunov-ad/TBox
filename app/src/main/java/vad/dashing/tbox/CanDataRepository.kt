@@ -109,6 +109,9 @@ object CanDataRepository {
     private val _fuelLevelPercentageFiltered = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentageFiltered: StateFlow<UInt?> = _fuelLevelPercentageFiltered.asStateFlow()
 
+    private val _currentFuelConsumption = MutableStateFlow<Float?>(null)
+    val currentFuelConsumption: StateFlow<Float?> = _currentFuelConsumption.asStateFlow()
+
     private val _gearBoxMode = MutableStateFlow("")
     val gearBoxMode: StateFlow<String> = _gearBoxMode.asStateFlow()
 
@@ -215,6 +218,10 @@ object CanDataRepository {
 
     fun updateFuelLevelPercentageFiltered(newValue: UInt) {
         _fuelLevelPercentageFiltered.setIfChanged(newValue)
+    }
+
+    fun updateCurrentFuelConsumption(newValue: Float?) {
+        _currentFuelConsumption.setIfChanged(newValue)
     }
 
     fun updateCruiseSetSpeed(newValue: UInt) {
