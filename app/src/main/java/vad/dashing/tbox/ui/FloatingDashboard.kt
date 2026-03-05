@@ -71,6 +71,7 @@ import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
@@ -629,6 +630,15 @@ fun FloatingDashboard(
                                                             isDraggingMode = false
                                                             isResizingMode = false
                                                         },
+                                                        onSelectedPlayerChange = { selectedPackage ->
+                                                            persistFloatingMediaWidgetSelectedPlayer(
+                                                                settingsViewModel = settingsViewModel,
+                                                                panelId = panelId,
+                                                                currentWidgetConfigs = widgetConfigs,
+                                                                widgetIndex = index,
+                                                                selectedPackage = selectedPackage
+                                                            )
+                                                        },
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
                                                         backgroundTransparent = true,
@@ -869,6 +879,9 @@ fun OverlayWidgetSelectionDialog(
             }
         )
     }
+    val selectedMediaPlayer = remember(widgetIndex, currentWidgetConfigs) {
+        resolveSelectedMediaPlayerForWidget(initialConfig)
+    }
     val isMusicWidgetSelected = selectedDataKey == MUSIC_WIDGET_DATA_KEY
     val togglesEnabled = selectedDataKey.isNotEmpty()
     val canSaveSelection = !isMusicWidgetSelected || selectedMediaPlayers.isNotEmpty()
@@ -1074,6 +1087,14 @@ fun OverlayWidgetSelectionDialog(
                                     orderedMediaPlayersForStorage(selectedMediaPlayers)
                                 } else {
                                     emptyList()
+                                },
+                                mediaSelectedPlayer = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                                    resolveStoredMediaSelectedPlayer(
+                                        selectedPlayers = selectedMediaPlayers,
+                                        currentSelectedPlayer = selectedMediaPlayer
+                                    )
+                                } else {
+                                    ""
                                 }
                             )
                         } else {
@@ -1105,5 +1126,37 @@ private fun openMainActivity(context: Context) {
         context.startActivity(intent)
     } catch (e: Exception) {
         e.printStackTrace()
+    }
+}
+
+private fun persistFloatingMediaWidgetSelectedPlayer(
+    settingsViewModel: SettingsViewModel,
+    panelId: String,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    widgetIndex: Int,
+    selectedPackage: String
+) {
+    val normalizedConfigs = normalizeWidgetConfigs(
+        configs = currentWidgetConfigs,
+        widgetCount = currentWidgetConfigs.size
+    ).toMutableList()
+    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
+    if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
+    if (currentConfig.mediaSelectedPlayer == selectedPackage) return
+
+    normalizedConfigs[widgetIndex] = currentConfig.copy(mediaSelectedPlayer = selectedPackage)
+    settingsViewModel.saveFloatingDashboardWidgets(panelId, normalizedConfigs)
+}
+
+private fun resolveStoredMediaSelectedPlayer(
+    selectedPlayers: Set<String>,
+    currentSelectedPlayer: String
+): String {
+    val orderedPlayers = orderedMediaPlayersForStorage(selectedPlayers)
+    if (orderedPlayers.isEmpty()) return ""
+    return if (currentSelectedPlayer in orderedPlayers) {
+        currentSelectedPlayer
+    } else {
+        orderedPlayers.first()
     }
 }

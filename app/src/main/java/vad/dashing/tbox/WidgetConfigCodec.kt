@@ -56,6 +56,12 @@ fun serializeWidgetConfigsToJsonArray(
         val mediaPlayers = orderedMediaPlayerPackages(config.mediaPlayers)
         if (mediaPlayers.isNotEmpty()) {
             obj.put("mediaPlayers", JSONArray(mediaPlayers))
+            val selectedPlayer = normalizeMediaPlayerPackages(
+                listOf(config.mediaSelectedPlayer)
+            ).firstOrNull()
+            if (selectedPlayer != null) {
+                obj.put("mediaSelectedPlayer", selectedPlayer)
+            }
         }
         array.put(obj)
     }
@@ -117,6 +123,7 @@ private fun parseWidgetConfigsFromJsonArray(
                 val dataKey = item.optString("dataKey").ifBlank {
                     item.optString("type")
                 }
+                val mediaPlayers = parseMediaPlayers(item)
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey.trim(),
@@ -133,7 +140,8 @@ private fun parseWidgetConfigsFromJsonArray(
                             "textColorDark",
                             DEFAULT_WIDGET_TEXT_COLOR_DARK
                         ),
-                        mediaPlayers = parseMediaPlayers(item)
+                        mediaPlayers = mediaPlayers,
+                        mediaSelectedPlayer = parseSelectedMediaPlayer(item, mediaPlayers)
                     )
                 )
             }
@@ -170,4 +178,13 @@ private fun parseMediaPlayers(item: JSONObject): List<String> {
     }
 
     return orderedMediaPlayerPackages(rawPlayers)
+}
+
+private fun parseSelectedMediaPlayer(
+    item: JSONObject,
+    mediaPlayers: List<String>
+): String {
+    val value = item.optString("mediaSelectedPlayer")
+    val selected = normalizeMediaPlayerPackages(listOf(value)).firstOrNull().orEmpty()
+    return if (selected in mediaPlayers) selected else ""
 }

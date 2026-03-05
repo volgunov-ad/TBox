@@ -54,6 +54,7 @@ import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
 @Composable
 fun MainDashboardTab(
@@ -249,6 +250,14 @@ fun MainDashboardTab(
                                                 widgetConfig = widgetConfig,
                                                 onClick = { showDialogForIndex = index },
                                                 onLongClick = {},
+                                                onSelectedPlayerChange = { selectedPackage ->
+                                                    persistMainMediaWidgetSelectedPlayer(
+                                                        settingsViewModel = settingsViewModel,
+                                                        currentWidgetConfigs = widgetConfigs,
+                                                        widgetIndex = index,
+                                                        selectedPackage = selectedPackage
+                                                    )
+                                                },
                                                 textColor = widgetTextColor
                                             )
                                         }
@@ -370,6 +379,9 @@ fun WidgetSelectionDialog(
                 emptySet()
             }
         )
+    }
+    val selectedMediaPlayer = remember(widgetIndex, currentWidgetConfigs) {
+        resolveSelectedMediaPlayerForWidget(initialConfig)
     }
     val isMusicWidgetSelected = selectedDataKey == MUSIC_WIDGET_DATA_KEY
     val togglesEnabled = selectedDataKey.isNotEmpty()
@@ -564,6 +576,14 @@ fun WidgetSelectionDialog(
                                 orderedMediaPlayersForStorage(selectedMediaPlayers)
                             } else {
                                 emptyList()
+                            },
+                            mediaSelectedPlayer = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                                resolveStoredMediaSelectedPlayer(
+                                    selectedPlayers = selectedMediaPlayers,
+                                    currentSelectedPlayer = selectedMediaPlayer
+                                )
+                            } else {
+                                ""
                             }
                         )
                     } else {
@@ -586,5 +606,36 @@ fun WidgetSelectionDialog(
             }
         }
     )
+}
+
+private fun persistMainMediaWidgetSelectedPlayer(
+    settingsViewModel: SettingsViewModel,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    widgetIndex: Int,
+    selectedPackage: String
+) {
+    val normalizedConfigs = normalizeWidgetConfigs(
+        configs = currentWidgetConfigs,
+        widgetCount = currentWidgetConfigs.size
+    ).toMutableList()
+    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
+    if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
+    if (currentConfig.mediaSelectedPlayer == selectedPackage) return
+
+    normalizedConfigs[widgetIndex] = currentConfig.copy(mediaSelectedPlayer = selectedPackage)
+    settingsViewModel.saveDashboardWidgets(normalizedConfigs)
+}
+
+private fun resolveStoredMediaSelectedPlayer(
+    selectedPlayers: Set<String>,
+    currentSelectedPlayer: String
+): String {
+    val orderedPlayers = orderedMediaPlayersForStorage(selectedPlayers)
+    if (orderedPlayers.isEmpty()) return ""
+    return if (currentSelectedPlayer in orderedPlayers) {
+        currentSelectedPlayer
+    } else {
+        orderedPlayers.first()
+    }
 }
 

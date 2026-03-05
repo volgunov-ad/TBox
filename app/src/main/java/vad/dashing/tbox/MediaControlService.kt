@@ -27,6 +27,11 @@ enum class SupportedMediaPlayer(
         packageName = "com.maxmpz.audioplayer",
         titleRes = R.string.media_player_poweramp,
         iconRes = R.drawable.player_poweramp
+    ),
+    AIMP(
+        packageName = "com.aimp.player",
+        titleRes = R.string.media_player_aimp,
+        iconRes = R.drawable.player_aimp
     );
 
     companion object {
@@ -74,6 +79,10 @@ fun resolveMediaPlayersForWidget(config: FloatingDashboardWidgetConfig): Set<Str
     if (config.dataKey != MUSIC_WIDGET_DATA_KEY) return emptySet()
     val selected = normalizeMediaPlayerPackages(config.mediaPlayers)
     return if (selected.isEmpty()) defaultMediaPlayerPackages() else selected
+}
+
+fun resolveSelectedMediaPlayerForWidget(config: FloatingDashboardWidgetConfig): String {
+    return normalizeMediaPlayerPackages(listOf(config.mediaSelectedPlayer)).firstOrNull().orEmpty()
 }
 
 fun collectMediaPlayersFromWidgetConfigs(
@@ -139,7 +148,8 @@ object SharedMediaControlService {
 
     fun resolveWidgetState(
         selectedPackages: Set<String>,
-        currentStates: Map<String, MediaPlayerState> = playerStates.value
+        currentStates: Map<String, MediaPlayerState> = playerStates.value,
+        preferredPackage: String = ""
     ): MediaWidgetState {
         val refreshedStates = synchronized(this) {
             updateNotificationAccessLocked()
@@ -160,13 +170,20 @@ object SharedMediaControlService {
             return MediaWidgetState(notificationAccessGranted = isNotificationAccessGranted())
         }
 
-        val candidates = orderedSelected.mapNotNull { effectiveStates[it] }
+        val normalizedPreferred = normalizeMediaPlayerPackages(listOf(preferredPackage)).firstOrNull()
+        val prioritizedPackages = if (normalizedPreferred != null && normalizedPreferred in orderedSelected) {
+            listOf(normalizedPreferred) + orderedSelected.filterNot { it == normalizedPreferred }
+        } else {
+            orderedSelected
+        }
+
+        val candidates = prioritizedPackages.mapNotNull { effectiveStates[it] }
         val selectedState = candidates.firstOrNull { it.isPlaying }
             ?: candidates.firstOrNull { it.track.isNotBlank() || it.artist.isNotBlank() }
             ?: candidates.firstOrNull { it.hasSession }
 
         val fallbackPlayer = selectedState?.player
-            ?: SupportedMediaPlayer.fromPackage(orderedSelected.firstOrNull().orEmpty())
+            ?: SupportedMediaPlayer.fromPackage(prioritizedPackages.firstOrNull().orEmpty())
 
         return MediaWidgetState(
             player = fallbackPlayer,
@@ -178,17 +195,19 @@ object SharedMediaControlService {
         )
     }
 
-    fun skipToPrevious(selectedPackages: Set<String>) {
+    fun skipToPrevious(selectedPackages: Set<String>, preferredPackage: String = "") {
         synchronized(this) {
             syncControllersLocked()
-            resolveControllerLocked(selectedPackages)?.transportControls?.skipToPrevious()
+            resolveControllerLocked(selectedPackages, preferredPackage)
+                ?.transportControls
+                ?.skipToPrevious()
         }
     }
 
-    fun playPause(selectedPackages: Set<String>) {
+    fun playPause(selectedPackages: Set<String>, preferredPackage: String = "") {
         synchronized(this) {
             syncControllersLocked()
-            val controller = resolveControllerLocked(selectedPackages) ?: return
+            val controller = resolveControllerLocked(selectedPackages, preferredPackage) ?: return
             val isPlaying = controller.playbackState.isPlayingState()
             if (isPlaying) {
                 controller.transportControls.pause()
@@ -198,10 +217,12 @@ object SharedMediaControlService {
         }
     }
 
-    fun skipToNext(selectedPackages: Set<String>) {
+    fun skipToNext(selectedPackages: Set<String>, preferredPackage: String = "") {
         synchronized(this) {
             syncControllersLocked()
-            resolveControllerLocked(selectedPackages)?.transportControls?.skipToNext()
+            resolveControllerLocked(selectedPackages, preferredPackage)
+                ?.transportControls
+                ?.skipToNext()
         }
     }
 
@@ -337,17 +358,31 @@ object SharedMediaControlService {
         }
     }
 
-    private fun resolveControllerLocked(selectedPackages: Set<String>): MediaController? {
+    private fun resolveControllerLocked(
+        selectedPackages: Set<String>,
+        preferredPackage: String = ""
+    ): MediaController? {
         val selected = orderedMediaPlayerPackages(selectedPackages)
         val effectiveSelection = if (selected.isEmpty()) {
             orderedMediaPlayerPackages(requestedPackages)
         } else {
             selected
         }
-        val candidates = effectiveSelection.mapNotNull { packageName ->
+        val normalizedPreferred = normalizeMediaPlayerPackages(listOf(preferredPackage)).firstOrNull()
+        val prioritizedSelection = if (normalizedPreferred != null && normalizedPreferred in effectiveSelection) {
+            listOf(normalizedPreferred) + effectiveSelection.filterNot { it == normalizedPreferred }
+        } else {
+            effectiveSelection
+        }
+        val candidates = prioritizedSelection.mapNotNull { packageName ->
             controllers[packageName]
         }
         if (candidates.isEmpty()) return null
+        if (normalizedPreferred != null) {
+            return candidates.firstOrNull { it.packageName == normalizedPreferred }
+                ?: candidates.firstOrNull { it.playbackState.isPlayingState() }
+                ?: candidates.first()
+        }
         return candidates.firstOrNull { it.playbackState.isPlayingState() } ?: candidates.first()
     }
 

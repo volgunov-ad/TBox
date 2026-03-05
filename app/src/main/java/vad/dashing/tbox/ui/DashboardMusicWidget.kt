@@ -5,6 +5,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -24,11 +25,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -41,7 +46,10 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
+import vad.dashing.tbox.orderedMediaPlayerPackages
 import vad.dashing.tbox.resolveMediaPlayersForWidget
+import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
+import kotlin.math.abs
 
 @Composable
 fun DashboardMusicWidgetItem(
@@ -49,6 +57,7 @@ fun DashboardMusicWidgetItem(
     widgetConfig: FloatingDashboardWidgetConfig,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
+    onSelectedPlayerChange: (String) -> Unit = {},
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
@@ -58,9 +67,22 @@ fun DashboardMusicWidgetItem(
     val selectedPlayers = remember(widget.dataKey, widgetConfig.mediaPlayers) {
         resolveMediaPlayersForWidget(widgetConfig)
     }
+    val carouselPackages = remember(selectedPlayers) {
+        orderedMediaPlayerPackages(selectedPlayers)
+    }
+    var selectedPackage by remember(widget.id, carouselPackages, widgetConfig.mediaSelectedPlayer) {
+        mutableStateOf(resolveInitialSelectedPackage(widgetConfig, carouselPackages))
+    }
+    var horizontalDragDistance by remember(widget.id, carouselPackages) {
+        mutableFloatStateOf(0f)
+    }
     val playerStates by SharedMediaControlService.playerStates.collectAsStateWithLifecycle()
-    val mediaState = remember(selectedPlayers, playerStates) {
-        SharedMediaControlService.resolveWidgetState(selectedPlayers, playerStates)
+    val mediaState = remember(selectedPlayers, playerStates, selectedPackage) {
+        SharedMediaControlService.resolveWidgetState(
+            selectedPackages = selectedPlayers,
+            currentStates = playerStates,
+            preferredPackage = selectedPackage
+        )
     }
 
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
@@ -73,6 +95,31 @@ fun DashboardMusicWidgetItem(
     Card(
         modifier = Modifier
             .fillMaxSize()
+            .pointerInput(carouselPackages, selectedPackage) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        horizontalDragDistance += dragAmount
+                    },
+                    onDragEnd = {
+                        if (abs(horizontalDragDistance) >= CAROUSEL_SWIPE_THRESHOLD_PX) {
+                            val nextPackage = resolveNextCarouselPackage(
+                                carouselPackages = carouselPackages,
+                                currentPackage = selectedPackage,
+                                moveToPrevious = horizontalDragDistance > 0f
+                            )
+                            if (nextPackage.isNotBlank() && nextPackage != selectedPackage) {
+                                selectedPackage = nextPackage
+                                onSelectedPlayerChange(nextPackage)
+                            }
+                        }
+                        horizontalDragDistance = 0f
+                    },
+                    onDragCancel = {
+                        horizontalDragDistance = 0f
+                    }
+                )
+            }
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -122,6 +169,16 @@ fun DashboardMusicWidgetItem(
                         modifier = Modifier
                             .weight(1f)
                             .padding(start = 8.dp)
+                    )
+                }
+                if (carouselPackages.size > 1) {
+                    Text(
+                        text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
+                        color = resolvedTextColor.copy(alpha = 0.8f),
+                        fontSize = calculateResponsiveFontSize(
+                            containerHeight = availableHeight,
+                            textType = TextType.TITLE
+                        ) * 0.85f
                     )
                 }
 
@@ -182,7 +239,12 @@ fun DashboardMusicWidgetItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
-                        onClick = { SharedMediaControlService.skipToPrevious(selectedPlayers) },
+                        onClick = {
+                            SharedMediaControlService.skipToPrevious(
+                                selectedPackages = selectedPlayers,
+                                preferredPackage = selectedPackage
+                            )
+                        },
                         enabled = mediaState.controlsAvailable
                     ) {
                         Icon(
@@ -192,7 +254,12 @@ fun DashboardMusicWidgetItem(
                         )
                     }
                     IconButton(
-                        onClick = { SharedMediaControlService.playPause(selectedPlayers) },
+                        onClick = {
+                            SharedMediaControlService.playPause(
+                                selectedPackages = selectedPlayers,
+                                preferredPackage = selectedPackage
+                            )
+                        },
                         enabled = mediaState.controlsAvailable
                     ) {
                         Icon(
@@ -202,7 +269,12 @@ fun DashboardMusicWidgetItem(
                         )
                     }
                     IconButton(
-                        onClick = { SharedMediaControlService.skipToNext(selectedPlayers) },
+                        onClick = {
+                            SharedMediaControlService.skipToNext(
+                                selectedPackages = selectedPlayers,
+                                preferredPackage = selectedPackage
+                            )
+                        },
                         enabled = mediaState.controlsAvailable
                     ) {
                         Icon(
@@ -225,3 +297,33 @@ private fun openNotificationListenerSettings(context: Context) {
         context.startActivity(intent)
     }
 }
+
+private fun resolveInitialSelectedPackage(
+    widgetConfig: FloatingDashboardWidgetConfig,
+    carouselPackages: List<String>
+): String {
+    if (carouselPackages.isEmpty()) return ""
+    val selectedFromSettings = resolveSelectedMediaPlayerForWidget(widgetConfig)
+    return if (selectedFromSettings in carouselPackages) {
+        selectedFromSettings
+    } else {
+        carouselPackages.first()
+    }
+}
+
+private fun resolveNextCarouselPackage(
+    carouselPackages: List<String>,
+    currentPackage: String,
+    moveToPrevious: Boolean
+): String {
+    if (carouselPackages.isEmpty()) return ""
+    val currentIndex = carouselPackages.indexOf(currentPackage).takeIf { it >= 0 } ?: 0
+    val nextIndex = if (moveToPrevious) {
+        if (currentIndex == 0) carouselPackages.lastIndex else currentIndex - 1
+    } else {
+        if (currentIndex == carouselPackages.lastIndex) 0 else currentIndex + 1
+    }
+    return carouselPackages[nextIndex]
+}
+
+private const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
