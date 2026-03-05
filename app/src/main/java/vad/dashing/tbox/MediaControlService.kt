@@ -179,10 +179,14 @@ object SharedMediaControlService {
             orderedSelected
         }
 
-        val candidates = prioritizedPackages.mapNotNull { effectiveStates[it] }
-        val selectedState = candidates.firstOrNull { it.isPlaying }
-            ?: candidates.firstOrNull { it.track.isNotBlank() || it.artist.isNotBlank() }
-            ?: candidates.firstOrNull { it.hasSession }
+        val selectedState = if (normalizedPreferred != null) {
+            effectiveStates[normalizedPreferred]
+        } else {
+            val candidates = prioritizedPackages.mapNotNull { effectiveStates[it] }
+            candidates.firstOrNull { it.isPlaying }
+                ?: candidates.firstOrNull { it.track.isNotBlank() || it.artist.isNotBlank() }
+                ?: candidates.firstOrNull { it.hasSession }
+        }
 
         val fallbackPlayer = selectedState?.player
             ?: SupportedMediaPlayer.fromPackage(prioritizedPackages.firstOrNull().orEmpty())
@@ -200,7 +204,11 @@ object SharedMediaControlService {
     fun skipToPrevious(selectedPackages: Set<String>, preferredPackage: String = "") {
         synchronized(this) {
             syncControllersLocked()
-            resolveControllerLocked(selectedPackages, preferredPackage)
+            resolveControllerLocked(
+                selectedPackages = selectedPackages,
+                preferredPackage = preferredPackage,
+                strictPreferred = preferredPackage.isNotBlank()
+            )
                 ?.transportControls
                 ?.skipToPrevious()
         }
@@ -214,7 +222,11 @@ object SharedMediaControlService {
         var controllerHandled = false
         synchronized(this) {
             syncControllersLocked()
-            val controller = resolveControllerLocked(selectedPackages, preferredPackage)
+            val controller = resolveControllerLocked(
+                selectedPackages = selectedPackages,
+                preferredPackage = preferredPackage,
+                strictPreferred = preferredPackage.isNotBlank()
+            )
             if (controller != null) {
                 val isPlaying = controller.playbackState.isPlayingState()
                 if (isPlaying) {
@@ -238,7 +250,11 @@ object SharedMediaControlService {
     fun skipToNext(selectedPackages: Set<String>, preferredPackage: String = "") {
         synchronized(this) {
             syncControllersLocked()
-            resolveControllerLocked(selectedPackages, preferredPackage)
+            resolveControllerLocked(
+                selectedPackages = selectedPackages,
+                preferredPackage = preferredPackage,
+                strictPreferred = preferredPackage.isNotBlank()
+            )
                 ?.transportControls
                 ?.skipToNext()
         }
@@ -378,7 +394,8 @@ object SharedMediaControlService {
 
     private fun resolveControllerLocked(
         selectedPackages: Set<String>,
-        preferredPackage: String = ""
+        preferredPackage: String = "",
+        strictPreferred: Boolean = false
     ): MediaController? {
         val selected = orderedMediaPlayerPackages(selectedPackages)
         val effectiveSelection = if (selected.isEmpty()) {
@@ -397,7 +414,11 @@ object SharedMediaControlService {
         }
         if (candidates.isEmpty()) return null
         if (normalizedPreferred != null) {
-            return candidates.firstOrNull { it.packageName == normalizedPreferred }
+            val preferredController = candidates.firstOrNull { it.packageName == normalizedPreferred }
+            if (strictPreferred) {
+                return preferredController
+            }
+            return preferredController
                 ?: candidates.firstOrNull { it.playbackState.isPlayingState() }
                 ?: candidates.first()
         }
