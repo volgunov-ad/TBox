@@ -173,7 +173,7 @@ fun DashboardMusicWidgetItem(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(0.5f),
+                        .weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -212,7 +212,7 @@ fun DashboardMusicWidgetItem(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .weight(1.5f)
                         .combinedClickable(
                             onClick = {},
                             onLongClick = {},
@@ -241,7 +241,7 @@ fun DashboardMusicWidgetItem(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .weight(1.5f)
                         .clip(RoundedCornerShape(8.dp))
                         .combinedClickable(
                             onClick = {

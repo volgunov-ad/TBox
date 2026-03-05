@@ -155,7 +155,10 @@ object SharedMediaControlService {
     ): MediaWidgetState {
         val refreshedStates = synchronized(this) {
             updateNotificationAccessLocked()
-            if (requestedPackages.isNotEmpty() && notificationAccessGranted) {
+            if (requestedPackages.isNotEmpty() &&
+                notificationAccessGranted &&
+                _playerStates.value.isEmpty()
+            ) {
                 startMonitoringLocked()
                 syncControllersLocked()
                 publishPlayerStatesLocked()
@@ -281,6 +284,10 @@ object SharedMediaControlService {
         updateNotificationAccessLocked()
 
         if (requestedPackages.isEmpty()) {
+            stopMonitoringLocked()
+            return
+        }
+        if (!notificationAccessGranted) {
             stopMonitoringLocked()
             return
         }
