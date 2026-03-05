@@ -159,8 +159,8 @@ fun MainDashboardTab(
                                         "netWidget" -> {
                                             DashboardNetWidgetItem(
                                                 widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 viewModel = tboxViewModel,
                                                 scale = widgetConfig.scale
                                             )
@@ -168,8 +168,8 @@ fun MainDashboardTab(
                                         "netWidgetNew" -> {
                                             DashboardNetNewWidgetItem(
                                                 widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 viewModel = tboxViewModel,
                                                 color = widgetTextColor,
                                                 scale = widgetConfig.scale
@@ -178,8 +178,8 @@ fun MainDashboardTab(
                                         "netWidgetColored" -> {
                                             DashboardNetNewWidgetItem(
                                                 widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 viewModel = tboxViewModel,
                                                 scale = widgetConfig.scale
                                             )
@@ -187,8 +187,8 @@ fun MainDashboardTab(
                                         "locWidget" -> {
                                             DashboardLocWidgetItem(
                                                 widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 viewModel = tboxViewModel,
                                                 textColor = widgetTextColor,
                                                 scale = widgetConfig.scale
@@ -197,8 +197,8 @@ fun MainDashboardTab(
                                         "voltage+engineTemperatureWidget" -> {
                                             DashboardVoltEngTempWidgetItem(
                                                 widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
                                                 textColor = widgetTextColor
@@ -207,8 +207,8 @@ fun MainDashboardTab(
                                         "gearBoxWidget" -> {
                                             DashboardGearBoxWidgetItem(
                                                 widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
                                                 textColor = widgetTextColor
@@ -217,8 +217,8 @@ fun MainDashboardTab(
                                         "wheelsPressureWidget" -> {
                                             DashboardWheelsPressureWidgetItem(
                                                 widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
                                                 textColor = widgetTextColor
@@ -227,8 +227,8 @@ fun MainDashboardTab(
                                         "wheelsPressureTemperatureWidget" -> {
                                             DashboardWheelsPressureTemperatureWidgetItem(
                                                 widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
                                                 textColor = widgetTextColor
@@ -237,8 +237,8 @@ fun MainDashboardTab(
                                         "tempInOutWidget" -> {
                                             DashboardTempInOutWidgetItem(
                                                 widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
                                                 textColor = widgetTextColor
@@ -248,8 +248,8 @@ fun MainDashboardTab(
                                             DashboardMusicWidgetItem(
                                                 widget = widget,
                                                 widgetConfig = widgetConfig,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 onSelectedPlayerChange = { selectedPackage ->
                                                     persistMainMediaWidgetSelectedPlayer(
                                                         settingsViewModel = settingsViewModel,
@@ -265,8 +265,8 @@ fun MainDashboardTab(
                                             DashboardMotorHoursWidgetItem(
                                                 widget = widget,
                                                 dataProvider = dataProvider,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 onDoubleClick = {
                                                     appDataViewModel.setMotorHours(0f)
                                                 },
@@ -278,8 +278,8 @@ fun MainDashboardTab(
                                             DashboardWidgetItem(
                                                 widget = widget,
                                                 dataProvider = dataProvider,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 onDoubleClick = {
                                                     if (restartEnabled) {
                                                         restartEnabled = false
@@ -305,8 +305,8 @@ fun MainDashboardTab(
                                             DashboardWidgetItem(
                                                 widget = widget,
                                                 dataProvider = dataProvider,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
+                                                onClick = {},
+                                                onLongClick = { showDialogForIndex = index },
                                                 onDoubleClick = {
                                                     if (widget.dataKey == "motorHours") {
                                                         appDataViewModel.setMotorHours(0f)

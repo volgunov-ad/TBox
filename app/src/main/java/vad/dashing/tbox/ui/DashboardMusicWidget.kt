@@ -212,7 +212,14 @@ fun DashboardMusicWidgetItem(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .weight(1f)
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = {},
+                            onDoubleClick = {
+                                openSelectedPlayer(context, selectedPackage)
+                            }
+                        ),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Text(
@@ -236,9 +243,17 @@ fun DashboardMusicWidgetItem(
                         .fillMaxWidth()
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable(enabled = !mediaState.notificationAccessGranted) {
-                            openNotificationListenerSettings(context)
-                        }
+                        .combinedClickable(
+                            onClick = {
+                                if (!mediaState.notificationAccessGranted) {
+                                    openNotificationListenerSettings(context)
+                                }
+                            },
+                            onLongClick = {},
+                            onDoubleClick = {
+                                openSelectedPlayer(context, selectedPackage)
+                            }
+                        )
                         .padding(horizontal = 2.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
@@ -320,6 +335,15 @@ private fun openNotificationListenerSettings(context: Context) {
     }
     runCatching {
         context.startActivity(intent)
+    }
+}
+
+private fun openSelectedPlayer(context: Context, packageName: String) {
+    if (packageName.isBlank()) return
+    val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
+    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching {
+        context.startActivity(launchIntent)
     }
 }
 
