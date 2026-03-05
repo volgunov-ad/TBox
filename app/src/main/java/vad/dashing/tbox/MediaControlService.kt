@@ -2,10 +2,12 @@ package vad.dashing.tbox
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.view.KeyEvent
 import android.provider.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -204,17 +206,33 @@ object SharedMediaControlService {
         }
     }
 
-    fun playPause(selectedPackages: Set<String>, preferredPackage: String = "") {
+    fun playPause(
+        context: Context,
+        selectedPackages: Set<String>,
+        preferredPackage: String = ""
+    ) {
+        var controllerHandled = false
         synchronized(this) {
             syncControllersLocked()
-            val controller = resolveControllerLocked(selectedPackages, preferredPackage) ?: return
-            val isPlaying = controller.playbackState.isPlayingState()
-            if (isPlaying) {
-                controller.transportControls.pause()
-            } else {
-                controller.transportControls.play()
+            val controller = resolveControllerLocked(selectedPackages, preferredPackage)
+            if (controller != null) {
+                val isPlaying = controller.playbackState.isPlayingState()
+                if (isPlaying) {
+                    controller.transportControls.pause()
+                } else {
+                    controller.transportControls.play()
+                }
+                controllerHandled = true
             }
         }
+        if (controllerHandled) return
+
+        val targetPackage = resolveTargetPackage(
+            selectedPackages = selectedPackages,
+            preferredPackage = preferredPackage
+        ) ?: return
+        sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
+        launchPlayerApp(context.applicationContext, targetPackage)
     }
 
     fun skipToNext(selectedPackages: Set<String>, preferredPackage: String = "") {
@@ -386,6 +404,15 @@ object SharedMediaControlService {
         return candidates.firstOrNull { it.playbackState.isPlayingState() } ?: candidates.first()
     }
 
+    private fun resolveTargetPackage(
+        selectedPackages: Set<String>,
+        preferredPackage: String
+    ): String? {
+        val normalizedPreferred = normalizeMediaPlayerPackages(listOf(preferredPackage)).firstOrNull()
+        if (normalizedPreferred != null) return normalizedPreferred
+        return orderedMediaPlayerPackages(selectedPackages).firstOrNull()
+    }
+
     private fun publishPlayerStatesLocked() {
         if (requestedPackages.isEmpty()) {
             _playerStates.value = emptyMap()
@@ -464,4 +491,25 @@ private fun hasNotificationListenerAccess(
         .split(':')
         .mapNotNull { ComponentName.unflattenFromString(it) }
         .any { it == listenerComponent }
+}
+
+private fun sendMediaPlayKeyEvent(context: Context, packageName: String) {
+    val keyDown = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+        setPackage(packageName)
+        putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+    }
+    val keyUp = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+        setPackage(packageName)
+        putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
+    }
+    context.sendOrderedBroadcast(keyDown, null)
+    context.sendOrderedBroadcast(keyUp, null)
+}
+
+private fun launchPlayerApp(context: Context, packageName: String) {
+    val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
+    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching {
+        context.startActivity(launchIntent)
+    }
 }

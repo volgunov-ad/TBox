@@ -68,6 +68,7 @@
     <string name="widget_music_no_artist">Исполнитель не определён</string>
     <string name="widget_music_no_track">Трек не определён</string>
     <string name="widget_music_player_none">Плеер не найден</string>
+    <string name="widget_music_player_with_state_off">%1$s (выключен)</string>
     <string name="widget_music_player_icon">Тип плеера</string>
     <string name="widget_music_action_previous">Предыдущий трек</string>
     <string name="widget_music_action_play_pause">Воспроизвести или пауза</string>

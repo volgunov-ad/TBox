@@ -68,6 +68,7 @@
     <string name="widget_music_no_artist">Artist is unknown</string>
     <string name="widget_music_no_track">Track is unknown</string>
     <string name="widget_music_player_none">Player not found</string>
+    <string name="widget_music_player_with_state_off">%1$s (off)</string>
     <string name="widget_music_player_icon">Player type</string>
     <string name="widget_music_action_previous">Previous track</string>
     <string name="widget_music_action_play_pause">Play or pause</string>

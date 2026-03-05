@@ -4,14 +4,17 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,10 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -46,6 +47,7 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
+import vad.dashing.tbox.SupportedMediaPlayer
 import vad.dashing.tbox.orderedMediaPlayerPackages
 import vad.dashing.tbox.resolveMediaPlayersForWidget
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
@@ -84,13 +86,37 @@ fun DashboardMusicWidgetItem(
             preferredPackage = selectedPackage
         )
     }
+    val selectedPlayerState = remember(playerStates, selectedPackage) {
+        if (selectedPackage.isBlank()) null else playerStates[selectedPackage]
+    }
+    val selectedPlayer = remember(selectedPackage, mediaState.player) {
+        SupportedMediaPlayer.fromPackage(selectedPackage) ?: mediaState.player
+    }
 
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
-    val playerLabel = mediaState.player?.let { stringResource(it.titleRes) }
+    val basePlayerLabel = selectedPlayer?.let { stringResource(it.titleRes) }
         ?: stringResource(R.string.widget_music_player_none)
-    val artist = mediaState.artist.ifBlank { stringResource(R.string.widget_music_no_artist) }
-    val track = mediaState.track.ifBlank { stringResource(R.string.widget_music_no_track) }
-    val playPauseIcon = if (mediaState.isPlaying) R.drawable.pause else R.drawable.play
+    val isSelectedPlayerRunning = selectedPlayerState?.hasSession == true
+    val playerLabel = if (selectedPackage.isNotBlank() && !isSelectedPlayerRunning) {
+        stringResource(R.string.widget_music_player_with_state_off, basePlayerLabel)
+    } else {
+        basePlayerLabel
+    }
+    val line2Text = if (!mediaState.notificationAccessGranted) {
+        stringResource(R.string.widget_music_access_required)
+    } else {
+        selectedPlayerState?.artist?.ifBlank { stringResource(R.string.widget_music_no_artist) }
+            ?: stringResource(R.string.widget_music_no_artist)
+    }
+    val line3Text = if (!mediaState.notificationAccessGranted) {
+        stringResource(R.string.widget_music_open_access_settings)
+    } else {
+        selectedPlayerState?.track?.ifBlank { stringResource(R.string.widget_music_no_track) }
+            ?: stringResource(R.string.widget_music_no_track)
+    }
+    val playPauseIcon = if (selectedPlayerState?.isPlaying == true) R.drawable.pause else R.drawable.play
+    val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()
+    val canSendSkip = mediaState.notificationAccessGranted && isSelectedPlayerRunning
 
     Card(
         modifier = Modifier
@@ -142,15 +168,16 @@ fun DashboardMusicWidgetItem(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(6.dp),
-                verticalArrangement = Arrangement.SpaceBetween
+                    .padding(6.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.5f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(id = mediaState.player?.iconRes ?: R.drawable.player_unknown),
+                        painter = painterResource(id = selectedPlayer?.iconRes ?: R.drawable.player_unknown),
                         contentDescription = stringResource(R.string.widget_music_player_icon),
                         tint = Color.Unspecified,
                         modifier = Modifier
@@ -170,119 +197,117 @@ fun DashboardMusicWidgetItem(
                             .weight(1f)
                             .padding(start = 8.dp)
                     )
-                }
-                if (carouselPackages.size > 1) {
-                    Text(
-                        text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
-                        color = resolvedTextColor.copy(alpha = 0.8f),
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.TITLE
-                        ) * 0.85f
-                    )
+                    if (carouselPackages.size > 1) {
+                        Text(
+                            text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
+                            color = resolvedTextColor,
+                            fontSize = calculateResponsiveFontSize(
+                                containerHeight = availableHeight,
+                                textType = TextType.TITLE
+                            ) * 0.85f
+                        )
+                    }
                 }
 
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.Center
+                        .weight(1.5f),
+                    contentAlignment = Alignment.CenterStart
                 ) {
                     Text(
-                        text = artist,
-                        color = resolvedTextColor.copy(alpha = 0.9f),
+                        text = line2Text,
+                        color = if (mediaState.notificationAccessGranted) {
+                            resolvedTextColor
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
                         fontSize = calculateResponsiveFontSize(
                             containerHeight = availableHeight,
                             textType = TextType.TITLE
                         ),
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.size(2.dp))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1.5f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(enabled = !mediaState.notificationAccessGranted) {
+                            openNotificationListenerSettings(context)
+                        }
+                        .padding(horizontal = 2.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
                     Text(
-                        text = track,
+                        text = line3Text,
                         color = resolvedTextColor,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = calculateResponsiveFontSize(
                             containerHeight = availableHeight,
                             textType = TextType.VALUE
                         ) * 0.7f,
-                        maxLines = 2,
+                        maxLines = if (mediaState.notificationAccessGranted) 2 else 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                }
-
-                if (!mediaState.notificationAccessGranted) {
-                    Text(
-                        text = stringResource(R.string.widget_music_access_required),
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.TITLE
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    TextButton(
-                        onClick = { openNotificationListenerSettings(context) }
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_music_open_access_settings),
-                            color = resolvedTextColor
-                        )
-                    }
                 }
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(2.5f),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
+                    MediaControlActionButton(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        iconRes = R.drawable.skip_previous,
+                        contentDescription = stringResource(R.string.widget_music_action_previous),
+                        iconTint = resolvedTextColor,
+                        enabled = canSendSkip,
                         onClick = {
                             SharedMediaControlService.skipToPrevious(
                                 selectedPackages = selectedPlayers,
                                 preferredPackage = selectedPackage
                             )
-                        },
-                        enabled = mediaState.controlsAvailable
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.skip_previous),
-                            contentDescription = stringResource(R.string.widget_music_action_previous),
-                            tint = resolvedTextColor
-                        )
-                    }
-                    IconButton(
+                        }
+                    )
+                    MediaControlActionButton(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        iconRes = playPauseIcon,
+                        contentDescription = stringResource(R.string.widget_music_action_play_pause),
+                        iconTint = resolvedTextColor,
+                        enabled = canSendPlay,
                         onClick = {
                             SharedMediaControlService.playPause(
+                                context = context,
                                 selectedPackages = selectedPlayers,
                                 preferredPackage = selectedPackage
                             )
-                        },
-                        enabled = mediaState.controlsAvailable
-                    ) {
-                        Icon(
-                            painter = painterResource(id = playPauseIcon),
-                            contentDescription = stringResource(R.string.widget_music_action_play_pause),
-                            tint = resolvedTextColor
-                        )
-                    }
-                    IconButton(
+                        }
+                    )
+                    MediaControlActionButton(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        iconRes = R.drawable.next_track,
+                        contentDescription = stringResource(R.string.widget_music_action_next),
+                        iconTint = resolvedTextColor,
+                        enabled = canSendSkip,
                         onClick = {
                             SharedMediaControlService.skipToNext(
                                 selectedPackages = selectedPlayers,
                                 preferredPackage = selectedPackage
                             )
-                        },
-                        enabled = mediaState.controlsAvailable
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.next_track),
-                            contentDescription = stringResource(R.string.widget_music_action_next),
-                            tint = resolvedTextColor
-                        )
-                    }
+                        }
+                    )
                 }
             }
         }
@@ -327,3 +352,36 @@ private fun resolveNextCarouselPackage(
 }
 
 private const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
+
+@Composable
+private fun MediaControlActionButton(
+    modifier: Modifier,
+    iconRes: Int,
+    contentDescription: String,
+    iconTint: Color,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                if (enabled) {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+                }
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = contentDescription,
+            tint = if (enabled) iconTint else iconTint.copy(alpha = 0.5f),
+            modifier = Modifier
+                .fillMaxHeight(0.72f)
+                .aspectRatio(1f)
+        )
+    }
+}
