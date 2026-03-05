@@ -76,6 +76,15 @@
             android:foregroundServiceType="connectedDevice">
         </service>
 
+        <service
+            android:name="vad.dashing.tbox.TboxDataAidlService"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="vad.dashing.tbox.BIND_TBOX_DATA" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name="vad.dashing.tbox.NetWidget"
             android:enabled="true"
