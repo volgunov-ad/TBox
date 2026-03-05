@@ -189,7 +189,7 @@ fun DashboardMusicWidgetItem(
                         color = resolvedTextColor,
                         fontSize = calculateResponsiveFontSize(
                             containerHeight = availableHeight,
-                            textType = TextType.TITLE
+                            textType = TextType.UNIT
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -203,8 +203,8 @@ fun DashboardMusicWidgetItem(
                             color = resolvedTextColor,
                             fontSize = calculateResponsiveFontSize(
                                 containerHeight = availableHeight,
-                                textType = TextType.TITLE
-                            ) * 0.85f
+                                textType = TextType.UNIT
+                            )
                         )
                     }
                 }
@@ -212,7 +212,7 @@ fun DashboardMusicWidgetItem(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1.5f),
+                        .weight(1f),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Text(
@@ -224,7 +224,7 @@ fun DashboardMusicWidgetItem(
                         },
                         fontSize = calculateResponsiveFontSize(
                             containerHeight = availableHeight,
-                            textType = TextType.TITLE
+                            textType = TextType.VALUE
                         ),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -234,7 +234,7 @@ fun DashboardMusicWidgetItem(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1.5f)
+                        .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable(enabled = !mediaState.notificationAccessGranted) {
                             openNotificationListenerSettings(context)
@@ -249,7 +249,7 @@ fun DashboardMusicWidgetItem(
                         fontSize = calculateResponsiveFontSize(
                             containerHeight = availableHeight,
                             textType = TextType.VALUE
-                        ) * 0.7f,
+                        ),
                         maxLines = if (mediaState.notificationAccessGranted) 2 else 1,
                         overflow = TextOverflow.Ellipsis
                     )
