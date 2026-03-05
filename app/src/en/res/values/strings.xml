@@ -62,6 +62,21 @@
     <string name="widget_color_value_label">Color value</string>
     <string name="widget_color_value_hint">Format: #AARRGGBB, #RRGGBB, 0xAARRGGBB or Int</string>
     <string name="widget_color_alpha">Alpha: %1$d%%</string>
+    <string name="widget_music_players">Players for music widget</string>
+    <string name="widget_music_players_hint">Select one or more players</string>
+    <string name="widget_music_players_required">Select at least one player</string>
+    <string name="widget_music_no_artist">Artist is unknown</string>
+    <string name="widget_music_no_track">Track is unknown</string>
+    <string name="widget_music_player_none">Player not found</string>
+    <string name="widget_music_player_icon">Player type</string>
+    <string name="widget_music_action_previous">Previous track</string>
+    <string name="widget_music_action_play_pause">Play or pause</string>
+    <string name="widget_music_action_next">Next track</string>
+    <string name="widget_music_access_required">Notification access is required for track data and controls</string>
+    <string name="widget_music_open_access_settings">Open access settings</string>
+    <string name="media_player_yandex_music">Yandex Music</string>
+    <string name="media_player_poweramp">Poweramp</string>
+    <string name="media_player_aimp">AIMP</string>
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
     <string name="logs_filter_placeholder">Enter text to search…</string>
