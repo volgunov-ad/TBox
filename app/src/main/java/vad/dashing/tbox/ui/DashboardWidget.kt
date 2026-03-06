@@ -60,7 +60,6 @@ fun DashboardWidgetItem(
     shape: Dp = 12.dp,
     title: Boolean = true,
     units: Boolean = true,
-    backgroundTransparent: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
@@ -101,11 +100,7 @@ fun DashboardWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) {
-                Color.Transparent
-            } else {
-                backgroundColor ?: MaterialTheme.colorScheme.surface
-            }
+            containerColor = backgroundColor ?: MaterialTheme.colorScheme.surface
         ),
         shape = RoundedCornerShape(shape)
     ) {

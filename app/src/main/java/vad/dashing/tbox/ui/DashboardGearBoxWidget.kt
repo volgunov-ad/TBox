@@ -38,7 +38,6 @@ fun DashboardGearBoxWidgetItem(
     canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false,
     units: Boolean = true,
     textColor: Color? = null,
     backgroundColor: Color? = null
@@ -57,11 +56,7 @@ fun DashboardGearBoxWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) {
-                Color.Transparent
-            } else {
-                backgroundColor ?: MaterialTheme.colorScheme.surface
-            }
+            containerColor = backgroundColor ?: MaterialTheme.colorScheme.surface
         ),
         shape = RoundedCornerShape(shape)
     ) {

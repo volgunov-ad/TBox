@@ -63,7 +63,6 @@ fun DashboardMusicWidgetItem(
     enableInnerInteractions: Boolean = true,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
@@ -160,11 +159,7 @@ fun DashboardMusicWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) {
-                Color.Transparent
-            } else {
-                backgroundColor ?: MaterialTheme.colorScheme.surface
-            }
+            containerColor = backgroundColor ?: MaterialTheme.colorScheme.surface
         ),
         shape = RoundedCornerShape(shape)
     ) {

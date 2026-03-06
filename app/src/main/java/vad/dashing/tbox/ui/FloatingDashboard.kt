@@ -435,7 +435,6 @@ fun FloatingDashboard(
                                                         viewModel = tboxViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         backgroundColor = widgetBackgroundColor,
                                                         scale = widgetConfig.scale
                                                     )
@@ -460,7 +459,6 @@ fun FloatingDashboard(
                                                         color = widgetTextColor,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         backgroundColor = widgetBackgroundColor,
                                                         scale = widgetConfig.scale
                                                     )
@@ -484,7 +482,6 @@ fun FloatingDashboard(
                                                         viewModel = tboxViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         backgroundColor = widgetBackgroundColor,
                                                         scale = widgetConfig.scale
                                                     )
@@ -508,7 +505,6 @@ fun FloatingDashboard(
                                                         viewModel = tboxViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         backgroundColor = widgetBackgroundColor,
                                                         textColor = widgetTextColor,
                                                         scale = widgetConfig.scale
@@ -532,7 +528,6 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
                                                         textColor = widgetTextColor,
                                                         backgroundColor = widgetBackgroundColor
@@ -556,7 +551,6 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
                                                         textColor = widgetTextColor,
                                                         backgroundColor = widgetBackgroundColor
@@ -580,7 +574,6 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
                                                         textColor = widgetTextColor,
                                                         backgroundColor = widgetBackgroundColor
@@ -604,7 +597,6 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
                                                         textColor = widgetTextColor,
                                                         backgroundColor = widgetBackgroundColor
@@ -628,7 +620,6 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
                                                         textColor = widgetTextColor,
                                                         backgroundColor = widgetBackgroundColor
@@ -662,7 +653,6 @@ fun FloatingDashboard(
                                                         },
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         enableInnerInteractions = !isEditMode,
                                                         textColor = widgetTextColor,
                                                         backgroundColor = widgetBackgroundColor
@@ -689,7 +679,6 @@ fun FloatingDashboard(
                                                         },
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
                                                         textColor = widgetTextColor,
                                                         backgroundColor = widgetBackgroundColor
@@ -723,7 +712,6 @@ fun FloatingDashboard(
                                                         shape = 0.dp,
                                                         title = widgetConfig.showTitle,
                                                         units = widgetConfig.showUnit,
-                                                        backgroundTransparent = false,
                                                         backgroundColor = widgetBackgroundColor,
                                                         textColor = if (restartEnabled) {
                                                             if (tboxConnected) {
@@ -763,7 +751,6 @@ fun FloatingDashboard(
                                                         shape = 0.dp,
                                                         title = widgetConfig.showTitle,
                                                         units = widgetConfig.showUnit,
-                                                        backgroundTransparent = false,
                                                         backgroundColor = widgetBackgroundColor,
                                                         textColor = widgetTextColor
                                                     )
