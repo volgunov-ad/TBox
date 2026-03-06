@@ -3,6 +3,7 @@ package vad.dashing.tbox.ui
 import android.content.Context
 import android.content.Intent
 import android.view.WindowManager
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardElevation
 import androidx.compose.material3.MaterialTheme
@@ -909,26 +911,13 @@ fun OverlayWidgetSelectionDialog(
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    SettingsTitle(
-                        if (showAdvancedSettings) {
-                            stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                        } else {
-                            stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
-                        }
-                    )
+            SettingsTitle(
+                if (showAdvancedSettings) {
+                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                } else {
+                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                 }
-                OutlinedButton(
-                    onClick = { showAdvancedSettings = !showAdvancedSettings },
-                    modifier = Modifier.padding(start = 8.dp)
-                ) {
-                    Text(text = stringResource(R.string.widget_toggle_advanced), fontSize = 20.sp)
-                }
-            }
+            )
 
             Box(
                 modifier = Modifier
@@ -1052,6 +1041,32 @@ fun OverlayWidgetSelectionDialog(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                OutlinedButton(
+                    onClick = { showAdvancedSettings = !showAdvancedSettings },
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (showAdvancedSettings) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        }
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (showAdvancedSettings) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        } else {
+                            Color.Transparent
+                        },
+                        contentColor = if (showAdvancedSettings) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                ) {
+                    Text(text = stringResource(R.string.widget_toggle_advanced), fontSize = 20.sp)
+                }
+                Box(modifier = Modifier.weight(1f))
                 OutlinedButton(
                     onClick = onDismiss,
                     modifier = Modifier.padding(end = 12.dp)

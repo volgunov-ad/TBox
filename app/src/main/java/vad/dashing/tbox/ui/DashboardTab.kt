@@ -1,6 +1,7 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -409,26 +411,13 @@ fun WidgetSelectionDialog(
                     .fillMaxSize()
                     .padding(8.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        SettingsTitle(
-                            if (showAdvancedSettings) {
-                                stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                            } else {
-                                stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
-                            }
-                        )
+                SettingsTitle(
+                    if (showAdvancedSettings) {
+                        stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                    } else {
+                        stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                     }
-                    OutlinedButton(
-                        onClick = { showAdvancedSettings = !showAdvancedSettings },
-                        modifier = Modifier.padding(start = 8.dp)
-                    ) {
-                        Text(text = stringResource(R.string.widget_toggle_advanced), fontSize = 20.sp)
-                    }
-                }
+                )
 
                 Box(
                     modifier = Modifier
@@ -545,81 +534,109 @@ fun WidgetSelectionDialog(
             }
         },
         confirmButton = {
-            Button(
-                enabled = canSaveSelection,
-                onClick = {
-                    val normalizedScale = normalizeWidgetScale(scale)
-                    scale = normalizedScale
-                    val updatedWidgets = currentWidgets.toMutableList()
-                    val newWidget = if (selectedDataKey.isNotEmpty()) {
-                        DashboardWidget(
-                            id = currentWidgets[widgetIndex].id,
-                            title = WidgetsRepository.getTitleForDataKey(context, selectedDataKey),
-                            unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
-                            dataKey = selectedDataKey,
-                            textColorLight = textColorLight,
-                            textColorDark = textColorDark
-                        )
-                    } else {
-                        DashboardWidget(
-                            id = currentWidgets[widgetIndex].id,
-                            title = "",
-                            dataKey = "",
-                            textColorLight = textColorLight,
-                            textColorDark = textColorDark
-                        )
-                    }
-                    updatedWidgets[widgetIndex] = newWidget
-
-                    // Обновляем виджеты
-                    dashboardManager.updateWidgets(updatedWidgets)
-
-                    // Сохраняем конфигурацию
-                    val normalizedConfigs = normalizeWidgetConfigs(
-                        currentWidgetConfigs,
-                        updatedWidgets.size
-                    ).toMutableList()
-                    normalizedConfigs[widgetIndex] = if (selectedDataKey.isNotEmpty()) {
-                        FloatingDashboardWidgetConfig(
-                            dataKey = selectedDataKey,
-                            showTitle = showTitle,
-                            showUnit = showUnit,
-                            scale = normalizedScale,
-                            textColorLight = textColorLight,
-                            textColorDark = textColorDark,
-                            mediaPlayers = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
-                                orderedMediaPlayersForStorage(selectedMediaPlayers)
-                            } else {
-                                emptyList()
-                            },
-                            mediaSelectedPlayer = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
-                                resolveStoredMediaSelectedPlayer(
-                                    selectedPlayers = selectedMediaPlayers,
-                                    currentSelectedPlayer = selectedMediaPlayer
-                                )
-                            } else {
-                                ""
-                            }
-                        )
-                    } else {
-                        FloatingDashboardWidgetConfig(dataKey = "")
-                    }
-                    settingsViewModel.saveDashboardWidgets(normalizedConfigs)
-
-                    // Очищаем историю
-                    dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
-
-                    onDismiss()
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = stringResource(R.string.action_save), fontSize = 24.sp)
+                OutlinedButton(
+                    onClick = { showAdvancedSettings = !showAdvancedSettings },
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (showAdvancedSettings) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        }
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (showAdvancedSettings) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        } else {
+                            Color.Transparent
+                        },
+                        contentColor = if (showAdvancedSettings) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                ) {
+                    Text(text = stringResource(R.string.widget_toggle_advanced), fontSize = 20.sp)
+                }
+                Box(modifier = Modifier.weight(1f))
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.padding(end = 12.dp)
+                ) {
+                    Text(text = stringResource(R.string.action_cancel), fontSize = 24.sp)
+                }
+                Button(
+                    enabled = canSaveSelection,
+                    onClick = {
+                        val normalizedScale = normalizeWidgetScale(scale)
+                        scale = normalizedScale
+                        val updatedWidgets = currentWidgets.toMutableList()
+                        val newWidget = if (selectedDataKey.isNotEmpty()) {
+                            DashboardWidget(
+                                id = currentWidgets[widgetIndex].id,
+                                title = WidgetsRepository.getTitleForDataKey(context, selectedDataKey),
+                                unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
+                                dataKey = selectedDataKey,
+                                textColorLight = textColorLight,
+                                textColorDark = textColorDark
+                            )
+                        } else {
+                            DashboardWidget(
+                                id = currentWidgets[widgetIndex].id,
+                                title = "",
+                                dataKey = "",
+                                textColorLight = textColorLight,
+                                textColorDark = textColorDark
+                            )
+                        }
+                        updatedWidgets[widgetIndex] = newWidget
+
+                        dashboardManager.updateWidgets(updatedWidgets)
+
+                        val normalizedConfigs = normalizeWidgetConfigs(
+                            currentWidgetConfigs,
+                            updatedWidgets.size
+                        ).toMutableList()
+                        normalizedConfigs[widgetIndex] = if (selectedDataKey.isNotEmpty()) {
+                            FloatingDashboardWidgetConfig(
+                                dataKey = selectedDataKey,
+                                showTitle = showTitle,
+                                showUnit = showUnit,
+                                scale = normalizedScale,
+                                textColorLight = textColorLight,
+                                textColorDark = textColorDark,
+                                mediaPlayers = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                                    orderedMediaPlayersForStorage(selectedMediaPlayers)
+                                } else {
+                                    emptyList()
+                                },
+                                mediaSelectedPlayer = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                                    resolveStoredMediaSelectedPlayer(
+                                        selectedPlayers = selectedMediaPlayers,
+                                        currentSelectedPlayer = selectedMediaPlayer
+                                    )
+                                } else {
+                                    ""
+                                }
+                            )
+                        } else {
+                            FloatingDashboardWidgetConfig(dataKey = "")
+                        }
+                        settingsViewModel.saveDashboardWidgets(normalizedConfigs)
+                        dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
+                        onDismiss()
+                    }
+                ) {
+                    Text(text = stringResource(R.string.action_save), fontSize = 24.sp)
+                }
             }
         },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text(text = stringResource(R.string.action_cancel), fontSize = 24.sp)
-            }
-        }
+        dismissButton = {}
     )
 }
 

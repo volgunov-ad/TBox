@@ -197,7 +197,7 @@ fun DashboardMusicWidgetItem(
                         fontSize = calculateResponsiveFontSize(
                             containerHeight = availableHeight,
                             textType = TextType.UNIT
-                        ),
+                        ) * 0.8f,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
@@ -211,7 +211,7 @@ fun DashboardMusicWidgetItem(
                             fontSize = calculateResponsiveFontSize(
                                 containerHeight = availableHeight,
                                 textType = TextType.UNIT
-                            )
+                            ) * 0.8f
                         )
                     }
                 }
@@ -239,7 +239,7 @@ fun DashboardMusicWidgetItem(
                         },
                         fontSize = calculateResponsiveFontSize(
                             containerHeight = availableHeight,
-                            textType = TextType.VALUE
+                            textType = TextType.TITLE
                         ),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -272,7 +272,7 @@ fun DashboardMusicWidgetItem(
                         fontWeight = FontWeight.SemiBold,
                         fontSize = calculateResponsiveFontSize(
                             containerHeight = availableHeight,
-                            textType = TextType.VALUE
+                            textType = TextType.TITLE
                         ),
                         maxLines = if (mediaState.notificationAccessGranted) 2 else 1,
                         overflow = TextOverflow.Ellipsis
