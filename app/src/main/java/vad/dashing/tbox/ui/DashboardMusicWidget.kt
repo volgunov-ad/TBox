@@ -9,7 +9,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -19,8 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -119,64 +116,50 @@ fun DashboardMusicWidgetItem(
     val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()
     val canSendSkip = mediaState.notificationAccessGranted && isSelectedPlayerRunning
 
-    Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(
-                if (enableInnerInteractions && carouselPackages.size > 1) {
-                    Modifier.pointerInput(carouselPackages, selectedPackage) {
-                        detectHorizontalDragGestures(
-                            onHorizontalDrag = { change, dragAmount ->
-                                change.consume()
-                                horizontalDragDistance += dragAmount
-                            },
-                            onDragEnd = {
-                                if (abs(horizontalDragDistance) >= CAROUSEL_SWIPE_THRESHOLD_PX) {
-                                    val nextPackage = resolveNextCarouselPackage(
-                                        carouselPackages = carouselPackages,
-                                        currentPackage = selectedPackage,
-                                        moveToPrevious = horizontalDragDistance > 0f
-                                    )
-                                    if (nextPackage.isNotBlank() && nextPackage != selectedPackage) {
-                                        selectedPackage = nextPackage
-                                        onSelectedPlayerChange(nextPackage)
-                                    }
+    DashboardWidgetScaffold(
+        modifier = Modifier.then(
+            if (enableInnerInteractions && carouselPackages.size > 1) {
+                Modifier.pointerInput(carouselPackages, selectedPackage) {
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            horizontalDragDistance += dragAmount
+                        },
+                        onDragEnd = {
+                            if (abs(horizontalDragDistance) >= CAROUSEL_SWIPE_THRESHOLD_PX) {
+                                val nextPackage = resolveNextCarouselPackage(
+                                    carouselPackages = carouselPackages,
+                                    currentPackage = selectedPackage,
+                                    moveToPrevious = horizontalDragDistance > 0f
+                                )
+                                if (nextPackage.isNotBlank() && nextPackage != selectedPackage) {
+                                    selectedPackage = nextPackage
+                                    onSelectedPlayerChange(nextPackage)
                                 }
-                                horizontalDragDistance = 0f
-                            },
-                            onDragCancel = {
-                                horizontalDragDistance = 0f
                             }
-                        )
-                    }
-                } else {
-                    Modifier
+                            horizontalDragDistance = 0f
+                        },
+                        onDragCancel = {
+                            horizontalDragDistance = 0f
+                        }
+                    )
                 }
-            )
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        elevation = CardDefaults.cardElevation(elevation),
-        colors = CardDefaults.cardColors(
-            containerColor = backgroundColor ?: MaterialTheme.colorScheme.surface
+            } else {
+                Modifier
+            }
         ),
-        shape = RoundedCornerShape(shape)
-    ) {
-        BoxWithConstraints(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, _ ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    color = Color.Transparent,
-                    shape = RoundedCornerShape(shape)
-                )
+                .padding(6.dp)
         ) {
-            val availableHeight = maxHeight
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(6.dp)
-            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -340,7 +323,6 @@ fun DashboardMusicWidgetItem(
                     )
                 }
             }
-        }
     }
 }
 
@@ -362,7 +344,7 @@ private fun openSelectedPlayer(context: Context, packageName: String) {
     }
 }
 
-private fun resolveInitialSelectedPackage(
+internal fun resolveInitialSelectedPackage(
     widgetConfig: FloatingDashboardWidgetConfig,
     carouselPackages: List<String>
 ): String {
@@ -375,7 +357,7 @@ private fun resolveInitialSelectedPackage(
     }
 }
 
-private fun resolveNextCarouselPackage(
+internal fun resolveNextCarouselPackage(
     carouselPackages: List<String>,
     currentPackage: String,
     moveToPrevious: Boolean
@@ -390,7 +372,7 @@ private fun resolveNextCarouselPackage(
     return carouselPackages[nextIndex]
 }
 
-private const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
+internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
 
 @Composable
 private fun MediaControlActionButton(

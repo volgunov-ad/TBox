@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun DashboardWidgetScaffold(
+    modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: (() -> Unit)? = null,
@@ -27,7 +28,7 @@ fun DashboardWidgetScaffold(
     content: @Composable BoxWithConstraintsScope.(availableHeight: Dp, resolvedTextColor: Color) -> Unit
 ) {
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .combinedClickable(
                 onClick = onClick,
