@@ -255,6 +255,7 @@ fun MainDashboardTab(
                                                         settingsViewModel = settingsViewModel,
                                                         currentWidgetConfigs = widgetConfigs,
                                                         widgetIndex = index,
+                                                        currentWidgetConfig = widgetConfig,
                                                         selectedPackage = selectedPackage
                                                     )
                                                 },
@@ -612,6 +613,7 @@ private fun persistMainMediaWidgetSelectedPlayer(
     settingsViewModel: SettingsViewModel,
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     widgetIndex: Int,
+    currentWidgetConfig: FloatingDashboardWidgetConfig,
     selectedPackage: String
 ) {
     val normalizedConfigs = normalizeWidgetConfigs(
@@ -622,7 +624,9 @@ private fun persistMainMediaWidgetSelectedPlayer(
     if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
     if (currentConfig.mediaSelectedPlayer == selectedPackage) return
 
-    normalizedConfigs[widgetIndex] = currentConfig.copy(mediaSelectedPlayer = selectedPackage)
+    normalizedConfigs[widgetIndex] = currentWidgetConfig.copy(
+        mediaSelectedPlayer = selectedPackage
+    )
     settingsViewModel.saveDashboardWidgets(normalizedConfigs)
 }
 
