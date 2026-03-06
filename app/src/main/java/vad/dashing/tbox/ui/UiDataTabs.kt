@@ -79,6 +79,7 @@ fun CarDataTabContent(
     val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
     val fuelLevelPercentage by canViewModel.fuelLevelPercentage.collectAsStateWithLifecycle()
     val fuelLevelPercentageFiltered by canViewModel.fuelLevelPercentageFiltered.collectAsStateWithLifecycle()
+    val currentFuelConsumption by canViewModel.currentFuelConsumption.collectAsStateWithLifecycle()
     val carSpeed by canViewModel.carSpeed.collectAsStateWithLifecycle()
     val carSpeedAccurate by canViewModel.carSpeedAccurate.collectAsStateWithLifecycle()
     val wheelsSpeed by canViewModel.wheelsSpeed.collectAsStateWithLifecycle()
@@ -134,13 +135,16 @@ fun CarDataTabContent(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "steerAngle"), valueToString(steerAngle, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "steerSpeed"), valueToString(steerSpeed)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "engineRPM"), valueToString(engineRPM, 1)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "throttlePosition"), valueToString(throttlePosition, 1)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param1"), valueToString(param1, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param2"), valueToString(param2, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param3"), valueToString(param3, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "param4"), valueToString(param4, 1)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "throttlePosition"), valueToString(throttlePosition, 1)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "carSpeed"), valueToString(carSpeed, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "carSpeedAccurate"), valueToString(carSpeedAccurate, 1)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel1Speed"), valueToString(wheelsSpeed.wheel1, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel2Speed"), valueToString(wheelsSpeed.wheel2, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel3Speed"), valueToString(wheelsSpeed.wheel3, 1)) }
@@ -153,14 +157,21 @@ fun CarDataTabContent(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel2Temperature"), valueToString(wheelsTemperature.wheel2, 0)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel3Temperature"), valueToString(wheelsTemperature.wheel3, 0)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "wheel4Temperature"), valueToString(wheelsTemperature.wheel4, 0)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "cruiseSetSpeed"), valueToString(cruiseSetSpeed)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "odometer"), valueToString(odometer)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "distanceToNextMaintenance"), valueToString(distanceToNextMaintenance)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "distanceToFuelEmpty"), valueToString(distanceToFuelEmpty)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "fuelLevelPercentage"), valueToString(fuelLevelPercentage)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "fuelLevelPercentageFiltered"), valueToString(fuelLevelPercentageFiltered)) }
+            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "currentFuelConsumption"), valueToString(currentFuelConsumption, 1)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "breakingForce"), valueToString(breakingForce)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "engineTemperature"), valueToString(engineTemperature, 1)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxOilTemperature"), valueToString(gearBoxOilTemperature)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxMode"), gearBoxMode) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "gearBoxDriveMode"), gearBoxDriveMode) }
@@ -173,20 +184,25 @@ fun CarDataTabContent(
                     valueToString(gearBoxChangeGear, booleanTrue = switchingLabel, booleanFalse = noLabel)
                 )
             }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "frontLeftSeatMode"), seatModeToString(context, frontLeftSeatMode)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "frontRightSeatMode"), seatModeToString(context, frontRightSeatMode)) }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "outsideTemperature"), valueToString(outsideTemperature, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "insideTemperature"), valueToString(insideTemperature, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "outsideAirQuality"), valueToString(outsideAirQuality)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "insideAirQuality"), valueToString(insideAirQuality)) }
+
             item {
                 StatusRow(
                     WidgetsRepository.getTitleUnitForDataKey(context, "isWindowsBlocked"),
                     valueToString(isWindowsBlocked, booleanTrue = blockedLabel, booleanFalse = unblockedLabel)
                 )
             }
+
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "motorHours"), valueToString(motorHours, 1)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "motorHoursTrip"), valueToString(motorHoursTrip, 1)) }
+
             if (isGetCycleSignalEnabled) {
                 item { StatusRow(stringResource(R.string.cycle_voltage), valueToString(voltageC, 1)) }
                 item { StatusRow(stringResource(R.string.cycle_speed), valueToString(carSpeedC, 1)) }

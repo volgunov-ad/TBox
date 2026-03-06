@@ -21,6 +21,7 @@
     <string name="value_unblocked">unlocked</string>
 
     <string name="unit_kmh">km/h</string>
+    <string name="unit_l_100km">l/100km</string>
     <string name="unit_hours">h</string>
     <string name="unit_volt">V</string>
     <string name="unit_celsius">°C</string>
@@ -296,7 +297,7 @@
     <string name="data_title_steer_angle">Steering wheel angle</string>
     <string name="data_title_steer_speed">Steering wheel speed</string>
     <string name="data_title_engine_rpm">Engine RPM</string>
-    <string name="data_title_throttle_position">Throttle Position</string>
+    <string name="data_title_throttle_position">Parameter 5</string>
     <string name="data_title_car_speed">Vehicle speed</string>
     <string name="data_title_car_speed_accurate">Precise vehicle speed</string>
     <string name="data_title_cruise_set_speed">Cruise control set speed</string>
@@ -305,6 +306,7 @@
     <string name="data_title_distance_to_fuel_empty">Distance to empty</string>
     <string name="data_title_fuel_level_percentage">Fuel level</string>
     <string name="data_title_fuel_level_percentage_filtered">Fuel level (filtered)</string>
+    <string name="currentFuelConsumption">Instantaneous fuel consumption</string>
     <string name="data_title_breaking_force">Braking force</string>
     <string name="data_title_engine_temperature">Engine temperature</string>
     <string name="data_title_gearbox_oil_temperature">Gearbox oil temperature</string>

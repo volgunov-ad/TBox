@@ -54,6 +54,7 @@ class TboxDataProvider(
         "param2" -> canViewModel.param2.mapState { valueToString(it, 1) }
         "param3" -> canViewModel.param3.mapState { valueToString(it, 1) }
         "param4" -> canViewModel.param4.mapState { valueToString(it, 1) }
+        "throttlePosition" -> canViewModel.throttlePosition.mapState { valueToString(it, 1) }
         "carSpeed" -> canViewModel.carSpeed.mapState { valueToString(it, 1) }
         "carSpeedAccurate" -> canViewModel.carSpeedAccurate.mapState { valueToString(it, 1) }
         "wheel1Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel1, 1) }
@@ -75,6 +76,7 @@ class TboxDataProvider(
         "breakingForce" -> canViewModel.breakingForce.mapState { valueToString(it) }
         "fuelLevelPercentage" -> canViewModel.fuelLevelPercentage.mapState { valueToString(it) }
         "fuelLevelPercentageFiltered" -> canViewModel.fuelLevelPercentageFiltered.mapState { valueToString(it) }
+        "currentFuelConsumption" -> canViewModel.currentFuelConsumption.mapState { valueToString(it, 1) }
         "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, 1) }
         "gearBoxOilTemperature" -> canViewModel.gearBoxOilTemperature.mapState { valueToString(it) }
         "gearBoxCurrentGear" -> canViewModel.gearBoxCurrentGear.mapState { valueToString(it) }

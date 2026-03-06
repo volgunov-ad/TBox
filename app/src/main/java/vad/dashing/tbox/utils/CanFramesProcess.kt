@@ -33,6 +33,7 @@ object CanFramesProcess {
     private const val CAN_ID_CRUISE = 0x00000305
     private const val CAN_ID_WHEEL_SPEED = 0x00000310
     private const val CAN_ID_SPEED_VOLTAGE_FUEL = 0x00000430
+    private const val CAN_ID_FUEL_CONSUMPTION = 0x000004E0
     private const val CAN_ID_ENGINE_TEMP = 0x00000501
     private const val CAN_ID_SPEED_ACCURATE = 0x00000502
     private const val CAN_ID_WHEELS_TPMS = 0x0000051B
@@ -208,6 +209,13 @@ object CanFramesProcess {
                     if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
                         CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
                     }
+                } else if (canId == CAN_ID_FUEL_CONSUMPTION) {
+                    val currentFuelConsumption = if (b2 != 0xFF.toByte() && b3 != 0xFF.toByte()) {
+                            readUInt16BigEndian(rawValue, payloadStart + 2).toFloat() / 160f
+                    } else {
+                        null
+                    }
+                    CanDataRepository.updateCurrentFuelConsumption(currentFuelConsumption)
                 } else if (canId == CAN_ID_ENGINE_TEMP) {
                     val engineTemperature = unsignedByte(b2).toFloat() * 0.75f - 48f
                     CanDataRepository.updateEngineTemperature(engineTemperature)

@@ -313,6 +313,7 @@ object WidgetsRepository {
         "param2" to DataTitle(R.string.data_title_param_2),
         "param3" to DataTitle(R.string.data_title_param_3),
         "param4" to DataTitle(R.string.data_title_param_4),
+        "throttlePosition" to DataTitle(R.string.data_title_throttle_position, R.string.unit_percent),
         "wheel1Speed" to DataTitle(R.string.data_title_wheel_speed_1, R.string.unit_kmh),
         "wheel2Speed" to DataTitle(R.string.data_title_wheel_speed_2, R.string.unit_kmh),
         "wheel3Speed" to DataTitle(R.string.data_title_wheel_speed_3, R.string.unit_kmh),
@@ -343,7 +344,6 @@ object WidgetsRepository {
         "steerAngle" to DataTitle(R.string.data_title_steer_angle, R.string.unit_degree),
         "steerSpeed" to DataTitle(R.string.data_title_steer_speed),
         "engineRPM" to DataTitle(R.string.data_title_engine_rpm, R.string.unit_rpm),
-        "throttlePosition" to DataTitle(R.string.data_title_throttle_position, R.string.unit_percent),
         "carSpeed" to DataTitle(R.string.data_title_car_speed, R.string.unit_kmh),
         "carSpeedAccurate" to DataTitle(R.string.data_title_car_speed_accurate, R.string.unit_kmh),
         "cruiseSetSpeed" to DataTitle(R.string.data_title_cruise_set_speed, R.string.unit_kmh),
@@ -358,6 +358,7 @@ object WidgetsRepository {
             R.string.data_title_fuel_level_percentage_filtered,
             R.string.unit_percent
         ),
+        "currentFuelConsumption" to DataTitle(R.string.currentFuelConsumption, R.string.unit_l_100km),
         "breakingForce" to DataTitle(R.string.data_title_breaking_force),
         "engineTemperature" to DataTitle(R.string.data_title_engine_temperature, R.string.unit_celsius),
         "gearBoxOilTemperature" to DataTitle(R.string.data_title_gearbox_oil_temperature, R.string.unit_celsius),

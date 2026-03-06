@@ -21,6 +21,7 @@
     <string name="value_unblocked">разблокированы</string>
 
     <string name="unit_kmh">км/ч</string>
+    <string name="unit_l_100km">л/100км</string>
     <string name="unit_hours">ч</string>
     <string name="unit_volt">В</string>
     <string name="unit_celsius">°C</string>
@@ -296,7 +297,7 @@
     <string name="data_title_steer_angle">Угол поворота руля</string>
     <string name="data_title_steer_speed">Скорость вращения руля</string>
     <string name="data_title_engine_rpm">Обороты двигателя</string>
-    <string name="data_title_throttle_position">Положение дросселя</string>
+    <string name="data_title_throttle_position">Параметр 5</string>
     <string name="data_title_car_speed">Скорость автомобиля</string>
     <string name="data_title_car_speed_accurate">Точная скорость автомобиля</string>
     <string name="data_title_cruise_set_speed">Скорость круиз-контроля</string>
@@ -305,6 +306,7 @@
     <string name="data_title_distance_to_fuel_empty">Пробег на остатке топлива</string>
     <string name="data_title_fuel_level_percentage">Уровень топлива</string>
     <string name="data_title_fuel_level_percentage_filtered">Уровень топлива (сглажено)</string>
+    <string name="currentFuelConsumption">Мгновенный расход топлива</string>
     <string name="data_title_breaking_force">Усилие торможения</string>
     <string name="data_title_engine_temperature">Температура двигателя</string>
     <string name="data_title_gearbox_oil_temperature">Температура масла КПП</string>
