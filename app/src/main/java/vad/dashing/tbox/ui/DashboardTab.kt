@@ -160,185 +160,37 @@ fun MainDashboardTab(
                                 CompositionLocalProvider(
                                     LocalWidgetTextScale provides widgetTextScale
                                 ) {
-                                    when (widget.dataKey) {
-                                        "netWidget" -> {
-                                            DashboardNetWidgetItem(
-                                                widget = widget,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                viewModel = tboxViewModel,
-                                                backgroundColor = widgetBackgroundColor,
-                                                scale = widgetConfig.scale
+                                    DashboardWidgetRenderer(
+                                        widget = widget,
+                                        widgetConfig = widgetConfig,
+                                        tboxViewModel = tboxViewModel,
+                                        canViewModel = canViewModel,
+                                        appDataViewModel = appDataViewModel,
+                                        dataProvider = dataProvider,
+                                        dashboardManager = dashboardViewModel.dashboardManager,
+                                        dashboardChart = dashboardChart,
+                                        tboxConnected = tboxConnected,
+                                        restartEnabled = restartEnabled,
+                                        widgetTextColor = widgetTextColor,
+                                        widgetBackgroundColor = widgetBackgroundColor,
+                                        onClick = {},
+                                        onLongClick = { showDialogForIndex = index },
+                                        onMusicSelectedPlayerChange = { selectedPackage ->
+                                            persistMainMediaWidgetSelectedPlayer(
+                                                settingsViewModel = settingsViewModel,
+                                                currentWidgetConfigs = widgetConfigs,
+                                                widgetIndex = index,
+                                                currentWidgetConfig = widgetConfig,
+                                                selectedPackage = selectedPackage
                                             )
+                                        },
+                                        onRestartRequested = {
+                                            if (restartEnabled) {
+                                                restartEnabled = false
+                                                onTboxRestartClick()
+                                            }
                                         }
-                                        "netWidgetNew" -> {
-                                            DashboardNetNewWidgetItem(
-                                                widget = widget,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                viewModel = tboxViewModel,
-                                                backgroundColor = widgetBackgroundColor,
-                                                color = widgetTextColor,
-                                                scale = widgetConfig.scale
-                                            )
-                                        }
-                                        "netWidgetColored" -> {
-                                            DashboardNetNewWidgetItem(
-                                                widget = widget,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                viewModel = tboxViewModel,
-                                                backgroundColor = widgetBackgroundColor,
-                                                scale = widgetConfig.scale
-                                            )
-                                        }
-                                        "locWidget" -> {
-                                            DashboardLocWidgetItem(
-                                                widget = widget,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                viewModel = tboxViewModel,
-                                                textColor = widgetTextColor,
-                                                backgroundColor = widgetBackgroundColor,
-                                                scale = widgetConfig.scale
-                                            )
-                                        }
-                                        "voltage+engineTemperatureWidget" -> {
-                                            DashboardVoltEngTempWidgetItem(
-                                                widget = widget,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor,
-                                                backgroundColor = widgetBackgroundColor
-                                            )
-                                        }
-                                        "gearBoxWidget" -> {
-                                            DashboardGearBoxWidgetItem(
-                                                widget = widget,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor,
-                                                backgroundColor = widgetBackgroundColor
-                                            )
-                                        }
-                                        "wheelsPressureWidget" -> {
-                                            DashboardWheelsPressureWidgetItem(
-                                                widget = widget,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor,
-                                                backgroundColor = widgetBackgroundColor
-                                            )
-                                        }
-                                        "wheelsPressureTemperatureWidget" -> {
-                                            DashboardWheelsPressureTemperatureWidgetItem(
-                                                widget = widget,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor,
-                                                backgroundColor = widgetBackgroundColor
-                                            )
-                                        }
-                                        "tempInOutWidget" -> {
-                                            DashboardTempInOutWidgetItem(
-                                                widget = widget,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor,
-                                                backgroundColor = widgetBackgroundColor
-                                            )
-                                        }
-                                        "musicWidget" -> {
-                                            DashboardMusicWidgetItem(
-                                                widget = widget,
-                                                widgetConfig = widgetConfig,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                onSelectedPlayerChange = { selectedPackage ->
-                                                    persistMainMediaWidgetSelectedPlayer(
-                                                        settingsViewModel = settingsViewModel,
-                                                        currentWidgetConfigs = widgetConfigs,
-                                                        widgetIndex = index,
-                                                        currentWidgetConfig = widgetConfig,
-                                                        selectedPackage = selectedPackage
-                                                    )
-                                                },
-                                                textColor = widgetTextColor,
-                                                backgroundColor = widgetBackgroundColor
-                                            )
-                                        }
-                                        "motorHoursWidget" -> {
-                                            DashboardMotorHoursWidgetItem(
-                                                widget = widget,
-                                                dataProvider = dataProvider,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                onDoubleClick = {
-                                                    appDataViewModel.setMotorHours(0f)
-                                                },
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor,
-                                                backgroundColor = widgetBackgroundColor
-                                            )
-                                        }
-                                        "restartTbox" -> {
-                                            DashboardWidgetItem(
-                                                widget = widget,
-                                                dataProvider = dataProvider,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                onDoubleClick = {
-                                                    if (restartEnabled) {
-                                                        restartEnabled = false
-                                                        onTboxRestartClick()
-                                                    }
-                                                },
-                                                dashboardManager = dashboardViewModel.dashboardManager,
-                                                dashboardChart = false,
-                                                title = widgetConfig.showTitle,
-                                                units = widgetConfig.showUnit,
-                                                backgroundColor = widgetBackgroundColor,
-                                                textColor = if (restartEnabled) {
-                                                    if (tboxConnected) {
-                                                        Color(0xD900A400)
-                                                    } else {
-                                                        Color(0xD9FF0000)
-                                                    }
-                                                } else {
-                                                    Color(0xD97E4C4C)
-                                                }
-                                            )
-                                        }
-                                        else -> {
-                                            DashboardWidgetItem(
-                                                widget = widget,
-                                                dataProvider = dataProvider,
-                                                onClick = {},
-                                                onLongClick = { showDialogForIndex = index },
-                                                onDoubleClick = {
-                                                    if (widget.dataKey == "motorHours") {
-                                                        appDataViewModel.setMotorHours(0f)
-                                                    }
-                                                },
-                                                dashboardManager = dashboardViewModel.dashboardManager,
-                                                dashboardChart = dashboardChart,
-                                                title = widgetConfig.showTitle,
-                                                units = widgetConfig.showUnit,
-                                                backgroundColor = widgetBackgroundColor,
-                                                textColor = widgetTextColor
-                                            )
-                                        }
-                                    }
+                                    )
                                 }
                             }
                         }
