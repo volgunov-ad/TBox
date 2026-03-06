@@ -27,6 +27,8 @@ data class FloatingDashboardWidgetConfig(
     val scale: Float = 1.0f,
     val textColorLight: Int = DEFAULT_WIDGET_TEXT_COLOR_LIGHT,
     val textColorDark: Int = DEFAULT_WIDGET_TEXT_COLOR_DARK,
+    val backgroundColorLight: Int? = null,
+    val backgroundColorDark: Int? = null,
     val mediaPlayers: List<String> = emptyList(),
     val mediaSelectedPlayer: String = ""
 )

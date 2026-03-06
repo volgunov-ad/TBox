@@ -249,7 +249,6 @@ fun SettingsTabContent(
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
 
     val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
-    val isFloatingDashboardBackground by settingsViewModel.isFloatingDashboardBackground.collectAsStateWithLifecycle()
     val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
@@ -422,15 +421,6 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_show_floating_panel_title),
             "",
-            true
-        )
-        SettingSwitch(
-            isFloatingDashboardBackground,
-            { enabled ->
-                settingsViewModel.saveFloatingDashboardBackground(enabled)
-            },
-            stringResource(R.string.settings_enable_floating_bg_title),
-            stringResource(R.string.settings_enable_floating_bg_desc),
             true
         )
         SettingSwitch(

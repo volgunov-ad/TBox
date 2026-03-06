@@ -46,6 +46,7 @@ fun DashboardLocWidgetItem(
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
     textColor: Color? = null,
+    backgroundColor: Color? = null,
     scale: Float = 1f
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
@@ -69,7 +70,11 @@ fun DashboardLocWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
+            containerColor = if (backgroundTransparent) {
+                Color.Transparent
+            } else {
+                backgroundColor ?: MaterialTheme.colorScheme.surface
+            }
         ),
         shape = RoundedCornerShape(shape)
     ) {

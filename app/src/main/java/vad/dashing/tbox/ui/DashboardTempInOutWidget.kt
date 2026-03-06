@@ -40,7 +40,8 @@ fun DashboardTempInOutWidgetItem(
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
     units: Boolean = true,
-    textColor: Color? = null
+    textColor: Color? = null,
+    backgroundColor: Color? = null
 ) {
     val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
     val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
@@ -55,7 +56,11 @@ fun DashboardTempInOutWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
+            containerColor = if (backgroundTransparent) {
+                Color.Transparent
+            } else {
+                backgroundColor ?: MaterialTheme.colorScheme.surface
+            }
         ),
         shape = RoundedCornerShape(shape)
     ) {

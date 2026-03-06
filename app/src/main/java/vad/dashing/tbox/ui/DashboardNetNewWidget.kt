@@ -36,6 +36,7 @@ fun DashboardNetNewWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
+    backgroundColor: Color? = null,
     color: Color? = null,
     scale: Float = 1f
 ) {
@@ -120,7 +121,11 @@ fun DashboardNetNewWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
+            containerColor = if (backgroundTransparent) {
+                Color.Transparent
+            } else {
+                backgroundColor ?: MaterialTheme.colorScheme.surface
+            }
         ),
         shape = RoundedCornerShape(shape)
     ) {

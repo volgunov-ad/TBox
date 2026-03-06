@@ -60,6 +60,8 @@
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_text_color_light">Text color (light theme)</string>
     <string name="widget_text_color_dark">Text color (dark theme)</string>
+    <string name="widget_background_color_light">Background color (light theme)</string>
+    <string name="widget_background_color_dark">Background color (dark theme)</string>
     <string name="widget_color_value_label">Color value</string>
     <string name="widget_color_value_hint">Format: #AARRGGBB, #RRGGBB, 0xAARRGGBB or Int</string>
     <string name="widget_color_alpha">Alpha: %1$d%%</string>

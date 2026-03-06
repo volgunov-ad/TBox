@@ -39,7 +39,8 @@ fun DashboardMotorHoursWidgetItem(
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
     units: Boolean = true,
-    textColor: Color? = null
+    textColor: Color? = null,
+    backgroundColor: Color? = null
 ) {
     val motorHoursFlow = dataProvider.getValueFlow("motorHours")
     val motorHoursString by motorHoursFlow.collectAsStateWithLifecycle()
@@ -58,7 +59,11 @@ fun DashboardMotorHoursWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
+            containerColor = if (backgroundTransparent) {
+                Color.Transparent
+            } else {
+                backgroundColor ?: MaterialTheme.colorScheme.surface
+            }
         ),
         shape = RoundedCornerShape(shape)
     ) {

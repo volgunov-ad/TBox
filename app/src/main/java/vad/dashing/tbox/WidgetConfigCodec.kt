@@ -53,6 +53,8 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("scale", normalizeWidgetScale(config.scale))
         obj.put("textColorLight", config.textColorLight)
         obj.put("textColorDark", config.textColorDark)
+        config.backgroundColorLight?.let { obj.put("backgroundColorLight", it) }
+        config.backgroundColorDark?.let { obj.put("backgroundColorDark", it) }
         val mediaPlayers = orderedMediaPlayerPackages(config.mediaPlayers)
         if (mediaPlayers.isNotEmpty()) {
             obj.put("mediaPlayers", JSONArray(mediaPlayers))
@@ -85,7 +87,9 @@ fun normalizeWidgetConfigs(
 fun loadWidgetsFromConfig(
     configs: List<FloatingDashboardWidgetConfig>,
     widgetCount: Int,
-    context: Context
+    context: Context,
+    defaultBackgroundLight: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN,
+    defaultBackgroundDark: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
 ): List<DashboardWidget> {
     return (0 until widgetCount).map { index ->
         val widgetConfig = configs.getOrNull(index)
@@ -98,7 +102,9 @@ fun loadWidgetsFromConfig(
                 unit = WidgetsRepository.getUnitForDataKey(context, dataKey),
                 dataKey = dataKey,
                 textColorLight = widgetConfig.textColorLight,
-                textColorDark = widgetConfig.textColorDark
+                textColorDark = widgetConfig.textColorDark,
+                backgroundColorLight = widgetConfig.backgroundColorLight ?: defaultBackgroundLight,
+                backgroundColorDark = widgetConfig.backgroundColorDark ?: defaultBackgroundDark
             )
         } else {
             DashboardWidget(
@@ -106,7 +112,9 @@ fun loadWidgetsFromConfig(
                 title = "",
                 dataKey = "",
                 textColorLight = widgetConfig.textColorLight,
-                textColorDark = widgetConfig.textColorDark
+                textColorDark = widgetConfig.textColorDark,
+                backgroundColorLight = widgetConfig.backgroundColorLight ?: defaultBackgroundLight,
+                backgroundColorDark = widgetConfig.backgroundColorDark ?: defaultBackgroundDark
             )
         }
     }
@@ -140,6 +148,8 @@ private fun parseWidgetConfigsFromJsonArray(
                             "textColorDark",
                             DEFAULT_WIDGET_TEXT_COLOR_DARK
                         ),
+                        backgroundColorLight = parseBackgroundColor(item, "backgroundColorLight"),
+                        backgroundColorDark = parseBackgroundColor(item, "backgroundColorDark"),
                         mediaPlayers = mediaPlayers,
                         mediaSelectedPlayer = parseSelectedMediaPlayer(item, mediaPlayers)
                     )
@@ -187,4 +197,8 @@ private fun parseSelectedMediaPlayer(
     val value = item.optString("mediaSelectedPlayer")
     val selected = normalizeMediaPlayerPackages(listOf(value)).firstOrNull().orEmpty()
     return if (selected in mediaPlayers) selected else ""
+}
+
+private fun parseBackgroundColor(item: JSONObject, key: String): Int? {
+    return if (item.has(key)) item.optInt(key) else null
 }

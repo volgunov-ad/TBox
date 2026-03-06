@@ -55,6 +55,8 @@ import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -162,7 +164,6 @@ fun FloatingDashboard(
     }
 
     val isFloatingDashboardClickAction = panelConfig.clickAction
-    val isFloatingDashboardBackground = panelConfig.background
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -239,7 +240,13 @@ fun FloatingDashboard(
         val totalWidgets = dashboardRows * dashboardCols
 
         // Всегда загружаем/создаем виджеты при изменении зависимостей
-        val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets, context)
+        val widgets = loadWidgetsFromConfig(
+            configs = widgetConfigs,
+            widgetCount = totalWidgets,
+            context = context,
+            defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
+            defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+        )
 
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
     }
@@ -268,7 +275,7 @@ fun FloatingDashboard(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(color = if (isFloatingDashboardBackground) MaterialTheme.colorScheme.surface else Color.Transparent)
+            .background(color = Color.Transparent)
     ) {
         Column(
             modifier = Modifier
@@ -391,6 +398,8 @@ fun FloatingDashboard(
                                         ?: FloatingDashboardWidgetConfig(dataKey = "")
                                     val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
                                     val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
+                                    val widgetBackgroundColor =
+                                        widget.resolveBackgroundColorForTheme(currentTheme)
 
                                     Box(modifier = Modifier.weight(1f)) {
                                         if (isEditMode) {
@@ -426,7 +435,8 @@ fun FloatingDashboard(
                                                         viewModel = tboxViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
+                                                        backgroundColor = widgetBackgroundColor,
                                                         scale = widgetConfig.scale
                                                     )
                                                 }
@@ -450,7 +460,8 @@ fun FloatingDashboard(
                                                         color = widgetTextColor,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
+                                                        backgroundColor = widgetBackgroundColor,
                                                         scale = widgetConfig.scale
                                                     )
                                                 }
@@ -473,7 +484,8 @@ fun FloatingDashboard(
                                                         viewModel = tboxViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
+                                                        backgroundColor = widgetBackgroundColor,
                                                         scale = widgetConfig.scale
                                                     )
                                                 }
@@ -496,7 +508,8 @@ fun FloatingDashboard(
                                                         viewModel = tboxViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
+                                                        backgroundColor = widgetBackgroundColor,
                                                         textColor = widgetTextColor,
                                                         scale = widgetConfig.scale
                                                     )
@@ -519,9 +532,10 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
-                                                        textColor = widgetTextColor
+                                                        textColor = widgetTextColor,
+                                                        backgroundColor = widgetBackgroundColor
                                                     )
                                                 }
                                                 "gearBoxWidget" -> {
@@ -542,9 +556,10 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
-                                                        textColor = widgetTextColor
+                                                        textColor = widgetTextColor,
+                                                        backgroundColor = widgetBackgroundColor
                                                     )
                                                 }
                                                 "wheelsPressureWidget" -> {
@@ -565,9 +580,10 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
-                                                        textColor = widgetTextColor
+                                                        textColor = widgetTextColor,
+                                                        backgroundColor = widgetBackgroundColor
                                                     )
                                                 }
                                                 "wheelsPressureTemperatureWidget" -> {
@@ -588,9 +604,10 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
-                                                        textColor = widgetTextColor
+                                                        textColor = widgetTextColor,
+                                                        backgroundColor = widgetBackgroundColor
                                                     )
                                                 }
                                                 "tempInOutWidget" -> {
@@ -611,9 +628,10 @@ fun FloatingDashboard(
                                                         canViewModel = canViewModel,
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
-                                                        textColor = widgetTextColor
+                                                        textColor = widgetTextColor,
+                                                        backgroundColor = widgetBackgroundColor
                                                     )
                                                 }
                                                 "musicWidget" -> {
@@ -644,9 +662,10 @@ fun FloatingDashboard(
                                                         },
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
                                                         enableInnerInteractions = !isEditMode,
-                                                        textColor = widgetTextColor
+                                                        textColor = widgetTextColor,
+                                                        backgroundColor = widgetBackgroundColor
                                                     )
                                                 }
                                                 "motorHoursWidget" -> {
@@ -670,9 +689,10 @@ fun FloatingDashboard(
                                                         },
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
                                                         units = widgetConfig.showUnit,
-                                                        textColor = widgetTextColor
+                                                        textColor = widgetTextColor,
+                                                        backgroundColor = widgetBackgroundColor
                                                     )
                                                 }
                                                 "restartTbox" -> {
@@ -703,7 +723,8 @@ fun FloatingDashboard(
                                                         shape = 0.dp,
                                                         title = widgetConfig.showTitle,
                                                         units = widgetConfig.showUnit,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
+                                                        backgroundColor = widgetBackgroundColor,
                                                         textColor = if (restartEnabled) {
                                                             if (tboxConnected) {
                                                                 Color(0xD900A400)
@@ -742,7 +763,8 @@ fun FloatingDashboard(
                                                         shape = 0.dp,
                                                         title = widgetConfig.showTitle,
                                                         units = widgetConfig.showUnit,
-                                                        backgroundTransparent = true,
+                                                        backgroundTransparent = false,
+                                                        backgroundColor = widgetBackgroundColor,
                                                         textColor = widgetTextColor
                                                     )
                                                 }
@@ -874,6 +896,16 @@ fun OverlayWidgetSelectionDialog(
     var textColorDark by remember(widgetIndex, currentWidgetConfigs) {
         mutableIntStateOf(initialConfig.textColorDark)
     }
+    var backgroundColorLight by remember(widgetIndex, currentWidgetConfigs) {
+        mutableIntStateOf(
+            initialConfig.backgroundColorLight ?: DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
+        )
+    }
+    var backgroundColorDark by remember(widgetIndex, currentWidgetConfigs) {
+        mutableIntStateOf(
+            initialConfig.backgroundColorDark ?: DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+        )
+    }
     var selectedMediaPlayers by remember(widgetIndex, currentWidgetConfigs) {
         mutableStateOf(
             if (initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY) {
@@ -998,6 +1030,18 @@ fun OverlayWidgetSelectionDialog(
                             enabled = togglesEnabled,
                             onColorChange = { textColorDark = it }
                         )
+                        WidgetTextColorSetting(
+                            title = stringResource(R.string.widget_background_color_light),
+                            colorValue = backgroundColorLight,
+                            enabled = togglesEnabled,
+                            onColorChange = { backgroundColorLight = it }
+                        )
+                        WidgetTextColorSetting(
+                            title = stringResource(R.string.widget_background_color_dark),
+                            colorValue = backgroundColorDark,
+                            enabled = togglesEnabled,
+                            onColorChange = { backgroundColorDark = it }
+                        )
                     }
                 } else {
                     Column(
@@ -1087,7 +1131,9 @@ fun OverlayWidgetSelectionDialog(
                                 unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
                                 dataKey = selectedDataKey,
                                 textColorLight = textColorLight,
-                                textColorDark = textColorDark
+                                textColorDark = textColorDark,
+                                backgroundColorLight = backgroundColorLight,
+                                backgroundColorDark = backgroundColorDark
                             )
                         } else {
                             DashboardWidget(
@@ -1095,7 +1141,9 @@ fun OverlayWidgetSelectionDialog(
                                 title = "",
                                 dataKey = "",
                                 textColorLight = textColorLight,
-                                textColorDark = textColorDark
+                                textColorDark = textColorDark,
+                                backgroundColorLight = backgroundColorLight,
+                                backgroundColorDark = backgroundColorDark
                             )
                         }
                         updatedWidgets[widgetIndex] = newWidget
@@ -1113,6 +1161,8 @@ fun OverlayWidgetSelectionDialog(
                                 scale = normalizedScale,
                                 textColorLight = textColorLight,
                                 textColorDark = textColorDark,
+                                backgroundColorLight = backgroundColorLight,
+                                backgroundColorDark = backgroundColorDark,
                                 mediaPlayers = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
                                     orderedMediaPlayersForStorage(selectedMediaPlayers)
                                 } else {

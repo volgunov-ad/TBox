@@ -61,7 +61,8 @@ fun DashboardWidgetItem(
     title: Boolean = true,
     units: Boolean = true,
     backgroundTransparent: Boolean = false,
-    textColor: Color? = null
+    textColor: Color? = null,
+    backgroundColor: Color? = null
 ) {
     val onlyText: Boolean
 
@@ -100,7 +101,11 @@ fun DashboardWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
+            containerColor = if (backgroundTransparent) {
+                Color.Transparent
+            } else {
+                backgroundColor ?: MaterialTheme.colorScheme.surface
+            }
         ),
         shape = RoundedCornerShape(shape)
     ) {

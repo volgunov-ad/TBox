@@ -42,7 +42,8 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
     units: Boolean = true,
-    textColor: Color? = null
+    textColor: Color? = null,
+    backgroundColor: Color? = null
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
     val wheelsTemperature by canViewModel.wheelsTemperature.collectAsStateWithLifecycle()
@@ -56,7 +57,11 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
+            containerColor = if (backgroundTransparent) {
+                Color.Transparent
+            } else {
+                backgroundColor ?: MaterialTheme.colorScheme.surface
+            }
         ),
         shape = RoundedCornerShape(shape)
     ) {

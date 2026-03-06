@@ -57,6 +57,10 @@ fun DashboardWidget.resolveTextColorForTheme(currentTheme: Int): Color {
     return Color(if (currentTheme == 2) textColorDark else textColorLight)
 }
 
+fun DashboardWidget.resolveBackgroundColorForTheme(currentTheme: Int): Color {
+    return Color(if (currentTheme == 2) backgroundColorDark else backgroundColorLight)
+}
+
 @Composable
 fun WidgetTextColorSetting(
     title: String,

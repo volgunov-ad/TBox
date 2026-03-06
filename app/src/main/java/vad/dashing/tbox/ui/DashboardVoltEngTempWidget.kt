@@ -40,7 +40,8 @@ fun DashboardVoltEngTempWidgetItem(
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
     units: Boolean = true,
-    textColor: Color? = null
+    textColor: Color? = null,
+    backgroundColor: Color? = null
 ) {
     val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
     val engineTemperature by canViewModel.engineTemperature.collectAsStateWithLifecycle()
@@ -56,7 +57,11 @@ fun DashboardVoltEngTempWidgetItem(
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
+            containerColor = if (backgroundTransparent) {
+                Color.Transparent
+            } else {
+                backgroundColor ?: MaterialTheme.colorScheme.surface
+            }
         ),
         shape = RoundedCornerShape(shape)
     ) {

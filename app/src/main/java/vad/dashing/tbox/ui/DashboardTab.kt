@@ -42,6 +42,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -152,6 +154,7 @@ fun MainDashboardTab(
                                 ?: FloatingDashboardWidgetConfig(dataKey = "")
                             val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
                             val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
+                            val widgetBackgroundColor = widget.resolveBackgroundColorForTheme(currentTheme)
 
                             Box(modifier = Modifier.weight(1f)) {
                                 CompositionLocalProvider(
@@ -164,6 +167,7 @@ fun MainDashboardTab(
                                                 onClick = {},
                                                 onLongClick = { showDialogForIndex = index },
                                                 viewModel = tboxViewModel,
+                                                backgroundColor = widgetBackgroundColor,
                                                 scale = widgetConfig.scale
                                             )
                                         }
@@ -173,6 +177,7 @@ fun MainDashboardTab(
                                                 onClick = {},
                                                 onLongClick = { showDialogForIndex = index },
                                                 viewModel = tboxViewModel,
+                                                backgroundColor = widgetBackgroundColor,
                                                 color = widgetTextColor,
                                                 scale = widgetConfig.scale
                                             )
@@ -183,6 +188,7 @@ fun MainDashboardTab(
                                                 onClick = {},
                                                 onLongClick = { showDialogForIndex = index },
                                                 viewModel = tboxViewModel,
+                                                backgroundColor = widgetBackgroundColor,
                                                 scale = widgetConfig.scale
                                             )
                                         }
@@ -193,6 +199,7 @@ fun MainDashboardTab(
                                                 onLongClick = { showDialogForIndex = index },
                                                 viewModel = tboxViewModel,
                                                 textColor = widgetTextColor,
+                                                backgroundColor = widgetBackgroundColor,
                                                 scale = widgetConfig.scale
                                             )
                                         }
@@ -203,7 +210,8 @@ fun MainDashboardTab(
                                                 onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
+                                                textColor = widgetTextColor,
+                                                backgroundColor = widgetBackgroundColor
                                             )
                                         }
                                         "gearBoxWidget" -> {
@@ -213,7 +221,8 @@ fun MainDashboardTab(
                                                 onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
+                                                textColor = widgetTextColor,
+                                                backgroundColor = widgetBackgroundColor
                                             )
                                         }
                                         "wheelsPressureWidget" -> {
@@ -223,7 +232,8 @@ fun MainDashboardTab(
                                                 onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
+                                                textColor = widgetTextColor,
+                                                backgroundColor = widgetBackgroundColor
                                             )
                                         }
                                         "wheelsPressureTemperatureWidget" -> {
@@ -233,7 +243,8 @@ fun MainDashboardTab(
                                                 onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
+                                                textColor = widgetTextColor,
+                                                backgroundColor = widgetBackgroundColor
                                             )
                                         }
                                         "tempInOutWidget" -> {
@@ -243,7 +254,8 @@ fun MainDashboardTab(
                                                 onLongClick = { showDialogForIndex = index },
                                                 canViewModel = canViewModel,
                                                 units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
+                                                textColor = widgetTextColor,
+                                                backgroundColor = widgetBackgroundColor
                                             )
                                         }
                                         "musicWidget" -> {
@@ -261,7 +273,8 @@ fun MainDashboardTab(
                                                         selectedPackage = selectedPackage
                                                     )
                                                 },
-                                                textColor = widgetTextColor
+                                                textColor = widgetTextColor,
+                                                backgroundColor = widgetBackgroundColor
                                             )
                                         }
                                         "motorHoursWidget" -> {
@@ -274,7 +287,8 @@ fun MainDashboardTab(
                                                     appDataViewModel.setMotorHours(0f)
                                                 },
                                                 units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
+                                                textColor = widgetTextColor,
+                                                backgroundColor = widgetBackgroundColor
                                             )
                                         }
                                         "restartTbox" -> {
@@ -293,6 +307,7 @@ fun MainDashboardTab(
                                                 dashboardChart = false,
                                                 title = widgetConfig.showTitle,
                                                 units = widgetConfig.showUnit,
+                                                backgroundColor = widgetBackgroundColor,
                                                 textColor = if (restartEnabled) {
                                                     if (tboxConnected) {
                                                         Color(0xD900A400)
@@ -319,6 +334,7 @@ fun MainDashboardTab(
                                                 dashboardChart = dashboardChart,
                                                 title = widgetConfig.showTitle,
                                                 units = widgetConfig.showUnit,
+                                                backgroundColor = widgetBackgroundColor,
                                                 textColor = widgetTextColor
                                             )
                                         }
@@ -373,6 +389,16 @@ fun WidgetSelectionDialog(
     }
     var textColorDark by remember(widgetIndex, currentWidgetConfigs) {
         mutableIntStateOf(initialConfig.textColorDark)
+    }
+    var backgroundColorLight by remember(widgetIndex, currentWidgetConfigs) {
+        mutableIntStateOf(
+            initialConfig.backgroundColorLight ?: DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
+        )
+    }
+    var backgroundColorDark by remember(widgetIndex, currentWidgetConfigs) {
+        mutableIntStateOf(
+            initialConfig.backgroundColorDark ?: DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+        )
     }
     var selectedMediaPlayers by remember(widgetIndex, currentWidgetConfigs) {
         mutableStateOf(
@@ -497,6 +523,18 @@ fun WidgetSelectionDialog(
                                 enabled = togglesEnabled,
                                 onColorChange = { textColorDark = it }
                             )
+                            WidgetTextColorSetting(
+                                title = stringResource(R.string.widget_background_color_light),
+                                colorValue = backgroundColorLight,
+                                enabled = togglesEnabled,
+                                onColorChange = { backgroundColorLight = it }
+                            )
+                            WidgetTextColorSetting(
+                                title = stringResource(R.string.widget_background_color_dark),
+                                colorValue = backgroundColorDark,
+                                enabled = togglesEnabled,
+                                onColorChange = { backgroundColorDark = it }
+                            )
                         }
                     } else {
                         Column(
@@ -583,7 +621,9 @@ fun WidgetSelectionDialog(
                                 unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
                                 dataKey = selectedDataKey,
                                 textColorLight = textColorLight,
-                                textColorDark = textColorDark
+                                textColorDark = textColorDark,
+                                backgroundColorLight = backgroundColorLight,
+                                backgroundColorDark = backgroundColorDark
                             )
                         } else {
                             DashboardWidget(
@@ -591,7 +631,9 @@ fun WidgetSelectionDialog(
                                 title = "",
                                 dataKey = "",
                                 textColorLight = textColorLight,
-                                textColorDark = textColorDark
+                                textColorDark = textColorDark,
+                                backgroundColorLight = backgroundColorLight,
+                                backgroundColorDark = backgroundColorDark
                             )
                         }
                         updatedWidgets[widgetIndex] = newWidget
@@ -610,6 +652,8 @@ fun WidgetSelectionDialog(
                                 scale = normalizedScale,
                                 textColorLight = textColorLight,
                                 textColorDark = textColorDark,
+                                backgroundColorLight = backgroundColorLight,
+                                backgroundColorDark = backgroundColorDark,
                                 mediaPlayers = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
                                     orderedMediaPlayersForStorage(selectedMediaPlayers)
                                 } else {
