@@ -384,6 +384,7 @@ fun WidgetSelectionDialog(
     val selectedMediaPlayer = remember(widgetIndex, currentWidgetConfigs) {
         resolveSelectedMediaPlayerForWidget(initialConfig)
     }
+    var showAdvancedSettings by remember(widgetIndex) { mutableStateOf(false) }
     val isMusicWidgetSelected = selectedDataKey == MUSIC_WIDGET_DATA_KEY
     val togglesEnabled = selectedDataKey.isNotEmpty()
     val canSaveSelection = !isMusicWidgetSelected || selectedMediaPlayers.isNotEmpty()
@@ -408,124 +409,137 @@ fun WidgetSelectionDialog(
                     .fillMaxSize()
                     .padding(8.dp)
             ) {
-                SettingsTitle(stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1))
-
-                // Список опций с прокруткой
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(10f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(12.dp)
-                    ) {
-                        availableOptions.forEachIndexed { index, (key, displayName) ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedDataKey = key }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                androidx.compose.material3.RadioButton(
-                                    selected = selectedDataKey == key,
-                                    onClick = { selectedDataKey = key }
-                                )
-                                Text(
-                                    text = displayName,
-                                    fontSize = 24.sp,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .weight(1f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                    Box(modifier = Modifier.weight(1f)) {
+                        SettingsTitle(
+                            if (showAdvancedSettings) {
+                                stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                            } else {
+                                stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                             }
-                        }
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { showAdvancedSettings = !showAdvancedSettings },
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text(text = stringResource(R.string.widget_toggle_advanced), fontSize = 20.sp)
                     }
                 }
 
-                SettingsTitle(stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(8f)
+                        .weight(1f)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(12.dp)
-                    ) {
-                        if (isMusicWidgetSelected) {
-                            MediaPlayersInlineSelection(
-                                selectedPlayers = selectedMediaPlayers,
-                                onSelectionChange = { selectedMediaPlayers = it },
-                                enabled = togglesEnabled
-                            )
-                            if (selectedMediaPlayers.isEmpty()) {
-                                Text(
-                                    text = stringResource(R.string.widget_music_players_required),
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontSize = 20.sp
-                                )
-                            }
-                        }
-                        SettingSwitch(
-                            showTitle,
-                            { showTitle = it },
-                            stringResource(R.string.widget_show_title),
-                            "",
-                            togglesEnabled
-                        )
-                        SettingSwitch(
-                            showUnit,
-                            { showUnit = it },
-                            stringResource(R.string.widget_show_unit),
-                            "",
-                            togglesEnabled
-                        )
+                    if (showAdvancedSettings) {
                         Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
+                                .fillMaxSize()
+                                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                                .padding(12.dp)
                         ) {
-                            Text(
-                                text = stringResource(R.string.widget_scale, scale),
-                                fontSize = 24.sp
+                            if (isMusicWidgetSelected) {
+                                MediaPlayersInlineSelection(
+                                    selectedPlayers = selectedMediaPlayers,
+                                    onSelectionChange = { selectedMediaPlayers = it },
+                                    enabled = togglesEnabled
+                                )
+                                if (selectedMediaPlayers.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.widget_music_players_required),
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontSize = 20.sp
+                                    )
+                                }
+                            }
+                            SettingSwitch(
+                                showTitle,
+                                { showTitle = it },
+                                stringResource(R.string.widget_show_title),
+                                "",
+                                togglesEnabled
                             )
-                            Text(
-                                text = stringResource(R.string.widget_scale_hint),
-                                fontSize = 20.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            SettingSwitch(
+                                showUnit,
+                                { showUnit = it },
+                                stringResource(R.string.widget_show_unit),
+                                "",
+                                togglesEnabled
                             )
-                            Slider(
-                                value = scale,
-                                onValueChange = { newValue ->
-                                    scale = normalizeWidgetScale(newValue)
-                                },
-                                valueRange = 0.1f..2.0f,
-                                steps = 18,
-                                enabled = togglesEnabled,
+                            Column(
                                 modifier = Modifier
-                                    .padding(top = 6.dp)
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.widget_scale, scale),
+                                    fontSize = 24.sp
+                                )
+                                Text(
+                                    text = stringResource(R.string.widget_scale_hint),
+                                    fontSize = 20.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Slider(
+                                    value = scale,
+                                    onValueChange = { newValue ->
+                                        scale = normalizeWidgetScale(newValue)
+                                    },
+                                    valueRange = 0.1f..2.0f,
+                                    steps = 18,
+                                    enabled = togglesEnabled,
+                                    modifier = Modifier
+                                        .padding(top = 6.dp)
+                                )
+                            }
+                            WidgetTextColorSetting(
+                                title = stringResource(R.string.widget_text_color_light),
+                                colorValue = textColorLight,
+                                enabled = togglesEnabled,
+                                onColorChange = { textColorLight = it }
+                            )
+                            WidgetTextColorSetting(
+                                title = stringResource(R.string.widget_text_color_dark),
+                                colorValue = textColorDark,
+                                enabled = togglesEnabled,
+                                onColorChange = { textColorDark = it }
                             )
                         }
-                        WidgetTextColorSetting(
-                            title = stringResource(R.string.widget_text_color_light),
-                            colorValue = textColorLight,
-                            enabled = togglesEnabled,
-                            onColorChange = { textColorLight = it }
-                        )
-                        WidgetTextColorSetting(
-                            title = stringResource(R.string.widget_text_color_dark),
-                            colorValue = textColorDark,
-                            enabled = togglesEnabled,
-                            onColorChange = { textColorDark = it }
-                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                                .padding(12.dp)
+                        ) {
+                            availableOptions.forEach { (key, displayName) ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedDataKey = key }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    androidx.compose.material3.RadioButton(
+                                        selected = selectedDataKey == key,
+                                        onClick = { selectedDataKey = key }
+                                    )
+                                    Text(
+                                        text = displayName,
+                                        fontSize = 24.sp,
+                                        modifier = Modifier
+                                            .padding(start = 8.dp)
+                                            .weight(1f),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
