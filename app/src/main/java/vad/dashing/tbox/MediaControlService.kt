@@ -54,6 +54,11 @@ enum class SupportedMediaPlayer(
         packageName = "ru.yandex.radio",
         titleRes = R.string.media_player_yandex_radio,
         iconRes = R.drawable.player_yandex_radio
+    ),
+    VKX(
+        packageName = "ua.itaysonlab.vkx",
+        titleRes = R.string.media_player_vkx,
+        iconRes = R.drawable.player_vkx
     );
 
     companion object {

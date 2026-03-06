@@ -82,6 +82,7 @@
     <string name="media_player_jetaudio">jetAudio</string>
     <string name="media_player_fmplay">FMPlay</string>
     <string name="media_player_yandex_radio">Yandex Radio</string>
+    <string name="media_player_vkx">VKX</string>
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
     <string name="logs_filter_placeholder">Enter text to search…</string>

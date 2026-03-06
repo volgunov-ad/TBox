@@ -82,6 +82,7 @@
     <string name="media_player_jetaudio">jetAudio</string>
     <string name="media_player_fmplay">FMPlay</string>
     <string name="media_player_yandex_radio">Яндекс.Радио</string>
+    <string name="media_player_vkx">VKX</string>
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
     <string name="logs_filter_placeholder">Введите текст для поиска…</string>
