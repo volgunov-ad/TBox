@@ -60,6 +60,7 @@ fun DashboardMusicWidgetItem(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onSelectedPlayerChange: (String) -> Unit = {},
+    enableInnerInteractions: Boolean = true,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     backgroundTransparent: Boolean = false,
@@ -121,31 +122,37 @@ fun DashboardMusicWidgetItem(
     Card(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(carouselPackages, selectedPackage) {
-                detectHorizontalDragGestures(
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
-                        horizontalDragDistance += dragAmount
-                    },
-                    onDragEnd = {
-                        if (abs(horizontalDragDistance) >= CAROUSEL_SWIPE_THRESHOLD_PX) {
-                            val nextPackage = resolveNextCarouselPackage(
-                                carouselPackages = carouselPackages,
-                                currentPackage = selectedPackage,
-                                moveToPrevious = horizontalDragDistance > 0f
-                            )
-                            if (nextPackage.isNotBlank() && nextPackage != selectedPackage) {
-                                selectedPackage = nextPackage
-                                onSelectedPlayerChange(nextPackage)
+            .then(
+                if (enableInnerInteractions && carouselPackages.size > 1) {
+                    Modifier.pointerInput(carouselPackages, selectedPackage) {
+                        detectHorizontalDragGestures(
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                horizontalDragDistance += dragAmount
+                            },
+                            onDragEnd = {
+                                if (abs(horizontalDragDistance) >= CAROUSEL_SWIPE_THRESHOLD_PX) {
+                                    val nextPackage = resolveNextCarouselPackage(
+                                        carouselPackages = carouselPackages,
+                                        currentPackage = selectedPackage,
+                                        moveToPrevious = horizontalDragDistance > 0f
+                                    )
+                                    if (nextPackage.isNotBlank() && nextPackage != selectedPackage) {
+                                        selectedPackage = nextPackage
+                                        onSelectedPlayerChange(nextPackage)
+                                    }
+                                }
+                                horizontalDragDistance = 0f
+                            },
+                            onDragCancel = {
+                                horizontalDragDistance = 0f
                             }
-                        }
-                        horizontalDragDistance = 0f
-                    },
-                    onDragCancel = {
-                        horizontalDragDistance = 0f
+                        )
                     }
-                )
-            }
+                } else {
+                    Modifier
+                }
+            )
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -214,8 +221,9 @@ fun DashboardMusicWidgetItem(
                         .fillMaxWidth()
                         .weight(1.5f)
                         .combinedClickable(
+                            enabled = enableInnerInteractions,
                             onClick = {},
-                            onLongClick = {},
+                            onLongClick = onLongClick,
                             onDoubleClick = {
                                 openSelectedPlayer(context, selectedPackage)
                             }
@@ -244,12 +252,13 @@ fun DashboardMusicWidgetItem(
                         .weight(1.5f)
                         .clip(RoundedCornerShape(8.dp))
                         .combinedClickable(
+                            enabled = enableInnerInteractions,
                             onClick = {
                                 if (!mediaState.notificationAccessGranted) {
                                     openNotificationListenerSettings(context)
                                 }
                             },
-                            onLongClick = {},
+                            onLongClick = onLongClick,
                             onDoubleClick = {
                                 openSelectedPlayer(context, selectedPackage)
                             }
@@ -284,7 +293,9 @@ fun DashboardMusicWidgetItem(
                         iconRes = R.drawable.skip_previous,
                         contentDescription = stringResource(R.string.widget_music_action_previous),
                         iconTint = resolvedTextColor,
-                        enabled = canSendSkip,
+                        actionEnabled = canSendSkip,
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
                         onClick = {
                             SharedMediaControlService.skipToPrevious(
                                 selectedPackages = selectedPlayers,
@@ -299,7 +310,9 @@ fun DashboardMusicWidgetItem(
                         iconRes = playPauseIcon,
                         contentDescription = stringResource(R.string.widget_music_action_play_pause),
                         iconTint = resolvedTextColor,
-                        enabled = canSendPlay,
+                        actionEnabled = canSendPlay,
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
                         onClick = {
                             SharedMediaControlService.playPause(
                                 context = context,
@@ -315,7 +328,9 @@ fun DashboardMusicWidgetItem(
                         iconRes = R.drawable.next_track,
                         contentDescription = stringResource(R.string.widget_music_action_next),
                         iconTint = resolvedTextColor,
-                        enabled = canSendSkip,
+                        actionEnabled = canSendSkip,
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
                         onClick = {
                             SharedMediaControlService.skipToNext(
                                 selectedPackages = selectedPlayers,
@@ -383,26 +398,36 @@ private fun MediaControlActionButton(
     iconRes: Int,
     contentDescription: String,
     iconTint: Color,
-    enabled: Boolean,
+    actionEnabled: Boolean,
+    interactionEnabled: Boolean,
+    onLongClick: () -> Unit,
     onClick: () -> Unit
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(
-                if (enabled) {
+                if (actionEnabled) {
                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
                 }
             )
-            .clickable(enabled = enabled, onClick = onClick),
+            .combinedClickable(
+                enabled = interactionEnabled,
+                onClick = {
+                    if (actionEnabled) {
+                        onClick()
+                    }
+                },
+                onLongClick = onLongClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             painter = painterResource(id = iconRes),
             contentDescription = contentDescription,
-            tint = if (enabled) iconTint else iconTint.copy(alpha = 0.5f),
+            tint = if (actionEnabled) iconTint else iconTint.copy(alpha = 0.5f),
             modifier = Modifier
                 .fillMaxHeight(0.72f)
                 .aspectRatio(1f)

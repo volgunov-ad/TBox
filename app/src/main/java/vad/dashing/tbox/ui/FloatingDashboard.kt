@@ -642,6 +642,7 @@ fun FloatingDashboard(
                                                         elevation = 0.dp,
                                                         shape = 0.dp,
                                                         backgroundTransparent = true,
+                                                        enableInnerInteractions = !isEditMode,
                                                         textColor = widgetTextColor
                                                     )
                                                 }

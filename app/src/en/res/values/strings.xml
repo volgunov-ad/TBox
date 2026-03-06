@@ -78,6 +78,10 @@
     <string name="media_player_yandex_music">Yandex Music</string>
     <string name="media_player_poweramp">Poweramp</string>
     <string name="media_player_aimp">AIMP</string>
+    <string name="media_player_record_radio">RecordRadio</string>
+    <string name="media_player_jetaudio">jetAudio</string>
+    <string name="media_player_fmplay">FMPlay</string>
+    <string name="media_player_yandex_radio">Yandex Radio</string>
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
     <string name="logs_filter_placeholder">Enter text to search…</string>

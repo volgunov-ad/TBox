@@ -34,11 +34,33 @@ enum class SupportedMediaPlayer(
         packageName = "com.aimp.player",
         titleRes = R.string.media_player_aimp,
         iconRes = R.drawable.player_aimp
+    ),
+    RECORD_RADIO(
+        packageName = "com.maxxt.recordradio",
+        titleRes = R.string.media_player_record_radio,
+        iconRes = R.drawable.player_record_radio
+    ),
+    JETAUDIO(
+        packageName = "com.jetappfactory.jetaudio",
+        titleRes = R.string.media_player_jetaudio,
+        iconRes = R.drawable.player_jetaudio
+    ),
+    FMPLAY(
+        packageName = "ru.fmplay",
+        titleRes = R.string.media_player_fmplay,
+        iconRes = R.drawable.player_fmplay
+    ),
+    YANDEX_RADIO(
+        packageName = "ru.yandex.radio",
+        titleRes = R.string.media_player_yandex_radio,
+        iconRes = R.drawable.player_yandex_radio
     );
 
     companion object {
         fun fromPackage(packageName: String): SupportedMediaPlayer? {
-            return entries.firstOrNull { it.packageName == packageName }
+            val normalizedPackage = packageName.trim().lowercase()
+            if (normalizedPackage.isBlank()) return null
+            return entries.firstOrNull { it.packageName == normalizedPackage }
         }
     }
 }
@@ -62,6 +84,7 @@ data class MediaWidgetState(
 
 fun normalizeMediaPlayerPackages(rawPackages: Collection<String>): Set<String> {
     return rawPackages
+        .map { it.trim().lowercase() }
         .mapNotNull { SupportedMediaPlayer.fromPackage(it)?.packageName }
         .toSet()
 }

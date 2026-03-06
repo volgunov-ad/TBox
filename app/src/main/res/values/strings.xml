@@ -78,6 +78,10 @@
     <string name="media_player_yandex_music">Я.Музыка</string>
     <string name="media_player_poweramp">Poweramp</string>
     <string name="media_player_aimp">AIMP</string>
+    <string name="media_player_record_radio">RecordRadio</string>
+    <string name="media_player_jetaudio">jetAudio</string>
+    <string name="media_player_fmplay">FMPlay</string>
+    <string name="media_player_yandex_radio">Яндекс.Радио</string>
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
     <string name="logs_filter_placeholder">Введите текст для поиска…</string>
