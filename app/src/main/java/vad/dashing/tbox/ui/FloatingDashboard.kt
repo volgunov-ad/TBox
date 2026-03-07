@@ -180,6 +180,7 @@ fun FloatingDashboard(
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
+    val canManipulatePanel = isEditMode && showDialogForIndex == null
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
@@ -192,10 +193,6 @@ fun FloatingDashboard(
             }
         }
     }
-
-    // Для определения области перетаскивания/изменения размера
-    var dragStartPosition by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
-    var resizeStartPosition by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
 
     // Используем rememberUpdatedState для отслеживания текущих значений windowParams
     val currentWindowParams by rememberUpdatedState(windowParams)
@@ -303,74 +300,65 @@ fun FloatingDashboard(
                     .fillMaxSize()
                     .weight(1f)
                     .background(color = Color.Transparent)
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { startOffset ->
-                                if (isEditMode && showDialogForIndex == null) { // Не позволяем перетаскивать при открытом диалоге
-                                    val isNearBottomRight = isInResizeHandleArea(
-                                        offset = startOffset,
-                                        width = size.width.toFloat(),
-                                        height = size.height.toFloat()
-                                    )
-
-                                    if (isNearBottomRight) {
-                                        // Изменение размера (за правый нижний угол)
-                                        isResizingMode = true
+                    .then(
+                        if (canManipulatePanel) {
+                            Modifier.pointerInput(panelId, windowParams.width, windowParams.height) {
+                                detectDragGestures(
+                                    onDragStart = { startOffset ->
+                                        val isNearBottomRight = isInResizeHandleArea(
+                                            offset = startOffset,
+                                            width = size.width.toFloat(),
+                                            height = size.height.toFloat()
+                                        )
+                                        if (isNearBottomRight) {
+                                            isResizingMode = true
+                                            isDraggingMode = false
+                                        } else {
+                                            isDraggingMode = true
+                                            isResizingMode = false
+                                        }
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        if (isDraggingMode) {
+                                            val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
+                                            val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
+                                            onUpdateWindowPosition(panelId, newX, newY)
+                                        } else if (isResizingMode) {
+                                            val newWidth = (windowParams.width + dragAmount.x).toInt()
+                                                .coerceAtLeast(50)
+                                            val newHeight = (windowParams.height + dragAmount.y).toInt()
+                                                .coerceAtLeast(50)
+                                            onUpdateWindowSize(panelId, newWidth, newHeight)
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        if (isDraggingMode) {
+                                            settingsViewModel.saveFloatingDashboardPosition(
+                                                panelId,
+                                                windowParams.x,
+                                                windowParams.y
+                                            )
+                                        } else if (isResizingMode) {
+                                            settingsViewModel.saveFloatingDashboardSize(
+                                                panelId,
+                                                windowParams.width,
+                                                windowParams.height
+                                            )
+                                        }
                                         isDraggingMode = false
-                                        resizeStartPosition = startOffset
-                                    } else {
-                                        // Перетаскивание окна (за края)
-                                        isDraggingMode = true
                                         isResizingMode = false
-                                        dragStartPosition = startOffset
+                                    },
+                                    onDragCancel = {
+                                        isDraggingMode = false
+                                        isResizingMode = false
                                     }
-                                }
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-
-                                if (isEditMode && showDialogForIndex == null && isDraggingMode && dragStartPosition != null) {
-                                    // Обновляем положение окна
-                                    val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
-                                    val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
-                                    onUpdateWindowPosition(panelId, newX, newY)
-
-                                } else if (isEditMode && showDialogForIndex == null && isResizingMode && resizeStartPosition != null) {
-                                    // Обновляем размер окна
-                                    val newWidth = (windowParams.width + dragAmount.x).toInt()
-                                        .coerceAtLeast(50)
-                                    val newHeight = (windowParams.height + dragAmount.y).toInt()
-                                        .coerceAtLeast(50)
-                                    onUpdateWindowSize(panelId, newWidth, newHeight)
-                                }
-                            },
-                            onDragEnd = {
-                                if (isEditMode && isDraggingMode) {
-                                    settingsViewModel.saveFloatingDashboardPosition(
-                                        panelId,
-                                        windowParams.x,
-                                        windowParams.y
-                                    )
-                                    // Сбрасываем режимы после завершения жеста
-                                    isDraggingMode = false
-                                    isResizingMode = false
-                                    dragStartPosition = null
-                                    resizeStartPosition = null
-                                } else if (isEditMode && isResizingMode) {
-                                    settingsViewModel.saveFloatingDashboardSize(
-                                        panelId,
-                                        windowParams.width,
-                                        windowParams.height
-                                    )
-                                    // Сбрасываем режимы после завершения жеста
-                                    isDraggingMode = false
-                                    isResizingMode = false
-                                    dragStartPosition = null
-                                    resizeStartPosition = null
-                                }
+                                )
                             }
-                        )
-                    }
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
                 Column(
                     modifier = Modifier
@@ -425,21 +413,11 @@ fun FloatingDashboard(
                                                 if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                     showDialogForIndex = index
                                                 } else if (isFloatingDashboardClickAction) {
-                                                    when (widget.dataKey) {
-                                                        "netWidget", "netWidgetNew", "netWidgetColored" -> {
-                                                            settingsViewModel.saveSelectedTab(0)
-                                                            openMainActivity(context)
-                                                        }
-
-                                                        "locWidget" -> {
-                                                            settingsViewModel.saveSelectedTab(2)
-                                                            openMainActivity(context)
-                                                        }
-
-                                                        else -> {
-                                                            openMainActivity(context)
-                                                        }
-                                                    }
+                                                    openMainActivityForWidgetKey(
+                                                        context = context,
+                                                        settingsViewModel = settingsViewModel,
+                                                        dataKey = widget.dataKey
+                                                    )
                                                 }
                                             }
                                             val onWidgetLongClick = {
@@ -490,76 +468,56 @@ fun FloatingDashboard(
                     }
                 }
 
-                if (!hasConfiguredWidgets) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .padding(4.dp)
-                    ) {
-                        Canvas(
-                            modifier = Modifier.matchParentSize()
-                        ) {
-                            drawRect(
-                                color = Color(0xFF008507),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                            )
-                        }
-                    }
-                }
-
-                if (!tboxConnected) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .padding(0.dp)
-                    ) {
-                        Canvas(
-                            modifier = Modifier.matchParentSize()
-                        ) {
-                            drawRect(
-                                color = Color(0xD9FF9800),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                            )
-                        }
-                    }
-                }
-
-                // Визуальные индикаторы режимов (не показываем при открытом диалоге)
-                if (isEditMode && showDialogForIndex == null) {
-                    // Показываем рамку в режиме редактирования
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .padding(2.dp)
-                    ) {
-                        Canvas(
-                            modifier = Modifier.matchParentSize()
-                        ) {
-                            drawRect(
-                                color = Color(0xFF00BCD4),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                            )
-                        }
-                    }
-
-                    // Рамка зоны изменения размера (правый нижний угол)
+                val showEditIndicators = isEditMode && showDialogForIndex == null
+                if (!hasConfiguredWidgets || !tboxConnected || showEditIndicators) {
                     Canvas(
                         modifier = Modifier.matchParentSize()
                     ) {
-                        val topLeft = resizeHandleAreaTopLeft(
-                            width = size.width,
-                            height = size.height
-                        )
-                        val handleSize = resizeHandleAreaSize(
-                            width = size.width,
-                            height = size.height
-                        )
-                        drawRect(
-                            color = Color(0xFF00BCD4),
-                            topLeft = topLeft,
-                            size = handleSize,
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                        )
+                        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                        if (!hasConfiguredWidgets) {
+                            val inset = 4.dp.toPx()
+                            drawRect(
+                                color = Color(0xFF008507),
+                                topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+                                size = androidx.compose.ui.geometry.Size(
+                                    width = (size.width - inset * 2f).coerceAtLeast(0f),
+                                    height = (size.height - inset * 2f).coerceAtLeast(0f)
+                                ),
+                                style = stroke
+                            )
+                        }
+                        if (!tboxConnected) {
+                            drawRect(
+                                color = Color(0xD9FF9800),
+                                style = stroke
+                            )
+                        }
+                        if (showEditIndicators) {
+                            val editInset = 2.dp.toPx()
+                            drawRect(
+                                color = Color(0xFF00BCD4),
+                                topLeft = androidx.compose.ui.geometry.Offset(editInset, editInset),
+                                size = androidx.compose.ui.geometry.Size(
+                                    width = (size.width - editInset * 2f).coerceAtLeast(0f),
+                                    height = (size.height - editInset * 2f).coerceAtLeast(0f)
+                                ),
+                                style = stroke
+                            )
+                            val topLeft = resizeHandleAreaTopLeft(
+                                width = size.width,
+                                height = size.height
+                            )
+                            val handleSize = resizeHandleAreaSize(
+                                width = size.width,
+                                height = size.height
+                            )
+                            drawRect(
+                                color = Color(0xFF00BCD4),
+                                topLeft = topLeft,
+                                size = handleSize,
+                                style = stroke
+                            )
+                        }
                     }
                 }
             }
@@ -591,63 +549,13 @@ fun OverlayWidgetSelectionDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var selectedDataKey by remember {
-        mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
-    }
-    val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
-        ?: FloatingDashboardWidgetConfig(dataKey = "")
-    var showTitle by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(initialConfig.showTitle)
-    }
-    var showUnit by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(initialConfig.showUnit)
-    }
-    var scale by remember(widgetIndex, currentWidgetConfigs) {
-        mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
-    }
-    var textColorLight by remember(widgetIndex, currentWidgetConfigs) {
-        mutableIntStateOf(initialConfig.textColorLight)
-    }
-    var textColorDark by remember(widgetIndex, currentWidgetConfigs) {
-        mutableIntStateOf(initialConfig.textColorDark)
-    }
-    var backgroundColorLight by remember(widgetIndex, currentWidgetConfigs) {
-        mutableIntStateOf(
-            initialConfig.backgroundColorLight ?: DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
-        )
-    }
-    var backgroundColorDark by remember(widgetIndex, currentWidgetConfigs) {
-        mutableIntStateOf(
-            initialConfig.backgroundColorDark ?: DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
-        )
-    }
-    var selectedMediaPlayers by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(
-            if (initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY) {
-                normalizeMediaPlayersSelection(initialConfig.mediaPlayers)
-            } else {
-                emptySet()
-            }
-        )
-    }
-    val selectedMediaPlayer = remember(widgetIndex, currentWidgetConfigs) {
-        resolveSelectedMediaPlayerForWidget(initialConfig)
-    }
-    var mediaAutoPlayOnInit by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(initialConfig.mediaAutoPlayOnInit)
-    }
-    var showAdvancedSettings by remember(widgetIndex) { mutableStateOf(false) }
-    val isMusicWidgetSelected = selectedDataKey == MUSIC_WIDGET_DATA_KEY
-    val togglesEnabled = selectedDataKey.isNotEmpty()
-    val canSaveSelection = !isMusicWidgetSelected || selectedMediaPlayers.isNotEmpty()
-
-    // Получаем список опций
-    val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
-            WidgetsRepository.getAvailableDataKeysWidgets()
-                .filter { it.isNotEmpty() }
-                .map { key ->
-                    key to WidgetsRepository.getTitleUnitForDataKey(context, key)
-                }
+    val state = rememberWidgetSelectionDialogState(
+        widgetIndex = widgetIndex,
+        currentWidgets = currentWidgets,
+        currentWidgetConfigs = currentWidgetConfigs,
+        defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
+        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+    )
 
     Card(
         modifier = Modifier
@@ -661,285 +569,40 @@ fun OverlayWidgetSelectionDialog(
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
-            SettingsTitle(
-                if (showAdvancedSettings) {
+            WidgetSelectionDialogForm(
+                titleText = if (state.showAdvancedSettings) {
                     stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
                 } else {
                     stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
-                }
+                },
+                state = state,
+                modifier = Modifier
+                    .weight(1f)
             )
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                if (showAdvancedSettings) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(12.dp)
-                    ) {
-                        if (isMusicWidgetSelected) {
-                            MediaPlayersInlineSelection(
-                                selectedPlayers = selectedMediaPlayers,
-                                onSelectionChange = { selectedMediaPlayers = it },
-                                enabled = togglesEnabled
-                            )
-                            if (selectedMediaPlayers.isEmpty()) {
-                                Text(
-                                    text = stringResource(R.string.widget_music_players_required),
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontSize = 20.sp
-                                )
-                            }
-                            SettingSwitch(
-                                mediaAutoPlayOnInit,
-                                { mediaAutoPlayOnInit = it },
-                                stringResource(R.string.widget_music_auto_play_on_init),
-                                "",
-                                togglesEnabled
-                            )
-                        }
-                        SettingSwitch(
-                            showTitle,
-                            { showTitle = it },
-                            stringResource(R.string.widget_show_title),
-                            "",
-                            togglesEnabled
-                        )
-                        SettingSwitch(
-                            showUnit,
-                            { showUnit = it },
-                            stringResource(R.string.widget_show_unit),
-                            "",
-                            togglesEnabled
-                        )
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.widget_scale, scale),
-                                fontSize = 24.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = stringResource(R.string.widget_scale_hint),
-                                fontSize = 20.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Slider(
-                                value = scale,
-                                onValueChange = { newValue ->
-                                    scale = normalizeWidgetScale(newValue)
-                                },
-                                valueRange = 0.1f..2.0f,
-                                steps = 18,
-                                enabled = togglesEnabled,
-                                modifier = Modifier
-                                    .padding(top = 6.dp)
-                            )
-                        }
-                        WidgetTextColorSetting(
-                            title = stringResource(R.string.widget_text_color_light),
-                            colorValue = textColorLight,
-                            enabled = togglesEnabled,
-                            onColorChange = { textColorLight = it },
-                            presetColors = listOf(
-                                LIGHT_THEME_TEXT_COLOR_PRESET_1_INT,
-                                LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
-                            )
-                        )
-                        WidgetTextColorSetting(
-                            title = stringResource(R.string.widget_text_color_dark),
-                            colorValue = textColorDark,
-                            enabled = togglesEnabled,
-                            onColorChange = { textColorDark = it },
-                            presetColors = listOf(
-                                DARK_THEME_TEXT_COLOR_PRESET_1_INT,
-                                DARK_THEME_TEXT_COLOR_PRESET_2_INT
-                            )
-                        )
-                        WidgetTextColorSetting(
-                            title = stringResource(R.string.widget_background_color_light),
-                            colorValue = backgroundColorLight,
-                            enabled = togglesEnabled,
-                            onColorChange = { backgroundColorLight = it },
-                            presetColors = listOf(
-                                LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT,
-                                LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
-                            )
-                        )
-                        WidgetTextColorSetting(
-                            title = stringResource(R.string.widget_background_color_dark),
-                            colorValue = backgroundColorDark,
-                            enabled = togglesEnabled,
-                            onColorChange = { backgroundColorDark = it },
-                            presetColors = listOf(
-                                DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT,
-                                DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
-                            )
-                        )
-                    }
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(12.dp)
-                    ) {
-                        availableOptions.forEach { (key, displayName) ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedDataKey = key }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                androidx.compose.material3.RadioButton(
-                                    selected = selectedDataKey == key,
-                                    onClick = { selectedDataKey = key }
-                                )
-                                Text(
-                                    text = displayName,
-                                    fontSize = 24.sp,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .weight(1f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
             // Кнопки действий
-            Row(
+            WidgetSelectionDialogActions(
+                state = state,
+                onDismiss = onDismiss,
+                onSave = {
+                    applyWidgetSelectionChanges(
+                        context = context,
+                        dashboardManager = dashboardManager,
+                        currentWidgets = currentWidgets,
+                        currentWidgetConfigs = currentWidgetConfigs,
+                        widgetIndex = widgetIndex,
+                        state = state,
+                        saveConfigs = { configs ->
+                            settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
+                        }
+                    )
+                    onDismiss()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 20.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = { showAdvancedSettings = !showAdvancedSettings },
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = if (showAdvancedSettings) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        }
-                    ),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (showAdvancedSettings) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                        } else {
-                            Color.Transparent
-                        },
-                        contentColor = if (showAdvancedSettings) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
-                    )
-                ) {
-                    Text(text = stringResource(R.string.widget_toggle_advanced), fontSize = 20.sp)
-                }
-                Box(modifier = Modifier.weight(1f))
-                OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.padding(end = 12.dp)
-                ) {
-                    Text(text = stringResource(R.string.action_cancel), fontSize = 24.sp)
-                }
-
-                Button(
-                    enabled = canSaveSelection,
-                    onClick = {
-                        val normalizedScale = normalizeWidgetScale(scale)
-                        scale = normalizedScale
-                        val updatedWidgets = currentWidgets.toMutableList()
-                        val newWidget = if (selectedDataKey.isNotEmpty()) {
-                            DashboardWidget(
-                                id = currentWidgets[widgetIndex].id,
-                                title = WidgetsRepository.getTitleForDataKey(context, selectedDataKey),
-                                unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
-                                dataKey = selectedDataKey,
-                                textColorLight = textColorLight,
-                                textColorDark = textColorDark,
-                                backgroundColorLight = backgroundColorLight,
-                                backgroundColorDark = backgroundColorDark
-                            )
-                        } else {
-                            DashboardWidget(
-                                id = currentWidgets[widgetIndex].id,
-                                title = "",
-                                dataKey = "",
-                                textColorLight = textColorLight,
-                                textColorDark = textColorDark,
-                                backgroundColorLight = backgroundColorLight,
-                                backgroundColorDark = backgroundColorDark
-                            )
-                        }
-                        updatedWidgets[widgetIndex] = newWidget
-
-                        dashboardManager.updateWidgets(updatedWidgets)
-                        val normalizedConfigs = normalizeWidgetConfigs(
-                            currentWidgetConfigs,
-                            updatedWidgets.size
-                        ).toMutableList()
-                        val newConfig = if (selectedDataKey.isNotEmpty()) {
-                            FloatingDashboardWidgetConfig(
-                                dataKey = selectedDataKey,
-                                showTitle = showTitle,
-                                showUnit = showUnit,
-                                scale = normalizedScale,
-                                textColorLight = textColorLight,
-                                textColorDark = textColorDark,
-                                backgroundColorLight = backgroundColorLight,
-                                backgroundColorDark = backgroundColorDark,
-                                mediaPlayers = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
-                                    orderedMediaPlayersForStorage(selectedMediaPlayers)
-                                } else {
-                                    emptyList()
-                                },
-                                mediaSelectedPlayer = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
-                                    resolveStoredMediaSelectedPlayer(
-                                        selectedPlayers = selectedMediaPlayers,
-                                        currentSelectedPlayer = selectedMediaPlayer
-                                    )
-                                } else {
-                                    ""
-                                },
-                                mediaAutoPlayOnInit = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
-                                    mediaAutoPlayOnInit
-                                } else {
-                                    false
-                                }
-                            )
-                        } else {
-                            FloatingDashboardWidgetConfig(dataKey = "")
-                        }
-                        normalizedConfigs[widgetIndex] = newConfig
-                        settingsViewModel.saveFloatingDashboardWidgets(panelId, normalizedConfigs)
-                        dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
-
-                        onDismiss()
-                    }
-                ) {
-                    Text(
-                        text = stringResource(R.string.action_save),
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        fontSize = 24.sp
-                    )
-                }
-            }
+                saveTextFontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+            )
         }
     }
 }
@@ -953,6 +616,20 @@ private fun openMainActivity(context: Context) {
     } catch (e: Exception) {
         e.printStackTrace()
     }
+}
+
+private fun openMainActivityForWidgetKey(
+    context: Context,
+    settingsViewModel: SettingsViewModel,
+    dataKey: String
+) {
+    val targetTab = when (dataKey) {
+        "netWidget", "netWidgetNew", "netWidgetColored" -> 0
+        "locWidget" -> 2
+        else -> null
+    }
+    targetTab?.let(settingsViewModel::saveSelectedTab)
+    openMainActivity(context)
 }
 
 private fun persistFloatingMediaWidgetSelectedPlayer(
@@ -975,17 +652,4 @@ private fun persistFloatingMediaWidgetSelectedPlayer(
         mediaSelectedPlayer = selectedPackage
     )
     settingsViewModel.saveFloatingDashboardWidgets(panelId, normalizedConfigs)
-}
-
-private fun resolveStoredMediaSelectedPlayer(
-    selectedPlayers: Set<String>,
-    currentSelectedPlayer: String
-): String {
-    val orderedPlayers = orderedMediaPlayersForStorage(selectedPlayers)
-    if (orderedPlayers.isEmpty()) return ""
-    return if (currentSelectedPlayer in orderedPlayers) {
-        currentSelectedPlayer
-    } else {
-        orderedPlayers.first()
-    }
 }
