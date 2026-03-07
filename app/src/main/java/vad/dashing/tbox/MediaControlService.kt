@@ -51,7 +51,7 @@ enum class SupportedMediaPlayer(
         iconRes = R.drawable.player_fmplay
     ),
     YANDEX_RADIO(
-        packageName = "ru.yandex.radio",
+        packageName = "ru.yandex.mobile.fmradio",
         titleRes = R.string.media_player_yandex_radio,
         iconRes = R.drawable.player_yandex_radio
     ),
@@ -65,7 +65,12 @@ enum class SupportedMediaPlayer(
         fun fromPackage(packageName: String): SupportedMediaPlayer? {
             val normalizedPackage = packageName.trim().lowercase()
             if (normalizedPackage.isBlank()) return null
-            return entries.firstOrNull { it.packageName == normalizedPackage }
+            val resolvedPackage = if (normalizedPackage == "ru.yandex.radio") {
+                "ru.yandex.mobile.fmradio"
+            } else {
+                normalizedPackage
+            }
+            return entries.firstOrNull { it.packageName == resolvedPackage }
         }
     }
 }
