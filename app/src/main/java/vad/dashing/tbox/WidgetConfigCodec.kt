@@ -65,6 +65,7 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("mediaSelectedPlayer", selectedPlayer)
             }
         }
+        obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
         array.put(obj)
     }
     return array
@@ -151,7 +152,8 @@ private fun parseWidgetConfigsFromJsonArray(
                         backgroundColorLight = parseBackgroundColor(item, "backgroundColorLight"),
                         backgroundColorDark = parseBackgroundColor(item, "backgroundColorDark"),
                         mediaPlayers = mediaPlayers,
-                        mediaSelectedPlayer = parseSelectedMediaPlayer(item, mediaPlayers)
+                        mediaSelectedPlayer = parseSelectedMediaPlayer(item, mediaPlayers),
+                        mediaAutoPlayOnInit = item.optBoolean("mediaAutoPlayOnInit", false)
                     )
                 )
             }

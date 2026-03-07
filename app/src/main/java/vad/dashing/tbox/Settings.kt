@@ -30,7 +30,8 @@ data class FloatingDashboardWidgetConfig(
     val backgroundColorLight: Int? = null,
     val backgroundColorDark: Int? = null,
     val mediaPlayers: List<String> = emptyList(),
-    val mediaSelectedPlayer: String = ""
+    val mediaSelectedPlayer: String = "",
+    val mediaAutoPlayOnInit: Boolean = false
 )
 
 data class FloatingDashboardConfig(

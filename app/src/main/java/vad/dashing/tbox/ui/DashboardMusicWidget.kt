@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -115,6 +116,19 @@ fun DashboardMusicWidgetItem(
     val playPauseIcon = if (selectedPlayerState?.isPlaying == true) R.drawable.pause else R.drawable.play
     val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()
     val canSendSkip = mediaState.notificationAccessGranted && isSelectedPlayerRunning
+    var autoPlayTriggered by remember(widget.id) { mutableStateOf(false) }
+
+    LaunchedEffect(widget.id, selectedPackage, widgetConfig.mediaAutoPlayOnInit) {
+        if (!widgetConfig.mediaAutoPlayOnInit) return@LaunchedEffect
+        if (autoPlayTriggered) return@LaunchedEffect
+        if (selectedPackage.isBlank()) return@LaunchedEffect
+        autoPlayTriggered = true
+        SharedMediaControlService.play(
+            context = context,
+            selectedPackages = selectedPlayers,
+            preferredPackage = selectedPackage
+        )
+    }
 
     DashboardWidgetScaffold(
         modifier = Modifier.then(

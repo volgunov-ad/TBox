@@ -283,6 +283,36 @@ object SharedMediaControlService {
         launchPlayerApp(context.applicationContext, targetPackage)
     }
 
+    fun play(
+        context: Context,
+        selectedPackages: Set<String>,
+        preferredPackage: String = ""
+    ) {
+        var controllerHandled = false
+        synchronized(this) {
+            syncControllersLocked()
+            val controller = resolveControllerLocked(
+                selectedPackages = selectedPackages,
+                preferredPackage = preferredPackage,
+                strictPreferred = preferredPackage.isNotBlank()
+            )
+            if (controller != null) {
+                if (!controller.playbackState.isPlayingState()) {
+                    controller.transportControls.play()
+                }
+                controllerHandled = true
+            }
+        }
+        if (controllerHandled) return
+
+        val targetPackage = resolveTargetPackage(
+            selectedPackages = selectedPackages,
+            preferredPackage = preferredPackage
+        ) ?: return
+        sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
+        launchPlayerApp(context.applicationContext, targetPackage)
+    }
+
     fun skipToNext(selectedPackages: Set<String>, preferredPackage: String = "") {
         synchronized(this) {
             syncControllersLocked()

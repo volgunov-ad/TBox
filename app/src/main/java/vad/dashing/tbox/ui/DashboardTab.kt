@@ -272,6 +272,9 @@ fun WidgetSelectionDialog(
     val selectedMediaPlayer = remember(widgetIndex, currentWidgetConfigs) {
         resolveSelectedMediaPlayerForWidget(initialConfig)
     }
+    var mediaAutoPlayOnInit by remember(widgetIndex, currentWidgetConfigs) {
+        mutableStateOf(initialConfig.mediaAutoPlayOnInit)
+    }
     var showAdvancedSettings by remember(widgetIndex) { mutableStateOf(false) }
     val isMusicWidgetSelected = selectedDataKey == MUSIC_WIDGET_DATA_KEY
     val togglesEnabled = selectedDataKey.isNotEmpty()
@@ -330,6 +333,13 @@ fun WidgetSelectionDialog(
                                         fontSize = 20.sp
                                     )
                                 }
+                                SettingSwitch(
+                                    mediaAutoPlayOnInit,
+                                    { mediaAutoPlayOnInit = it },
+                                    stringResource(R.string.widget_music_auto_play_on_init),
+                                    "",
+                                    togglesEnabled
+                                )
                             }
                             SettingSwitch(
                                 showTitle,
@@ -542,6 +552,11 @@ fun WidgetSelectionDialog(
                                     )
                                 } else {
                                     ""
+                                },
+                                mediaAutoPlayOnInit = if (selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                                    mediaAutoPlayOnInit
+                                } else {
+                                    false
                                 }
                             )
                         } else {
