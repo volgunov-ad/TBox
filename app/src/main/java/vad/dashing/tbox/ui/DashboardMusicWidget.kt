@@ -180,11 +180,12 @@ fun DashboardMusicWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, _ ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(6.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(6.dp)
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -361,6 +362,17 @@ fun DashboardMusicWidgetItem(
                     )
                 }
             }
+            if (!enableInnerInteractions) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .combinedClickable(
+                            onClick = onClick,
+                            onLongClick = onLongClick
+                        )
+                )
+            }
+        }
     }
 }
 
