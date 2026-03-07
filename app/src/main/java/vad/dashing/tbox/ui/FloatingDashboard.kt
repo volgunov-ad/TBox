@@ -271,6 +271,16 @@ fun FloatingDashboard(
     }
 
     var restartEnabled by remember { mutableStateOf(true) }
+    val widgetInteractionPolicy = remember(isEditMode) {
+        if (isEditMode) {
+            DashboardWidgetInteractionPolicy(
+                mode = DashboardWidgetInteractionMode.EDIT,
+                exclusions = listOf(ResizeHandleWidgetHitExclusion)
+            )
+        } else {
+            DashboardWidgetInteractionPolicy()
+        }
+    }
 
     LaunchedEffect(restartEnabled) {
         if (!restartEnabled) {
@@ -408,7 +418,8 @@ fun FloatingDashboard(
                                             }
                                         }
                                         CompositionLocalProvider(
-                                            LocalWidgetTextScale provides widgetTextScale
+                                            LocalWidgetTextScale provides widgetTextScale,
+                                            LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy
                                         ) {
                                             val onWidgetClick = {
                                                 if (isEditMode && !isDraggingMode && !isResizingMode) {

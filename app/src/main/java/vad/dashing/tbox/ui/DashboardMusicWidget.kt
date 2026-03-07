@@ -6,7 +6,6 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -352,26 +351,6 @@ fun DashboardMusicWidgetItem(
                         }
                     )
                 }
-            }
-            if (!enableInnerInteractions) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .pointerInput(widget.id) {
-                            detectTapGestures(
-                                onTap = { offset ->
-                                    if (!isInResizeHandleArea(offset, size.width.toFloat(), size.height.toFloat())) {
-                                        onClick()
-                                    }
-                                },
-                                onLongPress = { offset ->
-                                    if (!isInResizeHandleArea(offset, size.width.toFloat(), size.height.toFloat())) {
-                                        onLongClick()
-                                    }
-                                }
-                            )
-                        }
-                )
             }
         }
     }
