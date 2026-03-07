@@ -229,11 +229,17 @@ fun DashboardMusicWidgetItem(
                         .fillMaxWidth()
                         .weight(1.5f)
                         .combinedClickable(
-                            enabled = enableInnerInteractions,
-                            onClick = {},
+                            enabled = true,
+                            onClick = {
+                                if (!enableInnerInteractions) {
+                                    onClick()
+                                }
+                            },
                             onLongClick = onLongClick,
                             onDoubleClick = {
-                                openSelectedPlayer(context, selectedPackage)
+                                if (enableInnerInteractions) {
+                                    openSelectedPlayer(context, selectedPackage)
+                                }
                             }
                         ),
                     contentAlignment = Alignment.CenterStart
@@ -260,15 +266,19 @@ fun DashboardMusicWidgetItem(
                         .weight(1.5f)
                         .clip(RoundedCornerShape(8.dp))
                         .combinedClickable(
-                            enabled = enableInnerInteractions,
+                            enabled = true,
                             onClick = {
-                                if (!mediaState.notificationAccessGranted) {
+                                if (!enableInnerInteractions) {
+                                    onClick()
+                                } else if (!mediaState.notificationAccessGranted) {
                                     openNotificationListenerSettings(context)
                                 }
                             },
                             onLongClick = onLongClick,
                             onDoubleClick = {
-                                openSelectedPlayer(context, selectedPackage)
+                                if (enableInnerInteractions) {
+                                    openSelectedPlayer(context, selectedPackage)
+                                }
                             }
                         )
                         .padding(horizontal = 2.dp),
@@ -304,6 +314,7 @@ fun DashboardMusicWidgetItem(
                         actionEnabled = canSendSkip,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
+                        onDisabledClick = onClick,
                         onClick = {
                             SharedMediaControlService.skipToPrevious(
                                 selectedPackages = selectedPlayers,
@@ -321,6 +332,7 @@ fun DashboardMusicWidgetItem(
                         actionEnabled = canSendPlay,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
+                        onDisabledClick = onClick,
                         onClick = {
                             SharedMediaControlService.playPause(
                                 context = context,
@@ -339,6 +351,7 @@ fun DashboardMusicWidgetItem(
                         actionEnabled = canSendSkip,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
+                        onDisabledClick = onClick,
                         onClick = {
                             SharedMediaControlService.skipToNext(
                                 selectedPackages = selectedPlayers,
@@ -409,6 +422,7 @@ private fun MediaControlActionButton(
     actionEnabled: Boolean,
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
+    onDisabledClick: () -> Unit,
     onClick: () -> Unit
 ) {
     Box(
@@ -422,10 +436,14 @@ private fun MediaControlActionButton(
                 }
             )
             .combinedClickable(
-                enabled = interactionEnabled,
+                enabled = true,
                 onClick = {
-                    if (actionEnabled) {
-                        onClick()
+                    if (interactionEnabled) {
+                        if (actionEnabled) {
+                            onClick()
+                        }
+                    } else {
+                        onDisabledClick()
                     }
                 },
                 onLongClick = onLongClick
