@@ -1,17 +1,10 @@
 package vad.dashing.tbox.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,78 +31,61 @@ fun DashboardVoltEngTempWidgetItem(
     canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false,
     units: Boolean = true,
-    textColor: Color? = null
+    textColor: Color? = null,
+    backgroundColor: Color? = null
 ) {
     val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
     val engineTemperature by canViewModel.engineTemperature.collectAsStateWithLifecycle()
     val voltUnit = stringResource(R.string.unit_volt)
     val celsiusUnit = stringResource(R.string.unit_celsius)
 
-    Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        elevation = CardDefaults.cardElevation(elevation),
-        colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(shape)
-    ) {
-        BoxWithConstraints(
+    DashboardWidgetScaffold(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, resolvedTextColor ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    color = Color.Transparent,
-                    shape = RoundedCornerShape(shape)
-                )
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            val availableHeight = maxHeight
-            val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
-            // Основной контент
-            Column(
+            Text(
+                text = "${valueToString(voltage, 1)}${if (units) "\u2009$voltUnit" else ""}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(4.dp)
-                    .wrapContentHeight(Alignment.CenterVertically),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "${valueToString(voltage, 1)}${if (units) "\u2009$voltUnit" else ""}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-                Text(
-                    text = "${valueToString(engineTemperature, 0)}${if (units) "\u2009$celsiusUnit" else ""}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-            }
+                    .weight(1f)
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
+            Text(
+                text = "${valueToString(engineTemperature, 0)}${if (units) "\u2009$celsiusUnit" else ""}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
         }
     }
 }

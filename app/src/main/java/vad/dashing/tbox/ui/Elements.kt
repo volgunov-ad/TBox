@@ -708,11 +708,9 @@ fun FloatingDashboardProfileSelector(
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val options = listOf(
-        "floating-1" to "1",
-        "floating-2" to "2",
-        "floating-3" to "3"
-    )
+    val options = (1..6).map { index ->
+        "floating-$index" to index.toString()
+    }
     Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),

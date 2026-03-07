@@ -53,6 +53,19 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("scale", normalizeWidgetScale(config.scale))
         obj.put("textColorLight", config.textColorLight)
         obj.put("textColorDark", config.textColorDark)
+        config.backgroundColorLight?.let { obj.put("backgroundColorLight", it) }
+        config.backgroundColorDark?.let { obj.put("backgroundColorDark", it) }
+        val mediaPlayers = orderedMediaPlayerPackages(config.mediaPlayers)
+        if (mediaPlayers.isNotEmpty()) {
+            obj.put("mediaPlayers", JSONArray(mediaPlayers))
+            val selectedPlayer = normalizeMediaPlayerPackages(
+                listOf(config.mediaSelectedPlayer)
+            ).firstOrNull()
+            if (selectedPlayer != null) {
+                obj.put("mediaSelectedPlayer", selectedPlayer)
+            }
+        }
+        obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
         array.put(obj)
     }
     return array
@@ -75,7 +88,9 @@ fun normalizeWidgetConfigs(
 fun loadWidgetsFromConfig(
     configs: List<FloatingDashboardWidgetConfig>,
     widgetCount: Int,
-    context: Context
+    context: Context,
+    defaultBackgroundLight: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN,
+    defaultBackgroundDark: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
 ): List<DashboardWidget> {
     return (0 until widgetCount).map { index ->
         val widgetConfig = configs.getOrNull(index)
@@ -88,7 +103,9 @@ fun loadWidgetsFromConfig(
                 unit = WidgetsRepository.getUnitForDataKey(context, dataKey),
                 dataKey = dataKey,
                 textColorLight = widgetConfig.textColorLight,
-                textColorDark = widgetConfig.textColorDark
+                textColorDark = widgetConfig.textColorDark,
+                backgroundColorLight = widgetConfig.backgroundColorLight ?: defaultBackgroundLight,
+                backgroundColorDark = widgetConfig.backgroundColorDark ?: defaultBackgroundDark
             )
         } else {
             DashboardWidget(
@@ -96,7 +113,9 @@ fun loadWidgetsFromConfig(
                 title = "",
                 dataKey = "",
                 textColorLight = widgetConfig.textColorLight,
-                textColorDark = widgetConfig.textColorDark
+                textColorDark = widgetConfig.textColorDark,
+                backgroundColorLight = widgetConfig.backgroundColorLight ?: defaultBackgroundLight,
+                backgroundColorDark = widgetConfig.backgroundColorDark ?: defaultBackgroundDark
             )
         }
     }
@@ -113,6 +132,7 @@ private fun parseWidgetConfigsFromJsonArray(
                 val dataKey = item.optString("dataKey").ifBlank {
                     item.optString("type")
                 }
+                val mediaPlayers = parseMediaPlayers(item)
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey.trim(),
@@ -128,7 +148,12 @@ private fun parseWidgetConfigsFromJsonArray(
                         textColorDark = item.optInt(
                             "textColorDark",
                             DEFAULT_WIDGET_TEXT_COLOR_DARK
-                        )
+                        ),
+                        backgroundColorLight = parseBackgroundColor(item, "backgroundColorLight"),
+                        backgroundColorDark = parseBackgroundColor(item, "backgroundColorDark"),
+                        mediaPlayers = mediaPlayers,
+                        mediaSelectedPlayer = parseSelectedMediaPlayer(item, mediaPlayers),
+                        mediaAutoPlayOnInit = item.optBoolean("mediaAutoPlayOnInit", false)
                     )
                 )
             }
@@ -148,4 +173,34 @@ private fun parseLegacyWidgetConfigs(rawValue: String): List<FloatingDashboardWi
     return rawValue.split(LEGACY_WIDGETS_SEPARATOR).map { dataKey ->
         FloatingDashboardWidgetConfig(dataKey = dataKey.trim())
     }
+}
+
+private fun parseMediaPlayers(item: JSONObject): List<String> {
+    val rawPlayers = mutableListOf<String>()
+    val playersArray = item.optJSONArray("mediaPlayers")
+    if (playersArray != null) {
+        for (idx in 0 until playersArray.length()) {
+            rawPlayers.add(playersArray.optString(idx))
+        }
+    } else {
+        val legacyPlayer = item.optString("mediaPlayer")
+        if (legacyPlayer.isNotBlank()) {
+            rawPlayers.add(legacyPlayer)
+        }
+    }
+
+    return orderedMediaPlayerPackages(rawPlayers)
+}
+
+private fun parseSelectedMediaPlayer(
+    item: JSONObject,
+    mediaPlayers: List<String>
+): String {
+    val value = item.optString("mediaSelectedPlayer")
+    val selected = normalizeMediaPlayerPackages(listOf(value)).firstOrNull().orEmpty()
+    return if (selected in mediaPlayers) selected else ""
+}
+
+private fun parseBackgroundColor(item: JSONObject, key: String): Int? {
+    return if (item.has(key)) item.optInt(key) else null
 }

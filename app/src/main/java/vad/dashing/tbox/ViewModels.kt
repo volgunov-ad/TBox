@@ -393,6 +393,7 @@ object WidgetsRepository {
             R.string.unit_bar_celsius
         ),
         "tempInOutWidget" to DataTitle(R.string.data_title_temp_in_out_widget),
+        "musicWidget" to DataTitle(R.string.data_title_music_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
     )
 
@@ -430,6 +431,10 @@ object WidgetsRepository {
 
 const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = LIGHT_THEME_ON_SURFACE_COLOR_INT
 const val DEFAULT_WIDGET_TEXT_COLOR_DARK = DARK_THEME_ON_SURFACE_COLOR_INT
+const val DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN = 0xFFFFFFFF.toInt()
+const val DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN = 0xFF131C2D.toInt()
+const val DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING = 0x00000000
+const val DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING = 0x00000000
 
 // Модель для виджета панели
 data class DashboardWidget(
@@ -440,7 +445,9 @@ data class DashboardWidget(
     val maxValue: Float? = null,
     val minValue: Float? = null,
     val textColorLight: Int = DEFAULT_WIDGET_TEXT_COLOR_LIGHT,
-    val textColorDark: Int = DEFAULT_WIDGET_TEXT_COLOR_DARK
+    val textColorDark: Int = DEFAULT_WIDGET_TEXT_COLOR_DARK,
+    val backgroundColorLight: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN,
+    val backgroundColorDark: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
 )
 
 // Состояние панели виджетов

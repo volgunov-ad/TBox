@@ -1,19 +1,12 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,8 +37,8 @@ fun DashboardLocWidgetItem(
     viewModel: TboxViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false,
     textColor: Color? = null,
+    backgroundColor: Color? = null,
     scale: Float = 1f
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
@@ -60,87 +53,70 @@ fun DashboardLocWidgetItem(
         }
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        elevation = CardDefaults.cardElevation(elevation),
-        colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(shape)
-    ) {
-        BoxWithConstraints(
+    DashboardWidgetScaffold(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, resolvedTextColor ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    color = Color.Transparent,
-                    shape = RoundedCornerShape(shape)
-                )
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            val availableHeight = maxHeight
-            val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
-            // Основной контент
-            Column(
+            Text(
+                text = "${locValues.visibleSatellites}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .weight(1f)
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
+            // Отображаем иконку навигации с вращением по направлению
+            Image(
+                painter = painterResource(id = locIndicatorDrawable),
+                contentDescription = stringResource(
+                    R.string.dashboard_loc_content_desc,
+                    locValues.locateStatus,
+                    isLocValuesTrue
+                ),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .rotate(degrees = -locValues.trueDirection)
+                    .weight(2f)
                     .padding(4.dp)
-                    .wrapContentHeight(Alignment.CenterVertically),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "${locValues.visibleSatellites}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-                // Отображаем иконку навигации с вращением по направлению
-                Image(
-                    painter = painterResource(id = locIndicatorDrawable),
-                    contentDescription = stringResource(
-                        R.string.dashboard_loc_content_desc,
-                        locValues.locateStatus,
-                        isLocValuesTrue
-                    ),
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .rotate(degrees = -locValues.trueDirection)
-                        .weight(2f)
-                        .padding(4.dp)
-                        .wrapContentHeight(Alignment.CenterVertically)
-                        .scale(scale)
-                )
-                Text(
-                    text = "${locValues.speed}\u2009${stringResource(R.string.unit_kmh)}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    softWrap = true,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-            }
+                    .wrapContentHeight(Alignment.CenterVertically)
+                    .scale(scale)
+            )
+            Text(
+                text = "${locValues.speed}\u2009${stringResource(R.string.unit_kmh)}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                softWrap = true,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
         }
     }
 }

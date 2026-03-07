@@ -56,13 +56,38 @@
     <string name="widget_additional_settings_for_tile">Дополнительные настройки плитки %1$d</string>
     <string name="widget_show_title">Отображать название</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
+    <string name="widget_toggle_advanced">Дополнительно</string>
     <string name="widget_scale">Масштаб виджета: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_text_color_light">Цвет текста (светлая тема)</string>
     <string name="widget_text_color_dark">Цвет текста (тёмная тема)</string>
+    <string name="widget_background_color_light">Цвет фона (светлая тема)</string>
+    <string name="widget_background_color_dark">Цвет фона (тёмная тема)</string>
     <string name="widget_color_value_label">Значение цвета</string>
     <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
     <string name="widget_color_alpha">Прозрачность: %1$d%%</string>
+    <string name="widget_music_players">Плееры для виджета музыки</string>
+    <string name="widget_music_players_hint">Выберите один или несколько плееров</string>
+    <string name="widget_music_players_required">Выберите минимум один плеер</string>
+    <string name="widget_music_auto_play_on_init">Автоматически запускать воспроизведение</string>
+    <string name="widget_music_no_artist">Исполнитель не определён</string>
+    <string name="widget_music_no_track">Трек не определён</string>
+    <string name="widget_music_player_none">Плеер не найден</string>
+    <string name="widget_music_player_with_state_off">%1$s (выключен)</string>
+    <string name="widget_music_player_icon">Тип плеера</string>
+    <string name="widget_music_action_previous">Предыдущий трек</string>
+    <string name="widget_music_action_play_pause">Воспроизвести или пауза</string>
+    <string name="widget_music_action_next">Следующий трек</string>
+    <string name="widget_music_access_required">Нужен доступ к уведомлениям для чтения трека и управления</string>
+    <string name="widget_music_open_access_settings">Открыть доступ</string>
+    <string name="media_player_yandex_music">Я.Музыка</string>
+    <string name="media_player_poweramp">Poweramp</string>
+    <string name="media_player_aimp">AIMP</string>
+    <string name="media_player_record_radio">RecordRadio</string>
+    <string name="media_player_jetaudio">jetAudio</string>
+    <string name="media_player_fmplay">FMPlay</string>
+    <string name="media_player_yandex_radio">Яндекс.Радио</string>
+    <string name="media_player_vkx">VKX</string>
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
     <string name="logs_filter_placeholder">Введите текст для поиска…</string>
@@ -232,6 +257,9 @@
     <string name="floating_dashboard_name_1">Панель 1</string>
     <string name="floating_dashboard_name_2">Панель 2</string>
     <string name="floating_dashboard_name_3">Панель 3</string>
+    <string name="floating_dashboard_name_4">Панель 4</string>
+    <string name="floating_dashboard_name_5">Панель 5</string>
+    <string name="floating_dashboard_name_6">Панель 6</string>
 
     <string name="seat_mode_off">выключено</string>
     <string name="seat_mode_heat_1">обогрев 1</string>

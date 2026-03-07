@@ -56,13 +56,38 @@
     <string name="widget_additional_settings_for_tile">Additional settings for tile %1$d</string>
     <string name="widget_show_title">Show title</string>
     <string name="widget_show_unit">Show unit</string>
+    <string name="widget_toggle_advanced">Advanced</string>
     <string name="widget_scale">Widget scale: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_text_color_light">Text color (light theme)</string>
     <string name="widget_text_color_dark">Text color (dark theme)</string>
+    <string name="widget_background_color_light">Background color (light theme)</string>
+    <string name="widget_background_color_dark">Background color (dark theme)</string>
     <string name="widget_color_value_label">Color value</string>
     <string name="widget_color_value_hint">Format: #AARRGGBB, #RRGGBB, 0xAARRGGBB or Int</string>
     <string name="widget_color_alpha">Alpha: %1$d%%</string>
+    <string name="widget_music_players">Players for music widget</string>
+    <string name="widget_music_players_hint">Select one or more players</string>
+    <string name="widget_music_players_required">Select at least one player</string>
+    <string name="widget_music_auto_play_on_init">Auto start playback</string>
+    <string name="widget_music_no_artist">Artist is unknown</string>
+    <string name="widget_music_no_track">Track is unknown</string>
+    <string name="widget_music_player_none">Player not found</string>
+    <string name="widget_music_player_with_state_off">%1$s (off)</string>
+    <string name="widget_music_player_icon">Player type</string>
+    <string name="widget_music_action_previous">Previous track</string>
+    <string name="widget_music_action_play_pause">Play or pause</string>
+    <string name="widget_music_action_next">Next track</string>
+    <string name="widget_music_access_required">Notification access is required for track data and controls</string>
+    <string name="widget_music_open_access_settings">Open access settings</string>
+    <string name="media_player_yandex_music">Yandex Music</string>
+    <string name="media_player_poweramp">Poweramp</string>
+    <string name="media_player_aimp">AIMP</string>
+    <string name="media_player_record_radio">RecordRadio</string>
+    <string name="media_player_jetaudio">jetAudio</string>
+    <string name="media_player_fmplay">FMPlay</string>
+    <string name="media_player_yandex_radio">Yandex Radio</string>
+    <string name="media_player_vkx">VKX</string>
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
     <string name="logs_filter_placeholder">Enter text to search…</string>
@@ -232,6 +257,9 @@
     <string name="floating_dashboard_name_1">Panel 1</string>
     <string name="floating_dashboard_name_2">Panel 2</string>
     <string name="floating_dashboard_name_3">Panel 3</string>
+    <string name="floating_dashboard_name_4">Panel 4</string>
+    <string name="floating_dashboard_name_5">Panel 5</string>
+    <string name="floating_dashboard_name_6">Panel 6</string>
 
     <string name="seat_mode_off">off</string>
     <string name="seat_mode_heat_1">heating 1</string>

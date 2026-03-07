@@ -1,18 +1,9 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -38,7 +29,7 @@ fun DashboardNetWidgetItem(
     viewModel: TboxViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false,
+    backgroundColor: Color? = null,
     scale: Float = 1f
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
@@ -174,26 +165,17 @@ fun DashboardNetWidgetItem(
         }
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        elevation = CardDefaults.cardElevation(elevation),
-        colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(shape)
-    ) {
+    DashboardWidgetScaffold(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        backgroundColor = backgroundColor
+    ) { _, _ ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    color = Color.Transparent,
-                    shape = RoundedCornerShape(shape)
-                )
+                .padding(0.dp)
         ) {
             // Отображаем иконку сигнала
             Image(

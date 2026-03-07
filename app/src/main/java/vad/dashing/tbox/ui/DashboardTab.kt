@@ -1,6 +1,7 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,12 +13,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -39,17 +42,31 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MainDashboardViewModel
+import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
+import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
+import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.DARK_THEME_TEXT_COLOR_PRESET_1_INT
+import vad.dashing.tbox.ui.theme.DARK_THEME_TEXT_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_1_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 
 @Composable
 fun MainDashboardTab(
@@ -75,10 +92,26 @@ fun MainDashboardTab(
     val widgetConfigs = remember(widgetsConfig, totalWidgets) {
         normalizeWidgetConfigs(widgetsConfig, totalWidgets)
     }
+    val mediaSourceId = remember { "main-dashboard" }
+    val requestedMediaPlayers = remember(widgetConfigs) {
+        collectMediaPlayersFromWidgetConfigs(widgetConfigs)
+    }
 
     LaunchedEffect(widgetConfigs, totalWidgets, context) {
         val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets, context)
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
+    }
+    LaunchedEffect(mediaSourceId, requestedMediaPlayers, context) {
+        SharedMediaControlService.updateSourceSelection(
+            context = context,
+            sourceId = mediaSourceId,
+            mediaPackages = requestedMediaPlayers
+        )
+    }
+    DisposableEffect(mediaSourceId) {
+        onDispose {
+            SharedMediaControlService.clearSourceSelection(mediaSourceId)
+        }
     }
 
     var restartEnabled by remember { mutableStateOf(true) }
@@ -129,159 +162,43 @@ fun MainDashboardTab(
                                 ?: FloatingDashboardWidgetConfig(dataKey = "")
                             val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
                             val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
+                            val widgetBackgroundColor = widget.resolveBackgroundColorForTheme(currentTheme)
 
                             Box(modifier = Modifier.weight(1f)) {
                                 CompositionLocalProvider(
                                     LocalWidgetTextScale provides widgetTextScale
                                 ) {
-                                    when (widget.dataKey) {
-                                        "netWidget" -> {
-                                            DashboardNetWidgetItem(
-                                                widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                viewModel = tboxViewModel,
-                                                scale = widgetConfig.scale
+                                    DashboardWidgetRenderer(
+                                        widget = widget,
+                                        widgetConfig = widgetConfig,
+                                        tboxViewModel = tboxViewModel,
+                                        canViewModel = canViewModel,
+                                        appDataViewModel = appDataViewModel,
+                                        dataProvider = dataProvider,
+                                        dashboardManager = dashboardViewModel.dashboardManager,
+                                        dashboardChart = dashboardChart,
+                                        tboxConnected = tboxConnected,
+                                        restartEnabled = restartEnabled,
+                                        widgetTextColor = widgetTextColor,
+                                        widgetBackgroundColor = widgetBackgroundColor,
+                                        onClick = {},
+                                        onLongClick = { showDialogForIndex = index },
+                                        onMusicSelectedPlayerChange = { selectedPackage ->
+                                            persistMainMediaWidgetSelectedPlayer(
+                                                settingsViewModel = settingsViewModel,
+                                                currentWidgetConfigs = widgetConfigs,
+                                                widgetIndex = index,
+                                                currentWidgetConfig = widgetConfig,
+                                                selectedPackage = selectedPackage
                                             )
+                                        },
+                                        onRestartRequested = {
+                                            if (restartEnabled) {
+                                                restartEnabled = false
+                                                onTboxRestartClick()
+                                            }
                                         }
-                                        "netWidgetNew" -> {
-                                            DashboardNetNewWidgetItem(
-                                                widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                viewModel = tboxViewModel,
-                                                color = widgetTextColor,
-                                                scale = widgetConfig.scale
-                                            )
-                                        }
-                                        "netWidgetColored" -> {
-                                            DashboardNetNewWidgetItem(
-                                                widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                viewModel = tboxViewModel,
-                                                scale = widgetConfig.scale
-                                            )
-                                        }
-                                        "locWidget" -> {
-                                            DashboardLocWidgetItem(
-                                                widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                viewModel = tboxViewModel,
-                                                textColor = widgetTextColor,
-                                                scale = widgetConfig.scale
-                                            )
-                                        }
-                                        "voltage+engineTemperatureWidget" -> {
-                                            DashboardVoltEngTempWidgetItem(
-                                                widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
-                                            )
-                                        }
-                                        "gearBoxWidget" -> {
-                                            DashboardGearBoxWidgetItem(
-                                                widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
-                                            )
-                                        }
-                                        "wheelsPressureWidget" -> {
-                                            DashboardWheelsPressureWidgetItem(
-                                                widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
-                                            )
-                                        }
-                                        "wheelsPressureTemperatureWidget" -> {
-                                            DashboardWheelsPressureTemperatureWidgetItem(
-                                                widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
-                                            )
-                                        }
-                                        "tempInOutWidget" -> {
-                                            DashboardTempInOutWidgetItem(
-                                                widget = widget,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                canViewModel = canViewModel,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
-                                            )
-                                        }
-                                        "motorHoursWidget" -> {
-                                            DashboardMotorHoursWidgetItem(
-                                                widget = widget,
-                                                dataProvider = dataProvider,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                onDoubleClick = {
-                                                    appDataViewModel.setMotorHours(0f)
-                                                },
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
-                                            )
-                                        }
-                                        "restartTbox" -> {
-                                            DashboardWidgetItem(
-                                                widget = widget,
-                                                dataProvider = dataProvider,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                onDoubleClick = {
-                                                    if (restartEnabled) {
-                                                        restartEnabled = false
-                                                        onTboxRestartClick()
-                                                    }
-                                                },
-                                                dashboardManager = dashboardViewModel.dashboardManager,
-                                                dashboardChart = false,
-                                                title = widgetConfig.showTitle,
-                                                units = widgetConfig.showUnit,
-                                                textColor = if (restartEnabled) {
-                                                    if (tboxConnected) {
-                                                        Color(0xD900A400)
-                                                    } else {
-                                                        Color(0xD9FF0000)
-                                                    }
-                                                } else {
-                                                    Color(0xD97E4C4C)
-                                                }
-                                            )
-                                        }
-                                        else -> {
-                                            DashboardWidgetItem(
-                                                widget = widget,
-                                                dataProvider = dataProvider,
-                                                onClick = { showDialogForIndex = index },
-                                                onLongClick = {},
-                                                onDoubleClick = {
-                                                    if (widget.dataKey == "motorHours") {
-                                                        appDataViewModel.setMotorHours(0f)
-                                                    }
-                                                },
-                                                dashboardManager = dashboardViewModel.dashboardManager,
-                                                dashboardChart = dashboardChart,
-                                                title = widgetConfig.showTitle,
-                                                units = widgetConfig.showUnit,
-                                                textColor = widgetTextColor
-                                            )
-                                        }
-                                    }
+                                    )
                                 }
                             }
                         }
@@ -313,34 +230,13 @@ fun WidgetSelectionDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var selectedDataKey by remember {
-        mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
-    }
-    val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
-        ?: FloatingDashboardWidgetConfig(dataKey = "")
-    var showTitle by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(initialConfig.showTitle)
-    }
-    var showUnit by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(initialConfig.showUnit)
-    }
-    var scale by remember(widgetIndex, currentWidgetConfigs) {
-        mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
-    }
-    var textColorLight by remember(widgetIndex, currentWidgetConfigs) {
-        mutableIntStateOf(initialConfig.textColorLight)
-    }
-    var textColorDark by remember(widgetIndex, currentWidgetConfigs) {
-        mutableIntStateOf(initialConfig.textColorDark)
-    }
-    val togglesEnabled = selectedDataKey.isNotEmpty()
-
-    val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
-            WidgetsRepository.getAvailableDataKeysWidgets()
-                .filter { it.isNotEmpty() }
-                .map { key ->
-                    key to WidgetsRepository.getTitleUnitForDataKey(context, key)
-                }
+    val state = rememberWidgetSelectionDialogState(
+        widgetIndex = widgetIndex,
+        currentWidgets = currentWidgets,
+        currentWidgetConfigs = currentWidgetConfigs,
+        defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN,
+        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -350,181 +246,60 @@ fun WidgetSelectionDialog(
             usePlatformDefaultWidth = false // Отключает стандартную ширину платформы
         ),
         text = {
-            Column(
+            WidgetSelectionDialogForm(
+                titleText = if (state.showAdvancedSettings) {
+                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                } else {
+                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
+                },
+                state = state,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp)
-            ) {
-                SettingsTitle(stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1))
-
-                // Список опций с прокруткой
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(10f)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(12.dp)
-                    ) {
-                        availableOptions.forEachIndexed { index, (key, displayName) ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedDataKey = key }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                androidx.compose.material3.RadioButton(
-                                    selected = selectedDataKey == key,
-                                    onClick = { selectedDataKey = key }
-                                )
-                                Text(
-                                    text = displayName,
-                                    fontSize = 24.sp,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .weight(1f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-
-                SettingsTitle(stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(8f)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(12.dp)
-                    ) {
-                        SettingSwitch(
-                            showTitle,
-                            { showTitle = it },
-                            stringResource(R.string.widget_show_title),
-                            "",
-                            togglesEnabled
-                        )
-                        SettingSwitch(
-                            showUnit,
-                            { showUnit = it },
-                            stringResource(R.string.widget_show_unit),
-                            "",
-                            togglesEnabled
-                        )
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.widget_scale, scale),
-                                fontSize = 24.sp
-                            )
-                            Text(
-                                text = stringResource(R.string.widget_scale_hint),
-                                fontSize = 20.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Slider(
-                                value = scale,
-                                onValueChange = { newValue ->
-                                    scale = normalizeWidgetScale(newValue)
-                                },
-                                valueRange = 0.1f..2.0f,
-                                steps = 18,
-                                enabled = togglesEnabled,
-                                modifier = Modifier
-                                    .padding(top = 6.dp)
-                            )
-                        }
-                        WidgetTextColorSetting(
-                            title = stringResource(R.string.widget_text_color_light),
-                            colorValue = textColorLight,
-                            enabled = togglesEnabled,
-                            onColorChange = { textColorLight = it }
-                        )
-                        WidgetTextColorSetting(
-                            title = stringResource(R.string.widget_text_color_dark),
-                            colorValue = textColorDark,
-                            enabled = togglesEnabled,
-                            onColorChange = { textColorDark = it }
-                        )
-                    }
-                }
-            }
+            )
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val normalizedScale = normalizeWidgetScale(scale)
-                    scale = normalizedScale
-                    val updatedWidgets = currentWidgets.toMutableList()
-                    val newWidget = if (selectedDataKey.isNotEmpty()) {
-                        DashboardWidget(
-                            id = currentWidgets[widgetIndex].id,
-                            title = WidgetsRepository.getTitleForDataKey(context, selectedDataKey),
-                            unit = WidgetsRepository.getUnitForDataKey(context, selectedDataKey),
-                            dataKey = selectedDataKey,
-                            textColorLight = textColorLight,
-                            textColorDark = textColorDark
-                        )
-                    } else {
-                        DashboardWidget(
-                            id = currentWidgets[widgetIndex].id,
-                            title = "",
-                            dataKey = "",
-                            textColorLight = textColorLight,
-                            textColorDark = textColorDark
-                        )
-                    }
-                    updatedWidgets[widgetIndex] = newWidget
-
-                    // Обновляем виджеты
-                    dashboardManager.updateWidgets(updatedWidgets)
-
-                    // Сохраняем конфигурацию
-                    val normalizedConfigs = normalizeWidgetConfigs(
-                        currentWidgetConfigs,
-                        updatedWidgets.size
-                    ).toMutableList()
-                    normalizedConfigs[widgetIndex] = if (selectedDataKey.isNotEmpty()) {
-                        FloatingDashboardWidgetConfig(
-                            dataKey = selectedDataKey,
-                            showTitle = showTitle,
-                            showUnit = showUnit,
-                            scale = normalizedScale,
-                            textColorLight = textColorLight,
-                            textColorDark = textColorDark
-                        )
-                    } else {
-                        FloatingDashboardWidgetConfig(dataKey = "")
-                    }
-                    settingsViewModel.saveDashboardWidgets(normalizedConfigs)
-
-                    // Очищаем историю
-                    dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
-
+            WidgetSelectionDialogActions(
+                state = state,
+                onDismiss = onDismiss,
+                onSave = {
+                    applyWidgetSelectionChanges(
+                        context = context,
+                        dashboardManager = dashboardManager,
+                        currentWidgets = currentWidgets,
+                        currentWidgetConfigs = currentWidgetConfigs,
+                        widgetIndex = widgetIndex,
+                        state = state,
+                        saveConfigs = settingsViewModel::saveDashboardWidgets
+                    )
                     onDismiss()
-                }
-            ) {
-                Text(text = stringResource(R.string.action_save), fontSize = 24.sp)
-            }
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
         },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text(text = stringResource(R.string.action_cancel), fontSize = 24.sp)
-            }
-        }
+        dismissButton = {}
     )
 }
+
+private fun persistMainMediaWidgetSelectedPlayer(
+    settingsViewModel: SettingsViewModel,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    widgetIndex: Int,
+    currentWidgetConfig: FloatingDashboardWidgetConfig,
+    selectedPackage: String
+) {
+    val normalizedConfigs = normalizeWidgetConfigs(
+        configs = currentWidgetConfigs,
+        widgetCount = currentWidgetConfigs.size
+    ).toMutableList()
+    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
+    if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
+    if (currentConfig.mediaSelectedPlayer == selectedPackage) return
+
+    normalizedConfigs[widgetIndex] = currentWidgetConfig.copy(
+        mediaSelectedPlayer = selectedPackage
+    )
+    settingsViewModel.saveDashboardWidgets(normalizedConfigs)
+}
+
 

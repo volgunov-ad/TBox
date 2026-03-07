@@ -3,6 +3,7 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,12 +58,17 @@ fun DashboardWidget.resolveTextColorForTheme(currentTheme: Int): Color {
     return Color(if (currentTheme == 2) textColorDark else textColorLight)
 }
 
+fun DashboardWidget.resolveBackgroundColorForTheme(currentTheme: Int): Color {
+    return Color(if (currentTheme == 2) backgroundColorDark else backgroundColorLight)
+}
+
 @Composable
 fun WidgetTextColorSetting(
     title: String,
     colorValue: Int,
     enabled: Boolean,
-    onColorChange: (Int) -> Unit
+    onColorChange: (Int) -> Unit,
+    presetColors: List<Int> = emptyList()
 ) {
     var localColorValue by remember { mutableIntStateOf(colorValue) }
     var hueSliderPosition by remember {
@@ -76,6 +82,7 @@ fun WidgetTextColorSetting(
     }
     var textValue by remember { mutableStateOf(localColorValue.asColorInputText()) }
     var isInputError by remember { mutableStateOf(false) }
+    val normalizedPresetColors = remember(presetColors) { presetColors.take(2) }
 
     LaunchedEffect(colorValue) {
         if (localColorValue != colorValue) {
@@ -109,6 +116,10 @@ fun WidgetTextColorSetting(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            ColorSwatchBox(colorValue = localColorValue, enabled = enabled, onClick = null)
+
+            Spacer(modifier = Modifier.size(12.dp))
+
             OutlinedTextField(
                 value = textValue,
                 textStyle = TextStyle(fontSize = 20.sp),
@@ -141,19 +152,32 @@ fun WidgetTextColorSetting(
                 }
             )
 
-            Spacer(modifier = Modifier.size(12.dp))
-
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(localColorValue))
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline,
-                        shape = RoundedCornerShape(8.dp)
+            if (normalizedPresetColors.isNotEmpty()) {
+                Spacer(modifier = Modifier.size(12.dp))
+                normalizedPresetColors.forEachIndexed { index, presetColor ->
+                    ColorSwatchBox(
+                        colorValue = presetColor,
+                        enabled = enabled,
+                        onClick = {
+                            isInputError = false
+                            textValue = presetColor.asColorInputText()
+                            if (presetColor != localColorValue) {
+                                localColorValue = presetColor
+                                hueSliderPosition = hueSliderFromColor(
+                                    presetColor,
+                                    hueSliderPosition
+                                )
+                                toneSliderPosition = toneSliderFromColor(presetColor)
+                                alphaChannel = colorAlpha(presetColor)
+                                onColorChange(presetColor)
+                            }
+                        }
                     )
-            )
+                    if (index < normalizedPresetColors.lastIndex) {
+                        Spacer(modifier = Modifier.size(8.dp))
+                    }
+                }
+            }
         }
 
         Text(
@@ -306,6 +330,31 @@ fun WidgetTextColorSetting(
             )
         }
     }
+}
+
+@Composable
+private fun ColorSwatchBox(
+    colorValue: Int,
+    enabled: Boolean,
+    onClick: (() -> Unit)?
+) {
+    val clickableModifier = if (onClick != null) {
+        Modifier.clickable(enabled = enabled, onClick = onClick)
+    } else {
+        Modifier
+    }
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(colorValue))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .then(clickableModifier)
+    )
 }
 
 private fun colorFromSliders(

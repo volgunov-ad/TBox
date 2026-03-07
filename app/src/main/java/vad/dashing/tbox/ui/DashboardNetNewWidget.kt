@@ -1,15 +1,9 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -35,7 +29,7 @@ fun DashboardNetNewWidgetItem(
     viewModel: TboxViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    backgroundTransparent: Boolean = false,
+    backgroundColor: Color? = null,
     color: Color? = null,
     scale: Float = 1f
 ) {
@@ -111,51 +105,36 @@ fun DashboardNetNewWidgetItem(
         imageColorNet = color
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        elevation = CardDefaults.cardElevation(elevation),
-        colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(shape)
-    ) {
+    DashboardWidgetScaffold(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        backgroundColor = backgroundColor
+    ) { _, _ ->
+        // Контейнер для наложенных изображений
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    color = Color.Transparent,
-                    shape = RoundedCornerShape(shape)
-                )
+                .padding(4.dp)
         ) {
-            // Контейнер для наложенных изображений
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(4.dp)
-            ) {
+            Image(
+                painter = painterResource(id = imageSignalRes),
+                contentDescription = netState.signalLevel.toString(),
+                contentScale = ContentScale.Fit,
+                colorFilter = imageColorSignal.let { ColorFilter.tint(it) },
+                modifier = Modifier.matchParentSize().scale(scale)
+            )
+            if (imageNetRes != null) {
                 Image(
-                    painter = painterResource(id = imageSignalRes),
+                    painter = painterResource(id = imageNetRes),
                     contentDescription = netState.signalLevel.toString(),
                     contentScale = ContentScale.Fit,
-                    colorFilter = imageColorSignal.let { ColorFilter.tint(it) },
-                    modifier = Modifier.matchParentSize().scale(scale)
+                    colorFilter = imageColorNet.let { ColorFilter.tint(it) },
+                    modifier = Modifier
+                        .matchParentSize()
+                        .scale(scale)
                 )
-                if (imageNetRes != null) {
-                    Image(
-                        painter = painterResource(id = imageNetRes),
-                        contentDescription = netState.signalLevel.toString(),
-                        contentScale = ContentScale.Fit,
-                        colorFilter = imageColorNet.let { ColorFilter.tint(it) },
-                        modifier = Modifier
-                            .matchParentSize()
-                            .scale(scale)
-                    )
-                }
             }
         }
     }
