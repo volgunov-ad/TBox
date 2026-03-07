@@ -59,6 +59,14 @@ import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
+import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
+import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.DARK_THEME_TEXT_COLOR_PRESET_1_INT
+import vad.dashing.tbox.ui.theme.DARK_THEME_TEXT_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_1_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 
 @Composable
 fun MainDashboardTab(
@@ -367,25 +375,41 @@ fun WidgetSelectionDialog(
                                 title = stringResource(R.string.widget_text_color_light),
                                 colorValue = textColorLight,
                                 enabled = togglesEnabled,
-                                onColorChange = { textColorLight = it }
+                                onColorChange = { textColorLight = it },
+                                presetColors = listOf(
+                                    LIGHT_THEME_TEXT_COLOR_PRESET_1_INT,
+                                    LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
+                                )
                             )
                             WidgetTextColorSetting(
                                 title = stringResource(R.string.widget_text_color_dark),
                                 colorValue = textColorDark,
                                 enabled = togglesEnabled,
-                                onColorChange = { textColorDark = it }
+                                onColorChange = { textColorDark = it },
+                                presetColors = listOf(
+                                    DARK_THEME_TEXT_COLOR_PRESET_1_INT,
+                                    DARK_THEME_TEXT_COLOR_PRESET_2_INT
+                                )
                             )
                             WidgetTextColorSetting(
                                 title = stringResource(R.string.widget_background_color_light),
                                 colorValue = backgroundColorLight,
                                 enabled = togglesEnabled,
-                                onColorChange = { backgroundColorLight = it }
+                                onColorChange = { backgroundColorLight = it },
+                                presetColors = listOf(
+                                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT,
+                                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+                                )
                             )
                             WidgetTextColorSetting(
                                 title = stringResource(R.string.widget_background_color_dark),
                                 colorValue = backgroundColorDark,
                                 enabled = togglesEnabled,
-                                onColorChange = { backgroundColorDark = it }
+                                onColorChange = { backgroundColorDark = it },
+                                presetColors = listOf(
+                                    DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT,
+                                    DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+                                )
                             )
                         }
                     } else {
