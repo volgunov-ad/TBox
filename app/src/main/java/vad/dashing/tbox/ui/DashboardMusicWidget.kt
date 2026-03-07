@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -426,20 +425,6 @@ internal fun resolveNextCarouselPackage(
 
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
 private const val AUTO_PLAY_VERIFY_DELAY_MS = 2500L
-
-internal fun isInResizeHandleArea(offset: Offset, width: Float, height: Float): Boolean {
-    val resizeOffsetX = when {
-        width <= 60f -> 30f
-        width <= 100f -> 50f
-        else -> 60f
-    }
-    val resizeOffsetY = when {
-        height <= 60f -> 30f
-        height <= 100f -> 50f
-        else -> 60f
-    }
-    return offset.x > width - resizeOffsetX && offset.y > height - resizeOffsetY
-}
 
 @Composable
 private fun MediaControlActionButton(

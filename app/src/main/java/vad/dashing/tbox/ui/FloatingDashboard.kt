@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -298,23 +297,11 @@ fun FloatingDashboard(
                         detectDragGestures(
                             onDragStart = { startOffset ->
                                 if (isEditMode && showDialogForIndex == null) { // Не позволяем перетаскивать при открытом диалоге
-                                    // Определяем, в какой области началось перетаскивание
-                                    val resizeOffsetX = if (size.width <= 60f) {
-                                        30f
-                                    } else if (size.width <= 100f) {
-                                        50f
-                                    } else {
-                                        60f
-                                    }
-                                    val resizeOffsetY = if (size.height <= 60f) {
-                                        30f
-                                    } else if (size.height <= 100f) {
-                                        50f
-                                    } else {
-                                        60f
-                                    }
-                                    val isNearBottomRight = startOffset.x > size.width - resizeOffsetX &&
-                                            startOffset.y > size.height - resizeOffsetY
+                                    val isNearBottomRight = isInResizeHandleArea(
+                                        offset = startOffset,
+                                        width = size.width.toFloat(),
+                                        height = size.height.toFloat()
+                                    )
 
                                     if (isNearBottomRight) {
                                         // Изменение размера (за правый нижний угол)
@@ -544,22 +531,24 @@ fun FloatingDashboard(
                         }
                     }
 
-                    // Индикатор для изменения размера (правый нижний угол)
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
+                    // Рамка зоны изменения размера (правый нижний угол)
+                    Canvas(
+                        modifier = Modifier.matchParentSize()
                     ) {
-                        Canvas(
-                            modifier = Modifier.size(16.dp)
-                        ) {
-                            drawLine(
-                                color = Color(0xFF00BCD4),
-                                start = androidx.compose.ui.geometry.Offset(0f, size.height),
-                                end = androidx.compose.ui.geometry.Offset(size.width, 0f),
-                                strokeWidth = 2.dp.toPx()
-                            )
-                        }
+                        val topLeft = resizeHandleAreaTopLeft(
+                            width = size.width,
+                            height = size.height
+                        )
+                        val handleSize = resizeHandleAreaSize(
+                            width = size.width,
+                            height = size.height
+                        )
+                        drawRect(
+                            color = Color(0xFF00BCD4),
+                            topLeft = topLeft,
+                            size = handleSize,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                        )
                     }
                 }
             }

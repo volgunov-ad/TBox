@@ -88,4 +88,11 @@ class DashboardMusicWidgetGestureLogicTest {
 
         assertEquals(false, result)
     }
+
+    @Test
+    fun resizeHandleOffsetForDimension_matchesLegacyThresholds() {
+        assertEquals(30f, resizeHandleOffsetForDimension(60f))
+        assertEquals(50f, resizeHandleOffsetForDimension(100f))
+        assertEquals(60f, resizeHandleOffsetForDimension(101f))
+    }
 }
