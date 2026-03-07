@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
@@ -123,11 +124,21 @@ fun DashboardMusicWidgetItem(
         if (autoPlayTriggered) return@LaunchedEffect
         if (selectedPackage.isBlank()) return@LaunchedEffect
         autoPlayTriggered = true
+        val autoPlayPackage = selectedPackage
         SharedMediaControlService.play(
             context = context,
             selectedPackages = selectedPlayers,
-            preferredPackage = selectedPackage
+            preferredPackage = autoPlayPackage
         )
+        delay(AUTO_PLAY_VERIFY_DELAY_MS)
+        val isPlaying = SharedMediaControlService.playerStates.value[autoPlayPackage]?.isPlaying == true
+        if (!isPlaying) {
+            SharedMediaControlService.play(
+                context = context,
+                selectedPackages = selectedPlayers,
+                preferredPackage = autoPlayPackage
+            )
+        }
     }
 
     DashboardWidgetScaffold(
@@ -387,6 +398,7 @@ internal fun resolveNextCarouselPackage(
 }
 
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
+private const val AUTO_PLAY_VERIFY_DELAY_MS = 2500L
 
 @Composable
 private fun MediaControlActionButton(
