@@ -543,7 +543,10 @@ class SettingsManager(private val context: Context) {
                 context.getString(R.string.floating_dashboard_name_1)
             ),
             createDefaultFloatingDashboard("floating-2", context.getString(R.string.floating_dashboard_name_2)),
-            createDefaultFloatingDashboard("floating-3", context.getString(R.string.floating_dashboard_name_3))
+            createDefaultFloatingDashboard("floating-3", context.getString(R.string.floating_dashboard_name_3)),
+            createDefaultFloatingDashboard("floating-4", context.getString(R.string.floating_dashboard_name_4)),
+            createDefaultFloatingDashboard("floating-5", context.getString(R.string.floating_dashboard_name_5)),
+            createDefaultFloatingDashboard("floating-6", context.getString(R.string.floating_dashboard_name_6))
         )
     }
 
