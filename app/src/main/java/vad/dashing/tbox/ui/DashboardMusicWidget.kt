@@ -4,9 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -230,12 +231,8 @@ fun DashboardMusicWidgetItem(
                         .fillMaxWidth()
                         .weight(1.5f)
                         .combinedClickable(
-                            enabled = true,
-                            onClick = {
-                                if (!enableInnerInteractions) {
-                                    onClick()
-                                }
-                            },
+                            enabled = enableInnerInteractions,
+                            onClick = {},
                             onLongClick = onLongClick,
                             onDoubleClick = {
                                 if (enableInnerInteractions) {
@@ -267,11 +264,9 @@ fun DashboardMusicWidgetItem(
                         .weight(1.5f)
                         .clip(RoundedCornerShape(8.dp))
                         .combinedClickable(
-                            enabled = true,
+                            enabled = enableInnerInteractions,
                             onClick = {
-                                if (!enableInnerInteractions) {
-                                    onClick()
-                                } else if (!mediaState.notificationAccessGranted) {
+                                if (!mediaState.notificationAccessGranted) {
                                     openNotificationListenerSettings(context)
                                 }
                             },
@@ -315,7 +310,6 @@ fun DashboardMusicWidgetItem(
                         actionEnabled = canSendSkip,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
-                        onDisabledClick = onClick,
                         onClick = {
                             SharedMediaControlService.skipToPrevious(
                                 selectedPackages = selectedPlayers,
@@ -333,7 +327,6 @@ fun DashboardMusicWidgetItem(
                         actionEnabled = canSendPlay,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
-                        onDisabledClick = onClick,
                         onClick = {
                             SharedMediaControlService.playPause(
                                 context = context,
@@ -352,7 +345,6 @@ fun DashboardMusicWidgetItem(
                         actionEnabled = canSendSkip,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
-                        onDisabledClick = onClick,
                         onClick = {
                             SharedMediaControlService.skipToNext(
                                 selectedPackages = selectedPlayers,
@@ -366,10 +358,20 @@ fun DashboardMusicWidgetItem(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .combinedClickable(
-                            onClick = onClick,
-                            onLongClick = onLongClick
-                        )
+                        .pointerInput(widget.id) {
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    if (!isInResizeHandleArea(offset, size.width.toFloat(), size.height.toFloat())) {
+                                        onClick()
+                                    }
+                                },
+                                onLongPress = { offset ->
+                                    if (!isInResizeHandleArea(offset, size.width.toFloat(), size.height.toFloat())) {
+                                        onLongClick()
+                                    }
+                                }
+                            )
+                        }
                 )
             }
         }
@@ -425,6 +427,20 @@ internal fun resolveNextCarouselPackage(
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
 private const val AUTO_PLAY_VERIFY_DELAY_MS = 2500L
 
+internal fun isInResizeHandleArea(offset: Offset, width: Float, height: Float): Boolean {
+    val resizeOffsetX = when {
+        width <= 60f -> 30f
+        width <= 100f -> 50f
+        else -> 60f
+    }
+    val resizeOffsetY = when {
+        height <= 60f -> 30f
+        height <= 100f -> 50f
+        else -> 60f
+    }
+    return offset.x > width - resizeOffsetX && offset.y > height - resizeOffsetY
+}
+
 @Composable
 private fun MediaControlActionButton(
     modifier: Modifier,
@@ -434,7 +450,6 @@ private fun MediaControlActionButton(
     actionEnabled: Boolean,
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
-    onDisabledClick: () -> Unit,
     onClick: () -> Unit
 ) {
     Box(
@@ -448,14 +463,10 @@ private fun MediaControlActionButton(
                 }
             )
             .combinedClickable(
-                enabled = true,
+                enabled = interactionEnabled,
                 onClick = {
-                    if (interactionEnabled) {
-                        if (actionEnabled) {
-                            onClick()
-                        }
-                    } else {
-                        onDisabledClick()
+                    if (actionEnabled) {
+                        onClick()
                     }
                 },
                 onLongClick = onLongClick

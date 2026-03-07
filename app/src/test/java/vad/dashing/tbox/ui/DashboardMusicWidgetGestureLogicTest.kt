@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import androidx.compose.ui.geometry.Offset
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 
 class DashboardMusicWidgetGestureLogicTest {
@@ -64,5 +65,27 @@ class DashboardMusicWidgetGestureLogicTest {
         )
 
         assertEquals("com.maxmpz.audioplayer", result)
+    }
+
+    @Test
+    fun isInResizeHandleArea_returnsTrueForBottomRightCorner() {
+        val result = isInResizeHandleArea(
+            offset = Offset(95f, 95f),
+            width = 100f,
+            height = 100f
+        )
+
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun isInResizeHandleArea_returnsFalseOutsideBottomRightCorner() {
+        val result = isInResizeHandleArea(
+            offset = Offset(40f, 40f),
+            width = 100f,
+            height = 100f
+        )
+
+        assertEquals(false, result)
     }
 }
