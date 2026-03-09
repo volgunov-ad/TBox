@@ -10,12 +10,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +56,7 @@ import kotlin.math.abs
 fun DashboardMusicWidgetItem(
     widget: DashboardWidget,
     widgetConfig: FloatingDashboardWidgetConfig,
+    title: Boolean = true,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onSelectedPlayerChange: (String) -> Unit = {},
@@ -116,6 +118,11 @@ fun DashboardMusicWidgetItem(
     val playPauseIcon = if (selectedPlayerState?.isPlaying == true) R.drawable.pause else R.drawable.play
     val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()
     val canSendSkip = mediaState.notificationAccessGranted && isSelectedPlayerRunning
+    val playbackProgress = calculatePlaybackProgress(
+        isPlaying = selectedPlayerState?.isPlaying == true,
+        durationMs = selectedPlayerState?.durationMs ?: mediaState.durationMs,
+        positionMs = selectedPlayerState?.positionMs ?: mediaState.positionMs
+    )
     var autoPlayTriggered by remember(widget.id) { mutableStateOf(false) }
 
     LaunchedEffect(widget.id, selectedPackage, widgetConfig.mediaAutoPlayOnInit) {
@@ -185,46 +192,49 @@ fun DashboardMusicWidgetItem(
                     .fillMaxSize()
                     .padding(6.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        painter = painterResource(id = selectedPlayer?.iconRes ?: R.drawable.player_unknown),
-                        contentDescription = stringResource(R.string.widget_music_player_icon),
-                        tint = Color.Unspecified,
+                if (title) {
+                    Row(
                         modifier = Modifier
-                            .size(24.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                    Text(
-                        text = playerLabel,
-                        color = resolvedTextColor,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.UNIT
-                        ) * 0.8f,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 8.dp)
-                    )
-                    if (carouselPackages.size > 1) {
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painter = painterResource(id = selectedPlayer?.iconRes ?: R.drawable.player_unknown),
+                            contentDescription = stringResource(R.string.widget_music_player_icon),
+                            tint = Color.Unspecified,
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(4.dp))
+                        )
                         Text(
-                            text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
+                            text = playerLabel,
                             color = resolvedTextColor,
                             fontSize = calculateResponsiveFontSize(
                                 containerHeight = availableHeight,
                                 textType = TextType.UNIT
-                            ) * 0.8f
+                            ) * 0.8f,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 8.dp)
                         )
+                        if (carouselPackages.size > 1) {
+                            Text(
+                                text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
+                                color = resolvedTextColor,
+                                fontSize = calculateResponsiveFontSize(
+                                    containerHeight = availableHeight,
+                                    textType = TextType.UNIT
+                                ) * 0.8f
+                            )
+                        }
                     }
                 }
 
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1.5f)
@@ -238,8 +248,19 @@ fun DashboardMusicWidgetItem(
                                 }
                             }
                         ),
-                    contentAlignment = Alignment.CenterStart
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (!title) {
+                        Icon(
+                            painter = painterResource(id = selectedPlayer?.iconRes ?: R.drawable.player_unknown),
+                            contentDescription = stringResource(R.string.widget_music_player_icon),
+                            tint = Color.Unspecified,
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(4.dp))
+                        )
+                    }
                     Text(
                         text = line2Text,
                         color = if (mediaState.notificationAccessGranted) {
@@ -251,9 +272,18 @@ fun DashboardMusicWidgetItem(
                             containerHeight = availableHeight,
                             textType = TextType.TITLE
                         ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.weight(1f)
                     )
+                    if (!title) {
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(1f)
+                        )
+                    }
                 }
 
                 Box(
@@ -276,7 +306,7 @@ fun DashboardMusicWidgetItem(
                             }
                         )
                         .padding(horizontal = 2.dp),
-                    contentAlignment = Alignment.CenterStart
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = line3Text,
@@ -287,14 +317,15 @@ fun DashboardMusicWidgetItem(
                             textType = TextType.TITLE
                         ),
                         maxLines = if (mediaState.notificationAccessGranted) 2 else 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(2.5f),
+                        .weight(2.2f),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -351,6 +382,19 @@ fun DashboardMusicWidgetItem(
                         }
                     )
                 }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(Color.Transparent)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(playbackProgress)
+                            .background(resolvedTextColor)
+                    )
+                }
             }
         }
     }
@@ -404,6 +448,16 @@ internal fun resolveNextCarouselPackage(
 
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
 private const val AUTO_PLAY_VERIFY_DELAY_MS = 2500L
+
+internal fun calculatePlaybackProgress(
+    isPlaying: Boolean,
+    durationMs: Long,
+    positionMs: Long
+): Float {
+    if (!isPlaying) return 0f
+    if (durationMs <= 0L || positionMs <= 0L) return 0f
+    return (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+}
 
 @Composable
 private fun MediaControlActionButton(

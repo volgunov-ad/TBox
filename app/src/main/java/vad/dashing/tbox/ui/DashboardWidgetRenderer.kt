@@ -162,6 +162,7 @@ fun DashboardWidgetRenderer(
             DashboardMusicWidgetItem(
                 widget = widget,
                 widgetConfig = widgetConfig,
+                title = widgetConfig.showTitle,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onSelectedPlayerChange = onMusicSelectedPlayerChange,

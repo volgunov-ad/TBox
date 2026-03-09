@@ -95,4 +95,32 @@ class DashboardMusicWidgetGestureLogicTest {
         assertEquals(50f, resizeHandleOffsetForDimension(100f))
         assertEquals(60f, resizeHandleOffsetForDimension(101f))
     }
+
+    @Test
+    fun calculatePlaybackProgress_returnsZeroWhenNotPlaying() {
+        val result = calculatePlaybackProgress(
+            isPlaying = false,
+            durationMs = 120000L,
+            positionMs = 45000L
+        )
+
+        assertEquals(0f, result)
+    }
+
+    @Test
+    fun calculatePlaybackProgress_returnsClampedProgress() {
+        val half = calculatePlaybackProgress(
+            isPlaying = true,
+            durationMs = 200000L,
+            positionMs = 100000L
+        )
+        val overflow = calculatePlaybackProgress(
+            isPlaying = true,
+            durationMs = 100000L,
+            positionMs = 200000L
+        )
+
+        assertEquals(0.5f, half)
+        assertEquals(1f, overflow)
+    }
 }

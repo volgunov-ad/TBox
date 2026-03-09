@@ -79,6 +79,8 @@ data class MediaPlayerState(
     val player: SupportedMediaPlayer,
     val artist: String = "",
     val track: String = "",
+    val durationMs: Long = 0L,
+    val positionMs: Long = 0L,
     val isPlaying: Boolean = false,
     val hasSession: Boolean = false
 )
@@ -87,6 +89,8 @@ data class MediaWidgetState(
     val player: SupportedMediaPlayer? = null,
     val artist: String = "",
     val track: String = "",
+    val durationMs: Long = 0L,
+    val positionMs: Long = 0L,
     val isPlaying: Boolean = false,
     val controlsAvailable: Boolean = false,
     val notificationAccessGranted: Boolean = false
@@ -231,6 +235,8 @@ object SharedMediaControlService {
             player = fallbackPlayer,
             artist = selectedState?.artist.orEmpty(),
             track = selectedState?.track.orEmpty(),
+            durationMs = selectedState?.durationMs ?: 0L,
+            positionMs = selectedState?.positionMs ?: 0L,
             isPlaying = selectedState?.isPlaying == true,
             controlsAvailable = selectedState?.hasSession == true,
             notificationAccessGranted = isNotificationAccessGranted()
@@ -516,13 +522,16 @@ object SharedMediaControlService {
             val player = SupportedMediaPlayer.fromPackage(packageName) ?: return@forEach
             val controller = controllers[packageName]
             val metadata = controller?.metadata
+            val playbackState = controller?.playbackState
             val track = metadata.extractTrackTitle()
             val artist = metadata.extractArtistName()
             updatedStates[packageName] = MediaPlayerState(
                 player = player,
                 artist = artist,
                 track = track,
-                isPlaying = controller?.playbackState.isPlayingState(),
+                durationMs = metadata.extractDurationMs(),
+                positionMs = playbackState.extractPositionMs(),
+                isPlaying = playbackState.isPlayingState(),
                 hasSession = controller != null
             )
         }
@@ -566,6 +575,17 @@ private fun MediaMetadata?.extractArtistName(): String {
     val artist = getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
     if (artist.isNotBlank()) return artist
     return getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
+}
+
+private fun MediaMetadata?.extractDurationMs(): Long {
+    if (this == null) return 0L
+    val duration = getLong(MediaMetadata.METADATA_KEY_DURATION)
+    return if (duration > 0L) duration else 0L
+}
+
+private fun PlaybackState?.extractPositionMs(): Long {
+    val position = this?.position ?: 0L
+    return if (position > 0L) position else 0L
 }
 
 private fun hasNotificationListenerAccess(
