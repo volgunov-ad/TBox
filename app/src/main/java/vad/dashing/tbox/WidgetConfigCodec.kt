@@ -9,11 +9,18 @@ private const val LEGACY_WIDGETS_SEPARATOR = "|"
 const val DEFAULT_WIDGET_SCALE = 1.0f
 private const val MIN_WIDGET_SCALE = 0.1f
 private const val MAX_WIDGET_SCALE = 2f
+const val DEFAULT_WIDGET_SHAPE = 0
+private const val MIN_WIDGET_SHAPE = 0
+private const val MAX_WIDGET_SHAPE = 30
 
 fun normalizeWidgetScale(rawScale: Float): Float {
     if (!rawScale.isFinite()) return DEFAULT_WIDGET_SCALE
     val normalized = rawScale.coerceIn(MIN_WIDGET_SCALE, MAX_WIDGET_SCALE)
     return (normalized * 10f).roundToInt() / 10f
+}
+
+fun normalizeWidgetShape(rawShape: Int): Int {
+    return rawShape.coerceIn(MIN_WIDGET_SHAPE, MAX_WIDGET_SHAPE)
 }
 
 fun parseWidgetConfigsFromAny(rawValue: Any?): List<FloatingDashboardWidgetConfig> {
@@ -51,6 +58,7 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("showTitle", config.showTitle)
         obj.put("showUnit", config.showUnit)
         obj.put("scale", normalizeWidgetScale(config.scale))
+        obj.put("shape", normalizeWidgetShape(config.shape))
         obj.put("textColorLight", config.textColorLight)
         obj.put("textColorDark", config.textColorDark)
         config.backgroundColorLight?.let { obj.put("backgroundColorLight", it) }
@@ -140,6 +148,9 @@ private fun parseWidgetConfigsFromJsonArray(
                         showUnit = item.optBoolean("showUnit", true),
                         scale = normalizeWidgetScale(
                             item.optDouble("scale", DEFAULT_WIDGET_SCALE.toDouble()).toFloat()
+                        ),
+                        shape = normalizeWidgetShape(
+                            item.optInt("shape", DEFAULT_WIDGET_SHAPE)
                         ),
                         textColorLight = item.optInt(
                             "textColorLight",

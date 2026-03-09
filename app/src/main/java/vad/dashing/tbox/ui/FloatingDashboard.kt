@@ -456,7 +456,7 @@ fun FloatingDashboard(
                                                     }
                                                 },
                                                 elevation = 0.dp,
-                                                shape = 0.dp,
+                                                shape = widgetConfig.shape.dp,
                                                 enableMusicInnerInteractions = !isEditMode
                                             )
                                         }

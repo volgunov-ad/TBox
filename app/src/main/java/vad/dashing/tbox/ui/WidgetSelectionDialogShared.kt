@@ -41,6 +41,7 @@ import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
@@ -62,6 +63,7 @@ internal class WidgetSelectionDialogState(
     var showTitle by mutableStateOf(initialConfig.showTitle)
     var showUnit by mutableStateOf(initialConfig.showUnit)
     var scale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
+    var shape by mutableIntStateOf(normalizeWidgetShape(initialConfig.shape))
     var textColorLight by mutableIntStateOf(initialConfig.textColorLight)
     var textColorDark by mutableIntStateOf(initialConfig.textColorDark)
     var backgroundColorLight by mutableIntStateOf(
@@ -205,6 +207,32 @@ internal fun WidgetSelectionDialogForm(
                             },
                             valueRange = 0.1f..2.0f,
                             steps = 18,
+                            enabled = state.togglesEnabled,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.widget_shape, state.shape),
+                            fontSize = 24.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.widget_shape_hint),
+                            fontSize = 20.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = state.shape.toFloat(),
+                            onValueChange = { newValue ->
+                                state.shape = normalizeWidgetShape(newValue.toInt())
+                            },
+                            valueRange = 0f..30f,
+                            steps = 29,
                             enabled = state.togglesEnabled,
                             modifier = Modifier.padding(top = 6.dp)
                         )
@@ -354,7 +382,9 @@ internal fun applyWidgetSelectionChanges(
     saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit
 ) {
     val normalizedScale = normalizeWidgetScale(state.scale)
+    val normalizedShape = normalizeWidgetShape(state.shape)
     state.scale = normalizedScale
+    state.shape = normalizedShape
     val currentWidget = currentWidgets[widgetIndex]
     val updatedWidgets = currentWidgets.toMutableList()
     val newWidget = if (state.selectedDataKey.isNotEmpty()) {
@@ -392,6 +422,7 @@ internal fun applyWidgetSelectionChanges(
             showTitle = state.showTitle,
             showUnit = state.showUnit,
             scale = normalizedScale,
+            shape = normalizedShape,
             textColorLight = state.textColorLight,
             textColorDark = state.textColorDark,
             backgroundColorLight = state.backgroundColorLight,

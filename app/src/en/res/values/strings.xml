@@ -59,6 +59,8 @@
     <string name="widget_toggle_advanced">Advanced</string>
     <string name="widget_scale">Widget scale: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
+    <string name="widget_shape">Corner rounding: %1$d</string>
+    <string name="widget_shape_hint" formatted="false">0..30</string>
     <string name="widget_text_color_light">Text color (light theme)</string>
     <string name="widget_text_color_dark">Text color (dark theme)</string>
     <string name="widget_background_color_light">Background color (light theme)</string>
