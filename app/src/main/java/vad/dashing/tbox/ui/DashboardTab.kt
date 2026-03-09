@@ -89,17 +89,8 @@ fun MainDashboardTab(
 
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
     val totalWidgets = dashboardRows * dashboardCols
-    val storedWidgetConfigs = remember(widgetsConfig, totalWidgets) {
+    val widgetConfigs = remember(widgetsConfig, totalWidgets) {
         normalizeWidgetConfigs(widgetsConfig, totalWidgets)
-    }
-    var widgetConfigsOverride by remember(totalWidgets) {
-        mutableStateOf<List<FloatingDashboardWidgetConfig>?>(null)
-    }
-    val widgetConfigs = widgetConfigsOverride ?: storedWidgetConfigs
-    LaunchedEffect(storedWidgetConfigs) {
-        if (widgetConfigsOverride == storedWidgetConfigs) {
-            widgetConfigsOverride = null
-        }
     }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
@@ -193,15 +184,12 @@ fun MainDashboardTab(
                                         onClick = {},
                                         onLongClick = { showDialogForIndex = index },
                                         onMusicSelectedPlayerChange = { selectedPackage ->
-                                            val updatedConfigs = persistMainMediaWidgetSelectedPlayer(
+                                            persistMainMediaWidgetSelectedPlayer(
                                                 settingsViewModel = settingsViewModel,
                                                 currentWidgetConfigs = widgetConfigs,
                                                 widgetIndex = index,
                                                 selectedPackage = selectedPackage
                                             )
-                                            if (updatedConfigs != null) {
-                                                widgetConfigsOverride = updatedConfigs
-                                            }
                                         },
                                         onRestartRequested = {
                                             if (restartEnabled) {
@@ -225,10 +213,7 @@ fun MainDashboardTab(
                 widgetIndex = index,
                 currentWidgets = dashboardState.widgets,
                 currentWidgetConfigs = widgetConfigs,
-                onDismiss = { showDialogForIndex = null },
-                onConfigsSaved = { savedConfigs ->
-                    widgetConfigsOverride = normalizeWidgetConfigs(savedConfigs, totalWidgets)
-                }
+                onDismiss = { showDialogForIndex = null }
             )
         }
     }
@@ -241,8 +226,7 @@ fun WidgetSelectionDialog(
     widgetIndex: Int,
     currentWidgets: List<DashboardWidget>,
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
-    onDismiss: () -> Unit,
-    onConfigsSaved: (List<FloatingDashboardWidgetConfig>) -> Unit = {}
+    onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val state = rememberWidgetSelectionDialogState(
@@ -278,7 +262,7 @@ fun WidgetSelectionDialog(
                 state = state,
                 onDismiss = onDismiss,
                 onSave = {
-                    val savedConfigs = applyWidgetSelectionChanges(
+                    applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,
                         currentWidgets = currentWidgets,
@@ -287,7 +271,6 @@ fun WidgetSelectionDialog(
                         state = state,
                         saveConfigs = settingsViewModel::saveDashboardWidgets
                     )
-                    onConfigsSaved(savedConfigs)
                     onDismiss()
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -302,20 +285,19 @@ private fun persistMainMediaWidgetSelectedPlayer(
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     widgetIndex: Int,
     selectedPackage: String
-): List<FloatingDashboardWidgetConfig>? {
+) {
     val normalizedConfigs = normalizeWidgetConfigs(
         configs = currentWidgetConfigs,
         widgetCount = currentWidgetConfigs.size
     ).toMutableList()
-    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return null
-    if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return null
-    if (currentConfig.mediaSelectedPlayer == selectedPackage) return null
+    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
+    if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
+    if (currentConfig.mediaSelectedPlayer == selectedPackage) return
 
     normalizedConfigs[widgetIndex] = currentConfig.copy(
         mediaSelectedPlayer = selectedPackage
     )
     settingsViewModel.saveDashboardWidgets(normalizedConfigs)
-    return normalizedConfigs
 }
 
 
