@@ -352,7 +352,7 @@ internal fun applyWidgetSelectionChanges(
     widgetIndex: Int,
     state: WidgetSelectionDialogState,
     saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit
-) {
+): List<FloatingDashboardWidgetConfig> {
     val normalizedScale = normalizeWidgetScale(state.scale)
     state.scale = normalizedScale
     val currentWidget = currentWidgets[widgetIndex]
@@ -420,6 +420,7 @@ internal fun applyWidgetSelectionChanges(
     }
     saveConfigs(normalizedConfigs)
     dashboardManager.clearWidgetHistory(currentWidget.id)
+    return normalizedConfigs
 }
 
 internal fun resolveStoredMediaSelectedPlayer(
