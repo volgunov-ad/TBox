@@ -446,7 +446,6 @@ fun FloatingDashboard(
                                                         panelId = panelId,
                                                         currentWidgetConfigs = widgetConfigs,
                                                         widgetIndex = index,
-                                                        currentWidgetConfig = widgetConfig,
                                                         selectedPackage = selectedPackage
                                                     )
                                                 },
@@ -637,7 +636,6 @@ private fun persistFloatingMediaWidgetSelectedPlayer(
     panelId: String,
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     widgetIndex: Int,
-    currentWidgetConfig: FloatingDashboardWidgetConfig,
     selectedPackage: String
 ) {
     val normalizedConfigs = normalizeWidgetConfigs(
@@ -648,7 +646,7 @@ private fun persistFloatingMediaWidgetSelectedPlayer(
     if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
     if (currentConfig.mediaSelectedPlayer == selectedPackage) return
 
-    normalizedConfigs[widgetIndex] = currentWidgetConfig.copy(
+    normalizedConfigs[widgetIndex] = currentConfig.copy(
         mediaSelectedPlayer = selectedPackage
     )
     settingsViewModel.saveFloatingDashboardWidgets(panelId, normalizedConfigs)

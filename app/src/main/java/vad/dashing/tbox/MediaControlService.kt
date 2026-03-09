@@ -7,6 +7,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.provider.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,6 +82,8 @@ data class MediaPlayerState(
     val track: String = "",
     val durationMs: Long = 0L,
     val positionMs: Long = 0L,
+    val playbackSpeed: Float = 1f,
+    val positionUpdateTimeMs: Long = 0L,
     val isPlaying: Boolean = false,
     val hasSession: Boolean = false
 )
@@ -91,6 +94,8 @@ data class MediaWidgetState(
     val track: String = "",
     val durationMs: Long = 0L,
     val positionMs: Long = 0L,
+    val playbackSpeed: Float = 1f,
+    val positionUpdateTimeMs: Long = 0L,
     val isPlaying: Boolean = false,
     val controlsAvailable: Boolean = false,
     val notificationAccessGranted: Boolean = false
@@ -237,6 +242,8 @@ object SharedMediaControlService {
             track = selectedState?.track.orEmpty(),
             durationMs = selectedState?.durationMs ?: 0L,
             positionMs = selectedState?.positionMs ?: 0L,
+            playbackSpeed = selectedState?.playbackSpeed ?: 1f,
+            positionUpdateTimeMs = selectedState?.positionUpdateTimeMs ?: 0L,
             isPlaying = selectedState?.isPlaying == true,
             controlsAvailable = selectedState?.hasSession == true,
             notificationAccessGranted = isNotificationAccessGranted()
@@ -531,6 +538,8 @@ object SharedMediaControlService {
                 track = track,
                 durationMs = metadata.extractDurationMs(),
                 positionMs = playbackState.extractPositionMs(),
+                playbackSpeed = playbackState.extractPlaybackSpeed(),
+                positionUpdateTimeMs = playbackState.extractPositionUpdateTimeMs(),
                 isPlaying = playbackState.isPlayingState(),
                 hasSession = controller != null
             )
@@ -586,6 +595,16 @@ private fun MediaMetadata?.extractDurationMs(): Long {
 private fun PlaybackState?.extractPositionMs(): Long {
     val position = this?.position ?: 0L
     return if (position > 0L) position else 0L
+}
+
+private fun PlaybackState?.extractPlaybackSpeed(): Float {
+    return this?.playbackSpeed?.takeIf { it > 0f } ?: 1f
+}
+
+private fun PlaybackState?.extractPositionUpdateTimeMs(): Long {
+    val updateTime = this?.lastPositionUpdateTime ?: 0L
+    if (updateTime > 0L) return updateTime
+    return SystemClock.elapsedRealtime()
 }
 
 private fun hasNotificationListenerAccess(

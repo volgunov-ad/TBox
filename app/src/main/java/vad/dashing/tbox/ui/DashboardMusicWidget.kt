@@ -3,6 +3,7 @@ package vad.dashing.tbox.ui
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -118,11 +119,35 @@ fun DashboardMusicWidgetItem(
     val playPauseIcon = if (selectedPlayerState?.isPlaying == true) R.drawable.pause else R.drawable.play
     val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()
     val canSendSkip = mediaState.notificationAccessGranted && isSelectedPlayerRunning
-    val playbackProgress = calculatePlaybackProgress(
-        isPlaying = selectedPlayerState?.isPlaying == true,
-        durationMs = selectedPlayerState?.durationMs ?: mediaState.durationMs,
-        positionMs = selectedPlayerState?.positionMs ?: mediaState.positionMs
-    )
+    val isPlaying = selectedPlayerState?.isPlaying ?: mediaState.isPlaying
+    val durationMs = selectedPlayerState?.durationMs ?: mediaState.durationMs
+    val positionMs = selectedPlayerState?.positionMs ?: mediaState.positionMs
+    val playbackSpeed = selectedPlayerState?.playbackSpeed ?: mediaState.playbackSpeed
+    val positionUpdateTimeMs =
+        selectedPlayerState?.positionUpdateTimeMs ?: mediaState.positionUpdateTimeMs
+    var progressTick by remember(widget.id, selectedPackage) { mutableStateOf(0L) }
+    val playbackProgress = remember(
+        isPlaying,
+        durationMs,
+        positionMs,
+        playbackSpeed,
+        positionUpdateTimeMs,
+        progressTick
+    ) {
+        val estimatedPositionMs = estimatePlaybackPositionMs(
+            isPlaying = isPlaying,
+            durationMs = durationMs,
+            positionMs = positionMs,
+            playbackSpeed = playbackSpeed,
+            positionUpdateTimeMs = positionUpdateTimeMs,
+            nowElapsedRealtimeMs = SystemClock.elapsedRealtime()
+        )
+        calculatePlaybackProgress(
+            isPlaying = isPlaying,
+            durationMs = durationMs,
+            positionMs = estimatedPositionMs
+        )
+    }
     var autoPlayTriggered by remember(widget.id) { mutableStateOf(false) }
 
     LaunchedEffect(widget.id, selectedPackage, widgetConfig.mediaAutoPlayOnInit) {
@@ -144,6 +169,15 @@ fun DashboardMusicWidgetItem(
                 selectedPackages = selectedPlayers,
                 preferredPackage = autoPlayPackage
             )
+        }
+    }
+
+    LaunchedEffect(widget.id, selectedPackage, isPlaying, durationMs) {
+        progressTick = 0L
+        if (!isPlaying || durationMs <= 0L) return@LaunchedEffect
+        while (true) {
+            delay(PROGRESS_REFRESH_INTERVAL_MS)
+            progressTick += 1L
         }
     }
 
@@ -448,6 +482,28 @@ internal fun resolveNextCarouselPackage(
 
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
 private const val AUTO_PLAY_VERIFY_DELAY_MS = 2500L
+private const val PROGRESS_REFRESH_INTERVAL_MS = 5000L
+
+internal fun estimatePlaybackPositionMs(
+    isPlaying: Boolean,
+    durationMs: Long,
+    positionMs: Long,
+    playbackSpeed: Float,
+    positionUpdateTimeMs: Long,
+    nowElapsedRealtimeMs: Long
+): Long {
+    val basePositionMs = positionMs.coerceAtLeast(0L)
+    if (!isPlaying) return basePositionMs
+    if (durationMs <= 0L || basePositionMs <= 0L) return 0L
+    val safeUpdateTimeMs = if (positionUpdateTimeMs > 0L) {
+        positionUpdateTimeMs
+    } else {
+        nowElapsedRealtimeMs
+    }
+    val elapsedSinceUpdateMs = (nowElapsedRealtimeMs - safeUpdateTimeMs).coerceAtLeast(0L)
+    val predictedPositionMs = basePositionMs + (elapsedSinceUpdateMs * playbackSpeed.coerceAtLeast(0f)).toLong()
+    return predictedPositionMs.coerceIn(0L, durationMs)
+}
 
 internal fun calculatePlaybackProgress(
     isPlaying: Boolean,

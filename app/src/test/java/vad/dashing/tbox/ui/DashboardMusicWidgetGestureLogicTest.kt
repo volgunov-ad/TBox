@@ -123,4 +123,46 @@ class DashboardMusicWidgetGestureLogicTest {
         assertEquals(0.5f, half)
         assertEquals(1f, overflow)
     }
+
+    @Test
+    fun estimatePlaybackPositionMs_keepsStaticPositionWhenNotPlaying() {
+        val result = estimatePlaybackPositionMs(
+            isPlaying = false,
+            durationMs = 180000L,
+            positionMs = 40000L,
+            playbackSpeed = 1f,
+            positionUpdateTimeMs = 1000L,
+            nowElapsedRealtimeMs = 16000L
+        )
+
+        assertEquals(40000L, result)
+    }
+
+    @Test
+    fun estimatePlaybackPositionMs_advancesByElapsedTimeWhenPlaying() {
+        val result = estimatePlaybackPositionMs(
+            isPlaying = true,
+            durationMs = 180000L,
+            positionMs = 40000L,
+            playbackSpeed = 1f,
+            positionUpdateTimeMs = 1000L,
+            nowElapsedRealtimeMs = 6000L
+        )
+
+        assertEquals(45000L, result)
+    }
+
+    @Test
+    fun estimatePlaybackPositionMs_clampsToDuration() {
+        val result = estimatePlaybackPositionMs(
+            isPlaying = true,
+            durationMs = 50000L,
+            positionMs = 49000L,
+            playbackSpeed = 1f,
+            positionUpdateTimeMs = 1000L,
+            nowElapsedRealtimeMs = 6000L
+        )
+
+        assertEquals(50000L, result)
+    }
 }
