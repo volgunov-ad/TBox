@@ -15,6 +15,7 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.seatModeToString
+import vad.dashing.tbox.utils.FUEL_TANK_LITERS
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -76,6 +77,9 @@ class TboxDataProvider(
         "breakingForce" -> canViewModel.breakingForce.mapState { valueToString(it) }
         "fuelLevelPercentage" -> canViewModel.fuelLevelPercentage.mapState { valueToString(it) }
         "fuelLevelPercentageFiltered" -> canViewModel.fuelLevelPercentageFiltered.mapState { valueToString(it) }
+        "fuelLevelLiters" -> canViewModel.fuelLevelPercentageFiltered.mapState { valueToString(
+            it?.toFloat() ?: (0f * FUEL_TANK_LITERS.toFloat() / 100f)
+        ) }
         "currentFuelConsumption" -> canViewModel.currentFuelConsumption.mapState { valueToString(it, 1) }
         "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, 1) }
         "gearBoxOilTemperature" -> canViewModel.gearBoxOilTemperature.mapState { valueToString(it) }

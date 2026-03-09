@@ -30,6 +30,7 @@
     <string name="unit_rpm">rpm</string>
     <string name="unit_km">km</string>
     <string name="unit_percent" formatted="false">%</string>
+    <string name="unit_liter">l</string>
     <string name="unit_meter">m</string>
     <string name="unit_bar_celsius">bar / °C</string>
     <string name="title_with_unit">%1$s, %2$s</string>
@@ -311,6 +312,7 @@
     <string name="data_title_distance_to_next_maintenance">Distance to next service</string>
     <string name="data_title_distance_to_fuel_empty">Distance to empty</string>
     <string name="data_title_fuel_level_percentage">Fuel level</string>
+    <string name="data_title_fuel_level_liters">Fuel level in liters</string>
     <string name="data_title_fuel_level_percentage_filtered">Fuel level (filtered)</string>
     <string name="currentFuelConsumption">Instantaneous fuel consumption</string>
     <string name="data_title_breaking_force">Braking force</string>
