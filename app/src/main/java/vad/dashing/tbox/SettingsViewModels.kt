@@ -3,7 +3,6 @@ package vad.dashing.tbox
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -36,8 +35,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     private val defaultFloatingDashboards = settingsManager.getDefaultFloatingDashboards()
     private val floatingDashboardConfigStates =
         mutableMapOf<String, StateFlow<FloatingDashboardConfig>>()
-    private val pendingDashboardWidgets =
-        MutableStateFlow<List<FloatingDashboardWidgetConfig>?>(null)
 
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
         .stateIn(
@@ -361,12 +358,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = null
         )
 
-    val dashboardWidgetsConfig = combine(
-        settingsManager.dashboardWidgetsFlow,
-        pendingDashboardWidgets
-    ) { storedConfig, pendingConfig ->
-        pendingConfig ?: storedConfig
-    }
+    val dashboardWidgetsConfig = settingsManager.dashboardWidgetsFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -744,12 +736,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
-        pendingDashboardWidgets.value = config
         viewModelScope.launch {
             settingsManager.saveDashboardWidgets(config)
-            if (pendingDashboardWidgets.value == config) {
-                pendingDashboardWidgets.value = null
-            }
         }
     }
 
