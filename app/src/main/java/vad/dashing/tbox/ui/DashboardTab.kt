@@ -48,7 +48,6 @@ import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MainDashboardViewModel
-import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
@@ -184,10 +183,9 @@ fun MainDashboardTab(
                                         onClick = {},
                                         onLongClick = { showDialogForIndex = index },
                                         onMusicSelectedPlayerChange = { selectedPackage ->
-                                            persistMainMediaWidgetSelectedPlayer(
-                                                settingsViewModel = settingsViewModel,
-                                                currentWidgetConfigs = widgetConfigs,
+                                            settingsViewModel.saveDashboardMediaSelectedPlayer(
                                                 widgetIndex = index,
+                                                widgetCount = totalWidgets,
                                                 selectedPackage = selectedPackage
                                             )
                                         },
@@ -279,25 +277,4 @@ fun WidgetSelectionDialog(
         dismissButton = {}
     )
 }
-
-private fun persistMainMediaWidgetSelectedPlayer(
-    settingsViewModel: SettingsViewModel,
-    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
-    widgetIndex: Int,
-    selectedPackage: String
-) {
-    val normalizedConfigs = normalizeWidgetConfigs(
-        configs = currentWidgetConfigs,
-        widgetCount = currentWidgetConfigs.size
-    ).toMutableList()
-    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
-    if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
-    if (currentConfig.mediaSelectedPlayer == selectedPackage) return
-
-    normalizedConfigs[widgetIndex] = currentConfig.copy(
-        mediaSelectedPlayer = selectedPackage
-    )
-    settingsViewModel.saveDashboardWidgets(normalizedConfigs)
-}
-
 

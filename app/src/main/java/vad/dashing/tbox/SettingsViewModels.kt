@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -35,6 +36,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     private val defaultFloatingDashboards = settingsManager.getDefaultFloatingDashboards()
     private val floatingDashboardConfigStates =
         mutableMapOf<String, StateFlow<FloatingDashboardConfig>>()
+    private var latestDashboardWidgetsConfig: List<FloatingDashboardWidgetConfig> = emptyList()
 
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
         .stateIn(
@@ -412,6 +414,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 settingsManager.saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, resolvedId)
             }
         }
+        viewModelScope.launch {
+            settingsManager.dashboardWidgetsFlow.collect { configs ->
+                latestDashboardWidgetsConfig = configs
+            }
+        }
     }
 
     fun floatingDashboardConfig(panelId: String): StateFlow<FloatingDashboardConfig> {
@@ -736,9 +743,29 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
+        latestDashboardWidgetsConfig = config
         viewModelScope.launch {
             settingsManager.saveDashboardWidgets(config)
         }
+    }
+
+    fun saveDashboardMediaSelectedPlayer(
+        widgetIndex: Int,
+        widgetCount: Int,
+        selectedPackage: String
+    ) {
+        val normalizedConfigs = normalizeWidgetConfigs(
+            configs = latestDashboardWidgetsConfig,
+            widgetCount = widgetCount
+        ).toMutableList()
+        val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
+        if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
+        if (currentConfig.mediaSelectedPlayer == selectedPackage) return
+
+        normalizedConfigs[widgetIndex] = currentConfig.copy(
+            mediaSelectedPlayer = selectedPackage
+        )
+        saveDashboardWidgets(normalizedConfigs)
     }
 
     fun saveDashboardRows(config: Int) {
