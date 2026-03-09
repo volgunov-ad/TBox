@@ -78,7 +78,7 @@ class TboxDataProvider(
         "fuelLevelPercentage" -> canViewModel.fuelLevelPercentage.mapState { valueToString(it) }
         "fuelLevelPercentageFiltered" -> canViewModel.fuelLevelPercentageFiltered.mapState { valueToString(it) }
         "fuelLevelLiters" -> canViewModel.fuelLevelPercentageFiltered.mapState { valueToString(
-            it?.toFloat() ?: (0f * FUEL_TANK_LITERS.toFloat() / 100f)
+            (it?.toFloat()?.times(FUEL_TANK_LITERS.toFloat())?.div(100f)), 1
         ) }
         "currentFuelConsumption" -> canViewModel.currentFuelConsumption.mapState { valueToString(it, 1) }
         "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, 1) }
