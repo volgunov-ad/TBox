@@ -92,6 +92,7 @@ class BackgroundService : Service() {
     private var getSMSJob: Job? = null
     @Volatile
     private var backgroundPollingPauseUntilMs: Long = 0L
+    private var packetSilenceChecks: Int = 0
 
     private var netUpdateTime: Long = 5000
     private var apnUpdateTime: Long = 10000
@@ -791,13 +792,22 @@ class BackgroundService : Service() {
                 var tboxMdcCheckTime = System.currentTimeMillis()
                 val periodicTasksReadyAt = System.currentTimeMillis() + 15000
                 while (isActive) {
-                    if (TboxRepository.tboxConnected.value &&
-                        System.currentTimeMillis() - lastPacketAtMs > netUpdateTime * 2
-                    ) {
-                        onTboxConnected(false)
+                    val now = System.currentTimeMillis()
+                    if (TboxRepository.tboxConnected.value && !isBackgroundPollingPaused()) {
+                        if (now - lastPacketAtMs > netUpdateTime * 2) {
+                            packetSilenceChecks += 1
+                            if (packetSilenceChecks >= 3) {
+                                onTboxConnected(false)
+                                packetSilenceChecks = 0
+                            }
+                        } else {
+                            packetSilenceChecks = 0
+                        }
+                    } else {
+                        packetSilenceChecks = 0
                     }
 
-                    if (System.currentTimeMillis() < periodicTasksReadyAt) {
+                    if (now < periodicTasksReadyAt) {
                         delay(1000)
                         continue
                     }
@@ -2532,6 +2542,7 @@ class BackgroundService : Service() {
 
     private fun onTboxConnected(value: Boolean = false) {
         if (value) {
+            packetSilenceChecks = 0
             TboxRepository.addLog("INFO", "UDP Listener", "TBox connected")
             TboxRepository.updateTboxConnected(true)
 
@@ -2596,6 +2607,7 @@ class BackgroundService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         else {
+            packetSilenceChecks = 0
             TboxRepository.addLog("WARN", "UDP Listener", "TBox disconnected")
             TboxRepository.resetConnectionData()
             val notification = createNotification("TBox disconnected")
