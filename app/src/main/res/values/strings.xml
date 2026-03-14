@@ -197,7 +197,6 @@
     <string name="settings_expert_mode_title">Экспертный режим</string>
     <string name="settings_expert_mode_warning_desc">Все изменения в экспертном режиме вы делаете на свой страх и риск.\nНо к необратимым последствиям ваши действия в этом режиме привести не могут</string>
     <string name="settings_can_frames_count_title">Количество сохраняемых CAN фреймов (1…3600)</string>
-    <string name="settings_search_other_ip_title">Искать другие IP адреса TBox</string>
     <string name="settings_mock_location_title">Подменять системные данные о геопозиции (Фиктивные местоположения)</string>
     <string name="settings_mock_location_ready">Готово к использованию</string>
     <string name="settings_mock_location_requirements">Требует настройки разрешений и настройки фиктивных местоположений</string>
@@ -232,8 +231,6 @@
     <string name="info_confirm_stop_app">Подтверждение команды STOP приложению APP</string>
     <string name="info_confirm_stop_mdc">Подтверждение команды STOP приложению MDC</string>
     <string name="info_confirm_prevent_restart_swd">Подтверждение команды PREVENT RESTART приложению SWD</string>
-    <string name="info_saved_tbox_ip">Сохраненный IP адрес TBox</string>
-    <string name="info_possible_tbox_ips">Список возможных IP адресов TBox</string>
     <string name="info_app_version_app">Версия приложения APP</string>
     <string name="info_app_version_crt">Версия приложения CRT</string>
     <string name="info_app_version_loc">Версия приложения LOC</string>

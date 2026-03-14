@@ -254,8 +254,6 @@ fun SettingsTabContent(
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
 
-    val isTboxIPRotation by settingsViewModel.tboxIPRotation.collectAsStateWithLifecycle()
-
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
@@ -557,15 +555,6 @@ fun SettingsTabContent(
                 3600
             )
             SettingSwitch(
-                isTboxIPRotation,
-                { enabled ->
-                    settingsViewModel.saveTboxIPRotationSetting(enabled)
-                },
-                stringResource(R.string.settings_search_other_ip_title),
-                "",
-                true
-            )
-            SettingSwitch(
                 isMockLocationEnabled,
                 { enabled ->
                     onMockLocationSettingChanged(enabled)
@@ -732,8 +721,6 @@ fun InfoTabContent(
     val tboxSwdSuspended by viewModel.tboxSwdSuspended.collectAsStateWithLifecycle()
     val tboxAppStoped by viewModel.tboxAppStoped.collectAsStateWithLifecycle()
     val tboxMdcStoped by viewModel.tboxMdcStoped.collectAsStateWithLifecycle()
-    val ipList by viewModel.ipList.collectAsStateWithLifecycle()
-
     val appVersion by settingsViewModel.appVersion.collectAsStateWithLifecycle()
     val mdcVersion by settingsViewModel.mdcVersion.collectAsStateWithLifecycle()
     val swdVersion by settingsViewModel.swdVersion.collectAsStateWithLifecycle()
@@ -742,8 +729,6 @@ fun InfoTabContent(
     val swVersion by settingsViewModel.swVersion.collectAsStateWithLifecycle()
     val hwVersion by settingsViewModel.hwVersion.collectAsStateWithLifecycle()
     val vinCode by settingsViewModel.vinCode.collectAsStateWithLifecycle()
-    val tboxIP by settingsViewModel.tboxIP.collectAsStateWithLifecycle()
-
     var updateVersionButtonEnabled by remember { mutableStateOf(true) }
 
     LaunchedEffect(updateVersionButtonEnabled) {
@@ -795,8 +780,6 @@ fun InfoTabContent(
                     if (preventRestartSend) yesLabel else noLabel
                 )
             }
-            item { StatusRow(stringResource(R.string.info_saved_tbox_ip), tboxIP) }
-            item { StatusRow(stringResource(R.string.info_possible_tbox_ips), ipList.joinToString("; ")) }
             item { StatusRow(stringResource(R.string.info_app_version_app), appVersion) }
             item { StatusRow(stringResource(R.string.info_app_version_crt), crtVersion) }
             item { StatusRow(stringResource(R.string.info_app_version_loc), locVersion) }

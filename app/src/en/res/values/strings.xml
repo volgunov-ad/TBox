@@ -197,7 +197,6 @@
     <string name="settings_expert_mode_title">Expert mode</string>
     <string name="settings_expert_mode_warning_desc">All changes in expert mode are made at your own risk.\nHowever, your actions in this mode cannot lead to irreversible consequences.</string>
     <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>
-    <string name="settings_search_other_ip_title">Search for other TBox IP addresses</string>
     <string name="settings_mock_location_title">Inject system location data (Mock locations)</string>
     <string name="settings_mock_location_ready">Ready to use</string>
     <string name="settings_mock_location_requirements">Requires permission and mock location setup</string>
@@ -232,8 +231,6 @@
     <string name="info_confirm_stop_app">Confirm STOP command for APP</string>
     <string name="info_confirm_stop_mdc">Confirm STOP command for MDC</string>
     <string name="info_confirm_prevent_restart_swd">Confirm PREVENT RESTART command for SWD</string>
-    <string name="info_saved_tbox_ip">Saved TBox IP address</string>
-    <string name="info_possible_tbox_ips">Possible TBox IP list</string>
     <string name="info_app_version_app">APP version</string>
     <string name="info_app_version_crt">CRT version</string>
     <string name="info_app_version_loc">LOC version</string>

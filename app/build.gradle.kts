@@ -77,6 +77,7 @@ dependencies {
     implementation(libs.androidx.savedstate)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
+    implementation("com.github.jsparrow2006:tbox-proxy:v1.0.2")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
