@@ -505,6 +505,7 @@ class BackgroundService : Service() {
         if (mainJob?.isActive == true) return
         mainJob = scope.launch {
             try {
+                delay(2000)
                 Log.d("Net Updater", "Start updating network state")
                 while (isActive) {
                     if (isBackgroundPollingPaused()) {
@@ -619,8 +620,8 @@ class BackgroundService : Service() {
             try {
                 var rebootTimeout = 60000L
                 var modemCheckTimeout = 15000L
-                Log.d("Connection checker", "Start check connection")
                 delay(10000)
+                Log.d("Connection checker", "Start check connection")
                 while (isActive) {
                     delay(modemCheckTimeout)
                     if (!TboxRepository.tboxConnected.value) {
@@ -1518,6 +1519,7 @@ class BackgroundService : Service() {
         try {
             if (tBoxClient == null) {
                 connectTboxClient()
+                delay(1000)
             }
             val client = tBoxClient ?: run {
                 TboxRepository.addLog("ERROR", "TBox Proxy", "Client is not initialized")
