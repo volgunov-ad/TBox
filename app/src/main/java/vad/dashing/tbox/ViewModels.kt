@@ -44,13 +44,6 @@ class TboxViewModel : ViewModel() {
             initialValue = listOf("")
         )*/
 
-    val ipList: StateFlow<List<String>> = TboxRepository.ipList
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
     /*val canFramesList: StateFlow<List<String>> = TboxRepository.canFramesList
         .stateIn(
             scope = viewModelScope,

@@ -25,7 +25,6 @@ import vad.dashing.tbox.utils.CanFramesProcess
 import vad.dashing.tbox.utils.CanFramesProcess.toFloat
 import vad.dashing.tbox.utils.CanFramesProcess.toUInt
 import vad.dashing.tbox.utils.CsnOperatorResolver
-import vad.dashing.tbox.utils.IPManager
 import vad.dashing.tbox.utils.MotorHoursBuffer
 import vad.dashing.tbox.utils.ThemeObserver
 import java.net.DatagramPacket
@@ -38,7 +37,6 @@ import kotlin.let
 class BackgroundService : Service() {
     private lateinit var settingsManager: SettingsManager
     private lateinit var appDataManager: AppDataManager
-    private lateinit var ipManager: IPManager
     private lateinit var locationMockManager: LocationMockManager
     private lateinit var scope: CoroutineScope
     private val job = SupervisorJob()
@@ -54,8 +52,6 @@ class BackgroundService : Service() {
     private lateinit var getCanFrame: StateFlow<Boolean>
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
-    private lateinit var serverIp: StateFlow<String>
-    private lateinit var tboxIPRotation: StateFlow<Boolean>
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
@@ -63,7 +59,6 @@ class BackgroundService : Service() {
     private lateinit var canDataSaveCount: StateFlow<Int>
 
     private val serverPort = 50047
-    private var currentIP: String? = null
     private lateinit var themeObserver: ThemeObserver
     private var tBoxClient: TBoxClient? = null
     @Volatile
@@ -219,10 +214,6 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, false)
         getLocData = settingsManager.getLocDataFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
-        serverIp = settingsManager.tboxIPFlow
-            .stateIn(scope, SharingStarted.Eagerly, DEFAULT_TBOX_IP)
-        tboxIPRotation = settingsManager.tboxIPRotationFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
         widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
         widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
@@ -233,16 +224,6 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
         canDataSaveCount = settingsManager.canDataSaveCountFlow
             .stateIn(scope, SharingStarted.Eagerly, 5)
-
-        ipManager = IPManager(this)
-        ipManager.updateIPs(serverIp.value)
-        TboxRepository.updateIPList(ipManager.getIPList())
-        currentIP = if (tboxIPRotation.value) {
-            ipManager.getNextIP()
-        } else {
-            DEFAULT_TBOX_IP
-        }
-        TboxRepository.addLog("DEBUG", "IP manager", "Set TBox current IP: $currentIP")
 
         broadcastSender = TboxBroadcastSender(this, scope)
 
@@ -427,20 +408,17 @@ class BackgroundService : Service() {
 
     private fun connectTboxClient() {
         if (tBoxClient != null) return
-        val remoteIp = currentIP ?: DEFAULT_TBOX_IP
+        val remoteIp = DEFAULT_TBOX_IP
         val callback = object : TBoxClientCallback {
             override fun onDataReceived(data: ByteArray) {
                 lastPacketAtMs = System.currentTimeMillis()
                 scope.launch {
                     try {
-                        val responseAddress = InetAddress.getByName(currentIP ?: remoteIp)
+                        val responseAddress = InetAddress.getByName(remoteIp)
                         val packet = DatagramPacket(data, data.size, responseAddress, serverPort)
                         responseWork(packet)
                         if (!TboxRepository.tboxConnected.value) {
                             onTboxConnected(true)
-                            if (serverIp.value != currentIP) {
-                                currentIP?.let { settingsManager.saveTboxIP(it) }
-                            }
                         }
                     } catch (e: Exception) {
                         TboxRepository.addLog("ERROR", "TBox Proxy", "Error handling incoming data")
@@ -496,11 +474,6 @@ class BackgroundService : Service() {
         } finally {
             tBoxClient = null
         }
-    }
-
-    private fun reconnectTboxClient() {
-        disconnectTboxClient()
-        connectTboxClient()
     }
 
     private fun startNetUpdater() {
@@ -810,7 +783,6 @@ class BackgroundService : Service() {
                 var crtGetCanFrameTime = System.currentTimeMillis()
                 var crtGetCycleSignalTime = System.currentTimeMillis()
                 var crtGetLocDataTime = System.currentTimeMillis()
-                var updateIPTime = System.currentTimeMillis()
                 var locErrorCount = 0
                 var tboxAppCheckTime = System.currentTimeMillis()
                 var tboxMdcCheckTime = System.currentTimeMillis()
@@ -1026,22 +998,6 @@ class BackgroundService : Service() {
                                 swdPreventRestart()
                                 preventRestartLastTime = System.currentTimeMillis()
                             }
-                        }
-                    }
-                    else if (tboxIPRotation.value) {
-                        // Выбор следующего IP адреса, если подключения нет больше 60 с
-                        if (currentTime - TboxRepository.tboxConnectionTime.value.time > 60000 &&
-                            System.currentTimeMillis() - updateIPTime > 60000) {
-                            if (ipManager.isCurrentIPLast()) {
-                                ipManager.updateIPs(serverIp.value)
-                                TboxRepository.updateIPList(ipManager.getIPList())
-                                TboxRepository.addLog("DEBUG", "IP manager",
-                                    "Update IP list: ${TboxRepository.ipList.value.joinToString("; ")}")
-                            }
-                            currentIP = ipManager.getNextIP()
-                            TboxRepository.addLog("DEBUG", "IP manager", "Set TBox current IP: $currentIP")
-                            reconnectTboxClient()
-                            updateIPTime = System.currentTimeMillis()
                         }
                     }
 
@@ -1508,9 +1464,6 @@ class BackgroundService : Service() {
             TboxRepository.addLog("ERROR", "Theme Service", "Error during service destruction")
             Log.e("Theme Service", "Error during service destruction", e)
         }
-
-        // Очищаем ссылки
-        currentIP = null
 
         overlayController.onDestroy()
     }

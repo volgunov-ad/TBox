@@ -17,7 +17,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     companion object {
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
-        private const val DEFAULT_TBOX_IP = "192.168.225.1"
         private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
         private const val FLOATING_DASHBOARD_SELECTED_KEY = "floating_dashboard_selected"
         private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
@@ -339,20 +338,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = ""
         )
 
-    val tboxIP = settingsManager.tboxIPFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = DEFAULT_TBOX_IP
-        )
-
-    val tboxIPRotation = settingsManager.tboxIPRotationFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
-        )
-
     val selectedTab = settingsManager.selectedTabFlow
         .stateIn(
             scope = viewModelScope,
@@ -523,12 +508,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveWidgetShowLocIndicatorSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveWidgetShowLocIndicatorSetting(enabled)
-        }
-    }
-
-    fun saveTboxIPRotationSetting(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsManager.saveTboxIPRotationSetting(enabled)
         }
     }
 
