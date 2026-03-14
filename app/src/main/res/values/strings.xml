@@ -91,6 +91,7 @@
     <string name="media_player_jetaudioplus">jetAudioPlus</string>
     <string name="media_player_fmplay">FMPlay</string>
     <string name="media_player_yandex_radio">Яндекс.Радио</string>
+    <string name="media_player_wt_local_multimedia">Штатный плеер</string>
     <string name="media_player_vkx">VKX</string>
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>

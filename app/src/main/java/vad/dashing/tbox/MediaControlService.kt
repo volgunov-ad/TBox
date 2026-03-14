@@ -61,6 +61,11 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_yandex_radio,
         iconRes = R.drawable.player_yandex_radio
     ),
+    WT_LOCAL_MULTIMEDIA(
+        packageName = "com.wt.multimedia.local",
+        titleRes = R.string.media_player_wt_local_multimedia,
+        iconRes = R.drawable.player_unknown
+    ),
     VKX(
         packageName = "ua.itaysonlab.vkx",
         titleRes = R.string.media_player_vkx,

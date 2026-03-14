@@ -91,6 +91,7 @@
     <string name="media_player_jetaudioplus">jetAudioPlus</string>
     <string name="media_player_fmplay">FMPlay</string>
     <string name="media_player_yandex_radio">Yandex Radio</string>
+    <string name="media_player_wt_local_multimedia">Stock Player</string>
     <string name="media_player_vkx">VKX</string>
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
