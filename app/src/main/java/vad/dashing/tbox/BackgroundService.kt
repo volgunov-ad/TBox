@@ -90,6 +90,8 @@ class BackgroundService : Service() {
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
     private var getSMSJob: Job? = null
+    @Volatile
+    private var backgroundPollingPauseUntilMs: Long = 0L
 
     private var netUpdateTime: Long = 5000
     private var apnUpdateTime: Long = 10000
@@ -489,12 +491,25 @@ class BackgroundService : Service() {
         }
     }
 
+    private fun pauseBackgroundPolling(durationMs: Long) {
+        val pauseUntil = System.currentTimeMillis() + durationMs
+        backgroundPollingPauseUntilMs = maxOf(backgroundPollingPauseUntilMs, pauseUntil)
+    }
+
+    private fun isBackgroundPollingPaused(): Boolean {
+        return versionsJob?.isActive == true || System.currentTimeMillis() < backgroundPollingPauseUntilMs
+    }
+
     private fun startNetUpdater() {
         if (mainJob?.isActive == true) return
         mainJob = scope.launch {
             try {
                 Log.d("Net Updater", "Start updating network state")
                 while (isActive) {
+                    if (isBackgroundPollingPaused()) {
+                        delay(500)
+                        continue
+                    }
                     TboxRepository.addLog("DEBUG", "MDC send", "Update network")
                     sendUdpMessage(
                         socket,
@@ -531,6 +546,10 @@ class BackgroundService : Service() {
             try {
                 Log.d("APNUpdater", "Start updating APN state")
                 while (isActive) {
+                    if (isBackgroundPollingPaused()) {
+                        delay(500)
+                        continue
+                    }
                     if (TboxRepository.tboxConnected.value) {
                         if (!apnCheck) {
                             delay(1000)
@@ -825,7 +844,10 @@ class BackgroundService : Service() {
                     if (getCanFrame.value) {
                         val delta = currentTime - (TboxRepository.canFrameTime.value?.time ?: 0)
                         if (delta > 60000) {
-                            if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetCanFrameTime > 10000) {
+                            if (TboxRepository.tboxConnected.value &&
+                                !isBackgroundPollingPaused() &&
+                                System.currentTimeMillis() - crtGetCanFrameTime > 10000
+                            ) {
                                 crtGetCanFrame()
                                 crtGetCanFrameTime = System.currentTimeMillis()
                             }
@@ -1166,6 +1188,7 @@ class BackgroundService : Service() {
         if (versionsJob?.isActive == true) return
         versionsJob = scope.launch {
             try {
+                pauseBackgroundPolling(durationMs = 12000)
                 if (needClearInfo) {
                     clearInfo()
                 }
@@ -1176,6 +1199,7 @@ class BackgroundService : Service() {
                         socket, serverPort, CRT_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkMdcVersion) {
@@ -1184,6 +1208,7 @@ class BackgroundService : Service() {
                         socket, serverPort, MDC_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkLocVersion) {
@@ -1192,6 +1217,7 @@ class BackgroundService : Service() {
                         socket, serverPort, LOC_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkSwdVersion) {
@@ -1200,6 +1226,7 @@ class BackgroundService : Service() {
                         socket, serverPort, SWD_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkAppVersion) {
@@ -1208,6 +1235,7 @@ class BackgroundService : Service() {
                         socket, serverPort, APP_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkGateVersion) {
@@ -1216,6 +1244,7 @@ class BackgroundService : Service() {
                         socket, serverPort, GATE_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkSW) {
@@ -1224,6 +1253,7 @@ class BackgroundService : Service() {
                         socket, serverPort, CRT_CODE, SELF_CODE, 0x12,
                         byteArrayOf(0x00, 0x00, 0x01, 0x04.toByte()), false
                     ) // CRT - SW
+                    delay(150)
                 }
 
                 if (checkHW) {
@@ -1232,6 +1262,7 @@ class BackgroundService : Service() {
                         socket, serverPort, CRT_CODE, SELF_CODE, 0x12,
                         byteArrayOf(0x00, 0x00, 0x01, 0x05.toByte()), false
                     ) // CRT - HW
+                    delay(150)
                 }
 
                 if (checkVIN) {
@@ -1240,6 +1271,7 @@ class BackgroundService : Service() {
                         socket, serverPort, CRT_CODE, SELF_CODE, 0x12,
                         byteArrayOf(0x00, 0x00, 0x01, 0x0F.toByte()), false
                     ) // CRT VIN code
+                    delay(150)
                 }
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
