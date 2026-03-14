@@ -75,7 +75,6 @@ class BackgroundService : Service() {
     private var ssmCmdJob: Job? = null
     private var swdCmdJob: Job? = null
     private var locCmdJob: Job? = null
-    private var listenJob: Job? = null
     private var apnCmdJob: Job? = null
     private var humJob: Job? = null
     private var sendATJob: Job? = null
@@ -291,7 +290,6 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("INFO", "Service", "Start service")
                     connectTboxClient()
                     startSettingsListener()
-                    startListener()
                     startNetUpdater()
                     startAPNUpdater()
                     startCheckConnection()
@@ -309,7 +307,6 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("INFO", "Service", "Stop service")
                     stopNetUpdater()
                     stopAPNUpdater()
-                    stopListener()
                     stopCheckConnection()
                     stopPeriodicJob()
                     stopSettingsListener()
@@ -510,35 +507,6 @@ class BackgroundService : Service() {
     private fun stopNetUpdater() {
         mainJob?.cancel()
         mainJob = null
-    }
-
-    private fun startListener() {
-        if (listenJob?.isActive == true) return
-        listenJob = scope.launch {
-            try {
-                Log.d("TBox Listener", "Start TBox listener monitor")
-                TboxRepository.updateTboxConnectionTime()
-                while (isActive) {
-                    if (TboxRepository.tboxConnected.value &&
-                        System.currentTimeMillis() - lastPacketAtMs > netUpdateTime * 2
-                    ) {
-                        onTboxConnected(false)
-                    }
-                    delay(200)
-                }
-            } catch (e: CancellationException) {
-                // Нормальная отмена - не логируем
-                throw e
-            } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", "TBox Listener", "Fatal error in listener monitor")
-                Log.e("TBox Listener", "Fatal error in listener monitor", e)
-            }
-        }
-    }
-
-    private fun stopListener() {
-        listenJob?.cancel()
-        listenJob = null
     }
 
     private fun startAPNUpdater() {
@@ -786,8 +754,19 @@ class BackgroundService : Service() {
                 var locErrorCount = 0
                 var tboxAppCheckTime = System.currentTimeMillis()
                 var tboxMdcCheckTime = System.currentTimeMillis()
-                delay(15000)
+                val periodicTasksReadyAt = System.currentTimeMillis() + 15000
                 while (isActive) {
+                    if (TboxRepository.tboxConnected.value &&
+                        System.currentTimeMillis() - lastPacketAtMs > netUpdateTime * 2
+                    ) {
+                        onTboxConnected(false)
+                    }
+
+                    if (System.currentTimeMillis() < periodicTasksReadyAt) {
+                        delay(1000)
+                        continue
+                    }
+
                     /*if (mockLocation.value) {
                         locationMockManager.setMockLocation(LocValues(
                             rawValue = "",
@@ -1429,7 +1408,7 @@ class BackgroundService : Service() {
     private fun cancelAllJobs() {
         listOf(
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
-            swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob, humJob,
+            swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
             settingsListenerJob, dataListenerJob, getSMSJob
         ).forEach { job ->
