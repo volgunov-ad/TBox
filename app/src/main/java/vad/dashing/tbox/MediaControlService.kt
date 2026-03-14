@@ -46,6 +46,11 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_jetaudio,
         iconRes = R.drawable.player_jetaudio
     ),
+    JETAUDIOPLUS(
+        packageName = "com.jetappfactory.jetaudioplus",
+        titleRes = R.string.media_player_jetaudioplus,
+        iconRes = R.drawable.player_jetaudio
+    ),
     FMPLAY(
         packageName = "ru.fmplay",
         titleRes = R.string.media_player_fmplay,

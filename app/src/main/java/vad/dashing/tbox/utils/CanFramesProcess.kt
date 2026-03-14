@@ -222,28 +222,9 @@ object CanFramesProcess {
                     val engineTemperature = unsignedByte(b2).toFloat() * 0.75f - 48f
                     CanDataRepository.updateEngineTemperature(engineTemperature)
 
-                    val throttlePosition = unsignedByte(b4).toFloat() * 0.5f
-                    if (throttlePosition <= 100f && throttlePosition >= 0f) {
-                        CanDataRepository.updateThrottlePosition(throttlePosition)
-                    } else {
-                        CanDataRepository.updateThrottlePosition(null)
-                    }
+                    val throttlePosition = unsignedByte(b4).toFloat()
+                    CanDataRepository.updateThrottlePosition(throttlePosition)
 
-                    /*if (carType == "1.5_6DCT") {
-                        if (b1.toInt() == 1) {
-                            val cruiseSpeed = unsignedByte(b4).toUInt()
-                            CanDataRepository.updateCruiseSetSpeed(cruiseSpeed)
-                        } else if (b1.toInt() == 0) {
-                            CanDataRepository.updateCruiseSetSpeed(0u)
-                        }
-                    } else if (carType == "1.5_6MT") {
-                        if (b1.toInt() == 1) {
-                            val cruiseSpeed = unsignedByte(b4).toUInt()
-                            CanDataRepository.updateCruiseSetSpeed(cruiseSpeed)
-                        } else if (b1.toInt() == 0) {
-                            CanDataRepository.updateCruiseSetSpeed(0u)
-                        }
-                    }*/
                 } else if (canId == CAN_ID_SPEED_ACCURATE) {
                     val speed = if (b2 != 0x00.toByte()) {
                         readUInt12FromNibbleBigEndian(rawValue, payloadStart + 1).toFloat() / 16f

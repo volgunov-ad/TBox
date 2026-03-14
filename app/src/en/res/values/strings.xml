@@ -88,6 +88,7 @@
     <string name="media_player_aimp">AIMP</string>
     <string name="media_player_record_radio">RecordRadio</string>
     <string name="media_player_jetaudio">jetAudio</string>
+    <string name="media_player_jetaudioplus">jetAudioPlus</string>
     <string name="media_player_fmplay">FMPlay</string>
     <string name="media_player_yandex_radio">Yandex Radio</string>
     <string name="media_player_vkx">VKX</string>

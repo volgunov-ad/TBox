@@ -313,7 +313,7 @@ object WidgetsRepository {
         "param2" to DataTitle(R.string.data_title_param_2),
         "param3" to DataTitle(R.string.data_title_param_3),
         "param4" to DataTitle(R.string.data_title_param_4),
-        "throttlePosition" to DataTitle(R.string.data_title_throttle_position, R.string.unit_percent),
+        "throttlePosition" to DataTitle(R.string.data_title_throttle_position),
         "wheel1Speed" to DataTitle(R.string.data_title_wheel_speed_1, R.string.unit_kmh),
         "wheel2Speed" to DataTitle(R.string.data_title_wheel_speed_2, R.string.unit_kmh),
         "wheel3Speed" to DataTitle(R.string.data_title_wheel_speed_3, R.string.unit_kmh),
