@@ -32,6 +32,7 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Date
+import java.util.concurrent.Executors
 import kotlin.let
 
 class BackgroundService : Service() {
@@ -66,6 +67,10 @@ class BackgroundService : Service() {
     // Keeps existing sendUdpMessage call sites unchanged after transport migration.
     private val socket = Unit
     private val mutex = Mutex()
+    private val packetProcessingDispatcher =
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "tbox-packet-processor").apply { isDaemon = true }
+        }.asCoroutineDispatcher()
 
     private var mainJob: Job? = null
     private var periodicJob: Job? = null
@@ -406,13 +411,24 @@ class BackgroundService : Service() {
     private fun connectTboxClient() {
         if (tBoxClient != null) return
         val remoteIp = DEFAULT_TBOX_IP
+        val remoteAddress = try {
+            InetAddress.getByName(remoteIp)
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "TBox Proxy", "Invalid remote IP: $remoteIp")
+            Log.e("TBox Proxy", "Invalid remote IP", e)
+            return
+        }
         val callback = object : TBoxClientCallback {
             override fun onDataReceived(data: ByteArray) {
-                lastPacketAtMs = System.currentTimeMillis()
-                scope.launch {
+                val callbackReceivedAt = System.currentTimeMillis()
+                lastPacketAtMs = callbackReceivedAt
+                scope.launch(packetProcessingDispatcher) {
                     try {
-                        val responseAddress = InetAddress.getByName(remoteIp)
-                        val packet = DatagramPacket(data, data.size, responseAddress, serverPort)
+                        val queueDelay = System.currentTimeMillis() - callbackReceivedAt
+                        if (queueDelay > 300) {
+                            TboxRepository.addLog("WARN", "TBox Proxy", "Packet processing queue delay: ${queueDelay}ms")
+                        }
+                        val packet = DatagramPacket(data, data.size, remoteAddress, serverPort)
                         responseWork(packet)
                         if (!TboxRepository.tboxConnected.value) {
                             onTboxConnected(true)
@@ -1425,6 +1441,7 @@ class BackgroundService : Service() {
         cancelAllJobs()
         job.cancel()
         disconnectTboxClient()
+        packetProcessingDispatcher.close()
 
         isRunning = false
 
