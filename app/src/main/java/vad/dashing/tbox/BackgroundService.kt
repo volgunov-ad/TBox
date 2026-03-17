@@ -90,8 +90,6 @@ class BackgroundService : Service() {
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
     private var getSMSJob: Job? = null
-    @Volatile
-    private var backgroundPollingPauseUntilMs: Long = 0L
     private var packetSilenceChecks: Int = 0
 
     private var netUpdateTime: Long = 5000
@@ -492,15 +490,6 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun pauseBackgroundPolling(durationMs: Long) {
-        val pauseUntil = System.currentTimeMillis() + durationMs
-        backgroundPollingPauseUntilMs = maxOf(backgroundPollingPauseUntilMs, pauseUntil)
-    }
-
-    private fun isBackgroundPollingPaused(): Boolean {
-        return versionsJob?.isActive == true || System.currentTimeMillis() < backgroundPollingPauseUntilMs
-    }
-
     private fun startNetUpdater() {
         if (mainJob?.isActive == true) return
         mainJob = scope.launch {
@@ -508,10 +497,6 @@ class BackgroundService : Service() {
                 delay(2000)
                 Log.d("Net Updater", "Start updating network state")
                 while (isActive) {
-                    if (isBackgroundPollingPaused()) {
-                        delay(500)
-                        continue
-                    }
                     TboxRepository.addLog("DEBUG", "MDC send", "Update network")
                     sendUdpMessage(
                         socket,
@@ -548,10 +533,6 @@ class BackgroundService : Service() {
             try {
                 Log.d("APNUpdater", "Start updating APN state")
                 while (isActive) {
-                    if (isBackgroundPollingPaused()) {
-                        delay(500)
-                        continue
-                    }
                     if (TboxRepository.tboxConnected.value) {
                         if (!apnCheck) {
                             delay(1000)
@@ -794,7 +775,7 @@ class BackgroundService : Service() {
                 val periodicTasksReadyAt = System.currentTimeMillis() + 15000
                 while (isActive) {
                     val now = System.currentTimeMillis()
-                    if (TboxRepository.tboxConnected.value && !isBackgroundPollingPaused()) {
+                    if (TboxRepository.tboxConnected.value) {
                         if (now - lastPacketAtMs > netUpdateTime * 2) {
                             packetSilenceChecks += 1
                             if (packetSilenceChecks >= 3) {
@@ -856,7 +837,6 @@ class BackgroundService : Service() {
                         val delta = currentTime - (TboxRepository.canFrameTime.value?.time ?: 0)
                         if (delta > 60000) {
                             if (TboxRepository.tboxConnected.value &&
-                                !isBackgroundPollingPaused() &&
                                 System.currentTimeMillis() - crtGetCanFrameTime > 10000
                             ) {
                                 crtGetCanFrame()
@@ -1199,7 +1179,6 @@ class BackgroundService : Service() {
         if (versionsJob?.isActive == true) return
         versionsJob = scope.launch {
             try {
-                pauseBackgroundPolling(durationMs = 12000)
                 if (needClearInfo) {
                     clearInfo()
                 }
