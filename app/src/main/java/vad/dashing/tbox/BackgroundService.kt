@@ -419,14 +419,9 @@ class BackgroundService : Service() {
         }
         val callback = object : TBoxClientCallback {
             override fun onDataReceived(data: ByteArray) {
-                val callbackReceivedAt = System.currentTimeMillis()
-                lastPacketAtMs = callbackReceivedAt
+                lastPacketAtMs = System.currentTimeMillis()
                 scope.launch(packetProcessingDispatcher) {
                     try {
-                        val queueDelay = System.currentTimeMillis() - callbackReceivedAt
-                        if (queueDelay > 300) {
-                            TboxRepository.addLog("WARN", "TBox Proxy", "Packet processing queue delay: ${queueDelay}ms")
-                        }
                         val packet = DatagramPacket(data, data.size, remoteAddress, serverPort)
                         responseWork(packet)
                         if (!TboxRepository.tboxConnected.value) {
@@ -1486,8 +1481,11 @@ class BackgroundService : Service() {
                                        needLog: Boolean = true): Boolean {
         try {
             if (tBoxClient == null) {
-                connectTboxClient()
                 delay(1000)
+                if (tBoxClient == null) {
+                    connectTboxClient()
+                    delay(1000)
+                }
             }
             val client = tBoxClient ?: run {
                 TboxRepository.addLog("ERROR", "TBox Proxy", "Client is not initialized")
@@ -2513,7 +2511,7 @@ class BackgroundService : Service() {
     private fun onTboxConnected(value: Boolean = false) {
         if (value) {
             packetSilenceChecks = 0
-            TboxRepository.addLog("INFO", "UDP Listener", "TBox connected")
+            TboxRepository.addLog("INFO", "TBox connection", "TBox connected")
             TboxRepository.updateTboxConnected(true)
 
             modemMode(-1)
@@ -2578,7 +2576,7 @@ class BackgroundService : Service() {
         }
         else {
             packetSilenceChecks = 0
-            TboxRepository.addLog("WARN", "UDP Listener", "TBox disconnected")
+            TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
             TboxRepository.resetConnectionData()
             val notification = createNotification("TBox disconnected")
             startForeground(NOTIFICATION_ID, notification)
