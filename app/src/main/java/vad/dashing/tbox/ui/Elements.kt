@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -39,10 +40,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -732,6 +735,16 @@ fun FloatingDashboardPanelEditor(
     val selectedOption = remember(options, effectiveId) {
         options.find { it.id == effectiveId } ?: options.first()
     }
+    val focusManager = LocalFocusManager.current
+    val draftSnapshot = rememberUpdatedState(draftName)
+    val savedNameSnapshot = rememberUpdatedState(selectedConfig.name)
+    fun commitNameIfChanged() {
+        if (!enabled) return
+        val trimmed = draftSnapshot.value.trim()
+        if (trimmed != savedNameSnapshot.value) {
+            onRenamePanel(effectiveId, trimmed)
+        }
+    }
     Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -741,7 +754,10 @@ fun FloatingDashboardPanelEditor(
             GenericDropdownSelector(
                 selectedValue = selectedOption,
                 options = options,
-                onValueChange = { onSelectPanelId(it.id) },
+                onValueChange = { option ->
+                    commitNameIfChanged()
+                    onSelectPanelId(option.id)
+                },
                 width = 220.dp,
                 enabled = enabled
             )
@@ -751,18 +767,26 @@ fun FloatingDashboardPanelEditor(
                 modifier = Modifier
                     .weight(1f)
                     .onFocusChanged { state ->
-                        if (
-                            enabled &&
-                            !state.isFocused &&
-                            draftName != selectedConfig.name
-                        ) {
-                            onRenamePanel(effectiveId, draftName.trim())
+                        if (enabled && !state.isFocused) {
+                            commitNameIfChanged()
                         }
                     },
                 enabled = enabled,
                 singleLine = true,
-                label = { Text(stringResource(R.string.floating_panel_name_label)) },
-                textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+                label = {
+                    Text(
+                        text = stringResource(R.string.floating_panel_name_label),
+                        fontSize = 16.sp
+                    )
+                },
+                textStyle = LocalTextStyle.current.copy(fontSize = 22.sp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        commitNameIfChanged()
+                        focusManager.clearFocus()
+                    }
+                )
             )
             Button(onClick = onAddPanel, enabled = enabled) {
                 Text(stringResource(R.string.action_add), fontSize = 20.sp)
