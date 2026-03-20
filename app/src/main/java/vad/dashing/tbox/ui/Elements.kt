@@ -744,7 +744,7 @@ fun FloatingDashboardPanelEditor(
                 selectedValue = selectedOption,
                 options = options,
                 onValueChange = { option -> onSelectPanelId(option.id) },
-                width = 220.dp,
+                width = 300.dp,
                 enabled = enabled
             )
             Row(
