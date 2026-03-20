@@ -24,7 +24,7 @@ fun DashboardWidgetScaffold(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: (() -> Unit)? = null,
-    elevation: Dp = 4.dp,
+    elevation: Dp = 0.dp,
     shape: Dp = 12.dp,
     textColor: Color? = null,
     backgroundColor: Color? = null,

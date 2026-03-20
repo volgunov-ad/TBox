@@ -50,7 +50,7 @@ fun DashboardWidgetItem(
     onDoubleClick: () -> Unit = {},
     dashboardManager: DashboardManager,
     dashboardChart: Boolean,
-    elevation: Dp = 4.dp,
+    elevation: Dp = 0.dp,
     shape: Dp = 12.dp,
     title: Boolean = true,
     units: Boolean = true,

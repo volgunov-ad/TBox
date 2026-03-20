@@ -29,7 +29,7 @@ fun DashboardWidgetRenderer(
     onLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (String) -> Unit,
     onRestartRequested: () -> Unit,
-    elevation: Dp = 4.dp,
+    elevation: Dp = 0.dp,
     shape: Dp = 12.dp,
     enableMusicInnerInteractions: Boolean = true
 ) {

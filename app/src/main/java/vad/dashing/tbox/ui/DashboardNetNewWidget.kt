@@ -27,7 +27,7 @@ fun DashboardNetNewWidgetItem(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     viewModel: TboxViewModel,
-    elevation: Dp = 4.dp,
+    elevation: Dp = 0.dp,
     shape: Dp = 12.dp,
     backgroundColor: Color? = null,
     color: Color? = null,
