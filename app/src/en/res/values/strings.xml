@@ -46,6 +46,8 @@
     <string name="tab_widgets">Tiles</string>
     <string name="menu_hide">Hide menu</string>
     <string name="menu_show">Show menu</string>
+    <string name="menu_navigate_home">Home</string>
+    <string name="main_open_console_cd">Open app sections</string>
     <string name="tbox_connected_at">TBox connected at %1$s</string>
     <string name="tbox_disconnected_at">TBox disconnected at %1$s</string>
     <string name="service_started_at">Service started at %1$s</string>

@@ -26,7 +26,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -83,15 +86,24 @@ fun TboxApp(
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
 
     TboxAppTheme(theme = currentTheme) {
-        TboxScreen(
-            viewModel = viewModel,
-            settingsViewModel = settingsViewModel,
-            appDataViewModel = appDataViewModel,
-            onTboxRestart = onTboxRestart,
-            onSaveToFile = onSaveToFile,
-            onServiceCommand = onServiceCommand,
-            onMockLocationSettingChanged = onMockLocationSettingChanged
-        )
+        var showConsoleUi by rememberSaveable { mutableStateOf(false) }
+        if (showConsoleUi) {
+            TboxScreen(
+                viewModel = viewModel,
+                settingsViewModel = settingsViewModel,
+                appDataViewModel = appDataViewModel,
+                onTboxRestart = onTboxRestart,
+                onSaveToFile = onSaveToFile,
+                onServiceCommand = onServiceCommand,
+                onMockLocationSettingChanged = onMockLocationSettingChanged,
+                onNavigateHome = { showConsoleUi = false }
+            )
+        } else {
+            MainScreen(
+                onOpenConsole = { showConsoleUi = true },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 }
 
@@ -122,6 +134,7 @@ fun TboxScreen(
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
+    onNavigateHome: () -> Unit,
 ) {
     val canViewModel: CanDataViewModel = viewModel()
     val cycleViewModel: CycleDataViewModel = viewModel()
@@ -200,6 +213,14 @@ fun TboxScreen(
                         )
                     }
 
+                    TabMenuItem(
+                        title = stringResource(R.string.menu_navigate_home),
+                        icon = ImageVector.vectorResource(R.drawable.ic_menu_home),
+                        selected = false,
+                        showText = isMenuVisible,
+                        onClick = onNavigateHome
+                    )
+
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -276,7 +297,7 @@ fun TboxScreen(
             }
 
             // Содержимое справа
-            MainScreen(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .background(MaterialTheme.colorScheme.background)
@@ -321,7 +342,6 @@ fun TboxScreen(
                 }
             }
         }
-
     }
 }
 

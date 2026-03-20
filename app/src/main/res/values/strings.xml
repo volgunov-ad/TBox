@@ -46,6 +46,8 @@
     <string name="tab_widgets">Плитки</string>
     <string name="menu_hide">Скрыть меню</string>
     <string name="menu_show">Показать меню</string>
+    <string name="menu_navigate_home">Главная</string>
+    <string name="main_open_console_cd">Открыть разделы приложения</string>
     <string name="tbox_connected_at">TBox подключен в %1$s</string>
     <string name="tbox_disconnected_at">TBox отключен в %1$s</string>
     <string name="service_started_at">Служба запущена в %1$s</string>
