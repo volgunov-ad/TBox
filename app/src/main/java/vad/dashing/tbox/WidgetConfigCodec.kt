@@ -140,7 +140,7 @@ private fun parseWidgetConfigsFromJsonArray(
                 val dataKey = item.optString("dataKey").ifBlank {
                     item.optString("type")
                 }
-                val mediaPlayers = parseMediaPlayers(item)
+                val (mediaPlayers, mediaSelectedPlayer) = parseMediaPlayersAndSelectedPlayer(item)
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey.trim(),
@@ -163,7 +163,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         backgroundColorLight = parseBackgroundColor(item, "backgroundColorLight"),
                         backgroundColorDark = parseBackgroundColor(item, "backgroundColorDark"),
                         mediaPlayers = mediaPlayers,
-                        mediaSelectedPlayer = parseSelectedMediaPlayer(item, mediaPlayers),
+                        mediaSelectedPlayer = mediaSelectedPlayer,
                         mediaAutoPlayOnInit = item.optBoolean("mediaAutoPlayOnInit", false)
                     )
                 )
@@ -201,6 +201,27 @@ private fun parseMediaPlayers(item: JSONObject): List<String> {
     }
 
     return orderedMediaPlayerPackages(rawPlayers)
+}
+
+/**
+ * If [parseMediaPlayers] yields an empty list (unknown package names, empty array, etc.) but
+ * [mediaSelectedPlayer] is a supported package, keep that single package so runtime and settings
+ * do not treat the widget as unrestricted ([resolveMediaPlayersForWidget] / all players).
+ */
+private fun parseMediaPlayersAndSelectedPlayer(item: JSONObject): Pair<List<String>, String> {
+    val orderedFromList = parseMediaPlayers(item)
+    val selectedWhenListValid = parseSelectedMediaPlayer(item, orderedFromList)
+    if (orderedFromList.isNotEmpty()) {
+        return Pair(orderedFromList, selectedWhenListValid)
+    }
+    val normalizedSelected = normalizeMediaPlayerPackages(
+        listOf(item.optString("mediaSelectedPlayer"))
+    ).firstOrNull().orEmpty()
+    return if (normalizedSelected.isNotEmpty()) {
+        Pair(listOf(normalizedSelected), normalizedSelected)
+    } else {
+        Pair(emptyList(), "")
+    }
 }
 
 private fun parseSelectedMediaPlayer(
