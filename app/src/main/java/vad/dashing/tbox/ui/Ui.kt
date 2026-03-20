@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
@@ -104,6 +105,9 @@ fun TboxApp(
 }
 
 object TabItems {
+    /** Left menu order; tab index 9 is shown immediately after Settings (4). */
+    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 9, 5, 6, 7, 8)
+
     @Composable
     fun getItems(): List<TabItem> {
         return listOf(
@@ -115,7 +119,8 @@ object TabItems {
             TabItem(stringResource(R.string.tab_logs), ImageVector.vectorResource(R.drawable.menu_icon_log)),
             TabItem(stringResource(R.string.tab_info), Icons.Filled.Info),
             TabItem(stringResource(R.string.tab_can), ImageVector.vectorResource(R.drawable.menu_icon_data)),
-            TabItem(stringResource(R.string.tab_widgets), ImageVector.vectorResource(R.drawable.menu_icon_widgets))
+            TabItem(stringResource(R.string.tab_widgets), ImageVector.vectorResource(R.drawable.menu_icon_widgets)),
+            TabItem(stringResource(R.string.tab_main_screen_settings), Icons.Filled.Home)
         )
     }
 }
@@ -226,7 +231,9 @@ fun TboxScreen(
                             .verticalScroll(scrollState),
                         verticalArrangement = Arrangement.Center
                     ) {
-                        tabs.forEachIndexed { index, tab ->
+                        TabItems.tabMenuDisplayOrder.forEach { index ->
+                            if (index !in tabs.indices) return@forEach
+                            val tab = tabs[index]
                             if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
                                 TabMenuItem(
                                     title = tab.title,
@@ -337,6 +344,7 @@ fun TboxScreen(
                         settingsViewModel,
                         appDataViewModel,
                         onTboxRestart)
+                    9 -> MainScreenSettingsTab()
                     else -> ModemTab(viewModel, onServiceCommand)
                 }
             }
