@@ -716,7 +716,8 @@ fun FloatingDashboardPanelEditor(
     onAddPanel: () -> Unit,
     onDeletePanel: (String) -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    deleteInProgressPanelId: String? = null
 ) {
     if (panels.isEmpty()) return
     val selectedConfig = panels.find { it.id == selectedPanelId } ?: panels.first()
@@ -780,7 +781,9 @@ fun FloatingDashboardPanelEditor(
             }
             Button(
                 onClick = { onDeletePanel(effectiveId) },
-                enabled = enabled && panels.size > 1
+                enabled = enabled &&
+                    panels.size > 1 &&
+                    deleteInProgressPanelId != effectiveId
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 20.sp)
             }

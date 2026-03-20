@@ -257,6 +257,7 @@ fun SettingsTabContent(
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
+    val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
 
     val isTboxIPRotation by settingsViewModel.tboxIPRotation.collectAsStateWithLifecycle()
 
@@ -420,6 +421,7 @@ fun SettingsTabContent(
                 onDeletePanel = { panelId ->
                     settingsViewModel.deleteFloatingDashboard(panelId)
                 },
+                deleteInProgressPanelId = floatingPanelDeleteInProgressId,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         } else {
