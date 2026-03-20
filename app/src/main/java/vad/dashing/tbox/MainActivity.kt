@@ -31,7 +31,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
-        const val EXTRA_INITIAL_TAB = "vad.dashing.tbox.extra_initial_tab"
     }
 
     // Контракт для стандартных разрешений (Android 10-)
@@ -73,9 +72,6 @@ class MainActivity : ComponentActivity() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
 
-        val applyInitialTab = intent.hasExtra(EXTRA_INITIAL_TAB)
-        val initialTabIndex = intent.getIntExtra(EXTRA_INITIAL_TAB, 0).coerceIn(0, 8)
-
         setContent {
             Surface(
                 modifier = Modifier.fillMaxSize()
@@ -83,8 +79,6 @@ class MainActivity : ComponentActivity() {
                 TboxApp(
                     settingsManager = settingsManager,
                     appDataManager = appDataManager,
-                    applyInitialTabFromIntent = applyInitialTab,
-                    initialTabIndex = initialTabIndex,
                     onTboxRestart = { rebootTBox() },
                     onSaveToFile = { tag, dataList ->
                         saveDataToFile(tag, dataList)

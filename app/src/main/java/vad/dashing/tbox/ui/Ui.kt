@@ -67,8 +67,6 @@ data class TabItem(
 fun TboxApp(
     settingsManager: SettingsManager,
     appDataManager: AppDataManager,
-    applyInitialTabFromIntent: Boolean = false,
-    initialTabIndex: Int = 0,
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -92,8 +90,6 @@ fun TboxApp(
             viewModel = viewModel,
             settingsViewModel = settingsViewModel,
             appDataViewModel = appDataViewModel,
-            applyInitialTabFromIntent = applyInitialTabFromIntent,
-            initialTabIndex = initialTabIndex,
             onTboxRestart = onTboxRestart,
             onSaveToFile = onSaveToFile,
             onServiceCommand = onServiceCommand,
@@ -125,8 +121,6 @@ fun TboxScreen(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
-    applyInitialTabFromIntent: Boolean = false,
-    initialTabIndex: Int = 0,
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -136,9 +130,9 @@ fun TboxScreen(
     val cycleViewModel: CycleDataViewModel = viewModel()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(applyInitialTabFromIntent, initialTabIndex) {
-        if (applyInitialTabFromIntent) {
-            selectedTab = initialTabIndex
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 4) {
+            settingsViewModel.onSettingsTabSelected()
         }
     }
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()

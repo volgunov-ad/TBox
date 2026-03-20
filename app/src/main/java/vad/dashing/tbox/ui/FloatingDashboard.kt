@@ -395,10 +395,7 @@ fun FloatingDashboard(
                                                 if (isEditMode && !isDraggingMode && !isResizingMode) {
                                                     showDialogForIndex = index
                                                 } else if (isFloatingDashboardClickAction) {
-                                                    openMainActivityForWidgetKey(
-                                                        context = context,
-                                                        dataKey = widget.dataKey
-                                                    )
+                                                    openMainActivity(context)
                                                 }
                                             }
                                             val onWidgetLongClick = {
@@ -593,26 +590,6 @@ private fun openMainActivity(context: Context) {
     try {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
-}
-
-private fun openMainActivityForWidgetKey(
-    context: Context,
-    dataKey: String
-) {
-    val targetTab = when (dataKey) {
-        "netWidget", "netWidgetNew", "netWidgetColored" -> 0
-        "locWidget" -> 2
-        else -> null
-    }
-    try {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            targetTab?.let { putExtra(MainActivity.EXTRA_INITIAL_TAB, it) }
         }
         context.startActivity(intent)
     } catch (e: Exception) {

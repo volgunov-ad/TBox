@@ -253,6 +253,7 @@ fun SettingsTabContent(
     val isFloatingDashboardShowTboxDisconnectIndicator by
         settingsViewModel.isFloatingDashboardShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
     val floatingDashboardsList by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
+    val hasFloatingPanels = floatingDashboardsList.isNotEmpty()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
@@ -403,23 +404,34 @@ fun SettingsTabContent(
         )
 
         SettingsTitle(stringResource(R.string.settings_floating_panels_title))
-        FloatingDashboardPanelEditor(
-            panels = floatingDashboardsList,
-            selectedPanelId = activeFloatingDashboardId,
-            onSelectPanelId = { panelId ->
-                settingsViewModel.saveSelectedFloatingDashboardId(panelId)
-            },
-            onRenamePanel = { panelId, name ->
-                settingsViewModel.saveFloatingDashboardName(panelId, name)
-            },
-            onAddPanel = {
-                settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
-            },
-            onDeletePanel = { panelId ->
-                settingsViewModel.deleteFloatingDashboard(panelId)
-            },
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        if (hasFloatingPanels) {
+            FloatingDashboardPanelEditor(
+                panels = floatingDashboardsList,
+                selectedPanelId = activeFloatingDashboardId,
+                onSelectPanelId = { panelId ->
+                    settingsViewModel.saveSelectedFloatingDashboardId(panelId)
+                },
+                onRenamePanel = { panelId, name ->
+                    settingsViewModel.saveFloatingDashboardName(panelId, name)
+                },
+                onAddPanel = {
+                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
+                },
+                onDeletePanel = { panelId ->
+                    settingsViewModel.deleteFloatingDashboard(panelId)
+                },
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        } else {
+            Button(
+                onClick = {
+                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
+                },
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                Text(stringResource(R.string.action_add), fontSize = 22.sp)
+            }
+        }
         SettingSwitch(
             isFloatingDashboardEnabled,
             { enabled ->
@@ -435,7 +447,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_show_floating_panel_title),
             "",
-            true
+            hasFloatingPanels
         )
         SettingSwitch(
             isFloatingDashboardClickAction,
@@ -444,7 +456,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_open_app_on_panel_click_title),
             "",
-            true
+            hasFloatingPanels
         )
         SettingSwitch(
             isFloatingDashboardShowTboxDisconnectIndicator,
@@ -453,7 +465,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
             "",
-            true
+            hasFloatingPanels
         )
         SettingDropdownGeneric(
             floatingDashboardRows,
@@ -462,7 +474,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_floating_rows_title),
             "",
-            true,
+            hasFloatingPanels,
             listOf(1, 2, 3, 4, 5, 6)
         )
         SettingDropdownGeneric(
@@ -472,10 +484,14 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_floating_cols_title),
             "",
-            true,
+            hasFloatingPanels,
             listOf(1, 2, 3, 4, 5, 6)
         )
-        FloatingDashboardPositionSizeSettings(settingsViewModel, Modifier)
+        FloatingDashboardPositionSizeSettings(
+            settingsViewModel,
+            Modifier,
+            enabled = hasFloatingPanels
+        )
 
         SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
         SettingSwitch(

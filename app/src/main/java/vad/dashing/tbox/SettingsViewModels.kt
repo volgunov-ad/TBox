@@ -624,6 +624,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun onSettingsTabSelected() {
+        viewModelScope.launch {
+            val list = ensureDefaultFloatingDashboards(floatingDashboards.value)
+            if (list.isEmpty()) return@launch
+            settingsManager.saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, list.first().id)
+        }
+    }
+
     fun saveFloatingDashboardSetting(enabled: Boolean) {
         updateSelectedFloatingDashboard { it.copy(enabled = enabled) }
     }

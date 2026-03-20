@@ -716,7 +716,8 @@ fun FloatingDashboardPanelEditor(
     onRenamePanel: (panelId: String, name: String) -> Unit,
     onAddPanel: () -> Unit,
     onDeletePanel: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     if (panels.isEmpty()) return
     val selectedConfig = panels.find { it.id == selectedPanelId } ?: panels.first()
@@ -742,7 +743,7 @@ fun FloatingDashboardPanelEditor(
                 options = options,
                 onValueChange = { onSelectPanelId(it.id) },
                 width = 220.dp,
-                enabled = true
+                enabled = enabled
             )
             OutlinedTextField(
                 value = draftName,
@@ -750,20 +751,25 @@ fun FloatingDashboardPanelEditor(
                 modifier = Modifier
                     .weight(1f)
                     .onFocusChanged { state ->
-                        if (!state.isFocused && draftName != selectedConfig.name) {
+                        if (
+                            enabled &&
+                            !state.isFocused &&
+                            draftName != selectedConfig.name
+                        ) {
                             onRenamePanel(effectiveId, draftName.trim())
                         }
                     },
+                enabled = enabled,
                 singleLine = true,
                 label = { Text(stringResource(R.string.floating_panel_name_label)) },
                 textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
             )
-            Button(onClick = onAddPanel) {
+            Button(onClick = onAddPanel, enabled = enabled) {
                 Text(stringResource(R.string.action_add), fontSize = 20.sp)
             }
             Button(
                 onClick = { onDeletePanel(effectiveId) },
-                enabled = panels.size > 1
+                enabled = enabled && panels.size > 1
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 20.sp)
             }
@@ -774,7 +780,8 @@ fun FloatingDashboardPanelEditor(
 @Composable
 fun FloatingDashboardPositionSizeSettings(
     settingsViewModel: SettingsViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val floatingDashboardHeight by settingsViewModel.floatingDashboardHeight.collectAsStateWithLifecycle()
     val floatingDashboardWidth by settingsViewModel.floatingDashboardWidth.collectAsStateWithLifecycle()
@@ -804,7 +811,8 @@ fun FloatingDashboardPositionSizeSettings(
                             settingsViewModel.saveFloatingDashboardWidth(newValue)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
                 )
             }
 
@@ -825,7 +833,8 @@ fun FloatingDashboardPositionSizeSettings(
                             settingsViewModel.saveFloatingDashboardHeight(newValue)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
                 )
             }
         }
@@ -852,7 +861,8 @@ fun FloatingDashboardPositionSizeSettings(
                             settingsViewModel.saveFloatingDashboardStartX(newValue)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
                 )
             }
 
@@ -873,7 +883,8 @@ fun FloatingDashboardPositionSizeSettings(
                             settingsViewModel.saveFloatingDashboardStartY(newValue)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
                 )
             }
         }
@@ -886,7 +897,8 @@ fun IntInputField(
     value: Int,
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    fontSize: TextUnit = 24.sp
+    fontSize: TextUnit = 24.sp,
+    enabled: Boolean = true
 ) {
     var textValue by remember { mutableStateOf(value.toString()) }
     var isError by remember { mutableStateOf(false) }
@@ -913,6 +925,7 @@ fun IntInputField(
             }
         },
         modifier = modifier,
+        enabled = enabled,
         singleLine = true,
         isError = isError,
         textStyle = LocalTextStyle.current.copy(fontSize = fontSize),
