@@ -42,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import vad.dashing.tbox.FloatingDashboardConfig
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -702,37 +704,68 @@ fun ATLogsCard(
     }
 }
 
+private data class FloatingPanelDropdownOption(val id: String, val label: String) {
+    override fun toString() = label
+}
+
 @Composable
-fun FloatingDashboardProfileSelector(
-    selectedId: String,
-    onSelect: (String) -> Unit,
+fun FloatingDashboardPanelEditor(
+    panels: List<FloatingDashboardConfig>,
+    selectedPanelId: String,
+    onSelectPanelId: (String) -> Unit,
+    onRenamePanel: (panelId: String, name: String) -> Unit,
+    onAddPanel: () -> Unit,
+    onDeletePanel: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val options = (1..6).map { index ->
-        "floating-$index" to index.toString()
+    if (panels.isEmpty()) return
+    val selectedConfig = panels.find { it.id == selectedPanelId } ?: panels.first()
+    val effectiveId = selectedConfig.id
+    var draftName by remember { mutableStateOf(selectedConfig.name) }
+    LaunchedEffect(effectiveId, selectedConfig.name) {
+        draftName = selectedConfig.name
+    }
+    val options = remember(panels) {
+        panels.map { FloatingPanelDropdownOption(it.id, it.name.ifBlank { it.id }) }
+    }
+    val selectedOption = remember(options, effectiveId) {
+        options.find { it.id == effectiveId } ?: options.first()
     }
     Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            options.forEach { (id, label) ->
-                val isSelected = id == selectedId
-                if (isSelected) {
-                    Button(
-                        onClick = { onSelect(id) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(text = label, fontSize = 22.sp)
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = { onSelect(id) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(text = label, fontSize = 22.sp)
-                    }
-                }
+            GenericDropdownSelector(
+                selectedValue = selectedOption,
+                options = options,
+                onValueChange = { onSelectPanelId(it.id) },
+                width = 220.dp,
+                enabled = true
+            )
+            OutlinedTextField(
+                value = draftName,
+                onValueChange = { draftName = it },
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { state ->
+                        if (!state.isFocused && draftName != selectedConfig.name) {
+                            onRenamePanel(effectiveId, draftName.trim())
+                        }
+                    },
+                singleLine = true,
+                label = { Text(stringResource(R.string.floating_panel_name_label)) },
+                textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+            )
+            Button(onClick = onAddPanel) {
+                Text(stringResource(R.string.action_add), fontSize = 20.sp)
+            }
+            Button(
+                onClick = { onDeletePanel(effectiveId) },
+                enabled = panels.size > 1
+            ) {
+                Text(stringResource(R.string.action_delete), fontSize = 20.sp)
             }
         }
     }

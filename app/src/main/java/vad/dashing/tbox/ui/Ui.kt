@@ -26,7 +26,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -64,6 +67,8 @@ data class TabItem(
 fun TboxApp(
     settingsManager: SettingsManager,
     appDataManager: AppDataManager,
+    applyInitialTabFromIntent: Boolean = false,
+    initialTabIndex: Int = 0,
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -87,6 +92,8 @@ fun TboxApp(
             viewModel = viewModel,
             settingsViewModel = settingsViewModel,
             appDataViewModel = appDataViewModel,
+            applyInitialTabFromIntent = applyInitialTabFromIntent,
+            initialTabIndex = initialTabIndex,
             onTboxRestart = onTboxRestart,
             onSaveToFile = onSaveToFile,
             onServiceCommand = onServiceCommand,
@@ -118,6 +125,8 @@ fun TboxScreen(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
+    applyInitialTabFromIntent: Boolean = false,
+    initialTabIndex: Int = 0,
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -126,7 +135,12 @@ fun TboxScreen(
     val canViewModel: CanDataViewModel = viewModel()
     val cycleViewModel: CycleDataViewModel = viewModel()
 
-    val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(applyInitialTabFromIntent, initialTabIndex) {
+        if (applyInitialTabFromIntent) {
+            selectedTab = initialTabIndex
+        }
+    }
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
 
     val tabs = TabItems.getItems()
@@ -149,19 +163,6 @@ fun TboxScreen(
 
     val menuIconSize = 28.dp
     val menuButtonSize = 64.dp
-
-    // Показываем loading пока загружается сохраненная вкладка
-    if (selectedTab == null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(stringResource(R.string.loading), fontSize = 18.sp)
-        }
-        return
-    }
 
     LaunchedEffect(selectedTab) {
         if (selectedTab == 0) {
@@ -224,8 +225,7 @@ fun TboxScreen(
                                     selected = selectedTab == index,
                                     showText = isMenuVisible,
                                     onClick = {
-                                        // Сохраняем выбор вкладки через ViewModel
-                                        settingsViewModel.saveSelectedTab(index)
+                                        selectedTab = index
                                     }
                                 )
                             }

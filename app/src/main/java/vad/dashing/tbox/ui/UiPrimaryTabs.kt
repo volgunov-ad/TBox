@@ -252,6 +252,7 @@ fun SettingsTabContent(
     val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
     val isFloatingDashboardShowTboxDisconnectIndicator by
         settingsViewModel.isFloatingDashboardShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
+    val floatingDashboardsList by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
@@ -273,6 +274,7 @@ fun SettingsTabContent(
     val warningTitle = stringResource(R.string.warning_title)
     val warningSuspendStop = stringResource(R.string.warning_suspend_stop_manual_reboot)
     val expertModeWarning = stringResource(R.string.settings_expert_mode_warning_desc)
+    val newFloatingPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
@@ -401,10 +403,20 @@ fun SettingsTabContent(
         )
 
         SettingsTitle(stringResource(R.string.settings_floating_panels_title))
-        FloatingDashboardProfileSelector(
-            selectedId = activeFloatingDashboardId,
-            onSelect = { panelId ->
+        FloatingDashboardPanelEditor(
+            panels = floatingDashboardsList,
+            selectedPanelId = activeFloatingDashboardId,
+            onSelectPanelId = { panelId ->
                 settingsViewModel.saveSelectedFloatingDashboardId(panelId)
+            },
+            onRenamePanel = { panelId, name ->
+                settingsViewModel.saveFloatingDashboardName(panelId, name)
+            },
+            onAddPanel = {
+                settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
+            },
+            onDeletePanel = { panelId ->
+                settingsViewModel.deleteFloatingDashboard(panelId)
             },
             modifier = Modifier.padding(bottom = 8.dp)
         )

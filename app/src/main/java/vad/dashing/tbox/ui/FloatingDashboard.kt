@@ -397,7 +397,6 @@ fun FloatingDashboard(
                                                 } else if (isFloatingDashboardClickAction) {
                                                     openMainActivityForWidgetKey(
                                                         context = context,
-                                                        settingsViewModel = settingsViewModel,
                                                         dataKey = widget.dataKey
                                                     )
                                                 }
@@ -603,7 +602,6 @@ private fun openMainActivity(context: Context) {
 
 private fun openMainActivityForWidgetKey(
     context: Context,
-    settingsViewModel: SettingsViewModel,
     dataKey: String
 ) {
     val targetTab = when (dataKey) {
@@ -611,8 +609,15 @@ private fun openMainActivityForWidgetKey(
         "locWidget" -> 2
         else -> null
     }
-    targetTab?.let(settingsViewModel::saveSelectedTab)
-    openMainActivity(context)
+    try {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            targetTab?.let { putExtra(MainActivity.EXTRA_INITIAL_TAB, it) }
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
 }
 
 private fun persistFloatingMediaWidgetSelectedPlayer(

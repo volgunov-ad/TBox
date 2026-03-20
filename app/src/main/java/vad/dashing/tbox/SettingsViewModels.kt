@@ -362,13 +362,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
-    val selectedTab = settingsManager.selectedTabFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = null
-        )
-
     val dashboardWidgetsConfig = settingsManager.dashboardWidgetsFlow
         .stateIn(
             scope = viewModelScope,
@@ -476,9 +469,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         configs: List<FloatingDashboardConfig>
     ): List<FloatingDashboardConfig> {
         if (configs.isEmpty()) return defaultFloatingDashboards
-        val existingIds = configs.map { it.id }.toSet()
-        val missing = defaultFloatingDashboards.filter { it.id !in existingIds }
-        return if (missing.isEmpty()) configs else configs + missing
+        return configs
     }
 
     private fun updateFloatingDashboard(
@@ -748,15 +739,38 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateFloatingDashboard(panelId) { it.copy(showTboxDisconnectIndicator = enabled) }
     }
 
-    fun saveFloatingDashboards(configs: List<FloatingDashboardConfig>) {
+    fun saveFloatingDashboardName(panelId: String, name: String) {
+        updateFloatingDashboard(panelId) { it.copy(name = name) }
+    }
+
+    fun addFloatingDashboard(defaultName: String) {
         viewModelScope.launch {
-            settingsManager.saveFloatingDashboards(configs)
+            val base = ensureDefaultFloatingDashboards(floatingDashboards.value).toMutableList()
+            val newId = "floating-" + java.util.UUID.randomUUID().toString().take(8)
+            val newPanel = createDefaultFloatingDashboard(newId, defaultName)
+            base.add(newPanel)
+            settingsManager.saveFloatingDashboards(base)
+            settingsManager.saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, newId)
         }
     }
 
-    fun saveSelectedTab(tabIndex: Int) {
+    fun deleteFloatingDashboard(panelId: String) {
         viewModelScope.launch {
-            settingsManager.saveSelectedTab(tabIndex)
+            val base = ensureDefaultFloatingDashboards(floatingDashboards.value).toMutableList()
+            if (base.size <= 1) return@launch
+            val idx = base.indexOfFirst { it.id == panelId }
+            if (idx < 0) return@launch
+            base.removeAt(idx)
+            settingsManager.saveFloatingDashboards(base)
+            if (selectedFloatingDashboardId.value == panelId) {
+                settingsManager.saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, base.first().id)
+            }
+        }
+    }
+
+    fun saveFloatingDashboards(configs: List<FloatingDashboardConfig>) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingDashboards(configs)
         }
     }
 

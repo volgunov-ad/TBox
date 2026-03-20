@@ -76,8 +76,6 @@ class SettingsManager(private val context: Context) {
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         private val LEFT_MENU_VISIBLE = booleanPreferencesKey("${KEY_PREFIX}left_menu_visible")
 
-        private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
-
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
         private val DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_cols")
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
@@ -219,12 +217,6 @@ class SettingsManager(private val context: Context) {
 
     val tboxIPRotationFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[TBOX_IP_ROTATION_KEY] ?: false }
-        .distinctUntilChanged()
-
-    val selectedTabFlow: Flow<Int> = context.settingsDataStore.data
-        .map { preferences ->
-            preferences[SELECTED_TAB_KEY]?.toIntOrNull() ?: 0
-        }
         .distinctUntilChanged()
 
     val dashboardRowsFlow: Flow<Int> = context.settingsDataStore.data
@@ -485,12 +477,6 @@ class SettingsManager(private val context: Context) {
         }
     }
 
-    suspend fun saveSelectedTab(tabIndex: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[SELECTED_TAB_KEY] = tabIndex.toString()
-        }
-    }
-
     suspend fun saveDashboardRows(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[DASHBOARD_ROWS_KEY] = config
@@ -535,9 +521,7 @@ class SettingsManager(private val context: Context) {
         configs: List<FloatingDashboardConfig>
     ): List<FloatingDashboardConfig> {
         if (configs.isEmpty()) return defaultFloatingDashboards()
-        val existingIds = configs.map { it.id }.toSet()
-        val missing = defaultFloatingDashboards().filter { it.id !in existingIds }
-        return if (missing.isEmpty()) configs else configs + missing
+        return configs
     }
 
     private fun defaultFloatingDashboards(): List<FloatingDashboardConfig> {
@@ -545,12 +529,7 @@ class SettingsManager(private val context: Context) {
             createDefaultFloatingDashboard(
                 DEFAULT_FLOATING_DASHBOARD_ID,
                 context.getString(R.string.floating_dashboard_name_1)
-            ),
-            createDefaultFloatingDashboard("floating-2", context.getString(R.string.floating_dashboard_name_2)),
-            createDefaultFloatingDashboard("floating-3", context.getString(R.string.floating_dashboard_name_3)),
-            createDefaultFloatingDashboard("floating-4", context.getString(R.string.floating_dashboard_name_4)),
-            createDefaultFloatingDashboard("floating-5", context.getString(R.string.floating_dashboard_name_5)),
-            createDefaultFloatingDashboard("floating-6", context.getString(R.string.floating_dashboard_name_6))
+            )
         )
     }
 

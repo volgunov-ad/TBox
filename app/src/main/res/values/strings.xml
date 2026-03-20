@@ -269,6 +269,10 @@
     <string name="floating_dashboard_name_4">Панель 4</string>
     <string name="floating_dashboard_name_5">Панель 5</string>
     <string name="floating_dashboard_name_6">Панель 6</string>
+    <string name="floating_dashboard_new_panel_default">Новая панель</string>
+    <string name="floating_panel_name_label">Имя панели</string>
+    <string name="action_add">Добавить</string>
+    <string name="action_delete">Удалить</string>
 
     <string name="seat_mode_off">выключено</string>
     <string name="seat_mode_heat_1">обогрев 1</string>
