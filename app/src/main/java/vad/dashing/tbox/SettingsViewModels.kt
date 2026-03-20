@@ -365,7 +365,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0
+            initialValue = SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX
         )
 
     val dashboardWidgetsConfig = settingsManager.dashboardWidgetsFlow

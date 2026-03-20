@@ -55,6 +55,9 @@ data class FloatingDashboardConfig(
 class SettingsManager(private val context: Context) {
 
     companion object {
+        /** Tab index that shows the home [vad.dashing.tbox.ui.MainScreen] instead of [vad.dashing.tbox.ui.TboxScreen]. */
+        const val MAIN_SCREEN_SELECTED_TAB_INDEX = 100
+
         private const val KEY_PREFIX = "vad.dashing.tbox."
 
         // Boolean настройки
@@ -209,7 +212,8 @@ class SettingsManager(private val context: Context) {
 
     val selectedTabFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[SELECTED_TAB_KEY]?.toIntOrNull() ?: 0
+            preferences[SELECTED_TAB_KEY]?.toIntOrNull()
+                ?: MAIN_SCREEN_SELECTED_TAB_INDEX
         }
         .distinctUntilChanged()
 

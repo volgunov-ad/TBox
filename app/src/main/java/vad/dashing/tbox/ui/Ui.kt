@@ -26,10 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -84,10 +81,15 @@ fun TboxApp(
     )
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
+    val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
 
     TboxAppTheme(theme = currentTheme) {
-        var showConsoleUi by rememberSaveable { mutableStateOf(false) }
-        if (showConsoleUi) {
+        if (selectedTab == SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX) {
+            MainScreen(
+                onOpenConsole = { settingsViewModel.saveSelectedTab(0) },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
             TboxScreen(
                 viewModel = viewModel,
                 settingsViewModel = settingsViewModel,
@@ -95,13 +97,7 @@ fun TboxApp(
                 onTboxRestart = onTboxRestart,
                 onSaveToFile = onSaveToFile,
                 onServiceCommand = onServiceCommand,
-                onMockLocationSettingChanged = onMockLocationSettingChanged,
-                onNavigateHome = { showConsoleUi = false }
-            )
-        } else {
-            MainScreen(
-                onOpenConsole = { showConsoleUi = true },
-                modifier = Modifier.fillMaxSize()
+                onMockLocationSettingChanged = onMockLocationSettingChanged
             )
         }
     }
@@ -134,7 +130,6 @@ fun TboxScreen(
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
-    onNavigateHome: () -> Unit,
 ) {
     val canViewModel: CanDataViewModel = viewModel()
     val cycleViewModel: CycleDataViewModel = viewModel()
@@ -218,7 +213,11 @@ fun TboxScreen(
                         icon = ImageVector.vectorResource(R.drawable.ic_menu_home),
                         selected = false,
                         showText = isMenuVisible,
-                        onClick = onNavigateHome
+                        onClick = {
+                            settingsViewModel.saveSelectedTab(
+                                SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX
+                            )
+                        }
                     )
 
                     Column(
