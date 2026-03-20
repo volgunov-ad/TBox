@@ -62,7 +62,6 @@ import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetConfigs
-import vad.dashing.tbox.normalizeWidgetElevation
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.ui.theme.TboxAppTheme
@@ -433,7 +432,6 @@ fun FloatingDashboard(
                                                         onRebootTbox()
                                                     }
                                                 },
-                                                elevation = normalizeWidgetElevation(widgetConfig.elevation).dp,
                                                 shape = normalizeWidgetShape(widgetConfig.shape).dp,
                                                 enableMusicInnerInteractions = !isEditMode
                                             )

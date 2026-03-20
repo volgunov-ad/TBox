@@ -65,8 +65,6 @@
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_shape">Скругление углов: %1$d</string>
     <string name="widget_shape_hint" formatted="false">0..50</string>
-    <string name="widget_elevation">Тень карточки: %1$d</string>
-    <string name="widget_elevation_hint" formatted="false">0..10</string>
     <string name="widget_text_color_light">Цвет текста (светлая тема)</string>
     <string name="widget_text_color_dark">Цвет текста (тёмная тема)</string>
     <string name="widget_background_color_light">Цвет фона (светлая тема)</string>

@@ -41,7 +41,6 @@ import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
-import vad.dashing.tbox.normalizeWidgetElevation
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
@@ -65,7 +64,6 @@ internal class WidgetSelectionDialogState(
     var showUnit by mutableStateOf(initialConfig.showUnit)
     var scale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
     var shape by mutableIntStateOf(normalizeWidgetShape(initialConfig.shape))
-    var elevation by mutableIntStateOf(normalizeWidgetElevation(initialConfig.elevation))
     var textColorLight by mutableIntStateOf(initialConfig.textColorLight)
     var textColorDark by mutableIntStateOf(initialConfig.textColorDark)
     var backgroundColorLight by mutableIntStateOf(
@@ -239,32 +237,6 @@ internal fun WidgetSelectionDialogForm(
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_elevation, state.elevation),
-                            fontSize = 24.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_elevation_hint),
-                            fontSize = 20.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = state.elevation.toFloat(),
-                            onValueChange = { newValue ->
-                                state.elevation = normalizeWidgetElevation(newValue.toInt())
-                            },
-                            valueRange = 0f..10f,
-                            steps = 9,
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                    }
                     WidgetTextColorSetting(
                         title = stringResource(R.string.widget_text_color_light),
                         colorValue = state.textColorLight,
@@ -411,10 +383,8 @@ internal fun applyWidgetSelectionChanges(
 ) {
     val normalizedScale = normalizeWidgetScale(state.scale)
     val normalizedShape = normalizeWidgetShape(state.shape)
-    val normalizedElevation = normalizeWidgetElevation(state.elevation)
     state.scale = normalizedScale
     state.shape = normalizedShape
-    state.elevation = normalizedElevation
     val currentWidget = currentWidgets[widgetIndex]
     val updatedWidgets = currentWidgets.toMutableList()
     val newWidget = if (state.selectedDataKey.isNotEmpty()) {
@@ -453,7 +423,6 @@ internal fun applyWidgetSelectionChanges(
             showUnit = state.showUnit,
             scale = normalizedScale,
             shape = normalizedShape,
-            elevation = normalizedElevation,
             textColorLight = state.textColorLight,
             textColorDark = state.textColorDark,
             backgroundColorLight = state.backgroundColorLight,
