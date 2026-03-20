@@ -13,6 +13,9 @@ const val DEFAULT_WIDGET_SHAPE = 0
 private const val MIN_WIDGET_SHAPE = 0
 private const val MAX_WIDGET_SHAPE = 50
 
+/** Corner radius in dp for main dashboard tiles (matches DashboardWidgetScaffold defaults). */
+const val MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE = 12
+
 const val DEFAULT_WIDGET_ELEVATION = 4
 private const val MIN_WIDGET_ELEVATION = 0
 private const val MAX_WIDGET_ELEVATION = 10

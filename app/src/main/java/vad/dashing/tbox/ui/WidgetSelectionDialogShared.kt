@@ -36,7 +36,9 @@ import androidx.compose.ui.unit.sp
 import android.content.Context
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.WidgetsRepository
@@ -126,7 +128,8 @@ internal fun rememberWidgetSelectionDialogState(
 internal fun WidgetSelectionDialogForm(
     titleText: String,
     state: WidgetSelectionDialogState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showShapeAndElevationSettings: Boolean = true
 ) {
     val context = LocalContext.current
     val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
@@ -213,57 +216,59 @@ internal fun WidgetSelectionDialogForm(
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_shape, state.shape),
-                            fontSize = 24.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_shape_hint),
-                            fontSize = 20.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = state.shape.toFloat(),
-                            onValueChange = { newValue ->
-                                state.shape = normalizeWidgetShape(newValue.toInt())
-                            },
-                            valueRange = 0f..50f,
-                            steps = 49,
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                    }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_elevation, state.elevation),
-                            fontSize = 24.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_elevation_hint),
-                            fontSize = 20.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = state.elevation.toFloat(),
-                            onValueChange = { newValue ->
-                                state.elevation = normalizeWidgetElevation(newValue.toInt())
-                            },
-                            valueRange = 0f..10f,
-                            steps = 9,
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
+                    if (showShapeAndElevationSettings) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.widget_shape, state.shape),
+                                fontSize = 24.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.widget_shape_hint),
+                                fontSize = 20.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Slider(
+                                value = state.shape.toFloat(),
+                                onValueChange = { newValue ->
+                                    state.shape = normalizeWidgetShape(newValue.toInt())
+                                },
+                                valueRange = 0f..50f,
+                                steps = 49,
+                                enabled = state.togglesEnabled,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.widget_elevation, state.elevation),
+                                fontSize = 24.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.widget_elevation_hint),
+                                fontSize = 20.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Slider(
+                                value = state.elevation.toFloat(),
+                                onValueChange = { newValue ->
+                                    state.elevation = normalizeWidgetElevation(newValue.toInt())
+                                },
+                                valueRange = 0f..10f,
+                                steps = 9,
+                                enabled = state.togglesEnabled,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
                     }
                     WidgetTextColorSetting(
                         title = stringResource(R.string.widget_text_color_light),
@@ -407,11 +412,20 @@ internal fun applyWidgetSelectionChanges(
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     widgetIndex: Int,
     state: WidgetSelectionDialogState,
-    saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit
+    saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit,
+    pinDefaultShapeAndElevation: Boolean = false
 ) {
     val normalizedScale = normalizeWidgetScale(state.scale)
-    val normalizedShape = normalizeWidgetShape(state.shape)
-    val normalizedElevation = normalizeWidgetElevation(state.elevation)
+    val normalizedShape = if (pinDefaultShapeAndElevation) {
+        normalizeWidgetShape(MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE)
+    } else {
+        normalizeWidgetShape(state.shape)
+    }
+    val normalizedElevation = if (pinDefaultShapeAndElevation) {
+        normalizeWidgetElevation(DEFAULT_WIDGET_ELEVATION)
+    } else {
+        normalizeWidgetElevation(state.elevation)
+    }
     state.scale = normalizedScale
     state.shape = normalizedShape
     state.elevation = normalizedElevation

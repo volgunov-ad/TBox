@@ -41,8 +41,9 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
+import vad.dashing.tbox.DEFAULT_WIDGET_ELEVATION
+import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE
 import vad.dashing.tbox.normalizeWidgetConfigs
-import vad.dashing.tbox.normalizeWidgetElevation
 
 @Composable
 fun MainDashboardTab(
@@ -172,8 +173,8 @@ fun MainDashboardTab(
                                                 onTboxRestartClick()
                                             }
                                         },
-                                        elevation = normalizeWidgetElevation(widgetConfig.elevation).dp,
-                                        shape = widgetConfig.shape.dp
+                                        elevation = DEFAULT_WIDGET_ELEVATION.dp,
+                                        shape = MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE.dp
                                     )
                                 }
                             }
@@ -231,7 +232,8 @@ fun WidgetSelectionDialog(
                 state = state,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp)
+                    .padding(8.dp),
+                showShapeAndElevationSettings = false
             )
         },
         confirmButton = {
@@ -246,7 +248,8 @@ fun WidgetSelectionDialog(
                         currentWidgetConfigs = currentWidgetConfigs,
                         widgetIndex = widgetIndex,
                         state = state,
-                        saveConfigs = settingsViewModel::saveDashboardWidgets
+                        saveConfigs = settingsViewModel::saveDashboardWidgets,
+                        pinDefaultShapeAndElevation = true
                     )
                     onDismiss()
                 },
