@@ -450,7 +450,9 @@ fun FloatingDashboard(
                 }
 
                 val showEditIndicators = isEditMode && showDialogForIndex == null
-                if (!hasConfiguredWidgets || !tboxConnected || showEditIndicators) {
+                val showTboxDisconnectFrame =
+                    panelConfig.showTboxDisconnectIndicator && !tboxConnected
+                if (!hasConfiguredWidgets || showTboxDisconnectFrame || showEditIndicators) {
                     Canvas(
                         modifier = Modifier.matchParentSize()
                     ) {
@@ -467,7 +469,7 @@ fun FloatingDashboard(
                                 style = stroke
                             )
                         }
-                        if (!tboxConnected) {
+                        if (showTboxDisconnectFrame) {
                             drawRect(
                                 color = Color(0xD9FF9800),
                                 style = stroke

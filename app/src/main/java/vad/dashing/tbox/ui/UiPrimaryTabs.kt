@@ -250,6 +250,8 @@ fun SettingsTabContent(
 
     val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
     val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
+    val isFloatingDashboardShowTboxDisconnectIndicator by
+        settingsViewModel.isFloatingDashboardShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
@@ -429,6 +431,15 @@ fun SettingsTabContent(
                 settingsViewModel.saveFloatingDashboardClickAction(enabled)
             },
             stringResource(R.string.settings_open_app_on_panel_click_title),
+            "",
+            true
+        )
+        SettingSwitch(
+            isFloatingDashboardShowTboxDisconnectIndicator,
+            { enabled ->
+                settingsViewModel.saveFloatingDashboardShowTboxDisconnectIndicator(enabled)
+            },
+            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
             "",
             true
         )

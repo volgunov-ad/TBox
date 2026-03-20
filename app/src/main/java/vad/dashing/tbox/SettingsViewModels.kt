@@ -29,6 +29,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_FLOATING_DASHBOARD_ENABLED = false
         private const val DEFAULT_FLOATING_DASHBOARD_BACKGROUND = false
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
+        private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
         private const val DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD = false
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
@@ -276,6 +277,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
         )
 
+    val isFloatingDashboardShowTboxDisconnectIndicator = activeFloatingDashboardConfig
+        .map { it.showTboxDisconnectIndicator }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR
+        )
+
     val logLevel = settingsManager.logLevelFlow
         .stateIn(
             scope = viewModelScope,
@@ -453,7 +462,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             startX = DEFAULT_FLOATING_DASHBOARD_START_X,
             startY = DEFAULT_FLOATING_DASHBOARD_START_Y,
             background = DEFAULT_FLOATING_DASHBOARD_BACKGROUND,
-            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
+            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION,
+            showTboxDisconnectIndicator = DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR
         )
     }
 
@@ -728,6 +738,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveFloatingDashboardClickAction(panelId: String, enabled: Boolean) {
         updateFloatingDashboard(panelId) { it.copy(clickAction = enabled) }
+    }
+
+    fun saveFloatingDashboardShowTboxDisconnectIndicator(enabled: Boolean) {
+        updateSelectedFloatingDashboard { it.copy(showTboxDisconnectIndicator = enabled) }
+    }
+
+    fun saveFloatingDashboardShowTboxDisconnectIndicator(panelId: String, enabled: Boolean) {
+        updateFloatingDashboard(panelId) { it.copy(showTboxDisconnectIndicator = enabled) }
     }
 
     fun saveFloatingDashboards(configs: List<FloatingDashboardConfig>) {

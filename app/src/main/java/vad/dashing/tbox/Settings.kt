@@ -48,7 +48,8 @@ data class FloatingDashboardConfig(
     val startX: Int,
     val startY: Int,
     val background: Boolean,
-    val clickAction: Boolean
+    val clickAction: Boolean,
+    val showTboxDisconnectIndicator: Boolean = true
 )
 
 class SettingsManager(private val context: Context) {
@@ -99,6 +100,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FLOATING_DASHBOARD_ENABLED = false
         private const val DEFAULT_FLOATING_DASHBOARD_BACKGROUND = false
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
+        private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
         private const val DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD = false
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
@@ -572,7 +574,8 @@ class SettingsManager(private val context: Context) {
             startX = DEFAULT_FLOATING_DASHBOARD_START_X,
             startY = DEFAULT_FLOATING_DASHBOARD_START_Y,
             background = DEFAULT_FLOATING_DASHBOARD_BACKGROUND,
-            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
+            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION,
+            showTboxDisconnectIndicator = DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR
         )
     }
 
@@ -592,7 +595,11 @@ class SettingsManager(private val context: Context) {
             startX = obj.optInt("startX", DEFAULT_FLOATING_DASHBOARD_START_X),
             startY = obj.optInt("startY", DEFAULT_FLOATING_DASHBOARD_START_Y),
             background = obj.optBoolean("background", DEFAULT_FLOATING_DASHBOARD_BACKGROUND),
-            clickAction = obj.optBoolean("clickAction", DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION)
+            clickAction = obj.optBoolean("clickAction", DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION),
+            showTboxDisconnectIndicator = obj.optBoolean(
+                "showTboxDisconnectIndicator",
+                DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR
+            )
         )
     }
 
@@ -612,6 +619,7 @@ class SettingsManager(private val context: Context) {
             obj.put("startY", config.startY)
             obj.put("background", config.background)
             obj.put("clickAction", config.clickAction)
+            obj.put("showTboxDisconnectIndicator", config.showTboxDisconnectIndicator)
             array.put(obj)
         }
         return array.toString()
