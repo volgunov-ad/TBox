@@ -71,10 +71,13 @@ class DashboardMusicWidgetGestureLogicTest {
     @Test
     fun resolvePlayerLaunchPackage_redirectsBluetoothSourceToStockPlayer() {
         val canonicalResult = resolvePlayerLaunchPackage(SupportedMediaPlayer.BLUETOOTH_PHONE.packageName)
-        val aliasResult = resolvePlayerLaunchPackage("com.wt.wtbtservice")
 
         assertEquals("com.wt.multimedia.local", canonicalResult)
-        assertEquals("com.wt.multimedia.local", aliasResult)
+    }
+
+    @Test
+    fun resolvePlayerLaunchPackage_keepsUnknownBluetoothStackPackageUnchanged() {
+        assertEquals("com.wt.wtbtservice", resolvePlayerLaunchPackage("com.wt.wtbtservice"))
     }
 
     @Test

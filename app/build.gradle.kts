@@ -78,6 +78,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     testImplementation(libs.junit)
+    // Real org.json on JVM; Android's json stubs throw in unit tests (see parseWidgetConfigs tests).
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
