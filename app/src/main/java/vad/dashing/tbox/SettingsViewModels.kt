@@ -782,11 +782,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             if (_floatingPanelDeleteInProgressId.value != null) return@launch
             val base = ensureDefaultFloatingDashboards(floatingDashboards.value)
             if (base.size <= 1) return@launch
-            if (base.none { it.id == panelId }) return@launch
+            val panelConfig = base.firstOrNull { it.id == panelId } ?: return@launch
+            val wasAlreadyOff = !panelConfig.enabled
             _floatingPanelDeleteInProgressId.value = panelId
             try {
-                applyFloatingDashboardUpdate(panelId) { it.copy(enabled = false) }
-                delay(2000)
+                if (!wasAlreadyOff) {
+                    applyFloatingDashboardUpdate(panelId) { it.copy(enabled = false) }
+                }
+                delay(if (wasAlreadyOff) 1000 else 2000)
                 val remaining = ensureDefaultFloatingDashboards(floatingDashboards.value).toMutableList()
                 if (remaining.size <= 1) return@launch
                 val idx = remaining.indexOfFirst { it.id == panelId }
