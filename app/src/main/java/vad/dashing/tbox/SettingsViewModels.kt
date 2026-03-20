@@ -161,11 +161,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val floatingDashboards = settingsManager.floatingDashboardsFlow
-        .map { configs -> ensureDefaultFloatingDashboards(configs) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = defaultFloatingDashboards
+            initialValue = emptyList()
         )
 
     private val selectedFloatingDashboardIdState = MutableStateFlow(DEFAULT_FLOATING_DASHBOARD_ID)
@@ -406,17 +405,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     init {
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
-            val ensuredConfigs = ensureDefaultFloatingDashboards(storedConfigs)
-            if (ensuredConfigs != storedConfigs) {
-                settingsManager.saveFloatingDashboards(ensuredConfigs)
-            }
             selectedFloatingDashboardIdState.value =
-                ensuredConfigs.firstOrNull()?.id ?: DEFAULT_FLOATING_DASHBOARD_ID
+                storedConfigs.firstOrNull()?.id ?: DEFAULT_FLOATING_DASHBOARD_ID
         }
         viewModelScope.launch {
             floatingDashboards.collect { configs ->
-                if (configs.isEmpty()) return@collect
                 val cur = selectedFloatingDashboardIdState.value
+                if (configs.isEmpty()) {
+                    selectedFloatingDashboardIdState.value = DEFAULT_FLOATING_DASHBOARD_ID
+                    return@collect
+                }
                 if (configs.none { it.id == cur }) {
                     selectedFloatingDashboardIdState.value = configs.first().id
                 }
@@ -471,32 +469,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             ?: createDefaultFloatingDashboard(id, id)
     }
 
-    private fun ensureDefaultFloatingDashboards(
-        configs: List<FloatingDashboardConfig>
-    ): List<FloatingDashboardConfig> {
-        if (configs.isEmpty()) return defaultFloatingDashboards
-        return configs
-    }
-
     private suspend fun applyFloatingDashboardUpdate(
         panelId: String,
         update: (FloatingDashboardConfig) -> FloatingDashboardConfig
     ) {
         val resolvedId = panelId.ifBlank { DEFAULT_FLOATING_DASHBOARD_ID }
-        val baseConfigs = ensureDefaultFloatingDashboards(floatingDashboards.value)
-        val updatedConfigs = baseConfigs.toMutableList()
+        val updatedConfigs = floatingDashboards.value.toMutableList()
         val index = updatedConfigs.indexOfFirst { it.id == resolvedId }
-        val current = if (index >= 0) {
-            updatedConfigs[index]
-        } else {
-            fallbackFloatingDashboard(resolvedId)
-        }
-        val updated = update(current)
-        if (index >= 0) {
-            updatedConfigs[index] = updated
-        } else {
-            updatedConfigs.add(updated)
-        }
+        if (index < 0) return
+        val updated = update(updatedConfigs[index])
+        updatedConfigs[index] = updated
         settingsManager.saveFloatingDashboards(updatedConfigs)
     }
 
@@ -512,8 +494,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     private fun updateSelectedFloatingDashboard(
         update: (FloatingDashboardConfig) -> FloatingDashboardConfig
     ) {
-        val panelId = activeFloatingDashboardId.value
-        updateFloatingDashboard(panelId, update)
+        viewModelScope.launch {
+            val configs = floatingDashboards.value
+            if (configs.isEmpty()) return@launch
+            val panelId = activeFloatingDashboardId.value
+            if (configs.none { it.id == panelId }) return@launch
+            applyFloatingDashboardUpdate(panelId, update)
+        }
     }
 
     fun saveAutoRestartSetting(enabled: Boolean) {
@@ -636,7 +623,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun onSettingsTabSelected() {
-        val list = ensureDefaultFloatingDashboards(floatingDashboards.value)
+        val list = floatingDashboards.value
         if (list.isEmpty()) return
         selectedFloatingDashboardIdState.value = list.first().id
     }
@@ -768,7 +755,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun addFloatingDashboard(defaultName: String) {
         viewModelScope.launch {
-            val base = ensureDefaultFloatingDashboards(floatingDashboards.value).toMutableList()
+            val base = floatingDashboards.value.toMutableList()
             val newId = "floating-" + java.util.UUID.randomUUID().toString().take(8)
             val newPanel = createDefaultFloatingDashboard(newId, defaultName)
             base.add(newPanel)
@@ -780,8 +767,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun deleteFloatingDashboard(panelId: String) {
         viewModelScope.launch {
             if (_floatingPanelDeleteInProgressId.value != null) return@launch
-            val base = ensureDefaultFloatingDashboards(floatingDashboards.value)
-            if (base.size <= 1) return@launch
+            val base = floatingDashboards.value
             val panelConfig = base.firstOrNull { it.id == panelId } ?: return@launch
             val wasAlreadyOff = !panelConfig.enabled
             _floatingPanelDeleteInProgressId.value = panelId
@@ -790,14 +776,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                     applyFloatingDashboardUpdate(panelId) { it.copy(enabled = false) }
                 }
                 delay(if (wasAlreadyOff) 1000 else 2000)
-                val remaining = ensureDefaultFloatingDashboards(floatingDashboards.value).toMutableList()
-                if (remaining.size <= 1) return@launch
+                val remaining = floatingDashboards.value.toMutableList()
                 val idx = remaining.indexOfFirst { it.id == panelId }
                 if (idx < 0) return@launch
                 remaining.removeAt(idx)
                 settingsManager.saveFloatingDashboards(remaining)
                 if (selectedFloatingDashboardIdState.value == panelId) {
-                    selectedFloatingDashboardIdState.value = remaining.first().id
+                    selectedFloatingDashboardIdState.value =
+                        remaining.firstOrNull()?.id ?: DEFAULT_FLOATING_DASHBOARD_ID
                 }
             } finally {
                 _floatingPanelDeleteInProgressId.value = null

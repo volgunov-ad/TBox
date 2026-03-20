@@ -443,13 +443,7 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun ensureDefaultFloatingDashboards() {
-        val preferences = context.settingsDataStore.data.first()
-        val rawJson = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
-        val configs = parseFloatingDashboardsJson(rawJson)
-        val ensured = ensureDefaultFloatingDashboards(configs)
-        if (ensured != configs) {
-            saveFloatingDashboards(ensured)
-        }
+        // Historical API: empty floating panel list is valid; no default injection.
     }
 
     suspend fun saveTboxIP(value: String) {
@@ -523,13 +517,6 @@ class SettingsManager(private val context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
-    }
-
-    private fun ensureDefaultFloatingDashboards(
-        configs: List<FloatingDashboardConfig>
-    ): List<FloatingDashboardConfig> {
-        if (configs.isEmpty()) return defaultFloatingDashboards()
-        return configs
     }
 
     private fun defaultFloatingDashboards(): List<FloatingDashboardConfig> {

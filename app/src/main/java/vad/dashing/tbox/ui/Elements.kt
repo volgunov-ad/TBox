@@ -781,9 +781,7 @@ fun FloatingDashboardPanelEditor(
             }
             Button(
                 onClick = { onDeletePanel(effectiveId) },
-                enabled = enabled &&
-                    panels.size > 1 &&
-                    deleteInProgressPanelId != effectiveId
+                enabled = enabled && deleteInProgressPanelId != effectiveId
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 20.sp)
             }
