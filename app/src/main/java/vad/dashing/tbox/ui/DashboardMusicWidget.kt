@@ -461,7 +461,7 @@ private fun openSelectedPlayer(context: Context, packageName: String) {
 
 internal fun resolvePlayerLaunchPackage(packageName: String): String {
     return when (SupportedMediaPlayer.fromPackage(packageName)) {
-        SupportedMediaPlayer.BLUETOOTH_PHONE -> SupportedMediaPlayer.WT_LOCAL_MULTIMEDIA.packageName
+        SupportedMediaPlayer.BLUETOOTH_PHONE -> "com.wt.multimedia.local"
         else -> packageName
     }
 }
