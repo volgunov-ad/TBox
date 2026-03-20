@@ -266,12 +266,6 @@
     <string name="widget_desc_location">location</string>
     <string name="widget_desc_net">net</string>
     <string name="widget_desc_connection">connection</string>
-    <string name="floating_dashboard_name_1">Панель 1</string>
-    <string name="floating_dashboard_name_2">Панель 2</string>
-    <string name="floating_dashboard_name_3">Панель 3</string>
-    <string name="floating_dashboard_name_4">Панель 4</string>
-    <string name="floating_dashboard_name_5">Панель 5</string>
-    <string name="floating_dashboard_name_6">Панель 6</string>
     <string name="floating_dashboard_new_panel_default">Новая панель</string>
     <string name="floating_panel_name_label">Имя панели</string>
     <string name="floating_panel_rename_button">Изменить имя</string>

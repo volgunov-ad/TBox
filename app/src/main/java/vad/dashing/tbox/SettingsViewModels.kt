@@ -36,7 +36,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
 
-    private val defaultFloatingDashboards = settingsManager.getDefaultFloatingDashboards()
     private val floatingDashboardConfigStates =
         mutableMapOf<String, StateFlow<FloatingDashboardConfig>>()
     private var latestDashboardWidgetsConfig: List<FloatingDashboardWidgetConfig> = emptyList()
@@ -465,8 +464,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     private fun fallbackFloatingDashboard(id: String): FloatingDashboardConfig {
-        return defaultFloatingDashboards.firstOrNull { it.id == id }
-            ?: createDefaultFloatingDashboard(id, id)
+        return createDefaultFloatingDashboard(id, id)
     }
 
     private suspend fun applyFloatingDashboardUpdate(

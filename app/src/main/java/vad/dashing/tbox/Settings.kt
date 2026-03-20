@@ -107,7 +107,6 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD = false
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
-        private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
 
         // Кэш ключей для производительности
@@ -517,40 +516,6 @@ class SettingsManager(private val context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
-    }
-
-    private fun defaultFloatingDashboards(): List<FloatingDashboardConfig> {
-        return listOf(
-            createDefaultFloatingDashboard(
-                DEFAULT_FLOATING_DASHBOARD_ID,
-                context.getString(R.string.floating_dashboard_name_1)
-            )
-        )
-    }
-
-    fun getDefaultFloatingDashboards(): List<FloatingDashboardConfig> {
-        return defaultFloatingDashboards()
-    }
-
-    private fun createDefaultFloatingDashboard(
-        id: String,
-        name: String
-    ): FloatingDashboardConfig {
-        return FloatingDashboardConfig(
-            id = id,
-            name = name,
-            enabled = DEFAULT_FLOATING_DASHBOARD_ENABLED,
-            widgetsConfig = DEFAULT_FLOATING_DASHBOARD_WIDGETS,
-            rows = DEFAULT_FLOATING_DASHBOARD_ROWS,
-            cols = DEFAULT_FLOATING_DASHBOARD_COLS,
-            width = DEFAULT_FLOATING_DASHBOARD_WIDTH,
-            height = DEFAULT_FLOATING_DASHBOARD_HEIGHT,
-            startX = DEFAULT_FLOATING_DASHBOARD_START_X,
-            startY = DEFAULT_FLOATING_DASHBOARD_START_Y,
-            background = DEFAULT_FLOATING_DASHBOARD_BACKGROUND,
-            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION,
-            showTboxDisconnectIndicator = DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR
-        )
     }
 
     private fun parseFloatingDashboardConfig(obj: JSONObject): FloatingDashboardConfig? {
