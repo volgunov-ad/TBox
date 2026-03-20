@@ -276,7 +276,7 @@ fun TboxScreen(
             }
 
             // Содержимое справа
-            Box(
+            MainScreen(
                 modifier = Modifier
                     .weight(1f)
                     .background(MaterialTheme.colorScheme.background)
