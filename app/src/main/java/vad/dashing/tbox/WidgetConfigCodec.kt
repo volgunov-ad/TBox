@@ -16,6 +16,12 @@ private const val MAX_WIDGET_SHAPE = 50
 /** Corner radius in dp for main dashboard tiles (matches DashboardWidgetScaffold defaults). */
 const val MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE = 12
 
+/** Elevation in dp for main dashboard tiles. */
+const val MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION = 4
+
+/** Elevation in dp for floating overlay tiles (flat cards). */
+const val FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION = 0
+
 fun normalizeWidgetScale(rawScale: Float): Float {
     if (!rawScale.isFinite()) return DEFAULT_WIDGET_SCALE
     val normalized = rawScale.coerceIn(MIN_WIDGET_SCALE, MAX_WIDGET_SCALE)
