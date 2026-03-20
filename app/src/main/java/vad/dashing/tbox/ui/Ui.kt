@@ -26,10 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -129,12 +126,7 @@ fun TboxScreen(
     val canViewModel: CanDataViewModel = viewModel()
     val cycleViewModel: CycleDataViewModel = viewModel()
 
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(selectedTab) {
-        if (selectedTab == 4) {
-            settingsViewModel.onSettingsTabSelected()
-        }
-    }
+    val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
 
     val tabs = TabItems.getItems()
@@ -165,6 +157,9 @@ fun TboxScreen(
                 "",
                 ""
             )
+        }
+        if (selectedTab == 4) {
+            settingsViewModel.onSettingsTabSelected()
         }
     }
 
@@ -219,7 +214,7 @@ fun TboxScreen(
                                     selected = selectedTab == index,
                                     showText = isMenuVisible,
                                     onClick = {
-                                        selectedTab = index
+                                        settingsViewModel.saveSelectedTab(index)
                                     }
                                 )
                             }

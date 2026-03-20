@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -19,7 +20,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
         private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
-        private const val FLOATING_DASHBOARD_SELECTED_KEY = "floating_dashboard_selected"
         private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_COLS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_WIDTH = 100
@@ -166,16 +166,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = defaultFloatingDashboards
         )
 
-    private val selectedFloatingDashboardId = settingsManager.getStringFlow(
-        FLOATING_DASHBOARD_SELECTED_KEY,
-        DEFAULT_FLOATING_DASHBOARD_ID
-    ).stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = DEFAULT_FLOATING_DASHBOARD_ID
-    )
+    private val selectedFloatingDashboardIdState = MutableStateFlow(DEFAULT_FLOATING_DASHBOARD_ID)
 
-    val activeFloatingDashboardId = combine(floatingDashboards, selectedFloatingDashboardId) {
+    val activeFloatingDashboardId = combine(floatingDashboards, selectedFloatingDashboardIdState) {
             configs, selected ->
         configs.firstOrNull { it.id == selected }?.id
             ?: configs.firstOrNull()?.id
@@ -362,6 +355,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val selectedTab = settingsManager.selectedTabFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
     val dashboardWidgetsConfig = settingsManager.dashboardWidgetsFlow
         .stateIn(
             scope = viewModelScope,
@@ -404,16 +404,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             if (ensuredConfigs != storedConfigs) {
                 settingsManager.saveFloatingDashboards(ensuredConfigs)
             }
-
-            val selectedId = settingsManager.getStringFlow(
-                FLOATING_DASHBOARD_SELECTED_KEY,
-                DEFAULT_FLOATING_DASHBOARD_ID
-            ).first()
-            val resolvedId = ensuredConfigs.firstOrNull { it.id == selectedId }?.id
-                ?: ensuredConfigs.firstOrNull()?.id
-                ?: DEFAULT_FLOATING_DASHBOARD_ID
-            if (resolvedId != selectedId) {
-                settingsManager.saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, resolvedId)
+            selectedFloatingDashboardIdState.value =
+                ensuredConfigs.firstOrNull()?.id ?: DEFAULT_FLOATING_DASHBOARD_ID
+        }
+        viewModelScope.launch {
+            floatingDashboards.collect { configs ->
+                if (configs.isEmpty()) return@collect
+                val cur = selectedFloatingDashboardIdState.value
+                if (configs.none { it.id == cur }) {
+                    selectedFloatingDashboardIdState.value = configs.first().id
+                }
             }
         }
         viewModelScope.launch {
@@ -619,16 +619,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveSelectedFloatingDashboardId(panelId: String) {
         val resolvedId = panelId.ifBlank { DEFAULT_FLOATING_DASHBOARD_ID }
-        viewModelScope.launch {
-            settingsManager.saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, resolvedId)
-        }
+        selectedFloatingDashboardIdState.value = resolvedId
     }
 
     fun onSettingsTabSelected() {
+        val list = ensureDefaultFloatingDashboards(floatingDashboards.value)
+        if (list.isEmpty()) return
+        selectedFloatingDashboardIdState.value = list.first().id
+    }
+
+    fun saveSelectedTab(tabIndex: Int) {
         viewModelScope.launch {
-            val list = ensureDefaultFloatingDashboards(floatingDashboards.value)
-            if (list.isEmpty()) return@launch
-            settingsManager.saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, list.first().id)
+            settingsManager.saveSelectedTab(tabIndex)
         }
     }
 
@@ -758,7 +760,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             val newPanel = createDefaultFloatingDashboard(newId, defaultName)
             base.add(newPanel)
             settingsManager.saveFloatingDashboards(base)
-            settingsManager.saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, newId)
+            selectedFloatingDashboardIdState.value = newId
         }
     }
 
@@ -770,8 +772,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             if (idx < 0) return@launch
             base.removeAt(idx)
             settingsManager.saveFloatingDashboards(base)
-            if (selectedFloatingDashboardId.value == panelId) {
-                settingsManager.saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, base.first().id)
+            if (selectedFloatingDashboardIdState.value == panelId) {
+                selectedFloatingDashboardIdState.value = base.first().id
             }
         }
     }
