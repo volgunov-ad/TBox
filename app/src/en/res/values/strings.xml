@@ -271,6 +271,7 @@
     <string name="floating_dashboard_name_6">Panel 6</string>
     <string name="floating_dashboard_new_panel_default">New panel</string>
     <string name="floating_panel_name_label">Panel name</string>
+    <string name="floating_panel_rename_button">Change name</string>
     <string name="action_add">Add</string>
     <string name="action_delete">Delete</string>
 
