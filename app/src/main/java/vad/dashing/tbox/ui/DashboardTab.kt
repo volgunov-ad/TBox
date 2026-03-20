@@ -42,6 +42,7 @@ import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.normalizeWidgetElevation
 
 @Composable
 fun MainDashboardTab(
@@ -170,7 +171,9 @@ fun MainDashboardTab(
                                                 restartEnabled = false
                                                 onTboxRestartClick()
                                             }
-                                        }
+                                        },
+                                        elevation = normalizeWidgetElevation(widgetConfig.elevation).dp,
+                                        shape = widgetConfig.shape.dp
                                     )
                                 }
                             }

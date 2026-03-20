@@ -11,7 +11,11 @@ private const val MIN_WIDGET_SCALE = 0.1f
 private const val MAX_WIDGET_SCALE = 2f
 const val DEFAULT_WIDGET_SHAPE = 0
 private const val MIN_WIDGET_SHAPE = 0
-private const val MAX_WIDGET_SHAPE = 30
+private const val MAX_WIDGET_SHAPE = 50
+
+const val DEFAULT_WIDGET_ELEVATION = 4
+private const val MIN_WIDGET_ELEVATION = 0
+private const val MAX_WIDGET_ELEVATION = 10
 
 fun normalizeWidgetScale(rawScale: Float): Float {
     if (!rawScale.isFinite()) return DEFAULT_WIDGET_SCALE
@@ -21,6 +25,10 @@ fun normalizeWidgetScale(rawScale: Float): Float {
 
 fun normalizeWidgetShape(rawShape: Int): Int {
     return rawShape.coerceIn(MIN_WIDGET_SHAPE, MAX_WIDGET_SHAPE)
+}
+
+fun normalizeWidgetElevation(rawElevation: Int): Int {
+    return rawElevation.coerceIn(MIN_WIDGET_ELEVATION, MAX_WIDGET_ELEVATION)
 }
 
 fun parseWidgetConfigsFromAny(rawValue: Any?): List<FloatingDashboardWidgetConfig> {
@@ -59,6 +67,7 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("showUnit", config.showUnit)
         obj.put("scale", normalizeWidgetScale(config.scale))
         obj.put("shape", normalizeWidgetShape(config.shape))
+        obj.put("elevation", normalizeWidgetElevation(config.elevation))
         obj.put("textColorLight", config.textColorLight)
         obj.put("textColorDark", config.textColorDark)
         config.backgroundColorLight?.let { obj.put("backgroundColorLight", it) }
@@ -151,6 +160,9 @@ private fun parseWidgetConfigsFromJsonArray(
                         ),
                         shape = normalizeWidgetShape(
                             item.optInt("shape", DEFAULT_WIDGET_SHAPE)
+                        ),
+                        elevation = normalizeWidgetElevation(
+                            item.optInt("elevation", DEFAULT_WIDGET_ELEVATION)
                         ),
                         textColorLight = item.optInt(
                             "textColorLight",

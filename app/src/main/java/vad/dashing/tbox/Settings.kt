@@ -26,6 +26,7 @@ data class FloatingDashboardWidgetConfig(
     val showUnit: Boolean = true,
     val scale: Float = 1.0f,
     val shape: Int = 0,
+    val elevation: Int = DEFAULT_WIDGET_ELEVATION,
     val textColorLight: Int = DEFAULT_WIDGET_TEXT_COLOR_LIGHT,
     val textColorDark: Int = DEFAULT_WIDGET_TEXT_COLOR_DARK,
     val backgroundColorLight: Int? = null,
