@@ -28,7 +28,7 @@ fun DashboardMotorHoursWidgetItem(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
-    elevation: Dp = 0.dp,
+    elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
     textColor: Color? = null,

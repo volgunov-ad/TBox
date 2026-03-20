@@ -17,9 +17,9 @@ private const val MAX_WIDGET_SHAPE = 50
 const val MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE = 12
 
 /** Elevation in dp for main dashboard tiles (fixed appearance; stored config values are ignored for now). */
-const val MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION = 0
+const val MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION = 4
 
-const val DEFAULT_WIDGET_ELEVATION = 0
+const val DEFAULT_WIDGET_ELEVATION = 4
 private const val MIN_WIDGET_ELEVATION = 0
 private const val MAX_WIDGET_ELEVATION = 10
 

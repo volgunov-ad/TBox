@@ -62,7 +62,7 @@ fun DashboardMusicWidgetItem(
     onLongClick: () -> Unit = {},
     onSelectedPlayerChange: (String) -> Unit = {},
     enableInnerInteractions: Boolean = true,
-    elevation: Dp = 0.dp,
+    elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     textColor: Color? = null,
     backgroundColor: Color? = null

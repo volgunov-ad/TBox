@@ -29,7 +29,7 @@ fun DashboardTempInOutWidgetItem(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     canViewModel: CanDataViewModel,
-    elevation: Dp = 0.dp,
+    elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
     textColor: Color? = null,
