@@ -19,8 +19,7 @@ class MediaControlServicePlayersTest {
             "com.android.bluetooth",
             "com.wt.wtbtservice",
             "com.nforetek.bt",
-            "com.wt.openbt.server",
-            "com.wt.multimedia.platform3"
+            "com.wt.openbt.server"
         )
 
         packages.forEach { packageName ->
@@ -30,10 +29,18 @@ class MediaControlServicePlayersTest {
     }
 
     @Test
+    fun fromPackage_resolvesPlatform3AliasToWtLocalMultimedia() {
+        val resolved = SupportedMediaPlayer.fromPackage("com.wt.multimedia.platform3")
+
+        assertEquals(SupportedMediaPlayer.WT_LOCAL_MULTIMEDIA, resolved)
+    }
+
+    @Test
     fun normalizeMediaPlayerPackages_includesWtLocalMultimediaAndAlias() {
         val normalized = normalizeMediaPlayerPackages(
             listOf(
                 " COM.WT.MULTIMEDIA.LOCAL ",
+                "com.wt.multimedia.platform3",
                 "ru.yandex.radio",
                 " com.wt.wtbtservice "
             )
