@@ -16,7 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
@@ -120,7 +119,10 @@ object TabItems {
             TabItem(stringResource(R.string.tab_info), Icons.Filled.Info),
             TabItem(stringResource(R.string.tab_can), ImageVector.vectorResource(R.drawable.menu_icon_data)),
             TabItem(stringResource(R.string.tab_widgets), ImageVector.vectorResource(R.drawable.menu_icon_widgets)),
-            TabItem(stringResource(R.string.tab_main_screen_settings), Icons.Filled.Home)
+            TabItem(
+                stringResource(R.string.tab_main_screen_settings),
+                ImageVector.vectorResource(R.drawable.ic_tab_main_screen_settings)
+            )
         )
     }
 }
