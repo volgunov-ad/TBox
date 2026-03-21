@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -85,15 +86,30 @@ internal class WidgetSelectionDialogState(
     val selectedMediaPlayer: String = resolveSelectedMediaPlayerForWidget(initialConfig)
     var mediaAutoPlayOnInit by mutableStateOf(initialConfig.mediaAutoPlayOnInit)
     var showAdvancedSettings by mutableStateOf(false)
+    var launcherAppPackage by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherAppPackage
+        } else {
+            ""
+        }
+    )
 
     val isMusicWidgetSelected: Boolean
         get() = selectedDataKey == MUSIC_WIDGET_DATA_KEY
+
+    val isAppLauncherWidgetSelected: Boolean
+        get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
 
     val togglesEnabled: Boolean
         get() = selectedDataKey.isNotEmpty()
 
     val canSaveSelection: Boolean
-        get() = !isMusicWidgetSelected || selectedMediaPlayers.isNotEmpty()
+        get() = when {
+            selectedDataKey.isEmpty() -> true
+            isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
+            isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
+            else -> true
+        }
 }
 
 @Composable
@@ -137,6 +153,8 @@ internal fun WidgetSelectionDialogForm(
                     key to WidgetsRepository.getTitleUnitForDataKey(context, key)
                 }
 
+    var showAppLauncherPicker by remember { mutableStateOf(false) }
+
     Column(
         modifier = modifier
     ) {
@@ -173,6 +191,41 @@ internal fun WidgetSelectionDialogForm(
                             "",
                             state.togglesEnabled
                         )
+                    }
+                    if (state.isAppLauncherWidgetSelected) {
+                        val appsAdv = rememberLaunchableAppEntries()
+                        val selectedLabelAdv =
+                            appsAdv.find { it.packageName == state.launcherAppPackage }?.label
+                        Text(
+                            text = if (selectedLabelAdv != null) {
+                                stringResource(R.string.widget_app_launcher_selected, selectedLabelAdv)
+                            } else {
+                                stringResource(R.string.widget_app_launcher_none_selected)
+                            },
+                            fontSize = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                        )
+                        Button(
+                            onClick = { showAppLauncherPicker = true },
+                            enabled = state.togglesEnabled,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.widget_app_launcher_pick_app),
+                                fontSize = 22.sp
+                            )
+                        }
+                        if (state.launcherAppPackage.isBlank()) {
+                            Text(
+                                text = stringResource(R.string.widget_app_launcher_required),
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 20.sp,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
                     }
                     SettingSwitch(
                         state.showTitle,
@@ -311,8 +364,47 @@ internal fun WidgetSelectionDialogForm(
                             )
                         }
                     }
+                    if (state.isAppLauncherWidgetSelected) {
+                        val apps = rememberLaunchableAppEntries()
+                        val selectedLabel = apps.find { it.packageName == state.launcherAppPackage }?.label
+                        Text(
+                            text = if (selectedLabel != null) {
+                                stringResource(R.string.widget_app_launcher_selected, selectedLabel)
+                            } else {
+                                stringResource(R.string.widget_app_launcher_none_selected)
+                            },
+                            fontSize = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                        )
+                        Button(
+                            onClick = { showAppLauncherPicker = true },
+                            enabled = state.togglesEnabled,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = stringResource(R.string.widget_app_launcher_pick_app),
+                                fontSize = 22.sp
+                            )
+                        }
+                        if (state.launcherAppPackage.isBlank()) {
+                            Text(
+                                text = stringResource(R.string.widget_app_launcher_required),
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 20.sp,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
+                    }
                 }
             }
+        }
+        if (showAppLauncherPicker) {
+            AppLauncherAppPickerDialog(
+                selectedPackage = state.launcherAppPackage,
+                onPackageSelected = { state.launcherAppPackage = it },
+                onDismiss = { showAppLauncherPicker = false }
+            )
         }
     }
 }
@@ -452,6 +544,11 @@ internal fun applyWidgetSelectionChanges(
                 state.mediaAutoPlayOnInit
             } else {
                 false
+            },
+            launcherAppPackage = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                state.launcherAppPackage.trim()
+            } else {
+                ""
             }
         )
     } else {

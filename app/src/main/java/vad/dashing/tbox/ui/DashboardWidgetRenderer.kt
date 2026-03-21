@@ -10,6 +10,7 @@ import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 
 @Composable
 fun DashboardWidgetRenderer(
@@ -154,6 +155,18 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 units = widgetConfig.showUnit,
                 textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        APP_LAUNCHER_WIDGET_DATA_KEY -> {
+            DashboardAppLauncherWidgetItem(
+                widget = widget,
+                packageName = widgetConfig.launcherAppPackage,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
                 backgroundColor = widgetBackgroundColor
             )
         }

@@ -32,7 +32,9 @@ data class FloatingDashboardWidgetConfig(
     val backgroundColorDark: Int? = null,
     val mediaPlayers: List<String> = emptyList(),
     val mediaSelectedPlayer: String = "",
-    val mediaAutoPlayOnInit: Boolean = false
+    val mediaAutoPlayOnInit: Boolean = false,
+    /** Package name of the app to launch (only for `appLauncherWidget`). */
+    val launcherAppPackage: String = ""
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */

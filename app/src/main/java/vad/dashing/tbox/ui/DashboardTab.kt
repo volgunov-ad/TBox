@@ -44,6 +44,7 @@ import vad.dashing.tbox.MainDashboardViewModel
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
@@ -165,7 +166,15 @@ fun MainDashboardTab(
                                         restartEnabled = restartEnabled,
                                         widgetTextColor = widgetTextColor,
                                         widgetBackgroundColor = widgetBackgroundColor,
-                                        onClick = {},
+                                        onClick = {
+                                            val cfg = widgetConfigs.getOrNull(index)
+                                            if (
+                                                cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                                cfg.launcherAppPackage.isNotBlank()
+                                            ) {
+                                                launchAppFromWidget(context, cfg.launcherAppPackage)
+                                            }
+                                        },
                                         onLongClick = { showDialogForIndex = index },
                                         onMusicSelectedPlayerChange = { selectedPackage ->
                                             settingsViewModel.saveDashboardMediaSelectedPlayer(

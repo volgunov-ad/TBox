@@ -43,6 +43,7 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
@@ -345,8 +346,14 @@ fun FloatingDashboard(
                     widgetInteractionPolicy = widgetInteractionPolicy,
                     widgetCardElevation = FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
                     onWidgetClick = { index ->
+                        val cfg = widgetConfigs.getOrNull(index)
                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                             showDialogForIndex = index
+                        } else if (
+                            cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            cfg.launcherAppPackage.isNotBlank()
+                        ) {
+                            launchAppFromWidget(context, cfg.launcherAppPackage)
                         } else if (isFloatingDashboardClickAction) {
                             openMainActivityFromWidget(context)
                         }

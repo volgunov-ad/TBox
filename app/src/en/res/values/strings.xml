@@ -364,6 +364,14 @@
     <string name="data_title_temp_in_out_widget">Outside and inside temperature widget</string>
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
+    <string name="data_title_app_launcher_widget">App shortcut</string>
+    <string name="widget_app_launcher_selected">Selected: %1$s</string>
+    <string name="widget_app_launcher_none_selected">No app selected</string>
+    <string name="widget_app_launcher_pick_app">Choose app</string>
+    <string name="widget_app_launcher_required">Choose an app to save the widget</string>
+    <string name="widget_app_launcher_pick_title">Choose app</string>
+    <string name="widget_app_launcher_search">Search</string>
+    <string name="widget_app_launcher_no_icon">?</string>
 
     <string name="cycle_voltage">Cycle voltage, V</string>
     <string name="cycle_speed">Cycle speed, km/h</string>

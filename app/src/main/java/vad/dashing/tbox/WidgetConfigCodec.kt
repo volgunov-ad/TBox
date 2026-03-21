@@ -83,6 +83,9 @@ fun serializeWidgetConfigsToJsonArray(
             }
         }
         obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
+        if (config.launcherAppPackage.isNotBlank()) {
+            obj.put("launcherAppPackage", config.launcherAppPackage.trim())
+        }
         array.put(obj)
     }
     return array
@@ -173,7 +176,8 @@ private fun parseWidgetConfigsFromJsonArray(
                         backgroundColorDark = parseBackgroundColor(item, "backgroundColorDark"),
                         mediaPlayers = mediaPlayers,
                         mediaSelectedPlayer = parseSelectedMediaPlayer(item, mediaPlayers),
-                        mediaAutoPlayOnInit = item.optBoolean("mediaAutoPlayOnInit", false)
+                        mediaAutoPlayOnInit = item.optBoolean("mediaAutoPlayOnInit", false),
+                        launcherAppPackage = item.optString("launcherAppPackage", "").trim()
                     )
                 )
             }
