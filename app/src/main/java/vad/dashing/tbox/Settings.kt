@@ -35,6 +35,17 @@ data class FloatingDashboardWidgetConfig(
     val mediaAutoPlayOnInit: Boolean = false
 )
 
+/** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
+data class MainScreenSettingsButtonPosition(
+    val x: Float,
+    val y: Float
+) {
+    companion object {
+        /** Top-right area (similar to previous fixed layout). */
+        val Default = MainScreenSettingsButtonPosition(0.92f, 0.04f)
+    }
+}
+
 data class FloatingDashboardConfig(
     val id: String,
     val name: String,
@@ -106,6 +117,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD = false
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
+        private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
 
         // Кэш ключей для производительности
@@ -214,6 +226,15 @@ class SettingsManager(private val context: Context) {
                 ?: MAIN_SCREEN_SELECTED_TAB_INDEX
         }
         .distinctUntilChanged()
+
+    val mainScreenSettingsButtonFlow: Flow<MainScreenSettingsButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenSettingsButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_SETTINGS_BUTTON_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
 
     // String flows
     val logLevelFlow: Flow<String> = context.settingsDataStore.data
@@ -440,6 +461,13 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveMainScreenSettingsButton(position: MainScreenSettingsButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_SETTINGS_BUTTON_KEY, obj.toString())
+    }
+
     suspend fun ensureDefaultFloatingDashboards() {
         // Historical API: empty floating panel list is valid; no default injection.
     }
@@ -498,6 +526,23 @@ class SettingsManager(private val context: Context) {
     suspend fun saveCanDataSaveCount(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[CAN_DATA_SAVE_COUNT_KEY] = config
+        }
+    }
+
+    private fun parseMainScreenSettingsButtonJson(raw: String): MainScreenSettingsButtonPosition {
+        if (raw.isBlank()) return MainScreenSettingsButtonPosition.Default
+        return try {
+            val o = JSONObject(raw)
+            MainScreenSettingsButtonPosition(
+                x = o.optDouble("x", MainScreenSettingsButtonPosition.Default.x.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+                y = o.optDouble("y", MainScreenSettingsButtonPosition.Default.y.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f)
+            )
+        } catch (_: Exception) {
+            MainScreenSettingsButtonPosition.Default
         }
     }
 

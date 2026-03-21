@@ -366,6 +366,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX
         )
 
+    val mainScreenSettingsButtonPosition = settingsManager.mainScreenSettingsButtonFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainScreenSettingsButtonPosition.Default
+        )
+
     val dashboardWidgetsConfig = settingsManager.dashboardWidgetsFlow
         .stateIn(
             scope = viewModelScope,
@@ -629,6 +636,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveSelectedTab(tabIndex: Int) {
         viewModelScope.launch {
             settingsManager.saveSelectedTab(tabIndex)
+        }
+    }
+
+    fun saveMainScreenSettingsButton(position: MainScreenSettingsButtonPosition) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenSettingsButton(position)
         }
     }
 

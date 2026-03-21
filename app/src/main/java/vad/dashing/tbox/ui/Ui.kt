@@ -86,6 +86,7 @@ fun TboxApp(
     TboxAppTheme(theme = currentTheme) {
         if (selectedTab == SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX) {
             MainScreen(
+                settingsViewModel = settingsViewModel,
                 onOpenConsole = { settingsViewModel.saveSelectedTab(0) },
                 modifier = Modifier.fillMaxSize()
             )
