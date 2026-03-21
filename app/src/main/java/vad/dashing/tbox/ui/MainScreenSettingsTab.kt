@@ -1,11 +1,19 @@
 package vad.dashing.tbox.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +44,25 @@ fun MainScreenSettingsTab(
     val mainScreenPanelCols by settingsViewModel.mainScreenPanelCols.collectAsStateWithLifecycle()
     val isMainScreenOpenOnBootEnabled by
         settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
+    val isMainScreenWallpaperLightSet by
+        settingsViewModel.isMainScreenWallpaperLightSet.collectAsStateWithLifecycle()
+    val isMainScreenWallpaperDarkSet by
+        settingsViewModel.isMainScreenWallpaperDarkSet.collectAsStateWithLifecycle()
+
+    val pickWallpaperLight = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            settingsViewModel.setMainScreenWallpaperLight(uri)
+        }
+    }
+    val pickWallpaperDark = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            settingsViewModel.setMainScreenWallpaperDark(uri)
+        }
+    }
 
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
     val scrollState = rememberScrollState()
@@ -55,6 +82,59 @@ fun MainScreenSettingsTab(
             stringResource(R.string.settings_main_screen_open_on_boot_desc),
             true
         )
+        SettingsTitle(stringResource(R.string.settings_main_screen_wallpaper_title))
+        Text(
+            text = stringResource(R.string.settings_main_screen_wallpaper_light),
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = { pickWallpaperLight.launch("image/*") },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick), fontSize = 22.sp)
+            }
+            OutlinedButton(
+                onClick = { settingsViewModel.setMainScreenWallpaperLight(null) },
+                enabled = isMainScreenWallpaperLightSet,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(stringResource(R.string.action_delete), fontSize = 22.sp)
+            }
+        }
+        Text(
+            text = stringResource(R.string.settings_main_screen_wallpaper_dark),
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = { pickWallpaperDark.launch("image/*") },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick), fontSize = 22.sp)
+            }
+            OutlinedButton(
+                onClick = { settingsViewModel.setMainScreenWallpaperDark(null) },
+                enabled = isMainScreenWallpaperDarkSet,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(stringResource(R.string.action_delete), fontSize = 22.sp)
+            }
+        }
         SettingsTitle(stringResource(R.string.settings_main_screen_panels_title))
         if (hasMainScreenPanels) {
             MainScreenPanelEditor(

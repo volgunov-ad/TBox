@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -22,8 +23,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -31,12 +36,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.graphics.BitmapFactory
+import java.io.File
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.MainScreenAddButtonPosition
 import vad.dashing.tbox.MainScreenSettingsButtonPosition
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 
@@ -56,13 +66,17 @@ fun MainScreen(
     val mainPanels by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
     val settingsBtnPos by settingsViewModel.mainScreenSettingsButtonPosition.collectAsStateWithLifecycle()
     val addBtnPos by settingsViewModel.mainScreenAddButtonPosition.collectAsStateWithLifecycle()
+    val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
 
     BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+        modifier = modifier.fillMaxSize()
     ) {
+        MainScreenWallpaperBackground(
+            theme = currentTheme,
+            settingsViewModel = settingsViewModel,
+            modifier = Modifier.fillMaxSize()
+        )
         val maxWpx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val maxHpx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
 
@@ -110,6 +124,49 @@ fun MainScreen(
                 settingsViewModel.addMainScreenDashboard(newMainPanelDefaultName)
             },
         )
+    }
+}
+
+@Composable
+private fun MainScreenWallpaperBackground(
+    theme: Int,
+    settingsViewModel: SettingsViewModel,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val hasLight by settingsViewModel.isMainScreenWallpaperLightSet.collectAsStateWithLifecycle()
+    val hasDark by settingsViewModel.isMainScreenWallpaperDarkSet.collectAsStateWithLifecycle()
+    val epoch by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
+    val useWallpaper = if (theme == 2) hasDark else hasLight
+    val relPath = if (theme == 2) {
+        SettingsManager.MAIN_SCREEN_WALLPAPER_DARK_FILE
+    } else {
+        SettingsManager.MAIN_SCREEN_WALLPAPER_LIGHT_FILE
+    }
+    var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(useWallpaper, relPath, epoch) {
+        bitmap = withContext(Dispatchers.IO) {
+            if (!useWallpaper) return@withContext null
+            val file = File(context.filesDir, relPath)
+            if (!file.isFile) return@withContext null
+            BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+        }
+    }
+    Box(modifier = modifier) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap!!,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            )
+        }
     }
 }
 

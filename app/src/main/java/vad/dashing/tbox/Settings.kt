@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -8,10 +9,13 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -124,6 +128,10 @@ class SettingsManager(private val context: Context) {
         private val LEFT_MENU_VISIBLE = booleanPreferencesKey("${KEY_PREFIX}left_menu_visible")
         private val MAIN_SCREEN_OPEN_ON_BOOT_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_open_on_boot")
+        private val MAIN_SCREEN_WALLPAPER_LIGHT_SET_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_light")
+        private val MAIN_SCREEN_WALLPAPER_DARK_SET_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_dark")
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
@@ -165,6 +173,11 @@ class SettingsManager(private val context: Context) {
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
         private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
+
+        /** Copied image for MainScreen when global app theme is light (theme != 2). */
+        const val MAIN_SCREEN_WALLPAPER_LIGHT_FILE = "main_screen_wallpaper/light"
+        /** Copied image for MainScreen when global app theme is dark (theme == 2). */
+        const val MAIN_SCREEN_WALLPAPER_DARK_FILE = "main_screen_wallpaper/dark"
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
 
         // Кэш ключей для производительности
@@ -292,6 +305,14 @@ class SettingsManager(private val context: Context) {
     /** After device boot, open [MainActivity] on the main home screen (tab 100) when enabled. */
     val mainScreenOpenOnBootFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val mainScreenWallpaperLightSetFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_LIGHT_SET_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val mainScreenWallpaperDarkSetFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_DARK_SET_KEY] ?: false }
         .distinctUntilChanged()
 
     // String flows
@@ -476,6 +497,52 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] = enabled
+        }
+    }
+
+    suspend fun setMainScreenWallpaperLight(sourceUri: Uri?) {
+        setMainScreenWallpaper(
+            sourceUri = sourceUri,
+            relativePath = MAIN_SCREEN_WALLPAPER_LIGHT_FILE,
+            prefKey = MAIN_SCREEN_WALLPAPER_LIGHT_SET_KEY
+        )
+    }
+
+    suspend fun setMainScreenWallpaperDark(sourceUri: Uri?) {
+        setMainScreenWallpaper(
+            sourceUri = sourceUri,
+            relativePath = MAIN_SCREEN_WALLPAPER_DARK_FILE,
+            prefKey = MAIN_SCREEN_WALLPAPER_DARK_SET_KEY
+        )
+    }
+
+    private suspend fun setMainScreenWallpaper(
+        sourceUri: Uri?,
+        relativePath: String,
+        prefKey: Preferences.Key<Boolean>
+    ) {
+        withContext(Dispatchers.IO) {
+            val dest = File(context.filesDir, relativePath)
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                if (dest.exists()) dest.delete()
+                context.settingsDataStore.edit { preferences ->
+                    preferences[prefKey] = false
+                }
+                return@withContext
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            context.settingsDataStore.edit { preferences ->
+                preferences[prefKey] = copiedOk
+            }
         }
     }
 

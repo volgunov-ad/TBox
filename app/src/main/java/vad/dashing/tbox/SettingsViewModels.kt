@@ -1,5 +1,6 @@
 package vad.dashing.tbox
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -417,6 +418,23 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
         )
+
+    val isMainScreenWallpaperLightSet = settingsManager.mainScreenWallpaperLightSetFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val isMainScreenWallpaperDarkSet = settingsManager.mainScreenWallpaperDarkSetFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    private val _mainScreenWallpaperEpoch = MutableStateFlow(0L)
+    val mainScreenWallpaperEpoch: StateFlow<Long> = _mainScreenWallpaperEpoch.asStateFlow()
 
     val mainScreenDashboards = settingsManager.mainScreenDashboardsFlow
         .stateIn(
@@ -878,6 +896,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMainScreenOpenOnBoot(enabled)
+        }
+    }
+
+    fun setMainScreenWallpaperLight(sourceUri: Uri?) {
+        viewModelScope.launch {
+            settingsManager.setMainScreenWallpaperLight(sourceUri)
+            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+        }
+    }
+
+    fun setMainScreenWallpaperDark(sourceUri: Uri?) {
+        viewModelScope.launch {
+            settingsManager.setMainScreenWallpaperDark(sourceUri)
+            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
         }
     }
 

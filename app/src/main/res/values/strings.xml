@@ -187,6 +187,10 @@
 
     <string name="settings_main_screen_open_on_boot_title">Автоматически открывать главный экран при запуске</string>
     <string name="settings_main_screen_open_on_boot_desc">После загрузки устройства, когда фоновая служба стартует автоматически, открывается окно приложения на главном экране (плитки дома)</string>
+    <string name="settings_main_screen_wallpaper_title">Фон главного экрана</string>
+    <string name="settings_main_screen_wallpaper_light">Светлая тема приложения</string>
+    <string name="settings_main_screen_wallpaper_dark">Тёмная тема приложения</string>
+    <string name="settings_main_screen_wallpaper_pick">Выбрать изображение</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
     <string name="settings_show_main_screen_panel_title">Показывать панель на главном экране</string>
     <string name="main_screen_panel_rel_width_pct">Ширина панели, % экрана (8–100)</string>
