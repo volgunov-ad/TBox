@@ -2,7 +2,9 @@ package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -15,6 +17,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,10 +31,12 @@ import vad.dashing.tbox.R
 internal fun DashboardAppLauncherWidgetItem(
     widget: DashboardWidget,
     packageName: String,
+    showTitle: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     elevation: Dp,
     shape: Dp,
+    textColor: Color,
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
@@ -41,32 +48,71 @@ internal fun DashboardAppLauncherWidgetItem(
             info.loadIcon(pm).toBitmap().asImageBitmap()
         }.getOrNull()
     }
+    val appLabel = remember(packageName) {
+        if (packageName.isBlank()) {
+            ""
+        } else {
+            runCatching {
+                val pm = context.packageManager
+                val info = pm.getApplicationInfo(packageName, 0)
+                info.loadLabel(pm).toString()
+            }.getOrElse { packageName }
+        }
+    }
     DashboardWidgetScaffold(
         modifier = Modifier.fillMaxSize(),
         onClick = onClick,
         onLongClick = onLongClick,
         elevation = elevation,
         shape = shape,
+        textColor = textColor,
         backgroundColor = backgroundColor,
-    ) { _, _ ->
-        Box(
+    ) { availableHeight, resolvedTextColor ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp),
-            contentAlignment = Alignment.Center
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (imageBitmap != null) {
-                Image(
-                    bitmap = imageBitmap,
-                    contentDescription = widget.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (imageBitmap != null) {
+                    Image(
+                        bitmap = imageBitmap,
+                        contentDescription = widget.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.widget_app_launcher_no_icon),
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (showTitle && appLabel.isNotEmpty()) {
+                val titleFontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE
                 )
-            } else {
                 Text(
-                    text = stringResource(R.string.widget_app_launcher_no_icon),
-                    fontSize = 18.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = appLabel,
+                    fontSize = titleFontSize,
+                    fontWeight = FontWeight.Medium,
+                    color = resolvedTextColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    lineHeight = titleFontSize * 1.3f,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp)
                 )
             }
         }

@@ -163,10 +163,12 @@ fun DashboardWidgetRenderer(
             DashboardAppLauncherWidgetItem(
                 widget = widget,
                 packageName = widgetConfig.launcherAppPackage,
+                showTitle = widgetConfig.showTitle,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
                 shape = shape,
+                textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
         }
