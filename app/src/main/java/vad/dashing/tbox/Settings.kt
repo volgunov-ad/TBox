@@ -46,6 +46,37 @@ data class MainScreenSettingsButtonPosition(
     }
 }
 
+/** Normalized top-left of the MainScreen "+" add-panel control (same coordinate space as [MainScreenSettingsButtonPosition]). */
+data class MainScreenAddButtonPosition(
+    val x: Float,
+    val y: Float
+) {
+    companion object {
+        val Default = MainScreenAddButtonPosition(0.04f, 0.85f)
+    }
+}
+
+/**
+ * Dashboard panel on the in-app MainScreen (not a system overlay).
+ * Position uses the same convention as [MainScreenSettingsButtonPosition]: normalized against
+ * `(containerSize - panelSize)` along each axis. [relWidth] / [relHeight] are fractions of the full container.
+ */
+data class MainScreenPanelConfig(
+    val id: String,
+    val name: String,
+    val enabled: Boolean,
+    val widgetsConfig: List<FloatingDashboardWidgetConfig>,
+    val rows: Int,
+    val cols: Int,
+    val relX: Float,
+    val relY: Float,
+    val relWidth: Float,
+    val relHeight: Float,
+    val background: Boolean,
+    val clickAction: Boolean,
+    val showTboxDisconnectIndicator: Boolean = true
+)
+
 data class FloatingDashboardConfig(
     val id: String,
     val name: String,
@@ -115,8 +146,20 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
         private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
+        private const val DEFAULT_MAIN_SCREEN_PANEL_ROWS = 1
+        private const val DEFAULT_MAIN_SCREEN_PANEL_COLS = 1
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_X = 0.05f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_Y = 0.1f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH = 0.4f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT = 0.3f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
+        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = true
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
+        private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
+        private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
 
         // Кэш ключей для производительности
@@ -138,6 +181,13 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             val rawJson = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
             parseFloatingDashboardsJson(rawJson)
+        }
+        .distinctUntilChanged()
+
+    val mainScreenDashboardsFlow: Flow<List<MainScreenPanelConfig>> = context.settingsDataStore.data
+        .map { preferences ->
+            val rawJson = preferences[getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)] ?: ""
+            parseMainScreenDashboardsJson(rawJson)
         }
         .distinctUntilChanged()
 
@@ -221,6 +271,15 @@ class SettingsManager(private val context: Context) {
             .map { preferences ->
                 parseMainScreenSettingsButtonJson(
                     preferences[getStringKey(MAIN_SCREEN_SETTINGS_BUTTON_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
+
+    val mainScreenAddButtonFlow: Flow<MainScreenAddButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenAddButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_ADD_BUTTON_KEY)] ?: ""
                 )
             }
             .distinctUntilChanged()
@@ -397,6 +456,30 @@ class SettingsManager(private val context: Context) {
         saveCustomString(MAIN_SCREEN_SETTINGS_BUTTON_KEY, obj.toString())
     }
 
+    suspend fun saveMainScreenAddButton(position: MainScreenAddButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_ADD_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenDashboards(configs: List<MainScreenPanelConfig>) {
+        val normalized = configs
+            .filter { it.id.isNotBlank() }
+            .distinctBy { it.id }
+            .map {
+                it.copy(
+                    rows = it.rows.coerceIn(1, 6),
+                    cols = it.cols.coerceIn(1, 6),
+                    relX = it.relX.coerceIn(0f, 1f),
+                    relY = it.relY.coerceIn(0f, 1f),
+                    relWidth = it.relWidth.coerceIn(0.08f, 1f),
+                    relHeight = it.relHeight.coerceIn(0.08f, 1f)
+                )
+            }
+        saveCustomString(MAIN_SCREEN_DASHBOARDS_LIST_KEY, serializeMainScreenDashboards(normalized))
+    }
+
     suspend fun ensureDefaultFloatingDashboards() {
         // Historical API: empty floating panel list is valid; no default injection.
     }
@@ -473,6 +556,89 @@ class SettingsManager(private val context: Context) {
         } catch (_: Exception) {
             MainScreenSettingsButtonPosition.Default
         }
+    }
+
+    private fun parseMainScreenAddButtonJson(raw: String): MainScreenAddButtonPosition {
+        if (raw.isBlank()) return MainScreenAddButtonPosition.Default
+        return try {
+            val o = JSONObject(raw)
+            MainScreenAddButtonPosition(
+                x = o.optDouble("x", MainScreenAddButtonPosition.Default.x.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+                y = o.optDouble("y", MainScreenAddButtonPosition.Default.y.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f)
+            )
+        } catch (_: Exception) {
+            MainScreenAddButtonPosition.Default
+        }
+    }
+
+    private fun parseMainScreenDashboardsJson(json: String): List<MainScreenPanelConfig> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            val array = JSONArray(json)
+            val configs = mutableListOf<MainScreenPanelConfig>()
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                val config = parseMainScreenPanelConfig(obj) ?: continue
+                configs.add(config)
+            }
+            configs
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun parseMainScreenPanelConfig(obj: JSONObject): MainScreenPanelConfig? {
+        val id = obj.optString("id").trim()
+        if (id.isEmpty()) return null
+        val name = obj.optString("name").ifBlank { id }
+        return MainScreenPanelConfig(
+            id = id,
+            name = name,
+            enabled = obj.optBoolean("enabled", DEFAULT_MAIN_SCREEN_PANEL_ENABLED),
+            widgetsConfig = parseWidgetConfigsFromAny(obj.opt("widgetsConfig")),
+            rows = obj.optInt("rows", DEFAULT_MAIN_SCREEN_PANEL_ROWS).coerceIn(1, 6),
+            cols = obj.optInt("cols", DEFAULT_MAIN_SCREEN_PANEL_COLS).coerceIn(1, 6),
+            relX = obj.optDouble("relX", DEFAULT_MAIN_SCREEN_PANEL_REL_X.toDouble()).toFloat()
+                .coerceIn(0f, 1f),
+            relY = obj.optDouble("relY", DEFAULT_MAIN_SCREEN_PANEL_REL_Y.toDouble()).toFloat()
+                .coerceIn(0f, 1f),
+            relWidth = obj.optDouble("relWidth", DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH.toDouble())
+                .toFloat().coerceIn(0.08f, 1f),
+            relHeight = obj.optDouble("relHeight", DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT.toDouble())
+                .toFloat().coerceIn(0.08f, 1f),
+            background = obj.optBoolean("background", DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND),
+            clickAction = obj.optBoolean("clickAction", DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION),
+            showTboxDisconnectIndicator = obj.optBoolean(
+                "showTboxDisconnectIndicator",
+                DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
+            )
+        )
+    }
+
+    private fun serializeMainScreenDashboards(configs: List<MainScreenPanelConfig>): String {
+        val array = JSONArray()
+        configs.forEach { config ->
+            val o = JSONObject()
+            o.put("id", config.id)
+            o.put("name", config.name)
+            o.put("enabled", config.enabled)
+            o.put("widgetsConfig", serializeWidgetConfigsToJsonArray(config.widgetsConfig))
+            o.put("rows", config.rows)
+            o.put("cols", config.cols)
+            o.put("relX", config.relX.toDouble())
+            o.put("relY", config.relY.toDouble())
+            o.put("relWidth", config.relWidth.toDouble())
+            o.put("relHeight", config.relHeight.toDouble())
+            o.put("background", config.background)
+            o.put("clickAction", config.clickAction)
+            o.put("showTboxDisconnectIndicator", config.showTboxDisconnectIndicator)
+            array.put(o)
+        }
+        return array.toString()
     }
 
     private fun parseFloatingDashboardsJson(json: String): List<FloatingDashboardConfig> {

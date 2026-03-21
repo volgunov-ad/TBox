@@ -33,10 +33,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
         private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
+        private const val DEFAULT_MAIN_SCREEN_PANEL_ID = "main-screen-1"
+        private const val DEFAULT_MAIN_SCREEN_PANEL_ROWS = 1
+        private const val DEFAULT_MAIN_SCREEN_PANEL_COLS = 1
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_X = 0.05f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_Y = 0.1f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH = 0.4f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT = 0.3f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
+        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = true
+        private val DEFAULT_MAIN_SCREEN_PANEL_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
 
     private val floatingDashboardConfigStates =
         mutableMapOf<String, StateFlow<FloatingDashboardConfig>>()
+    private val mainScreenPanelConfigStates =
+        mutableMapOf<String, StateFlow<MainScreenPanelConfig>>()
     private var latestDashboardWidgetsConfig: List<FloatingDashboardWidgetConfig> = emptyList()
 
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
@@ -364,6 +378,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = MainScreenSettingsButtonPosition.Default
         )
 
+    val mainScreenAddButtonPosition = settingsManager.mainScreenAddButtonFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainScreenAddButtonPosition.Default
+        )
+
+    val mainScreenDashboards = settingsManager.mainScreenDashboardsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList<MainScreenPanelConfig>()
+        )
+
     val dashboardWidgetsConfig = settingsManager.dashboardWidgetsFlow
         .stateIn(
             scope = viewModelScope,
@@ -440,6 +468,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun mainScreenPanelConfig(panelId: String): StateFlow<MainScreenPanelConfig> {
+        val resolvedId = panelId.ifBlank { DEFAULT_MAIN_SCREEN_PANEL_ID }
+        return mainScreenPanelConfigStates.getOrPut(resolvedId) {
+            mainScreenDashboards
+                .map { configs ->
+                    configs.firstOrNull { it.id == resolvedId }
+                        ?: fallbackMainScreenPanel(resolvedId)
+                }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000),
+                    initialValue = fallbackMainScreenPanel(resolvedId)
+                )
+        }
+    }
+
     private fun createDefaultFloatingDashboard(
         id: String,
         name: String
@@ -463,6 +507,50 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     private fun fallbackFloatingDashboard(id: String): FloatingDashboardConfig {
         return createDefaultFloatingDashboard(id, id)
+    }
+
+    private fun createDefaultMainScreenPanel(id: String, name: String): MainScreenPanelConfig {
+        return MainScreenPanelConfig(
+            id = id,
+            name = name,
+            enabled = DEFAULT_MAIN_SCREEN_PANEL_ENABLED,
+            widgetsConfig = DEFAULT_MAIN_SCREEN_PANEL_WIDGETS,
+            rows = DEFAULT_MAIN_SCREEN_PANEL_ROWS,
+            cols = DEFAULT_MAIN_SCREEN_PANEL_COLS,
+            relX = DEFAULT_MAIN_SCREEN_PANEL_REL_X,
+            relY = DEFAULT_MAIN_SCREEN_PANEL_REL_Y,
+            relWidth = DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH,
+            relHeight = DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT,
+            background = DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND,
+            clickAction = DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION,
+            showTboxDisconnectIndicator = DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
+        )
+    }
+
+    private fun fallbackMainScreenPanel(id: String): MainScreenPanelConfig {
+        return createDefaultMainScreenPanel(id, id)
+    }
+
+    private suspend fun applyMainScreenPanelUpdate(
+        panelId: String,
+        update: (MainScreenPanelConfig) -> MainScreenPanelConfig
+    ) {
+        val resolvedId = panelId.ifBlank { DEFAULT_MAIN_SCREEN_PANEL_ID }
+        val updatedConfigs = mainScreenDashboards.value.toMutableList()
+        val index = updatedConfigs.indexOfFirst { it.id == resolvedId }
+        if (index < 0) return
+        val updated = update(updatedConfigs[index])
+        updatedConfigs[index] = updated
+        settingsManager.saveMainScreenDashboards(updatedConfigs)
+    }
+
+    private fun updateMainScreenPanel(
+        panelId: String,
+        update: (MainScreenPanelConfig) -> MainScreenPanelConfig
+    ) {
+        viewModelScope.launch {
+            applyMainScreenPanelUpdate(panelId, update)
+        }
     }
 
     private suspend fun applyFloatingDashboardUpdate(
@@ -633,6 +721,56 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenSettingsButton(position: MainScreenSettingsButtonPosition) {
         viewModelScope.launch {
             settingsManager.saveMainScreenSettingsButton(position)
+        }
+    }
+
+    fun saveMainScreenAddButton(position: MainScreenAddButtonPosition) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenAddButton(position)
+        }
+    }
+
+    fun saveMainScreenDashboardWidgets(
+        panelId: String,
+        config: List<FloatingDashboardWidgetConfig>
+    ) {
+        updateMainScreenPanel(panelId) { it.copy(widgetsConfig = config) }
+    }
+
+    fun saveMainScreenPanelLayout(
+        panelId: String,
+        relX: Float,
+        relY: Float,
+        relWidth: Float,
+        relHeight: Float
+    ) {
+        updateMainScreenPanel(panelId) {
+            it.copy(
+                relX = relX.coerceIn(0f, 1f),
+                relY = relY.coerceIn(0f, 1f),
+                relWidth = relWidth.coerceIn(0.08f, 1f),
+                relHeight = relHeight.coerceIn(0.08f, 1f)
+            )
+        }
+    }
+
+    fun addMainScreenDashboard(defaultName: String) {
+        viewModelScope.launch {
+            val base = mainScreenDashboards.value.toMutableList()
+            val newId = "main-screen-" + java.util.UUID.randomUUID().toString().take(8)
+            val newPanel = createDefaultMainScreenPanel(newId, defaultName)
+            base.add(newPanel)
+            settingsManager.saveMainScreenDashboards(base)
+        }
+    }
+
+    fun deleteMainScreenDashboard(panelId: String) {
+        viewModelScope.launch {
+            val remaining = mainScreenDashboards.value.toMutableList()
+            val idx = remaining.indexOfFirst { it.id == panelId }
+            if (idx < 0) return@launch
+            remaining.removeAt(idx)
+            settingsManager.saveMainScreenDashboards(remaining)
         }
     }
 

@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -320,13 +323,18 @@ internal fun WidgetSelectionDialogActions(
     onDismiss: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
-    saveTextFontWeight: FontWeight = FontWeight.Normal
+    saveTextFontWeight: FontWeight = FontWeight.Normal,
+    leadingExtra: (@Composable RowScope.() -> Unit)? = null
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        leadingExtra?.invoke(this)
+        if (leadingExtra != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+        }
         OutlinedButton(
             onClick = { state.showAdvancedSettings = !state.showAdvancedSettings },
             border = BorderStroke(

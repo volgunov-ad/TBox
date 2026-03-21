@@ -70,6 +70,7 @@ fun TboxApp(
     onMockLocationSettingChanged: (Boolean) -> Unit
 ) {
     val viewModel: TboxViewModel = viewModel()
+    val canViewModel: CanDataViewModel = viewModel()
 
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(
         settingsManager
@@ -86,8 +87,12 @@ fun TboxApp(
     TboxAppTheme(theme = currentTheme) {
         if (selectedTab == SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX) {
             MainScreen(
+                tboxViewModel = viewModel,
+                canViewModel = canViewModel,
+                appDataViewModel = appDataViewModel,
                 settingsViewModel = settingsViewModel,
                 onOpenConsole = { settingsViewModel.saveSelectedTab(0) },
+                onTboxRestart = onTboxRestart,
                 modifier = Modifier.fillMaxSize()
             )
         } else {

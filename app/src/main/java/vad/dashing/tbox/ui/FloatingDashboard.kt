@@ -1,16 +1,11 @@
 package vad.dashing.tbox.ui
 
-import android.content.Context
-import android.content.Intent
 import android.view.WindowManager
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,9 +13,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardElevation
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,7 +22,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -49,22 +41,17 @@ import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
-import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
-import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
-import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
-import vad.dashing.tbox.normalizeWidgetScale
-import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
@@ -148,10 +135,6 @@ fun FloatingDashboard(
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
     }
-    val hasConfiguredWidgets = widgetConfigs.any { config ->
-        config.dataKey.isNotBlank() && config.dataKey != "null"
-    }
-
     val isFloatingDashboardClickAction = panelConfig.clickAction
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
@@ -342,163 +325,55 @@ fun FloatingDashboard(
                         }
                     )
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(0.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (dashboardState.widgets.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .weight(1f)
-                                .background(color = Color.Transparent),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(stringResource(R.string.loading))
+                DashboardPanelGridAndFrames(
+                    dashboardRows = dashboardRows,
+                    dashboardCols = dashboardCols,
+                    dashboardState = dashboardState,
+                    widgetConfigs = widgetConfigs,
+                    tboxViewModel = tboxViewModel,
+                    canViewModel = canViewModel,
+                    appDataViewModel = appDataViewModel,
+                    dataProvider = dataProvider,
+                    dashboardManager = dashboardViewModel.dashboardManager,
+                    dashboardChart = false,
+                    tboxConnected = tboxConnected,
+                    currentTheme = currentTheme,
+                    restartEnabled = restartEnabled,
+                    isEditMode = isEditMode,
+                    showDialogOpen = showDialogForIndex != null,
+                    widgetInteractionPolicy = widgetInteractionPolicy,
+                    widgetCardElevation = FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
+                    onWidgetClick = { index ->
+                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                            showDialogForIndex = index
+                        } else if (isFloatingDashboardClickAction) {
+                            openMainActivityFromWidget(context)
                         }
-                    } else {
-                        for (row in 0 until dashboardRows) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                for (col in 0 until dashboardCols) {
-                                    val index = row * dashboardCols + col
-                                    val widget = dashboardState.widgets.getOrNull(index) ?: continue
-                                    val widgetConfig = widgetConfigs.getOrNull(index)
-                                        ?: FloatingDashboardWidgetConfig(dataKey = "")
-                                    val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
-                                    val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
-                                    val widgetBackgroundColor =
-                                        widget.resolveBackgroundColorForTheme(currentTheme)
-
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        if (isEditMode) {
-                                            Canvas(
-                                                modifier = Modifier.matchParentSize()
-                                            ) {
-                                                drawRect(
-                                                    color = Color(0x7E00BCD4),
-                                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-                                                )
-                                            }
-                                        }
-                                        CompositionLocalProvider(
-                                            LocalWidgetTextScale provides widgetTextScale,
-                                            LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy
-                                        ) {
-                                            val onWidgetClick = {
-                                                if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                    showDialogForIndex = index
-                                                } else if (isFloatingDashboardClickAction) {
-                                                    openMainActivity(context)
-                                                }
-                                            }
-                                            val onWidgetLongClick = {
-                                                isEditMode = !isEditMode
-                                                isDraggingMode = false
-                                                isResizingMode = false
-                                            }
-                                            DashboardWidgetRenderer(
-                                                widget = widget,
-                                                widgetConfig = widgetConfig,
-                                                tboxViewModel = tboxViewModel,
-                                                canViewModel = canViewModel,
-                                                appDataViewModel = appDataViewModel,
-                                                dataProvider = dataProvider,
-                                                dashboardManager = dashboardViewModel.dashboardManager,
-                                                dashboardChart = false,
-                                                tboxConnected = tboxConnected,
-                                                restartEnabled = restartEnabled,
-                                                widgetTextColor = widgetTextColor,
-                                                widgetBackgroundColor = widgetBackgroundColor,
-                                                onClick = onWidgetClick,
-                                                onLongClick = onWidgetLongClick,
-                                                onMusicSelectedPlayerChange = { selectedPackage ->
-                                                    persistFloatingMediaWidgetSelectedPlayer(
-                                                        settingsViewModel = settingsViewModel,
-                                                        panelId = panelId,
-                                                        currentWidgetConfigs = widgetConfigs,
-                                                        widgetIndex = index,
-                                                        selectedPackage = selectedPackage
-                                                    )
-                                                },
-                                                onRestartRequested = {
-                                                    if (restartEnabled) {
-                                                        restartEnabled = false
-                                                        onRebootTbox()
-                                                    }
-                                                },
-                                                elevation = FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
-                                                shape = normalizeWidgetShape(widgetConfig.shape).dp,
-                                                enableMusicInnerInteractions = !isEditMode
-                                            )
-                                        }
-                                    }
-                                }
+                    },
+                    onWidgetLongClick = {
+                        isEditMode = !isEditMode
+                        isDraggingMode = false
+                        isResizingMode = false
+                    },
+                    onMusicSelectedPlayerChange = { index, selectedPackage ->
+                        persistDashboardPanelMediaSelectedPlayer(
+                            currentWidgetConfigs = widgetConfigs,
+                            widgetIndex = index,
+                            selectedPackage = selectedPackage,
+                            saveConfigs = { configs ->
+                                settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
                             }
+                        )
+                    },
+                    onRestartRequested = {
+                        if (restartEnabled) {
+                            restartEnabled = false
+                            onRebootTbox()
                         }
-                    }
-                }
-
-                val showEditIndicators = isEditMode && showDialogForIndex == null
-                val showTboxDisconnectFrame =
-                    panelConfig.showTboxDisconnectIndicator && !tboxConnected
-                if (!hasConfiguredWidgets || showTboxDisconnectFrame || showEditIndicators) {
-                    Canvas(
-                        modifier = Modifier.matchParentSize()
-                    ) {
-                        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                        if (!hasConfiguredWidgets) {
-                            val inset = 4.dp.toPx()
-                            drawRect(
-                                color = Color(0xFF008507),
-                                topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
-                                size = androidx.compose.ui.geometry.Size(
-                                    width = (size.width - inset * 2f).coerceAtLeast(0f),
-                                    height = (size.height - inset * 2f).coerceAtLeast(0f)
-                                ),
-                                style = stroke
-                            )
-                        }
-                        if (showTboxDisconnectFrame) {
-                            drawRect(
-                                color = Color(0xD9FF9800),
-                                style = stroke
-                            )
-                        }
-                        if (showEditIndicators) {
-                            val editInset = 2.dp.toPx()
-                            drawRect(
-                                color = Color(0xFF00BCD4),
-                                topLeft = androidx.compose.ui.geometry.Offset(editInset, editInset),
-                                size = androidx.compose.ui.geometry.Size(
-                                    width = (size.width - editInset * 2f).coerceAtLeast(0f),
-                                    height = (size.height - editInset * 2f).coerceAtLeast(0f)
-                                ),
-                                style = stroke
-                            )
-                            val topLeft = resizeHandleAreaTopLeft(
-                                width = size.width,
-                                height = size.height
-                            )
-                            val handleSize = resizeHandleAreaSize(
-                                width = size.width,
-                                height = size.height
-                            )
-                            drawRect(
-                                color = Color(0xFF00BCD4),
-                                topLeft = topLeft,
-                                size = handleSize,
-                                style = stroke
-                            )
-                        }
-                    }
-                }
+                    },
+                    showTboxDisconnectIndicator = panelConfig.showTboxDisconnectIndicator,
+                    enableMusicInnerInteractions = !isEditMode
+                )
             }
         }
 
@@ -584,36 +459,4 @@ fun OverlayWidgetSelectionDialog(
             )
         }
     }
-}
-
-private fun openMainActivity(context: Context) {
-    try {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
-}
-
-private fun persistFloatingMediaWidgetSelectedPlayer(
-    settingsViewModel: SettingsViewModel,
-    panelId: String,
-    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
-    widgetIndex: Int,
-    selectedPackage: String
-) {
-    val normalizedConfigs = normalizeWidgetConfigs(
-        configs = currentWidgetConfigs,
-        widgetCount = currentWidgetConfigs.size
-    ).toMutableList()
-    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
-    if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
-    if (currentConfig.mediaSelectedPlayer == selectedPackage) return
-
-    normalizedConfigs[widgetIndex] = currentConfig.copy(
-        mediaSelectedPlayer = selectedPackage
-    )
-    settingsViewModel.saveFloatingDashboardWidgets(panelId, normalizedConfigs)
 }
