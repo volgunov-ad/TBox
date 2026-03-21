@@ -26,6 +26,11 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_yandex_music,
         iconRes = R.drawable.player_yandex_music
     ),
+    YANDEX_MUSIC_AUTO_PLAY(
+        packageName = "ru.auto.music",
+        titleRes = R.string.media_player_yandex_music_auto_play,
+        iconRes = R.drawable.player_yandex_music
+    ),
     POWERAMP(
         packageName = "com.maxmpz.audioplayer",
         titleRes = R.string.media_player_poweramp,

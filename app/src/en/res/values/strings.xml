@@ -88,6 +88,7 @@
     <string name="widget_music_access_required">Notification access is required for track data and controls</string>
     <string name="widget_music_open_access_settings">Open access settings</string>
     <string name="media_player_yandex_music">Yandex Music</string>
+    <string name="media_player_yandex_music_auto_play">Yandex Music (Auto)</string>
     <string name="media_player_poweramp">Poweramp</string>
     <string name="media_player_aimp">AIMP</string>
     <string name="media_player_record_radio">RecordRadio</string>

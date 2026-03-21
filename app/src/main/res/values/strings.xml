@@ -88,6 +88,7 @@
     <string name="widget_music_access_required">Нужен доступ к уведомлениям для чтения трека и управления</string>
     <string name="widget_music_open_access_settings">Открыть доступ</string>
     <string name="media_player_yandex_music">Я.Музыка</string>
+    <string name="media_player_yandex_music_auto_play">Я.Музыка (Auto)</string>
     <string name="media_player_poweramp">Poweramp</string>
     <string name="media_player_aimp">AIMP</string>
     <string name="media_player_record_radio">RecordRadio</string>
