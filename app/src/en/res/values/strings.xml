@@ -185,6 +185,13 @@
     <string name="settings_floating_rows_title">Number of tile rows in floating panel</string>
     <string name="settings_floating_cols_title">Number of tile columns in floating panel</string>
 
+    <string name="settings_main_screen_panels_title">Main screen panels</string>
+    <string name="settings_show_main_screen_panel_title">Show panel on main screen</string>
+    <string name="main_screen_panel_rel_width_pct">Panel width, % of screen (8–100)</string>
+    <string name="main_screen_panel_rel_height_pct">Panel height, % of screen (8–100)</string>
+    <string name="main_screen_panel_rel_x_pct">Position X, % of free range (0–100)</string>
+    <string name="main_screen_panel_rel_y_pct">Position Y, % of free range (0–100)</string>
+
     <string name="settings_overlay_widgets_title">Overlay widget settings</string>
     <string name="settings_widget_connection_indicator_title">Show TBox connection indicator in widget</string>
     <string name="settings_widget_connection_indicator_desc">Widget circle indicator has 3 colors: \n- red - no data from background service;\n- yellow - no connection to TBox;\n- green - connected to TBox</string>

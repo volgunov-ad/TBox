@@ -182,6 +182,9 @@ fun TboxScreen(
         if (selectedTab == 4) {
             settingsViewModel.onSettingsTabSelected()
         }
+        if (selectedTab == 9) {
+            settingsViewModel.onMainScreenSettingsTabSelected()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -352,7 +355,7 @@ fun TboxScreen(
                         settingsViewModel,
                         appDataViewModel,
                         onTboxRestart)
-                    9 -> MainScreenSettingsTab()
+                    9 -> MainScreenSettingsTab(settingsViewModel = settingsViewModel)
                     else -> ModemTab(viewModel, onServiceCommand)
                 }
             }

@@ -227,14 +227,8 @@ fun MainScreenDashboardPanel(
             .background(Color.Transparent)
             .then(
                 if (canManipulatePanel) {
-                    Modifier.pointerInput(
-                        panel.id,
-                        layoutPx.width,
-                        layoutPx.height,
-                        cw,
-                        ch,
-                        minPanelPx
-                    ) {
+                    // Do not use layoutPx width/height as keys — they change during resize and cancel the gesture.
+                    Modifier.pointerInput(panel.id, cw, ch, minPanelPx) {
                         detectDragGestures(
                             onDragStart = { startOffset ->
                                 layoutInteraction = true

@@ -185,6 +185,13 @@
     <string name="settings_floating_rows_title">Количество строк плиток плавающей панели</string>
     <string name="settings_floating_cols_title">Количество столбцов плиток плавающей панели</string>
 
+    <string name="settings_main_screen_panels_title">Панели главного экрана</string>
+    <string name="settings_show_main_screen_panel_title">Показывать панель на главном экране</string>
+    <string name="main_screen_panel_rel_width_pct">Ширина панели, % экрана (8–100)</string>
+    <string name="main_screen_panel_rel_height_pct">Высота панели, % экрана (8–100)</string>
+    <string name="main_screen_panel_rel_x_pct">Позиция X, % свободного хода (0–100)</string>
+    <string name="main_screen_panel_rel_y_pct">Позиция Y, % свободного хода (0–100)</string>
+
     <string name="settings_overlay_widgets_title">Настройки виджетов для Overlays</string>
     <string name="settings_widget_connection_indicator_title">Показывать индикатор подключения TBox в виджете</string>
     <string name="settings_widget_connection_indicator_desc">Индикатор в виджете в виде круга может иметь 3 цвета: \n- красный - нет данных от фоновой службы;\n- желтый - нет связи с TBox;\n- зеленый - есть связь с TBox</string>

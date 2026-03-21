@@ -43,14 +43,40 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
         private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
         private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
-        private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private val DEFAULT_MAIN_SCREEN_PANEL_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
+    }
+
+    private fun createDefaultMainScreenPanel(id: String, name: String): MainScreenPanelConfig {
+        return MainScreenPanelConfig(
+            id = id,
+            name = name,
+            enabled = DEFAULT_MAIN_SCREEN_PANEL_ENABLED,
+            widgetsConfig = DEFAULT_MAIN_SCREEN_PANEL_WIDGETS,
+            rows = DEFAULT_MAIN_SCREEN_PANEL_ROWS,
+            cols = DEFAULT_MAIN_SCREEN_PANEL_COLS,
+            relX = DEFAULT_MAIN_SCREEN_PANEL_REL_X,
+            relY = DEFAULT_MAIN_SCREEN_PANEL_REL_Y,
+            relWidth = DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH,
+            relHeight = DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT,
+            background = DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND,
+            clickAction = DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION,
+            showTboxDisconnectIndicator = DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
+        )
+    }
+
+    private fun fallbackMainScreenPanel(id: String): MainScreenPanelConfig {
+        return createDefaultMainScreenPanel(id, id)
     }
 
     private val floatingDashboardConfigStates =
         mutableMapOf<String, StateFlow<FloatingDashboardConfig>>()
     private val mainScreenPanelConfigStates =
         mutableMapOf<String, StateFlow<MainScreenPanelConfig>>()
+    private val selectedMainScreenPanelIdState = MutableStateFlow(DEFAULT_MAIN_SCREEN_PANEL_ID)
+    private val _mainScreenPanelDeleteInProgressId = MutableStateFlow<String?>(null)
+    val mainScreenPanelDeleteInProgressId: StateFlow<String?> =
+        _mainScreenPanelDeleteInProgressId.asStateFlow()
     private var latestDashboardWidgetsConfig: List<FloatingDashboardWidgetConfig> = emptyList()
 
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
@@ -392,6 +418,100 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = emptyList<MainScreenPanelConfig>()
         )
 
+    val activeMainScreenPanelId = combine(mainScreenDashboards, selectedMainScreenPanelIdState) {
+            configs, selected ->
+        configs.firstOrNull { it.id == selected }?.id
+            ?: configs.firstOrNull()?.id
+            ?: DEFAULT_MAIN_SCREEN_PANEL_ID
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DEFAULT_MAIN_SCREEN_PANEL_ID
+    )
+
+    private val activeMainScreenPanelConfig = combine(
+        mainScreenDashboards,
+        activeMainScreenPanelId
+    ) { configs, id ->
+        configs.firstOrNull { it.id == id } ?: fallbackMainScreenPanel(id)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = fallbackMainScreenPanel(DEFAULT_MAIN_SCREEN_PANEL_ID)
+    )
+
+    val isMainScreenPanelEnabled = activeMainScreenPanelConfig
+        .map { it.enabled }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_MAIN_SCREEN_PANEL_ENABLED
+        )
+
+    val isMainScreenPanelClickAction = activeMainScreenPanelConfig
+        .map { it.clickAction }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION
+        )
+
+    val isMainScreenPanelShowTboxDisconnectIndicator = activeMainScreenPanelConfig
+        .map { it.showTboxDisconnectIndicator }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
+        )
+
+    val mainScreenPanelRows = activeMainScreenPanelConfig
+        .map { it.rows }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_MAIN_SCREEN_PANEL_ROWS
+        )
+
+    val mainScreenPanelCols = activeMainScreenPanelConfig
+        .map { it.cols }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_MAIN_SCREEN_PANEL_COLS
+        )
+
+    val mainScreenPanelRelXPercent = activeMainScreenPanelConfig
+        .map { (it.relX * 100f).toInt().coerceIn(0, 100) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = (DEFAULT_MAIN_SCREEN_PANEL_REL_X * 100f).toInt()
+        )
+
+    val mainScreenPanelRelYPercent = activeMainScreenPanelConfig
+        .map { (it.relY * 100f).toInt().coerceIn(0, 100) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = (DEFAULT_MAIN_SCREEN_PANEL_REL_Y * 100f).toInt()
+        )
+
+    val mainScreenPanelRelWidthPercent = activeMainScreenPanelConfig
+        .map { (it.relWidth * 100f).toInt().coerceIn(8, 100) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = (DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH * 100f).toInt()
+        )
+
+    val mainScreenPanelRelHeightPercent = activeMainScreenPanelConfig
+        .map { (it.relHeight * 100f).toInt().coerceIn(8, 100) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = (DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT * 100f).toInt()
+        )
+
     val dashboardWidgetsConfig = settingsManager.dashboardWidgetsFlow
         .stateIn(
             scope = viewModelScope,
@@ -448,6 +568,23 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.dashboardWidgetsFlow.collect { configs ->
                 latestDashboardWidgetsConfig = configs
+            }
+        }
+        viewModelScope.launch {
+            val storedMain = settingsManager.mainScreenDashboardsFlow.first()
+            selectedMainScreenPanelIdState.value =
+                storedMain.firstOrNull()?.id ?: DEFAULT_MAIN_SCREEN_PANEL_ID
+        }
+        viewModelScope.launch {
+            mainScreenDashboards.collect { configs ->
+                val cur = selectedMainScreenPanelIdState.value
+                if (configs.isEmpty()) {
+                    selectedMainScreenPanelIdState.value = DEFAULT_MAIN_SCREEN_PANEL_ID
+                    return@collect
+                }
+                if (configs.none { it.id == cur }) {
+                    selectedMainScreenPanelIdState.value = configs.first().id
+                }
             }
         }
     }
@@ -509,28 +646,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         return createDefaultFloatingDashboard(id, id)
     }
 
-    private fun createDefaultMainScreenPanel(id: String, name: String): MainScreenPanelConfig {
-        return MainScreenPanelConfig(
-            id = id,
-            name = name,
-            enabled = DEFAULT_MAIN_SCREEN_PANEL_ENABLED,
-            widgetsConfig = DEFAULT_MAIN_SCREEN_PANEL_WIDGETS,
-            rows = DEFAULT_MAIN_SCREEN_PANEL_ROWS,
-            cols = DEFAULT_MAIN_SCREEN_PANEL_COLS,
-            relX = DEFAULT_MAIN_SCREEN_PANEL_REL_X,
-            relY = DEFAULT_MAIN_SCREEN_PANEL_REL_Y,
-            relWidth = DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH,
-            relHeight = DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT,
-            background = DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND,
-            clickAction = DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION,
-            showTboxDisconnectIndicator = DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
-        )
-    }
-
-    private fun fallbackMainScreenPanel(id: String): MainScreenPanelConfig {
-        return createDefaultMainScreenPanel(id, id)
-    }
-
     private suspend fun applyMainScreenPanelUpdate(
         panelId: String,
         update: (MainScreenPanelConfig) -> MainScreenPanelConfig
@@ -549,6 +664,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         update: (MainScreenPanelConfig) -> MainScreenPanelConfig
     ) {
         viewModelScope.launch {
+            applyMainScreenPanelUpdate(panelId, update)
+        }
+    }
+
+    private fun updateSelectedMainScreenPanel(
+        update: (MainScreenPanelConfig) -> MainScreenPanelConfig
+    ) {
+        viewModelScope.launch {
+            val configs = mainScreenDashboards.value
+            if (configs.isEmpty()) return@launch
+            val panelId = activeMainScreenPanelId.value
+            if (configs.none { it.id == panelId }) return@launch
             applyMainScreenPanelUpdate(panelId, update)
         }
     }
@@ -712,6 +839,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         selectedFloatingDashboardIdState.value = list.first().id
     }
 
+    fun saveSelectedMainScreenPanelId(panelId: String) {
+        val resolvedId = panelId.ifBlank { DEFAULT_MAIN_SCREEN_PANEL_ID }
+        selectedMainScreenPanelIdState.value = resolvedId
+    }
+
+    fun onMainScreenSettingsTabSelected() {
+        val list = mainScreenDashboards.value
+        if (list.isEmpty()) return
+        selectedMainScreenPanelIdState.value = list.first().id
+    }
+
     fun saveSelectedTab(tabIndex: Int) {
         viewModelScope.launch {
             settingsManager.saveSelectedTab(tabIndex)
@@ -761,9 +899,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             val newPanel = createDefaultMainScreenPanel(newId, defaultName)
             base.add(newPanel)
             settingsManager.saveMainScreenDashboards(base)
+            selectedMainScreenPanelIdState.value = newId
         }
     }
 
+    /** Removes a main-screen panel immediately (e.g. from the widget dialog). */
     fun deleteMainScreenDashboard(panelId: String) {
         viewModelScope.launch {
             val remaining = mainScreenDashboards.value.toMutableList()
@@ -771,7 +911,91 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             if (idx < 0) return@launch
             remaining.removeAt(idx)
             settingsManager.saveMainScreenDashboards(remaining)
+            if (selectedMainScreenPanelIdState.value == panelId) {
+                selectedMainScreenPanelIdState.value =
+                    remaining.firstOrNull()?.id ?: DEFAULT_MAIN_SCREEN_PANEL_ID
+            }
         }
+    }
+
+    /** Same delayed delete as floating panels when removing from settings. */
+    fun deleteMainScreenPanelFromSettings(panelId: String) {
+        viewModelScope.launch {
+            if (_mainScreenPanelDeleteInProgressId.value != null) return@launch
+            val base = mainScreenDashboards.value
+            val panelConfig = base.firstOrNull { it.id == panelId } ?: return@launch
+            val wasAlreadyOff = !panelConfig.enabled
+            _mainScreenPanelDeleteInProgressId.value = panelId
+            try {
+                if (!wasAlreadyOff) {
+                    applyMainScreenPanelUpdate(panelId) { it.copy(enabled = false) }
+                }
+                delay(if (wasAlreadyOff) 1000 else 2000)
+                val remaining = mainScreenDashboards.value.toMutableList()
+                val idx = remaining.indexOfFirst { it.id == panelId }
+                if (idx < 0) return@launch
+                remaining.removeAt(idx)
+                settingsManager.saveMainScreenDashboards(remaining)
+                if (selectedMainScreenPanelIdState.value == panelId) {
+                    selectedMainScreenPanelIdState.value =
+                        remaining.firstOrNull()?.id ?: DEFAULT_MAIN_SCREEN_PANEL_ID
+                }
+            } finally {
+                _mainScreenPanelDeleteInProgressId.value = null
+            }
+        }
+    }
+
+    fun saveMainScreenPanelSetting(enabled: Boolean) {
+        updateSelectedMainScreenPanel { it.copy(enabled = enabled) }
+    }
+
+    fun saveMainScreenPanelClickAction(enabled: Boolean) {
+        updateSelectedMainScreenPanel { it.copy(clickAction = enabled) }
+    }
+
+    fun saveMainScreenPanelShowTboxDisconnectIndicator(enabled: Boolean) {
+        updateSelectedMainScreenPanel { it.copy(showTboxDisconnectIndicator = enabled) }
+    }
+
+    fun saveMainScreenPanelRows(rows: Int) {
+        if (rows in 1..6) {
+            updateSelectedMainScreenPanel { it.copy(rows = rows) }
+        }
+    }
+
+    fun saveMainScreenPanelCols(cols: Int) {
+        if (cols in 1..6) {
+            updateSelectedMainScreenPanel { it.copy(cols = cols) }
+        }
+    }
+
+    fun saveMainScreenPanelRelXPercent(percent: Int) {
+        updateSelectedMainScreenPanel {
+            it.copy(relX = (percent.coerceIn(0, 100)) / 100f)
+        }
+    }
+
+    fun saveMainScreenPanelRelYPercent(percent: Int) {
+        updateSelectedMainScreenPanel {
+            it.copy(relY = (percent.coerceIn(0, 100)) / 100f)
+        }
+    }
+
+    fun saveMainScreenPanelRelWidthPercent(percent: Int) {
+        updateSelectedMainScreenPanel {
+            it.copy(relWidth = (percent.coerceIn(8, 100)) / 100f)
+        }
+    }
+
+    fun saveMainScreenPanelRelHeightPercent(percent: Int) {
+        updateSelectedMainScreenPanel {
+            it.copy(relHeight = (percent.coerceIn(8, 100)) / 100f)
+        }
+    }
+
+    fun saveMainScreenPanelName(panelId: String, name: String) {
+        updateMainScreenPanel(panelId) { it.copy(name = name) }
     }
 
     fun saveFloatingDashboardSetting(enabled: Boolean) {

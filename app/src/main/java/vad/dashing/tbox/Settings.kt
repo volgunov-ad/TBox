@@ -74,7 +74,7 @@ data class MainScreenPanelConfig(
     val relHeight: Float,
     val background: Boolean,
     val clickAction: Boolean,
-    val showTboxDisconnectIndicator: Boolean = true
+    val showTboxDisconnectIndicator: Boolean = false
 )
 
 data class FloatingDashboardConfig(
@@ -155,7 +155,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
         private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
         private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
-        private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"

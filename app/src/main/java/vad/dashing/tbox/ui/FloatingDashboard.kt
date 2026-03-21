@@ -267,7 +267,8 @@ fun FloatingDashboard(
                     .background(color = Color.Transparent)
                     .then(
                         if (canManipulatePanel) {
-                            Modifier.pointerInput(panelId, windowParams.width, windowParams.height) {
+                            // Avoid width/height in keys: they change while resizing and cancel the drag.
+                            Modifier.pointerInput(panelId) {
                                 detectDragGestures(
                                     onDragStart = { startOffset ->
                                         val isNearBottomRight = isInResizeHandleArea(
