@@ -433,6 +433,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val isMainScreenWallpaperCrop = settingsManager.mainScreenWallpaperCropFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     private val _mainScreenWallpaperEpoch = MutableStateFlow(0L)
     val mainScreenWallpaperEpoch: StateFlow<Long> = _mainScreenWallpaperEpoch.asStateFlow()
 
@@ -910,6 +917,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.setMainScreenWallpaperDark(sourceUri)
             _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+        }
+    }
+
+    fun saveMainScreenWallpaperCrop(crop: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWallpaperCrop(crop)
         }
     }
 

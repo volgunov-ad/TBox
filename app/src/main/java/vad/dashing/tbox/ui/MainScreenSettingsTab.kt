@@ -48,6 +48,8 @@ fun MainScreenSettingsTab(
         settingsViewModel.isMainScreenWallpaperLightSet.collectAsStateWithLifecycle()
     val isMainScreenWallpaperDarkSet by
         settingsViewModel.isMainScreenWallpaperDarkSet.collectAsStateWithLifecycle()
+    val isMainScreenWallpaperCrop by
+        settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
 
     val pickWallpaperLight = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -135,6 +137,13 @@ fun MainScreenSettingsTab(
                 Text(stringResource(R.string.action_delete), fontSize = 22.sp)
             }
         }
+        SettingSwitch(
+            isMainScreenWallpaperCrop,
+            { crop -> settingsViewModel.saveMainScreenWallpaperCrop(crop) },
+            stringResource(R.string.settings_main_screen_wallpaper_scale_crop_title),
+            stringResource(R.string.settings_main_screen_wallpaper_scale_crop_desc),
+            true
+        )
         SettingsTitle(stringResource(R.string.settings_main_screen_panels_title))
         if (hasMainScreenPanels) {
             MainScreenPanelEditor(

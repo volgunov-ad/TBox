@@ -132,6 +132,8 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_light")
         private val MAIN_SCREEN_WALLPAPER_DARK_SET_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_dark")
+        private val MAIN_SCREEN_WALLPAPER_CROP_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_crop")
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
@@ -313,6 +315,11 @@ class SettingsManager(private val context: Context) {
 
     val mainScreenWallpaperDarkSetFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_DARK_SET_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** `true`: fill screen with Crop; `false`: Fit (whole image, possible side bars). */
+    val mainScreenWallpaperCropFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_CROP_KEY] ?: false }
         .distinctUntilChanged()
 
     // String flows
@@ -514,6 +521,12 @@ class SettingsManager(private val context: Context) {
             relativePath = MAIN_SCREEN_WALLPAPER_DARK_FILE,
             prefKey = MAIN_SCREEN_WALLPAPER_DARK_SET_KEY
         )
+    }
+
+    suspend fun saveMainScreenWallpaperCrop(crop: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WALLPAPER_CROP_KEY] = crop
+        }
     }
 
     private suspend fun setMainScreenWallpaper(

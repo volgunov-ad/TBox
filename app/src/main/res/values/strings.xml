@@ -191,6 +191,8 @@
     <string name="settings_main_screen_wallpaper_light">Светлая тема приложения</string>
     <string name="settings_main_screen_wallpaper_dark">Тёмная тема приложения</string>
     <string name="settings_main_screen_wallpaper_pick">Выбрать изображение</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
     <string name="settings_show_main_screen_panel_title">Показывать панель на главном экране</string>
     <string name="main_screen_panel_rel_width_pct">Ширина панели, % экрана (8–100)</string>

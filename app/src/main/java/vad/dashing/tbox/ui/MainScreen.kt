@@ -137,6 +137,7 @@ private fun MainScreenWallpaperBackground(
     val hasLight by settingsViewModel.isMainScreenWallpaperLightSet.collectAsStateWithLifecycle()
     val hasDark by settingsViewModel.isMainScreenWallpaperDarkSet.collectAsStateWithLifecycle()
     val epoch by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
+    val wallpaperCrop by settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
     val useWallpaper = if (theme == 2) hasDark else hasLight
     val relPath = if (theme == 2) {
         SettingsManager.MAIN_SCREEN_WALLPAPER_DARK_FILE
@@ -163,7 +164,7 @@ private fun MainScreenWallpaperBackground(
                 bitmap = bitmap!!,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
+                contentScale = if (wallpaperCrop) ContentScale.Crop else ContentScale.Fit
             )
         }
     }
