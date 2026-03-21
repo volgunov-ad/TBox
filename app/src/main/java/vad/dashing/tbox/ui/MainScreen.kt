@@ -152,19 +152,18 @@ private fun MainScreenWallpaperBackground(
             BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
         }
     }
-    Box(modifier = modifier) {
+    Box(modifier = modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        )
         if (bitmap != null) {
             Image(
                 bitmap = bitmap!!,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                contentScale = ContentScale.Fit
             )
         }
     }
