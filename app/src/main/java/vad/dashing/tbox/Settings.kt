@@ -52,7 +52,8 @@ data class MainScreenAddButtonPosition(
     val y: Float
 ) {
     companion object {
-        val Default = MainScreenAddButtonPosition(0.04f, 0.85f)
+        /** Top-right row, immediately left of [MainScreenSettingsButtonPosition.Default] (same Y). */
+        val Default = MainScreenAddButtonPosition(0.84f, 0.04f)
     }
 }
 
