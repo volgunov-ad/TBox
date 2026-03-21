@@ -367,7 +367,6 @@
     <string name="data_title_app_launcher_widget">App shortcut</string>
     <string name="widget_app_launcher_selected">Selected: %1$s</string>
     <string name="widget_app_launcher_none_selected">No app selected</string>
-    <string name="widget_app_launcher_pick_app">Choose app</string>
     <string name="widget_app_launcher_required">Choose an app to save the widget</string>
     <string name="widget_app_launcher_pick_title">Choose app</string>
     <string name="widget_app_launcher_search">Search</string>

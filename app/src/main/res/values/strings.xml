@@ -367,7 +367,6 @@
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
     <string name="widget_app_launcher_selected">Выбрано: %1$s</string>
     <string name="widget_app_launcher_none_selected">Приложение не выбрано</string>
-    <string name="widget_app_launcher_pick_app">Выбрать приложение</string>
     <string name="widget_app_launcher_required">Выберите приложение, чтобы сохранить виджет</string>
     <string name="widget_app_launcher_pick_title">Выбор приложения</string>
     <string name="widget_app_launcher_search">Поиск</string>

@@ -153,8 +153,6 @@ internal fun WidgetSelectionDialogForm(
                     key to WidgetsRepository.getTitleUnitForDataKey(context, key)
                 }
 
-    var showAppLauncherPicker by remember { mutableStateOf(false) }
-
     Column(
         modifier = modifier
     ) {
@@ -192,41 +190,10 @@ internal fun WidgetSelectionDialogForm(
                             state.togglesEnabled
                         )
                     }
-                    if (state.isAppLauncherWidgetSelected) {
-                        val appsAdv = rememberLaunchableAppEntries()
-                        val selectedLabelAdv =
-                            appsAdv.find { it.packageName == state.launcherAppPackage }?.label
-                        Text(
-                            text = if (selectedLabelAdv != null) {
-                                stringResource(R.string.widget_app_launcher_selected, selectedLabelAdv)
-                            } else {
-                                stringResource(R.string.widget_app_launcher_none_selected)
-                            },
-                            fontSize = 22.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
-                        )
-                        Button(
-                            onClick = { showAppLauncherPicker = true },
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.widget_app_launcher_pick_app),
-                                fontSize = 22.sp
-                            )
-                        }
-                        if (state.launcherAppPackage.isBlank()) {
-                            Text(
-                                text = stringResource(R.string.widget_app_launcher_required),
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 20.sp,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                        }
-                    }
+                    AppLauncherWidgetSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
                     SettingSwitch(
                         state.showTitle,
                         { state.showTitle = it },
@@ -364,47 +331,12 @@ internal fun WidgetSelectionDialogForm(
                             )
                         }
                     }
-                    if (state.isAppLauncherWidgetSelected) {
-                        val apps = rememberLaunchableAppEntries()
-                        val selectedLabel = apps.find { it.packageName == state.launcherAppPackage }?.label
-                        Text(
-                            text = if (selectedLabel != null) {
-                                stringResource(R.string.widget_app_launcher_selected, selectedLabel)
-                            } else {
-                                stringResource(R.string.widget_app_launcher_none_selected)
-                            },
-                            fontSize = 22.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-                        )
-                        Button(
-                            onClick = { showAppLauncherPicker = true },
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = stringResource(R.string.widget_app_launcher_pick_app),
-                                fontSize = 22.sp
-                            )
-                        }
-                        if (state.launcherAppPackage.isBlank()) {
-                            Text(
-                                text = stringResource(R.string.widget_app_launcher_required),
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 20.sp,
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
-                        }
-                    }
+                    AppLauncherWidgetSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
                 }
             }
-        }
-        if (showAppLauncherPicker) {
-            AppLauncherAppPickerDialog(
-                selectedPackage = state.launcherAppPackage,
-                onPackageSelected = { state.launcherAppPackage = it },
-                onDismiss = { showAppLauncherPicker = false }
-            )
         }
     }
 }
