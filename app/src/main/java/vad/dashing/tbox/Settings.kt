@@ -114,7 +114,6 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FLOATING_DASHBOARD_BACKGROUND = false
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
         private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
-        private const val DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD = false
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
@@ -126,16 +125,6 @@ class SettingsManager(private val context: Context) {
         // Ключ для сохранения конфигурации виджетов
         private val DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}dashboard_widgets")
 
-        private val FLOATING_DASHBOARD_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard")
-        private val FLOATING_DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}floating_dashboard_widgets")
-        private val FLOATING_DASHBOARD_WIDTH_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_width")
-        private val FLOATING_DASHBOARD_HEIGHT_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_height")
-        private val FLOATING_DASHBOARD_START_X_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_start_x")
-        private val FLOATING_DASHBOARD_START_Y_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_start_y")
-        private val FLOATING_DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_rows")
-        private val FLOATING_DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_cols")
-        private val FLOATING_DASHBOARD_BACKGROUND_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard_background")
-        private val FLOATING_DASHBOARD_CLICK_ACTION_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard_click_action")
     }
 
     // Flow для конфигурации виджетов
@@ -379,66 +368,6 @@ class SettingsManager(private val context: Context) {
     suspend fun saveLeftMenuVisibleSetting(visible: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[LEFT_MENU_VISIBLE] = visible
-        }
-    }
-
-    suspend fun saveFloatingDashboardSetting(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_KEY] = enabled
-        }
-    }
-
-    suspend fun saveFloatingDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_WIDGETS_KEY] = serializeWidgetConfigs(config)
-        }
-    }
-
-    suspend fun saveFloatingDashboardRows(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_ROWS_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardCols(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_COLS_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardHeight(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_HEIGHT_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardWidth(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_WIDTH_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardStartX(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_START_X_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardStartY(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_START_Y_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardBackground(config: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_BACKGROUND_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardClickAction(config: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_CLICK_ACTION_KEY] = config
         }
     }
 

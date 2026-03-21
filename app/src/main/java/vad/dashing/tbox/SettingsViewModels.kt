@@ -32,7 +32,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_FLOATING_DASHBOARD_BACKGROUND = false
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
         private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
-        private const val DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD = false
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
 
@@ -256,14 +255,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_FLOATING_DASHBOARD_START_Y
-        )
-
-    val isFloatingDashboardBackground = activeFloatingDashboardConfig
-        .map { it.background }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = DEFAULT_FLOATING_DASHBOARD_BACKGROUND
         )
 
     val isFloatingDashboardClickAction = activeFloatingDashboardConfig
@@ -649,14 +640,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateSelectedFloatingDashboard { it.copy(enabled = enabled) }
     }
 
-    fun saveFloatingDashboardSetting(panelId: String, enabled: Boolean) {
-        updateFloatingDashboard(panelId) { it.copy(enabled = enabled) }
-    }
-
-    fun saveFloatingDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
-        updateSelectedFloatingDashboard { it.copy(widgetsConfig = config) }
-    }
-
     fun saveFloatingDashboardWidgets(
         panelId: String,
         config: List<FloatingDashboardWidgetConfig>
@@ -670,21 +653,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun saveFloatingDashboardRows(panelId: String, rows: Int) {
-        if (rows in 1..6) {
-            updateFloatingDashboard(panelId) { it.copy(rows = rows) }
-        }
-    }
-
     fun saveFloatingDashboardCols(cols: Int) {
         if (cols in 1..6) {
             updateSelectedFloatingDashboard { it.copy(cols = cols) }
-        }
-    }
-
-    fun saveFloatingDashboardCols(panelId: String, cols: Int) {
-        if (cols in 1..6) {
-            updateFloatingDashboard(panelId) { it.copy(cols = cols) }
         }
     }
 
@@ -692,20 +663,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateSelectedFloatingDashboard { it.copy(width = width) }
     }
 
-    fun saveFloatingDashboardWidth(panelId: String, width: Int) {
-        updateFloatingDashboard(panelId) { it.copy(width = width) }
-    }
-
     fun saveFloatingDashboardHeight(height: Int) {
         updateSelectedFloatingDashboard { it.copy(height = height) }
-    }
-
-    fun saveFloatingDashboardHeight(panelId: String, height: Int) {
-        updateFloatingDashboard(panelId) { it.copy(height = height) }
-    }
-
-    fun saveFloatingDashboardSize(width: Int, height: Int) {
-        updateSelectedFloatingDashboard { it.copy(width = width, height = height) }
     }
 
     fun saveFloatingDashboardSize(panelId: String, width: Int, height: Int) {
@@ -716,48 +675,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateSelectedFloatingDashboard { it.copy(startX = x) }
     }
 
-    fun saveFloatingDashboardStartX(panelId: String, x: Int) {
-        updateFloatingDashboard(panelId) { it.copy(startX = x) }
-    }
-
     fun saveFloatingDashboardStartY(y: Int) {
         updateSelectedFloatingDashboard { it.copy(startY = y) }
-    }
-
-    fun saveFloatingDashboardStartY(panelId: String, y: Int) {
-        updateFloatingDashboard(panelId) { it.copy(startY = y) }
-    }
-
-    fun saveFloatingDashboardPosition(x: Int, y: Int) {
-        updateSelectedFloatingDashboard { it.copy(startX = x, startY = y) }
     }
 
     fun saveFloatingDashboardPosition(panelId: String, x: Int, y: Int) {
         updateFloatingDashboard(panelId) { it.copy(startX = x, startY = y) }
     }
 
-    fun saveFloatingDashboardBackground(enabled: Boolean) {
-        updateSelectedFloatingDashboard { it.copy(background = enabled) }
-    }
-
-    fun saveFloatingDashboardBackground(panelId: String, enabled: Boolean) {
-        updateFloatingDashboard(panelId) { it.copy(background = enabled) }
-    }
-
     fun saveFloatingDashboardClickAction(enabled: Boolean) {
         updateSelectedFloatingDashboard { it.copy(clickAction = enabled) }
     }
 
-    fun saveFloatingDashboardClickAction(panelId: String, enabled: Boolean) {
-        updateFloatingDashboard(panelId) { it.copy(clickAction = enabled) }
-    }
-
     fun saveFloatingDashboardShowTboxDisconnectIndicator(enabled: Boolean) {
         updateSelectedFloatingDashboard { it.copy(showTboxDisconnectIndicator = enabled) }
-    }
-
-    fun saveFloatingDashboardShowTboxDisconnectIndicator(panelId: String, enabled: Boolean) {
-        updateFloatingDashboard(panelId) { it.copy(showTboxDisconnectIndicator = enabled) }
     }
 
     fun saveFloatingDashboardName(panelId: String, name: String) {
