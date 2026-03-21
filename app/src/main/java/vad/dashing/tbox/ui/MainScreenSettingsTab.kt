@@ -34,6 +34,8 @@ fun MainScreenSettingsTab(
         settingsViewModel.isMainScreenPanelShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
     val mainScreenPanelRows by settingsViewModel.mainScreenPanelRows.collectAsStateWithLifecycle()
     val mainScreenPanelCols by settingsViewModel.mainScreenPanelCols.collectAsStateWithLifecycle()
+    val isMainScreenOpenOnBootEnabled by
+        settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
 
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
     val scrollState = rememberScrollState()
@@ -44,6 +46,15 @@ fun MainScreenSettingsTab(
             .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
+        SettingSwitch(
+            isMainScreenOpenOnBootEnabled,
+            { enabled ->
+                settingsViewModel.saveMainScreenOpenOnBoot(enabled)
+            },
+            stringResource(R.string.settings_main_screen_open_on_boot_title),
+            stringResource(R.string.settings_main_screen_open_on_boot_desc),
+            true
+        )
         SettingsTitle(stringResource(R.string.settings_main_screen_panels_title))
         if (hasMainScreenPanels) {
             MainScreenPanelEditor(

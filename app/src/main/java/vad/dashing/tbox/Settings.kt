@@ -120,6 +120,8 @@ class SettingsManager(private val context: Context) {
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         private val LEFT_MENU_VISIBLE = booleanPreferencesKey("${KEY_PREFIX}left_menu_visible")
+        private val MAIN_SCREEN_OPEN_ON_BOOT_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_open_on_boot")
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
@@ -284,6 +286,11 @@ class SettingsManager(private val context: Context) {
                 )
             }
             .distinctUntilChanged()
+
+    /** After device boot, open [MainActivity] on the main home screen (tab 100) when enabled. */
+    val mainScreenOpenOnBootFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] ?: false }
+        .distinctUntilChanged()
 
     // String flows
     val logLevelFlow: Flow<String> = context.settingsDataStore.data
@@ -462,6 +469,12 @@ class SettingsManager(private val context: Context) {
         obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
         obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
         saveCustomString(MAIN_SCREEN_ADD_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenOpenOnBoot(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] = enabled
+        }
     }
 
     suspend fun saveMainScreenDashboards(configs: List<MainScreenPanelConfig>) {

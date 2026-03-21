@@ -185,6 +185,8 @@
     <string name="settings_floating_rows_title">Number of tile rows in floating panel</string>
     <string name="settings_floating_cols_title">Number of tile columns in floating panel</string>
 
+    <string name="settings_main_screen_open_on_boot_title">Automatically open main screen on startup</string>
+    <string name="settings_main_screen_open_on_boot_desc">After the device boots and the background service starts automatically, opens the app on the home main screen</string>
     <string name="settings_main_screen_panels_title">Main screen panels</string>
     <string name="settings_show_main_screen_panel_title">Show panel on main screen</string>
     <string name="main_screen_panel_rel_width_pct">Panel width, % of screen (8–100)</string>

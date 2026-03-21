@@ -411,6 +411,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = MainScreenAddButtonPosition.Default
         )
 
+    val isMainScreenOpenOnBootEnabled = settingsManager.mainScreenOpenOnBootFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val mainScreenDashboards = settingsManager.mainScreenDashboardsFlow
         .stateIn(
             scope = viewModelScope,
@@ -865,6 +872,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenAddButton(position: MainScreenAddButtonPosition) {
         viewModelScope.launch {
             settingsManager.saveMainScreenAddButton(position)
+        }
+    }
+
+    fun saveMainScreenOpenOnBoot(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenOpenOnBoot(enabled)
         }
     }
 
