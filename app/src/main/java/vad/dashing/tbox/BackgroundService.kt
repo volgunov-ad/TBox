@@ -306,7 +306,10 @@ class BackgroundService : Service() {
                 if (!isRunning) {
                     isRunning = true
                     val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
+                    val notification = createNotification("Start service")
+                    startForeground(NOTIFICATION_ID, notification)
                     TboxRepository.addLog("INFO", "Service", "Start service")
+                    TboxRepository.updateServiceStartTime()
                     startSettingsListener()
                     startListener()
                     startNetUpdater()
@@ -315,9 +318,6 @@ class BackgroundService : Service() {
                     //startCheckGateVersion()
                     startPeriodicJob()
                     startDataListener()
-                    TboxRepository.updateServiceStartTime()
-                    val notification = createNotification("Start service")
-                    startForeground(NOTIFICATION_ID, notification)
                     if (startFromBoot) {
                         maybeOpenMainScreenAfterBoot()
                     }
