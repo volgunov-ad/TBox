@@ -40,12 +40,16 @@
     <string name="tab_geoposition">Location</string>
     <string name="tab_car_data">Car data</string>
     <string name="tab_settings">Settings</string>
+    <string name="tab_main_screen_settings">Main screen settings</string>
     <string name="tab_logs">Logs</string>
     <string name="tab_info">Info</string>
     <string name="tab_can">CAN</string>
     <string name="tab_widgets">Tiles</string>
     <string name="menu_hide">Hide menu</string>
     <string name="menu_show">Show menu</string>
+    <string name="menu_navigate_home">Home</string>
+    <string name="main_open_console_cd">Open app sections</string>
+    <string name="main_screen_add_panel_cd">Add main screen panel</string>
     <string name="tbox_connected_at">TBox connected at %1$s</string>
     <string name="tbox_disconnected_at">TBox disconnected at %1$s</string>
     <string name="service_started_at">Service started at %1$s</string>
@@ -61,7 +65,7 @@
     <string name="widget_scale">Widget scale: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_shape">Corner rounding: %1$d</string>
-    <string name="widget_shape_hint" formatted="false">0..30</string>
+    <string name="widget_shape_hint" formatted="false">0..50</string>
     <string name="widget_text_color_light">Text color (light theme)</string>
     <string name="widget_text_color_dark">Text color (dark theme)</string>
     <string name="widget_background_color_light">Background color (light theme)</string>
@@ -84,6 +88,7 @@
     <string name="widget_music_access_required">Notification access is required for track data and controls</string>
     <string name="widget_music_open_access_settings">Open access settings</string>
     <string name="media_player_yandex_music">Yandex Music</string>
+    <string name="media_player_yandex_music_auto_play">Yandex Music (Auto)</string>
     <string name="media_player_poweramp">Poweramp</string>
     <string name="media_player_aimp">AIMP</string>
     <string name="media_player_record_radio">RecordRadio</string>
@@ -177,8 +182,24 @@
     <string name="settings_enable_floating_bg_title">Enable floating panel background</string>
     <string name="settings_enable_floating_bg_desc">If disabled, the background is transparent</string>
     <string name="settings_open_app_on_panel_click_title">Open app window on single tap on floating panel element</string>
+    <string name="settings_floating_tbox_disconnect_indicator_title">TBox disconnect indicator</string>
     <string name="settings_floating_rows_title">Number of tile rows in floating panel</string>
     <string name="settings_floating_cols_title">Number of tile columns in floating panel</string>
+
+    <string name="settings_main_screen_open_on_boot_title">Automatically open main screen on startup</string>
+    <string name="settings_main_screen_open_on_boot_desc">After the device boots and the background service starts automatically, opens the app on the home main screen</string>
+    <string name="settings_main_screen_wallpaper_title">Main screen background</string>
+    <string name="settings_main_screen_wallpaper_light">Light app theme</string>
+    <string name="settings_main_screen_wallpaper_dark">Dark app theme</string>
+    <string name="settings_main_screen_wallpaper_pick">Choose image</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_title">Background scale: Crop (fill screen)</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_desc">On — fill the screen, excess image cropped (ContentScale.Crop). Off — show full image, theme-colored bars if needed (ContentScale.Fit).</string>
+    <string name="settings_main_screen_panels_title">Main screen panels</string>
+    <string name="settings_show_main_screen_panel_title">Show panel on main screen</string>
+    <string name="main_screen_panel_rel_width_pct">Panel width, % of screen (8–100)</string>
+    <string name="main_screen_panel_rel_height_pct">Panel height, % of screen (8–100)</string>
+    <string name="main_screen_panel_rel_x_pct">Position X, % of free range (0–100)</string>
+    <string name="main_screen_panel_rel_y_pct">Position Y, % of free range (0–100)</string>
 
     <string name="settings_overlay_widgets_title">Overlay widget settings</string>
     <string name="settings_widget_connection_indicator_title">Show TBox connection indicator in widget</string>
@@ -260,12 +281,11 @@
     <string name="widget_desc_location">location</string>
     <string name="widget_desc_net">network</string>
     <string name="widget_desc_connection">connection</string>
-    <string name="floating_dashboard_name_1">Panel 1</string>
-    <string name="floating_dashboard_name_2">Panel 2</string>
-    <string name="floating_dashboard_name_3">Panel 3</string>
-    <string name="floating_dashboard_name_4">Panel 4</string>
-    <string name="floating_dashboard_name_5">Panel 5</string>
-    <string name="floating_dashboard_name_6">Panel 6</string>
+    <string name="floating_dashboard_new_panel_default">New panel</string>
+    <string name="floating_panel_name_label">Panel name</string>
+    <string name="floating_panel_rename_button">Change name</string>
+    <string name="action_add">Add</string>
+    <string name="action_delete">Delete</string>
 
     <string name="seat_mode_off">off</string>
     <string name="seat_mode_heat_1">heating 1</string>
@@ -351,6 +371,13 @@
     <string name="data_title_temp_in_out_widget">Outside and inside temperature widget</string>
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
+    <string name="data_title_app_launcher_widget">App shortcut</string>
+    <string name="widget_app_launcher_selected">Selected: %1$s</string>
+    <string name="widget_app_launcher_none_selected">No app selected</string>
+    <string name="widget_app_launcher_required">Choose an app to save the widget</string>
+    <string name="widget_app_launcher_pick_title">Choose app</string>
+    <string name="widget_app_launcher_search">Search</string>
+    <string name="widget_app_launcher_no_icon">?</string>
 
     <string name="cycle_voltage">Cycle voltage, V</string>
     <string name="cycle_speed">Cycle speed, km/h</string>

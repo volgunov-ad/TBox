@@ -70,6 +70,7 @@ fun TboxApp(
     onMockLocationSettingChanged: (Boolean) -> Unit
 ) {
     val viewModel: TboxViewModel = viewModel()
+    val canViewModel: CanDataViewModel = viewModel()
 
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(
         settingsManager
@@ -81,21 +82,37 @@ fun TboxApp(
     )
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
+    val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
 
     TboxAppTheme(theme = currentTheme) {
-        TboxScreen(
-            viewModel = viewModel,
-            settingsViewModel = settingsViewModel,
-            appDataViewModel = appDataViewModel,
-            onTboxRestart = onTboxRestart,
-            onSaveToFile = onSaveToFile,
-            onServiceCommand = onServiceCommand,
-            onMockLocationSettingChanged = onMockLocationSettingChanged
-        )
+        if (selectedTab == SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX) {
+            MainScreen(
+                tboxViewModel = viewModel,
+                canViewModel = canViewModel,
+                appDataViewModel = appDataViewModel,
+                settingsViewModel = settingsViewModel,
+                onOpenConsole = { settingsViewModel.saveSelectedTab(0) },
+                onTboxRestart = onTboxRestart,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            TboxScreen(
+                viewModel = viewModel,
+                settingsViewModel = settingsViewModel,
+                appDataViewModel = appDataViewModel,
+                onTboxRestart = onTboxRestart,
+                onSaveToFile = onSaveToFile,
+                onServiceCommand = onServiceCommand,
+                onMockLocationSettingChanged = onMockLocationSettingChanged
+            )
+        }
     }
 }
 
 object TabItems {
+    /** Left menu order; tab index 9 is shown immediately after Settings (4). */
+    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 9, 5, 6, 7, 8)
+
     @Composable
     fun getItems(): List<TabItem> {
         return listOf(
@@ -107,7 +124,11 @@ object TabItems {
             TabItem(stringResource(R.string.tab_logs), ImageVector.vectorResource(R.drawable.menu_icon_log)),
             TabItem(stringResource(R.string.tab_info), Icons.Filled.Info),
             TabItem(stringResource(R.string.tab_can), ImageVector.vectorResource(R.drawable.menu_icon_data)),
-            TabItem(stringResource(R.string.tab_widgets), ImageVector.vectorResource(R.drawable.menu_icon_widgets))
+            TabItem(stringResource(R.string.tab_widgets), ImageVector.vectorResource(R.drawable.menu_icon_widgets)),
+            TabItem(
+                stringResource(R.string.tab_main_screen_settings),
+                ImageVector.vectorResource(R.drawable.ic_tab_main_screen_settings)
+            )
         )
     }
 }
@@ -150,19 +171,6 @@ fun TboxScreen(
     val menuIconSize = 28.dp
     val menuButtonSize = 64.dp
 
-    // Показываем loading пока загружается сохраненная вкладка
-    if (selectedTab == null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(stringResource(R.string.loading), fontSize = 18.sp)
-        }
-        return
-    }
-
     LaunchedEffect(selectedTab) {
         if (selectedTab == 0) {
             onServiceCommand(
@@ -170,6 +178,12 @@ fun TboxScreen(
                 "",
                 ""
             )
+        }
+        if (selectedTab == 4) {
+            settingsViewModel.onSettingsTabSelected()
+        }
+        if (selectedTab == 9) {
+            settingsViewModel.onMainScreenSettingsTabSelected()
         }
     }
 
@@ -210,13 +224,27 @@ fun TboxScreen(
                         )
                     }
 
+                    TabMenuItem(
+                        title = stringResource(R.string.menu_navigate_home),
+                        icon = ImageVector.vectorResource(R.drawable.ic_menu_home),
+                        selected = false,
+                        showText = isMenuVisible,
+                        onClick = {
+                            settingsViewModel.saveSelectedTab(
+                                SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX
+                            )
+                        }
+                    )
+
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .verticalScroll(scrollState),
                         verticalArrangement = Arrangement.Center
                     ) {
-                        tabs.forEachIndexed { index, tab ->
+                        TabItems.tabMenuDisplayOrder.forEach { index ->
+                            if (index !in tabs.indices) return@forEach
+                            val tab = tabs[index]
                             if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
                                 TabMenuItem(
                                     title = tab.title,
@@ -224,7 +252,6 @@ fun TboxScreen(
                                     selected = selectedTab == index,
                                     showText = isMenuVisible,
                                     onClick = {
-                                        // Сохраняем выбор вкладки через ViewModel
                                         settingsViewModel.saveSelectedTab(index)
                                     }
                                 )
@@ -328,11 +355,11 @@ fun TboxScreen(
                         settingsViewModel,
                         appDataViewModel,
                         onTboxRestart)
+                    9 -> MainScreenSettingsTab(settingsViewModel = settingsViewModel)
                     else -> ModemTab(viewModel, onServiceCommand)
                 }
             }
         }
-
     }
 }
 

@@ -19,6 +19,7 @@ class BootCompleteReceiver : BroadcastReceiver() {
     private fun startService(context: Context) {
         val intent = Intent(context, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_START
+            putExtra(BackgroundService.EXTRA_START_FROM_BOOT, true)
         }
 
         // Для Android 8+ используем startForegroundService

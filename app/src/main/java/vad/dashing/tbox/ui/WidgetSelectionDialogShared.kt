@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -34,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -82,15 +86,30 @@ internal class WidgetSelectionDialogState(
     val selectedMediaPlayer: String = resolveSelectedMediaPlayerForWidget(initialConfig)
     var mediaAutoPlayOnInit by mutableStateOf(initialConfig.mediaAutoPlayOnInit)
     var showAdvancedSettings by mutableStateOf(false)
+    var launcherAppPackage by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherAppPackage
+        } else {
+            ""
+        }
+    )
 
     val isMusicWidgetSelected: Boolean
         get() = selectedDataKey == MUSIC_WIDGET_DATA_KEY
+
+    val isAppLauncherWidgetSelected: Boolean
+        get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
 
     val togglesEnabled: Boolean
         get() = selectedDataKey.isNotEmpty()
 
     val canSaveSelection: Boolean
-        get() = !isMusicWidgetSelected || selectedMediaPlayers.isNotEmpty()
+        get() = when {
+            selectedDataKey.isEmpty() -> true
+            isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
+            isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
+            else -> true
+        }
 }
 
 @Composable
@@ -171,6 +190,10 @@ internal fun WidgetSelectionDialogForm(
                             state.togglesEnabled
                         )
                     }
+                    AppLauncherWidgetSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
                     SettingSwitch(
                         state.showTitle,
                         { state.showTitle = it },
@@ -231,8 +254,8 @@ internal fun WidgetSelectionDialogForm(
                             onValueChange = { newValue ->
                                 state.shape = normalizeWidgetShape(newValue.toInt())
                             },
-                            valueRange = 0f..30f,
-                            steps = 29,
+                            valueRange = 0f..50f,
+                            steps = 49,
                             enabled = state.togglesEnabled,
                             modifier = Modifier.padding(top = 6.dp)
                         )
@@ -308,6 +331,10 @@ internal fun WidgetSelectionDialogForm(
                             )
                         }
                     }
+                    AppLauncherWidgetSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
                 }
             }
         }
@@ -320,13 +347,18 @@ internal fun WidgetSelectionDialogActions(
     onDismiss: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
-    saveTextFontWeight: FontWeight = FontWeight.Normal
+    saveTextFontWeight: FontWeight = FontWeight.Normal,
+    leadingExtra: (@Composable RowScope.() -> Unit)? = null
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        leadingExtra?.invoke(this)
+        if (leadingExtra != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+        }
         OutlinedButton(
             onClick = { state.showAdvancedSettings = !state.showAdvancedSettings },
             border = BorderStroke(
@@ -444,6 +476,11 @@ internal fun applyWidgetSelectionChanges(
                 state.mediaAutoPlayOnInit
             } else {
                 false
+            },
+            launcherAppPackage = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                state.launcherAppPackage.trim()
+            } else {
+                ""
             }
         )
     } else {

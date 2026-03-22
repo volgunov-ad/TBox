@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import vad.dashing.tbox.FloatingDashboardConfig
+import vad.dashing.tbox.MainScreenPanelConfig
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -702,37 +704,270 @@ fun ATLogsCard(
     }
 }
 
+private data class FloatingPanelDropdownOption(val id: String, val label: String) {
+    override fun toString() = label
+}
+
+private data class MainScreenPanelDropdownOption(val id: String, val label: String) {
+    override fun toString() = label
+}
+
 @Composable
-fun FloatingDashboardProfileSelector(
-    selectedId: String,
-    onSelect: (String) -> Unit,
-    modifier: Modifier = Modifier
+fun FloatingDashboardPanelEditor(
+    panels: List<FloatingDashboardConfig>,
+    selectedPanelId: String,
+    onSelectPanelId: (String) -> Unit,
+    onRenamePanel: (panelId: String, name: String) -> Unit,
+    onAddPanel: () -> Unit,
+    onDeletePanel: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    deleteInProgressPanelId: String? = null
 ) {
-    val options = (1..6).map { index ->
-        "floating-$index" to index.toString()
+    if (panels.isEmpty()) return
+    val selectedConfig = panels.find { it.id == selectedPanelId } ?: panels.first()
+    val effectiveId = selectedConfig.id
+    var draftName by remember { mutableStateOf(selectedConfig.name) }
+    LaunchedEffect(effectiveId, selectedConfig.name) {
+        draftName = selectedConfig.name
     }
+    val options = remember(panels) {
+        panels.map { FloatingPanelDropdownOption(it.id, it.name.ifBlank { it.id }) }
+    }
+    val selectedOption = remember(options, effectiveId) {
+        options.find { it.id == effectiveId } ?: options.first()
+    }
+    val trimmedDraft = draftName.trim()
+    val nameDirty = trimmedDraft != selectedConfig.name
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            GenericDropdownSelector(
+                selectedValue = selectedOption,
+                options = options,
+                onValueChange = { option -> onSelectPanelId(option.id) },
+                width = 300.dp,
+                enabled = enabled
+            )
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = draftName,
+                    onValueChange = { draftName = it },
+                    modifier = Modifier.weight(1f),
+                    enabled = enabled,
+                    singleLine = true,
+                    label = {
+                        Text(
+                            text = stringResource(R.string.floating_panel_name_label),
+                            fontSize = 16.sp
+                        )
+                    },
+                    textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+                )
+                Button(
+                    onClick = { onRenamePanel(effectiveId, trimmedDraft) },
+                    enabled = enabled && nameDirty
+                ) {
+                    Text(
+                        stringResource(R.string.floating_panel_rename_button),
+                        fontSize = 18.sp
+                    )
+                }
+            }
+            Button(onClick = onAddPanel, enabled = enabled) {
+                Text(stringResource(R.string.action_add), fontSize = 20.sp)
+            }
+            Button(
+                onClick = { onDeletePanel(effectiveId) },
+                enabled = enabled && deleteInProgressPanelId != effectiveId
+            ) {
+                Text(stringResource(R.string.action_delete), fontSize = 20.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun MainScreenPanelEditor(
+    panels: List<MainScreenPanelConfig>,
+    selectedPanelId: String,
+    onSelectPanelId: (String) -> Unit,
+    onRenamePanel: (panelId: String, name: String) -> Unit,
+    onAddPanel: () -> Unit,
+    onDeletePanel: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    deleteInProgressPanelId: String? = null
+) {
+    if (panels.isEmpty()) return
+    val selectedConfig = panels.find { it.id == selectedPanelId } ?: panels.first()
+    val effectiveId = selectedConfig.id
+    var draftName by remember { mutableStateOf(selectedConfig.name) }
+    LaunchedEffect(effectiveId, selectedConfig.name) {
+        draftName = selectedConfig.name
+    }
+    val options = remember(panels) {
+        panels.map { MainScreenPanelDropdownOption(it.id, it.name.ifBlank { it.id }) }
+    }
+    val selectedOption = remember(options, effectiveId) {
+        options.find { it.id == effectiveId } ?: options.first()
+    }
+    val trimmedDraft = draftName.trim()
+    val nameDirty = trimmedDraft != selectedConfig.name
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            GenericDropdownSelector(
+                selectedValue = selectedOption,
+                options = options,
+                onValueChange = { option -> onSelectPanelId(option.id) },
+                width = 300.dp,
+                enabled = enabled
+            )
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = draftName,
+                    onValueChange = { draftName = it },
+                    modifier = Modifier.weight(1f),
+                    enabled = enabled,
+                    singleLine = true,
+                    label = {
+                        Text(
+                            text = stringResource(R.string.floating_panel_name_label),
+                            fontSize = 16.sp
+                        )
+                    },
+                    textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+                )
+                Button(
+                    onClick = { onRenamePanel(effectiveId, trimmedDraft) },
+                    enabled = enabled && nameDirty
+                ) {
+                    Text(
+                        stringResource(R.string.floating_panel_rename_button),
+                        fontSize = 18.sp
+                    )
+                }
+            }
+            Button(onClick = onAddPanel, enabled = enabled) {
+                Text(stringResource(R.string.action_add), fontSize = 20.sp)
+            }
+            Button(
+                onClick = { onDeletePanel(effectiveId) },
+                enabled = enabled && deleteInProgressPanelId != effectiveId
+            ) {
+                Text(stringResource(R.string.action_delete), fontSize = 20.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun MainScreenPanelRelativeLayoutSettings(
+    settingsViewModel: SettingsViewModel,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val relX by settingsViewModel.mainScreenPanelRelXPercent.collectAsStateWithLifecycle()
+    val relY by settingsViewModel.mainScreenPanelRelYPercent.collectAsStateWithLifecycle()
+    val relW by settingsViewModel.mainScreenPanelRelWidthPercent.collectAsStateWithLifecycle()
+    val relH by settingsViewModel.mainScreenPanelRelHeightPercent.collectAsStateWithLifecycle()
+
     Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            options.forEach { (id, label) ->
-                val isSelected = id == selectedId
-                if (isSelected) {
-                    Button(
-                        onClick = { onSelect(id) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(text = label, fontSize = 22.sp)
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = { onSelect(id) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(text = label, fontSize = 22.sp)
-                    }
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.main_screen_panel_rel_width_pct),
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = relW,
+                    onValueChange = { newValue ->
+                        if (newValue in 8..100) {
+                            settingsViewModel.saveMainScreenPanelRelWidthPercent(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.main_screen_panel_rel_height_pct),
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = relH,
+                    onValueChange = { newValue ->
+                        if (newValue in 8..100) {
+                            settingsViewModel.saveMainScreenPanelRelHeightPercent(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.main_screen_panel_rel_x_pct),
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = relX,
+                    onValueChange = { newValue ->
+                        if (newValue in 0..100) {
+                            settingsViewModel.saveMainScreenPanelRelXPercent(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.main_screen_panel_rel_y_pct),
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = relY,
+                    onValueChange = { newValue ->
+                        if (newValue in 0..100) {
+                            settingsViewModel.saveMainScreenPanelRelYPercent(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                )
             }
         }
     }
@@ -741,7 +976,8 @@ fun FloatingDashboardProfileSelector(
 @Composable
 fun FloatingDashboardPositionSizeSettings(
     settingsViewModel: SettingsViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val floatingDashboardHeight by settingsViewModel.floatingDashboardHeight.collectAsStateWithLifecycle()
     val floatingDashboardWidth by settingsViewModel.floatingDashboardWidth.collectAsStateWithLifecycle()
@@ -771,7 +1007,8 @@ fun FloatingDashboardPositionSizeSettings(
                             settingsViewModel.saveFloatingDashboardWidth(newValue)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
                 )
             }
 
@@ -792,7 +1029,8 @@ fun FloatingDashboardPositionSizeSettings(
                             settingsViewModel.saveFloatingDashboardHeight(newValue)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
                 )
             }
         }
@@ -819,7 +1057,8 @@ fun FloatingDashboardPositionSizeSettings(
                             settingsViewModel.saveFloatingDashboardStartX(newValue)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
                 )
             }
 
@@ -840,7 +1079,8 @@ fun FloatingDashboardPositionSizeSettings(
                             settingsViewModel.saveFloatingDashboardStartY(newValue)
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
                 )
             }
         }
@@ -853,7 +1093,8 @@ fun IntInputField(
     value: Int,
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    fontSize: TextUnit = 24.sp
+    fontSize: TextUnit = 24.sp,
+    enabled: Boolean = true
 ) {
     var textValue by remember { mutableStateOf(value.toString()) }
     var isError by remember { mutableStateOf(false) }
@@ -880,6 +1121,7 @@ fun IntInputField(
             }
         },
         modifier = modifier,
+        enabled = enabled,
         singleLine = true,
         isError = isError,
         textStyle = LocalTextStyle.current.copy(fontSize = fontSize),
