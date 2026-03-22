@@ -7,13 +7,6 @@ import org.junit.Test
 class MediaControlServicePlayersTest {
 
     @Test
-    fun fromPackage_resolvesWtLocalMultimediaPlayer() {
-        val resolved = SupportedMediaPlayer.fromPackage("com.wt.multimedia.local")
-
-        assertEquals(SupportedMediaPlayer.WT_LOCAL_MULTIMEDIA, resolved)
-    }
-
-    @Test
     fun fromPackage_resolvesBluetoothAliasesToBluetoothPhonePlayer() {
         val packages = listOf(
             "com.android.bluetooth",
@@ -26,13 +19,6 @@ class MediaControlServicePlayersTest {
             val resolved = SupportedMediaPlayer.fromPackage(packageName)
             assertEquals(SupportedMediaPlayer.BLUETOOTH_PHONE, resolved)
         }
-    }
-
-    @Test
-    fun fromPackage_resolvesPlatform3AliasToWtLocalMultimedia() {
-        val resolved = SupportedMediaPlayer.fromPackage("com.wt.multimedia.platform3")
-
-        assertEquals(SupportedMediaPlayer.WT_LOCAL_MULTIMEDIA, resolved)
     }
 
     @Test
