@@ -1,24 +1,18 @@
 package vad.dashing.tbox
 
 import android.appwidget.AppWidgetManager
-import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
 import android.content.Intent
-import android.os.Bundle
 import android.util.Log
+import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import vad.dashing.tbox.ui.WidgetProviderCatalogScreen
 
 /**
- * Host-owned widget selection: our catalog with [AppWidgetProviderInfo] previews first;
- * [android.appwidget.AppWidgetManager.ACTION_APPWIDGET_PICK] remains available as fallback.
+ * Allocates an app widget id and opens the system [AppWidgetManager.ACTION_APPWIDGET_PICK] flow.
  */
 class WidgetPickerActivity : ComponentActivity() {
 
@@ -76,16 +70,7 @@ class WidgetPickerActivity : ComponentActivity() {
             cleanupAndFinish()
             return@registerForActivityResult
         }
-        handleSystemPickResult(result.data)
-    }
-
-    private val bindWidgetLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode != RESULT_OK) {
-            return@registerForActivityResult
-        }
-        continueAfterBound()
+        handlePickResult(result.data)
     }
 
     private val configureWidgetLauncher = registerForActivityResult(
@@ -122,46 +107,13 @@ class WidgetPickerActivity : ComponentActivity() {
             return
         }
 
-        setContent {
-            MaterialTheme {
-                BackHandler(onBack = { cleanupAndFinish() })
-                WidgetProviderCatalogScreen(
-                    appWidgetManager = appWidgetManager,
-                    packageManager = packageManager,
-                    onProviderClick = { onProviderChosen(it) },
-                    onCancel = { cleanupAndFinish() },
-                    onOpenSystemPicker = { openSystemWidgetPicker() }
-                )
-            }
-        }
-    }
-
-    private fun openSystemWidgetPicker() {
         val pickIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
         }
         pickWidgetLauncher.launch(pickIntent)
     }
 
-    private fun onProviderChosen(info: AppWidgetProviderInfo) {
-        val provider = info.provider
-        if (appWidgetManager.bindAppWidgetIdIfAllowed(appWidgetId, provider, null)) {
-            continueAfterBound()
-            return
-        }
-        try {
-            val bindIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, provider)
-            }
-            bindWidgetLauncher.launch(bindIntent)
-        } catch (e: Exception) {
-            Log.w("WidgetPicker", "ACTION_APPWIDGET_BIND launch failed, opening system picker", e)
-            openSystemWidgetPicker()
-        }
-    }
-
-    private fun handleSystemPickResult(data: Intent?) {
+    private fun handlePickResult(data: Intent?) {
         val pickedId = data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             ?: appWidgetId
         if (pickedId == AppWidgetManager.INVALID_APPWIDGET_ID) {
@@ -172,10 +124,7 @@ class WidgetPickerActivity : ComponentActivity() {
             ExternalWidgetHostManager.deleteAppWidgetId(this, appWidgetId)
         }
         appWidgetId = pickedId
-        continueAfterBound()
-    }
 
-    private fun continueAfterBound() {
         val info = appWidgetManager.getAppWidgetInfo(appWidgetId)
         if (info == null) {
             cleanupAndFinish()

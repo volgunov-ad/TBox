@@ -67,11 +67,6 @@
     <string name="widget_external_app_not_selected">Not selected</string>
     <string name="widget_external_tile_empty">No widget selected</string>
     <string name="widget_external_tile_unavailable">Widget unavailable</string>
-    <string name="widget_picker_catalog_title">Widgets</string>
-    <string name="widget_picker_back">Back</string>
-    <string name="widget_picker_system_list">System list</string>
-    <string name="widget_picker_preview_placeholder">No preview</string>
-    <string name="widget_picker_empty_list">No widgets available</string>
     <string name="widget_toggle_advanced">Advanced</string>
     <string name="widget_scale">Widget scale: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
