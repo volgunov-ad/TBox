@@ -27,6 +27,7 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
+import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
@@ -101,6 +102,13 @@ fun MainScreenDashboardPanel(
     val context = LocalContext.current
     val density = LocalDensity.current
     val minPanelPx = with(density) { 80.dp.toPx() }
+    val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
+
+    DisposableEffect(appWidgetHost) {
+        onDispose {
+            ExternalWidgetHostManager.releaseHost()
+        }
+    }
 
     val vmKey = "main-screen-${panel.id}"
     val dashboardViewModel: FloatingDashboardViewModel = viewModel(
@@ -353,7 +361,8 @@ fun MainScreenDashboardPanel(
                 }
             },
             showTboxDisconnectIndicator = panel.showTboxDisconnectIndicator,
-            enableMusicInnerInteractions = !isEditMode
+            enableMusicInnerInteractions = !isEditMode,
+            externalWidgetHost = appWidgetHost
         )
     }
 

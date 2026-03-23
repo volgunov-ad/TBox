@@ -52,6 +52,8 @@ import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.WidgetPickerActivity
 
 @Composable
 fun MainDashboardTab(
@@ -62,6 +64,14 @@ fun MainDashboardTab(
     onTboxRestartClick: () -> Unit,
 ) {
     val context = LocalContext.current
+    val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
+
+    DisposableEffect(appWidgetHost) {
+        onDispose {
+            ExternalWidgetHostManager.releaseHost()
+        }
+    }
+
     val dashboardViewModel: MainDashboardViewModel = viewModel()
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
     val widgetsConfig by settingsViewModel.dashboardWidgetsConfig.collectAsStateWithLifecycle()
@@ -189,6 +199,8 @@ fun MainDashboardTab(
                                                 onTboxRestartClick()
                                             }
                                         },
+                                        externalWidgetHost = appWidgetHost,
+                                        isEditMode = false,
                                         elevation = MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
                                         shape = MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE.dp
                                     )
@@ -248,7 +260,29 @@ fun WidgetSelectionDialog(
                 state = state,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp)
+                    .padding(8.dp),
+                bottomContent = {
+                    if (state.isExternalAppWidgetSelected) {
+                        ExternalAppWidgetPickerSection(
+                            appWidgetId = externalAppWidgetIdForApply(
+                                state,
+                                currentWidgetConfigs,
+                                widgetIndex
+                            ),
+                            onPickClick = {
+                                WidgetPickerActivity.start(
+                                    context = context,
+                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_DASHBOARD,
+                                    panelId = "",
+                                    widgetIndex = widgetIndex,
+                                    showTitle = state.showTitle,
+                                    showUnit = state.showUnit
+                                )
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
             )
         },
         confirmButton = {
@@ -256,6 +290,18 @@ fun WidgetSelectionDialog(
                 state = state,
                 onDismiss = onDismiss,
                 onSave = {
+                    if (tryLaunchExternalWidgetPicker(
+                            context = context,
+                            saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_DASHBOARD,
+                            panelId = "",
+                            widgetIndex = widgetIndex,
+                            state = state,
+                            currentWidgetConfigs = currentWidgetConfigs,
+                            onDismiss = onDismiss
+                        )
+                    ) {
+                        return@WidgetSelectionDialogActions
+                    }
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,
@@ -263,7 +309,12 @@ fun WidgetSelectionDialog(
                         currentWidgetConfigs = currentWidgetConfigs,
                         widgetIndex = widgetIndex,
                         state = state,
-                        saveConfigs = settingsViewModel::saveDashboardWidgets
+                        saveConfigs = settingsViewModel::saveDashboardWidgets,
+                        externalAppWidgetId = externalAppWidgetIdForApply(
+                            state,
+                            currentWidgetConfigs,
+                            widgetIndex
+                        )
                     )
                     onDismiss()
                 },
@@ -309,7 +360,29 @@ fun MainScreenPanelWidgetSelectionDialog(
                 state = state,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp)
+                    .padding(8.dp),
+                bottomContent = {
+                    if (state.isExternalAppWidgetSelected) {
+                        ExternalAppWidgetPickerSection(
+                            appWidgetId = externalAppWidgetIdForApply(
+                                state,
+                                currentWidgetConfigs,
+                                widgetIndex
+                            ),
+                            onPickClick = {
+                                WidgetPickerActivity.start(
+                                    context = context,
+                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_SCREEN,
+                                    panelId = panelId,
+                                    widgetIndex = widgetIndex,
+                                    showTitle = state.showTitle,
+                                    showUnit = state.showUnit
+                                )
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
             )
         },
         confirmButton = {
@@ -331,6 +404,18 @@ fun MainScreenPanelWidgetSelectionDialog(
                 state = state,
                 onDismiss = onDismiss,
                 onSave = {
+                    if (tryLaunchExternalWidgetPicker(
+                            context = context,
+                            saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_SCREEN,
+                            panelId = panelId,
+                            widgetIndex = widgetIndex,
+                            state = state,
+                            currentWidgetConfigs = currentWidgetConfigs,
+                            onDismiss = onDismiss
+                        )
+                    ) {
+                        return@WidgetSelectionDialogActions
+                    }
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,
@@ -340,7 +425,12 @@ fun MainScreenPanelWidgetSelectionDialog(
                         state = state,
                         saveConfigs = { configs ->
                             settingsViewModel.saveMainScreenDashboardWidgets(panelId, configs)
-                        }
+                        },
+                        externalAppWidgetId = externalAppWidgetIdForApply(
+                            state,
+                            currentWidgetConfigs,
+                            widgetIndex
+                        )
                     )
                     onDismiss()
                 },

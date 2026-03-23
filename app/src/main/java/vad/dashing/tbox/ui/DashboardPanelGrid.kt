@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.appwidget.AppWidgetHost
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,6 +59,7 @@ internal fun DashboardPanelGridAndFrames(
     onRestartRequested: () -> Unit,
     showTboxDisconnectIndicator: Boolean,
     enableMusicInnerInteractions: Boolean,
+    externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 4.dp,
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
@@ -133,6 +135,8 @@ internal fun DashboardPanelGridAndFrames(
                                         onMusicSelectedPlayerChange(index, selectedPackage)
                                     },
                                     onRestartRequested = onRestartRequested,
+                                    externalWidgetHost = externalWidgetHost,
+                                    isEditMode = isEditMode,
                                     elevation = widgetCardElevation,
                                     shape = normalizeWidgetShape(widgetConfig.shape).dp,
                                     enableMusicInnerInteractions = enableMusicInnerInteractions
