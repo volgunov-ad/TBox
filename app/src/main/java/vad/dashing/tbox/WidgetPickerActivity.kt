@@ -1,10 +1,13 @@
 package vad.dashing.tbox
 
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.util.Log
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
@@ -17,6 +20,7 @@ import kotlinx.coroutines.launch
 class WidgetPickerActivity : ComponentActivity() {
 
     companion object {
+        private const val TAG = "WidgetPicker"
         const val EXTRA_PANEL_ID = "extra_panel_id"
         const val EXTRA_WIDGET_INDEX = "extra_widget_index"
         const val EXTRA_SHOW_TITLE = "extra_show_title"
@@ -130,14 +134,57 @@ class WidgetPickerActivity : ComponentActivity() {
             cleanupAndFinish()
             return
         }
-        if (info.configure != null) {
+        val configure = info.configure
+        if (configure != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !isConfigureActivityExported(configure)) {
+                Log.w(
+                    TAG,
+                    "Configure activity ${configure.flattenToShortString()} is not exported; saving widget without config UI."
+                )
+                saveSelectionAndFinish()
+                return
+            }
             val configIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
-                component = info.configure
+                component = configure
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             }
-            configureWidgetLauncher.launch(configIntent)
+            try {
+                configureWidgetLauncher.launch(configIntent)
+            } catch (e: SecurityException) {
+                Log.w(
+                    TAG,
+                    "Cannot start APPWIDGET_CONFIGURE for ${configure.flattenToShortString()}; saving widget as-is.",
+                    e
+                )
+                saveSelectionAndFinish()
+            } catch (e: RuntimeException) {
+                if (e.cause is SecurityException) {
+                    Log.w(
+                        TAG,
+                        "Cannot start APPWIDGET_CONFIGURE for ${configure.flattenToShortString()}; saving widget as-is.",
+                        e
+                    )
+                    saveSelectionAndFinish()
+                } else {
+                    throw e
+                }
+            }
         } else {
             saveSelectionAndFinish()
+        }
+    }
+
+    private fun isConfigureActivityExported(component: ComponentName): Boolean {
+        return try {
+            @Suppress("DEPRECATION")
+            val ai = packageManager.getActivityInfo(component, PackageManager.GET_META_DATA)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                ai.exported
+            } else {
+                true
+            }
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
         }
     }
 
