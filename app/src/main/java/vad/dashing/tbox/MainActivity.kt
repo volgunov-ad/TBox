@@ -56,7 +56,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Переменная для хранения данных, которые нужно сохранить после получения разрешений
+    // Переменные для хранения данных/тега, которые нужно сохранить после получения разрешений
+    private var pendingSaveTag: String? = null
     private var pendingDataToSave: List<String>? = null
 
     // Флаг для отслеживания состояния переключателя mock-локации
@@ -249,6 +250,7 @@ class MainActivity : ComponentActivity() {
             performFileSave(tag, dataList)
         } else {
             // Если разрешений нет - сохраняем данные и запрашиваем разрешения
+            pendingSaveTag = tag
             pendingDataToSave = dataList
             requestStoragePermissions()
         }
@@ -280,12 +282,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            Toast.makeText(this, "Сохранено в: ${dataFile.absolutePath}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                getString(R.string.toast_saved_to, dataFile.absolutePath),
+                Toast.LENGTH_LONG
+            ).show()
             Log.d(TAG, "Файл сохранен: ${dataFile.absolutePath}")
 
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка сохранения файла", e)
-            Toast.makeText(this, "Ошибка сохранения: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                this,
+                getString(R.string.toast_save_error, e.message ?: ""),
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -337,16 +347,17 @@ class MainActivity : ComponentActivity() {
         Log.d(TAG, "Storage permissions granted")
         // Если есть ожидающие данные для сохранения - сохраняем их
         pendingDataToSave?.let { data ->
-            performFileSave("data", data)
+            val tag = pendingSaveTag ?: "data"
+            performFileSave(tag, data)
+            pendingSaveTag = null
             pendingDataToSave = null
         }
     }
 
     private fun onStoragePermissionsDenied() {
         Log.w(TAG, "Storage permissions denied")
-        Toast.makeText(this,
-            "Не удалось сохранить файл: нет разрешений на запись",
-            Toast.LENGTH_LONG).show()
+        Toast.makeText(this, getString(R.string.toast_storage_permission_denied), Toast.LENGTH_LONG).show()
+        pendingSaveTag = null
         pendingDataToSave = null
     }
 
@@ -355,7 +366,7 @@ class MainActivity : ComponentActivity() {
             startForegroundService(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка запуска сервиса", e)
-            Toast.makeText(this, "Ошибка запуска службы", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_service_start_error), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -372,7 +383,7 @@ class MainActivity : ComponentActivity() {
             disableMockLocation()
             Toast.makeText(
                 this,
-                "Для подмены местоположения нужны разрешения геолокации",
+                getString(R.string.toast_mock_location_permissions_required),
                 Toast.LENGTH_LONG
             ).show()
         }

@@ -1,5 +1,7 @@
 package vad.dashing.tbox
 
+import android.content.Context
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -107,6 +109,13 @@ class CanDataViewModel : ViewModel() {
             initialValue = null
         )
 
+    val currentFuelConsumption: StateFlow<Float?> = CanDataRepository.currentFuelConsumption
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     val cruiseSetSpeed: StateFlow<UInt?> = CanDataRepository.cruiseSetSpeed
         .stateIn(
             scope = viewModelScope,
@@ -157,6 +166,13 @@ class CanDataViewModel : ViewModel() {
         )
 
     val engineTemperature: StateFlow<Float?> = CanDataRepository.engineTemperature
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val throttlePosition: StateFlow<Float?> = CanDataRepository.throttlePosition
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -277,32 +293,22 @@ class CanDataViewModel : ViewModel() {
         )
 }
 
-fun seatModeToString(seatMode: UInt?): String {
-    if (seatMode == null) return ""
+@StringRes
+private fun seatModeToStringRes(seatMode: UInt?): Int? {
     return when (seatMode) {
-        1u -> {
-            "выключено"
-        }
-        2u -> {
-            "обогрев 1"
-        }
-        3u -> {
-            "обогрев 2"
-        }
-        4u -> {
-            "обогрев 3"
-        }
-        5u -> {
-            "вентиляция 1"
-        }
-        6u -> {
-            "вентиляция 2"
-        }
-        7u -> {
-            "вентиляция 3"
-        }
-        else -> {
-            seatMode.toString()
-        }
+        1u -> R.string.seat_mode_off
+        2u -> R.string.seat_mode_heat_1
+        3u -> R.string.seat_mode_heat_2
+        4u -> R.string.seat_mode_heat_3
+        5u -> R.string.seat_mode_vent_1
+        6u -> R.string.seat_mode_vent_2
+        7u -> R.string.seat_mode_vent_3
+        else -> null
     }
+}
+
+fun seatModeToString(context: Context, seatMode: UInt?): String {
+    if (seatMode == null) return ""
+    val resId = seatModeToStringRes(seatMode) ?: return seatMode.toString()
+    return context.getString(resId)
 }

@@ -6,29 +6,19 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.content.IntentFilter
-import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
-import android.provider.Settings
 import android.util.Log
-import android.view.Gravity
-import android.view.WindowManager
-import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import vad.dashing.tbox.location.LocationMockManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import vad.dashing.tbox.ui.FloatingDashboardUI
-import vad.dashing.tbox.ui.MyLifecycleOwner
 import vad.dashing.tbox.utils.CanFramesProcess
 import vad.dashing.tbox.utils.CanFramesProcess.toFloat
 import vad.dashing.tbox.utils.CanFramesProcess.toUInt
@@ -96,6 +86,7 @@ class BackgroundService : Service() {
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
+    private var getSMSJob: Job? = null
 
     private var netUpdateTime: Long = 5000
     private var apnUpdateTime: Long = 10000
@@ -113,20 +104,14 @@ class BackgroundService : Service() {
     private val broadcastReceiver = TboxBroadcastReceiver()
     lateinit var broadcastSender: TboxBroadcastSender
 
-    private var windowManager: WindowManager? = null
-    private val overlayViews = linkedMapOf<String, ComposeView>()
-    private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
-    private val overlayRetryCounts = mutableMapOf<String, Int>()
-    private val overlayOffIds = mutableSetOf<String>()
-    private var overlaysSuspended = false
-    private val lifecycleOwner by lazy { MyLifecycleOwner() }
+    private lateinit var overlayController: FloatingOverlayController
 
     private var motorHoursBuffer = MotorHoursBuffer(0.05f)
     private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
 
-    companion object {
-        private const val MAX_OVERLAY_RETRIES = 3
+    private var isLastSMS: Boolean = false
 
+    companion object {
         private const val APP_CODE = 0x2F.toByte()
         private const val MDC_CODE = 0x25.toByte()
         private const val LOC_CODE = 0x29.toByte()
@@ -159,6 +144,8 @@ class BackgroundService : Service() {
         const val EXTRA_APP_NAME = "vad.dashing.tbox.EXTRA_APP_NAME"
 
         const val ACTION_START = "vad.dashing.tbox.START"
+        /** Present when [ACTION_START] was triggered after [android.content.Intent.ACTION_BOOT_COMPLETED]. */
+        const val EXTRA_START_FROM_BOOT = "vad.dashing.tbox.START_FROM_BOOT"
         const val ACTION_STOP = "vad.dashing.tbox.STOP"
         const val ACTION_SEND_AT = "vad.dashing.tbox.SEND_AT"
         const val ACTION_MODEM_CHECK = "vad.dashing.tbox.MODEM_CHECK"
@@ -182,6 +169,7 @@ class BackgroundService : Service() {
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
         const val ACTION_SUSPEND_OVERLAYS = "vad.dashing.tbox.SUSPEND_OVERLAYS"
         const val ACTION_RESUME_OVERLAYS = "vad.dashing.tbox.RESUME_OVERLAYS"
+        const val ACTION_READ_ALL_SMS = "vad.dashing.tbox.READ_ALL_SMS"
     }
 
 
@@ -192,6 +180,12 @@ class BackgroundService : Service() {
         appDataManager = AppDataManager(this)
         locationMockManager = LocationMockManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+        overlayController = FloatingOverlayController(
+            service = this,
+            settingsManager = settingsManager,
+            appDataManager = appDataManager,
+            onRebootTbox = { crtRebootTbox() }
+        )
 
         scope.launch {
             settingsManager.ensureDefaultFloatingDashboards()
@@ -311,7 +305,11 @@ class BackgroundService : Service() {
             ACTION_START -> {
                 if (!isRunning) {
                     isRunning = true
+                    val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
+                    val notification = createNotification("Start service")
+                    startForeground(NOTIFICATION_ID, notification)
                     TboxRepository.addLog("INFO", "Service", "Start service")
+                    TboxRepository.updateServiceStartTime()
                     startSettingsListener()
                     startListener()
                     startNetUpdater()
@@ -320,9 +318,9 @@ class BackgroundService : Service() {
                     //startCheckGateVersion()
                     startPeriodicJob()
                     startDataListener()
-                    TboxRepository.updateServiceStartTime()
-                    val notification = createNotification("Start service")
-                    startForeground(NOTIFICATION_ID, notification)
+                    if (startFromBoot) {
+                        maybeOpenMainScreenAfterBoot()
+                    }
                 }
             }
             ACTION_STOP -> {
@@ -337,9 +335,10 @@ class BackgroundService : Service() {
                     stopSettingsListener()
                     stopDataListener()
                     stopStateBroadcastListener()
+                    stopReadAllSMS()
                     val notification = createNotification("Stop service")
                     startForeground(NOTIFICATION_ID, notification)
-                    closeAllOverlays()
+                    overlayController.closeAllOverlays()
                 }
             }
             ACTION_SEND_AT -> {
@@ -379,8 +378,13 @@ class BackgroundService : Service() {
                 sendControlTboxApplication(appName, "STOP")
             }
             ACTION_GET_INFO -> getInfo()
-            ACTION_SUSPEND_OVERLAYS -> suspendOverlays()
-            ACTION_RESUME_OVERLAYS -> resumeOverlays()
+            ACTION_SUSPEND_OVERLAYS -> overlayController.suspendOverlays()
+            ACTION_RESUME_OVERLAYS -> {
+                overlayController.resumeOverlays()
+                scope.launch {
+                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                }
+            }
             ACTION_CLOSE -> crtCmd(0x26,
                 ByteArray(45).apply {
                     this[0] = 0x02 },
@@ -390,249 +394,9 @@ class BackgroundService : Service() {
                     this[0] = 0x02
                     this[9] = 0x01 },
                 "Open", "INFO")
+            ACTION_READ_ALL_SMS -> readAllSMS()
         }
         return START_STICKY
-    }
-
-    private fun openOverlay(config: FloatingDashboardConfig) {
-        if (windowManager == null) {
-            try {
-                windowManager = getSystemService(WindowManager::class.java)
-            } catch (e: Exception) {
-                Log.e("FloatingDashboard", "Error creating Window manager", e)
-                TboxRepository.addLog("ERROR", "Floating Dashboard", "Error creating Window manager: ${e.message}")
-                return
-            }
-        }
-
-        if (!config.enabled) {
-            TboxRepository.addLog("DEBUG", "Floating Dashboard", "Setting off: ${config.id}")
-            return
-        }
-        // Проверяем, не открыто ли уже окно
-        if (overlayViews.containsKey(config.id)) {
-            TboxRepository.addLog("DEBUG", "Floating Dashboard", "Already shown: ${config.id}")
-            return
-        }
-
-        if (!Settings.canDrawOverlays(this)) {
-            TboxRepository.addLog("ERROR", "Floating Dashboard", "Cannot draw overlay")
-            return
-        }
-
-        val layoutParams = WindowManager.LayoutParams(
-            config.width.coerceAtLeast(50),
-            config.height.coerceAtLeast(50),
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = config.startX.coerceAtLeast(0)
-            y = config.startY.coerceAtLeast(0)
-        }
-
-        val newComposeView = ComposeView(this)
-
-        try {
-            // Создаем новый ComposeView каждый раз
-            newComposeView.apply {
-                // Устанавливаем MyLifecycleOwner
-                setViewTreeLifecycleOwner(lifecycleOwner)
-                setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-                setViewTreeViewModelStoreOwner(lifecycleOwner)
-
-                setContent {
-                    FloatingDashboardUI(
-                        settingsManager = settingsManager,
-                        appDataManager = appDataManager,
-                        onUpdateWindowSize = { panelId, width, height -> updateWindowSize(panelId, width, height) },
-                        onUpdateWindowPosition = { panelId, x, y -> updateWindowPosition(panelId, x, y) },
-                        onRebootTbox = { crtRebootTbox() },
-                        panelId = config.id,
-                        params = layoutParams
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("FloatingDashboard", "Error creating view", e)
-            TboxRepository.addLog("ERROR", "Floating Dashboard", "Failed to create: ${e.message}")
-            return
-        }
-
-        try {
-            windowManager?.addView(newComposeView, layoutParams)
-            overlayViews[config.id] = newComposeView
-            overlayParams[config.id] = layoutParams
-
-            if (!lifecycleOwner.isInitialized || lifecycleOwner.lifecycle.currentState.isAtLeast(
-                    Lifecycle.State.DESTROYED
-                )
-            ) {
-                lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
-            }
-
-            overlayRetryCounts[config.id] = 0
-            TboxRepository.addLog("INFO", "Floating Dashboard", "Shown: ${config.id}")
-        } catch (e: Exception) {
-            Log.e("Floating Dashboard", "Error adding view", e)
-            TboxRepository.addLog("ERROR", "Floating Dashboard", "Failed to show: ${e.message}")
-        }
-    }
-
-    private fun closeOverlay(panelId: String) {
-        val view = overlayViews.remove(panelId)
-        overlayParams.remove(panelId)
-        if (view != null) {
-            try {
-                windowManager?.removeView(view)
-            } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", "Floating Dashboard", "Error removing view")
-                Log.e("Floating Dashboard", "Error removing view", e)
-            }
-        }
-
-        overlayRetryCounts.remove(panelId)
-        overlayOffIds.remove(panelId)
-
-        TboxRepository.addLog("INFO", "Floating Dashboard", "Closed: $panelId")
-    }
-
-    private fun closeAllOverlays() {
-        val ids = overlayViews.keys.toList()
-        ids.forEach { closeOverlay(it) }
-    }
-
-    private fun suspendOverlays() {
-        overlaysSuspended = true
-        closeAllOverlays()
-    }
-
-    private fun resumeOverlays() {
-        overlaysSuspended = false
-        scope.launch {
-            ensureFloatingDashboards()
-        }
-    }
-
-    fun updateWindowPosition(panelId: String, x: Int, y: Int) {
-        val params = overlayParams[panelId] ?: return
-        if (params.x == x && params.y == y) return
-        params.x = x.coerceAtLeast(0)
-        params.y = y.coerceAtLeast(0)
-        overlayViews[panelId]?.let { view ->
-            windowManager?.updateViewLayout(view, params)
-        }
-    }
-
-    fun updateWindowSize(panelId: String, width: Int, height: Int) {
-        val params = overlayParams[panelId] ?: return
-        if (params.width == width && params.height == height) return
-        params.width = width.coerceAtLeast(50)
-        params.height = height.coerceAtLeast(50)
-        overlayViews[panelId]?.let { view ->
-            windowManager?.updateViewLayout(view, params)
-        }
-    }
-
-    private fun updateOverlayLayout(config: FloatingDashboardConfig) {
-        val params = overlayParams[config.id] ?: return
-        val newWidth = config.width.coerceAtLeast(50)
-        val newHeight = config.height.coerceAtLeast(50)
-        val newX = config.startX.coerceAtLeast(0)
-        val newY = config.startY.coerceAtLeast(0)
-        if (params.width == newWidth &&
-            params.height == newHeight &&
-            params.x == newX &&
-            params.y == newY
-        ) {
-            return
-        }
-        params.width = newWidth
-        params.height = newHeight
-        params.x = newX
-        params.y = newY
-        overlayViews[config.id]?.let { view ->
-            windowManager?.updateViewLayout(view, params)
-        }
-    }
-
-    private fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
-        if (overlaysSuspended) {
-            if (overlayViews.isNotEmpty()) {
-                closeAllOverlays()
-            }
-            return
-        }
-        val configMap = configs.associateBy { it.id }
-        val enabledConfigs = configs.filter { it.enabled }
-
-        val enabledIds = enabledConfigs.map { it.id }.toSet()
-        val existingIds = overlayViews.keys.toSet()
-
-        // Удаляем конфигурации, которых больше нет
-        val removedIds = overlayRetryCounts.keys - configMap.keys
-        removedIds.forEach { id ->
-            overlayRetryCounts.remove(id)
-            overlayOffIds.remove(id)
-        }
-
-        // Обрабатываем видимость оверлеев
-        enabledConfigs.forEach { config ->
-            overlayOffIds.remove(config.id)
-
-            if (config.enabled) {
-                // Оверлей должен быть видимым
-                val view = overlayViews[config.id]
-                if (view != null) {
-                    updateOverlayLayout(config)
-                } else {
-                    // Создаем новый оверлей
-                    openOverlay(config)
-                }
-            }
-        }
-
-        // Закрываем оверлеи, которые отключены или удалены
-        val idsToClose = existingIds - enabledIds
-        idsToClose.forEach { id ->
-            closeOverlay(id)
-        }
-
-        // Очищаем счетчики для отключенных конфигов
-        val disabledIds = configMap.keys - enabledIds
-        disabledIds.forEach { id ->
-            overlayRetryCounts.remove(id)
-            overlayOffIds.remove(id)
-        }
-    }
-
-    private suspend fun ensureFloatingDashboards() {
-        withContext(Dispatchers.Main) {
-            if (overlaysSuspended) return@withContext
-            val currentConfigs = floatingDashboards.value
-            val enabledConfigs = currentConfigs.filter { it.enabled }
-            enabledConfigs.forEach { config ->
-                if (overlayOffIds.contains(config.id)) return@forEach
-                if (overlayViews.containsKey(config.id)) {
-                    overlayRetryCounts[config.id] = 0
-                    return@forEach
-                }
-
-                val retryCount = overlayRetryCounts[config.id] ?: 0
-                if (retryCount >= MAX_OVERLAY_RETRIES * 2) {
-                    TboxRepository.addLog("ERROR", "Floating Dashboard",
-                        "Can't show: ${config.id}")
-                    overlayOffIds.add(config.id)
-                    return@forEach
-                }
-                overlayRetryCounts[config.id] = retryCount + 1
-                openOverlay(config)
-            }
-        }
     }
 
     private fun createNotificationChannel() {
@@ -968,7 +732,7 @@ class BackgroundService : Service() {
                     .drop(1) // Пропускаем начальное значение
                     .collect { configs ->
                         withContext(Dispatchers.Main) {
-                            syncFloatingDashboards(configs)
+                            overlayController.syncFloatingDashboards(configs)
                         }
                     }
             }
@@ -986,7 +750,7 @@ class BackgroundService : Service() {
             try {
                 Log.d("1s Job", "Start periodic job")
                 delay(5000)
-                ensureFloatingDashboards()
+                overlayController.ensureFloatingDashboards(floatingDashboards.value)
                 sendWidgetUpdate()
                 var widgetUpdateTime = System.currentTimeMillis()
                 var floatingDashboardCheckTime = System.currentTimeMillis()
@@ -1023,7 +787,7 @@ class BackgroundService : Service() {
 
                     if (System.currentTimeMillis() - floatingDashboardCheckTime > 60000) {
                         floatingDashboardCheckTime = System.currentTimeMillis()
-                        ensureFloatingDashboards()
+                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
                     }
 
                     val currentTime = Date().time
@@ -1315,6 +1079,49 @@ class BackgroundService : Service() {
                 Log.e("AT command", "Fatal error in AT command job", e)
             }
         }
+    }
+
+    private fun readAllSMS() {
+        if (!TboxRepository.tboxConnected.value) {
+            return
+        }
+        if (getSMSJob?.isActive == true) return
+        getSMSJob = scope.launch {
+            isLastSMS = false
+            try {
+                if (!sendATJob.awaitCompletionWithTimeout(5000)) {
+                    return@launch
+                }
+                mdcSendAT("AT+CMGF=1".toByteArray())
+                delay(2000)
+                if (!sendATJob.awaitCompletionWithTimeout(5000)) {
+                    return@launch
+                }
+                mdcSendAT("AT+CSCS=\"UCS2\"".toByteArray())
+                delay(1000)
+
+                for (i in 0 until 50) {
+                    delay(2000)
+                    if (isLastSMS) return@launch
+
+                    if (!sendATJob.awaitCompletionWithTimeout(5000)) {
+                        return@launch
+                    }
+                    mdcSendAT("AT+CMGR=$i".toByteArray())
+                }
+            } catch (e: CancellationException) {
+                // Нормальная отмена - не логируем
+                throw e
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "AT command", "Fatal error in AT command job")
+                Log.e("AT command", "Fatal error in AT command job", e)
+            }
+        }
+    }
+
+    private fun stopReadAllSMS() {
+        getSMSJob?.cancel()
+        getSMSJob = null
     }
 
     private fun crtCmd (cmd: Byte, data: ByteArray, description: String, logLevel: String = "DEBUG") {
@@ -1616,7 +1423,7 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob
+            settingsListenerJob, dataListenerJob, getSMSJob
         ).forEach { job ->
             job?.cancel()
         }
@@ -1660,9 +1467,7 @@ class BackgroundService : Service() {
         address = null
         currentIP = null
 
-        closeAllOverlays()
-        // Устанавливаем состояние DESTROYED для lifecycle
-        lifecycleOwner.setCurrentState(Lifecycle.State.DESTROYED)
+        overlayController.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -2218,23 +2023,87 @@ class BackgroundService : Service() {
             TboxRepository.addATLog("Receive: ERROR")
             return false
         }
-        val ans = String(data.copyOfRange(10, data.size), charset = Charsets.UTF_8).trimEnd()
+        val ans = try {
+            String(data.copyOfRange(10, data.size), charset = Charsets.UTF_8).trimEnd()
+        } catch (_: Exception) {
+            toHexString(data.copyOfRange(10, data.size))
+        }
 
         TboxRepository.addATLog("Receive: $ans")
 
         if ("ERROR" in ans) {
             TboxRepository.addLog("ERROR", "MDC AT response", "AT command error: $ans")
-            return false
+        } else {
+            TboxRepository.addLog("DEBUG", "MDC AT response", "AT command answer: $ans")
         }
-        TboxRepository.addLog("DEBUG", "MDC AT response", "AT command answer: $ans")
+
         if ("+CFUN: 0" in ans || ("AT+CFUN=0" in ans && "OK" in ans)) {
             TboxRepository.updateModemStatus(0)
         } else if ("+CFUN: 1" in ans || ("AT+CFUN=1" in ans && "OK" in ans)) {
             TboxRepository.updateModemStatus(1)
         } else if ("+CFUN: 4" in ans || ("AT+CFUN=4" in ans && "OK" in ans)) {
             TboxRepository.updateModemStatus(4)
+        } else if ("+CMGR: \"REC" in ans && "OK" in ans) {
+            val ansList = ans.split("\n")
+            if (ansList.size >= 4) {
+                val messageNumber = try {
+                    ansList[0].split("=")[1].trim().toInt()
+                } catch (_: Exception) {
+                    -1
+                }
+                val infoList = ansList[1].replace("\"", "").split(",")
+                val from: String
+                val dateTime: String
+                if (infoList.size >= 4) {
+                    from = try {
+                        decodeFlexibleUcs2(infoList[1])
+                    } catch (_: Exception) {
+                        "n/a"
+                    }
+                    dateTime = "${infoList[3]} ${infoList[4]}"
+                } else {
+                    from = "?"
+                    dateTime = "?"
+                }
+
+                val message = try {
+                    decodeFlexibleUcs2(ansList[2])
+                } catch (_: Exception){
+                    "?"
+                }
+
+                TboxRepository.addATLog("SMS $messageNumber from ($from) $dateTime: $message")
+            } else {
+                TboxRepository.addATLog(toHexString(data.copyOfRange(10, data.size)))
+            }
+        } else if ("at+cmgr=" in ans.lowercase() && "ERROR" in ans){
+            isLastSMS = true
         }
-        return true
+
+        return "ERROR" !in ans
+    }
+
+    fun decodeFlexibleUcs2(hexString: String, littleEndian: Boolean = false): String {
+        return try {
+            val cleanHex = hexString.replace(Regex("[^0-9a-fA-F]"), "")
+
+            val bytes = cleanHex.chunked(2)
+                .mapNotNull { hexPair ->
+                    try {
+                        if (hexPair.length == 2) hexPair.toInt(16).toByte() else null
+                    } catch (_: NumberFormatException) {
+                        null
+                    }
+                }
+                .toByteArray()
+
+            if (bytes.isEmpty()) return ""
+
+            String(bytes, if (littleEndian) Charsets.UTF_16LE else Charsets.UTF_16BE)
+        } catch (_: Exception) {
+            // В случае любой ошибки возвращаем пустую строку
+            ""
+        }
     }
 
     private fun ansCRTPowVol(data: ByteArray): Boolean {
@@ -2729,5 +2598,31 @@ class BackgroundService : Service() {
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
         Log.e("BackgroundService", "Coroutine error", throwable)
         TboxRepository.addLog("ERROR", "Coroutine", "Error: ${throwable.message}")
+    }
+
+    /**
+     * After boot-time service start: wait for core jobs to spin up, then optionally bring
+     * [MainActivity] to the foreground on the home main screen (tab 100).
+     */
+    private fun maybeOpenMainScreenAfterBoot() {
+        scope.launch {
+            delay(2000)
+            try {
+                val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
+                if (!enabled) return@launch
+                settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
+                withContext(Dispatchers.Main) {
+                    val launchIntent = Intent(this@BackgroundService, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    }
+                    startActivity(launchIntent)
+                }
+            } catch (e: Exception) {
+                Log.e("BackgroundService", "Open main screen after boot failed", e)
+                TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")
+            }
+        }
     }
 }

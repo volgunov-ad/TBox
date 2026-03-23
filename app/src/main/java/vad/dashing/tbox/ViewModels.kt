@@ -1,11 +1,11 @@
 package vad.dashing.tbox
 
-import androidx.compose.runtime.mutableStateMapOf
+import android.content.Context
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Date
 import java.util.Locale
+import vad.dashing.tbox.ui.theme.DARK_THEME_ON_SURFACE_COLOR_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_ON_SURFACE_COLOR_INT
 import kotlin.Boolean
 import kotlin.collections.List
 
@@ -232,13 +234,13 @@ class TboxViewModel : ViewModel() {
 }
 
 class MainDashboardViewModel : ViewModel() {
-    val dashboardManager = DashboardManager("main")
+    val dashboardManager = DashboardManager("main", viewModelScope)
 
     // Дополнительные методы если нужно
 }
 
 class FloatingDashboardViewModel(private val dashboardId: String) : ViewModel() {
-    val dashboardManager = DashboardManager(dashboardId)
+    val dashboardManager = DashboardManager(dashboardId, viewModelScope)
 
     // Дополнительные методы если нужно
 }
@@ -256,7 +258,8 @@ class FloatingDashboardViewModelFactory(
 }
 
 class DashboardManager(
-    private val dashboardId: String
+    private val dashboardId: String,
+    private val scope: CoroutineScope
 ) {
     private val _dashboardState = MutableStateFlow(DashboardState())
     val dashboardState: StateFlow<DashboardState> = _dashboardState.asStateFlow()
@@ -276,7 +279,7 @@ class DashboardManager(
             _widgetHistory
                 .map { it[widgetId] ?: emptyList() }
                 .stateIn(
-                    scope = CoroutineScope(Dispatchers.Default),
+                    scope = scope,
                     started = SharingStarted.WhileSubscribed(5000),
                     initialValue = emptyList()
                 )
@@ -300,103 +303,126 @@ class DashboardManager(
 
 object WidgetsRepository {
     // Только статические данные - заголовки и единицы измерения
-    private data class DataTitle(val title: String, val unit: String)
+    private data class DataTitle(
+        @StringRes val titleRes: Int,
+        @StringRes val unitRes: Int? = null
+    )
 
     const val EXTERNAL_WIDGET_DATA_KEY = "externalAppWidget"
-    const val LAUNCH_APP_DATA_KEY = "launchAppWidget"
 
     private val dataKeyTitles = mapOf(
-        "param1" to DataTitle("Параметр 1", ""),
-        "param2" to DataTitle("Параметр 2", ""),
-        "param3" to DataTitle("Параметр 3", ""),
-        "param4" to DataTitle("Параметр 4", ""),
-        "wheel1Speed" to DataTitle("Скорость колеса 1", "км/ч"),
-        "wheel2Speed" to DataTitle("Скорость колеса 2", "км/ч"),
-        "wheel3Speed" to DataTitle("Скорость колеса 3", "км/ч"),
-        "wheel4Speed" to DataTitle("Скорость колеса 4", "км/ч"),
-        "wheel1Pressure" to DataTitle("Давление колеса ПЛ", "бар"),
-        "wheel2Pressure" to DataTitle("Давление колеса ПП", "бар"),
-        "wheel3Pressure" to DataTitle("Давление колеса ЗЛ", "бар"),
-        "wheel4Pressure" to DataTitle("Давление колеса ЗП", "бар"),
-        "wheel1Temperature" to DataTitle("Температура колеса ПЛ", "°C"),
-        "wheel2Temperature" to DataTitle("Температура колеса ПП", "°C"),
-        "wheel3Temperature" to DataTitle("Температура колеса ЗЛ", "°C"),
-        "wheel4Temperature" to DataTitle("Температура колеса ЗП", "°C"),
-        "frontLeftSeatMode" to DataTitle("Режим левого переднего сиденья", ""),
-        "frontRightSeatMode" to DataTitle("Режим правого переднего сиденья", ""),
-        "locateStatus" to DataTitle("Фиксация местоположения", ""),
-        "isLocValuesTrue" to DataTitle("Правдивость местоположения", ""),
-        "locationUpdateTime" to DataTitle("Время изменения GNSS", ""),
-        "locationRefreshTime" to DataTitle("Время получения GNSS", ""),
-        "signalLevel" to DataTitle("Уровень сигнала сети", ""),
-        "netStatus" to DataTitle("Тип сети", ""),
-        "regStatus" to DataTitle("Регистрация в сети", ""),
-        "simStatus" to DataTitle("Состояние SIM", ""),
-        "isWindowsBlocked" to DataTitle("Блокировка окон", ""),
+        "param1" to DataTitle(R.string.data_title_param_1),
+        "param2" to DataTitle(R.string.data_title_param_2),
+        "param3" to DataTitle(R.string.data_title_param_3),
+        "param4" to DataTitle(R.string.data_title_param_4),
+        "throttlePosition" to DataTitle(R.string.data_title_throttle_position),
+        "wheel1Speed" to DataTitle(R.string.data_title_wheel_speed_1, R.string.unit_kmh),
+        "wheel2Speed" to DataTitle(R.string.data_title_wheel_speed_2, R.string.unit_kmh),
+        "wheel3Speed" to DataTitle(R.string.data_title_wheel_speed_3, R.string.unit_kmh),
+        "wheel4Speed" to DataTitle(R.string.data_title_wheel_speed_4, R.string.unit_kmh),
+        "wheel1Pressure" to DataTitle(R.string.data_title_wheel_pressure_fl, R.string.unit_bar),
+        "wheel2Pressure" to DataTitle(R.string.data_title_wheel_pressure_fr, R.string.unit_bar),
+        "wheel3Pressure" to DataTitle(R.string.data_title_wheel_pressure_rl, R.string.unit_bar),
+        "wheel4Pressure" to DataTitle(R.string.data_title_wheel_pressure_rr, R.string.unit_bar),
+        "wheel1Temperature" to DataTitle(R.string.data_title_wheel_temperature_fl, R.string.unit_celsius),
+        "wheel2Temperature" to DataTitle(R.string.data_title_wheel_temperature_fr, R.string.unit_celsius),
+        "wheel3Temperature" to DataTitle(R.string.data_title_wheel_temperature_rl, R.string.unit_celsius),
+        "wheel4Temperature" to DataTitle(R.string.data_title_wheel_temperature_rr, R.string.unit_celsius),
+        "frontLeftSeatMode" to DataTitle(R.string.data_title_front_left_seat_mode),
+        "frontRightSeatMode" to DataTitle(R.string.data_title_front_right_seat_mode),
+        "locateStatus" to DataTitle(R.string.data_title_locate_status),
+        "isLocValuesTrue" to DataTitle(R.string.data_title_loc_values_true),
+        "locationUpdateTime" to DataTitle(R.string.data_title_location_update_time),
+        "locationRefreshTime" to DataTitle(R.string.data_title_location_refresh_time),
+        "signalLevel" to DataTitle(R.string.data_title_signal_level),
+        "netStatus" to DataTitle(R.string.data_title_net_status),
+        "regStatus" to DataTitle(R.string.data_title_reg_status),
+        "simStatus" to DataTitle(R.string.data_title_sim_status),
+        "isWindowsBlocked" to DataTitle(R.string.data_title_windows_blocked),
     )
 
     private val dataKeyTitlesWidgets = mapOf(
-        "voltage" to DataTitle("Напряжение", "В"),
-        "steerAngle" to DataTitle("Угол поворота руля", "°"),
-        "steerSpeed" to DataTitle("Скорость вращения руля", ""),
-        "engineRPM" to DataTitle("Обороты двигателя", "об/мин"),
-        "carSpeed" to DataTitle("Скорость автомобиля", "км/ч"),
-        "carSpeedAccurate" to DataTitle("Точная скорость автомобиля", "км/ч"),
-        "cruiseSetSpeed" to DataTitle("Скорость круиз-контроля", "км/ч"),
-        "odometer" to DataTitle("Одометр", "км"),
-        "distanceToNextMaintenance" to DataTitle("Пробег до следующего ТО", "км"),
-        "distanceToFuelEmpty" to DataTitle("Пробег на остатке топлива", "км"),
-        "fuelLevelPercentage" to DataTitle("Уровень топлива", "%"),
-        "fuelLevelPercentageFiltered" to DataTitle("Уровень топлива (сглажено)", "%"),
-        "breakingForce" to DataTitle("Усилие торможения", ""),
-        "engineTemperature" to DataTitle("Температура двигателя", "°C"),
-        "gearBoxOilTemperature" to DataTitle("Температура масла КПП", "°C"),
-        "gearBoxCurrentGear" to DataTitle("Текущая передача КПП", ""),
-        "gearBoxPreparedGear" to DataTitle("Приготовленная передача КПП", ""),
-        "gearBoxChangeGear" to DataTitle("Выполнение переключения", ""),
-        "gearBoxMode" to DataTitle("Режим КПП", ""),
-        "gearBoxDriveMode" to DataTitle("Режим движения КПП", ""),
-        "gearBoxWork" to DataTitle("Работа КПП", ""),
-        "gnssSpeed" to DataTitle("Скорость GNSS", "км/ч"),
-        "visibleSatellites" to DataTitle("Видимые спутники", ""),
-        "longitude" to DataTitle("Долгота", "°"),
-        "latitude" to DataTitle("Широта", "°"),
-        "altitude" to DataTitle("Высота", "м"),
-        "trueDirection" to DataTitle("Направление", ""),
-        "outsideTemperature" to DataTitle("Температура на улице", "°C"),
-        "insideTemperature" to DataTitle("Температура в машине", "°C"),
-        "outsideAirQuality" to DataTitle("Качество воздуха на улице", ""),
-        "insideAirQuality" to DataTitle("Качество воздуха в машине", ""),
-        "motorHours" to DataTitle("Моточасы двигателя", "ч"),
-        "motorHoursTrip" to DataTitle("Моточасы двигателя за поездку", "ч"),
-        "motorHoursWidget" to DataTitle("Виджет моточасов", ""),
-        "netWidget" to DataTitle("Виджет сигнала сети", ""),
-        "locWidget" to DataTitle("Виджет навигации", ""),
-        "voltage+engineTemperatureWidget" to DataTitle("Виджет напряжения и температуры двигателя", ""),
-        "gearBoxWidget" to DataTitle("Виджет режима КПП с текущей передачей и температурой", ""),
-        "wheelsPressureWidget" to DataTitle("Виджет давления в шинах", "бар"),
-        "wheelsPressureTemperatureWidget" to DataTitle("Виджет давления и температуры в шинах", "бар / °C"),
-        "tempInOutWidget" to DataTitle("Виджет температуры снаружи и внутри", ""),
-        "restartTbox" to DataTitle("Кнопка перезагрузки TBox", ""),
-        EXTERNAL_WIDGET_DATA_KEY to DataTitle("Виджет стороннего приложения", ""),
-        LAUNCH_APP_DATA_KEY to DataTitle("Запуск приложения", "")
+        "voltage" to DataTitle(R.string.data_title_voltage, R.string.unit_volt),
+        "steerAngle" to DataTitle(R.string.data_title_steer_angle, R.string.unit_degree),
+        "steerSpeed" to DataTitle(R.string.data_title_steer_speed),
+        "engineRPM" to DataTitle(R.string.data_title_engine_rpm, R.string.unit_rpm),
+        "carSpeed" to DataTitle(R.string.data_title_car_speed, R.string.unit_kmh),
+        "carSpeedAccurate" to DataTitle(R.string.data_title_car_speed_accurate, R.string.unit_kmh),
+        "cruiseSetSpeed" to DataTitle(R.string.data_title_cruise_set_speed, R.string.unit_kmh),
+        "odometer" to DataTitle(R.string.data_title_odometer, R.string.unit_km),
+        "distanceToNextMaintenance" to DataTitle(
+            R.string.data_title_distance_to_next_maintenance,
+            R.string.unit_km
+        ),
+        "distanceToFuelEmpty" to DataTitle(R.string.data_title_distance_to_fuel_empty, R.string.unit_km),
+        "fuelLevelPercentage" to DataTitle(R.string.data_title_fuel_level_percentage, R.string.unit_percent),
+        "fuelLevelPercentageFiltered" to DataTitle(
+            R.string.data_title_fuel_level_percentage_filtered,
+            R.string.unit_percent
+        ),
+        "fuelLevelLiters" to DataTitle(R.string.data_title_fuel_level_liters, R.string.unit_liter),
+        "currentFuelConsumption" to DataTitle(R.string.currentFuelConsumption, R.string.unit_l_100km),
+        "breakingForce" to DataTitle(R.string.data_title_breaking_force),
+        "engineTemperature" to DataTitle(R.string.data_title_engine_temperature, R.string.unit_celsius),
+        "gearBoxOilTemperature" to DataTitle(R.string.data_title_gearbox_oil_temperature, R.string.unit_celsius),
+        "gearBoxCurrentGear" to DataTitle(R.string.data_title_gearbox_current_gear),
+        "gearBoxPreparedGear" to DataTitle(R.string.data_title_gearbox_prepared_gear),
+        "gearBoxChangeGear" to DataTitle(R.string.data_title_gearbox_change_gear),
+        "gearBoxMode" to DataTitle(R.string.data_title_gearbox_mode),
+        "gearBoxDriveMode" to DataTitle(R.string.data_title_gearbox_drive_mode),
+        "gearBoxWork" to DataTitle(R.string.data_title_gearbox_work),
+        "gnssSpeed" to DataTitle(R.string.data_title_gnss_speed, R.string.unit_kmh),
+        "visibleSatellites" to DataTitle(R.string.data_title_visible_satellites),
+        "longitude" to DataTitle(R.string.data_title_longitude, R.string.unit_degree),
+        "latitude" to DataTitle(R.string.data_title_latitude, R.string.unit_degree),
+        "altitude" to DataTitle(R.string.data_title_altitude, R.string.unit_meter),
+        "trueDirection" to DataTitle(R.string.data_title_true_direction),
+        "outsideTemperature" to DataTitle(R.string.data_title_outside_temperature, R.string.unit_celsius),
+        "insideTemperature" to DataTitle(R.string.data_title_inside_temperature, R.string.unit_celsius),
+        "outsideAirQuality" to DataTitle(R.string.data_title_outside_air_quality),
+        "insideAirQuality" to DataTitle(R.string.data_title_inside_air_quality),
+        "motorHours" to DataTitle(R.string.data_title_motor_hours, R.string.unit_hours),
+        "motorHoursTrip" to DataTitle(R.string.data_title_motor_hours_trip, R.string.unit_hours),
+        "motorHoursWidget" to DataTitle(R.string.data_title_motor_hours_widget),
+        "netWidget" to DataTitle(R.string.data_title_net_widget),
+        "netWidgetNew" to DataTitle(R.string.data_title_net_widget_new),
+        "netWidgetColored" to DataTitle(R.string.data_title_net_widget_colored),
+        "locWidget" to DataTitle(R.string.data_title_loc_widget),
+        "voltage+engineTemperatureWidget" to DataTitle(R.string.data_title_voltage_engine_temperature_widget),
+        "gearBoxWidget" to DataTitle(R.string.data_title_gearbox_widget),
+        "wheelsPressureWidget" to DataTitle(R.string.data_title_wheels_pressure_widget, R.string.unit_bar),
+        "wheelsPressureTemperatureWidget" to DataTitle(
+            R.string.data_title_wheels_pressure_temperature_widget,
+            R.string.unit_bar_celsius
+        ),
+        "tempInOutWidget" to DataTitle(R.string.data_title_temp_in_out_widget),
+        "musicWidget" to DataTitle(R.string.data_title_music_widget),
+        APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
+        "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
+        EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget)
     )
 
-    fun getTitleForDataKey(dataKey: String): String {
-        return (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]?.title ?: ""
+    private fun getDataTitle(dataKey: String): DataTitle? {
+        return (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]
     }
 
-    fun getUnitForDataKey(dataKey: String): String {
-        return (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]?.unit ?: ""
+    fun getTitleForDataKey(context: Context, dataKey: String): String {
+        val dataTitle = getDataTitle(dataKey) ?: return ""
+        return context.getString(dataTitle.titleRes)
     }
 
-    fun getTitleUnitForDataKey(dataKey: String): String {
-        val unit = getUnitForDataKey(dataKey)
-        return if (unit != "") {
-            "${getTitleForDataKey(dataKey)}, $unit"
-        } else {
-            getTitleForDataKey(dataKey)
-        }
+    fun getUnitForDataKey(context: Context, dataKey: String): String {
+        val dataTitle = getDataTitle(dataKey) ?: return ""
+        val unitRes = dataTitle.unitRes ?: return ""
+        return context.getString(unitRes)
+    }
+
+    fun getTitleUnitForDataKey(context: Context, dataKey: String): String {
+        val dataTitle = getDataTitle(dataKey) ?: return ""
+        val title = context.getString(dataTitle.titleRes)
+        val unitRes = dataTitle.unitRes ?: return title
+        val unit = context.getString(unitRes)
+        return context.getString(R.string.title_with_unit, title, unit)
     }
 
     fun getAvailableDataKeys(): List<String> {
@@ -408,6 +434,13 @@ object WidgetsRepository {
     }
 }
 
+const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = LIGHT_THEME_ON_SURFACE_COLOR_INT
+const val DEFAULT_WIDGET_TEXT_COLOR_DARK = DARK_THEME_ON_SURFACE_COLOR_INT
+const val DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN = 0xFFFFFFFF.toInt()
+const val DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN = 0xFF131C2D.toInt()
+const val DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING = 0x00000000
+const val DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING = 0x00000000
+
 // Модель для виджета панели
 data class DashboardWidget(
     val id: Int,
@@ -415,7 +448,11 @@ data class DashboardWidget(
     val unit: String = "",
     val dataKey: String = "", // Ключ для идентификации данных
     val maxValue: Float? = null,
-    val minValue: Float? = null
+    val minValue: Float? = null,
+    val textColorLight: Int = DEFAULT_WIDGET_TEXT_COLOR_LIGHT,
+    val textColorDark: Int = DEFAULT_WIDGET_TEXT_COLOR_DARK,
+    val backgroundColorLight: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN,
+    val backgroundColorDark: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
 )
 
 // Состояние панели виджетов

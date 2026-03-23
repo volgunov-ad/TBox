@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Card
@@ -18,26 +17,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.gestures.detectTapGestures
 import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 
 @Composable
 fun ExternalAppWidgetItem(
     widgetConfig: FloatingDashboardWidgetConfig,
-    appWidgetHost: AppWidgetHost,
+    appWidgetHost: AppWidgetHost?,
     isEditMode: Boolean,
     handleClick: Boolean,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     elevation: Dp = 0.dp,
     shape: Dp = 0.dp,
-    backgroundTransparent: Boolean = false
+    backgroundColor: Color? = null
 ) {
     val context = LocalContext.current
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
@@ -50,8 +51,12 @@ fun ExternalAppWidgetItem(
         }
     }
     val density = LocalDensity.current
-    val hostView = remember(appWidgetId, appWidgetInfo) {
-        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID || appWidgetInfo == null) {
+    val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost) {
+        if (
+            appWidgetHost == null ||
+            appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
+            appWidgetInfo == null
+        ) {
             null
         } else {
             try {
@@ -77,7 +82,7 @@ fun ExternalAppWidgetItem(
             .then(clickModifier),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
+            containerColor = backgroundColor ?: MaterialTheme.colorScheme.surface
         ),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(shape)
     ) {
@@ -151,13 +156,34 @@ fun ExternalAppWidgetItem(
             }
 
             if (isEditMode) {
+                val interactionPolicy = LocalDashboardWidgetInteractionPolicy.current
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .combinedClickable(
-                            onClick = onClick,
-                            onLongClick = onLongClick
-                        )
+                        .pointerInput(interactionPolicy, onClick, onLongClick) {
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    if (interactionPolicy.isActionAllowed(
+                                            offset = offset,
+                                            width = size.width.toFloat(),
+                                            height = size.height.toFloat()
+                                        )
+                                    ) {
+                                        onClick()
+                                    }
+                                },
+                                onLongPress = { offset ->
+                                    if (interactionPolicy.isActionAllowed(
+                                            offset = offset,
+                                            width = size.width.toFloat(),
+                                            height = size.height.toFloat()
+                                        )
+                                    ) {
+                                        onLongClick()
+                                    }
+                                }
+                            )
+                        }
                 )
             }
         }

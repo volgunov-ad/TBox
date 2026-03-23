@@ -1,30 +1,20 @@
 package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetManager
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
 import android.view.WindowManager
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults.cardElevation
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -35,38 +25,40 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
-import vad.dashing.tbox.AppPickerActivity
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
-import vad.dashing.tbox.MainActivity
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
+import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
-import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
@@ -153,20 +145,21 @@ fun FloatingDashboard(
     val widgetConfigs = panelConfig.widgetsConfig
     val dashboardRows = panelConfig.rows
     val dashboardCols = panelConfig.cols
-    val hasConfiguredWidgets = widgetConfigs.any { config ->
-        config.dataKey.isNotBlank() && config.dataKey != "null"
+    val mediaSourceId = remember(panelId) { "floating-dashboard-$panelId" }
+    val requestedMediaPlayers = remember(widgetConfigs) {
+        collectMediaPlayersFromWidgetConfigs(widgetConfigs)
     }
-
     val isFloatingDashboardClickAction = panelConfig.clickAction
-    val isFloatingDashboardBackground = panelConfig.background
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
+    val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
 
     // Состояния
     var isEditMode by remember { mutableStateOf(false) }
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
+    val canManipulatePanel = isEditMode && showDialogForIndex == null
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
@@ -179,10 +172,6 @@ fun FloatingDashboard(
             }
         }
     }
-
-    // Для определения области перетаскивания/изменения размера
-    var dragStartPosition by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
-    var resizeStartPosition by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
 
     // Используем rememberUpdatedState для отслеживания текущих значений windowParams
     val currentWindowParams by rememberUpdatedState(windowParams)
@@ -207,17 +196,17 @@ fun FloatingDashboard(
             originalY.intValue = currentWindowParams.y
 
             // Увеличиваем окно для диалога
-            val dialogWidth = (containerSize.width * 0.5f).toInt()
-            val dialogHeight = (containerSize.height * 0.7f).toInt()
+            val dialogWidth = (containerSize.width * 0.6f).toInt()
+            val dialogHeight = (containerSize.height * 0.8f).toInt()
 
             val newWidth = dialogWidth.coerceAtMost(containerSize.width)
-            val newHeight = dialogHeight.coerceAtMost(containerSize.height - 100)
+            val newHeight = dialogHeight.coerceAtMost(containerSize.height)
 
             onUpdateWindowSize(panelId, newWidth, newHeight)
 
             // Центрируем окно
             val centerX = (containerSize.width - newWidth) / 2 + 100
-            val centerY = (containerSize.height - newHeight) / 2
+            val centerY = (containerSize.height - newHeight) / 2 + 100
             onUpdateWindowPosition(panelId, centerX, centerY)
         } else {
             // Восстанавливаем оригинальные размеры и положение
@@ -226,18 +215,48 @@ fun FloatingDashboard(
         }
     }
 
-    val dataProvider = remember { TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel) }
+    val dataProvider = remember(context) {
+        TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, context)
+    }
 
-    LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols) {
+    LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols, context) {
         val totalWidgets = dashboardRows * dashboardCols
 
         // Всегда загружаем/создаем виджеты при изменении зависимостей
-        val widgets = loadWidgetsFromConfig(widgetConfigs, totalWidgets)
+        val widgets = loadWidgetsFromConfig(
+            configs = widgetConfigs,
+            widgetCount = totalWidgets,
+            context = context,
+            defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
+            defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+        )
 
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
     }
+    LaunchedEffect(mediaSourceId, requestedMediaPlayers, context) {
+        SharedMediaControlService.updateSourceSelection(
+            context = context,
+            sourceId = mediaSourceId,
+            mediaPackages = requestedMediaPlayers
+        )
+    }
+    DisposableEffect(mediaSourceId) {
+        onDispose {
+            SharedMediaControlService.clearSourceSelection(mediaSourceId)
+        }
+    }
 
     var restartEnabled by remember { mutableStateOf(true) }
+    val widgetInteractionPolicy = remember(isEditMode) {
+        if (isEditMode) {
+            DashboardWidgetInteractionPolicy(
+                mode = DashboardWidgetInteractionMode.EDIT,
+                exclusions = listOf(ResizeHandleWidgetHitExclusion)
+            )
+        } else {
+            DashboardWidgetInteractionPolicy()
+        }
+    }
 
     LaunchedEffect(restartEnabled) {
         if (!restartEnabled) {
@@ -249,7 +268,7 @@ fun FloatingDashboard(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(color = if (isFloatingDashboardBackground) MaterialTheme.colorScheme.surface else Color.Transparent)
+            .background(color = Color.Transparent)
     ) {
         Column(
             modifier = Modifier
@@ -260,504 +279,123 @@ fun FloatingDashboard(
                     .fillMaxSize()
                     .weight(1f)
                     .background(color = Color.Transparent)
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { startOffset ->
-                                if (isEditMode && showDialogForIndex == null) { // Не позволяем перетаскивать при открытом диалоге
-                                    // Определяем, в какой области началось перетаскивание
-                                    val resizeOffsetX = if (size.width <= 60f) {
-                                        30f
-                                    } else if (size.width <= 100f) {
-                                        50f
-                                    } else {
-                                        60f
-                                    }
-                                    val resizeOffsetY = if (size.height <= 60f) {
-                                        30f
-                                    } else if (size.height <= 100f) {
-                                        50f
-                                    } else {
-                                        60f
-                                    }
-                                    val isNearBottomRight = startOffset.x > size.width - resizeOffsetX &&
-                                            startOffset.y > size.height - resizeOffsetY
-
-                                    if (isNearBottomRight) {
-                                        // Изменение размера (за правый нижний угол)
-                                        isResizingMode = true
+                    .then(
+                        if (canManipulatePanel) {
+                            // Avoid width/height in keys: they change while resizing and cancel the drag.
+                            Modifier.pointerInput(panelId) {
+                                detectDragGestures(
+                                    onDragStart = { startOffset ->
+                                        val isNearBottomRight = isInResizeHandleArea(
+                                            offset = startOffset,
+                                            width = size.width.toFloat(),
+                                            height = size.height.toFloat()
+                                        )
+                                        if (isNearBottomRight) {
+                                            isResizingMode = true
+                                            isDraggingMode = false
+                                        } else {
+                                            isDraggingMode = true
+                                            isResizingMode = false
+                                        }
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        if (isDraggingMode) {
+                                            val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
+                                            val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
+                                            onUpdateWindowPosition(panelId, newX, newY)
+                                        } else if (isResizingMode) {
+                                            val newWidth = (windowParams.width + dragAmount.x).toInt()
+                                                .coerceAtLeast(50)
+                                            val newHeight = (windowParams.height + dragAmount.y).toInt()
+                                                .coerceAtLeast(50)
+                                            onUpdateWindowSize(panelId, newWidth, newHeight)
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        if (isDraggingMode) {
+                                            settingsViewModel.saveFloatingDashboardPosition(
+                                                panelId,
+                                                windowParams.x,
+                                                windowParams.y
+                                            )
+                                        } else if (isResizingMode) {
+                                            settingsViewModel.saveFloatingDashboardSize(
+                                                panelId,
+                                                windowParams.width,
+                                                windowParams.height
+                                            )
+                                        }
                                         isDraggingMode = false
-                                        resizeStartPosition = startOffset
-                                    } else {
-                                        // Перетаскивание окна (за края)
-                                        isDraggingMode = true
                                         isResizingMode = false
-                                        dragStartPosition = startOffset
+                                    },
+                                    onDragCancel = {
+                                        isDraggingMode = false
+                                        isResizingMode = false
                                     }
-                                }
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-
-                                if (isEditMode && showDialogForIndex == null && isDraggingMode && dragStartPosition != null) {
-                                    // Обновляем положение окна
-                                    val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
-                                    val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
-                                    onUpdateWindowPosition(panelId, newX, newY)
-
-                                } else if (isEditMode && showDialogForIndex == null && isResizingMode && resizeStartPosition != null) {
-                                    // Обновляем размер окна
-                                    val newWidth = (windowParams.width + dragAmount.x).toInt()
-                                        .coerceAtLeast(50)
-                                    val newHeight = (windowParams.height + dragAmount.y).toInt()
-                                        .coerceAtLeast(50)
-                                    onUpdateWindowSize(panelId, newWidth, newHeight)
-                                }
-                            },
-                            onDragEnd = {
-                                if (isEditMode && isDraggingMode) {
-                                    settingsViewModel.saveFloatingDashboardPosition(
-                                        panelId,
-                                        windowParams.x,
-                                        windowParams.y
-                                    )
-                                    // Сбрасываем режимы после завершения жеста
-                                    isDraggingMode = false
-                                    isResizingMode = false
-                                    dragStartPosition = null
-                                    resizeStartPosition = null
-                                } else if (isEditMode && isResizingMode) {
-                                    settingsViewModel.saveFloatingDashboardSize(
-                                        panelId,
-                                        windowParams.width,
-                                        windowParams.height
-                                    )
-                                    // Сбрасываем режимы после завершения жеста
-                                    isDraggingMode = false
-                                    isResizingMode = false
-                                    dragStartPosition = null
-                                    resizeStartPosition = null
-                                }
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
+                DashboardPanelGridAndFrames(
+                    dashboardRows = dashboardRows,
+                    dashboardCols = dashboardCols,
+                    dashboardState = dashboardState,
+                    widgetConfigs = widgetConfigs,
+                    tboxViewModel = tboxViewModel,
+                    canViewModel = canViewModel,
+                    appDataViewModel = appDataViewModel,
+                    dataProvider = dataProvider,
+                    dashboardManager = dashboardViewModel.dashboardManager,
+                    dashboardChart = false,
+                    tboxConnected = tboxConnected,
+                    currentTheme = currentTheme,
+                    restartEnabled = restartEnabled,
+                    isEditMode = isEditMode,
+                    showDialogOpen = showDialogForIndex != null,
+                    widgetInteractionPolicy = widgetInteractionPolicy,
+                    widgetCardElevation = FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
+                    onWidgetClick = { index ->
+                        val cfg = widgetConfigs.getOrNull(index)
+                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                            showDialogForIndex = index
+                        } else if (
+                            cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            cfg.launcherAppPackage.isNotBlank()
+                        ) {
+                            launchAppFromWidget(context, cfg.launcherAppPackage)
+                        } else if (isFloatingDashboardClickAction) {
+                            openMainActivityFromWidget(context)
+                        }
+                    },
+                    onWidgetLongClick = {
+                        isEditMode = !isEditMode
+                        isDraggingMode = false
+                        isResizingMode = false
+                    },
+                    onMusicSelectedPlayerChange = { index, selectedPackage ->
+                        persistDashboardPanelMediaSelectedPlayer(
+                            currentWidgetConfigs = widgetConfigs,
+                            widgetIndex = index,
+                            selectedPackage = selectedPackage,
+                            saveConfigs = { configs ->
+                                settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
                             }
                         )
-                    }
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(0.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (dashboardState.widgets.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .weight(1f)
-                                .background(color = Color.Transparent),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Загрузка...")
+                    },
+                    onRestartRequested = {
+                        if (restartEnabled) {
+                            restartEnabled = false
+                            onRebootTbox()
                         }
-                    } else {
-                        for (row in 0 until dashboardRows) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                for (col in 0 until dashboardCols) {
-                                    val index = row * dashboardCols + col
-                                    val widget = dashboardState.widgets.getOrNull(index) ?: continue
-                                    val widgetConfig = widgetConfigs.getOrNull(index)
-                                        ?: FloatingDashboardWidgetConfig(dataKey = "")
-
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        if (isEditMode) {
-                                            Canvas(
-                                                modifier = Modifier.matchParentSize()
-                                            ) {
-                                                drawRect(
-                                                    color = Color(0x7E00BCD4),
-                                                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-                                                )
-                                            }
-                                        }
-                                        when (widget.dataKey) {
-                                            "netWidget" -> {
-                                                DashboardNetWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            settingsViewModel.saveSelectedTab(0)
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    viewModel = tboxViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true
-                                                )
-                                            }
-                                            "locWidget" -> {
-                                                DashboardLocWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            settingsViewModel.saveSelectedTab(2)
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    viewModel = tboxViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true
-                                                )
-                                            }
-                                            "voltage+engineTemperatureWidget" -> {
-                                                DashboardVoltEngTempWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
-                                                )
-                                            }
-                                            "gearBoxWidget" -> {
-                                                DashboardGearBoxWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
-                                                )
-                                            }
-                                            "wheelsPressureWidget" -> {
-                                                DashboardWheelsPressureWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
-                                                )
-                                            }
-                                            "wheelsPressureTemperatureWidget" -> {
-                                                DashboardWheelsPressureTemperatureWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
-                                                )
-                                            }
-                                            "tempInOutWidget" -> {
-                                                DashboardTempInOutWidgetItem(
-                                                    widget = widget,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    canViewModel = canViewModel,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
-                                                )
-                                            }
-                                            "motorHoursWidget" -> {
-                                                DashboardMotorHoursWidgetItem(
-                                                    widget = widget,
-                                                    dataProvider = dataProvider,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    onDoubleClick = {
-                                                        appDataViewModel.setMotorHours(0f)
-                                                    },
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true,
-                                                    units = widgetConfig.showUnit
-                                                )
-                                            }
-                                            "restartTbox" -> {
-                                                DashboardWidgetItem(
-                                                    widget = widget,
-                                                    dataProvider = dataProvider,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    onDoubleClick = {
-                                                        if (restartEnabled) {
-                                                            restartEnabled = false
-                                                            onRebootTbox()
-                                                        }
-                                                    },
-                                                    dashboardManager = dashboardViewModel.dashboardManager,
-                                                    dashboardChart = false,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    title = widgetConfig.showTitle,
-                                                    units = widgetConfig.showUnit,
-                                                    backgroundTransparent = true,
-                                                    textColor = if (restartEnabled) {
-                                                        if (tboxConnected) {
-                                                            Color(0xD900A400)
-                                                        } else {
-                                                            Color(0xD9FF0000)
-                                                        }
-                                                    } else {
-                                                        Color(0xD97E4C4C)
-                                                    }
-                                                )
-                                            }
-                                            WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY -> {
-                                                ExternalAppWidgetItem(
-                                                    widgetConfig = widgetConfig,
-                                                    appWidgetHost = appWidgetHost,
-                                                    isEditMode = isEditMode,
-                                                    handleClick = isFloatingDashboardClickAction,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true
-                                                )
-                                            }
-                                            WidgetsRepository.LAUNCH_APP_DATA_KEY -> {
-                                                AppLauncherWidgetItem(
-                                                    appPackageName = widgetConfig.appPackageName,
-                                                    appClassName = widgetConfig.appClassName,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else {
-                                                            openSelectedApp(
-                                                                context = context,
-                                                                packageName = widgetConfig.appPackageName,
-                                                                className = widgetConfig.appClassName
-                                                            )
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    backgroundTransparent = true
-                                                )
-                                            }
-                                            else -> {
-                                                DashboardWidgetItem(
-                                                    widget = widget,
-                                                    dataProvider = dataProvider,
-                                                    onClick = {
-                                                        if (isEditMode && !isDraggingMode && !isResizingMode) {
-                                                            showDialogForIndex = index
-                                                        } else if (isFloatingDashboardClickAction) {
-                                                            openMainActivity(context)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        isEditMode = !isEditMode
-                                                        isDraggingMode = false
-                                                        isResizingMode = false
-                                                    },
-                                                    onDoubleClick = {
-                                                        if (widget.dataKey == "motorHours") {
-                                                            appDataViewModel.setMotorHours(0f)
-                                                        }
-                                                    },
-                                                    dashboardManager = dashboardViewModel.dashboardManager,
-                                                    dashboardChart = false,
-                                                    elevation = 0.dp,
-                                                    shape = 0.dp,
-                                                    title = widgetConfig.showTitle,
-                                                    units = widgetConfig.showUnit,
-                                                    backgroundTransparent = true
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (!hasConfiguredWidgets) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .padding(4.dp)
-                    ) {
-                        Canvas(
-                            modifier = Modifier.matchParentSize()
-                        ) {
-                            drawRect(
-                                color = Color(0xFF008507),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                            )
-                        }
-                    }
-                }
-
-                if (!tboxConnected) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .padding(0.dp)
-                    ) {
-                        Canvas(
-                            modifier = Modifier.matchParentSize()
-                        ) {
-                            drawRect(
-                                color = Color(0xD9FF9800),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                            )
-                        }
-                    }
-                }
-
-                // Визуальные индикаторы режимов (не показываем при открытом диалоге)
-                if (isEditMode && showDialogForIndex == null) {
-                    // Показываем рамку в режиме редактирования
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .padding(2.dp)
-                    ) {
-                        Canvas(
-                            modifier = Modifier.matchParentSize()
-                        ) {
-                            drawRect(
-                                color = Color(0xFF00BCD4),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                            )
-                        }
-                    }
-
-                    // Индикатор для изменения размера (правый нижний угол)
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                    ) {
-                        Canvas(
-                            modifier = Modifier.size(16.dp)
-                        ) {
-                            drawLine(
-                                color = Color(0xFF00BCD4),
-                                start = androidx.compose.ui.geometry.Offset(0f, size.height),
-                                end = androidx.compose.ui.geometry.Offset(size.width, 0f),
-                                strokeWidth = 2.dp.toPx()
-                            )
-                        }
-                    }
-                }
+                    },
+                    showTboxDisconnectIndicator = panelConfig.showTboxDisconnectIndicator,
+                    enableMusicInnerInteractions = !isEditMode,
+                    externalWidgetHost = appWidgetHost
+                )
             }
         }
 
@@ -787,69 +425,22 @@ fun OverlayWidgetSelectionDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var selectedDataKey by remember {
-        mutableStateOf(currentWidgets.getOrNull(widgetIndex)?.dataKey ?: "")
-    }
     val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
         ?: FloatingDashboardWidgetConfig(dataKey = "")
-    var showTitle by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(initialConfig.showTitle)
-    }
-    var showUnit by remember(widgetIndex, currentWidgetConfigs) {
-        mutableStateOf(initialConfig.showUnit)
-    }
+    val state = rememberWidgetSelectionDialogState(
+        widgetIndex = widgetIndex,
+        currentWidgets = currentWidgets,
+        currentWidgetConfigs = currentWidgetConfigs,
+        defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
+        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+    )
     val isExternalWidgetSelected =
-        selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
-    val isAppLaunchSelected =
-        selectedDataKey == WidgetsRepository.LAUNCH_APP_DATA_KEY
-    val togglesEnabled =
-        selectedDataKey.isNotEmpty() && !isExternalWidgetSelected && !isAppLaunchSelected
+        state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
     val selectedWidgetLabel = remember(initialConfig.appWidgetId) {
         val info = initialConfig.appWidgetId?.let { appWidgetManager.getAppWidgetInfo(it) }
         info?.loadLabel(context.packageManager)?.toString().orEmpty()
     }
-    val selectedAppLabel = remember(initialConfig.appPackageName, initialConfig.appClassName) {
-        val packageManager = context.packageManager
-        if (initialConfig.appPackageName.isNullOrBlank()) {
-            ""
-        } else {
-            val component = if (!initialConfig.appClassName.isNullOrBlank()) {
-                ComponentName(
-                    initialConfig.appPackageName,
-                    initialConfig.appClassName
-                )
-            } else {
-                null
-            }
-            try {
-                if (component != null) {
-                    val info = packageManager.getActivityInfo(component, 0)
-                    info.loadLabel(packageManager)?.toString().orEmpty()
-                } else {
-                    ""
-                }
-            } catch (_: Exception) {
-                try {
-                    val appInfo = packageManager.getApplicationInfo(
-                        initialConfig.appPackageName,
-                        0
-                    )
-                    appInfo.loadLabel(packageManager)?.toString().orEmpty()
-                } catch (_: Exception) {
-                    ""
-                }
-            }
-        }
-    }
-
-    // Получаем список опций
-    val availableOptions = listOf("" to "Не выбрано") +
-            WidgetsRepository.getAvailableDataKeysWidgets()
-                .filter { it.isNotEmpty() }
-                .map { key ->
-                    key to WidgetsRepository.getTitleUnitForDataKey(key)
-                }
 
     Card(
         modifier = Modifier
@@ -863,55 +454,26 @@ fun OverlayWidgetSelectionDialog(
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
-            SettingsTitle("Выберите данные для плитки ${widgetIndex + 1}")
-
-            // Список опций с прокруткой
-            Box(
+            WidgetSelectionDialogForm(
+                titleText = if (state.showAdvancedSettings) {
+                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                } else {
+                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
+                },
+                state = state,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(2f)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                        .padding(12.dp)
-                ) {
-                    availableOptions.forEachIndexed { index, (key, displayName) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedDataKey = key }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            androidx.compose.material3.RadioButton(
-                                selected = selectedDataKey == key,
-                                onClick = { selectedDataKey = key }
-                            )
-                            Text(
-                                text = displayName,
-                                fontSize = 24.sp,
-                                modifier = Modifier
-                                    .padding(start = 8.dp)
-                                    .weight(1f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
+                    .weight(1f)
+            )
 
             if (isExternalWidgetSelected) {
                 val label = if (selectedWidgetLabel.isNotBlank()) {
                     selectedWidgetLabel
                 } else {
-                    "Не выбрано"
+                    stringResource(R.string.widget_external_app_not_selected)
                 }
-                SettingsTitle("Виджет стороннего приложения")
+                SettingsTitle(stringResource(R.string.widget_external_app_title))
                 Text(
-                    text = "Выбранный виджет: $label",
+                    text = stringResource(R.string.widget_external_app_selected, label),
                     fontSize = 20.sp,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
@@ -921,257 +483,79 @@ fun OverlayWidgetSelectionDialog(
                             context = context,
                             panelId = panelId,
                             widgetIndex = widgetIndex,
-                            showTitle = showTitle,
-                            showUnit = showUnit
+                            showTitle = state.showTitle,
+                            showUnit = state.showUnit
                         )
                         onDismiss()
                     }
                 ) {
-                    Text(text = "Выбрать виджет", fontSize = 22.sp)
-                }
-            }
-
-            if (isAppLaunchSelected) {
-                val label = if (selectedAppLabel.isNotBlank()) {
-                    selectedAppLabel
-                } else {
-                    "Не выбрано"
-                }
-                SettingsTitle("Запуск приложения")
-                Text(
-                    text = "Выбранное приложение: $label",
-                    fontSize = 20.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                OutlinedButton(
-                    onClick = {
-                        openAppPicker(
-                            context = context,
-                            panelId = panelId,
-                            widgetIndex = widgetIndex,
-                            showTitle = showTitle,
-                            showUnit = showUnit
-                        )
-                        onDismiss()
-                    }
-                ) {
-                    Text(text = "Выбрать приложение", fontSize = 22.sp)
-                }
-            }
-
-            SettingsTitle("Дополнительные настройки плитки ${widgetIndex + 1}")
-            // Список опций с прокруткой
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                        .padding(12.dp)
-                ) {
-                    SettingSwitch(
-                        showTitle,
-                        { showTitle = it },
-                        "Отображать название",
-                        "",
-                        togglesEnabled
-                    )
-                    SettingSwitch(
-                        showUnit,
-                        { showUnit = it },
-                        "Отображать единицу измерения",
-                        "",
-                        togglesEnabled
-                    )
+                    Text(text = stringResource(R.string.widget_external_app_pick), fontSize = 22.sp)
                 }
             }
 
             // Кнопки действий
-            Row(
+            WidgetSelectionDialogActions(
+                state = state,
+                onDismiss = onDismiss,
+                onSave = {
+                    if (isExternalWidgetSelected && initialConfig.appWidgetId == null) {
+                        openExternalWidgetPicker(
+                            context = context,
+                            panelId = panelId,
+                            widgetIndex = widgetIndex,
+                            showTitle = state.showTitle,
+                            showUnit = state.showUnit
+                        )
+                        onDismiss()
+                        return@WidgetSelectionDialogActions
+                    }
+                    if (!isExternalWidgetSelected && initialConfig.appWidgetId != null) {
+                        ExternalWidgetHostManager.deleteAppWidgetId(
+                            context,
+                            initialConfig.appWidgetId
+                        )
+                    }
+                    applyWidgetSelectionChanges(
+                        context = context,
+                        dashboardManager = dashboardManager,
+                        currentWidgets = currentWidgets,
+                        currentWidgetConfigs = currentWidgetConfigs,
+                        widgetIndex = widgetIndex,
+                        state = state,
+                        saveConfigs = { configs ->
+                            settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
+                        },
+                        externalAppWidgetId = if (isExternalWidgetSelected) {
+                            initialConfig.appWidgetId
+                        } else {
+                            null
+                        }
+                    )
+                    onDismiss()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 20.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.padding(end = 12.dp)
-                ) {
-                    Text(text = "Отмена", fontSize = 24.sp)
-                }
-
-                Button(
-                    onClick = {
-                        val isExternalSelected =
-                            selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
-                        val isAppLaunchSelected =
-                            selectedDataKey == WidgetsRepository.LAUNCH_APP_DATA_KEY
-                        if (isExternalSelected && initialConfig.appWidgetId == null) {
-                            openExternalWidgetPicker(
-                                context = context,
-                                panelId = panelId,
-                                widgetIndex = widgetIndex,
-                                showTitle = showTitle,
-                                showUnit = showUnit
-                            )
-                            onDismiss()
-                            return@Button
-                        }
-                        if (isAppLaunchSelected &&
-                            initialConfig.appPackageName.isNullOrBlank()
-                        ) {
-                            openAppPicker(
-                                context = context,
-                                panelId = panelId,
-                                widgetIndex = widgetIndex,
-                                showTitle = showTitle,
-                                showUnit = showUnit
-                            )
-                            onDismiss()
-                            return@Button
-                        }
-                        if (!isExternalSelected && initialConfig.appWidgetId != null) {
-                            ExternalWidgetHostManager.deleteAppWidgetId(
-                                context,
-                                initialConfig.appWidgetId
-                            )
-                        }
-                        val updatedWidgets = currentWidgets.toMutableList()
-                        val newWidget = if (selectedDataKey.isNotEmpty()) {
-                            DashboardWidget(
-                                id = currentWidgets[widgetIndex].id,
-                                title = WidgetsRepository.getTitleForDataKey(selectedDataKey),
-                                unit = WidgetsRepository.getUnitForDataKey(selectedDataKey),
-                                dataKey = selectedDataKey
-                            )
-                        } else {
-                            DashboardWidget(
-                                id = currentWidgets[widgetIndex].id,
-                                title = "",
-                                dataKey = ""
-                            )
-                        }
-                        updatedWidgets[widgetIndex] = newWidget
-
-                        dashboardManager.updateWidgets(updatedWidgets)
-                        val normalizedConfigs = normalizeWidgetConfigs(
-                            currentWidgetConfigs,
-                            updatedWidgets.size
-                        ).toMutableList()
-                        val newConfig = if (selectedDataKey.isNotEmpty()) {
-                            FloatingDashboardWidgetConfig(
-                                dataKey = selectedDataKey,
-                                showTitle = showTitle,
-                                showUnit = showUnit,
-                                appWidgetId = if (isExternalSelected) {
-                                    initialConfig.appWidgetId
-                                } else {
-                                    null
-                                },
-                                appPackageName = if (isAppLaunchSelected) {
-                                    initialConfig.appPackageName
-                                } else {
-                                    null
-                                },
-                                appClassName = if (isAppLaunchSelected) {
-                                    initialConfig.appClassName
-                                } else {
-                                    null
-                                }
-                            )
-                        } else {
-                            FloatingDashboardWidgetConfig(dataKey = "")
-                        }
-                        normalizedConfigs[widgetIndex] = newConfig
-                        settingsViewModel.saveFloatingDashboardWidgets(panelId, normalizedConfigs)
-                        dashboardManager.clearWidgetHistory(currentWidgets[widgetIndex].id)
-
-                        onDismiss()
-                    }
-                ) {
-                    Text(
-                        text = "Сохранить",
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        fontSize = 24.sp
-                    )
-                }
-            }
+                saveTextFontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+            )
         }
-    }
-}
-
-private fun openMainActivity(context: Context) {
-    try {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
-}
-
-private fun openSelectedApp(
-    context: Context,
-    packageName: String?,
-    className: String?
-) {
-    if (packageName.isNullOrBlank()) return
-    val intent = if (!className.isNullOrBlank()) {
-        Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_LAUNCHER)
-            component = ComponentName(packageName, className)
-        }
-    } else {
-        context.packageManager.getLaunchIntentForPackage(packageName)
-    } ?: return
-    try {
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        e.printStackTrace()
     }
 }
 
 private fun openExternalWidgetPicker(
-    context: Context,
+    context: android.content.Context,
     panelId: String,
     widgetIndex: Int,
     showTitle: Boolean,
     showUnit: Boolean
 ) {
     try {
-        val intent = Intent(context, WidgetPickerActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        val intent = android.content.Intent(context, WidgetPickerActivity::class.java).apply {
+            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
             putExtra(WidgetPickerActivity.EXTRA_PANEL_ID, panelId)
             putExtra(WidgetPickerActivity.EXTRA_WIDGET_INDEX, widgetIndex)
             putExtra(WidgetPickerActivity.EXTRA_SHOW_TITLE, showTitle)
             putExtra(WidgetPickerActivity.EXTRA_SHOW_UNIT, showUnit)
-        }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
-}
-
-private fun openAppPicker(
-    context: Context,
-    panelId: String,
-    widgetIndex: Int,
-    showTitle: Boolean,
-    showUnit: Boolean
-) {
-    try {
-        val intent = Intent(context, AppPickerActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            putExtra(AppPickerActivity.EXTRA_PANEL_ID, panelId)
-            putExtra(AppPickerActivity.EXTRA_WIDGET_INDEX, widgetIndex)
-            putExtra(AppPickerActivity.EXTRA_SHOW_TITLE, showTitle)
-            putExtra(AppPickerActivity.EXTRA_SHOW_UNIT, showUnit)
         }
         context.startActivity(intent)
     } catch (e: Exception) {

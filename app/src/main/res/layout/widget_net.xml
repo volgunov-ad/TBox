@@ -9,14 +9,14 @@
         android:id="@+id/widget_image"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:contentDescription="net"
+        android:contentDescription="@string/widget_desc_net"
         android:scaleType="fitCenter"
         android:adjustViewBounds="true"
         android:src="@drawable/ic_signal_nosig_sharp_outlined_dark" />
 
     <ImageView
         android:id="@+id/status_indicator"
-        android:contentDescription="connection"
+        android:contentDescription="@string/widget_desc_connection"
         android:layout_width="10dp"
         android:layout_height="10dp"
         android:scaleType="fitCenter"
@@ -27,7 +27,7 @@
 
     <ImageView
         android:id="@+id/location_indicator"
-        android:contentDescription="location"
+        android:contentDescription="@string/widget_desc_location"
         android:layout_width="14dp"
         android:layout_height="14dp"
         android:scaleType="fitCenter"

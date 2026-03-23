@@ -12,22 +12,31 @@ android {
         applicationId = "vad.dashing.tbox"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1030
-        versionName = "0.10.3"
+        versionCode = 1300
+        versionName = "0.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
+    flavorDimensions += "language"
+    productFlavors {
+        create("ru") {
+            dimension = "language"
+            versionNameSuffix = "-ru"
+        }
+        create("en") {
+            dimension = "language"
+            versionNameSuffix = "-en"
+        }
+    }
     buildTypes {
         release {
-            //isMinifyEnabled = true
-            //isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             isMinifyEnabled = false
@@ -35,11 +44,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
     buildFeatures {
         compose = true

@@ -1,18 +1,12 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -37,10 +32,14 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.DEFAULT_WIDGET_SCALE
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.normalizeWidgetScale
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
 import kotlin.math.abs
+
+val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
 
 @Composable
 fun DashboardWidgetItem(
@@ -55,8 +54,8 @@ fun DashboardWidgetItem(
     shape: Dp = 12.dp,
     title: Boolean = true,
     units: Boolean = true,
-    backgroundTransparent: Boolean = false,
-    textColor: Color? = null
+    textColor: Color? = null,
+    backgroundColor: Color? = null
 ) {
     val onlyText: Boolean
 
@@ -85,116 +84,100 @@ fun DashboardWidgetItem(
         onlyText = false
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-                onDoubleClick = onDoubleClick
-            ),
-        elevation = CardDefaults.cardElevation(elevation),
-        colors = CardDefaults.cardColors(
-            containerColor = if (backgroundTransparent) Color.Transparent else MaterialTheme.colorScheme.surface
-        ),
-        shape = RoundedCornerShape(shape)
-    ) {
-        BoxWithConstraints(
+    DashboardWidgetScaffold(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onDoubleClick = onDoubleClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, resolvedTextColor ->
+        if (!widgetHistory.checkValues() && dashboardChart && !onlyText) {
+            HistoryLineChart(
+                values = widgetHistory,
+                modifier = Modifier
+                    .matchParentSize()
+                    .alpha(0.3f)
+            )
+        }
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                color = Color.Transparent,
-                shape = RoundedCornerShape(shape)
-            )
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (!widgetHistory.checkValues() && dashboardChart && !onlyText) {
-                HistoryLineChart(
-                    values = widgetHistory,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .alpha(0.3f)
-                )
-            }
-
-            val availableHeight = maxHeight
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(4.dp)
-                    .wrapContentHeight(Alignment.CenterVertically),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (title && !onlyText) {
-                    Text(
-                        text = widget.title,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.TITLE
-                        ),
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        lineHeight = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.TITLE
-                        ) * 1.3f,
-                        softWrap = true,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .wrapContentHeight(Alignment.CenterVertically)
-                    )
-                }
-
+            if (title && !onlyText) {
                 Text(
-                    text = "$valueString ${if (units && !onlyText) " ${widget.unit.replace("/", "\u2060/\u2060")}" else ""}",
+                    text = widget.title,
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
-                        textType = if (widget.dataKey == "restartTbox") {
-                            TextType.TITLE
-                        } else {
-                            TextType.VALUE
-                        }
+                        textType = TextType.TITLE
                     ),
                     fontWeight = FontWeight.Medium,
-                    color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                    color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     lineHeight = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
-                        textType = TextType.VALUE
+                        textType = TextType.TITLE
                     ) * 1.3f,
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
-                        .weight(if (title) 2f else 3f)
+                        .weight(1f)
                         .fillMaxWidth()
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
-
-                /*if (units && !onlyText) {
-                    Text(
-                        text = widget.unit,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.UNIT
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        softWrap = true,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .wrapContentHeight(Alignment.CenterVertically)
-                    )
-                }*/
             }
+
+            Text(
+                text = "$valueString\u2009${if (units && !onlyText) widget.unit.replace("/", "\u2060/\u2060") else ""}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = if (widget.dataKey == "restartTbox") {
+                        TextType.TITLE
+                    } else {
+                        TextType.VALUE
+                    }
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                lineHeight = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                ) * 1.3f,
+                softWrap = true,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(if (title) 2f else 3f)
+                    .fillMaxWidth()
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
+
+            /*if (units && !onlyText) {
+                Text(
+                    text = widget.unit,
+                    fontSize = calculateResponsiveFontSize(
+                        containerHeight = availableHeight,
+                        textType = TextType.UNIT
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically)
+                )
+            }*/
         }
     }
 }
@@ -205,8 +188,9 @@ fun calculateResponsiveFontSize(
     textType: TextType = TextType.VALUE
 ): TextUnit {
     val heightInDp = containerHeight.value
+    val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
 
-    return when (textType) {
+    val baseSize = when (textType) {
         TextType.TITLE -> {
             when {
                 heightInDp < 20 -> 8.sp
@@ -244,6 +228,7 @@ fun calculateResponsiveFontSize(
             }
         }
     }
+    return baseSize * textScale
 }
 
 enum class TextType {

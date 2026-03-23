@@ -51,7 +51,8 @@
 
         <activity
             android:name="vad.dashing.tbox.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -61,11 +62,6 @@
 
         <activity
             android:name="vad.dashing.tbox.WidgetPickerActivity"
-            android:exported="false"
-            android:excludeFromRecents="true" />
-
-        <activity
-            android:name="vad.dashing.tbox.AppPickerActivity"
             android:exported="false"
             android:excludeFromRecents="true" />
 
@@ -84,6 +80,17 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="connectedDevice">
+        </service>
+
+        <service
+            android:name="vad.dashing.tbox.MediaControlNotificationListenerService"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
         </service>
 
         <receiver
