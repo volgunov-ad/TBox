@@ -61,6 +61,12 @@
     <string name="widget_additional_settings_for_tile">Additional settings for tile %1$d</string>
     <string name="widget_show_title">Show title</string>
     <string name="widget_show_unit">Show unit</string>
+    <string name="widget_external_app_title">Third-party app widget</string>
+    <string name="widget_external_app_selected">Selected widget: %1$s</string>
+    <string name="widget_external_app_pick">Choose widget</string>
+    <string name="widget_external_app_not_selected">Not selected</string>
+    <string name="widget_external_tile_empty">No widget selected</string>
+    <string name="widget_external_tile_unavailable">Widget unavailable</string>
     <string name="widget_toggle_advanced">Advanced</string>
     <string name="widget_scale">Widget scale: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
@@ -372,6 +378,7 @@
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
+    <string name="data_title_external_app_widget">Third-party app widget</string>
     <string name="widget_app_launcher_selected">Selected: %1$s</string>
     <string name="widget_app_launcher_none_selected">No app selected</string>
     <string name="widget_app_launcher_required">Choose an app to save the widget</string>
