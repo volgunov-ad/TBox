@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.DEFAULT_WIDGET_SCALE
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -247,31 +248,33 @@ internal fun WidgetSelectionDialogForm(
                         "",
                         state.togglesEnabled
                     )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_scale, state.scale),
-                            fontSize = 24.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_scale_hint),
-                            fontSize = 20.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = state.scale,
-                            onValueChange = { newValue ->
-                                state.scale = normalizeWidgetScale(newValue)
-                            },
-                            valueRange = 0.1f..2.0f,
-                            steps = 18,
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
+                    if (!state.isExternalAppWidgetSelected) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.widget_scale, state.scale),
+                                fontSize = 24.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.widget_scale_hint),
+                                fontSize = 20.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Slider(
+                                value = state.scale,
+                                onValueChange = { newValue ->
+                                    state.scale = normalizeWidgetScale(newValue)
+                                },
+                                valueRange = 0.1f..2.0f,
+                                steps = 18,
+                                enabled = state.togglesEnabled,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
                     }
                     Column(
                         modifier = Modifier
@@ -454,9 +457,15 @@ internal fun applyWidgetSelectionChanges(
     saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit,
     externalAppWidgetId: Int? = null
 ) {
-    val normalizedScale = normalizeWidgetScale(state.scale)
+    val normalizedScale = if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+        DEFAULT_WIDGET_SCALE
+    } else {
+        normalizeWidgetScale(state.scale)
+    }
     val normalizedShape = normalizeWidgetShape(state.shape)
-    state.scale = normalizedScale
+    if (state.selectedDataKey != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+        state.scale = normalizedScale
+    }
     state.shape = normalizedShape
     val currentWidget = currentWidgets[widgetIndex]
     val updatedWidgets = currentWidgets.toMutableList()

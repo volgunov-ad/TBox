@@ -29,8 +29,6 @@ import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
-import vad.dashing.tbox.normalizeWidgetScale
-import vad.dashing.tbox.withAppWidgetLayoutScale
 
 @Composable
 fun ExternalAppWidgetItem(
@@ -55,8 +53,7 @@ fun ExternalAppWidgetItem(
         }
     }
     val density = LocalDensity.current
-    val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
-    val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost, widgetDisplayScale) {
+    val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost) {
         if (
             appWidgetHost == null ||
             appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
@@ -65,8 +62,7 @@ fun ExternalAppWidgetItem(
             null
         } else {
             try {
-                val inflationContext = context.withAppWidgetLayoutScale(widgetDisplayScale)
-                appWidgetHost.createView(inflationContext, appWidgetId, appWidgetInfo).apply {
+                appWidgetHost.createView(context, appWidgetId, appWidgetInfo).apply {
                     setAppWidget(appWidgetId, appWidgetInfo)
                     setPadding(0, 0, 0, 0)
                 }

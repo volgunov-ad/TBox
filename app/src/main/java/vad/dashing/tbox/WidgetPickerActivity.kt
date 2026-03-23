@@ -184,6 +184,7 @@ class WidgetPickerActivity : ComponentActivity() {
             dataKey = WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY,
             showTitle = showTitle,
             showUnit = showUnit,
+            scale = DEFAULT_WIDGET_SCALE,
             appWidgetId = appWidgetId,
             launcherAppPackage = ""
         )
@@ -204,6 +205,7 @@ class WidgetPickerActivity : ComponentActivity() {
             dataKey = WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY,
             showTitle = showTitle,
             showUnit = showUnit,
+            scale = DEFAULT_WIDGET_SCALE,
             appWidgetId = appWidgetId,
             launcherAppPackage = ""
         )
