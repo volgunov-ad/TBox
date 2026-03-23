@@ -9,13 +9,6 @@ import android.view.ViewConfiguration
 import android.widget.FrameLayout
 
 class LongPressInterceptLayout(context: Context) : FrameLayout(context) {
-    /** Visual scale for hosted content (e.g. app widget); touch coordinates stay correct. */
-    var displayScale: Float = 1f
-        set(value) {
-            field = value.coerceIn(0.1f, 2f)
-            applyDisplayScale()
-        }
-
     private val handler = Handler(Looper.getMainLooper())
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
@@ -34,19 +27,6 @@ class LongPressInterceptLayout(context: Context) : FrameLayout(context) {
                 cancelLongPressCheck()
             }
         }
-
-    private fun applyDisplayScale() {
-        if (width <= 0 || height <= 0) return
-        pivotX = width / 2f
-        pivotY = height / 2f
-        scaleX = displayScale
-        scaleY = displayScale
-    }
-
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        applyDisplayScale()
-    }
 
     private val longPressRunnable = Runnable {
         if (isDown && !intercepting) {

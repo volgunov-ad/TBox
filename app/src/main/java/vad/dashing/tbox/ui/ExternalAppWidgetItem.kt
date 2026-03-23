@@ -30,6 +30,7 @@ import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
+import vad.dashing.tbox.normalizeWidgetScale
 
 @Composable
 fun ExternalAppWidgetItem(
@@ -54,6 +55,7 @@ fun ExternalAppWidgetItem(
         }
     }
     val density = LocalDensity.current
+    val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
     val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost) {
         if (
             appWidgetHost == null ||
@@ -111,8 +113,8 @@ fun ExternalAppWidgetItem(
                 key(appWidgetId) {
                     AndroidView(
                         factory = { viewContext ->
-                            LongPressInterceptLayout(viewContext).apply {
-                                displayScale = 1f
+                            val frame = ExternalWidgetScaleFrame(viewContext)
+                            val intercept = LongPressInterceptLayout(viewContext).apply {
                                 onLongPress = onLongClick
                                 interceptLongPress = !isEditMode
                                 if (hostView.parent != null) {
@@ -126,18 +128,22 @@ fun ExternalAppWidgetItem(
                                     )
                                 )
                             }
+                            frame.attachIntercept(intercept)
+                            frame.displayScale = widgetDisplayScale
+                            frame
                         },
-                        update = { layout ->
-                            layout.displayScale = 1f
-                            layout.onLongPress = onLongClick
-                            layout.interceptLongPress = !isEditMode
-                            // AndroidView factory runs once per key; if hierarchy drifts, resync child.
+                        update = { frame ->
+                            val scaleFrame = frame as ExternalWidgetScaleFrame
+                            scaleFrame.displayScale = widgetDisplayScale
+                            val intercept = scaleFrame.interceptChild ?: return@AndroidView
+                            intercept.onLongPress = onLongClick
+                            intercept.interceptLongPress = !isEditMode
                             val onlyChildIsCurrent =
-                                layout.childCount == 1 && layout.getChildAt(0) === hostView
+                                intercept.childCount == 1 && intercept.getChildAt(0) === hostView
                             if (!onlyChildIsCurrent) {
-                                layout.removeAllViews()
+                                intercept.removeAllViews()
                                 (hostView.parent as? ViewGroup)?.removeView(hostView)
-                                layout.addView(
+                                intercept.addView(
                                     hostView,
                                     ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
