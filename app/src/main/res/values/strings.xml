@@ -67,6 +67,11 @@
     <string name="widget_external_app_not_selected">Не выбрано</string>
     <string name="widget_external_tile_empty">Виджет не выбран</string>
     <string name="widget_external_tile_unavailable">Виджет недоступен</string>
+    <string name="widget_picker_catalog_title">Виджеты</string>
+    <string name="widget_picker_back">Назад</string>
+    <string name="widget_picker_system_list">Системный список</string>
+    <string name="widget_picker_preview_placeholder">Нет превью</string>
+    <string name="widget_picker_empty_list">Нет доступных виджетов</string>
     <string name="widget_toggle_advanced">Дополнительно</string>
     <string name="widget_scale">Масштаб виджета: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
