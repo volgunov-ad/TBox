@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
@@ -146,6 +147,7 @@ class WidgetPickerActivity : ComponentActivity() {
                 SAVE_TARGET_MAIN_SCREEN -> saveMainScreen(settingsManager)
                 SAVE_TARGET_MAIN_DASHBOARD -> saveMainDashboard(settingsManager)
             }
+            requestProviderRefreshAfterConfigure()
             finish()
         }
     }
@@ -213,5 +215,25 @@ class WidgetPickerActivity : ComponentActivity() {
             ExternalWidgetHostManager.deleteAppWidgetId(this, appWidgetId)
         }
         finish()
+    }
+
+    /**
+     * After configure, ask the provider to run onUpdate again so RemoteViews match saved settings.
+     * The host callback also delivers updates, but an explicit broadcast fixes OEMs where the first
+     * paint stays on defaults until the next system tick.
+     */
+    private fun requestProviderRefreshAfterConfigure() {
+        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
+        val info = appWidgetManager.getAppWidgetInfo(appWidgetId) ?: return
+        val provider = info.provider
+        try {
+            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+                component = provider
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
+            }
+            sendBroadcast(intent)
+        } catch (e: Exception) {
+            Log.w("WidgetPicker", "Could not request widget provider refresh", e)
+        }
     }
 }

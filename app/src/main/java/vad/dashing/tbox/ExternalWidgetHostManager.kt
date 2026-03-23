@@ -2,8 +2,10 @@ package vad.dashing.tbox
 
 import android.appwidget.AppWidgetHost
 import android.content.Context
+import android.util.Log
 
 object ExternalWidgetHostManager {
+    private const val TAG = "ExternalWidgetHost"
     private const val HOST_ID = 1024
     private var host: AppWidgetHost? = null
     private var refCount = 0
@@ -21,8 +23,8 @@ object ExternalWidgetHostManager {
         if (refCount == 0) {
             try {
                 resolved.startListening()
-            } catch (_: Exception) {
-                // Ignore start listening issues to keep overlay running.
+            } catch (e: Exception) {
+                Log.e(TAG, "AppWidgetHost.startListening failed; embedded widgets may not refresh", e)
             }
         }
         refCount++

@@ -2,7 +2,6 @@ package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
-import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,7 +28,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
+import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
+import vad.dashing.tbox.withAppWidgetLayoutScale
 
 @Composable
 fun ExternalAppWidgetItem(
@@ -55,7 +56,7 @@ fun ExternalAppWidgetItem(
     }
     val density = LocalDensity.current
     val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
-    val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost) {
+    val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost, widgetDisplayScale) {
         if (
             appWidgetHost == null ||
             appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
@@ -64,7 +65,8 @@ fun ExternalAppWidgetItem(
             null
         } else {
             try {
-                appWidgetHost.createView(context, appWidgetId, appWidgetInfo).apply {
+                val inflationContext = context.withAppWidgetLayoutScale(widgetDisplayScale)
+                appWidgetHost.createView(inflationContext, appWidgetId, appWidgetInfo).apply {
                     setAppWidget(appWidgetId, appWidgetInfo)
                     setPadding(0, 0, 0, 0)
                 }
@@ -112,7 +114,7 @@ fun ExternalAppWidgetItem(
                 AndroidView(
                     factory = { viewContext ->
                         LongPressInterceptLayout(viewContext).apply {
-                            displayScale = widgetDisplayScale
+                            displayScale = 1f
                             onLongPress = onLongClick
                             interceptLongPress = !isEditMode
                             if (hostView.parent != null) {
@@ -128,7 +130,7 @@ fun ExternalAppWidgetItem(
                         }
                     },
                     update = { layout ->
-                        layout.displayScale = widgetDisplayScale
+                        layout.displayScale = 1f
                         layout.onLongPress = onLongClick
                         layout.interceptLongPress = !isEditMode
                         if (hostView.parent != layout) {
@@ -149,13 +151,13 @@ fun ExternalAppWidgetItem(
                             val minWidth = with(density) { size.width.toDp().value }.roundToInt()
                             val minHeight = with(density) { size.height.toDp().value }.roundToInt()
                             if (minWidth > 0 && minHeight > 0) {
-                                val options = Bundle().apply {
-                                    putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, minWidth)
-                                    putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, minHeight)
-                                    putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidth)
-                                    putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight)
-                                }
-                                appWidgetManager.updateAppWidgetOptions(appWidgetId, options)
+                                val merged = mergeAppWidgetSizeOptions(
+                                    appWidgetManager,
+                                    appWidgetId,
+                                    minWidth,
+                                    minHeight
+                                )
+                                appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
                             }
                         }
                 )
