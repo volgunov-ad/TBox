@@ -13,6 +13,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,56 +108,62 @@ fun ExternalAppWidgetItem(
                     style = MaterialTheme.typography.bodyMedium
                 )
             } else {
-                AndroidView(
-                    factory = { viewContext ->
-                        LongPressInterceptLayout(viewContext).apply {
-                            displayScale = 1f
-                            onLongPress = onLongClick
-                            interceptLongPress = !isEditMode
-                            if (hostView.parent != null) {
+                key(appWidgetId) {
+                    AndroidView(
+                        factory = { viewContext ->
+                            LongPressInterceptLayout(viewContext).apply {
+                                displayScale = 1f
+                                onLongPress = onLongClick
+                                interceptLongPress = !isEditMode
+                                if (hostView.parent != null) {
+                                    (hostView.parent as? ViewGroup)?.removeView(hostView)
+                                }
+                                addView(
+                                    hostView,
+                                    ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                )
+                            }
+                        },
+                        update = { layout ->
+                            layout.displayScale = 1f
+                            layout.onLongPress = onLongClick
+                            layout.interceptLongPress = !isEditMode
+                            // AndroidView factory runs once per key; if hierarchy drifts, resync child.
+                            val onlyChildIsCurrent =
+                                layout.childCount == 1 && layout.getChildAt(0) === hostView
+                            if (!onlyChildIsCurrent) {
+                                layout.removeAllViews()
                                 (hostView.parent as? ViewGroup)?.removeView(hostView)
+                                layout.addView(
+                                    hostView,
+                                    ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                )
                             }
-                            addView(
-                                hostView,
-                                ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                            )
-                        }
-                    },
-                    update = { layout ->
-                        layout.displayScale = 1f
-                        layout.onLongPress = onLongClick
-                        layout.interceptLongPress = !isEditMode
-                        if (hostView.parent != layout) {
-                            (hostView.parent as? ViewGroup)?.removeView(hostView)
-                            layout.addView(
-                                hostView,
-                                ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Transparent)
-                        .onSizeChanged { size ->
-                            val minWidth = with(density) { size.width.toDp().value }.roundToInt()
-                            val minHeight = with(density) { size.height.toDp().value }.roundToInt()
-                            if (minWidth > 0 && minHeight > 0) {
-                                val merged = mergeAppWidgetSizeOptions(
-                                    appWidgetManager,
-                                    appWidgetId,
-                                    minWidth,
-                                    minHeight
-                                )
-                                appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Transparent)
+                            .onSizeChanged { size ->
+                                val minWidth = with(density) { size.width.toDp().value }.roundToInt()
+                                val minHeight = with(density) { size.height.toDp().value }.roundToInt()
+                                if (minWidth > 0 && minHeight > 0) {
+                                    val merged = mergeAppWidgetSizeOptions(
+                                        appWidgetManager,
+                                        appWidgetId,
+                                        minWidth,
+                                        minHeight
+                                    )
+                                    appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
+                                }
                             }
-                        }
-                )
+                    )
+                }
             }
 
             if (isEditMode) {
