@@ -498,7 +498,7 @@ class BackgroundService : Service() {
                 Log.d("Net Updater", "Start updating network state")
                 while (isActive) {
                     TboxRepository.addLog("DEBUG", "MDC send", "Update network")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         MDC_CODE,
                         SELF_CODE,
                         0x07,
@@ -537,7 +537,7 @@ class BackgroundService : Service() {
                             continue
                         }
                         TboxRepository.addLog("DEBUG", "MDC send", "Update APN1")
-                        sendUdpMessage(
+                        sendTboxMessage(
                             MDC_CODE,
                             SELF_CODE,
                             0x11,
@@ -549,7 +549,7 @@ class BackgroundService : Service() {
                         }
                         delay(500)
                         TboxRepository.addLog("DEBUG", "MDC send", "Update APN2")
-                        sendUdpMessage(
+                        sendTboxMessage(
                             MDC_CODE,
                             SELF_CODE,
                             0x11,
@@ -1077,7 +1077,7 @@ class BackgroundService : Service() {
                 //val cmdEnd = cmd
                 TboxRepository.addLog("DEBUG", "MDC send", "AT command send: $cmds")
                 TboxRepository.addATLog("Send: $cmds")
-                sendUdpMessage(MDC_CODE, SELF_CODE, 0x0E,
+                sendTboxMessage(MDC_CODE, SELF_CODE, 0x0E,
                     byteArrayOf(
                         (cmdEnd.size + 10 shr 8).toByte(), (cmdEnd.size + 10 and 0xFF).toByte(),
                         0xFF.toByte(), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00) + cmdEnd, false)
@@ -1142,7 +1142,7 @@ class BackgroundService : Service() {
         scope.launch {
             try {
                 TboxRepository.addLog(logLevel, "CRT send", description)
-                sendUdpMessage(CRT_CODE, SELF_CODE, cmd, data, false)
+                sendTboxMessage(CRT_CODE, SELF_CODE, cmd, data, false)
                 delay(100)
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
@@ -1179,7 +1179,7 @@ class BackgroundService : Service() {
 
                 if (checkCrtVersion) {
                     TboxRepository.addLog("DEBUG", "CRT", "Get CRT Version")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         CRT_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
@@ -1188,7 +1188,7 @@ class BackgroundService : Service() {
 
                 if (checkMdcVersion) {
                     TboxRepository.addLog("DEBUG", "MDC", "Get MDC Version")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         MDC_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
@@ -1197,7 +1197,7 @@ class BackgroundService : Service() {
 
                 if (checkLocVersion) {
                     TboxRepository.addLog("DEBUG", "LOC", "Get LOC Version")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         LOC_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
@@ -1206,7 +1206,7 @@ class BackgroundService : Service() {
 
                 if (checkSwdVersion) {
                     TboxRepository.addLog("DEBUG", "SWD", "Get SWD Version")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         SWD_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
@@ -1215,7 +1215,7 @@ class BackgroundService : Service() {
 
                 if (checkAppVersion) {
                     TboxRepository.addLog("DEBUG", "APP", "Get APP Version")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         APP_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
@@ -1224,7 +1224,7 @@ class BackgroundService : Service() {
 
                 if (checkGateVersion) {
                     TboxRepository.addLog("DEBUG", "GATE", "Get GATE Version")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         GATE_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
@@ -1233,7 +1233,7 @@ class BackgroundService : Service() {
 
                 if (checkSW) {
                     TboxRepository.addLog("DEBUG", "TBox", "Get SW Version")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         CRT_CODE, SELF_CODE, 0x12,
                         byteArrayOf(0x00, 0x00, 0x01, 0x04.toByte()), false
                     ) // CRT - SW
@@ -1242,7 +1242,7 @@ class BackgroundService : Service() {
 
                 if (checkHW) {
                     TboxRepository.addLog("DEBUG", "TBox", "Get HW Version")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         CRT_CODE, SELF_CODE, 0x12,
                         byteArrayOf(0x00, 0x00, 0x01, 0x05.toByte()), false
                     ) // CRT - HW
@@ -1251,7 +1251,7 @@ class BackgroundService : Service() {
 
                 if (checkVIN) {
                     TboxRepository.addLog("DEBUG", "TBox", "Get VIN code")
-                    sendUdpMessage(
+                    sendTboxMessage(
                         CRT_CODE, SELF_CODE, 0x12,
                         byteArrayOf(0x00, 0x00, 0x01, 0x0F.toByte()), false
                     ) // CRT VIN code
@@ -1311,7 +1311,7 @@ class BackgroundService : Service() {
         }
         if (apnCmdJob?.isActive == true) return
         apnCmdJob = scope.launch {
-            sendUdpMessage(MDC_CODE, SELF_CODE, 0x10, cmd)
+            sendTboxMessage(MDC_CODE, SELF_CODE, 0x10, cmd)
         }
     }
 
@@ -1346,7 +1346,7 @@ class BackgroundService : Service() {
             TboxRepository.addLog("DEBUG", "SWD send", "Prevent restart")
             //sendUdpMessage(SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x01)) //Netstates Prevent Restart
             //sendUdpMessage(SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x01, 0x01)) //Monitor Prevent Restart
-            sendUdpMessage(SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x02, 0x01), false) //Netstates и Monitor Prevent Restart
+            sendTboxMessage(SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x02, 0x01), false) //Netstates и Monitor Prevent Restart
         }
     }
 
@@ -1359,12 +1359,12 @@ class BackgroundService : Service() {
             if (value) {
                 TboxRepository.addLog("DEBUG", "LOC send", "Location subscribe")
                 val timeout = (LOCATION_UPDATE_TIME).toByte()
-                sendUdpMessage(LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x02, timeout, 0x00), false)
+                sendTboxMessage(LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x02, timeout, 0x00), false)
                 //sendUdpMessage(LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x02, timeout, 0x01), false)
             }
             else {
                 TboxRepository.addLog("DEBUG", "LOC send", "Location unsubscribe")
-                sendUdpMessage(LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x00, 0x00, 0x00), false)
+                sendTboxMessage(LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x00, 0x00, 0x00), false)
             }
             //TboxRepository.updateLocationSubscribed(value)
         }
@@ -1390,7 +1390,7 @@ class BackgroundService : Service() {
         }
         scope.launch {
             TboxRepository.addLog("DEBUG", "$app send", cmd)
-            sendUdpMessage(
+            sendTboxMessage(
                 appCode,
                 SELF_CODE,
                 cmdCode,
@@ -1480,7 +1480,7 @@ class BackgroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private suspend fun sendUdpMessage(
+    private suspend fun sendTboxMessage(
                                        tid: Byte,
                                        sid: Byte,
                                        cmd: Byte,
@@ -1524,14 +1524,14 @@ class BackgroundService : Service() {
         val fromAddress = receivePacket.address.hostAddress
         val fromPort = receivePacket.port
         if (!checkPacket(receivePacket.data)) {
-            TboxRepository.addLog("ERROR", "UDP response",
+            TboxRepository.addLog("ERROR", "TBox proxy response",
                 "Unknown data received from $fromAddress:$fromPort: \" +\n" +
                         toHexString(receivePacket.data))
             return
         }
         val dataLength = extractDataLength(receivePacket.data)
         if (!checkLength(receivePacket.data, dataLength)) {
-            TboxRepository.addLog("ERROR", "UDP response",
+            TboxRepository.addLog("ERROR", "TBox proxy response",
                 "Error data length ${receivePacket.data.size-14} < $dataLength " +
                         "received from $fromAddress:$fromPort: " +
                         toHexString(receivePacket.data))
@@ -1540,7 +1540,7 @@ class BackgroundService : Service() {
         val receivedData = extractData(receivePacket.data, dataLength)
         if (receivedData.contentEquals(ByteArray(0))) {
             TboxRepository.addLog(
-                "ERROR", "UDP response",
+                "ERROR", "TBox proxy response",
                 "Checksum error or no data received from $fromAddress:$fromPort: " +
                         toHexString(receivePacket.data))
             return
@@ -1762,13 +1762,13 @@ class BackgroundService : Service() {
             }
             else -> {
                 tidName = "unknown"
-                TboxRepository.addLog("ERROR", "UDP response",
+                TboxRepository.addLog("ERROR", "TBox proxy response",
                     "Unknown TID 0x$tids")
             }
         }
         if (needEndLog) {
             TboxRepository.addLog(
-                "DEBUG", "UDP response",
+                "DEBUG", "TBox proxy response",
                 "Received from $fromAddress:$fromPort: TID: 0x$tids ($tidName), " +
                         "SID: 0x$sids, CMD: 0x$cmds - " +
                         toHexString(receivedData)
