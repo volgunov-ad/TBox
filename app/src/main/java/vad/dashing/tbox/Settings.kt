@@ -38,7 +38,9 @@ data class FloatingDashboardWidgetConfig(
     val mediaSelectedPlayer: String = "",
     val mediaAutoPlayOnInit: Boolean = false,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
-    val launcherAppPackage: String = ""
+    val launcherAppPackage: String = "",
+    /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
+    val appWidgetId: Int? = null
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */

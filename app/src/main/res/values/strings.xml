@@ -61,6 +61,12 @@
     <string name="widget_additional_settings_for_tile">Дополнительные настройки плитки %1$d</string>
     <string name="widget_show_title">Отображать название</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
+    <string name="widget_external_app_title">Виджет стороннего приложения</string>
+    <string name="widget_external_app_selected">Выбранный виджет: %1$s</string>
+    <string name="widget_external_app_pick">Выбрать виджет</string>
+    <string name="widget_external_app_not_selected">Не выбрано</string>
+    <string name="widget_external_tile_empty">Виджет не выбран</string>
+    <string name="widget_external_tile_unavailable">Виджет недоступен</string>
     <string name="widget_toggle_advanced">Дополнительно</string>
     <string name="widget_scale">Масштаб виджета: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
@@ -372,6 +378,7 @@
     <string name="data_title_restart_tbox">Кнопка перезагрузки TBox</string>
     <string name="data_title_music_widget">Виджет управления музыкой</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
+    <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
     <string name="widget_app_launcher_selected">Выбрано: %1$s</string>
     <string name="widget_app_launcher_none_selected">Приложение не выбрано</string>
     <string name="widget_app_launcher_required">Выберите приложение, чтобы сохранить виджет</string>

@@ -6,6 +6,7 @@ import org.json.JSONObject
 import kotlin.math.roundToInt
 
 private const val LEGACY_WIDGETS_SEPARATOR = "|"
+private const val LEGACY_APP_LAUNCHER_WIDGET_DATA_KEY = "launchAppWidget"
 const val DEFAULT_WIDGET_SCALE = 1.0f
 private const val MIN_WIDGET_SCALE = 0.1f
 private const val MAX_WIDGET_SCALE = 2f
@@ -86,6 +87,9 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
+        if (config.appWidgetId != null) {
+            obj.put("appWidgetId", config.appWidgetId)
+        }
         array.put(obj)
     }
     return array
@@ -149,13 +153,23 @@ private fun parseWidgetConfigsFromJsonArray(
         val item = array.opt(i)
         when (item) {
             is JSONObject -> {
-                val dataKey = item.optString("dataKey").ifBlank {
+                val rawDataKey = item.optString("dataKey").ifBlank {
                     item.optString("type")
+                }.trim()
+                val dataKey = if (rawDataKey == LEGACY_APP_LAUNCHER_WIDGET_DATA_KEY) {
+                    APP_LAUNCHER_WIDGET_DATA_KEY
+                } else {
+                    rawDataKey
                 }
+                val appWidgetId = item.optInt("appWidgetId", -1)
+                    .takeIf { it != -1 }
                 val mediaPlayers = parseMediaPlayers(item)
+                val launcherAppPackage = item.optString("launcherAppPackage", "").trim().ifBlank {
+                    item.optString("appPackageName", "").trim()
+                }
                 configs.add(
                     FloatingDashboardWidgetConfig(
-                        dataKey = dataKey.trim(),
+                        dataKey = dataKey,
                         showTitle = item.optBoolean("showTitle", false),
                         showUnit = item.optBoolean("showUnit", true),
                         scale = normalizeWidgetScale(
@@ -177,7 +191,16 @@ private fun parseWidgetConfigsFromJsonArray(
                         mediaPlayers = mediaPlayers,
                         mediaSelectedPlayer = parseSelectedMediaPlayer(item, mediaPlayers),
                         mediaAutoPlayOnInit = item.optBoolean("mediaAutoPlayOnInit", false),
-                        launcherAppPackage = item.optString("launcherAppPackage", "").trim()
+                        launcherAppPackage = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                            launcherAppPackage
+                        } else {
+                            ""
+                        },
+                        appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+                            appWidgetId
+                        } else {
+                            null
+                        }
                     )
                 )
             }

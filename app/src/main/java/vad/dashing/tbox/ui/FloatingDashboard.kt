@@ -40,6 +40,7 @@ import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -50,6 +51,7 @@ import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.SharedMediaControlService
+import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
@@ -122,6 +124,13 @@ fun FloatingDashboard(
     windowParams: WindowManager.LayoutParams
 ) {
     val context = LocalContext.current
+    val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
+
+    DisposableEffect(appWidgetHost) {
+        onDispose {
+            ExternalWidgetHostManager.releaseHost()
+        }
+    }
 
     val dashboardViewModel: FloatingDashboardViewModel = viewModel(
         key = "floating-$panelId",
@@ -380,7 +389,8 @@ fun FloatingDashboard(
                         }
                     },
                     showTboxDisconnectIndicator = panelConfig.showTboxDisconnectIndicator,
-                    enableMusicInnerInteractions = !isEditMode
+                    enableMusicInnerInteractions = !isEditMode,
+                    externalWidgetHost = appWidgetHost
                 )
             }
         }
@@ -439,7 +449,29 @@ fun OverlayWidgetSelectionDialog(
                 },
                 state = state,
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(1f),
+                bottomContent = {
+                    if (state.isExternalAppWidgetSelected) {
+                        ExternalAppWidgetPickerSection(
+                            appWidgetId = externalAppWidgetIdForApply(
+                                state,
+                                currentWidgetConfigs,
+                                widgetIndex
+                            ),
+                            onPickClick = {
+                                WidgetPickerActivity.start(
+                                    context = context,
+                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
+                                    panelId = panelId,
+                                    widgetIndex = widgetIndex,
+                                    showTitle = state.showTitle,
+                                    showUnit = state.showUnit
+                                )
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
             )
 
             // Кнопки действий
@@ -447,6 +479,18 @@ fun OverlayWidgetSelectionDialog(
                 state = state,
                 onDismiss = onDismiss,
                 onSave = {
+                    if (tryLaunchExternalWidgetPicker(
+                            context = context,
+                            saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
+                            panelId = panelId,
+                            widgetIndex = widgetIndex,
+                            state = state,
+                            currentWidgetConfigs = currentWidgetConfigs,
+                            onDismiss = onDismiss
+                        )
+                    ) {
+                        return@WidgetSelectionDialogActions
+                    }
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,
@@ -456,7 +500,12 @@ fun OverlayWidgetSelectionDialog(
                         state = state,
                         saveConfigs = { configs ->
                             settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
-                        }
+                        },
+                        externalAppWidgetId = externalAppWidgetIdForApply(
+                            state,
+                            currentWidgetConfigs,
+                            widgetIndex
+                        )
                     )
                     onDismiss()
                 },
