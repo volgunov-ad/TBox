@@ -22,6 +22,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -95,10 +97,16 @@ fun TripsTab(
         SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
     }
 
+    val tabTextStyle = MaterialTheme.typography.bodyLarge.copy(
+        fontSize = 24.sp,
+        lineHeight = 24.sp * 1.3f,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -117,14 +125,26 @@ fun TripsTab(
                     readOnly = true,
                     trailingIcon = {
                         IconButton(onClick = { expanded = !expanded }) {
-                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                            Icon(
+                                Icons.Filled.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(enabled = sortedIds.isNotEmpty()) { expanded = true },
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 20.sp)
+                    textStyle = tabTextStyle,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedBorderColor = MaterialTheme.colorScheme.outline,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                    )
                 )
                 DropdownMenu(
                     expanded = expanded && sortedIds.isNotEmpty(),
@@ -139,7 +159,9 @@ fun TripsTab(
                             text = {
                                 Text(
                                     "${dateTimeFormat.format(Date(trip.startTimeEpochMs))}$suffix$star",
-                                    fontSize = 18.sp
+                                    style = tabTextStyle,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             },
                             onClick = {
@@ -166,11 +188,23 @@ fun TripsTab(
             OutlinedTextField(
                 value = nameEdit,
                 onValueChange = { nameEdit = it },
-                label = { Text(stringResource(R.string.trips_name_label)) },
+                label = {
+                    Text(
+                        stringResource(R.string.trips_name_label),
+                        style = tabTextStyle.copy(fontSize = 20.sp)
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),
                 singleLine = true,
+                textStyle = tabTextStyle,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedBorderColor = MaterialTheme.colorScheme.outline,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     appDataViewModel.updateTripName(trip.id, nameEdit.trim())
@@ -198,13 +232,17 @@ fun TripsTab(
                         modifier = Modifier.padding(end = 4.dp)
                     )
                     Text(
-                        if (fav) stringResource(R.string.trips_remove_favorite)
-                        else stringResource(R.string.trips_add_favorite)
+                        text = if (fav) stringResource(R.string.trips_remove_favorite)
+                        else stringResource(R.string.trips_add_favorite),
+                        fontSize = 24.sp
                     )
                 }
                 if (trip.isActive && activeTrip?.id == trip.id) {
                     Button(onClick = onTripFinishAndStart) {
-                        Text(stringResource(R.string.trips_finish))
+                        Text(
+                            stringResource(R.string.trips_finish),
+                            fontSize = 24.sp
+                        )
                     }
                 }
             }
@@ -322,7 +360,8 @@ fun TripsTab(
             Text(
                 text = stringResource(R.string.trips_empty),
                 modifier = Modifier.padding(top = 24.dp),
-                fontSize = 20.sp
+                style = tabTextStyle,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }

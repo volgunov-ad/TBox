@@ -575,7 +575,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 3
+            initialValue = 5
         )
 
     init {

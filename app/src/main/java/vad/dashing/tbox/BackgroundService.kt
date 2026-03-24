@@ -252,7 +252,7 @@ class BackgroundService : Service() {
         fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
             .stateIn(scope, SharingStarted.Lazily, 57)
         splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
-            .stateIn(scope, SharingStarted.Lazily, 3)
+            .stateIn(scope, SharingStarted.Lazily, 5)
 
         val filter = IntentFilter().apply {
             addAction(TboxBroadcastReceiver.MAIN_ACTION)

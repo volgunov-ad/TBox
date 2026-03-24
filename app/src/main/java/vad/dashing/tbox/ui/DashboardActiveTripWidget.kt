@@ -65,10 +65,15 @@ fun DashboardActiveTripWidgetItem(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
                     ),
+                    lineHeight = calculateResponsiveFontSize(
+                        containerHeight = availableHeight,
+                        textType = TextType.VALUE
+                    ) * 1.3f,
                     fontWeight = FontWeight.Medium,
                     color = resolvedTextColor,
                     textAlign = TextAlign.Start,
-                    maxLines = 2,
+                    maxLines = 4,
+                    softWrap = true,
                     overflow = TextOverflow.Ellipsis
                 )
             } else {
@@ -199,9 +204,11 @@ private fun ActiveTripRow(
     Text(
         text = "$label: $valueWithUnit",
         fontSize = fontSize,
+        lineHeight = fontSize * 1.3f,
         fontWeight = FontWeight.Normal,
         color = color,
-        maxLines = 2,
+        maxLines = 4,
+        softWrap = true,
         overflow = TextOverflow.Ellipsis
     )
 }

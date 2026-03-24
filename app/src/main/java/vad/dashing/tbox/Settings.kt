@@ -182,7 +182,7 @@ class SettingsManager(private val context: Context) {
         const val MAIN_SCREEN_WALLPAPER_DARK_FILE = "main_screen_wallpaper/dark"
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
         private const val DEFAULT_FUEL_TANK_LITERS = 57
-        private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 3
+        private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
