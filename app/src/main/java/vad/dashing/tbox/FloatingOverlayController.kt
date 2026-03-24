@@ -20,7 +20,8 @@ internal class FloatingOverlayController(
     private val service: Service,
     private val settingsManager: SettingsManager,
     private val appDataManager: AppDataManager,
-    private val onRebootTbox: () -> Unit
+    private val onRebootTbox: () -> Unit,
+    private val onTripFinishAndStart: () -> Unit,
 ) {
     private var windowManager: WindowManager? = null
     private val overlayViews = linkedMapOf<String, ComposeView>()
@@ -189,6 +190,7 @@ internal class FloatingOverlayController(
                             updateWindowPosition(panelId, x, y)
                         },
                         onRebootTbox = onRebootTbox,
+                        onTripFinishAndStart = onTripFinishAndStart,
                         panelId = config.id,
                         params = layoutParams
                     )

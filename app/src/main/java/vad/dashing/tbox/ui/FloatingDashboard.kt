@@ -64,6 +64,7 @@ fun FloatingDashboardUI(
     onUpdateWindowSize: (String, Int, Int) -> Unit,
     onUpdateWindowPosition: (String, Int, Int) -> Unit,
     onRebootTbox: () -> Unit,
+    onTripFinishAndStart: () -> Unit,
     panelId: String,
     params: WindowManager.LayoutParams
 ) {
@@ -105,6 +106,7 @@ fun FloatingDashboardUI(
                 onUpdateWindowSize = onUpdateWindowSize,
                 onUpdateWindowPosition = onUpdateWindowPosition,
                 onRebootTbox = onRebootTbox,
+                onTripFinishAndStart = onTripFinishAndStart,
                 windowParams = params
             )
         }
@@ -121,6 +123,7 @@ fun FloatingDashboard(
     onUpdateWindowSize: (String, Int, Int) -> Unit,
     onUpdateWindowPosition: (String, Int, Int) -> Unit,
     onRebootTbox: () -> Unit,
+    onTripFinishAndStart: () -> Unit,
     windowParams: WindowManager.LayoutParams
 ) {
     val context = LocalContext.current
@@ -350,6 +353,7 @@ fun FloatingDashboard(
                     tboxConnected = tboxConnected,
                     currentTheme = currentTheme,
                     restartEnabled = restartEnabled,
+                    onTripFinishAndStart = onTripFinishAndStart,
                     isEditMode = isEditMode,
                     showDialogOpen = showDialogForIndex != null,
                     widgetInteractionPolicy = widgetInteractionPolicy,

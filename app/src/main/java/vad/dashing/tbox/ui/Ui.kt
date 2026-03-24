@@ -69,7 +69,8 @@ fun TboxApp(
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit
+    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onTripFinishAndStart: () -> Unit,
 ) {
     val viewModel: TboxViewModel = viewModel()
     val canViewModel: CanDataViewModel = viewModel()
@@ -95,6 +96,7 @@ fun TboxApp(
                 settingsViewModel = settingsViewModel,
                 onOpenConsole = { settingsViewModel.saveSelectedTab(0) },
                 onTboxRestart = onTboxRestart,
+                onTripFinishAndStart = onTripFinishAndStart,
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -105,7 +107,8 @@ fun TboxApp(
                 onTboxRestart = onTboxRestart,
                 onSaveToFile = onSaveToFile,
                 onServiceCommand = onServiceCommand,
-                onMockLocationSettingChanged = onMockLocationSettingChanged
+                onMockLocationSettingChanged = onMockLocationSettingChanged,
+                onTripFinishAndStart = onTripFinishAndStart,
             )
         }
     }
@@ -146,6 +149,7 @@ fun TboxScreen(
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
+    onTripFinishAndStart: () -> Unit,
 ) {
     val canViewModel: CanDataViewModel = viewModel()
     val cycleViewModel: CycleDataViewModel = viewModel()
@@ -349,7 +353,8 @@ fun TboxScreen(
                         settingsViewModel)
                     4 -> TripsTab(
                         appDataViewModel = appDataViewModel,
-                        settingsViewModel = settingsViewModel
+                        settingsViewModel = settingsViewModel,
+                        onTripFinishAndStart = onTripFinishAndStart,
                     )
                     5 -> SettingsTab(
                         viewModel,
@@ -373,7 +378,9 @@ fun TboxScreen(
                         canViewModel,
                         settingsViewModel,
                         appDataViewModel,
-                        onTboxRestart)
+                        onTboxRestart,
+                        onTripFinishAndStart = onTripFinishAndStart,
+                    )
                     10 -> MainScreenSettingsTab(settingsViewModel = settingsViewModel)
                     else -> ModemTab(viewModel, onServiceCommand)
                 }

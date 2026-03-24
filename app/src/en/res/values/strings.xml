@@ -371,6 +371,7 @@
     <string name="settings_split_trip_time_title">Trip split time, min</string>
 
     <string name="trips_delete">Delete trip</string>
+    <string name="trips_finish">Finish</string>
     <string name="trips_name_label">Trip name</string>
     <string name="trips_add_favorite">Add to favorites</string>
     <string name="trips_remove_favorite">Remove from favorites</string>

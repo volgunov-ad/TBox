@@ -50,9 +50,11 @@ import java.util.Locale
 fun TripsTab(
     appDataViewModel: AppDataViewModel,
     settingsViewModel: SettingsViewModel,
+    onTripFinishAndStart: () -> Unit,
 ) {
     val trips by appDataViewModel.trips.collectAsStateWithLifecycle()
     val favorites by appDataViewModel.favoriteTripIds.collectAsStateWithLifecycle()
+    val activeTrip by appDataViewModel.activeTrip.collectAsStateWithLifecycle()
     val sortedIds = remember(trips, favorites) {
         val favSet = favorites
         trips.sortedWith(
@@ -199,6 +201,11 @@ fun TripsTab(
                         if (fav) stringResource(R.string.trips_remove_favorite)
                         else stringResource(R.string.trips_add_favorite)
                     )
+                }
+                if (trip.isActive && activeTrip?.id == trip.id) {
+                    Button(onClick = onTripFinishAndStart) {
+                        Text(stringResource(R.string.trips_finish))
+                    }
                 }
             }
 

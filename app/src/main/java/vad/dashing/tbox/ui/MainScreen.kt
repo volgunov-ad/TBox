@@ -61,6 +61,7 @@ fun MainScreen(
     settingsViewModel: SettingsViewModel,
     onOpenConsole: () -> Unit,
     onTboxRestart: () -> Unit,
+    onTripFinishAndStart: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val mainPanels by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
@@ -90,7 +91,8 @@ fun MainScreen(
                     canViewModel = canViewModel,
                     appDataViewModel = appDataViewModel,
                     settingsViewModel = settingsViewModel,
-                    onRebootTbox = onTboxRestart
+                    onRebootTbox = onTboxRestart,
+                    onTripFinishAndStart = onTripFinishAndStart,
                 )
             }
         }

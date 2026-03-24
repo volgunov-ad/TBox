@@ -371,6 +371,7 @@
     <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
 
     <string name="trips_delete">Удалить поездку</string>
+    <string name="trips_finish">Завершить</string>
     <string name="trips_name_label">Название поездки</string>
     <string name="trips_add_favorite">В избранное</string>
     <string name="trips_remove_favorite">Убрать из избранного</string>

@@ -26,6 +26,7 @@ fun DashboardWidgetRenderer(
     dashboardChart: Boolean,
     tboxConnected: Boolean,
     restartEnabled: Boolean,
+    onTripFinishAndStart: () -> Unit,
     widgetTextColor: Color,
     widgetBackgroundColor: Color,
     onClick: () -> Unit,
@@ -228,6 +229,7 @@ fun DashboardWidgetRenderer(
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
+                onTripFinishAndStart = onTripFinishAndStart,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,

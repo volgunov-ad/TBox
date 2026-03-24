@@ -127,6 +127,34 @@ object TripRepository {
         }
     }
 
+    /**
+     * When the service starts, continue the last saved trip if it is still active (no end time)
+     * or the end time was less than [splitWindowMs] ago (short stop / restart within split window).
+     * Returns true if a trip was resumed (or was already active).
+     */
+    fun tryResumeLastTripAfterServiceStart(splitWindowMs: Long): Boolean {
+        synchronized(lock) {
+            val list = _trips.value
+            if (list.isEmpty()) return false
+            val last = list.last()
+            val now = System.currentTimeMillis()
+            val withinSplitAfterEnd =
+                last.endTimeEpochMs != null && (now - last.endTimeEpochMs!!) < splitWindowMs
+            val shouldContinue = last.isActive || withinSplitAfterEnd
+            if (!shouldContinue) return false
+            val resumed = if (last.isActive) {
+                last
+            } else {
+                last.copy(endTimeEpochMs = null)
+            }
+            _trips.update { cur ->
+                if (cur.isEmpty()) cur else cur.dropLast(1) + resumed
+            }
+            _activeTrip.value = resumed
+            return true
+        }
+    }
+
     fun averageSpeedMovingKmH(t: TripRecord): Float? {
         val d = t.distanceKm
         val sec = t.movingTimeMs / 1000f

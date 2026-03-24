@@ -62,6 +62,7 @@ fun MainDashboardTab(
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
     onTboxRestartClick: () -> Unit,
+    onTripFinishAndStart: () -> Unit,
 ) {
     val context = LocalContext.current
     val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
@@ -174,6 +175,7 @@ fun MainDashboardTab(
                                         dashboardChart = dashboardChart,
                                         tboxConnected = tboxConnected,
                                         restartEnabled = restartEnabled,
+                                        onTripFinishAndStart = onTripFinishAndStart,
                                         widgetTextColor = widgetTextColor,
                                         widgetBackgroundColor = widgetBackgroundColor,
                                         onClick = {

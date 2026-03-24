@@ -88,6 +88,9 @@ class MainActivity : ComponentActivity() {
                     },
                     onMockLocationSettingChanged = { enabled ->
                         handleMockLocationSettingChange(enabled)
+                    },
+                    onTripFinishAndStart = {
+                        serviceCommand(BackgroundService.ACTION_TRIP_FINISH_AND_START, "", "")
                     }
                 )
             }
