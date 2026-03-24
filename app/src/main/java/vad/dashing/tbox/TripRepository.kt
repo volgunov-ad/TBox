@@ -13,6 +13,17 @@ object TripRepository {
 
     val lock = Any()
 
+    /** Clears in-memory state without org.json (JVM unit tests use stubbed android JSON). */
+    internal fun resetForUnitTests() {
+        synchronized(lock) {
+            _trips.value = emptyList()
+            _favoriteIds.value = emptySet()
+            _activeTrip.value = null
+            lastPersistedTripsJson = "[]"
+            lastPersistedFavoritesJson = "[]"
+        }
+    }
+
     private const val PERSIST_EPS = 1e-4f
     private const val MS_EPS = 500L
 
@@ -89,6 +100,8 @@ object TripRepository {
     fun setFavorite(id: String, favorite: Boolean) {
         synchronized(lock) {
             if (favorite) {
+                val trip = _trips.value.firstOrNull { it.id == id } ?: return
+                if (trip.isActive) return
                 _favoriteIds.update { cur ->
                     if (cur.contains(id) || cur.size >= MAX_FAVORITES) cur else cur + id
                 }
@@ -138,10 +151,7 @@ object TripRepository {
             if (list.isEmpty()) return false
             val last = list.last()
             val now = System.currentTimeMillis()
-            val withinSplitAfterEnd =
-                last.endTimeEpochMs != null && (now - last.endTimeEpochMs!!) < splitWindowMs
-            val shouldContinue = last.isActive || withinSplitAfterEnd
-            if (!shouldContinue) return false
+            if (!TripRules.shouldResumeLastTripOnColdStart(last, now, splitWindowMs)) return false
             val resumed = if (last.isActive) {
                 last
             } else {

@@ -224,7 +224,7 @@ fun TripsTab(
                     onClick = {
                         appDataViewModel.setTripFavorite(trip.id, !fav)
                     },
-                    enabled = fav || favorites.size < TripRepository.MAX_FAVORITES
+                    enabled = !trip.isActive && (fav || favorites.size < TripRepository.MAX_FAVORITES)
                 ) {
                     Icon(
                         Icons.Filled.Star,
