@@ -445,10 +445,24 @@ private fun openNotificationListenerSettings(context: Context) {
 
 private fun openSelectedPlayer(context: Context, packageName: String) {
     if (packageName.isBlank()) return
-    val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
+    val launchPackage = resolvePlayerLaunchPackage(packageName)
+    val launchIntent = context.packageManager.getLaunchIntentForPackage(launchPackage)
+        ?: if (launchPackage != packageName) {
+            context.packageManager.getLaunchIntentForPackage(packageName)
+        } else {
+            null
+        }
+        ?: return
     launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching {
         context.startActivity(launchIntent)
+    }
+}
+
+internal fun resolvePlayerLaunchPackage(packageName: String): String {
+    return when (SupportedMediaPlayer.fromPackage(packageName)) {
+        SupportedMediaPlayer.BLUETOOTH_PHONE -> "com.wt.multimedia.local"
+        else -> packageName
     }
 }
 

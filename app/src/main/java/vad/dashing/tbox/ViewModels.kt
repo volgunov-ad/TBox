@@ -301,6 +301,8 @@ object WidgetsRepository {
         @StringRes val unitRes: Int? = null
     )
 
+    const val EXTERNAL_WIDGET_DATA_KEY = "externalAppWidget"
+
     private val dataKeyTitles = mapOf(
         "param1" to DataTitle(R.string.data_title_param_1),
         "param2" to DataTitle(R.string.data_title_param_2),
@@ -388,7 +390,9 @@ object WidgetsRepository {
         ),
         "tempInOutWidget" to DataTitle(R.string.data_title_temp_in_out_widget),
         "musicWidget" to DataTitle(R.string.data_title_music_widget),
+        APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
+        EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
     )
 
     private fun getDataTitle(dataKey: String): DataTitle? {

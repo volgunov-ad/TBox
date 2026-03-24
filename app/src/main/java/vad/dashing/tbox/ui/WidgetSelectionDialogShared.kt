@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,6 +18,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
+import android.appwidget.AppWidgetManager
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,11 +38,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
+import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
@@ -82,15 +89,33 @@ internal class WidgetSelectionDialogState(
     val selectedMediaPlayer: String = resolveSelectedMediaPlayerForWidget(initialConfig)
     var mediaAutoPlayOnInit by mutableStateOf(initialConfig.mediaAutoPlayOnInit)
     var showAdvancedSettings by mutableStateOf(false)
+    var launcherAppPackage by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherAppPackage
+        } else {
+            ""
+        }
+    )
 
     val isMusicWidgetSelected: Boolean
         get() = selectedDataKey == MUSIC_WIDGET_DATA_KEY
+
+    val isAppLauncherWidgetSelected: Boolean
+        get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
+
+    val isExternalAppWidgetSelected: Boolean
+        get() = selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
 
     val togglesEnabled: Boolean
         get() = selectedDataKey.isNotEmpty()
 
     val canSaveSelection: Boolean
-        get() = !isMusicWidgetSelected || selectedMediaPlayers.isNotEmpty()
+        get() = when {
+            selectedDataKey.isEmpty() -> true
+            isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
+            isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
+            else -> true
+        }
 }
 
 @Composable
@@ -121,15 +146,48 @@ internal fun rememberWidgetSelectionDialogState(
 }
 
 @Composable
+internal fun ExternalAppWidgetPickerSection(
+    appWidgetId: Int?,
+    onPickClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
+    val selectedWidgetLabel = remember(appWidgetId) {
+        appWidgetId?.let { id ->
+            appWidgetManager.getAppWidgetInfo(id)?.loadLabel(context.packageManager)?.toString()
+        }.orEmpty()
+    }
+    val label = if (selectedWidgetLabel.isNotBlank()) {
+        selectedWidgetLabel
+    } else {
+        stringResource(R.string.widget_external_app_not_selected)
+    }
+    Column(modifier = modifier.padding(top = 8.dp)) {
+        SettingsTitle(stringResource(R.string.widget_external_app_title))
+        Text(
+            text = stringResource(R.string.widget_external_app_selected, label),
+            fontSize = 20.sp,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        OutlinedButton(onClick = onPickClick) {
+            Text(text = stringResource(R.string.widget_external_app_pick), fontSize = 22.sp)
+        }
+    }
+}
+
+@Composable
 internal fun WidgetSelectionDialogForm(
     titleText: String,
     state: WidgetSelectionDialogState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    dataKeyFilter: (String) -> Boolean = { true },
+    bottomContent: (@Composable () -> Unit)? = null
 ) {
     val context = LocalContext.current
     val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
             WidgetsRepository.getAvailableDataKeysWidgets()
-                .filter { it.isNotEmpty() }
+                .filter { it.isNotEmpty() && dataKeyFilter(it) }
                 .map { key ->
                     key to WidgetsRepository.getTitleUnitForDataKey(context, key)
                 }
@@ -171,6 +229,10 @@ internal fun WidgetSelectionDialogForm(
                             state.togglesEnabled
                         )
                     }
+                    AppLauncherWidgetSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
                     SettingSwitch(
                         state.showTitle,
                         { state.showTitle = it },
@@ -231,8 +293,8 @@ internal fun WidgetSelectionDialogForm(
                             onValueChange = { newValue ->
                                 state.shape = normalizeWidgetShape(newValue.toInt())
                             },
-                            valueRange = 0f..30f,
-                            steps = 29,
+                            valueRange = 0f..50f,
+                            steps = 49,
                             enabled = state.togglesEnabled,
                             modifier = Modifier.padding(top = 6.dp)
                         )
@@ -308,9 +370,14 @@ internal fun WidgetSelectionDialogForm(
                             )
                         }
                     }
+                    AppLauncherWidgetSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
                 }
             }
         }
+        bottomContent?.invoke()
     }
 }
 
@@ -320,13 +387,18 @@ internal fun WidgetSelectionDialogActions(
     onDismiss: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
-    saveTextFontWeight: FontWeight = FontWeight.Normal
+    saveTextFontWeight: FontWeight = FontWeight.Normal,
+    leadingExtra: (@Composable RowScope.() -> Unit)? = null
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        leadingExtra?.invoke(this)
+        if (leadingExtra != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+        }
         OutlinedButton(
             onClick = { state.showAdvancedSettings = !state.showAdvancedSettings },
             border = BorderStroke(
@@ -379,7 +451,8 @@ internal fun applyWidgetSelectionChanges(
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     widgetIndex: Int,
     state: WidgetSelectionDialogState,
-    saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit
+    saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit,
+    externalAppWidgetId: Int? = null
 ) {
     val normalizedScale = normalizeWidgetScale(state.scale)
     val normalizedShape = normalizeWidgetShape(state.shape)
@@ -416,6 +489,7 @@ internal fun applyWidgetSelectionChanges(
         currentWidgetConfigs,
         updatedWidgets.size
     ).toMutableList()
+    val prevAppWidgetId = normalizedConfigs.getOrNull(widgetIndex)?.appWidgetId
     normalizedConfigs[widgetIndex] = if (state.selectedDataKey.isNotEmpty()) {
         FloatingDashboardWidgetConfig(
             dataKey = state.selectedDataKey,
@@ -444,13 +518,68 @@ internal fun applyWidgetSelectionChanges(
                 state.mediaAutoPlayOnInit
             } else {
                 false
+            },
+            launcherAppPackage = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                state.launcherAppPackage.trim()
+            } else {
+                ""
+            },
+            appWidgetId = if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+                externalAppWidgetId
+            } else {
+                null
             }
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "")
     }
+    val newCfg = normalizedConfigs[widgetIndex]
+    if (prevAppWidgetId != null) {
+        val keep = newCfg.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY &&
+            newCfg.appWidgetId == prevAppWidgetId
+        if (!keep) {
+            ExternalWidgetHostManager.deleteAppWidgetId(context, prevAppWidgetId)
+        }
+    }
     saveConfigs(normalizedConfigs)
     dashboardManager.clearWidgetHistory(currentWidget.id)
+}
+
+internal fun externalAppWidgetIdForApply(
+    state: WidgetSelectionDialogState,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    widgetIndex: Int
+): Int? {
+    if (state.selectedDataKey != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) return null
+    return currentWidgetConfigs.getOrNull(widgetIndex)
+        ?.takeIf { it.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
+        ?.appWidgetId
+}
+
+internal fun tryLaunchExternalWidgetPicker(
+    context: Context,
+    saveTarget: Int,
+    panelId: String,
+    widgetIndex: Int,
+    state: WidgetSelectionDialogState,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    onDismiss: () -> Unit
+): Boolean {
+    if (state.selectedDataKey != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) return false
+    val id = currentWidgetConfigs.getOrNull(widgetIndex)
+        ?.takeIf { it.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
+        ?.appWidgetId
+    if (id != null) return false
+    WidgetPickerActivity.start(
+        context = context,
+        saveTarget = saveTarget,
+        panelId = panelId,
+        widgetIndex = widgetIndex,
+        showTitle = state.showTitle,
+        showUnit = state.showUnit
+    )
+    onDismiss()
+    return true
 }
 
 internal fun resolveStoredMediaSelectedPlayer(

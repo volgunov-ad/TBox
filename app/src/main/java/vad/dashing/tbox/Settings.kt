@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -8,10 +9,13 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -32,7 +36,54 @@ data class FloatingDashboardWidgetConfig(
     val backgroundColorDark: Int? = null,
     val mediaPlayers: List<String> = emptyList(),
     val mediaSelectedPlayer: String = "",
-    val mediaAutoPlayOnInit: Boolean = false
+    val mediaAutoPlayOnInit: Boolean = false,
+    /** Package name of the app to launch (only for `appLauncherWidget`). */
+    val launcherAppPackage: String = "",
+    /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
+    val appWidgetId: Int? = null
+)
+
+/** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
+data class MainScreenSettingsButtonPosition(
+    val x: Float,
+    val y: Float
+) {
+    companion object {
+        /** Top-right area (similar to previous fixed layout). */
+        val Default = MainScreenSettingsButtonPosition(0.92f, 0.04f)
+    }
+}
+
+/** Normalized top-left of the MainScreen "+" add-panel control (same coordinate space as [MainScreenSettingsButtonPosition]). */
+data class MainScreenAddButtonPosition(
+    val x: Float,
+    val y: Float
+) {
+    companion object {
+        /** Top-right row, immediately left of [MainScreenSettingsButtonPosition.Default] (same Y). */
+        val Default = MainScreenAddButtonPosition(0.84f, 0.04f)
+    }
+}
+
+/**
+ * Dashboard panel on the in-app MainScreen (not a system overlay).
+ * Position uses the same convention as [MainScreenSettingsButtonPosition]: normalized against
+ * `(containerSize - panelSize)` along each axis. [relWidth] / [relHeight] are fractions of the full container.
+ */
+data class MainScreenPanelConfig(
+    val id: String,
+    val name: String,
+    val enabled: Boolean,
+    val widgetsConfig: List<FloatingDashboardWidgetConfig>,
+    val rows: Int,
+    val cols: Int,
+    val relX: Float,
+    val relY: Float,
+    val relWidth: Float,
+    val relHeight: Float,
+    val background: Boolean,
+    val clickAction: Boolean,
+    val showTboxDisconnectIndicator: Boolean = false
 )
 
 data class FloatingDashboardConfig(
@@ -47,12 +98,16 @@ data class FloatingDashboardConfig(
     val startX: Int,
     val startY: Int,
     val background: Boolean,
-    val clickAction: Boolean
+    val clickAction: Boolean,
+    val showTboxDisconnectIndicator: Boolean = true
 )
 
 class SettingsManager(private val context: Context) {
 
     companion object {
+        /** Tab index that shows the home [vad.dashing.tbox.ui.MainScreen] instead of [vad.dashing.tbox.ui.TboxScreen]. */
+        const val MAIN_SCREEN_SELECTED_TAB_INDEX = 100
+
         private const val KEY_PREFIX = "vad.dashing.tbox."
 
         // Boolean настройки
@@ -73,6 +128,14 @@ class SettingsManager(private val context: Context) {
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
         private val LEFT_MENU_VISIBLE = booleanPreferencesKey("${KEY_PREFIX}left_menu_visible")
+        private val MAIN_SCREEN_OPEN_ON_BOOT_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_open_on_boot")
+        private val MAIN_SCREEN_WALLPAPER_LIGHT_SET_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_light")
+        private val MAIN_SCREEN_WALLPAPER_DARK_SET_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_dark")
+        private val MAIN_SCREEN_WALLPAPER_CROP_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_crop")
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
@@ -94,11 +157,27 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FLOATING_DASHBOARD_ENABLED = false
         private const val DEFAULT_FLOATING_DASHBOARD_BACKGROUND = false
         private const val DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION = true
-        private const val DEFAULT_FLOATING_DASHBOARD_HIDE_ON_KEYBOARD = false
+        private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
+        private const val DEFAULT_MAIN_SCREEN_PANEL_ROWS = 1
+        private const val DEFAULT_MAIN_SCREEN_PANEL_COLS = 1
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_X = 0.05f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_Y = 0.1f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH = 0.4f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT = 0.3f
+        private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
+        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
-        private const val FLOATING_DASHBOARD_SELECTED_KEY = "floating_dashboard_selected"
-        private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
+        private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
+        private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
+        private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
+
+        /** Copied image for MainScreen when global app theme is light (theme != 2). */
+        const val MAIN_SCREEN_WALLPAPER_LIGHT_FILE = "main_screen_wallpaper/light"
+        /** Copied image for MainScreen when global app theme is dark (theme == 2). */
+        const val MAIN_SCREEN_WALLPAPER_DARK_FILE = "main_screen_wallpaper/dark"
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
 
         // Кэш ключей для производительности
@@ -107,16 +186,6 @@ class SettingsManager(private val context: Context) {
         // Ключ для сохранения конфигурации виджетов
         private val DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}dashboard_widgets")
 
-        private val FLOATING_DASHBOARD_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard")
-        private val FLOATING_DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}floating_dashboard_widgets")
-        private val FLOATING_DASHBOARD_WIDTH_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_width")
-        private val FLOATING_DASHBOARD_HEIGHT_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_height")
-        private val FLOATING_DASHBOARD_START_X_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_start_x")
-        private val FLOATING_DASHBOARD_START_Y_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_start_y")
-        private val FLOATING_DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_rows")
-        private val FLOATING_DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}floating_dashboard_cols")
-        private val FLOATING_DASHBOARD_BACKGROUND_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard_background")
-        private val FLOATING_DASHBOARD_CLICK_ACTION_KEY = booleanPreferencesKey("${KEY_PREFIX}floating_dashboard_click_action")
     }
 
     // Flow для конфигурации виджетов
@@ -130,6 +199,13 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             val rawJson = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
             parseFloatingDashboardsJson(rawJson)
+        }
+        .distinctUntilChanged()
+
+    val mainScreenDashboardsFlow: Flow<List<MainScreenPanelConfig>> = context.settingsDataStore.data
+        .map { preferences ->
+            val rawJson = preferences[getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)] ?: ""
+            parseMainScreenDashboardsJson(rawJson)
         }
         .distinctUntilChanged()
 
@@ -201,15 +277,52 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[LEFT_MENU_VISIBLE] ?: true }
         .distinctUntilChanged()
 
+    val selectedTabFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[SELECTED_TAB_KEY]?.toIntOrNull()
+                ?: MAIN_SCREEN_SELECTED_TAB_INDEX
+        }
+        .distinctUntilChanged()
+
+    val mainScreenSettingsButtonFlow: Flow<MainScreenSettingsButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenSettingsButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_SETTINGS_BUTTON_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
+
+    val mainScreenAddButtonFlow: Flow<MainScreenAddButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenAddButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_ADD_BUTTON_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
+
+    /** After device boot, open [MainActivity] on the main home screen (tab 100) when enabled. */
+    val mainScreenOpenOnBootFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val mainScreenWallpaperLightSetFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_LIGHT_SET_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val mainScreenWallpaperDarkSetFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_DARK_SET_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** `true`: fill screen with Crop; `false`: Fit (whole image, possible side bars). */
+    val mainScreenWallpaperCropFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_CROP_KEY] ?: false }
+        .distinctUntilChanged()
+
     // String flows
     val logLevelFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[LOG_LEVEL_KEY] ?: DEFAULT_LOG_LEVEL }
-        .distinctUntilChanged()
-
-    val selectedTabFlow: Flow<Int> = context.settingsDataStore.data
-        .map { preferences ->
-            preferences[SELECTED_TAB_KEY]?.toIntOrNull() ?: 0
-        }
         .distinctUntilChanged()
 
     val dashboardRowsFlow: Flow<Int> = context.settingsDataStore.data
@@ -345,66 +458,6 @@ class SettingsManager(private val context: Context) {
         }
     }
 
-    suspend fun saveFloatingDashboardSetting(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_KEY] = enabled
-        }
-    }
-
-    suspend fun saveFloatingDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_WIDGETS_KEY] = serializeWidgetConfigs(config)
-        }
-    }
-
-    suspend fun saveFloatingDashboardRows(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_ROWS_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardCols(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_COLS_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardHeight(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_HEIGHT_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardWidth(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_WIDTH_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardStartX(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_START_X_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardStartY(config: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_START_Y_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardBackground(config: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_BACKGROUND_KEY] = config
-        }
-    }
-
-    suspend fun saveFloatingDashboardClickAction(config: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[FLOATING_DASHBOARD_CLICK_ACTION_KEY] = config
-        }
-    }
-
     suspend fun saveFloatingDashboards(configs: List<FloatingDashboardConfig>) {
         val normalized = configs
             .filter { it.id.isNotBlank() }
@@ -418,23 +471,103 @@ class SettingsManager(private val context: Context) {
         saveCustomString(FLOATING_DASHBOARDS_LIST_KEY, serializeFloatingDashboards(normalized))
     }
 
-    suspend fun ensureDefaultFloatingDashboards() {
-        val preferences = context.settingsDataStore.data.first()
-        val rawJson = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
-        val configs = parseFloatingDashboardsJson(rawJson)
-        val ensured = ensureDefaultFloatingDashboards(configs)
-        if (ensured != configs) {
-            saveFloatingDashboards(ensured)
+    suspend fun saveSelectedTab(tabIndex: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[SELECTED_TAB_KEY] = tabIndex.toString()
         }
+    }
 
-        val selectedKey = getStringKey(FLOATING_DASHBOARD_SELECTED_KEY)
-        val selectedId = preferences[selectedKey] ?: DEFAULT_FLOATING_DASHBOARD_ID
-        val resolvedId = ensured.firstOrNull { it.id == selectedId }?.id
-            ?: ensured.firstOrNull()?.id
-            ?: DEFAULT_FLOATING_DASHBOARD_ID
-        if (resolvedId != selectedId) {
-            saveCustomString(FLOATING_DASHBOARD_SELECTED_KEY, resolvedId)
+    suspend fun saveMainScreenSettingsButton(position: MainScreenSettingsButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_SETTINGS_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenAddButton(position: MainScreenAddButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_ADD_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenOpenOnBoot(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] = enabled
         }
+    }
+
+    suspend fun setMainScreenWallpaperLight(sourceUri: Uri?) {
+        setMainScreenWallpaper(
+            sourceUri = sourceUri,
+            relativePath = MAIN_SCREEN_WALLPAPER_LIGHT_FILE,
+            prefKey = MAIN_SCREEN_WALLPAPER_LIGHT_SET_KEY
+        )
+    }
+
+    suspend fun setMainScreenWallpaperDark(sourceUri: Uri?) {
+        setMainScreenWallpaper(
+            sourceUri = sourceUri,
+            relativePath = MAIN_SCREEN_WALLPAPER_DARK_FILE,
+            prefKey = MAIN_SCREEN_WALLPAPER_DARK_SET_KEY
+        )
+    }
+
+    suspend fun saveMainScreenWallpaperCrop(crop: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WALLPAPER_CROP_KEY] = crop
+        }
+    }
+
+    private suspend fun setMainScreenWallpaper(
+        sourceUri: Uri?,
+        relativePath: String,
+        prefKey: Preferences.Key<Boolean>
+    ) {
+        withContext(Dispatchers.IO) {
+            val dest = File(context.filesDir, relativePath)
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                if (dest.exists()) dest.delete()
+                context.settingsDataStore.edit { preferences ->
+                    preferences[prefKey] = false
+                }
+                return@withContext
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            context.settingsDataStore.edit { preferences ->
+                preferences[prefKey] = copiedOk
+            }
+        }
+    }
+
+    suspend fun saveMainScreenDashboards(configs: List<MainScreenPanelConfig>) {
+        val normalized = configs
+            .filter { it.id.isNotBlank() }
+            .distinctBy { it.id }
+            .map {
+                it.copy(
+                    rows = it.rows.coerceIn(1, 6),
+                    cols = it.cols.coerceIn(1, 6),
+                    relX = it.relX.coerceIn(0f, 1f),
+                    relY = it.relY.coerceIn(0f, 1f),
+                    relWidth = it.relWidth.coerceIn(0.08f, 1f),
+                    relHeight = it.relHeight.coerceIn(0.08f, 1f)
+                )
+            }
+        saveCustomString(MAIN_SCREEN_DASHBOARDS_LIST_KEY, serializeMainScreenDashboards(normalized))
+    }
+
+    suspend fun ensureDefaultFloatingDashboards() {
+        // Historical API: empty floating panel list is valid; no default injection.
     }
 
     // Улучшенные методы для кастомных строк
@@ -455,12 +588,6 @@ class SettingsManager(private val context: Context) {
     private fun getStringKey(key: String): Preferences.Key<String> {
         return stringKeysCache.getOrPut(key) {
             stringPreferencesKey("${KEY_PREFIX}$key")
-        }
-    }
-
-    suspend fun saveSelectedTab(tabIndex: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[SELECTED_TAB_KEY] = tabIndex.toString()
         }
     }
 
@@ -488,6 +615,106 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    private fun parseMainScreenSettingsButtonJson(raw: String): MainScreenSettingsButtonPosition {
+        if (raw.isBlank()) return MainScreenSettingsButtonPosition.Default
+        return try {
+            val o = JSONObject(raw)
+            MainScreenSettingsButtonPosition(
+                x = o.optDouble("x", MainScreenSettingsButtonPosition.Default.x.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+                y = o.optDouble("y", MainScreenSettingsButtonPosition.Default.y.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f)
+            )
+        } catch (_: Exception) {
+            MainScreenSettingsButtonPosition.Default
+        }
+    }
+
+    private fun parseMainScreenAddButtonJson(raw: String): MainScreenAddButtonPosition {
+        if (raw.isBlank()) return MainScreenAddButtonPosition.Default
+        return try {
+            val o = JSONObject(raw)
+            MainScreenAddButtonPosition(
+                x = o.optDouble("x", MainScreenAddButtonPosition.Default.x.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+                y = o.optDouble("y", MainScreenAddButtonPosition.Default.y.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f)
+            )
+        } catch (_: Exception) {
+            MainScreenAddButtonPosition.Default
+        }
+    }
+
+    private fun parseMainScreenDashboardsJson(json: String): List<MainScreenPanelConfig> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            val array = JSONArray(json)
+            val configs = mutableListOf<MainScreenPanelConfig>()
+            for (i in 0 until array.length()) {
+                val obj = array.optJSONObject(i) ?: continue
+                val config = parseMainScreenPanelConfig(obj) ?: continue
+                configs.add(config)
+            }
+            configs
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun parseMainScreenPanelConfig(obj: JSONObject): MainScreenPanelConfig? {
+        val id = obj.optString("id").trim()
+        if (id.isEmpty()) return null
+        val name = obj.optString("name").ifBlank { id }
+        return MainScreenPanelConfig(
+            id = id,
+            name = name,
+            enabled = obj.optBoolean("enabled", DEFAULT_MAIN_SCREEN_PANEL_ENABLED),
+            widgetsConfig = parseWidgetConfigsFromAny(obj.opt("widgetsConfig")),
+            rows = obj.optInt("rows", DEFAULT_MAIN_SCREEN_PANEL_ROWS).coerceIn(1, 6),
+            cols = obj.optInt("cols", DEFAULT_MAIN_SCREEN_PANEL_COLS).coerceIn(1, 6),
+            relX = obj.optDouble("relX", DEFAULT_MAIN_SCREEN_PANEL_REL_X.toDouble()).toFloat()
+                .coerceIn(0f, 1f),
+            relY = obj.optDouble("relY", DEFAULT_MAIN_SCREEN_PANEL_REL_Y.toDouble()).toFloat()
+                .coerceIn(0f, 1f),
+            relWidth = obj.optDouble("relWidth", DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH.toDouble())
+                .toFloat().coerceIn(0.08f, 1f),
+            relHeight = obj.optDouble("relHeight", DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT.toDouble())
+                .toFloat().coerceIn(0.08f, 1f),
+            background = obj.optBoolean("background", DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND),
+            clickAction = obj.optBoolean("clickAction", DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION),
+            showTboxDisconnectIndicator = obj.optBoolean(
+                "showTboxDisconnectIndicator",
+                DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
+            )
+        )
+    }
+
+    private fun serializeMainScreenDashboards(configs: List<MainScreenPanelConfig>): String {
+        val array = JSONArray()
+        configs.forEach { config ->
+            val o = JSONObject()
+            o.put("id", config.id)
+            o.put("name", config.name)
+            o.put("enabled", config.enabled)
+            o.put("widgetsConfig", serializeWidgetConfigsToJsonArray(config.widgetsConfig))
+            o.put("rows", config.rows)
+            o.put("cols", config.cols)
+            o.put("relX", config.relX.toDouble())
+            o.put("relY", config.relY.toDouble())
+            o.put("relWidth", config.relWidth.toDouble())
+            o.put("relHeight", config.relHeight.toDouble())
+            o.put("background", config.background)
+            o.put("clickAction", config.clickAction)
+            o.put("showTboxDisconnectIndicator", config.showTboxDisconnectIndicator)
+            array.put(o)
+        }
+        return array.toString()
+    }
+
     private fun parseFloatingDashboardsJson(json: String): List<FloatingDashboardConfig> {
         if (json.isBlank()) return emptyList()
         return try {
@@ -502,53 +729,6 @@ class SettingsManager(private val context: Context) {
         } catch (e: Exception) {
             emptyList()
         }
-    }
-
-    private fun ensureDefaultFloatingDashboards(
-        configs: List<FloatingDashboardConfig>
-    ): List<FloatingDashboardConfig> {
-        if (configs.isEmpty()) return defaultFloatingDashboards()
-        val existingIds = configs.map { it.id }.toSet()
-        val missing = defaultFloatingDashboards().filter { it.id !in existingIds }
-        return if (missing.isEmpty()) configs else configs + missing
-    }
-
-    private fun defaultFloatingDashboards(): List<FloatingDashboardConfig> {
-        return listOf(
-            createDefaultFloatingDashboard(
-                DEFAULT_FLOATING_DASHBOARD_ID,
-                context.getString(R.string.floating_dashboard_name_1)
-            ),
-            createDefaultFloatingDashboard("floating-2", context.getString(R.string.floating_dashboard_name_2)),
-            createDefaultFloatingDashboard("floating-3", context.getString(R.string.floating_dashboard_name_3)),
-            createDefaultFloatingDashboard("floating-4", context.getString(R.string.floating_dashboard_name_4)),
-            createDefaultFloatingDashboard("floating-5", context.getString(R.string.floating_dashboard_name_5)),
-            createDefaultFloatingDashboard("floating-6", context.getString(R.string.floating_dashboard_name_6))
-        )
-    }
-
-    fun getDefaultFloatingDashboards(): List<FloatingDashboardConfig> {
-        return defaultFloatingDashboards()
-    }
-
-    private fun createDefaultFloatingDashboard(
-        id: String,
-        name: String
-    ): FloatingDashboardConfig {
-        return FloatingDashboardConfig(
-            id = id,
-            name = name,
-            enabled = DEFAULT_FLOATING_DASHBOARD_ENABLED,
-            widgetsConfig = DEFAULT_FLOATING_DASHBOARD_WIDGETS,
-            rows = DEFAULT_FLOATING_DASHBOARD_ROWS,
-            cols = DEFAULT_FLOATING_DASHBOARD_COLS,
-            width = DEFAULT_FLOATING_DASHBOARD_WIDTH,
-            height = DEFAULT_FLOATING_DASHBOARD_HEIGHT,
-            startX = DEFAULT_FLOATING_DASHBOARD_START_X,
-            startY = DEFAULT_FLOATING_DASHBOARD_START_Y,
-            background = DEFAULT_FLOATING_DASHBOARD_BACKGROUND,
-            clickAction = DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION
-        )
     }
 
     private fun parseFloatingDashboardConfig(obj: JSONObject): FloatingDashboardConfig? {
@@ -567,7 +747,11 @@ class SettingsManager(private val context: Context) {
             startX = obj.optInt("startX", DEFAULT_FLOATING_DASHBOARD_START_X),
             startY = obj.optInt("startY", DEFAULT_FLOATING_DASHBOARD_START_Y),
             background = obj.optBoolean("background", DEFAULT_FLOATING_DASHBOARD_BACKGROUND),
-            clickAction = obj.optBoolean("clickAction", DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION)
+            clickAction = obj.optBoolean("clickAction", DEFAULT_FLOATING_DASHBOARD_CLICK_ACTION),
+            showTboxDisconnectIndicator = obj.optBoolean(
+                "showTboxDisconnectIndicator",
+                DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR
+            )
         )
     }
 
@@ -587,6 +771,7 @@ class SettingsManager(private val context: Context) {
             obj.put("startY", config.startY)
             obj.put("background", config.background)
             obj.put("clickAction", config.clickAction)
+            obj.put("showTboxDisconnectIndicator", config.showTboxDisconnectIndicator)
             array.put(obj)
         }
         return array.toString()

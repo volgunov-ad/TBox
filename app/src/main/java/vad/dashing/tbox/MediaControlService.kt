@@ -26,6 +26,11 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_yandex_music,
         iconRes = R.drawable.player_yandex_music
     ),
+    YANDEX_MUSIC_AUTO_PLAY(
+        packageName = "ru.auto.music",
+        titleRes = R.string.media_player_yandex_music_auto_play,
+        iconRes = R.drawable.player_yandex_music
+    ),
     POWERAMP(
         packageName = "com.maxmpz.audioplayer",
         titleRes = R.string.media_player_poweramp,
@@ -61,6 +66,16 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_yandex_radio,
         iconRes = R.drawable.player_yandex_radio
     ),
+    //WT_LOCAL_MULTIMEDIA(
+    //    packageName = "com.wt.multimedia.local",
+    //    titleRes = R.string.media_player_wt_local_multimedia,
+    //    iconRes = R.drawable.player_unknown
+    //),
+    BLUETOOTH_PHONE(
+        packageName = "com.android.bluetooth",
+        titleRes = R.string.media_player_bluetooth_phone,
+        iconRes = R.drawable.player_bluetooth
+    ),
     VKX(
         packageName = "ua.itaysonlab.vkx",
         titleRes = R.string.media_player_vkx,
@@ -71,10 +86,9 @@ enum class SupportedMediaPlayer(
         fun fromPackage(packageName: String): SupportedMediaPlayer? {
             val normalizedPackage = packageName.trim().lowercase()
             if (normalizedPackage.isBlank()) return null
-            val resolvedPackage = if (normalizedPackage == "ru.yandex.radio") {
-                "ru.yandex.mobile.fmradio"
-            } else {
-                normalizedPackage
+            val resolvedPackage = when (normalizedPackage) {
+                "ru.yandex.radio" -> "ru.yandex.mobile.fmradio"
+                else -> normalizedPackage
             }
             return entries.firstOrNull { it.packageName == resolvedPackage }
         }
@@ -412,8 +426,20 @@ object SharedMediaControlService {
         activeControllers: List<MediaController> = queryActiveControllersLocked()
     ) {
         val activeByPackage = activeControllers
-            .filter { it.packageName in requestedPackages }
-            .associateBy { it.packageName }
+            .mapNotNull { controller ->
+                val supportedPackage = SupportedMediaPlayer
+                    .fromPackage(controller.packageName)
+                    ?.packageName
+                if (supportedPackage == null || supportedPackage !in requestedPackages) {
+                    null
+                } else {
+                    supportedPackage to controller
+                }
+            }
+            .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+            .mapValues { (_, candidates) ->
+                selectPreferredController(candidates)
+            }
 
         val packagesToRemove = controllers.keys
             .filter { packageName ->
@@ -428,6 +454,15 @@ object SharedMediaControlService {
                 registerControllerLocked(packageName, controller)
             }
         }
+    }
+
+    private fun selectPreferredController(candidates: List<MediaController>): MediaController {
+        return candidates.firstOrNull { it.playbackState.isPlayingState() }
+            ?: candidates.firstOrNull {
+                val metadata = it.metadata
+                metadata.extractTrackTitle().isNotBlank() || metadata.extractArtistName().isNotBlank()
+            }
+            ?: candidates.first()
     }
 
     private fun queryActiveControllersLocked(): List<MediaController> {
@@ -502,7 +537,9 @@ object SharedMediaControlService {
         }
         if (candidates.isEmpty()) return null
         if (normalizedPreferred != null) {
-            val preferredController = candidates.firstOrNull { it.packageName == normalizedPreferred }
+            val preferredController = candidates.firstOrNull {
+                SupportedMediaPlayer.fromPackage(it.packageName)?.packageName == normalizedPreferred
+            }
             if (strictPreferred) {
                 return preferredController
             }

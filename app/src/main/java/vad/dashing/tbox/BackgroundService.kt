@@ -18,6 +18,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -146,6 +147,8 @@ class BackgroundService : Service() {
         const val EXTRA_APP_NAME = "vad.dashing.tbox.EXTRA_APP_NAME"
 
         const val ACTION_START = "vad.dashing.tbox.START"
+        /** Present when [ACTION_START] was triggered after [android.content.Intent.ACTION_BOOT_COMPLETED]. */
+        const val EXTRA_START_FROM_BOOT = "vad.dashing.tbox.START_FROM_BOOT"
         const val ACTION_STOP = "vad.dashing.tbox.STOP"
         const val ACTION_SEND_AT = "vad.dashing.tbox.SEND_AT"
         const val ACTION_MODEM_CHECK = "vad.dashing.tbox.MODEM_CHECK"
@@ -291,8 +294,12 @@ class BackgroundService : Service() {
             ACTION_START -> {
                 if (!isRunning) {
                     isRunning = true
+                    val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
+                    val notification = createNotification("Start service")
+                    startForeground(NOTIFICATION_ID, notification)
                     TboxRepository.addLog("INFO", "Service", "Start service")
                     connectTboxClient()
+                    TboxRepository.updateServiceStartTime()
                     startSettingsListener()
                     startNetUpdater()
                     startAPNUpdater()
@@ -300,9 +307,9 @@ class BackgroundService : Service() {
                     //startCheckGateVersion()
                     startPeriodicJob()
                     startDataListener()
-                    TboxRepository.updateServiceStartTime()
-                    val notification = createNotification("Start service")
-                    startForeground(NOTIFICATION_ID, notification)
+                    if (startFromBoot) {
+                        maybeOpenMainScreenAfterBoot()
+                    }
                 }
             }
             ACTION_STOP -> {
@@ -2601,5 +2608,31 @@ class BackgroundService : Service() {
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
         Log.e("BackgroundService", "Coroutine error", throwable)
         TboxRepository.addLog("ERROR", "Coroutine", "Error: ${throwable.message}")
+    }
+
+    /**
+     * After boot-time service start: wait for core jobs to spin up, then optionally bring
+     * [MainActivity] to the foreground on the home main screen (tab 100).
+     */
+    private fun maybeOpenMainScreenAfterBoot() {
+        scope.launch {
+            delay(2000)
+            try {
+                val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
+                if (!enabled) return@launch
+                settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
+                withContext(Dispatchers.Main) {
+                    val launchIntent = Intent(this@BackgroundService, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    }
+                    startActivity(launchIntent)
+                }
+            } catch (e: Exception) {
+                Log.e("BackgroundService", "Open main screen after boot failed", e)
+                TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")
+            }
+        }
     }
 }

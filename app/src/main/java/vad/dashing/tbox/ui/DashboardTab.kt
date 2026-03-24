@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -22,13 +26,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
@@ -37,11 +44,16 @@ import vad.dashing.tbox.MainDashboardViewModel
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
+import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
+import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.WidgetPickerActivity
 
 @Composable
 fun MainDashboardTab(
@@ -52,6 +64,14 @@ fun MainDashboardTab(
     onTboxRestartClick: () -> Unit,
 ) {
     val context = LocalContext.current
+    val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
+
+    DisposableEffect(appWidgetHost) {
+        onDispose {
+            ExternalWidgetHostManager.releaseHost()
+        }
+    }
+
     val dashboardViewModel: MainDashboardViewModel = viewModel()
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
     val widgetsConfig by settingsViewModel.dashboardWidgetsConfig.collectAsStateWithLifecycle()
@@ -156,7 +176,15 @@ fun MainDashboardTab(
                                         restartEnabled = restartEnabled,
                                         widgetTextColor = widgetTextColor,
                                         widgetBackgroundColor = widgetBackgroundColor,
-                                        onClick = {},
+                                        onClick = {
+                                            val cfg = widgetConfigs.getOrNull(index)
+                                            if (
+                                                cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                                cfg.launcherAppPackage.isNotBlank()
+                                            ) {
+                                                launchAppFromWidget(context, cfg.launcherAppPackage)
+                                            }
+                                        },
                                         onLongClick = { showDialogForIndex = index },
                                         onMusicSelectedPlayerChange = { selectedPackage ->
                                             settingsViewModel.saveDashboardMediaSelectedPlayer(
@@ -170,7 +198,11 @@ fun MainDashboardTab(
                                                 restartEnabled = false
                                                 onTboxRestartClick()
                                             }
-                                        }
+                                        },
+                                        externalWidgetHost = appWidgetHost,
+                                        isEditMode = false,
+                                        elevation = MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
+                                        shape = MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE.dp
                                     )
                                 }
                             }
@@ -228,7 +260,29 @@ fun WidgetSelectionDialog(
                 state = state,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp)
+                    .padding(8.dp),
+                bottomContent = {
+                    if (state.isExternalAppWidgetSelected) {
+                        ExternalAppWidgetPickerSection(
+                            appWidgetId = externalAppWidgetIdForApply(
+                                state,
+                                currentWidgetConfigs,
+                                widgetIndex
+                            ),
+                            onPickClick = {
+                                WidgetPickerActivity.start(
+                                    context = context,
+                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_DASHBOARD,
+                                    panelId = "",
+                                    widgetIndex = widgetIndex,
+                                    showTitle = state.showTitle,
+                                    showUnit = state.showUnit
+                                )
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
             )
         },
         confirmButton = {
@@ -236,6 +290,18 @@ fun WidgetSelectionDialog(
                 state = state,
                 onDismiss = onDismiss,
                 onSave = {
+                    if (tryLaunchExternalWidgetPicker(
+                            context = context,
+                            saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_DASHBOARD,
+                            panelId = "",
+                            widgetIndex = widgetIndex,
+                            state = state,
+                            currentWidgetConfigs = currentWidgetConfigs,
+                            onDismiss = onDismiss
+                        )
+                    ) {
+                        return@WidgetSelectionDialogActions
+                    }
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,
@@ -243,7 +309,128 @@ fun WidgetSelectionDialog(
                         currentWidgetConfigs = currentWidgetConfigs,
                         widgetIndex = widgetIndex,
                         state = state,
-                        saveConfigs = settingsViewModel::saveDashboardWidgets
+                        saveConfigs = settingsViewModel::saveDashboardWidgets,
+                        externalAppWidgetId = externalAppWidgetIdForApply(
+                            state,
+                            currentWidgetConfigs,
+                            widgetIndex
+                        )
+                    )
+                    onDismiss()
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        dismissButton = {}
+    )
+}
+
+@Composable
+fun MainScreenPanelWidgetSelectionDialog(
+    dashboardManager: DashboardManager,
+    settingsViewModel: SettingsViewModel,
+    panelId: String,
+    widgetIndex: Int,
+    currentWidgets: List<DashboardWidget>,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    onDismiss: () -> Unit,
+    onDeletePanel: () -> Unit,
+) {
+    val context = LocalContext.current
+    val state = rememberWidgetSelectionDialogState(
+        widgetIndex = widgetIndex,
+        currentWidgets = currentWidgets,
+        currentWidgetConfigs = currentWidgetConfigs,
+        defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
+        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { },
+        modifier = Modifier.fillMaxWidth(0.8f),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        text = {
+            WidgetSelectionDialogForm(
+                titleText = if (state.showAdvancedSettings) {
+                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                } else {
+                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
+                },
+                state = state,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                bottomContent = {
+                    if (state.isExternalAppWidgetSelected) {
+                        ExternalAppWidgetPickerSection(
+                            appWidgetId = externalAppWidgetIdForApply(
+                                state,
+                                currentWidgetConfigs,
+                                widgetIndex
+                            ),
+                            onPickClick = {
+                                WidgetPickerActivity.start(
+                                    context = context,
+                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_SCREEN,
+                                    panelId = panelId,
+                                    widgetIndex = widgetIndex,
+                                    showTitle = state.showTitle,
+                                    showUnit = state.showUnit
+                                )
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
+            )
+        },
+        confirmButton = {
+            WidgetSelectionDialogActions(
+                leadingExtra = {
+                    OutlinedButton(
+                        onClick = {
+                            onDeletePanel()
+                            onDismiss()
+                        },
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text(text = stringResource(R.string.action_delete), fontSize = 20.sp)
+                    }
+                },
+                state = state,
+                onDismiss = onDismiss,
+                onSave = {
+                    if (tryLaunchExternalWidgetPicker(
+                            context = context,
+                            saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_SCREEN,
+                            panelId = panelId,
+                            widgetIndex = widgetIndex,
+                            state = state,
+                            currentWidgetConfigs = currentWidgetConfigs,
+                            onDismiss = onDismiss
+                        )
+                    ) {
+                        return@WidgetSelectionDialogActions
+                    }
+                    applyWidgetSelectionChanges(
+                        context = context,
+                        dashboardManager = dashboardManager,
+                        currentWidgets = currentWidgets,
+                        currentWidgetConfigs = currentWidgetConfigs,
+                        widgetIndex = widgetIndex,
+                        state = state,
+                        saveConfigs = { configs ->
+                            settingsViewModel.saveMainScreenDashboardWidgets(panelId, configs)
+                        },
+                        externalAppWidgetId = externalAppWidgetIdForApply(
+                            state,
+                            currentWidgetConfigs,
+                            widgetIndex
+                        )
                     )
                     onDismiss()
                 },

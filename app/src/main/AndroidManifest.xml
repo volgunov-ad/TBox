@@ -51,13 +51,19 @@
 
         <activity
             android:name="vad.dashing.tbox.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="vad.dashing.tbox.WidgetPickerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
