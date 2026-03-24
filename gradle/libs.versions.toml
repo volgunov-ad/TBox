@@ -22,6 +22,7 @@ lifecycleViewmodelKtx = "2.10.0"
 savedstate = "1.4.0"
 lifecycleRuntime = "2.10.0"
 lifecycleViewmodelSavedstate = "2.10.0"
+tboxProxy = "1.0.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

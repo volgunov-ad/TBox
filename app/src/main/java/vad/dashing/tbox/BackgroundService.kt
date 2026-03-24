@@ -4,10 +4,12 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import dashingineering.jetour.tboxcore.TBoxClient
@@ -39,7 +41,7 @@ import kotlin.let
 class BackgroundService : Service() {
     private lateinit var settingsManager: SettingsManager
     private lateinit var appDataManager: AppDataManager
-    private lateinit var locationMockManager: LocationMockManager
+    private val locationMockManager by lazy { LocationMockManager(this) }
     private lateinit var scope: CoroutineScope
     private val job = SupervisorJob()
     private lateinit var autoModemRestart: StateFlow<Boolean>
@@ -50,7 +52,6 @@ class BackgroundService : Service() {
     private lateinit var autoStopTboxMdc: StateFlow<Boolean>
     private lateinit var autoSuspendTboxSwd: StateFlow<Boolean>
     private lateinit var autoPreventTboxRestart: StateFlow<Boolean>
-    private lateinit var getVoltages: StateFlow<Boolean>
     private lateinit var getCanFrame: StateFlow<Boolean>
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
@@ -61,7 +62,7 @@ class BackgroundService : Service() {
     private lateinit var canDataSaveCount: StateFlow<Int>
 
     private val serverPort = 50047
-    private lateinit var themeObserver: ThemeObserver
+    private var themeObserver: ThemeObserver? = null
     private var tBoxClient: TBoxClient? = null
     @Volatile
     private var lastPacketAtMs: Long = 0
@@ -105,9 +106,18 @@ class BackgroundService : Service() {
     private var preventRestartLastTime = System.currentTimeMillis()
 
     private val broadcastReceiver = TboxBroadcastReceiver()
-    lateinit var broadcastSender: TboxBroadcastSender
+    private val broadcastSenderLazy = lazy { TboxBroadcastSender(this, scope) }
+    val broadcastSender get() = broadcastSenderLazy.value
 
-    private lateinit var overlayController: FloatingOverlayController
+    private val overlayControllerLazy = lazy {
+        FloatingOverlayController(
+            service = this,
+            settingsManager = settingsManager,
+            appDataManager = appDataManager,
+            onRebootTbox = { crtRebootTbox() }
+        )
+    }
+    private val overlayController get() = overlayControllerLazy.value
 
     private var motorHoursBuffer = MotorHoursBuffer(0.05f)
     private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
@@ -173,6 +183,8 @@ class BackgroundService : Service() {
         const val ACTION_SUSPEND_OVERLAYS = "vad.dashing.tbox.SUSPEND_OVERLAYS"
         const val ACTION_RESUME_OVERLAYS = "vad.dashing.tbox.RESUME_OVERLAYS"
         const val ACTION_READ_ALL_SMS = "vad.dashing.tbox.READ_ALL_SMS"
+
+        private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
     }
 
 
@@ -181,57 +193,42 @@ class BackgroundService : Service() {
 
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
-        locationMockManager = LocationMockManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
-        overlayController = FloatingOverlayController(
-            service = this,
-            settingsManager = settingsManager,
-            appDataManager = appDataManager,
-            onRebootTbox = { crtRebootTbox() }
-        )
 
-        scope.launch {
-            settingsManager.ensureDefaultFloatingDashboards()
-        }
-
-        //windowManager = getSystemService(WindowManager::class.java)
-
+        // Lazily subscribed StateFlows: defaults match Settings.kt so .value is safe before
+        // the first DataStore read; avoids N× eager DataStore reads during service creation.
         autoModemRestart = settingsManager.autoModemRestartFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         autoTboxReboot = settingsManager.autoTboxRebootFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         autoSuspendTboxApp = settingsManager.autoSuspendTboxAppFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         autoStopTboxApp = settingsManager.autoStopTboxAppFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         autoSuspendTboxMdc = settingsManager.autoSuspendTboxMdcFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         autoStopTboxMdc = settingsManager.autoStopTboxMdcFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         autoSuspendTboxSwd = settingsManager.autoSuspendTboxSwdFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         autoPreventTboxRestart = settingsManager.autoPreventTboxRestartFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        getVoltages = settingsManager.getVoltagesFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         getCanFrame = settingsManager.getCanFrameFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, true)
         getCycleSignal = settingsManager.getCycleSignalFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         getLocData = settingsManager.getLocDataFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, true)
         widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         mockLocation = settingsManager.mockLocationFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.Lazily, false)
         floatingDashboards = settingsManager.floatingDashboardsFlow
-            .stateIn(scope, SharingStarted.Eagerly, emptyList())
+            .stateIn(scope, SharingStarted.Lazily, emptyList())
         canDataSaveCount = settingsManager.canDataSaveCountFlow
-            .stateIn(scope, SharingStarted.Eagerly, 5)
-
-        broadcastSender = TboxBroadcastSender(this, scope)
+            .stateIn(scope, SharingStarted.Lazily, 5)
 
         val filter = IntentFilter().apply {
             addAction(TboxBroadcastReceiver.MAIN_ACTION)
@@ -243,7 +240,7 @@ class BackgroundService : Service() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 // API 33+
-                registerReceiver(broadcastReceiver, filter, RECEIVER_EXPORTED)
+                registerReceiver(broadcastReceiver, filter, Context.RECEIVER_EXPORTED)
             } else {
                 // API < 33
                 registerReceiver(broadcastReceiver, filter)
@@ -255,12 +252,19 @@ class BackgroundService : Service() {
             Log.e("Background Service", "Failed to register TboxBroadcastReceiver", e)
         }
 
-        try {
-            setupThemeObserver()
-            Log.d("Theme Service", "Service created successfully")
-        } catch (e: Exception) {
-            TboxRepository.addLog("ERROR", "Theme Service", "Failed to create service")
-            Log.e("Theme Service", "Failed to create service", e)
+        scope.launch {
+            try {
+                settingsManager.ensureDefaultFloatingDashboards()
+            } catch (e: Exception) {
+                Log.e("Background Service", "ensureDefaultFloatingDashboards failed", e)
+            }
+            try {
+                setupThemeObserver()
+                Log.d("Theme Service", "Service created successfully")
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "Theme Service", "Failed to create service")
+                Log.e("Theme Service", "Failed to create service", e)
+            }
         }
         createNotificationChannel()
     }
@@ -270,7 +274,7 @@ class BackgroundService : Service() {
             themeObserver = ThemeObserver(this) { themeMode ->
                 handleThemeChange(themeMode)
             }
-            themeObserver.startObserving()
+            themeObserver?.startObserving()
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Failed to setup theme observer")
             Log.e("Theme Service", "Failed to setup theme observer", e)
@@ -682,18 +686,32 @@ class BackgroundService : Service() {
         dataListenerJob = scope.launch {
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
+                var prevRpm = 0f
+                var lastMotorHoursPeriodicPersistAt = SystemClock.elapsedRealtime()
                 CanDataRepository.engineRPM
                     .drop(1)
                     .collect { rpm ->
                     try {
-                        val motorHours = motorHoursBuffer.updateValue(rpm ?: 0f)
-                        val motorHoursTrip = motorHoursTripBuffer.updateValue(rpm ?: 0f)
+                        val r = rpm ?: 0f
+                        val motorHours = motorHoursBuffer.updateValue(r)
+                        val motorHoursTrip = motorHoursTripBuffer.updateValue(r)
                         if (motorHours != 0f) {
-                            appDataManager.addMotorHours(motorHours)
+                            CarDataRepository.addMotorHours(motorHours)
                         }
                         if (motorHoursTrip != 0f) {
                             CanDataRepository.addMotorHoursTrip(motorHoursTrip)
                         }
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastMotorHoursPeriodicPersistAt >= MOTOR_HOURS_PERSIST_INTERVAL_MS &&
+                            CarDataRepository.needsPersistence()
+                        ) {
+                            lastMotorHoursPeriodicPersistAt = now
+                            persistMotorHoursToStore()
+                        }
+                        if (prevRpm > 0f && r == 0f) {
+                            persistMotorHoursToStore()
+                        }
+                        prevRpm = r
                     } catch (e: Exception) {
                         TboxRepository.addLog("ERROR", "Data Listener",
                             "Fatal error in motor hours")
@@ -702,6 +720,12 @@ class BackgroundService : Service() {
                 }
             }
         }
+    }
+
+    private suspend fun persistMotorHoursToStore() {
+        val v = CarDataRepository.motorHours.value
+        appDataManager.saveMotorHours(v)
+        CarDataRepository.markPersisted(v)
     }
 
     private fun stopDataListener() {
@@ -1468,14 +1492,16 @@ class BackgroundService : Service() {
         }
 
         try {
-            themeObserver.stopObserving()
+            themeObserver?.stopObserving()
             Log.d("Theme Service", "Service destroyed")
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Error during service destruction")
             Log.e("Theme Service", "Error during service destruction", e)
         }
 
-        overlayController.onDestroy()
+        if (overlayControllerLazy.isInitialized()) {
+            overlayController.onDestroy()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

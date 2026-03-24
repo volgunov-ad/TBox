@@ -33,11 +33,4 @@ class AppDataManager(private val context: Context) {
             preferences[MOTOR_HOURS_KEY] = value
         }
     }
-
-    suspend fun addMotorHours(value: Float) {
-        context.appDataStore.edit { preferences ->
-            val currentHours = preferences[MOTOR_HOURS_KEY] ?: 0f
-            preferences[MOTOR_HOURS_KEY] = currentHours + value
-        }
-    }
 }

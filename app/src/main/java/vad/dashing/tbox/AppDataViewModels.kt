@@ -8,16 +8,18 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class AppDataViewModel(private val appDataManager: AppDataManager) : ViewModel() {
-    val motorHours = appDataManager.motorHoursFlow
+    val motorHours = CarDataRepository.motorHours
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0f
+            initialValue = CarDataRepository.motorHours.value
         )
 
     fun setMotorHours(value: Float) {
         viewModelScope.launch {
+            CarDataRepository.setMotorHours(value)
             appDataManager.saveMotorHours(value)
+            CarDataRepository.markPersisted(value)
         }
     }
 }
