@@ -39,6 +39,7 @@
     <string name="tab_at_commands">AT команды</string>
     <string name="tab_geoposition">Геопозиция</string>
     <string name="tab_car_data">Данные авто</string>
+    <string name="tab_trips">Поездки</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_main_screen_settings">Настройки главного экрана</string>
     <string name="tab_logs">Журнал</string>
@@ -364,6 +365,30 @@
     <string name="data_title_motor_hours">Моточасы двигателя</string>
     <string name="data_title_motor_hours_trip">Моточасы двигателя за поездку</string>
     <string name="data_title_motor_hours_widget">Виджет моточасов</string>
+    <string name="data_title_active_trip_widget">Активная поездка</string>
+
+    <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
+    <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
+
+    <string name="trips_delete">Удалить поездку</string>
+    <string name="trips_name_label">Название поездки</string>
+    <string name="trips_add_favorite">В избранное</string>
+    <string name="trips_remove_favorite">Убрать из избранного</string>
+    <string name="trips_empty">Нет сохранённых поездок</string>
+    <string name="trips_active_trip">Активная поездка</string>
+    <string name="trips_start_time">Начало</string>
+    <string name="trips_end_time">Окончание</string>
+    <string name="trips_distance">Пробег</string>
+    <string name="trips_moving_time">Время в движении</string>
+    <string name="trips_idle_time">Время в простое</string>
+    <string name="trips_max_speed">Макс. скорость</string>
+    <string name="trips_max_engine_temp">Макс. температура двигателя</string>
+    <string name="trips_max_gearbox_temp">Макс. температура масла КПП</string>
+    <string name="trips_min_outside_temp">Мин. температура на улице</string>
+    <string name="trips_max_outside_temp">Макс. температура на улице</string>
+    <string name="trips_avg_speed_moving">Средняя скорость без учёта простоев</string>
+    <string name="trips_avg_speed_trip">Средняя скорость</string>
+    <string name="trips_fuel_used">Израсходовано топлива</string>
     <string name="data_title_net_widget">Виджет сигнала сети</string>
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>
     <string name="data_title_net_widget_colored">Виджет сигнала сети (цветной)</string>

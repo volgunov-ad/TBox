@@ -39,6 +39,7 @@
     <string name="tab_at_commands">AT commands</string>
     <string name="tab_geoposition">Location</string>
     <string name="tab_car_data">Car data</string>
+    <string name="tab_trips">Trips</string>
     <string name="tab_settings">Settings</string>
     <string name="tab_main_screen_settings">Main screen settings</string>
     <string name="tab_logs">Logs</string>
@@ -364,6 +365,30 @@
     <string name="data_title_motor_hours">Engine hours</string>
     <string name="data_title_motor_hours_trip">Trip engine hours</string>
     <string name="data_title_motor_hours_widget">Engine hours widget</string>
+    <string name="data_title_active_trip_widget">Active trip</string>
+
+    <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
+    <string name="settings_split_trip_time_title">Trip split time, min</string>
+
+    <string name="trips_delete">Delete trip</string>
+    <string name="trips_name_label">Trip name</string>
+    <string name="trips_add_favorite">Add to favorites</string>
+    <string name="trips_remove_favorite">Remove from favorites</string>
+    <string name="trips_empty">No saved trips</string>
+    <string name="trips_active_trip">Active trip</string>
+    <string name="trips_start_time">Start</string>
+    <string name="trips_end_time">End</string>
+    <string name="trips_distance">Distance</string>
+    <string name="trips_moving_time">Moving time</string>
+    <string name="trips_idle_time">Idle time</string>
+    <string name="trips_max_speed">Max speed</string>
+    <string name="trips_max_engine_temp">Max engine temperature</string>
+    <string name="trips_max_gearbox_temp">Max transmission oil temperature</string>
+    <string name="trips_min_outside_temp">Min outside temperature</string>
+    <string name="trips_max_outside_temp">Max outside temperature</string>
+    <string name="trips_avg_speed_moving">Average speed (moving only)</string>
+    <string name="trips_avg_speed_trip">Average speed</string>
+    <string name="trips_fuel_used">Fuel used</string>
     <string name="data_title_net_widget">Network signal widget</string>
     <string name="data_title_net_widget_new">Network signal widget (new)</string>
     <string name="data_title_net_widget_colored">Network signal widget (colored)</string>

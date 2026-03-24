@@ -212,7 +212,7 @@ fun FloatingDashboard(
     }
 
     val dataProvider = remember(context) {
-        TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, context)
+        TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, settingsViewModel, context)
     }
 
     LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols, context) {

@@ -119,7 +119,7 @@ fun MainDashboardTab(
     }
 
     val dataProvider = remember(context) {
-        TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, context)
+        TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, settingsViewModel, context)
     }
 
     Column(

@@ -564,6 +564,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 5
         )
 
+    val fuelTankLiters = settingsManager.fuelTankLitersFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 57
+        )
+
+    val splitTripTimeMinutes = settingsManager.splitTripTimeMinutesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 3
+        )
+
     init {
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
@@ -1189,6 +1203,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveCanDataSaveCount(config: Int) {
         viewModelScope.launch {
             settingsManager.saveCanDataSaveCount(config)
+        }
+    }
+
+    fun saveFuelTankLiters(liters: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFuelTankLiters(liters)
+        }
+    }
+
+    fun saveSplitTripTimeMinutes(minutes: Int) {
+        viewModelScope.launch {
+            settingsManager.saveSplitTripTimeMinutes(minutes)
         }
     }
 }

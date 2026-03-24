@@ -15,12 +15,66 @@ class AppDataViewModel(private val appDataManager: AppDataManager) : ViewModel()
             initialValue = CarDataRepository.motorHours.value
         )
 
+    val trips = TripRepository.trips
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TripRepository.trips.value
+        )
+
+    val favoriteTripIds = TripRepository.favoriteIds
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TripRepository.favoriteIds.value
+        )
+
+    val activeTrip = TripRepository.activeTrip
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TripRepository.activeTrip.value
+        )
+
     fun setMotorHours(value: Float) {
         viewModelScope.launch {
             CarDataRepository.setMotorHours(value)
             appDataManager.saveMotorHours(value)
             CarDataRepository.markPersisted(value)
         }
+    }
+
+    fun updateTripName(id: String, name: String) {
+        viewModelScope.launch {
+            synchronized(TripRepository.lock) {
+                val t = TripRepository.trips.value.firstOrNull { it.id == id } ?: return@launch
+                TripRepository.replaceTrip(t.copy(name = name))
+            }
+            persistTripsIfNeeded()
+        }
+    }
+
+    fun deleteTrip(id: String) {
+        viewModelScope.launch {
+            TripRepository.removeTrip(id)
+            persistTripsIfNeeded()
+        }
+    }
+
+    fun setTripFavorite(id: String, favorite: Boolean) {
+        viewModelScope.launch {
+            TripRepository.setFavorite(id, favorite)
+            persistTripsIfNeeded()
+        }
+    }
+
+    private suspend fun persistTripsIfNeeded() {
+        if (!TripRepository.needsPersistence()) return
+        val tripsJson = tripsListToJson(TripRepository.trips.value)
+        val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
+        appDataManager.saveTripsJson(tripsJson)
+        appDataManager.saveTripFavoritesJson(favJson)
+        TripRepository.markPersisted(tripsJson, favJson)
     }
 }
 

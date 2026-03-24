@@ -4,8 +4,6 @@ import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 
-const val FUEL_TANK_LITERS = 57
-
 object CanFramesProcess {
 
     private val GEAR_BOX_7_DRIVE_MODES = setOf(0x1B, 0x2B, 0x3B, 0x4B, 0x5B, 0x6B, 0x7B)

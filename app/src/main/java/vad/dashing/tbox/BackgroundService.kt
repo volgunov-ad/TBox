@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlin.math.max
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.utils.CanFramesProcess
@@ -60,6 +61,8 @@ class BackgroundService : Service() {
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     private lateinit var canDataSaveCount: StateFlow<Int>
+    private lateinit var fuelTankLitersSetting: StateFlow<Int>
+    private lateinit var splitTripTimeMinutesSetting: StateFlow<Int>
 
     private val serverPort = 50047
     private var themeObserver: ThemeObserver? = null
@@ -121,6 +124,19 @@ class BackgroundService : Service() {
 
     private var motorHoursBuffer = MotorHoursBuffer(0.05f)
     private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
+
+    private var tripPrevRpmForStart = 0f
+    private var tripRpmWasPositiveSinceService = false
+    private var tripPendingSplitTripId: String? = null
+    private var tripRpmZeroAtMs: Long? = null
+    private var tripLastSampleElapsedMs: Long = 0L
+    private var tripLastOdometer: UInt? = null
+    private var tripStartOdometer: UInt? = null
+    private var tripLastFuelPercent: Float? = null
+    private var tripFuelStartPercent: Float? = null
+    private var tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
+    private var tripLastPersistedSnapshot: TripRecord? = null
+    private var tripFirstSampleAfterSessionStart = true
 
     private var isLastSMS: Boolean = false
 
@@ -185,6 +201,7 @@ class BackgroundService : Service() {
         const val ACTION_READ_ALL_SMS = "vad.dashing.tbox.READ_ALL_SMS"
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
+        private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
     }
 
 
@@ -229,6 +246,10 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Lazily, emptyList())
         canDataSaveCount = settingsManager.canDataSaveCountFlow
             .stateIn(scope, SharingStarted.Lazily, 5)
+        fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
+            .stateIn(scope, SharingStarted.Lazily, 57)
+        splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
+            .stateIn(scope, SharingStarted.Lazily, 3)
 
         val filter = IntentFilter().apply {
             addAction(TboxBroadcastReceiver.MAIN_ACTION)
@@ -304,6 +325,7 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("INFO", "Service", "Start service")
                     connectTboxClient()
                     TboxRepository.updateServiceStartTime()
+                    resetTripStateForNewServiceSession()
                     startSettingsListener()
                     startNetUpdater()
                     startAPNUpdater()
@@ -326,6 +348,7 @@ class BackgroundService : Service() {
                     stopPeriodicJob()
                     stopSettingsListener()
                     stopDataListener()
+                    scope.launch { finalizeTripsOnServiceStop() }
                     stopStateBroadcastListener()
                     stopReadAllSMS()
                     disconnectTboxClient()
@@ -711,6 +734,7 @@ class BackgroundService : Service() {
                         if (prevRpm > 0f && r == 0f) {
                             persistMotorHoursToStore()
                         }
+                        onTripRpmSample(r, prevRpm, now)
                         prevRpm = r
                     } catch (e: Exception) {
                         TboxRepository.addLog("ERROR", "Data Listener",
@@ -719,6 +743,226 @@ class BackgroundService : Service() {
                     }
                 }
             }
+        }
+    }
+
+    private fun onTripRpmSample(rpm: Float, prevRpm: Float, nowElapsedMs: Long) {
+        synchronized(TripRepository.lock) {
+            val wallNow = System.currentTimeMillis()
+            val splitWindowMs = splitTripTimeMinutesSetting.value * 60_000L
+            val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+
+            if (rpm > 0f) {
+                tripRpmWasPositiveSinceService = true
+            }
+
+            if (tripFirstSampleAfterSessionStart) {
+                tripFirstSampleAfterSessionStart = false
+                if (rpm > 0f && TripRepository.activeTrip.value == null) {
+                    TripRepository.startTrip(
+                        TripRecord(
+                            startTimeEpochMs = TboxRepository.serviceStartTime.value.time,
+                            endTimeEpochMs = null,
+                        )
+                    )
+                    tripStartOdometer = CanDataRepository.odometer.value
+                    tripLastOdometer = tripStartOdometer
+                    val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+                    tripFuelStartPercent = p
+                    tripLastFuelPercent = p
+                    tripPendingSplitTripId = null
+                    tripRpmZeroAtMs = null
+                    tripLastSampleElapsedMs = nowElapsedMs
+                    maybePersistTrips(force = true)
+                    tripPrevRpmForStart = rpm
+                    return@synchronized
+                }
+            }
+
+            // Short stop: continue the same trip if RPM returns before split window
+            if (rpm > 0f && tripRpmZeroAtMs != null) {
+                val zeroStart = tripRpmZeroAtMs!!
+                val pauseMs = wallNow - zeroStart
+                if (pauseMs < splitWindowMs) {
+                    val pendingId = tripPendingSplitTripId
+                    if (pendingId != null) {
+                        val trip = TripRepository.trips.value.firstOrNull { it.id == pendingId }
+                        if (trip != null && !trip.isActive) {
+                            TripRepository.replaceTrip(trip.copy(endTimeEpochMs = null))
+                            TripRepository.updateActiveTrip { cur ->
+                                cur.copy(idleTimeMs = cur.idleTimeMs + pauseMs.coerceAtLeast(0L))
+                            }
+                        }
+                    }
+                } else {
+                    tripPendingSplitTripId = null
+                }
+                tripRpmZeroAtMs = null
+            }
+
+            var active = TripRepository.activeTrip.value
+            if (active != null && rpm > 0f) {
+                val dt = if (tripLastSampleElapsedMs == 0L) {
+                    0L
+                } else {
+                    (nowElapsedMs - tripLastSampleElapsedMs).coerceAtLeast(0L)
+                }
+                val speed = CanDataRepository.carSpeed.value ?: 0f
+                val eng = CanDataRepository.engineTemperature.value
+                val gb = CanDataRepository.gearBoxOilTemperature.value
+                val out = CanDataRepository.outsideTemperature.value
+                val odo = CanDataRepository.odometer.value
+                TripRepository.updateActiveTrip { cur ->
+                    var d = cur.distanceKm
+                    val lastO = tripLastOdometer
+                    if (odo != null && lastO != null && odo >= lastO) {
+                        d += (odo - lastO).toFloat() / 1000f
+                    }
+                    tripLastOdometer = odo ?: tripLastOdometer
+                    var mov = cur.movingTimeMs
+                    var idl = cur.idleTimeMs
+                    if (speed > 0f) {
+                        mov += dt
+                    } else {
+                        idl += dt
+                    }
+                    var fuel = cur.fuelConsumedLiters
+                    val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+                    val lastFp = tripLastFuelPercent
+                    if (pctNow != null && lastFp != null && lastFp >= pctNow) {
+                        fuel += (lastFp - pctNow) / 100f * tankL
+                    }
+                    tripLastFuelPercent = pctNow ?: tripLastFuelPercent
+                    val outside = TripRepository.mergeOutsideTemp(
+                        cur.minOutsideTemp,
+                        cur.maxOutsideTemp,
+                        out
+                    )
+                    TripRecord(
+                        id = cur.id,
+                        name = cur.name,
+                        startTimeEpochMs = cur.startTimeEpochMs,
+                        endTimeEpochMs = cur.endTimeEpochMs,
+                        distanceKm = d,
+                        movingTimeMs = mov,
+                        idleTimeMs = idl,
+                        maxSpeed = max(cur.maxSpeed, speed),
+                        maxEngineTemp = TripRepository.updateMaxEngineTemp(cur.maxEngineTemp, eng),
+                        maxGearboxOilTemp = TripRepository.updateMaxGearboxTemp(cur.maxGearboxOilTemp, gb),
+                        minOutsideTemp = outside.first,
+                        maxOutsideTemp = outside.second,
+                        fuelConsumedLiters = fuel,
+                    )
+                }
+            }
+
+            active = TripRepository.activeTrip.value
+            if (active != null && prevRpm > 0f && rpm == 0f) {
+                TripRepository.updateActiveTrip { it.copy(endTimeEpochMs = wallNow) }
+                tripRpmZeroAtMs = wallNow
+                tripPendingSplitTripId = TripRepository.trips.value.lastOrNull { it.isActive }?.id
+                    ?: TripRepository.activeTrip.value?.id
+                maybePersistTrips(force = true)
+            }
+
+            if (rpm > 0f && TripRepository.activeTrip.value == null) {
+                val canStart = prevRpm <= 0f && tripPrevRpmForStart <= 0f && tripRpmWasPositiveSinceService
+                if (canStart) {
+                    val startMs = if (!tripRpmWasPositiveSinceService) {
+                        TboxRepository.serviceStartTime.value.time
+                    } else {
+                        wallNow
+                    }
+                    TripRepository.startTrip(
+                        TripRecord(
+                            startTimeEpochMs = startMs,
+                            endTimeEpochMs = null,
+                        )
+                    )
+                    tripStartOdometer = CanDataRepository.odometer.value
+                    tripLastOdometer = tripStartOdometer
+                    val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+                    tripFuelStartPercent = p
+                    tripLastFuelPercent = p
+                    tripPendingSplitTripId = null
+                    tripRpmZeroAtMs = null
+                    tripLastSampleElapsedMs = nowElapsedMs
+                    maybePersistTrips(force = true)
+                }
+            }
+
+            tripLastSampleElapsedMs = nowElapsedMs
+            tripPrevRpmForStart = rpm
+
+            val rtNow = SystemClock.elapsedRealtime()
+            if (rtNow - tripLastPeriodicPersistAt >= TRIPS_PERSIST_INTERVAL_MS) {
+                tripLastPeriodicPersistAt = rtNow
+                val curActive = TripRepository.activeTrip.value
+                val shouldWrite = TripRepository.needsPersistence() &&
+                    (curActive == null ||
+                        tripLastPersistedSnapshot == null ||
+                        TripRepository.tripChangedEnough(tripLastPersistedSnapshot!!, curActive))
+                if (shouldWrite) {
+                    maybePersistTrips(force = false)
+                    tripLastPersistedSnapshot = curActive
+                }
+            }
+        }
+    }
+
+    private fun maybePersistTrips(force: Boolean) {
+        if (!force && !TripRepository.needsPersistence()) return
+        val tripsJson = tripsListToJson(TripRepository.trips.value)
+        val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
+        scope.launch {
+            appDataManager.saveTripsJson(tripsJson)
+            appDataManager.saveTripFavoritesJson(favJson)
+            TripRepository.markPersisted(tripsJson, favJson)
+        }
+    }
+
+    private fun resetTripStateForNewServiceSession() {
+        synchronized(TripRepository.lock) {
+            tripPrevRpmForStart = 0f
+            tripRpmWasPositiveSinceService = false
+            tripPendingSplitTripId = null
+            tripRpmZeroAtMs = null
+            tripLastSampleElapsedMs = 0L
+            tripLastOdometer = null
+            tripStartOdometer = null
+            tripLastFuelPercent = null
+            tripFuelStartPercent = null
+            tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
+            tripLastPersistedSnapshot = TripRepository.activeTrip.value
+            tripFirstSampleAfterSessionStart = true
+        }
+    }
+
+    private suspend fun finalizeTripsOnServiceStop() {
+        val wallNow = System.currentTimeMillis()
+        synchronized(TripRepository.lock) {
+            val active = TripRepository.activeTrip.value
+            if (active != null) {
+                TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
+            }
+            tripPrevRpmForStart = 0f
+            tripRpmWasPositiveSinceService = false
+            tripPendingSplitTripId = null
+            tripRpmZeroAtMs = null
+            tripLastSampleElapsedMs = 0L
+            tripLastOdometer = null
+            tripStartOdometer = null
+            tripLastFuelPercent = null
+            tripFuelStartPercent = null
+            tripLastPersistedSnapshot = null
+            tripFirstSampleAfterSessionStart = true
+        }
+        if (TripRepository.needsPersistence()) {
+            val tripsJson = tripsListToJson(TripRepository.trips.value)
+            val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
+            appDataManager.saveTripsJson(tripsJson)
+            appDataManager.saveTripFavoritesJson(favJson)
+            TripRepository.markPersisted(tripsJson, favJson)
         }
     }
 

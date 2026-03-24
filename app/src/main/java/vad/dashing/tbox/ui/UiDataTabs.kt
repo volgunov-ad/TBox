@@ -52,7 +52,6 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.seatModeToString
-import vad.dashing.tbox.utils.FUEL_TANK_LITERS
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -121,6 +120,7 @@ fun CarDataTabContent(
     val engineRPMC by cycleViewModel.engineRPM.collectAsStateWithLifecycle()
 
     val motorHours by appDataViewModel.motorHours.collectAsStateWithLifecycle()
+    val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -167,7 +167,15 @@ fun CarDataTabContent(
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "distanceToFuelEmpty"), valueToString(distanceToFuelEmpty)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "fuelLevelPercentage"), valueToString(fuelLevelPercentage)) }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "fuelLevelPercentageFiltered"), valueToString(fuelLevelPercentageFiltered)) }
-            item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "fuelLevelLiters"), valueToString(fuelLevelPercentageFiltered?.toFloat()?.times(FUEL_TANK_LITERS.toFloat())?.div(100f), 1)) }
+            item {
+                StatusRow(
+                    WidgetsRepository.getTitleUnitForDataKey(context, "fuelLevelLiters"),
+                    valueToString(
+                        fuelLevelPercentageFiltered?.toFloat()?.times(fuelTankLiters.toFloat())?.div(100f),
+                        1
+                    )
+                )
+            }
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "currentFuelConsumption"), valueToString(currentFuelConsumption, 1)) }
 
             item { StatusRow(WidgetsRepository.getTitleUnitForDataKey(context, "breakingForce"), valueToString(breakingForce)) }

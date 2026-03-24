@@ -224,6 +224,19 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "activeTripWidget" -> {
+            DashboardActiveTripWidgetItem(
+                widget = widget,
+                appDataViewModel = appDataViewModel,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
         "restartTbox" -> {
             DashboardWidgetItem(
                 widget = widget,

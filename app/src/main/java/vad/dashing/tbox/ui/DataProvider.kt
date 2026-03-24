@@ -7,15 +7,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.seatModeToString
-import vad.dashing.tbox.utils.FUEL_TANK_LITERS
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -28,6 +29,7 @@ class TboxDataProvider(
     private val viewModel: TboxViewModel,
     private val canViewModel: CanDataViewModel,
     private val appDataViewModel: AppDataViewModel,
+    private val settingsViewModel: SettingsViewModel,
     private val context: Context,
 ) : DataProvider {
     private val flowCache = mutableMapOf<String, StateFlow<String>>()
@@ -77,9 +79,18 @@ class TboxDataProvider(
         "breakingForce" -> canViewModel.breakingForce.mapState { valueToString(it) }
         "fuelLevelPercentage" -> canViewModel.fuelLevelPercentage.mapState { valueToString(it) }
         "fuelLevelPercentageFiltered" -> canViewModel.fuelLevelPercentageFiltered.mapState { valueToString(it) }
-        "fuelLevelLiters" -> canViewModel.fuelLevelPercentageFiltered.mapState { valueToString(
-            (it?.toFloat()?.times(FUEL_TANK_LITERS.toFloat())?.div(100f)), 1
-        ) }
+        "fuelLevelLiters" -> combine(
+            canViewModel.fuelLevelPercentageFiltered,
+            settingsViewModel.fuelTankLiters
+        ) { pct, tank ->
+            valueToString(pct?.toFloat()?.times(tank.toFloat())?.div(100f), 1)
+        }
+            .distinctUntilChanged()
+            .stateIn(
+                scope = viewModel.viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = ""
+            )
         "currentFuelConsumption" -> canViewModel.currentFuelConsumption.mapState { valueToString(it, 1) }
         "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, 1) }
         "gearBoxOilTemperature" -> canViewModel.gearBoxOilTemperature.mapState { valueToString(it) }
