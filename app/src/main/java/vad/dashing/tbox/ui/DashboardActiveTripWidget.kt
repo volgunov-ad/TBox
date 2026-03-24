@@ -89,13 +89,6 @@ fun DashboardActiveTripWidgetItem(
                     }
                 }
                 ActiveTripRow(
-                    label = stringResource(R.string.trips_name_label),
-                    value = t.name.ifBlank { "—" },
-                    unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
-                )
-                ActiveTripRow(
                     label = stringResource(R.string.trips_start_time),
                     value = dateFmt.format(Date(t.startTimeEpochMs)),
                     unit = "",
