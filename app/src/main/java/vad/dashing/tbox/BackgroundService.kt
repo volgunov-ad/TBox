@@ -10,6 +10,9 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import dashingineering.jetour.tboxcore.TBoxClient
+import dashingineering.jetour.tboxcore.types.TBoxClientCallback
+import dashingineering.jetour.tboxcore.types.LogType
 import vad.dashing.tbox.location.LocationMockManager
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,21 +26,19 @@ import vad.dashing.tbox.utils.CanFramesProcess
 import vad.dashing.tbox.utils.CanFramesProcess.toFloat
 import vad.dashing.tbox.utils.CanFramesProcess.toUInt
 import vad.dashing.tbox.utils.CsnOperatorResolver
-import vad.dashing.tbox.utils.IPManager
 import vad.dashing.tbox.utils.MotorHoursBuffer
 import vad.dashing.tbox.utils.ThemeObserver
 import java.net.DatagramPacket
-import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Date
+import java.util.concurrent.Executors
 import kotlin.let
 
 class BackgroundService : Service() {
     private lateinit var settingsManager: SettingsManager
     private lateinit var appDataManager: AppDataManager
-    private lateinit var ipManager: IPManager
     private lateinit var locationMockManager: LocationMockManager
     private lateinit var scope: CoroutineScope
     private val job = SupervisorJob()
@@ -53,8 +54,6 @@ class BackgroundService : Service() {
     private lateinit var getCanFrame: StateFlow<Boolean>
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
-    private lateinit var serverIp: StateFlow<String>
-    private lateinit var tboxIPRotation: StateFlow<Boolean>
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
@@ -62,11 +61,15 @@ class BackgroundService : Service() {
     private lateinit var canDataSaveCount: StateFlow<Int>
 
     private val serverPort = 50047
-    private var currentIP: String? = null
-    private var address: InetAddress? = null
     private lateinit var themeObserver: ThemeObserver
-    private val socket = DatagramSocket().apply {soTimeout = 1000}
+    private var tBoxClient: TBoxClient? = null
+    @Volatile
+    private var lastPacketAtMs: Long = 0
     private val mutex = Mutex()
+    private val packetProcessingDispatcher =
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "tbox-packet-processor").apply { isDaemon = true }
+        }.asCoroutineDispatcher()
 
     private var mainJob: Job? = null
     private var periodicJob: Job? = null
@@ -76,7 +79,6 @@ class BackgroundService : Service() {
     private var ssmCmdJob: Job? = null
     private var swdCmdJob: Job? = null
     private var locCmdJob: Job? = null
-    private var listenJob: Job? = null
     private var apnCmdJob: Job? = null
     private var humJob: Job? = null
     private var sendATJob: Job? = null
@@ -87,6 +89,7 @@ class BackgroundService : Service() {
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
     private var getSMSJob: Job? = null
+    private var packetSilenceChecks: Int = 0
 
     private var netUpdateTime: Long = 5000
     private var apnUpdateTime: Long = 10000
@@ -217,10 +220,6 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, false)
         getLocData = settingsManager.getLocDataFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
-        serverIp = settingsManager.tboxIPFlow
-            .stateIn(scope, SharingStarted.Eagerly, DEFAULT_TBOX_IP)
-        tboxIPRotation = settingsManager.tboxIPRotationFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
         widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
             .stateIn(scope, SharingStarted.Eagerly, false)
         widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
@@ -231,16 +230,6 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
         canDataSaveCount = settingsManager.canDataSaveCountFlow
             .stateIn(scope, SharingStarted.Eagerly, 5)
-
-        ipManager = IPManager(this)
-        ipManager.updateIPs(serverIp.value)
-        TboxRepository.updateIPList(ipManager.getIPList())
-        currentIP = if (tboxIPRotation.value) {
-            ipManager.getNextIP()
-        } else {
-            DEFAULT_TBOX_IP
-        }
-        TboxRepository.addLog("DEBUG", "IP manager", "Set TBox current IP: $currentIP")
 
         broadcastSender = TboxBroadcastSender(this, scope)
 
@@ -309,9 +298,9 @@ class BackgroundService : Service() {
                     val notification = createNotification("Start service")
                     startForeground(NOTIFICATION_ID, notification)
                     TboxRepository.addLog("INFO", "Service", "Start service")
+                    connectTboxClient()
                     TboxRepository.updateServiceStartTime()
                     startSettingsListener()
-                    startListener()
                     startNetUpdater()
                     startAPNUpdater()
                     startCheckConnection()
@@ -329,13 +318,13 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("INFO", "Service", "Stop service")
                     stopNetUpdater()
                     stopAPNUpdater()
-                    stopListener()
                     stopCheckConnection()
                     stopPeriodicJob()
                     stopSettingsListener()
                     stopDataListener()
                     stopStateBroadcastListener()
                     stopReadAllSMS()
+                    disconnectTboxClient()
                     val notification = createNotification("Stop service")
                     startForeground(NOTIFICATION_ID, notification)
                     overlayController.closeAllOverlays()
@@ -425,13 +414,79 @@ class BackgroundService : Service() {
             .build()
     }
 
-    private fun getCurrentAddress(): InetAddress? {
-        return try {
-            InetAddress.getByName(currentIP)
-        } catch (_: Exception) {
-            TboxRepository.addLog("ERROR", "Tbox IP address",
-                "Failed to get address for IP: $currentIP")
-            null
+    private fun connectTboxClient() {
+        if (tBoxClient != null) return
+        val remoteIp = DEFAULT_TBOX_IP
+        val remoteAddress = try {
+            InetAddress.getByName(remoteIp)
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "TBox Proxy", "Invalid remote IP: $remoteIp")
+            Log.e("TBox Proxy", "Invalid remote IP", e)
+            return
+        }
+        val callback = object : TBoxClientCallback {
+            override fun onDataReceived(data: ByteArray) {
+                lastPacketAtMs = System.currentTimeMillis()
+                scope.launch(packetProcessingDispatcher) {
+                    try {
+                        val packet = DatagramPacket(data, data.size, remoteAddress, serverPort)
+                        responseWork(packet)
+                        if (!TboxRepository.tboxConnected.value) {
+                            onTboxConnected(true)
+                        }
+                    } catch (e: Exception) {
+                        TboxRepository.addLog("ERROR", "TBox Proxy", "Error handling incoming data")
+                        Log.e("TBox Proxy", "Error handling incoming data", e)
+                    }
+                }
+            }
+
+            override fun onLogMessage(type: LogType, tag: String, message: String) {
+                when (type) {
+                    LogType.ERROR -> TboxRepository.addLog("ERROR", "TBox Proxy/$tag", message)
+                    LogType.WARN -> TboxRepository.addLog("WARN", "TBox Proxy/$tag", message)
+                    else -> Unit
+                }
+            }
+
+            override fun onConnectionChanged(connected: Boolean) {
+                TboxRepository.addLog(
+                    "INFO",
+                    "TBox Proxy",
+                    "Bridge connection state: ${if (connected) "connected" else "disconnected"}"
+                )
+                if (!connected && TboxRepository.tboxConnected.value) {
+                    onTboxConnected(false)
+                }
+            }
+        }
+
+        try {
+            tBoxClient = TBoxClient(
+                context = applicationContext,
+                remotePort = serverPort,
+                remoteAddress = remoteIp,
+                callback = callback
+            ).also {
+                it.initialize()
+            }
+            lastPacketAtMs = System.currentTimeMillis()
+            TboxRepository.addLog("INFO", "TBox Proxy", "Client initialized for $remoteIp")
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "TBox Proxy", "Failed to initialize client for $remoteIp")
+            Log.e("TBox Proxy", "Failed to initialize client", e)
+            tBoxClient = null
+        }
+    }
+
+    private fun disconnectTboxClient() {
+        try {
+            tBoxClient?.destroy()
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "TBox Proxy", "Failed to destroy client")
+            Log.e("TBox Proxy", "Failed to destroy client", e)
+        } finally {
+            tBoxClient = null
         }
     }
 
@@ -439,12 +494,11 @@ class BackgroundService : Service() {
         if (mainJob?.isActive == true) return
         mainJob = scope.launch {
             try {
+                delay(2000)
                 Log.d("Net Updater", "Start updating network state")
                 while (isActive) {
                     TboxRepository.addLog("DEBUG", "MDC send", "Update network")
                     sendUdpMessage(
-                        socket,
-                        serverPort,
                         MDC_CODE,
                         SELF_CODE,
                         0x07,
@@ -471,51 +525,6 @@ class BackgroundService : Service() {
         mainJob = null
     }
 
-    private fun startListener() {
-        if (listenJob?.isActive == true) return
-        listenJob = scope.launch {
-            try {
-                var errCount = 0
-                val receiveData = ByteArray(4096)
-                val receivePacket = DatagramPacket(receiveData, receiveData.size)
-                Log.d("UDP Listener", "Start UDP listener")
-                TboxRepository.updateTboxConnectionTime()
-                while (isActive) {
-                    try {
-                        socket.receive(receivePacket)
-                        responseWork(receivePacket)
-                        errCount = 0
-                        if (!TboxRepository.tboxConnected.value) {
-                            onTboxConnected(true)
-                            if (serverIp.value != currentIP) {
-                                settingsManager.saveTboxIP(currentIP!!)
-                            }
-                        }
-                    } catch (_: Exception) {
-                        if (TboxRepository.tboxConnected.value) {
-                            errCount += 1
-                            if (errCount > netUpdateTime * 2 / 1000) {
-                                onTboxConnected(false)
-                            }
-                        }
-                    }
-                    delay(100)
-                }
-            } catch (e: CancellationException) {
-                // Нормальная отмена - не логируем
-                throw e
-            } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", "UDP Listener", "Fatal error in UDP Listener job")
-                Log.e("UDP Listener", "Fatal error in listener", e)
-            }
-        }
-    }
-
-    private fun stopListener() {
-        listenJob?.cancel()
-        listenJob = null
-    }
-
     private fun startAPNUpdater() {
         if (apnJob?.isActive == true) return
         apnJob = scope.launch {
@@ -529,8 +538,6 @@ class BackgroundService : Service() {
                         }
                         TboxRepository.addLog("DEBUG", "MDC send", "Update APN1")
                         sendUdpMessage(
-                            socket,
-                            serverPort,
                             MDC_CODE,
                             SELF_CODE,
                             0x11,
@@ -543,8 +550,6 @@ class BackgroundService : Service() {
                         delay(500)
                         TboxRepository.addLog("DEBUG", "MDC send", "Update APN2")
                         sendUdpMessage(
-                            socket,
-                            serverPort,
                             MDC_CODE,
                             SELF_CODE,
                             0x11,
@@ -590,8 +595,8 @@ class BackgroundService : Service() {
             try {
                 var rebootTimeout = 60000L
                 var modemCheckTimeout = 15000L
-                Log.d("Connection checker", "Start check connection")
                 delay(10000)
+                Log.d("Connection checker", "Start check connection")
                 while (isActive) {
                     delay(modemCheckTimeout)
                     if (!TboxRepository.tboxConnected.value) {
@@ -758,12 +763,31 @@ class BackgroundService : Service() {
                 var crtGetCanFrameTime = System.currentTimeMillis()
                 var crtGetCycleSignalTime = System.currentTimeMillis()
                 var crtGetLocDataTime = System.currentTimeMillis()
-                var updateIPTime = System.currentTimeMillis()
                 var locErrorCount = 0
                 var tboxAppCheckTime = System.currentTimeMillis()
                 var tboxMdcCheckTime = System.currentTimeMillis()
-                delay(15000)
+                val periodicTasksReadyAt = System.currentTimeMillis() + 15000
                 while (isActive) {
+                    val now = System.currentTimeMillis()
+                    if (TboxRepository.tboxConnected.value) {
+                        if (now - lastPacketAtMs > netUpdateTime * 2) {
+                            packetSilenceChecks += 1
+                            if (packetSilenceChecks >= 3) {
+                                onTboxConnected(false)
+                                packetSilenceChecks = 0
+                            }
+                        } else {
+                            packetSilenceChecks = 0
+                        }
+                    } else {
+                        packetSilenceChecks = 0
+                    }
+
+                    if (now < periodicTasksReadyAt) {
+                        delay(1000)
+                        continue
+                    }
+
                     /*if (mockLocation.value) {
                         locationMockManager.setMockLocation(LocValues(
                             rawValue = "",
@@ -806,7 +830,9 @@ class BackgroundService : Service() {
                     if (getCanFrame.value) {
                         val delta = currentTime - (TboxRepository.canFrameTime.value?.time ?: 0)
                         if (delta > 60000) {
-                            if (TboxRepository.tboxConnected.value && System.currentTimeMillis() - crtGetCanFrameTime > 10000) {
+                            if (TboxRepository.tboxConnected.value &&
+                                System.currentTimeMillis() - crtGetCanFrameTime > 10000
+                            ) {
                                 crtGetCanFrame()
                                 crtGetCanFrameTime = System.currentTimeMillis()
                             }
@@ -976,22 +1002,6 @@ class BackgroundService : Service() {
                             }
                         }
                     }
-                    else if (tboxIPRotation.value) {
-                        // Выбор следующего IP адреса, если подключения нет больше 60 с
-                        if (currentTime - TboxRepository.tboxConnectionTime.value.time > 60000 &&
-                            System.currentTimeMillis() - updateIPTime > 60000) {
-                            if (ipManager.isCurrentIPLast()) {
-                                ipManager.updateIPs(serverIp.value)
-                                TboxRepository.updateIPList(ipManager.getIPList())
-                                TboxRepository.addLog("DEBUG", "IP manager",
-                                    "Update IP list: ${TboxRepository.ipList.value.joinToString("; ")}")
-                            }
-                            currentIP = ipManager.getNextIP()
-                            TboxRepository.addLog("DEBUG", "IP manager", "Set TBox current IP: $currentIP")
-                            address = null
-                            updateIPTime = System.currentTimeMillis()
-                        }
-                    }
 
                     delay(1000)
                 }
@@ -1067,7 +1077,7 @@ class BackgroundService : Service() {
                 //val cmdEnd = cmd
                 TboxRepository.addLog("DEBUG", "MDC send", "AT command send: $cmds")
                 TboxRepository.addATLog("Send: $cmds")
-                sendUdpMessage(socket, serverPort, MDC_CODE, SELF_CODE, 0x0E,
+                sendUdpMessage(MDC_CODE, SELF_CODE, 0x0E,
                     byteArrayOf(
                         (cmdEnd.size + 10 shr 8).toByte(), (cmdEnd.size + 10 and 0xFF).toByte(),
                         0xFF.toByte(), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00) + cmdEnd, false)
@@ -1132,7 +1142,7 @@ class BackgroundService : Service() {
         scope.launch {
             try {
                 TboxRepository.addLog(logLevel, "CRT send", description)
-                sendUdpMessage(socket, serverPort, CRT_CODE, SELF_CODE, cmd, data, false)
+                sendUdpMessage(CRT_CODE, SELF_CODE, cmd, data, false)
                 delay(100)
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
@@ -1170,73 +1180,82 @@ class BackgroundService : Service() {
                 if (checkCrtVersion) {
                     TboxRepository.addLog("DEBUG", "CRT", "Get CRT Version")
                     sendUdpMessage(
-                        socket, serverPort, CRT_CODE, SELF_CODE, 0x01,
+                        CRT_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkMdcVersion) {
                     TboxRepository.addLog("DEBUG", "MDC", "Get MDC Version")
                     sendUdpMessage(
-                        socket, serverPort, MDC_CODE, SELF_CODE, 0x01,
+                        MDC_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkLocVersion) {
                     TboxRepository.addLog("DEBUG", "LOC", "Get LOC Version")
                     sendUdpMessage(
-                        socket, serverPort, LOC_CODE, SELF_CODE, 0x01,
+                        LOC_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkSwdVersion) {
                     TboxRepository.addLog("DEBUG", "SWD", "Get SWD Version")
                     sendUdpMessage(
-                        socket, serverPort, SWD_CODE, SELF_CODE, 0x01,
+                        SWD_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkAppVersion) {
                     TboxRepository.addLog("DEBUG", "APP", "Get APP Version")
                     sendUdpMessage(
-                        socket, serverPort, APP_CODE, SELF_CODE, 0x01,
+                        APP_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkGateVersion) {
                     TboxRepository.addLog("DEBUG", "GATE", "Get GATE Version")
                     sendUdpMessage(
-                        socket, serverPort, GATE_CODE, SELF_CODE, 0x01,
+                        GATE_CODE, SELF_CODE, 0x01,
                         byteArrayOf(0x00, 0x00), false
                     )
+                    delay(150)
                 }
 
                 if (checkSW) {
                     TboxRepository.addLog("DEBUG", "TBox", "Get SW Version")
                     sendUdpMessage(
-                        socket, serverPort, CRT_CODE, SELF_CODE, 0x12,
+                        CRT_CODE, SELF_CODE, 0x12,
                         byteArrayOf(0x00, 0x00, 0x01, 0x04.toByte()), false
                     ) // CRT - SW
+                    delay(150)
                 }
 
                 if (checkHW) {
                     TboxRepository.addLog("DEBUG", "TBox", "Get HW Version")
                     sendUdpMessage(
-                        socket, serverPort, CRT_CODE, SELF_CODE, 0x12,
+                        CRT_CODE, SELF_CODE, 0x12,
                         byteArrayOf(0x00, 0x00, 0x01, 0x05.toByte()), false
                     ) // CRT - HW
+                    delay(150)
                 }
 
                 if (checkVIN) {
                     TboxRepository.addLog("DEBUG", "TBox", "Get VIN code")
                     sendUdpMessage(
-                        socket, serverPort, CRT_CODE, SELF_CODE, 0x12,
+                        CRT_CODE, SELF_CODE, 0x12,
                         byteArrayOf(0x00, 0x00, 0x01, 0x0F.toByte()), false
                     ) // CRT VIN code
+                    delay(150)
                 }
             } catch (e: CancellationException) {
                 // Нормальная отмена - не логируем
@@ -1292,7 +1311,7 @@ class BackgroundService : Service() {
         }
         if (apnCmdJob?.isActive == true) return
         apnCmdJob = scope.launch {
-            sendUdpMessage(socket, serverPort, MDC_CODE, SELF_CODE, 0x10, cmd)
+            sendUdpMessage(MDC_CODE, SELF_CODE, 0x10, cmd)
         }
     }
 
@@ -1303,7 +1322,7 @@ class BackgroundService : Service() {
         if (appCmdJob?.isActive == true) return
         appCmdJob = scope.launch {
             TboxRepository.addLog("DEBUG", "APP send", "Suspend APP")
-            sendUdpMessage(socket, serverPort, APP_CODE, SELF_CODE, 0x02, byteArrayOf(0x00), false)
+            sendUdpMessage(APP_CODE, SELF_CODE, 0x02, byteArrayOf(0x00), false)
         }
     }
 
@@ -1314,7 +1333,7 @@ class BackgroundService : Service() {
         if (appCmdJob?.isActive == true) return
         appCmdJob = scope.launch {
             TboxRepository.addLog("DEBUG", "APP send", "Stop APP")
-            sendUdpMessage(socket, serverPort, APP_CODE, SELF_CODE, 0x04, byteArrayOf(0x00), false)
+            sendUdpMessage(APP_CODE, SELF_CODE, 0x04, byteArrayOf(0x00), false)
         }
     }*/
 
@@ -1325,9 +1344,9 @@ class BackgroundService : Service() {
         if (swdCmdJob?.isActive == true) return
         swdCmdJob = scope.launch {
             TboxRepository.addLog("DEBUG", "SWD send", "Prevent restart")
-            //sendUdpMessage(socket, serverPort, SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x01)) //Netstates Prevent Restart
-            //sendUdpMessage(socket, serverPort, SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x01, 0x01)) //Monitor Prevent Restart
-            sendUdpMessage(socket, serverPort, SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x02, 0x01), false) //Netstates и Monitor Prevent Restart
+            //sendUdpMessage(SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x00, 0x01)) //Netstates Prevent Restart
+            //sendUdpMessage(SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x01, 0x01)) //Monitor Prevent Restart
+            sendUdpMessage(SWD_CODE, SELF_CODE, 0x07, byteArrayOf(0x00, 0x00, 0x02, 0x01), false) //Netstates и Monitor Prevent Restart
         }
     }
 
@@ -1340,12 +1359,12 @@ class BackgroundService : Service() {
             if (value) {
                 TboxRepository.addLog("DEBUG", "LOC send", "Location subscribe")
                 val timeout = (LOCATION_UPDATE_TIME).toByte()
-                sendUdpMessage(socket, serverPort, LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x02, timeout, 0x00), false)
-                //sendUdpMessage(socket, serverPort, LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x02, timeout, 0x01), false)
+                sendUdpMessage(LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x02, timeout, 0x00), false)
+                //sendUdpMessage(LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x02, timeout, 0x01), false)
             }
             else {
                 TboxRepository.addLog("DEBUG", "LOC send", "Location unsubscribe")
-                sendUdpMessage(socket, serverPort, LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x00, 0x00, 0x00), false)
+                sendUdpMessage(LOC_CODE, SELF_CODE, 0x05, byteArrayOf(0x00, 0x00, 0x00), false)
             }
             //TboxRepository.updateLocationSubscribed(value)
         }
@@ -1372,8 +1391,6 @@ class BackgroundService : Service() {
         scope.launch {
             TboxRepository.addLog("DEBUG", "$app send", cmd)
             sendUdpMessage(
-                socket,
-                serverPort,
                 appCode,
                 SELF_CODE,
                 cmdCode,
@@ -1421,7 +1438,7 @@ class BackgroundService : Service() {
     private fun cancelAllJobs() {
         listOf(
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
-            swdCmdJob, locCmdJob, listenJob, apnCmdJob, sendATJob, humJob,
+            swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
             settingsListenerJob, dataListenerJob, getSMSJob
         ).forEach { job ->
@@ -1437,13 +1454,8 @@ class BackgroundService : Service() {
 
         cancelAllJobs()
         job.cancel()
-
-        try {
-            socket.close()
-        } catch (e: Exception) {
-            TboxRepository.addLog("ERROR", "Background Service", "Error closing socket")
-            Log.e("Background Service", "Error closing socket", e)
-        }
+        disconnectTboxClient()
+        packetProcessingDispatcher.close()
 
         isRunning = false
 
@@ -1463,51 +1475,47 @@ class BackgroundService : Service() {
             Log.e("Theme Service", "Error during service destruction", e)
         }
 
-        // Очищаем ссылки
-        address = null
-        currentIP = null
-
         overlayController.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private suspend fun sendUdpMessage(socket: DatagramSocket,
-                                       port: Int,
+    private suspend fun sendUdpMessage(
                                        tid: Byte,
                                        sid: Byte,
                                        cmd: Byte,
                                        msg: ByteArray,
                                        needLog: Boolean = true): Boolean {
         try {
-            if (!TboxRepository.tboxConnected.value || address == null) {
-                address = getCurrentAddress()
+            if (tBoxClient == null) {
+                delay(1000)
+                if (tBoxClient == null) {
+                    connectTboxClient()
+                    delay(1000)
+                }
             }
-            if (address == null) {
+            val client = tBoxClient ?: run {
+                TboxRepository.addLog("ERROR", "TBox Proxy", "Client is not initialized")
                 return false
             }
 
             var data = fillHeader(msg.size, tid, sid, cmd) + msg
             val checkSum = xorSum(data)
             data += checkSum
-            val packet = DatagramPacket(data, data.size, address, port)
             mutex.withLock {
                 withTimeout(1000) { // Таймаут на отправку
-                    socket.send(packet)
+                    client.sendRawMessage(data)
                 }
             }
 
             if (needLog) {
-                TboxRepository.addLog("DEBUG", "UDP message send", toHexString(data))
+                TboxRepository.addLog("DEBUG", "Proxy message send", toHexString(data))
             }
 
-            /*if (serverIp.value != currentIP) {
-                settingsManager.saveTboxIP(currentIP!!)
-            }*/
-
             return true
-        } catch (_: Exception) {
-            TboxRepository.addLog("ERROR", "UDP message send", "Error send message")
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "Proxy message send", "Error send message")
+            Log.e("TBox Proxy", "Error sending message through proxy", e)
             return false
         }
     }
@@ -2509,7 +2517,8 @@ class BackgroundService : Service() {
 
     private fun onTboxConnected(value: Boolean = false) {
         if (value) {
-            TboxRepository.addLog("INFO", "UDP Listener", "TBox connected")
+            packetSilenceChecks = 0
+            TboxRepository.addLog("INFO", "TBox connection", "TBox connected")
             TboxRepository.updateTboxConnected(true)
 
             modemMode(-1)
@@ -2573,7 +2582,8 @@ class BackgroundService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         else {
-            TboxRepository.addLog("WARN", "UDP Listener", "TBox disconnected")
+            packetSilenceChecks = 0
+            TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
             TboxRepository.resetConnectionData()
             val notification = createNotification("TBox disconnected")
             startForeground(NOTIFICATION_ID, notification)

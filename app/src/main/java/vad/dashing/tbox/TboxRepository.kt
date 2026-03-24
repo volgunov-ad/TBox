@@ -185,9 +185,6 @@ object TboxRepository {
     private val _cycleSignalTime = MutableStateFlow<Date?>(null)
     val cycleSignalTime: StateFlow<Date?> = _cycleSignalTime.asStateFlow()
 
-    private val _ipList = MutableStateFlow<List<String>>(emptyList())
-    val ipList: StateFlow<List<String>> = _ipList.asStateFlow()
-
     private val _didDataCSV = MutableStateFlow<List<String>>(emptyList())
     val didDataCSV: StateFlow<List<String>> = _didDataCSV.asStateFlow()
 
@@ -346,10 +343,6 @@ object TboxRepository {
 
     fun updateHdm(newValue: HdmData) {
         _hdm.setIfChanged(newValue)
-    }
-
-    fun updateIPList(value: List<String>) {
-        _ipList.setIfChanged(value)
     }
 
     fun updateGateVersion(value: String) {

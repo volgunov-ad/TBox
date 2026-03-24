@@ -146,12 +146,8 @@ class SettingsManager(private val context: Context) {
 
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
-        private val TBOX_IP_KEY = stringPreferencesKey("${KEY_PREFIX}tbox_ip")
-        private val TBOX_IP_ROTATION_KEY = booleanPreferencesKey("${KEY_PREFIX}tbox_ip_rotation")
-
         // Значения по умолчанию
         private const val DEFAULT_LOG_LEVEL = "DEBUG"
-        private const val DEFAULT_TBOX_IP = "192.168.225.1"
         private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_COLS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_WIDTH = 100
@@ -327,14 +323,6 @@ class SettingsManager(private val context: Context) {
     // String flows
     val logLevelFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[LOG_LEVEL_KEY] ?: DEFAULT_LOG_LEVEL }
-        .distinctUntilChanged()
-
-    val tboxIPFlow: Flow<String> = context.settingsDataStore.data
-        .map { preferences -> preferences[TBOX_IP_KEY] ?: DEFAULT_TBOX_IP }
-        .distinctUntilChanged()
-
-    val tboxIPRotationFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[TBOX_IP_ROTATION_KEY] ?: false }
         .distinctUntilChanged()
 
     val dashboardRowsFlow: Flow<Int> = context.settingsDataStore.data
@@ -580,18 +568,6 @@ class SettingsManager(private val context: Context) {
 
     suspend fun ensureDefaultFloatingDashboards() {
         // Historical API: empty floating panel list is valid; no default injection.
-    }
-
-    suspend fun saveTboxIP(value: String) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[TBOX_IP_KEY] = value
-        }
-    }
-
-    suspend fun saveTboxIPRotationSetting(enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[TBOX_IP_ROTATION_KEY] = enabled
-        }
     }
 
     // Улучшенные методы для кастомных строк
