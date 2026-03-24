@@ -54,6 +54,7 @@
     <string name="tbox_disconnected_at">TBox отключен в %1$s</string>
     <string name="service_started_at">Служба запущена в %1$s</string>
     <string name="program_version">Версия программы %1$s</string>
+    <string name="tbox_proxy_version">Версия Tbox proxy %1$s</string>
     <string name="tbox_short">TBox</string>
 
     <string name="widget_option_not_selected">Не выбрано</string>

@@ -16,6 +16,11 @@ android {
         versionName = "0.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField(
+            "String",
+            "TBOX_PROXY_VERSION",
+            "\"${libs.versions.tboxProxy.get()}\""
+        )
     }
     flavorDimensions += "language"
     productFlavors {
@@ -52,6 +57,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -77,7 +83,7 @@ dependencies {
     implementation(libs.androidx.savedstate)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
-    implementation("com.github.jsparrow2006:tbox-proxy:v1.0.3")
+    implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

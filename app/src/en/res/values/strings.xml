@@ -54,6 +54,7 @@
     <string name="tbox_disconnected_at">TBox disconnected at %1$s</string>
     <string name="service_started_at">Service started at %1$s</string>
     <string name="program_version">App version %1$s</string>
+    <string name="tbox_proxy_version">Tbox proxy version %1$s</string>
     <string name="tbox_short">TBox</string>
 
     <string name="widget_option_not_selected">Not selected</string>

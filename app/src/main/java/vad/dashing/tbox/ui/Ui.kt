@@ -49,6 +49,7 @@ import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.CycleDataViewModel
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import java.text.SimpleDateFormat
@@ -300,6 +301,18 @@ fun TboxScreen(
                     if (isMenuVisible) {
                         Text(
                             text = stringResource(R.string.program_version, versionName),
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .padding(horizontal = 8.dp)
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.tbox_proxy_version,
+                                BuildConfig.TBOX_PROXY_VERSION
+                            ),
                             fontSize = 16.sp,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurface,
