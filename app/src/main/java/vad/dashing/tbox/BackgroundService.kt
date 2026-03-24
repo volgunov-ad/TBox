@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import dashingineering.jetour.tboxcore.TBoxClient
@@ -182,6 +183,8 @@ class BackgroundService : Service() {
         const val ACTION_SUSPEND_OVERLAYS = "vad.dashing.tbox.SUSPEND_OVERLAYS"
         const val ACTION_RESUME_OVERLAYS = "vad.dashing.tbox.RESUME_OVERLAYS"
         const val ACTION_READ_ALL_SMS = "vad.dashing.tbox.READ_ALL_SMS"
+
+        private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
     }
 
 
@@ -683,18 +686,32 @@ class BackgroundService : Service() {
         dataListenerJob = scope.launch {
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
+                var prevRpm = 0f
+                var lastMotorHoursPeriodicPersistAt = SystemClock.elapsedRealtime()
                 CanDataRepository.engineRPM
                     .drop(1)
                     .collect { rpm ->
                     try {
-                        val motorHours = motorHoursBuffer.updateValue(rpm ?: 0f)
-                        val motorHoursTrip = motorHoursTripBuffer.updateValue(rpm ?: 0f)
+                        val r = rpm ?: 0f
+                        val motorHours = motorHoursBuffer.updateValue(r)
+                        val motorHoursTrip = motorHoursTripBuffer.updateValue(r)
                         if (motorHours != 0f) {
-                            appDataManager.addMotorHours(motorHours)
+                            CarDataRepository.addMotorHours(motorHours)
                         }
                         if (motorHoursTrip != 0f) {
                             CanDataRepository.addMotorHoursTrip(motorHoursTrip)
                         }
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastMotorHoursPeriodicPersistAt >= MOTOR_HOURS_PERSIST_INTERVAL_MS &&
+                            CarDataRepository.needsPersistence()
+                        ) {
+                            lastMotorHoursPeriodicPersistAt = now
+                            persistMotorHoursToStore()
+                        }
+                        if (prevRpm > 0f && r == 0f) {
+                            persistMotorHoursToStore()
+                        }
+                        prevRpm = r
                     } catch (e: Exception) {
                         TboxRepository.addLog("ERROR", "Data Listener",
                             "Fatal error in motor hours")
@@ -703,6 +720,12 @@ class BackgroundService : Service() {
                 }
             }
         }
+    }
+
+    private suspend fun persistMotorHoursToStore() {
+        val v = CarDataRepository.motorHours.value
+        appDataManager.saveMotorHours(v)
+        CarDataRepository.markPersisted(v)
     }
 
     private fun stopDataListener() {
