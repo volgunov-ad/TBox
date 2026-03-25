@@ -8,7 +8,7 @@ fun tripDurationRoundedMinutes(ms: Long): Int =
     ((ms + 30_000L).coerceAtLeast(0L) / 60_000L).toInt()
 
 /**
- * Formats trip duration for UI: "1 ч 34 м", or "35 м" when hours are zero; "1 ч" when minutes are zero.
+ * Formats trip duration for UI: "1 ч 34 мин", or "35 мин" when hours are zero; "1 ч" when minutes are zero.
  * Rounds to the nearest minute.
  */
 fun formatTripDurationHuman(context: Context, ms: Long): String {
