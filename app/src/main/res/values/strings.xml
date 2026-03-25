@@ -382,6 +382,10 @@
     <string name="trips_distance">Пробег</string>
     <string name="trips_moving_time">Время в движении</string>
     <string name="trips_idle_time">Время в простое</string>
+    <string name="trips_total_time">Общее время</string>
+    <string name="trips_format_hours_minutes">%1$d ч %2$d м</string>
+    <string name="trips_format_hours_only">%1$d ч</string>
+    <string name="trips_format_minutes_only">%1$d м</string>
     <string name="trips_max_speed">Макс. скорость</string>
     <string name="trips_max_engine_temp">Макс. температура двигателя</string>
     <string name="trips_max_gearbox_temp">Макс. температура масла КПП</string>

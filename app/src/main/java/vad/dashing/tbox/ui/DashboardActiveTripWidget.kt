@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.formatTripDurationHuman
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TripRepository
 import vad.dashing.tbox.valueToString
@@ -40,6 +42,7 @@ fun DashboardActiveTripWidgetItem(
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
+    val context = LocalContext.current
     val trip by appDataViewModel.activeTrip.collectAsStateWithLifecycle()
     val dateFmt = rememberTripDateFormat()
 
@@ -109,14 +112,24 @@ fun DashboardActiveTripWidgetItem(
                 )
                 ActiveTripRow(
                     label = stringResource(R.string.trips_moving_time),
-                    value = formatTripDurationMs(t.movingTimeMs),
+                    value = formatTripDurationHuman(context, t.movingTimeMs),
                     unit = "",
                     fontSize = rowFont,
                     color = resolvedTextColor
                 )
                 ActiveTripRow(
                     label = stringResource(R.string.trips_idle_time),
-                    value = formatTripDurationMs(t.idleTimeMs),
+                    value = formatTripDurationHuman(context, t.idleTimeMs),
+                    unit = "",
+                    fontSize = rowFont,
+                    color = resolvedTextColor
+                )
+                ActiveTripRow(
+                    label = stringResource(R.string.trips_total_time),
+                    value = formatTripDurationHuman(
+                        context,
+                        t.movingTimeMs + t.idleTimeMs
+                    ),
                     unit = "",
                     fontSize = rowFont,
                     color = resolvedTextColor
@@ -213,15 +226,3 @@ private fun ActiveTripRow(
     )
 }
 
-private fun formatTripDurationMs(ms: Long): String {
-    if (ms <= 0L) return "0"
-    val totalSec = (ms + 500) / 1000
-    val h = totalSec / 3600
-    val m = (totalSec % 3600) / 60
-    val s = totalSec % 60
-    return if (h > 0) {
-        String.format(Locale.getDefault(), "%d:%02d:%02d", h, m, s)
-    } else {
-        String.format(Locale.getDefault(), "%d:%02d", m, s)
-    }
-}

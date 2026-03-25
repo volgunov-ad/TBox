@@ -382,6 +382,10 @@
     <string name="trips_distance">Distance</string>
     <string name="trips_moving_time">Moving time</string>
     <string name="trips_idle_time">Idle time</string>
+    <string name="trips_total_time">Total time</string>
+    <string name="trips_format_hours_minutes">%1$d h %2$d min</string>
+    <string name="trips_format_hours_only">%1$d h</string>
+    <string name="trips_format_minutes_only">%1$d min</string>
     <string name="trips_max_speed">Max speed</string>
     <string name="trips_max_engine_temp">Max engine temperature</string>
     <string name="trips_max_gearbox_temp">Max transmission oil temperature</string>

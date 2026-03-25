@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.formatTripDurationHuman
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TripRecord
@@ -92,6 +94,7 @@ fun TripsTab(
         nameEdit = selectedTrip?.name ?: ""
     }
 
+    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val dateTimeFormat = remember {
         SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
@@ -284,13 +287,22 @@ fun TripsTab(
                 item {
                     StatusRow(
                         stringResource(R.string.trips_moving_time),
-                        formatDurationMs(trip.movingTimeMs)
+                        formatTripDurationHuman(context, trip.movingTimeMs)
                     )
                 }
                 item {
                     StatusRow(
                         stringResource(R.string.trips_idle_time),
-                        formatDurationMs(trip.idleTimeMs)
+                        formatTripDurationHuman(context, trip.idleTimeMs)
+                    )
+                }
+                item {
+                    StatusRow(
+                        stringResource(R.string.trips_total_time),
+                        formatTripDurationHuman(
+                            context,
+                            trip.movingTimeMs + trip.idleTimeMs
+                        )
                     )
                 }
                 item {
@@ -369,16 +381,3 @@ fun TripsTab(
 
 private fun formatWithUnit(value: String, unit: String): String =
     if (value.isBlank()) value else "$value\u2009$unit"
-
-private fun formatDurationMs(ms: Long): String {
-    if (ms <= 0L) return "0"
-    val totalSec = (ms + 500) / 1000
-    val h = totalSec / 3600
-    val m = (totalSec % 3600) / 60
-    val s = totalSec % 60
-    return if (h > 0) {
-        String.format(Locale.getDefault(), "%d:%02d:%02d", h, m, s)
-    } else {
-        String.format(Locale.getDefault(), "%d:%02d", m, s)
-    }
-}
