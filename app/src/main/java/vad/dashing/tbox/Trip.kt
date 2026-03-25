@@ -18,6 +18,7 @@ private const val JSON_MIN_OUTSIDE_TEMP = "minOutsideTemp"
 private const val JSON_MAX_OUTSIDE_TEMP = "maxOutsideTemp"
 private const val JSON_FUEL_LITERS = "fuelLiters"
 private const val JSON_REFUEL_COUNT = "refuelCount"
+private const val JSON_FUEL_BASELINE_PERCENT = "fuelBaselinePercent"
 
 data class TripRecord(
     val id: String = UUID.randomUUID().toString(),
@@ -35,6 +36,11 @@ data class TripRecord(
     val fuelConsumedLiters: Float = 0f,
     /** Number of refueling events detected during the trip (level jump heuristic). */
     val refuelCount: Int = 0,
+    /**
+     * Last known filtered fuel level (%) for this trip, persisted so consumption/refuel logic can
+     * resume after the HU/service was off (e.g. refuel while engine stopped).
+     */
+    val fuelBaselinePercent: Float? = null,
 ) {
     val isActive: Boolean get() = endTimeEpochMs == null
 
@@ -53,6 +59,7 @@ data class TripRecord(
         if (maxOutsideTemp != null) put(JSON_MAX_OUTSIDE_TEMP, maxOutsideTemp.toDouble())
         put(JSON_FUEL_LITERS, fuelConsumedLiters.toDouble())
         put(JSON_REFUEL_COUNT, refuelCount)
+        if (fuelBaselinePercent != null) put(JSON_FUEL_BASELINE_PERCENT, fuelBaselinePercent.toDouble())
     }
 
     companion object {
@@ -79,6 +86,9 @@ data class TripRecord(
             } else null,
             fuelConsumedLiters = o.optDouble(JSON_FUEL_LITERS, 0.0).toFloat(),
             refuelCount = o.optInt(JSON_REFUEL_COUNT),
+            fuelBaselinePercent = if (o.has(JSON_FUEL_BASELINE_PERCENT) && !o.isNull(JSON_FUEL_BASELINE_PERCENT)) {
+                o.optDouble(JSON_FUEL_BASELINE_PERCENT).toFloat()
+            } else null,
         )
     }
 }
