@@ -190,6 +190,7 @@ object TripRepository {
         if (abs(a.maxSpeed - b.maxSpeed) > PERSIST_EPS) return true
         if (abs(a.fuelConsumedLiters - b.fuelConsumedLiters) > PERSIST_EPS) return true
         if (a.refuelCount != b.refuelCount) return true
+        if (abs(a.fuelRefueledLiters - b.fuelRefueledLiters) > PERSIST_EPS) return true
         when {
             a.fuelBaselinePercent == null && b.fuelBaselinePercent == null -> Unit
             a.fuelBaselinePercent == null || b.fuelBaselinePercent == null -> return true

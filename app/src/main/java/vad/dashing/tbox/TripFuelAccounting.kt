@@ -16,6 +16,8 @@ object TripFuelAccounting {
         val consumedLiters: Float,
         val baselinePercent: Float,
         val refuelDetected: Boolean,
+        /** Positive liters added when [refuelDetected] (from % delta × tank). */
+        val refueledLitersThisStep: Float,
     )
 
     /**
@@ -31,7 +33,12 @@ object TripFuelAccounting {
         tankLiters: Float,
     ): FuelStepResult {
         if (lastPercent == null) {
-            return FuelStepResult(currentConsumedLiters, percentNow, refuelDetected = false)
+            return FuelStepResult(
+                currentConsumedLiters,
+                percentNow,
+                refuelDetected = false,
+                refueledLitersThisStep = 0f,
+            )
         }
         val delta = percentNow - lastPercent
         val refuel = delta >= REFUEL_RISE_PERCENT
@@ -41,6 +48,7 @@ object TripFuelAccounting {
                 currentConsumedLiters + (-delta) / 100f * tankLiters
             else -> currentConsumedLiters
         }
-        return FuelStepResult(consumed, percentNow, refuelDetected = refuel)
+        val refueledStep = if (refuel) delta / 100f * tankLiters else 0f
+        return FuelStepResult(consumed, percentNow, refuelDetected = refuel, refueledLitersThisStep = refueledStep)
     }
 }

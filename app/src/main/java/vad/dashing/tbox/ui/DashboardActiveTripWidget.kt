@@ -196,6 +196,13 @@ fun DashboardActiveTripWidgetItem(
                     color = resolvedTextColor
                 )
                 ActiveTripRow(
+                    label = stringResource(R.string.trips_fuel_refueled),
+                    value = valueToString(t.fuelRefueledLiters, 2),
+                    unit = stringResource(R.string.unit_liter),
+                    fontSize = rowFont,
+                    color = resolvedTextColor
+                )
+                ActiveTripRow(
                     label = stringResource(R.string.trips_refuel_count),
                     value = valueToString(t.refuelCount),
                     unit = "",

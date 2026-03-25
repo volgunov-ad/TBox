@@ -369,6 +369,12 @@ fun TripsTab(
                 }
                 item {
                     StatusRow(
+                        stringResource(R.string.trips_fuel_refueled),
+                        formatWithUnit(valueToString(trip.fuelRefueledLiters, 2), stringResource(R.string.unit_liter))
+                    )
+                }
+                item {
+                    StatusRow(
                         stringResource(R.string.trips_refuel_count),
                         valueToString(trip.refuelCount)
                     )

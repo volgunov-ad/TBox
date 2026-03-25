@@ -15,6 +15,7 @@ class TripFuelAccountingTest {
         assertEquals(0f, r.consumedLiters, 1e-4f)
         assertEquals(50f, r.baselinePercent, 1e-4f)
         assertFalse(r.refuelDetected)
+        assertEquals(0f, r.refueledLitersThisStep, 1e-4f)
     }
 
     @Test
@@ -23,6 +24,7 @@ class TripFuelAccountingTest {
         assertEquals(1f, r.consumedLiters, 1e-4f)
         assertEquals(80f, r.baselinePercent, 1e-4f)
         assertTrue(r.refuelDetected)
+        assertEquals(28.5f, r.refueledLitersThisStep, 1e-3f)
     }
 
     @Test
@@ -30,6 +32,7 @@ class TripFuelAccountingTest {
         val r = TripFuelAccounting.applyFuelPercentStep(0f, 50f, 45f, tank)
         assertEquals(2.85f, r.consumedLiters, 1e-3f)
         assertFalse(r.refuelDetected)
+        assertEquals(0f, r.refueledLitersThisStep, 1e-4f)
     }
 
     @Test
@@ -37,5 +40,6 @@ class TripFuelAccountingTest {
         val r = TripFuelAccounting.applyFuelPercentStep(0f, 50f, 49.9f, tank)
         assertEquals(0f, r.consumedLiters, 1e-4f)
         assertFalse(r.refuelDetected)
+        assertEquals(0f, r.refueledLitersThisStep, 1e-4f)
     }
 }

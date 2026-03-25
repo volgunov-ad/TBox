@@ -770,6 +770,7 @@ class BackgroundService : Service() {
             cur.copy(
                 fuelConsumedLiters = step.consumedLiters,
                 refuelCount = cur.refuelCount + if (step.refuelDetected) 1 else 0,
+                fuelRefueledLiters = cur.fuelRefueledLiters + step.refueledLitersThisStep,
                 fuelBaselinePercent = step.baselinePercent,
             )
         }
