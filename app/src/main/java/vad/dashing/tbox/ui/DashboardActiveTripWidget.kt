@@ -3,7 +3,6 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -17,7 +16,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.DashboardWidget
@@ -33,7 +31,6 @@ import java.util.Locale
 fun DashboardActiveTripWidgetItem(
     widget: DashboardWidget,
     appDataViewModel: AppDataViewModel,
-    onTripFinishAndStart: () -> Unit,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
@@ -85,17 +82,6 @@ fun DashboardActiveTripWidgetItem(
                     containerHeight = availableHeight,
                     textType = TextType.VALUE
                 )
-                if (t.isActive) {
-                    Button(
-                        onClick = onTripFinishAndStart,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.trips_finish),
-                            fontSize = 16.sp
-                        )
-                    }
-                }
                 ActiveTripRow(
                     label = stringResource(R.string.trips_start_time),
                     value = dateFmt.format(Date(t.startTimeEpochMs)),
@@ -105,7 +91,7 @@ fun DashboardActiveTripWidgetItem(
                 )
                 ActiveTripRow(
                     label = stringResource(R.string.trips_distance),
-                    value = valueToString(t.distanceKm, 2),
+                    value = valueToString(t.distanceKm, 0),
                     unit = stringResource(R.string.unit_km),
                     fontSize = rowFont,
                     color = resolvedTextColor
@@ -190,14 +176,14 @@ fun DashboardActiveTripWidgetItem(
                 )
                 ActiveTripRow(
                     label = stringResource(R.string.trips_fuel_used),
-                    value = valueToString(t.fuelConsumedLiters, 2),
+                    value = valueToString(t.fuelConsumedLiters, 1),
                     unit = stringResource(R.string.unit_liter),
                     fontSize = rowFont,
                     color = resolvedTextColor
                 )
                 ActiveTripRow(
                     label = stringResource(R.string.trips_fuel_refueled),
-                    value = valueToString(t.fuelRefueledLiters, 2),
+                    value = valueToString(t.fuelRefueledLiters, 1),
                     unit = stringResource(R.string.unit_liter),
                     fontSize = rowFont,
                     color = resolvedTextColor

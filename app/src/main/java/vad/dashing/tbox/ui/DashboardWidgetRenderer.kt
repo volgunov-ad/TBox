@@ -229,9 +229,13 @@ fun DashboardWidgetRenderer(
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
-                onTripFinishAndStart = onTripFinishAndStart,
                 onClick = onClick,
                 onLongClick = onLongClick,
+                onDoubleClick = {
+                    if (appDataViewModel.activeTrip.value?.isActive == true) {
+                        onTripFinishAndStart()
+                    }
+                },
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,

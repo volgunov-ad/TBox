@@ -295,7 +295,7 @@ fun TripsTab(
                 item {
                     StatusRow(
                         stringResource(R.string.trips_distance),
-                        formatWithUnit(valueToString(trip.distanceKm, 2), stringResource(R.string.unit_km))
+                        formatWithUnit(valueToString(trip.distanceKm, 0), stringResource(R.string.unit_km))
                     )
                 }
                 item {
@@ -378,13 +378,13 @@ fun TripsTab(
                 item {
                     StatusRow(
                         stringResource(R.string.trips_fuel_used),
-                        formatWithUnit(valueToString(trip.fuelConsumedLiters, 2), stringResource(R.string.unit_liter))
+                        formatWithUnit(valueToString(trip.fuelConsumedLiters, 1), stringResource(R.string.unit_liter))
                     )
                 }
                 item {
                     StatusRow(
                         stringResource(R.string.trips_fuel_refueled),
-                        formatWithUnit(valueToString(trip.fuelRefueledLiters, 2), stringResource(R.string.unit_liter))
+                        formatWithUnit(valueToString(trip.fuelRefueledLiters, 1), stringResource(R.string.unit_liter))
                     )
                 }
                 item {

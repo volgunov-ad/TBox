@@ -6,10 +6,11 @@ import org.junit.Test
 class TripDurationFormatTest {
 
     @Test
-    fun rounding_nearestMinute() {
-        assertEquals(0, tripDurationRoundedMinutes(29_999L))
-        assertEquals(1, tripDurationRoundedMinutes(30_000L))
-        assertEquals(35, tripDurationRoundedMinutes(35 * 60_000L))
-        assertEquals(94, tripDurationRoundedMinutes(94 * 60_000L + 20_000L))
+    fun hms_truncatesToWholeSeconds() {
+        assertEquals(Triple(0, 0, 0), tripDurationHms(0L))
+        assertEquals(Triple(0, 0, 0), tripDurationHms(999L))
+        assertEquals(Triple(0, 0, 1), tripDurationHms(1000L))
+        assertEquals(Triple(1, 2, 5), tripDurationHms(3_725_000L))
+        assertEquals(Triple(2, 0, 0), tripDurationHms(7_200_000L))
     }
 }

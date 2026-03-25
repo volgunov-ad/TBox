@@ -365,7 +365,7 @@
     <string name="data_title_motor_hours">Engine hours</string>
     <string name="data_title_motor_hours_trip">Trip engine hours</string>
     <string name="data_title_motor_hours_widget">Engine hours widget</string>
-    <string name="data_title_active_trip_widget">Active trip</string>
+    <string name="data_title_active_trip_widget">Current trip</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_split_trip_time_title">Trip split time, min</string>
@@ -376,22 +376,22 @@
     <string name="trips_add_favorite">Add to favorites</string>
     <string name="trips_remove_favorite">Remove from favorites</string>
     <string name="trips_empty">No saved trips</string>
-    <string name="trips_active_trip">Active trip</string>
+    <string name="trips_active_trip">Current trip</string>
     <string name="trips_start_time">Start</string>
     <string name="trips_end_time">End</string>
     <string name="trips_distance">Distance</string>
     <string name="trips_moving_time">Moving time</string>
     <string name="trips_idle_time">Idle time</string>
     <string name="trips_total_time">Total time</string>
-    <string name="trips_format_hours_minutes">%1$d h %2$d min</string>
-    <string name="trips_format_hours_only">%1$d h</string>
-    <string name="trips_format_minutes_only">%1$d min</string>
+    <string name="trips_format_hours_minutes_seconds">%1$d h %2$d min %3$d s</string>
+    <string name="trips_format_minutes_seconds">%1$d min %2$d s</string>
+    <string name="trips_format_seconds_only">%1$d s</string>
     <string name="trips_max_speed">Max speed</string>
     <string name="trips_max_engine_temp">Max engine temperature</string>
     <string name="trips_max_gearbox_temp">Max transmission oil temperature</string>
     <string name="trips_min_outside_temp">Min outside temperature</string>
     <string name="trips_max_outside_temp">Max outside temperature</string>
-    <string name="trips_avg_speed_moving">Average speed (moving only)</string>
+    <string name="trips_avg_speed_moving">Average speed without idle</string>
     <string name="trips_avg_speed_trip">Average speed</string>
     <string name="trips_fuel_used">Fuel used</string>
     <string name="trips_fuel_refueled">Fuel refueled</string>
