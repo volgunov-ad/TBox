@@ -8,7 +8,7 @@ import kotlin.math.abs
 import kotlin.math.max
 
 object TripRepository {
-    const val MAX_TRIPS = 25
+    const val MAX_TRIPS = 31
     const val MAX_FAVORITES = 25
 
     val lock = Any()
