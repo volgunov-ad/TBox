@@ -66,8 +66,7 @@ fun DashboardWidgetScaffold(
                             .pointerInput(
                                 resolvedInteractionPolicy,
                                 onClick,
-                                onLongClick,
-                                onDoubleClick
+                                onLongClick
                             ) {
                                 detectTapGestures(
                                     onTap = { offset ->
@@ -88,17 +87,6 @@ fun DashboardWidgetScaffold(
                                             )
                                         ) {
                                             onLongClick()
-                                        }
-                                    },
-                                    onDoubleTap = { offset ->
-                                        if (onDoubleClick != null &&
-                                            resolvedInteractionPolicy.isActionAllowed(
-                                                offset = offset,
-                                                width = size.width.toFloat(),
-                                                height = size.height.toFloat()
-                                            )
-                                        ) {
-                                            onDoubleClick()
                                         }
                                     }
                                 )
