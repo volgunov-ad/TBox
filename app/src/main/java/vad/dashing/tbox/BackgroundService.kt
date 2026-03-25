@@ -845,10 +845,16 @@ class BackgroundService : Service() {
                     var fuel = cur.fuelConsumedLiters
                     val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
                     val lastFp = tripLastFuelPercent
-                    if (pctNow != null && lastFp != null && lastFp >= pctNow) {
-                        fuel += (lastFp - pctNow) / 100f * tankL
+                    if (pctNow != null) {
+                        val (nextFuel, nextPct) = TripFuelAccounting.applyFuelPercentStep(
+                            currentConsumedLiters = fuel,
+                            lastPercent = lastFp,
+                            percentNow = pctNow,
+                            tankLiters = tankL
+                        )
+                        fuel = nextFuel
+                        tripLastFuelPercent = nextPct
                     }
-                    tripLastFuelPercent = pctNow ?: tripLastFuelPercent
                     val outside = TripRepository.mergeOutsideTemp(
                         cur.minOutsideTemp,
                         cur.maxOutsideTemp,
