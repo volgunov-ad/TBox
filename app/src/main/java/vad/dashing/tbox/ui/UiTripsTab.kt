@@ -1,24 +1,25 @@
 package vad.dashing.tbox.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +38,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +52,8 @@ import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TripsTab(
     appDataViewModel: AppDataViewModel,
@@ -67,17 +71,14 @@ fun TripsTab(
         ).map { it.id }
     }
 
-    var selectedId by remember(trips) {
-        mutableStateOf(
-            trips.maxByOrNull { it.startTimeEpochMs }?.id ?: ""
-        )
-    }
+    var selectedId by remember { mutableStateOf("") }
 
-    LaunchedEffect(sortedIds) {
-        if (selectedId.isNotEmpty() && sortedIds.none { it == selectedId }) {
-            selectedId = sortedIds.firstOrNull() ?: ""
+    LaunchedEffect(trips, sortedIds) {
+        if (sortedIds.isEmpty()) {
+            selectedId = ""
+            return@LaunchedEffect
         }
-        if (selectedId.isEmpty() && sortedIds.isNotEmpty()) {
+        if (selectedId.isEmpty() || selectedId !in sortedIds) {
             selectedId = sortedIds.first()
         }
     }
@@ -95,6 +96,7 @@ fun TripsTab(
     }
 
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val focusManager = LocalFocusManager.current
     val dateTimeFormat = remember {
         SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
@@ -116,7 +118,13 @@ fun TripsTab(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(modifier = Modifier.weight(1f)) {
+            ExposedDropdownMenuBox(
+                expanded = expanded && sortedIds.isNotEmpty(),
+                onExpandedChange = { open ->
+                    if (sortedIds.isNotEmpty()) expanded = open
+                },
+                modifier = Modifier.weight(1f)
+            ) {
                 OutlinedTextField(
                     value = selectedTrip?.let { trip ->
                         val star = if (favorites.contains(trip.id)) " ★" else ""
@@ -127,17 +135,14 @@ fun TripsTab(
                     onValueChange = {},
                     readOnly = true,
                     trailingIcon = {
-                        IconButton(onClick = { expanded = !expanded }) {
-                            Icon(
-                                Icons.Filled.ArrowDropDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                     },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = sortedIds.isNotEmpty()) { expanded = true },
+                        .menuAnchor(
+                            type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                            enabled = sortedIds.isNotEmpty(),
+                        )
+                        .fillMaxWidth(),
                     singleLine = true,
                     textStyle = tabTextStyle,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -149,9 +154,12 @@ fun TripsTab(
                         cursorColor = MaterialTheme.colorScheme.primary,
                     )
                 )
-                DropdownMenu(
+                ExposedDropdownMenu(
                     expanded = expanded && sortedIds.isNotEmpty(),
-                    onDismissRequest = { expanded = false }
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.requiredWidthIn(
+                        min = (configuration.screenWidthDp.dp - 36.dp).coerceAtLeast(280.dp)
+                    )
                 ) {
                     sortedIds.forEach { id ->
                         val trip = trips.firstOrNull { it.id == id } ?: return@forEach
@@ -170,7 +178,8 @@ fun TripsTab(
                             onClick = {
                                 selectedId = id
                                 expanded = false
-                            }
+                            },
+                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                         )
                     }
                 }
@@ -186,6 +195,11 @@ fun TripsTab(
                 Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.trips_delete))
             }
         }
+
+        HorizontalDivider(
+            modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
 
         selectedTrip?.let { trip ->
             OutlinedTextField(
