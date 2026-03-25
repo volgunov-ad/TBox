@@ -863,7 +863,7 @@ class BackgroundService : Service() {
                     var d = cur.distanceKm
                     val lastO = tripLastOdometer
                     if (odo != null && lastO != null && odo >= lastO) {
-                        d += (odo - lastO).toFloat() / 1000f
+                        d += (odo - lastO).toFloat()
                     }
                     tripLastOdometer = odo ?: tripLastOdometer
                     var mov = cur.movingTimeMs
