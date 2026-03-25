@@ -225,7 +225,7 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        "activeTripWidget" -> {
+        "activeTripWidget", "activeTripWidgetSimple" -> {
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,

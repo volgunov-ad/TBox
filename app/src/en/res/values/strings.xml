@@ -366,6 +366,7 @@
     <string name="data_title_motor_hours_trip">Trip engine hours</string>
     <string name="data_title_motor_hours_widget">Engine hours widget</string>
     <string name="data_title_active_trip_widget">Current trip</string>
+    <string name="data_title_active_trip_widget_simple">Current trip (compact)</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_split_trip_time_title">Trip split time, min</string>

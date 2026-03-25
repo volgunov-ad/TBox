@@ -333,13 +333,13 @@ fun TripsTab(
                         } ?: stringResource(R.string.value_no_data)
                     )
                 }
-                item {
-                    StatusRow(
-                        stringResource(R.string.trips_max_gearbox_temp),
-                        trip.maxGearboxOilTemp?.let {
-                            formatWithUnit(valueToString(it), stringResource(R.string.unit_celsius))
-                        } ?: stringResource(R.string.value_no_data)
-                    )
+                trip.maxGearboxOilTemp?.let { gb ->
+                    item {
+                        StatusRow(
+                            stringResource(R.string.trips_max_gearbox_temp),
+                            formatWithUnit(valueToString(gb), stringResource(R.string.unit_celsius))
+                        )
+                    }
                 }
                 item {
                     StatusRow(
