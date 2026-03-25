@@ -843,17 +843,21 @@ class BackgroundService : Service() {
                         idl += dt
                     }
                     var fuel = cur.fuelConsumedLiters
+                    var refuels = cur.refuelCount
                     val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
                     val lastFp = tripLastFuelPercent
                     if (pctNow != null) {
-                        val (nextFuel, nextPct) = TripFuelAccounting.applyFuelPercentStep(
+                        val step = TripFuelAccounting.applyFuelPercentStep(
                             currentConsumedLiters = fuel,
                             lastPercent = lastFp,
                             percentNow = pctNow,
                             tankLiters = tankL
                         )
-                        fuel = nextFuel
-                        tripLastFuelPercent = nextPct
+                        fuel = step.consumedLiters
+                        tripLastFuelPercent = step.baselinePercent
+                        if (step.refuelDetected) {
+                            refuels += 1
+                        }
                     }
                     val outside = TripRepository.mergeOutsideTemp(
                         cur.minOutsideTemp,
@@ -874,6 +878,7 @@ class BackgroundService : Service() {
                         minOutsideTemp = outside.first,
                         maxOutsideTemp = outside.second,
                         fuelConsumedLiters = fuel,
+                        refuelCount = refuels,
                     )
                 }
             }

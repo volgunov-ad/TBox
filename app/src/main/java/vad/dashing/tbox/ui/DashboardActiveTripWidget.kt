@@ -195,6 +195,13 @@ fun DashboardActiveTripWidgetItem(
                     fontSize = rowFont,
                     color = resolvedTextColor
                 )
+                ActiveTripRow(
+                    label = stringResource(R.string.trips_refuel_count),
+                    value = valueToString(t.refuelCount),
+                    unit = "",
+                    fontSize = rowFont,
+                    color = resolvedTextColor
+                )
             }
         }
     }

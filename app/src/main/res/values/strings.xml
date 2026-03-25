@@ -394,6 +394,7 @@
     <string name="trips_avg_speed_moving">Средняя скорость без учёта простоев</string>
     <string name="trips_avg_speed_trip">Средняя скорость</string>
     <string name="trips_fuel_used">Израсходовано топлива</string>
+    <string name="trips_refuel_count">Заправки</string>
     <string name="data_title_net_widget">Виджет сигнала сети</string>
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>
     <string name="data_title_net_widget_colored">Виджет сигнала сети (цветной)</string>

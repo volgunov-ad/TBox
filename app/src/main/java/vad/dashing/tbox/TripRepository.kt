@@ -187,6 +187,7 @@ object TripRepository {
         if (abs(a.distanceKm - b.distanceKm) > PERSIST_EPS) return true
         if (abs(a.maxSpeed - b.maxSpeed) > PERSIST_EPS) return true
         if (abs(a.fuelConsumedLiters - b.fuelConsumedLiters) > PERSIST_EPS) return true
+        if (a.refuelCount != b.refuelCount) return true
         if (kotlin.math.abs(a.movingTimeMs - b.movingTimeMs) > MS_EPS) return true
         if (kotlin.math.abs(a.idleTimeMs - b.idleTimeMs) > MS_EPS) return true
         if (a.maxEngineTemp != b.maxEngineTemp) return true

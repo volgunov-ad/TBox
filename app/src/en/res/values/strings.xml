@@ -394,6 +394,7 @@
     <string name="trips_avg_speed_moving">Average speed (moving only)</string>
     <string name="trips_avg_speed_trip">Average speed</string>
     <string name="trips_fuel_used">Fuel used</string>
+    <string name="trips_refuel_count">Refuelings</string>
     <string name="data_title_net_widget">Network signal widget</string>
     <string name="data_title_net_widget_new">Network signal widget (new)</string>
     <string name="data_title_net_widget_colored">Network signal widget (colored)</string>

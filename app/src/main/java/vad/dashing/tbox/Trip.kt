@@ -17,6 +17,7 @@ private const val JSON_MAX_GEARBOX_TEMP = "maxGearboxTemp"
 private const val JSON_MIN_OUTSIDE_TEMP = "minOutsideTemp"
 private const val JSON_MAX_OUTSIDE_TEMP = "maxOutsideTemp"
 private const val JSON_FUEL_LITERS = "fuelLiters"
+private const val JSON_REFUEL_COUNT = "refuelCount"
 
 data class TripRecord(
     val id: String = UUID.randomUUID().toString(),
@@ -32,6 +33,8 @@ data class TripRecord(
     val minOutsideTemp: Float? = null,
     val maxOutsideTemp: Float? = null,
     val fuelConsumedLiters: Float = 0f,
+    /** Number of refueling events detected during the trip (level jump heuristic). */
+    val refuelCount: Int = 0,
 ) {
     val isActive: Boolean get() = endTimeEpochMs == null
 
@@ -49,6 +52,7 @@ data class TripRecord(
         if (minOutsideTemp != null) put(JSON_MIN_OUTSIDE_TEMP, minOutsideTemp.toDouble())
         if (maxOutsideTemp != null) put(JSON_MAX_OUTSIDE_TEMP, maxOutsideTemp.toDouble())
         put(JSON_FUEL_LITERS, fuelConsumedLiters.toDouble())
+        put(JSON_REFUEL_COUNT, refuelCount)
     }
 
     companion object {
@@ -74,6 +78,7 @@ data class TripRecord(
                 o.optDouble(JSON_MAX_OUTSIDE_TEMP).toFloat()
             } else null,
             fuelConsumedLiters = o.optDouble(JSON_FUEL_LITERS, 0.0).toFloat(),
+            refuelCount = o.optInt(JSON_REFUEL_COUNT),
         )
     }
 }
