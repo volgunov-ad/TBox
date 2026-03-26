@@ -88,6 +88,9 @@ internal class WidgetSelectionDialogState(
     )
     val selectedMediaPlayer: String = resolveSelectedMediaPlayerForWidget(initialConfig)
     var mediaAutoPlayOnInit by mutableStateOf(initialConfig.mediaAutoPlayOnInit)
+    var mediaAutoPlayOnlyWhenEngineRunning by mutableStateOf(
+        initialConfig.mediaAutoPlayOnlyWhenEngineRunning
+    )
     var showAdvancedSettings by mutableStateOf(false)
     var launcherAppPackage by mutableStateOf(
         if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
@@ -223,10 +226,22 @@ internal fun WidgetSelectionDialogForm(
                         }
                         SettingSwitch(
                             state.mediaAutoPlayOnInit,
-                            { state.mediaAutoPlayOnInit = it },
+                            {
+                                state.mediaAutoPlayOnInit = it
+                                if (!it) {
+                                    state.mediaAutoPlayOnlyWhenEngineRunning = false
+                                }
+                            },
                             stringResource(R.string.widget_music_auto_play_on_init),
                             "",
                             state.togglesEnabled
+                        )
+                        SettingSwitch(
+                            state.mediaAutoPlayOnlyWhenEngineRunning,
+                            { state.mediaAutoPlayOnlyWhenEngineRunning = it },
+                            stringResource(R.string.widget_music_auto_play_only_engine),
+                            "",
+                            state.togglesEnabled && state.mediaAutoPlayOnInit
                         )
                     }
                     AppLauncherWidgetSettingsSection(
@@ -516,6 +531,11 @@ internal fun applyWidgetSelectionChanges(
             },
             mediaAutoPlayOnInit = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
                 state.mediaAutoPlayOnInit
+            } else {
+                false
+            },
+            mediaAutoPlayOnlyWhenEngineRunning = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                state.mediaAutoPlayOnlyWhenEngineRunning && state.mediaAutoPlayOnInit
             } else {
                 false
             },

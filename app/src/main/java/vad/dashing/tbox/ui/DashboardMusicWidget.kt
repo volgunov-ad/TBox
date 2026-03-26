@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
@@ -57,6 +58,7 @@ import kotlin.math.abs
 fun DashboardMusicWidgetItem(
     widget: DashboardWidget,
     widgetConfig: FloatingDashboardWidgetConfig,
+    canViewModel: CanDataViewModel,
     title: Boolean = true,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
@@ -150,10 +152,29 @@ fun DashboardMusicWidgetItem(
     }
     var autoPlayTriggered by remember(widget.id) { mutableStateOf(false) }
 
-    LaunchedEffect(widget.id, selectedPackage, widgetConfig.mediaAutoPlayOnInit) {
+    LaunchedEffect(
+        widget.id,
+        selectedPackage,
+        widgetConfig.mediaAutoPlayOnInit,
+        widgetConfig.mediaAutoPlayOnlyWhenEngineRunning
+    ) {
         if (!widgetConfig.mediaAutoPlayOnInit) return@LaunchedEffect
         if (autoPlayTriggered) return@LaunchedEffect
         if (selectedPackage.isBlank()) return@LaunchedEffect
+        if (widgetConfig.mediaAutoPlayOnlyWhenEngineRunning) {
+            fun engineRunning(): Boolean = (canViewModel.engineRPM.value ?: 0f) > 0f
+            if (!engineRunning()) {
+                val deadline = SystemClock.elapsedRealtime() + ENGINE_AUTO_PLAY_WAIT_MS
+                while (SystemClock.elapsedRealtime() < deadline) {
+                    delay(ENGINE_AUTO_PLAY_POLL_MS)
+                    if (engineRunning()) break
+                }
+                if (!engineRunning()) {
+                    autoPlayTriggered = true
+                    return@LaunchedEffect
+                }
+            }
+        }
         autoPlayTriggered = true
         val autoPlayPackage = selectedPackage
         SharedMediaControlService.play(
@@ -496,6 +517,8 @@ internal fun resolveNextCarouselPackage(
 
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
 private const val AUTO_PLAY_VERIFY_DELAY_MS = 2500L
+private const val ENGINE_AUTO_PLAY_WAIT_MS = 120_000L
+private const val ENGINE_AUTO_PLAY_POLL_MS = 500L
 private const val PROGRESS_REFRESH_INTERVAL_MS = 5000L
 
 internal fun estimatePlaybackPositionMs(

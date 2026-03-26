@@ -37,6 +37,8 @@ data class FloatingDashboardWidgetConfig(
     val mediaPlayers: List<String> = emptyList(),
     val mediaSelectedPlayer: String = "",
     val mediaAutoPlayOnInit: Boolean = false,
+    /** If true (and [mediaAutoPlayOnInit]), delay auto-play until engine RPM is greater than zero. */
+    val mediaAutoPlayOnlyWhenEngineRunning: Boolean = false,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */

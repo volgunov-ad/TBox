@@ -85,6 +85,7 @@
     <string name="widget_music_players_hint">Выберите один или несколько плееров</string>
     <string name="widget_music_players_required">Выберите минимум один плеер</string>
     <string name="widget_music_auto_play_on_init">Автоматически запускать воспроизведение</string>
+    <string name="widget_music_auto_play_only_engine">Запускать только при включении двигателя</string>
     <string name="widget_music_no_artist">Исполнитель не определён</string>
     <string name="widget_music_no_track">Трек не определён</string>
     <string name="widget_music_player_none">Плеер не найден</string>
