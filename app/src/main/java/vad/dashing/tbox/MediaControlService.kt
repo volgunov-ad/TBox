@@ -66,6 +66,16 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_yandex_radio,
         iconRes = R.drawable.player_yandex_radio
     ),
+    YANDEX_MAPS(
+        packageName = "ru.yandex.yandexmaps",
+        titleRes = R.string.media_player_yandex_maps,
+        iconRes = R.drawable.player_yandex_music
+    ),
+    YANDEX_NAVI(
+        packageName = "ru.yandex.yandexnavi",
+        titleRes = R.string.media_player_yandex_navi,
+        iconRes = R.drawable.player_yandex_music
+    ),
     //WT_LOCAL_MULTIMEDIA(
     //    packageName = "com.wt.multimedia.local",
     //    titleRes = R.string.media_player_wt_local_multimedia,
