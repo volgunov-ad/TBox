@@ -894,10 +894,11 @@ class BackgroundService : Service() {
 
             active = TripRepository.activeTrip.value
             if (active != null && prevRpm > 0f && rpm == 0f) {
+                val endedTripId = active.id
                 TripRepository.updateActiveTrip { it.copy(endTimeEpochMs = wallNow) }
                 tripRpmZeroAtMs = wallNow
-                tripPendingSplitTripId = TripRepository.trips.value.lastOrNull { it.isActive }?.id
-                    ?: TripRepository.activeTrip.value?.id
+                // Must capture id before updateActiveTrip clears _activeTrip (ended trip is not "active").
+                tripPendingSplitTripId = endedTripId
                 maybePersistTrips(force = true)
             }
 
@@ -962,6 +963,15 @@ class BackgroundService : Service() {
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
+            val splitMs = splitTripTimeMinutesSetting.value * 60_000L
+            val nowWall = System.currentTimeMillis()
+            val lastStored = TripRepository.trips.value.lastOrNull()
+            if (lastStored != null && !lastStored.isActive) {
+                val end = lastStored.endTimeEpochMs
+                if (end != null && nowWall - end < splitMs) {
+                    tripPendingSplitTripId = lastStored.id
+                }
+            }
             tripRpmZeroAtMs = null
             tripLastSampleElapsedMs = 0L
             tripLastOdometer = null
