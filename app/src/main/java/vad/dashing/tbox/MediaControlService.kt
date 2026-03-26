@@ -36,6 +36,11 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_yandex_maps,
         iconRes = R.drawable.player_yandex_music
     ),
+    YANDEX_NAVI(
+        packageName = "ru.yandex.yandexnavi",
+        titleRes = R.string.media_player_yandex_navi,
+        iconRes = R.drawable.player_yandex_music
+    ),
     POWERAMP(
         packageName = "com.maxmpz.audioplayer",
         titleRes = R.string.media_player_poweramp,
