@@ -1,5 +1,6 @@
 package vad.dashing.tbox
 
+import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -7,6 +8,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Bundle
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.provider.Settings
@@ -192,6 +194,10 @@ object SharedMediaControlService {
     private val controllers = mutableMapOf<String, MediaController>()
     private val controllerCallbacks = mutableMapOf<String, MediaController.Callback>()
 
+    /** OEMs often put track/artist only in media notifications, not in MediaMetadata. */
+    private var notificationArtistByPackage: Map<String, String> = emptyMap()
+    private var notificationTrackByPackage: Map<String, String> = emptyMap()
+
     private val _playerStates = MutableStateFlow<Map<String, MediaPlayerState>>(emptyMap())
     val playerStates: StateFlow<Map<String, MediaPlayerState>> = _playerStates.asStateFlow()
 
@@ -227,6 +233,19 @@ object SharedMediaControlService {
         synchronized(this) {
             sourceSelections.remove(sourceId)
             refreshRequestedPackagesLocked()
+        }
+    }
+
+    /**
+     * Called when [MediaControlNotificationListenerService] posts/removes notifications so we can
+     * pick up title/artist text OEMs only expose on the media notification.
+     */
+    fun onMediaNotificationsMayHaveChanged(context: Context) {
+        synchronized(this) {
+            initializeLocked(context)
+            if (requestedPackages.isEmpty()) return
+            refreshNotificationMediaLocked()
+            publishPlayerStatesLocked()
         }
     }
 
@@ -586,6 +605,8 @@ object SharedMediaControlService {
             return
         }
 
+        refreshNotificationMediaLocked()
+
         val orderedPackages = orderedMediaPlayerPackages(requestedPackages)
         val updatedStates = mutableMapOf<String, MediaPlayerState>()
         orderedPackages.forEach { packageName ->
@@ -593,8 +614,16 @@ object SharedMediaControlService {
             val controller = controllers[packageName]
             val metadata = controller?.metadata
             val playbackState = controller?.playbackState
-            val track = metadata.extractTrackTitle()
-            val artist = metadata.extractArtistName()
+            val track = listOf(
+                metadata.extractTrackTitle(),
+                playbackState.extractPlaybackExtrasTitle(),
+                notificationTrackByPackage[packageName].orEmpty()
+            ).firstOrNull { it.isNotBlank() }.orEmpty()
+            val artist = listOf(
+                metadata.extractArtistName(),
+                playbackState.extractPlaybackExtrasArtist(),
+                notificationArtistByPackage[packageName].orEmpty()
+            ).firstOrNull { it.isNotBlank() }.orEmpty()
             updatedStates[packageName] = MediaPlayerState(
                 player = player,
                 artist = artist,
@@ -624,6 +653,40 @@ object SharedMediaControlService {
             hasNotificationListenerAccess(context, component)
         }
     }
+
+    private fun refreshNotificationMediaLocked() {
+        val svc = MediaControlNotificationListenerService.instance
+        if (svc == null || !notificationAccessGranted || requestedPackages.isEmpty()) {
+            notificationArtistByPackage = emptyMap()
+            notificationTrackByPackage = emptyMap()
+            return
+        }
+        val artistByPkg = mutableMapOf<String, String>()
+        val trackByPkg = mutableMapOf<String, String>()
+        runCatching {
+            requestedPackages.forEach { pkg ->
+                val sbns = svc.activeNotifications.orEmpty().filter { it.packageName == pkg }
+                var bestArtist = ""
+                var bestTrack = ""
+                var bestScore = -1
+                sbns.forEach { sbn ->
+                    val notification = sbn.notification ?: return@forEach
+                    val extras = notification.extras ?: return@forEach
+                    val (artist, track) = extractMediaTextFromNotificationExtras(extras)
+                    val score = track.length + artist.length
+                    if (score > bestScore) {
+                        bestScore = score
+                        bestArtist = artist
+                        bestTrack = track
+                    }
+                }
+                if (bestArtist.isNotBlank()) artistByPkg[pkg] = bestArtist
+                if (bestTrack.isNotBlank()) trackByPkg[pkg] = bestTrack
+            }
+        }
+        notificationArtistByPackage = artistByPkg
+        notificationTrackByPackage = trackByPkg
+    }
 }
 
 private fun PlaybackState?.isPlayingState(): Boolean {
@@ -633,6 +696,97 @@ private fun PlaybackState?.isPlayingState(): Boolean {
         PlaybackState.STATE_CONNECTING -> true
         else -> false
     }
+}
+
+private fun PlaybackState?.extractPlaybackExtrasTitle(): String {
+    return this?.extras?.let { extractTitleLikeFromMediaBundle(it) }.orEmpty()
+}
+
+private fun PlaybackState?.extractPlaybackExtrasArtist(): String {
+    return this?.extras?.let { extractArtistLikeFromMediaBundle(it) }.orEmpty()
+}
+
+private fun extractTitleLikeFromMediaBundle(bundle: Bundle): String {
+    val direct = bundle.pickFirstNonBlankString(
+        MediaMetadata.METADATA_KEY_TITLE.toString(),
+        MediaMetadata.METADATA_KEY_DISPLAY_TITLE.toString(),
+        "android.media.metadata.TITLE",
+        "android.media.metadata.DISPLAY_TITLE",
+        "title",
+        "track",
+        "Track",
+        "song",
+        "media_title"
+    )
+    if (direct.isNotBlank()) return direct
+    return bundle.deepSearchStrings { key, value ->
+        val kl = key.lowercase()
+        (kl.contains("title") || kl.contains("track") || kl.contains("song")) &&
+            !kl.contains("artist") && !kl.contains("album_artist")
+    }.firstOrNull().orEmpty()
+}
+
+private fun extractArtistLikeFromMediaBundle(bundle: Bundle): String {
+    val direct = bundle.pickFirstNonBlankString(
+        MediaMetadata.METADATA_KEY_ARTIST.toString(),
+        MediaMetadata.METADATA_KEY_ALBUM_ARTIST.toString(),
+        MediaMetadata.METADATA_KEY_WRITER.toString(),
+        "android.media.metadata.ARTIST",
+        "android.media.metadata.ALBUM_ARTIST",
+        "artist",
+        "Artist",
+        "media_artist"
+    )
+    if (direct.isNotBlank()) return direct
+    return bundle.deepSearchStrings { key, value ->
+        key.lowercase().contains("artist")
+    }.firstOrNull().orEmpty()
+}
+
+private fun Bundle.pickFirstNonBlankString(vararg keys: String): String {
+    for (key in keys) {
+        val v = getCharSequence(key)?.toString()?.trim()
+        if (!v.isNullOrBlank()) return v
+        val s = getString(key)?.trim()
+        if (!s.isNullOrBlank()) return s
+    }
+    return ""
+}
+
+private fun Bundle.deepSearchStrings(predicate: (String, String) -> Boolean): List<String> {
+    val out = mutableListOf<String>()
+    for (key in keySet()) {
+        val cs = getCharSequence(key)?.toString()?.trim()
+        if (!cs.isNullOrBlank() && predicate(key, cs)) out.add(cs)
+    }
+    return out
+}
+
+private fun extractMediaTextFromNotificationExtras(extras: Bundle): Pair<String, String> {
+    val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
+    val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim().orEmpty()
+    val sub = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()?.trim().orEmpty()
+    val info = extras.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString()?.trim().orEmpty()
+    val summary = extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString()?.trim().orEmpty()
+    val big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.trim().orEmpty()
+
+    var track = title
+    var artist = sub
+    if (track.isBlank() && text.isNotBlank()) track = text
+    if (artist.isBlank() && text.isNotBlank() && text != track) artist = text
+    if (artist.isBlank() && info.isNotBlank()) artist = info
+    if (artist.isBlank() && summary.isNotBlank()) artist = summary
+    if (track.isBlank() && big.isNotBlank()) {
+        val lines = big.lines().map { it.trim() }.filter { it.isNotBlank() }
+        if (lines.isNotEmpty()) track = lines.first()
+        if (lines.size >= 2 && artist.isBlank()) artist = lines[1]
+    }
+
+    val mediaFromExtras = extractTitleLikeFromMediaBundle(extras) to extractArtistLikeFromMediaBundle(extras)
+    if (mediaFromExtras.first.isNotBlank()) track = mediaFromExtras.first
+    if (mediaFromExtras.second.isNotBlank()) artist = mediaFromExtras.second
+
+    return Pair(artist, track)
 }
 
 private fun MediaMetadata?.extractTrackTitle(): String {
