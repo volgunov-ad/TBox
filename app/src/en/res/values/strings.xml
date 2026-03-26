@@ -106,6 +106,7 @@
     <string name="media_player_fmplay">FMPlay</string>
     <string name="media_player_yandex_radio">Yandex Radio</string>
     <string name="media_player_wt_local_multimedia">Stock Player</string>
+    <string name="media_player_android_car_local_media">Local media player</string>
     <string name="media_player_bluetooth_phone">Bluetooth from phone</string>
     <string name="media_player_vkx">VKX</string>
 

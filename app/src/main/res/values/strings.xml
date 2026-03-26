@@ -106,6 +106,7 @@
     <string name="media_player_fmplay">FMPlay</string>
     <string name="media_player_yandex_radio">Яндекс.Радио</string>
     <string name="media_player_wt_local_multimedia">Штатный плеер</string>
+    <string name="media_player_android_car_local_media">Локальный медиаплеер</string>
     <string name="media_player_bluetooth_phone">Bluetooth с телефона</string>
     <string name="media_player_vkx">VKX</string>
 

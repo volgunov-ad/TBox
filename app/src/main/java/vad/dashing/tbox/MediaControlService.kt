@@ -81,6 +81,11 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_wt_local_multimedia,
         iconRes = R.drawable.player_unknown
     ),
+    ANDROID_CAR_LOCAL_MEDIA_PLAYER(
+        packageName = "com.android.car.media.localmediaplayer",
+        titleRes = R.string.media_player_android_car_local_media,
+        iconRes = R.drawable.player_unknown
+    ),
     BLUETOOTH_PHONE(
         packageName = "com.android.bluetooth",
         titleRes = R.string.media_player_bluetooth_phone,
