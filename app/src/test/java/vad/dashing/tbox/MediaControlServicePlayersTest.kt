@@ -26,6 +26,7 @@ class MediaControlServicePlayersTest {
         val normalized = normalizeMediaPlayerPackages(
             listOf(
                 " COM.WT.MULTIMEDIA.LOCAL ",
+                "com.wt.multimedia",
                 "com.wt.multimedia.platform3",
                 "ru.yandex.radio",
                 " com.wt.wtbtservice "

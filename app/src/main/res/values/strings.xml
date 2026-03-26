@@ -86,6 +86,8 @@
     <string name="widget_music_auto_play_on_init">Автоматически запускать воспроизведение</string>
     <string name="widget_music_no_artist">Исполнитель не определён</string>
     <string name="widget_music_no_track">Трек не определён</string>
+    <string name="widget_music_active_no_metadata_artist">Воспроизведение</string>
+    <string name="widget_music_active_no_metadata_track">Метаданные недоступны</string>
     <string name="widget_music_player_none">Плеер не найден</string>
     <string name="widget_music_player_with_state_off">%1$s (выключен)</string>
     <string name="widget_music_player_icon">Тип плеера</string>

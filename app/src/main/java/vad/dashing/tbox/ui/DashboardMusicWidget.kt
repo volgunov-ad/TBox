@@ -107,14 +107,22 @@ fun DashboardMusicWidgetItem(
     val line2Text = if (!mediaState.notificationAccessGranted) {
         stringResource(R.string.widget_music_access_required)
     } else {
-        selectedPlayerState?.artist?.ifBlank { stringResource(R.string.widget_music_no_artist) }
-            ?: stringResource(R.string.widget_music_no_artist)
+        val artist = selectedPlayerState?.artist.orEmpty()
+        when {
+            artist.isNotBlank() -> artist
+            selectedPlayerState?.hasSession == true -> stringResource(R.string.widget_music_active_no_metadata_artist)
+            else -> stringResource(R.string.widget_music_no_artist)
+        }
     }
     val line3Text = if (!mediaState.notificationAccessGranted) {
         stringResource(R.string.widget_music_open_access_settings)
     } else {
-        selectedPlayerState?.track?.ifBlank { stringResource(R.string.widget_music_no_track) }
-            ?: stringResource(R.string.widget_music_no_track)
+        val track = selectedPlayerState?.track.orEmpty()
+        when {
+            track.isNotBlank() -> track
+            selectedPlayerState?.hasSession == true -> stringResource(R.string.widget_music_active_no_metadata_track)
+            else -> stringResource(R.string.widget_music_no_track)
+        }
     }
     val playPauseIcon = if (selectedPlayerState?.isPlaying == true) R.drawable.pause else R.drawable.play
     val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()

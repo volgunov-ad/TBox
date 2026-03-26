@@ -86,6 +86,8 @@
     <string name="widget_music_auto_play_on_init">Auto start playback</string>
     <string name="widget_music_no_artist">Artist is unknown</string>
     <string name="widget_music_no_track">Track is unknown</string>
+    <string name="widget_music_active_no_metadata_artist">Playback</string>
+    <string name="widget_music_active_no_metadata_track">No metadata from player</string>
     <string name="widget_music_player_none">Player not found</string>
     <string name="widget_music_player_with_state_off">%1$s (off)</string>
     <string name="widget_music_player_icon">Player type</string>

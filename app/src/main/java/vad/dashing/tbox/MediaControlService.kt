@@ -103,6 +103,8 @@ enum class SupportedMediaPlayer(
             if (normalizedPackage.isBlank()) return null
             val resolvedPackage = when (normalizedPackage) {
                 "ru.yandex.radio" -> "ru.yandex.mobile.fmradio"
+                // OEM often registers MediaSession with parent package (no .local suffix).
+                "com.wt.multimedia",
                 "com.wt.multimedia.platform3" -> "com.wt.multimedia.local"
                 "com.wt.wtbtservice",
                 "com.nforetek.bt",
@@ -637,14 +639,28 @@ private fun MediaMetadata?.extractTrackTitle(): String {
     if (this == null) return ""
     val title = getString(MediaMetadata.METADATA_KEY_TITLE).orEmpty()
     if (title.isNotBlank()) return title
-    return getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE).orEmpty()
+    val displayTitle = getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE).orEmpty()
+    if (displayTitle.isNotBlank()) return displayTitle
+    val subtitle = getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE).orEmpty()
+    if (subtitle.isNotBlank()) return subtitle
+    val description = getString(MediaMetadata.METADATA_KEY_DISPLAY_DESCRIPTION).orEmpty()
+    if (description.isNotBlank()) return description
+    val album = getString(MediaMetadata.METADATA_KEY_ALBUM).orEmpty()
+    if (album.isNotBlank()) return album
+    val uri = getString(MediaMetadata.METADATA_KEY_MEDIA_URI).orEmpty()
+    if (uri.isNotBlank()) return uri.substringAfterLast('/').substringBefore('?')
+    return ""
 }
 
 private fun MediaMetadata?.extractArtistName(): String {
     if (this == null) return ""
     val artist = getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty()
     if (artist.isNotBlank()) return artist
-    return getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
+    val albumArtist = getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty()
+    if (albumArtist.isNotBlank()) return albumArtist
+    val writer = getString(MediaMetadata.METADATA_KEY_WRITER).orEmpty()
+    if (writer.isNotBlank()) return writer
+    return ""
 }
 
 private fun MediaMetadata?.extractDurationMs(): Long {
