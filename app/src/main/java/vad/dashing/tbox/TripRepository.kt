@@ -103,7 +103,6 @@ object TripRepository {
         synchronized(lock) {
             if (favorite) {
                 val trip = _trips.value.firstOrNull { it.id == id } ?: return
-                if (trip.isActive) return
                 _favoriteIds.update { cur ->
                     if (cur.contains(id) || cur.size >= MAX_FAVORITES) cur else cur + id
                 }

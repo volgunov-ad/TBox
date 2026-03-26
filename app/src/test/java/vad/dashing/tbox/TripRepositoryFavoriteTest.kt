@@ -3,7 +3,6 @@ package vad.dashing.tbox
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,13 +14,13 @@ class TripRepositoryFavoriteTest {
     }
 
     @Test
-    fun cannotFavoriteActiveTrip() = runBlocking {
+    fun canFavoriteActiveTrip() = runBlocking {
         val id = "t1"
         TripRepository.startTrip(
             TripRecord(id = id, startTimeEpochMs = 1L, endTimeEpochMs = null)
         )
         TripRepository.setFavorite(id, favorite = true)
-        assertFalse(TripRepository.favoriteIds.first().contains(id))
+        assertTrue(TripRepository.favoriteIds.first().contains(id))
     }
 
     @Test
