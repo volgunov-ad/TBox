@@ -327,6 +327,9 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("INFO", "Service", "Start service")
                     connectTboxClient()
                     TboxRepository.updateServiceStartTime()
+                    // Process may start the service without Application.onCreate (e.g. killed HU);
+                    // reload trips so split-window resume sees persisted data.
+                    reloadTripsFromDataStore()
                     resetTripStateForNewServiceSession()
                     applyTripResumeIfLastTripContinues()
                     startSettingsListener()
@@ -944,6 +947,17 @@ class BackgroundService : Service() {
                     tripLastPersistedSnapshot = curActive
                 }
             }
+        }
+    }
+
+    private fun reloadTripsFromDataStore() {
+        runBlocking {
+            val tripsJson = appDataManager.tripsJsonFlow.first()
+            val favJson = appDataManager.tripFavoritesJsonFlow.first()
+            TripRepository.setTripsFromStore(
+                tripsListFromJson(tripsJson),
+                favoritesSetFromJson(favJson)
+            )
         }
     }
 
