@@ -9,6 +9,8 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.provider.Settings
@@ -17,6 +19,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
+
+/** After launching a player without a MediaController, OEM may register MediaSession late. */
+private const val POST_LAUNCH_SESSION_HINT_MS = 15_000L
+private val POST_LAUNCH_RESYNC_DELAYS_MS = longArrayOf(400L, 1_200L, 2_500L, 5_000L, 8_000L)
 
 enum class SupportedMediaPlayer(
     val packageName: String,
@@ -198,6 +204,21 @@ object SharedMediaControlService {
     private var notificationArtistByPackage: Map<String, String> = emptyMap()
     private var notificationTrackByPackage: Map<String, String> = emptyMap()
 
+    /**
+     * While the user just launched a player via fallback (no controller yet), treat as session
+     * active so the widget does not show "(выключен)" until [POST_LAUNCH_SESSION_HINT_MS] elapses
+     * or a real controller appears.
+     */
+    private val pendingSessionHintUntilElapsed = mutableMapOf<String, Long>()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val postLaunchResyncRunnable = Runnable {
+        synchronized(this) {
+            if (requestedPackages.isEmpty()) return@Runnable
+            syncControllersLocked()
+            publishPlayerStatesLocked()
+        }
+    }
+
     private val _playerStates = MutableStateFlow<Map<String, MediaPlayerState>>(emptyMap())
     val playerStates: StateFlow<Map<String, MediaPlayerState>> = _playerStates.asStateFlow()
 
@@ -353,6 +374,7 @@ object SharedMediaControlService {
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
         launchPlayerApp(context.applicationContext, targetPackage)
+        noteLaunchFallbackForPackage(targetPackage)
     }
 
     fun play(
@@ -383,6 +405,7 @@ object SharedMediaControlService {
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
         launchPlayerApp(context.applicationContext, targetPackage)
+        noteLaunchFallbackForPackage(targetPackage)
     }
 
     fun skipToNext(selectedPackages: Set<String>, preferredPackage: String = "") {
@@ -459,6 +482,8 @@ object SharedMediaControlService {
         controllers.keys.toList().forEach { packageName ->
             unregisterControllerLocked(packageName)
         }
+        pendingSessionHintUntilElapsed.clear()
+        mainHandler.removeCallbacks(postLaunchResyncRunnable)
         _playerStates.value = emptyMap()
     }
 
@@ -599,6 +624,21 @@ object SharedMediaControlService {
         return orderedMediaPlayerPackages(selectedPackages).firstOrNull()
     }
 
+    private fun noteLaunchFallbackForPackage(targetPackage: String) {
+        val normalized = normalizeMediaPlayerPackages(listOf(targetPackage)).firstOrNull() ?: return
+        if (normalized !in requestedPackages) return
+        val until = SystemClock.elapsedRealtime() + POST_LAUNCH_SESSION_HINT_MS
+        pendingSessionHintUntilElapsed[normalized] =
+            maxOf(pendingSessionHintUntilElapsed[normalized] ?: 0L, until)
+        mainHandler.removeCallbacks(postLaunchResyncRunnable)
+        POST_LAUNCH_RESYNC_DELAYS_MS.forEach { delayMs ->
+            mainHandler.postDelayed(postLaunchResyncRunnable, delayMs)
+        }
+        synchronized(this) {
+            publishPlayerStatesLocked()
+        }
+    }
+
     private fun publishPlayerStatesLocked() {
         if (requestedPackages.isEmpty()) {
             _playerStates.value = emptyMap()
@@ -609,6 +649,7 @@ object SharedMediaControlService {
 
         val orderedPackages = orderedMediaPlayerPackages(requestedPackages)
         val updatedStates = mutableMapOf<String, MediaPlayerState>()
+        val nowElapsed = SystemClock.elapsedRealtime()
         orderedPackages.forEach { packageName ->
             val player = SupportedMediaPlayer.fromPackage(packageName) ?: return@forEach
             val controller = controllers[packageName]
@@ -624,6 +665,12 @@ object SharedMediaControlService {
                 playbackState.extractPlaybackExtrasArtist(),
                 notificationArtistByPackage[packageName].orEmpty()
             ).firstOrNull { it.isNotBlank() }.orEmpty()
+            val hasController = controller != null
+            if (hasController) {
+                pendingSessionHintUntilElapsed.remove(packageName)
+            }
+            val hintUntil = pendingSessionHintUntilElapsed[packageName] ?: 0L
+            val hasSession = hasController || nowElapsed < hintUntil
             updatedStates[packageName] = MediaPlayerState(
                 player = player,
                 artist = artist,
@@ -633,7 +680,7 @@ object SharedMediaControlService {
                 playbackSpeed = playbackState.extractPlaybackSpeed(),
                 positionUpdateTimeMs = playbackState.extractPositionUpdateTimeMs(),
                 isPlaying = playbackState.isPlayingState(),
-                hasSession = controller != null
+                hasSession = hasSession
             )
         }
 
