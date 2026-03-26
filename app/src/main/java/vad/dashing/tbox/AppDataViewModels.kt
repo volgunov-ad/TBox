@@ -56,14 +56,18 @@ class AppDataViewModel(private val appDataManager: AppDataManager) : ViewModel()
 
     fun deleteTrip(id: String) {
         viewModelScope.launch {
-            TripRepository.removeTrip(id)
+            synchronized(TripRepository.lock) {
+                TripRepository.removeTrip(id)
+            }
             persistTripsIfNeeded()
         }
     }
 
     fun setTripFavorite(id: String, favorite: Boolean) {
         viewModelScope.launch {
-            TripRepository.setFavorite(id, favorite)
+            synchronized(TripRepository.lock) {
+                TripRepository.setFavorite(id, favorite)
+            }
             persistTripsIfNeeded()
         }
     }

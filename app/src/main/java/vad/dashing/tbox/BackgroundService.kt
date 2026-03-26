@@ -70,6 +70,7 @@ class BackgroundService : Service() {
     @Volatile
     private var lastPacketAtMs: Long = 0
     private val mutex = Mutex()
+    private val tripsPersistMutex = Mutex()
     private val packetProcessingDispatcher =
         Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "tbox-packet-processor").apply { isDaemon = true }
@@ -829,7 +830,7 @@ class BackgroundService : Service() {
             if (rpm > 0f && tripRpmZeroAtMs != null) {
                 val zeroStart = tripRpmZeroAtMs!!
                 val pauseMs = wallNow - zeroStart
-                if (pauseMs < splitWindowMs) {
+                if (pauseMs <= splitWindowMs) {
                     val pendingId = tripPendingSplitTripId
                     if (pendingId != null) {
                         val trip = TripRepository.trips.value.firstOrNull { it.id == pendingId }
@@ -966,9 +967,11 @@ class BackgroundService : Service() {
         val tripsJson = tripsListToJson(TripRepository.trips.value)
         val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
         scope.launch {
-            appDataManager.saveTripsJson(tripsJson)
-            appDataManager.saveTripFavoritesJson(favJson)
-            TripRepository.markPersisted(tripsJson, favJson)
+            tripsPersistMutex.withLock {
+                appDataManager.saveTripsJson(tripsJson)
+                appDataManager.saveTripFavoritesJson(favJson)
+                TripRepository.markPersisted(tripsJson, favJson)
+            }
         }
     }
 
@@ -982,7 +985,7 @@ class BackgroundService : Service() {
             val lastStored = TripRepository.trips.value.lastOrNull()
             if (lastStored != null && !lastStored.isActive) {
                 val end = lastStored.endTimeEpochMs
-                if (end != null && nowWall - end < splitMs) {
+                if (end != null && nowWall - end <= splitMs) {
                     tripPendingSplitTripId = lastStored.id
                 }
             }
@@ -1042,9 +1045,11 @@ class BackgroundService : Service() {
         }
         val tripsJson = tripsListToJson(TripRepository.trips.value)
         val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
-        appDataManager.saveTripsJson(tripsJson)
-        appDataManager.saveTripFavoritesJson(favJson)
-        TripRepository.markPersisted(tripsJson, favJson)
+        tripsPersistMutex.withLock {
+            appDataManager.saveTripsJson(tripsJson)
+            appDataManager.saveTripFavoritesJson(favJson)
+            TripRepository.markPersisted(tripsJson, favJson)
+        }
     }
 
     private suspend fun finalizeTripsOnServiceStop() {
@@ -1068,9 +1073,11 @@ class BackgroundService : Service() {
         if (TripRepository.needsPersistence()) {
             val tripsJson = tripsListToJson(TripRepository.trips.value)
             val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
-            appDataManager.saveTripsJson(tripsJson)
-            appDataManager.saveTripFavoritesJson(favJson)
-            TripRepository.markPersisted(tripsJson, favJson)
+            tripsPersistMutex.withLock {
+                appDataManager.saveTripsJson(tripsJson)
+                appDataManager.saveTripFavoritesJson(favJson)
+                TripRepository.markPersisted(tripsJson, favJson)
+            }
         }
     }
 

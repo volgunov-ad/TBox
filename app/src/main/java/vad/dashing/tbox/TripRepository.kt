@@ -44,7 +44,7 @@ object TripRepository {
 
     fun setTripsFromStore(trips: List<TripRecord>, favorites: Set<String>) {
         synchronized(lock) {
-            _trips.value = trips.takeLast(MAX_TRIPS)
+            _trips.value = normalizeTripsList(trips.takeLast(MAX_TRIPS))
             _favoriteIds.value = favorites.intersect(_trips.value.map { it.id }.toSet())
             lastPersistedTripsJson = tripsListToJson(_trips.value)
             lastPersistedFavoritesJson = favoritesSetToJson(_favoriteIds.value)
@@ -130,7 +130,17 @@ object TripRepository {
 
     fun startTrip(record: TripRecord) {
         synchronized(lock) {
-            _trips.update { current -> (current + record).takeLast(MAX_TRIPS) }
+            val now = System.currentTimeMillis()
+            _trips.update { current ->
+                val closed = current.map { t ->
+                    if (t.isActive && t.id != record.id) {
+                        t.copy(endTimeEpochMs = now.coerceAtLeast(t.startTimeEpochMs))
+                    } else {
+                        t
+                    }
+                }
+                (closed + record).takeLast(MAX_TRIPS)
+            }
             _activeTrip.value = record
         }
     }
@@ -150,18 +160,21 @@ object TripRepository {
         synchronized(lock) {
             val list = _trips.value
             if (list.isEmpty()) return false
-            val last = list.last()
             val now = System.currentTimeMillis()
-            if (!TripRules.shouldResumeLastTripOnColdStart(last, now, splitWindowMs)) return false
-            val resumed = if (last.isActive) {
-                last
+            val candidate = TripRules.findResumeCandidate(list, now, splitWindowMs) ?: return false
+            if (!TripRules.shouldResumeLastTripOnColdStart(candidate, now, splitWindowMs)) return false
+            val resumed = if (candidate.isActive) {
+                candidate
             } else {
-                last.copy(endTimeEpochMs = null)
+                candidate.copy(endTimeEpochMs = null)
             }
             _trips.update { cur ->
-                if (cur.isEmpty()) cur else cur.dropLast(1) + resumed
+                val mapped = cur.map { t ->
+                    if (t.id == resumed.id) resumed else t
+                }
+                normalizeTripsList(mapped)
             }
-            _activeTrip.value = resumed
+            _activeTrip.value = _trips.value.lastOrNull { it.isActive }
             return true
         }
     }
@@ -219,5 +232,23 @@ object TripRepository {
     fun updateMaxGearboxTemp(current: Int?, sample: Int?): Int? {
         if (sample == null) return current
         return current?.let { kotlin.math.max(it, sample) } ?: sample
+    }
+
+    /**
+     * If multiple trips have no [TripRecord.endTimeEpochMs], keep only the latest by [TripRecord.startTimeEpochMs]
+     * and close the others (data repair).
+     */
+    private fun normalizeTripsList(list: List<TripRecord>): List<TripRecord> {
+        val actives = list.filter { it.isActive }
+        if (actives.size <= 1) return list
+        val keep = actives.maxByOrNull { it.startTimeEpochMs } ?: return list
+        return list.map { t ->
+            if (!t.isActive || t.id == keep.id) {
+                t
+            } else {
+                val boundary = (keep.startTimeEpochMs - 1L).coerceAtLeast(t.startTimeEpochMs)
+                t.copy(endTimeEpochMs = boundary)
+            }
+        }
     }
 }
