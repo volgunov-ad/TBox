@@ -44,6 +44,13 @@
     <string name="tab_logs">Журнал</string>
     <string name="tab_info">Информация</string>
     <string name="tab_can">CAN</string>
+    <string name="tab_mb_can">MB-CAN</string>
+    <string name="mb_can_tab_intro">Шина MB-CAN (Mengbo): подписка на скорость, как в приложении Dashing Electric Heat. Нужны сервисы на ГУ.</string>
+    <string name="mb_can_interval_ms">Интервал опроса (мс)</string>
+    <string name="mb_can_codes">init=%1$s subscribe=%2$s</string>
+    <string name="mb_can_speed_gear">Скорость: %1$s км/ч, передача: %2$s</string>
+    <string name="mb_can_connect">Подключить</string>
+    <string name="mb_can_disconnect">Отключить</string>
     <string name="tab_widgets">Плитки</string>
     <string name="menu_hide">Скрыть меню</string>
     <string name="menu_show">Показать меню</string>

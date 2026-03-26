@@ -112,7 +112,7 @@ fun TboxApp(
 
 object TabItems {
     /** Left menu order; tab index 9 is shown immediately after Settings (4). */
-    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 9, 5, 6, 7, 8)
+    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 9, 5, 6, 7, 8, 10)
 
     @Composable
     fun getItems(): List<TabItem> {
@@ -129,7 +129,8 @@ object TabItems {
             TabItem(
                 stringResource(R.string.tab_main_screen_settings),
                 ImageVector.vectorResource(R.drawable.ic_tab_main_screen_settings)
-            )
+            ),
+            TabItem(stringResource(R.string.tab_mb_can), Icons.Filled.Info),
         )
     }
 }
@@ -246,7 +247,7 @@ fun TboxScreen(
                         TabItems.tabMenuDisplayOrder.forEach { index ->
                             if (index !in tabs.indices) return@forEach
                             val tab = tabs[index]
-                            if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
+                            if (isExpertModeEnabled || index !in setOf(1, 5, 7, 10)) {
                                 TabMenuItem(
                                     title = tab.title,
                                     icon = tab.icon,
@@ -369,6 +370,7 @@ fun TboxScreen(
                         appDataViewModel,
                         onTboxRestart)
                     9 -> MainScreenSettingsTab(settingsViewModel = settingsViewModel)
+                    10 -> MbCanTab()
                     else -> ModemTab(viewModel, onServiceCommand)
                 }
             }

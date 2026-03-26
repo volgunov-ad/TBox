@@ -5,6 +5,9 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
+# MB-CAN JNI (com.mengbo.mbCan.* must match libmbCan.so registration)
+-keep class com.mengbo.mbCan.** { *; }
+
 # If your project uses WebView with JS, uncomment the following
 # and specify the fully qualified class name to the JavaScript interface
 # class:

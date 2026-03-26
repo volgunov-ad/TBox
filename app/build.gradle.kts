@@ -15,6 +15,10 @@ android {
         versionCode = 1300
         versionName = "0.13.0"
 
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField(
             "String",
