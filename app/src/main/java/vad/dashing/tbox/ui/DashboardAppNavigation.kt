@@ -9,7 +9,7 @@ internal fun launchAppFromWidget(context: Context, packageName: String) {
     try {
         val pm = context.packageManager
         val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
-        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         context.startActivity(launchIntent)
     } catch (e: Exception) {
         e.printStackTrace()
