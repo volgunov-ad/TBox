@@ -190,7 +190,7 @@ fun TripsTab(
                         appDataViewModel.deleteTrip(selectedId)
                     }
                 },
-                enabled = selectedId.isNotEmpty()
+                enabled = selectedTrip != null && !selectedTrip.isActive
             ) {
                 Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.trips_delete))
             }
