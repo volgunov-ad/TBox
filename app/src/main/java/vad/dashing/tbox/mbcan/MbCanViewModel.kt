@@ -37,11 +37,7 @@ class MbCanViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(
         MbCanUiState(
-            statusText = if (MbCanNative.librariesLoaded) {
-                "Библиотеки загружены"
-            } else {
-                "Нативные библиотеки MB-CAN недоступны на этой сборке"
-            }
+            statusText = "MB-CAN: библиотеки подгружаются только по кнопке «Подключить»"
         )
     )
     val uiState: StateFlow<MbCanUiState> = _uiState.asStateFlow()
@@ -62,11 +58,17 @@ class MbCanViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun connect(subscribeIntervalMs: Int) {
-        if (!MbCanNative.librariesLoaded) {
-            _uiState.update { it.copy(lastError = "Нет arm64-v8a .so в APK") }
-            return
-        }
         viewModelScope.launch {
+            _uiState.update { it.copy(statusText = "Загрузка библиотек…", lastError = null) }
+            if (!MbCanNative.ensureLoaded()) {
+                _uiState.update {
+                    it.copy(
+                        statusText = "MB-CAN недоступен на этом устройстве",
+                        lastError = "Не удалось загрузить libmbcanclient/libmbCan (см. logcat: MbCanNative)",
+                    )
+                }
+                return@launch
+            }
             _uiState.update { it.copy(statusText = "Подключение…", lastError = null) }
             try {
                 val initRc: Int
@@ -89,12 +91,12 @@ class MbCanViewModel(application: Application) : AndroidViewModel(application) {
                         subscribeReturnCode = subRc,
                     )
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "MB-CAN connect failed", e)
+            } catch (t: Throwable) {
+                Log.e(TAG, "MB-CAN connect failed", t)
                 _uiState.update {
                     it.copy(
-                        statusText = "Ошибка",
-                        lastError = e.message ?: e.toString(),
+                        statusText = "Ошибка MB-CAN",
+                        lastError = t.message ?: t.toString(),
                     )
                 }
             }
@@ -102,11 +104,23 @@ class MbCanViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun disconnect() {
-        if (!MbCanNative.librariesLoaded) return
         viewModelScope.launch(Dispatchers.Default) {
-            runCatching {
+            if (!MbCanNative.isLoaded()) {
+                _uiState.update {
+                    it.copy(
+                        statusText = "Отключено",
+                        subscribeReturnCode = null,
+                        speedKmh = null,
+                        gear = null,
+                    )
+                }
+                return@launch
+            }
+            try {
                 MBCanClient.nativeCanUnInit()
-            }.onFailure { Log.e(TAG, "nativeCanUnInit", it) }
+            } catch (t: Throwable) {
+                Log.e(TAG, "nativeCanUnInit", t)
+            }
             _uiState.update {
                 it.copy(
                     statusText = "Отключено",
@@ -120,9 +134,11 @@ class MbCanViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        if (MbCanNative.librariesLoaded) {
-            runCatching { MBCanClient.nativeCanUnInit() }
-                .onFailure { Log.e(TAG, "nativeCanUnInit in onCleared", it) }
+        if (!MbCanNative.isLoaded()) return
+        try {
+            MBCanClient.nativeCanUnInit()
+        } catch (t: Throwable) {
+            Log.e(TAG, "nativeCanUnInit in onCleared", t)
         }
     }
 
