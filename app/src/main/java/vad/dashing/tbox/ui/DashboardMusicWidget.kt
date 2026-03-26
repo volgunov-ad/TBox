@@ -43,6 +43,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -162,14 +165,16 @@ fun DashboardMusicWidgetItem(
         if (autoPlayTriggered) return@LaunchedEffect
         if (selectedPackage.isBlank()) return@LaunchedEffect
         if (widgetConfig.mediaAutoPlayOnlyWhenEngineRunning) {
-            fun engineRunning(): Boolean = (canViewModel.engineRPM.value ?: 0f) > 0f
-            if (!engineRunning()) {
-                val deadline = SystemClock.elapsedRealtime() + ENGINE_AUTO_PLAY_WAIT_MS
-                while (SystemClock.elapsedRealtime() < deadline) {
-                    delay(ENGINE_AUTO_PLAY_POLL_MS)
-                    if (engineRunning()) break
+            // engineRPM uses WhileSubscribed(5000): polling .value never subscribes, so RPM may never
+            // update. Collecting the flow waits for real emissions after the subscription starts.
+            val engineRunningNow = (canViewModel.engineRPM.value ?: 0f) > 0f
+            if (!engineRunningNow) {
+                val gotPositiveRpm = withTimeoutOrNull(ENGINE_AUTO_PLAY_WAIT_MS) {
+                    canViewModel.engineRPM
+                        .filter { (it ?: 0f) > 0f }
+                        .first()
                 }
-                if (!engineRunning()) {
+                if (gotPositiveRpm == null) {
                     autoPlayTriggered = true
                     return@LaunchedEffect
                 }
@@ -518,7 +523,6 @@ internal fun resolveNextCarouselPackage(
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
 private const val AUTO_PLAY_VERIFY_DELAY_MS = 2500L
 private const val ENGINE_AUTO_PLAY_WAIT_MS = 120_000L
-private const val ENGINE_AUTO_PLAY_POLL_MS = 500L
 private const val PROGRESS_REFRESH_INTERVAL_MS = 5000L
 
 internal fun estimatePlaybackPositionMs(
