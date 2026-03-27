@@ -66,13 +66,20 @@ object TripRepository {
 
     fun replaceTrip(updated: TripRecord) {
         synchronized(lock) {
-            _trips.update { list ->
-                val idx = list.indexOfFirst { it.id == updated.id }
-                if (idx < 0) list else list.toMutableList().apply { this[idx] = updated }
+            val list = _trips.value
+            val idx = list.indexOfFirst { it.id == updated.id }
+            val merged = if (idx >= 0) {
+                updated.copy(odometerStartKm = list[idx].odometerStartKm)
+            } else {
+                updated
             }
-            if (updated.isActive) {
-                _activeTrip.value = updated
-            } else if (_activeTrip.value?.id == updated.id) {
+            _trips.update { cur ->
+                val i = cur.indexOfFirst { it.id == merged.id }
+                if (i < 0) cur else cur.toMutableList().apply { this[i] = merged }
+            }
+            if (merged.isActive) {
+                _activeTrip.value = merged
+            } else if (_activeTrip.value?.id == merged.id) {
                 _activeTrip.value = null
             }
         }
@@ -115,7 +122,7 @@ object TripRepository {
     fun updateActiveTrip(transform: (TripRecord) -> TripRecord) {
         synchronized(lock) {
             val cur = _activeTrip.value ?: return
-            val next = transform(cur)
+            val next = transform(cur).copy(odometerStartKm = cur.odometerStartKm)
             _trips.update { list ->
                 val idx = list.indexOfFirst { it.id == next.id }
                 if (idx < 0) list else list.toMutableList().apply { this[idx] = next }
