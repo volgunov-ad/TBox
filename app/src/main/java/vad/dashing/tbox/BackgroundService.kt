@@ -249,10 +249,12 @@ class BackgroundService : Service() {
             .stateIn(scope, SharingStarted.Lazily, emptyList())
         canDataSaveCount = settingsManager.canDataSaveCountFlow
             .stateIn(scope, SharingStarted.Lazily, 5)
+        // Eagerly: trip resume on service start must see saved settings, not Lazily initial values (race
+        // with first RPM sample / DataStore read).
         fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
-            .stateIn(scope, SharingStarted.Lazily, 57)
+            .stateIn(scope, SharingStarted.Eagerly, 57)
         splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
-            .stateIn(scope, SharingStarted.Lazily, 5)
+            .stateIn(scope, SharingStarted.Eagerly, 5)
 
         val filter = IntentFilter().apply {
             addAction(TboxBroadcastReceiver.MAIN_ACTION)
@@ -331,8 +333,11 @@ class BackgroundService : Service() {
                     // Process may start the service without Application.onCreate (e.g. killed HU);
                     // reload trips so split-window resume sees persisted data.
                     reloadTripsFromDataStore()
-                    resetTripStateForNewServiceSession()
-                    applyTripResumeIfLastTripContinues()
+                    val splitWindowMs = runBlocking {
+                        splitTripTimeMinutesSetting.first().toLong() * 60_000L
+                    }
+                    resetTripStateForNewServiceSession(splitWindowMs)
+                    applyTripResumeIfLastTripContinues(splitWindowMs)
                     startSettingsListener()
                     startNetUpdater()
                     startAPNUpdater()
@@ -990,17 +995,16 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun resetTripStateForNewServiceSession() {
+    private fun resetTripStateForNewServiceSession(splitWindowMs: Long) {
         synchronized(TripRepository.lock) {
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
-            val splitMs = splitTripTimeMinutesSetting.value * 60_000L
             val nowWall = System.currentTimeMillis()
             val lastStored = TripRepository.trips.value.lastOrNull()
             if (lastStored != null && !lastStored.isActive) {
                 val end = lastStored.endTimeEpochMs
-                if (end != null && nowWall - end <= splitMs) {
+                if (end != null && nowWall - end <= splitWindowMs) {
                     tripPendingSplitTripId = lastStored.id
                 }
             }
@@ -1019,10 +1023,9 @@ class BackgroundService : Service() {
      * If the last stored trip should continue (active or ended within split window), resume it
      * and seed odometer/fuel buffers so [onTripRpmSample] extends the same trip.
      */
-    private fun applyTripResumeIfLastTripContinues() {
-        val splitMs = splitTripTimeMinutesSetting.value * 60_000L
+    private fun applyTripResumeIfLastTripContinues(splitWindowMs: Long) {
         synchronized(TripRepository.lock) {
-            if (!TripRepository.tryResumeLastTripAfterServiceStart(splitMs)) return
+            if (!TripRepository.tryResumeLastTripAfterServiceStart(splitWindowMs)) return
             tripLastOdometer = CanDataRepository.odometer.value
             tripStartOdometer = tripLastOdometer
             val active = TripRepository.activeTrip.value
