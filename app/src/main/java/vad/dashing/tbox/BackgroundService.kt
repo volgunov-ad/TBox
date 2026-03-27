@@ -807,14 +807,16 @@ class BackgroundService : Service() {
                 }
                 if (rpm > 0f) {
                     val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+                    val odoStart = CanDataRepository.odometer.value
                     TripRepository.startTrip(
                         TripRecord(
                             startTimeEpochMs = TboxRepository.serviceStartTime.value.time,
                             endTimeEpochMs = null,
+                            odometerStartKm = odoStart,
                             fuelBaselinePercent = p,
                         )
                     )
-                    tripStartOdometer = CanDataRepository.odometer.value
+                    tripStartOdometer = odoStart
                     tripLastOdometer = tripStartOdometer
                     tripLastFuelPercent = p
                     tripPendingSplitTripId = null
@@ -915,14 +917,16 @@ class BackgroundService : Service() {
                         wallNow
                     }
                     val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+                    val odoStart = CanDataRepository.odometer.value
                     TripRepository.startTrip(
                         TripRecord(
                             startTimeEpochMs = startMs,
                             endTimeEpochMs = null,
+                            odometerStartKm = odoStart,
                             fuelBaselinePercent = p,
                         )
                     )
-                    tripStartOdometer = CanDataRepository.odometer.value
+                    tripStartOdometer = odoStart
                     tripLastOdometer = tripStartOdometer
                     tripLastFuelPercent = p
                     tripPendingSplitTripId = null
@@ -1027,14 +1031,16 @@ class BackgroundService : Service() {
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
             val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+            val odoStart = CanDataRepository.odometer.value
             TripRepository.startTrip(
                 TripRecord(
                     startTimeEpochMs = wallNow,
                     endTimeEpochMs = null,
+                    odometerStartKm = odoStart,
                     fuelBaselinePercent = p,
                 )
             )
-            tripStartOdometer = CanDataRepository.odometer.value
+            tripStartOdometer = odoStart
             tripLastOdometer = tripStartOdometer
             tripLastFuelPercent = p
             tripRpmZeroAtMs = null

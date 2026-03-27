@@ -294,6 +294,14 @@ fun TripsTab(
                 }
                 item {
                     StatusRow(
+                        stringResource(R.string.trips_odometer_start),
+                        trip.odometerStartKm?.let { odo ->
+                            formatWithUnit(valueToString(odo, 0), stringResource(R.string.unit_km))
+                        } ?: stringResource(R.string.value_no_data)
+                    )
+                }
+                item {
+                    StatusRow(
                         stringResource(R.string.trips_distance),
                         formatWithUnit(valueToString(trip.distanceKm, 0), stringResource(R.string.unit_km))
                     )

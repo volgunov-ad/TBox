@@ -198,6 +198,7 @@ object TripRepository {
         if (a.id != b.id) return true
         if (a.name != b.name) return true
         if (a.endTimeEpochMs != b.endTimeEpochMs) return true
+        if (a.odometerStartKm != b.odometerStartKm) return true
         if (abs(a.distanceKm - b.distanceKm) > PERSIST_EPS) return true
         if (abs(a.maxSpeed - b.maxSpeed) > PERSIST_EPS) return true
         if (abs(a.fuelConsumedLiters - b.fuelConsumedLiters) > PERSIST_EPS) return true

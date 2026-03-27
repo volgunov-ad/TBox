@@ -383,6 +383,7 @@
     <string name="trips_active_trip">Current trip</string>
     <string name="trips_start_time">Start</string>
     <string name="trips_end_time">End</string>
+    <string name="trips_odometer_start">Odometer at trip start</string>
     <string name="trips_distance">Distance</string>
     <string name="trips_moving_time">Moving time</string>
     <string name="trips_idle_time">Idle time</string>

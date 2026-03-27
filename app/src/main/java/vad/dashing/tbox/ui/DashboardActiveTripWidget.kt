@@ -85,6 +85,14 @@ fun DashboardActiveTripWidgetItem(
                 val simplified = widget.dataKey == "activeTripWidgetSimple"
                 if (simplified) {
                     ActiveTripRow(
+                        label = stringResource(R.string.trips_odometer_start),
+                        value = t.odometerStartKm?.let { valueToString(it, 0) }
+                            ?: stringResource(R.string.value_no_data),
+                        unit = if (t.odometerStartKm != null) stringResource(R.string.unit_km) else "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    ActiveTripRow(
                         label = stringResource(R.string.trips_distance),
                         value = valueToString(t.distanceKm, 0),
                         unit = stringResource(R.string.unit_km),
@@ -143,6 +151,14 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_start_time),
                         value = dateFmt.format(Date(t.startTimeEpochMs)),
                         unit = "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    ActiveTripRow(
+                        label = stringResource(R.string.trips_odometer_start),
+                        value = t.odometerStartKm?.let { valueToString(it, 0) }
+                            ?: stringResource(R.string.value_no_data),
+                        unit = if (t.odometerStartKm != null) stringResource(R.string.unit_km) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )

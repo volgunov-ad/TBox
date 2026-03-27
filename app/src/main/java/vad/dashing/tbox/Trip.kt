@@ -20,12 +20,15 @@ private const val JSON_FUEL_LITERS = "fuelLiters"
 private const val JSON_REFUEL_COUNT = "refuelCount"
 private const val JSON_FUEL_REFUELED_LITERS = "fuelRefueledLiters"
 private const val JSON_FUEL_BASELINE_PERCENT = "fuelBaselinePercent"
+private const val JSON_ODOMETER_START_KM = "odometerStartKm"
 
 data class TripRecord(
     val id: String = UUID.randomUUID().toString(),
     val name: String = "",
     val startTimeEpochMs: Long,
     val endTimeEpochMs: Long? = null,
+    /** Odometer reading (km, same units as CAN) at trip start; null for legacy records. */
+    val odometerStartKm: UInt? = null,
     val distanceKm: Float = 0f,
     val movingTimeMs: Long = 0L,
     val idleTimeMs: Long = 0L,
@@ -52,6 +55,7 @@ data class TripRecord(
         put(JSON_NAME, name)
         put(JSON_START, startTimeEpochMs)
         if (endTimeEpochMs != null) put(JSON_END, endTimeEpochMs)
+        if (odometerStartKm != null) put(JSON_ODOMETER_START_KM, odometerStartKm.toLong())
         put(JSON_DISTANCE_KM, distanceKm.toDouble())
         put(JSON_MOVING_MS, movingTimeMs)
         put(JSON_IDLE_MS, idleTimeMs)
@@ -72,6 +76,9 @@ data class TripRecord(
             name = o.optString(JSON_NAME),
             startTimeEpochMs = o.optLong(JSON_START),
             endTimeEpochMs = if (o.has(JSON_END) && !o.isNull(JSON_END)) o.optLong(JSON_END) else null,
+            odometerStartKm = if (o.has(JSON_ODOMETER_START_KM) && !o.isNull(JSON_ODOMETER_START_KM)) {
+                o.optLong(JSON_ODOMETER_START_KM).takeIf { it >= 0 }?.toUInt()
+            } else null,
             distanceKm = o.optDouble(JSON_DISTANCE_KM, 0.0).toFloat(),
             movingTimeMs = o.optLong(JSON_MOVING_MS),
             idleTimeMs = o.optLong(JSON_IDLE_MS),
