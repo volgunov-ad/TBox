@@ -123,6 +123,13 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
+                    ActiveTripRow(
+                        label = stringResource(R.string.trips_engine_start_count),
+                        value = valueToString(t.engineStartCount),
+                        unit = "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
                     val avgM = TripRepository.averageSpeedMovingKmH(t)
                     ActiveTripRow(
                         label = stringResource(R.string.trips_avg_speed_moving),

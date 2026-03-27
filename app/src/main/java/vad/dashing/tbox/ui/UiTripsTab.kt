@@ -329,6 +329,12 @@ fun TripsTab(
                 }
                 item {
                     StatusRow(
+                        stringResource(R.string.trips_engine_start_count),
+                        valueToString(trip.engineStartCount)
+                    )
+                }
+                item {
+                    StatusRow(
                         stringResource(R.string.trips_max_speed),
                         formatWithUnit(valueToString(trip.maxSpeed, 1), stringResource(R.string.unit_kmh))
                     )

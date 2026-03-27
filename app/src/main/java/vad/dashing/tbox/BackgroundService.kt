@@ -760,6 +760,10 @@ class BackgroundService : Service() {
         }
     }
 
+    /** True when [rpm] is a running engine and the previous sample was stopped or unknown (treated as 0). */
+    private fun isTripEngineStartEdge(prevRpm: Float, rpm: Float): Boolean =
+        rpm > 0f && prevRpm <= 0f
+
     /** Updates consumption, refuel count, persisted fuel baseline; uses [tripLastFuelPercent] as prior sample. */
     private fun applyActiveTripFuelStep(tankL: Float) {
         val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
@@ -802,6 +806,10 @@ class BackgroundService : Service() {
                     }
                     if (rpm == 0f) {
                         applyActiveTripFuelStep(tankL)
+                    } else {
+                        TripRepository.updateActiveTrip { cur ->
+                            cur.copy(engineStartCount = cur.engineStartCount + 1)
+                        }
                     }
                     return@synchronized
                 }
@@ -814,6 +822,7 @@ class BackgroundService : Service() {
                             endTimeEpochMs = null,
                             odometerStartKm = odoStart,
                             fuelBaselinePercent = p,
+                            engineStartCount = 1,
                         )
                     )
                     tripStartOdometer = odoStart
@@ -865,6 +874,7 @@ class BackgroundService : Service() {
                 val gb = CanDataRepository.gearBoxOilTemperature.value
                 val out = CanDataRepository.outsideTemperature.value
                 val odo = CanDataRepository.odometer.value
+                val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
                 TripRepository.updateActiveTrip { cur ->
                     var d = cur.distanceKm
                     val lastO = tripLastOdometer
@@ -893,6 +903,7 @@ class BackgroundService : Service() {
                         maxGearboxOilTemp = TripRepository.updateMaxGearboxTemp(cur.maxGearboxOilTemp, gb),
                         minOutsideTemp = outside.first,
                         maxOutsideTemp = outside.second,
+                        engineStartCount = cur.engineStartCount + addEngineStart,
                     )
                 }
                 applyActiveTripFuelStep(tankL)
@@ -1032,12 +1043,14 @@ class BackgroundService : Service() {
             }
             val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
             val odoStart = CanDataRepository.odometer.value
+            val rpmNow = CanDataRepository.engineRPM.value ?: 0f
             TripRepository.startTrip(
                 TripRecord(
                     startTimeEpochMs = wallNow,
                     endTimeEpochMs = null,
                     odometerStartKm = odoStart,
                     fuelBaselinePercent = p,
+                    engineStartCount = if (rpmNow > 0f) 1 else 0,
                 )
             )
             tripStartOdometer = odoStart
@@ -1045,9 +1058,8 @@ class BackgroundService : Service() {
             tripLastFuelPercent = p
             tripRpmZeroAtMs = null
             tripPendingSplitTripId = null
-            val rpm = CanDataRepository.engineRPM.value ?: 0f
-            tripPrevRpmForStart = rpm
-            tripRpmWasPositiveSinceService = rpm > 0f
+            tripPrevRpmForStart = rpmNow
+            tripRpmWasPositiveSinceService = rpmNow > 0f
         }
         val tripsJson = tripsListToJson(TripRepository.trips.value)
         val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)

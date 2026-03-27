@@ -21,6 +21,7 @@ private const val JSON_REFUEL_COUNT = "refuelCount"
 private const val JSON_FUEL_REFUELED_LITERS = "fuelRefueledLiters"
 private const val JSON_FUEL_BASELINE_PERCENT = "fuelBaselinePercent"
 private const val JSON_ODOMETER_START_KM = "odometerStartKm"
+private const val JSON_ENGINE_START_COUNT = "engineStartCount"
 
 data class TripRecord(
     val id: String = UUID.randomUUID().toString(),
@@ -40,6 +41,8 @@ data class TripRecord(
     val fuelConsumedLiters: Float = 0f,
     /** Number of refueling events detected during the trip (level jump heuristic). */
     val refuelCount: Int = 0,
+    /** Engine starts: transition from 0 or unknown RPM to positive; includes service start with RPM already positive. */
+    val engineStartCount: Int = 0,
     /** Estimated liters added from detected refuels (% rise × tank size per event). */
     val fuelRefueledLiters: Float = 0f,
     /**
@@ -66,6 +69,7 @@ data class TripRecord(
         if (maxOutsideTemp != null) put(JSON_MAX_OUTSIDE_TEMP, maxOutsideTemp.toDouble())
         put(JSON_FUEL_LITERS, fuelConsumedLiters.toDouble())
         put(JSON_REFUEL_COUNT, refuelCount)
+        put(JSON_ENGINE_START_COUNT, engineStartCount)
         put(JSON_FUEL_REFUELED_LITERS, fuelRefueledLiters.toDouble())
         if (fuelBaselinePercent != null) put(JSON_FUEL_BASELINE_PERCENT, fuelBaselinePercent.toDouble())
     }
@@ -97,6 +101,7 @@ data class TripRecord(
             } else null,
             fuelConsumedLiters = o.optDouble(JSON_FUEL_LITERS, 0.0).toFloat(),
             refuelCount = o.optInt(JSON_REFUEL_COUNT),
+            engineStartCount = o.optInt(JSON_ENGINE_START_COUNT),
             fuelRefueledLiters = o.optDouble(JSON_FUEL_REFUELED_LITERS, 0.0).toFloat(),
             fuelBaselinePercent = if (o.has(JSON_FUEL_BASELINE_PERCENT) && !o.isNull(JSON_FUEL_BASELINE_PERCENT)) {
                 o.optDouble(JSON_FUEL_BASELINE_PERCENT).toFloat()

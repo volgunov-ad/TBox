@@ -401,6 +401,7 @@
     <string name="trips_fuel_used">Израсходовано топлива</string>
     <string name="trips_fuel_refueled">Заправлено топлива</string>
     <string name="trips_refuel_count">Заправки</string>
+    <string name="trips_engine_start_count">Запуски двигателя</string>
     <string name="data_title_net_widget">Виджет сигнала сети</string>
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>
     <string name="data_title_net_widget_colored">Виджет сигнала сети (цветной)</string>
