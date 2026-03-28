@@ -63,6 +63,10 @@
     <string name="widget_additional_settings_for_tile">Дополнительные настройки плитки %1$d</string>
     <string name="widget_show_title">Отображать название</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
+    <string name="widget_title_gear_box_mode_temp">Режим и температура КПП</string>
+    <string name="widget_title_motor_hours_total_trip">Моточасы (общ. и за поездку)</string>
+    <string name="widget_title_temp_outside_inside">Темп. снаружи и внутри</string>
+    <string name="widget_title_voltage_engine_temp">Напряжение и темп. двигателя</string>
     <string name="widget_external_app_title">Виджет стороннего приложения</string>
     <string name="widget_external_app_selected">Выбранный виджет: %1$s</string>
     <string name="widget_external_app_pick">Выбрать виджет</string>

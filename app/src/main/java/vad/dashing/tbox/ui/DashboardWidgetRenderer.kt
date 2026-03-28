@@ -103,6 +103,7 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -117,6 +118,7 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -159,6 +161,7 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -221,6 +224,7 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )

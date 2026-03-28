@@ -63,6 +63,10 @@
     <string name="widget_additional_settings_for_tile">Additional settings for tile %1$d</string>
     <string name="widget_show_title">Show title</string>
     <string name="widget_show_unit">Show unit</string>
+    <string name="widget_title_gear_box_mode_temp">Transmission mode and temperature</string>
+    <string name="widget_title_motor_hours_total_trip">Engine hours (total and trip)</string>
+    <string name="widget_title_temp_outside_inside">Outside and inside temperature</string>
+    <string name="widget_title_voltage_engine_temp">Voltage and engine temperature</string>
     <string name="widget_external_app_title">Third-party app widget</string>
     <string name="widget_external_app_selected">Selected widget: %1$s</string>
     <string name="widget_external_app_pick">Choose widget</string>
