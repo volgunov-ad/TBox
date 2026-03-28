@@ -65,6 +65,27 @@ android {
     }
 }
 
+/**
+ * OEM [libmbCan.so] ships with PT_LOAD p_align=4096; Google Play requires 16 KB ELF alignment
+ * for apps targeting Android 15+. The script pads file offsets so (vaddr-offset) % 16384 == 0.
+ */
+tasks.register<Exec>("alignMbCanFor16KPageSize") {
+    val script = rootProject.layout.projectDirectory.file("tools/align_elf_load_16k.py")
+    val lib = layout.projectDirectory.file("src/main/jniLibs/arm64-v8a/libmbCan.so")
+    onlyIf { script.asFile.exists() && lib.asFile.exists() }
+    commandLine(
+        "python3",
+        script.asFile.absolutePath,
+        lib.asFile.absolutePath,
+        "-o",
+        lib.asFile.absolutePath,
+    )
+}
+
+tasks.named("preBuild").configure {
+    dependsOn("alignMbCanFor16KPageSize")
+}
+
 dependencies {
 
     implementation(libs.androidx.core.ktx)
