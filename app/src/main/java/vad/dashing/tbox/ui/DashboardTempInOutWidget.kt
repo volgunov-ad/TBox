@@ -65,6 +65,7 @@ fun DashboardTempInOutWidgetItem(
                 Text(
                     text = stringResource(R.string.widget_title_temp_outside_inside),
                     modifier = Modifier
+                        .weight(1f)
                         .fillMaxWidth()
                         .wrapContentHeight(Alignment.CenterVertically),
                     fontSize = titleFont,
@@ -77,44 +78,38 @@ fun DashboardTempInOutWidgetItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Column(
+            Text(
+                text = "${valueToString(outsideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .fillMaxWidth()
                     .weight(1f)
-            ) {
-                Text(
-                    text = "${valueToString(outsideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-                Text(
-                    text = "${valueToString(insideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-            }
+                    .fillMaxWidth()
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
+            Text(
+                text = "${valueToString(insideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
         }
     }
 }

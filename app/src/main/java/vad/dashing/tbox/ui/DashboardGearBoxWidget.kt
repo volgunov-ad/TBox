@@ -66,6 +66,7 @@ fun DashboardGearBoxWidgetItem(
                 Text(
                     text = stringResource(R.string.widget_title_gear_box_mode_temp),
                     modifier = Modifier
+                        .weight(1f)
                         .fillMaxWidth()
                         .wrapContentHeight(Alignment.CenterVertically),
                     fontSize = titleFont,
@@ -78,44 +79,38 @@ fun DashboardGearBoxWidgetItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Column(
+            Text(
+                text = "$gearBoxMode${valueToString(gearBoxCurrentGear)}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .fillMaxWidth()
                     .weight(1f)
-            ) {
-                Text(
-                    text = "$gearBoxMode${valueToString(gearBoxCurrentGear)}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-                Text(
-                    text = "${valueToString(gearBoxOilTemperature, 0)}${if (units) "\u2009$celsiusUnit" else ""}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-            }
+                    .fillMaxWidth()
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
+            Text(
+                text = "${valueToString(gearBoxOilTemperature, 0)}${if (units) "\u2009$celsiusUnit" else ""}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
         }
     }
 }

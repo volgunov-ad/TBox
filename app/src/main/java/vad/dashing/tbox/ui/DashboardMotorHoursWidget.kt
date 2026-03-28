@@ -68,6 +68,7 @@ fun DashboardMotorHoursWidgetItem(
                 Text(
                     text = stringResource(R.string.widget_title_motor_hours_total_trip),
                     modifier = Modifier
+                        .weight(1f)
                         .fillMaxWidth()
                         .wrapContentHeight(Alignment.CenterVertically),
                     fontSize = titleFont,
@@ -80,44 +81,38 @@ fun DashboardMotorHoursWidgetItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Column(
+            Text(
+                text = "$motorHoursString${if (units) "\u2009$hourUnit" else ""}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .fillMaxWidth()
                     .weight(1f)
-            ) {
-                Text(
-                    text = "$motorHoursString${if (units) "\u2009$hourUnit" else ""}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-                Text(
-                    text = "$motorHoursTripString${if (units) "\u2009$hourUnit" else ""}",
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically)
-                )
-            }
+                    .fillMaxWidth()
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
+            Text(
+                text = "$motorHoursTripString${if (units) "\u2009$hourUnit" else ""}",
+                fontSize = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                ),
+                fontWeight = FontWeight.Medium,
+                color = resolvedTextColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .wrapContentHeight(Alignment.CenterVertically)
+            )
         }
     }
 }
