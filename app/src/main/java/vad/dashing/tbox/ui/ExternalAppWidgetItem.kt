@@ -105,10 +105,26 @@ fun ExternalAppWidgetItem(
                 } else {
                     stringResource(R.string.widget_external_tile_unavailable)
                 }
-                Text(
-                    text = placeholder,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                // No AppWidget host view: LongPressInterceptLayout is absent, so long-press would
+                // not reach the panel's edit handler unless we capture it here.
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Text(
+                        text = placeholder,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                    if (!isEditMode) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(onLongClick) {
+                                    detectTapGestures(
+                                        onLongPress = { onLongClick() }
+                                    )
+                                }
+                        )
+                    }
+                }
             } else {
                 key(appWidgetId) {
                     AndroidView(
