@@ -106,9 +106,7 @@ internal fun DashboardAppLauncherWidgetItem(
                     fontWeight = FontWeight.Medium,
                     color = resolvedTextColor,
                     textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    lineHeight = titleFontSize * 1.3f,
-                    softWrap = true,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .fillMaxWidth()
