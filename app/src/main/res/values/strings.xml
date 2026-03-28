@@ -63,6 +63,13 @@
     <string name="widget_additional_settings_for_tile">Дополнительные настройки плитки %1$d</string>
     <string name="widget_show_title">Отображать название</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
+    <string name="widget_title_gear_box_mode_temp">Режим и температура КПП</string>
+    <string name="widget_title_motor_hours_total_trip">Моточасы (общ. и за поездку)</string>
+    <string name="widget_title_temp_outside_inside">Темп. снаружи и внутри</string>
+    <string name="widget_title_voltage_engine_temp">Напряжение и темп. двигателя</string>
+    <string name="widget_title_fuel_level">Уровень топлива</string>
+    <string name="widget_title_air_quality_outside_inside">Воздух снаружи и внутри</string>
+    <string name="widget_single_line_dual_metrics">Данные в одну строку</string>
     <string name="widget_external_app_title">Виджет стороннего приложения</string>
     <string name="widget_external_app_selected">Выбранный виджет: %1$s</string>
     <string name="widget_external_app_pick">Выбрать виджет</string>
@@ -101,6 +108,7 @@
     <string name="media_player_poweramp">Poweramp</string>
     <string name="media_player_aimp">AIMP</string>
     <string name="media_player_record_radio">RecordRadio</string>
+    <string name="media_player_pcradio">PCRadio</string>
     <string name="media_player_jetaudio">jetAudio</string>
     <string name="media_player_jetaudioplus">jetAudioPlus</string>
     <string name="media_player_fmplay">FMPlay</string>
@@ -412,6 +420,8 @@
     <string name="data_title_wheels_pressure_widget">Виджет давления в шинах</string>
     <string name="data_title_wheels_pressure_temperature_widget">Виджет давления и температуры в шинах</string>
     <string name="data_title_temp_in_out_widget">Виджет температуры снаружи и внутри</string>
+    <string name="data_title_fuel_level_widget">Виджет уровня топлива</string>
+    <string name="data_title_air_quality_widget">Виджет качества воздуха</string>
     <string name="data_title_restart_tbox">Кнопка перезагрузки TBox</string>
     <string name="data_title_music_widget">Виджет управления музыкой</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>

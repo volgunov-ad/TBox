@@ -37,7 +37,8 @@ fun DashboardWidgetRenderer(
     isEditMode: Boolean = false,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    enableMusicInnerInteractions: Boolean = true
+    enableMusicInnerInteractions: Boolean = true,
+    fuelTankLiters: Int = 57
 ) {
     when (widget.dataKey) {
         "netWidget" -> {
@@ -103,6 +104,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -117,6 +120,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -159,6 +164,40 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        "fuelLevelWidget" -> {
+            DashboardFuelLevelWidgetItem(
+                widget = widget,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                canViewModel = canViewModel,
+                fuelTankLiters = fuelTankLiters,
+                elevation = elevation,
+                shape = shape,
+                units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        "airQualityWidget" -> {
+            DashboardAirQualityWidgetItem(
+                widget = widget,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                canViewModel = canViewModel,
+                elevation = elevation,
+                shape = shape,
+                showTitle = widgetConfig.showTitle,
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -221,6 +260,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )

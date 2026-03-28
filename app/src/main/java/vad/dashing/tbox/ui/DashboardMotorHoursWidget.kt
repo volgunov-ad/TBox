@@ -3,6 +3,7 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
@@ -31,6 +32,8 @@ fun DashboardMotorHoursWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
+    showTitle: Boolean = false,
+    singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
@@ -40,6 +43,8 @@ fun DashboardMotorHoursWidgetItem(
     val motorHoursTripFlow = dataProvider.getValueFlow("motorHoursTrip")
     val motorHoursTripString by motorHoursTripFlow.collectAsStateWithLifecycle()
     val hourUnit = stringResource(R.string.unit_hours)
+    val firstLine = "$motorHoursString${if (units) "\u2009$hourUnit" else ""}"
+    val secondLine = "$motorHoursTripString${if (units) "\u2009$hourUnit" else ""}"
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -58,35 +63,36 @@ fun DashboardMotorHoursWidgetItem(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "$motorHoursString${if (units) "\u2009$hourUnit" else ""}",
-                fontSize = calculateResponsiveFontSize(
+            if (showTitle) {
+                val titleFont = calculateResponsiveFontSize(
                     containerHeight = availableHeight,
-                    textType = TextType.VALUE
-                ),
-                fontWeight = FontWeight.Medium,
-                color = resolvedTextColor,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .wrapContentHeight(Alignment.CenterVertically)
-            )
-            Text(
-                text = "$motorHoursTripString${if (units) "\u2009$hourUnit" else ""}",
-                fontSize = calculateResponsiveFontSize(
-                    containerHeight = availableHeight,
-                    textType = TextType.VALUE
-                ),
-                fontWeight = FontWeight.Medium,
-                color = resolvedTextColor,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .wrapContentHeight(Alignment.CenterVertically)
+                    textType = TextType.TITLE
+                )
+                Text(
+                    text = stringResource(R.string.widget_title_motor_hours_total_trip),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically),
+                    fontSize = titleFont,
+                    lineHeight = titleFont * 1.3f,
+                    fontWeight = FontWeight.Medium,
+                    color = resolvedTextColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            DashboardDualMetricRows(
+                firstLine = firstLine,
+                secondLine = secondLine,
+                singleLineDualMetrics = singleLineDualMetrics,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor,
+                modifier = Modifier.weight(
+                    if (showTitle && !singleLineDualMetrics) 2f else 1f
+                )
             )
         }
     }

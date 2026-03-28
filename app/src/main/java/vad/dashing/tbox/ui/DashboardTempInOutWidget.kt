@@ -3,6 +3,7 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
@@ -32,12 +33,18 @@ fun DashboardTempInOutWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
+    showTitle: Boolean = false,
+    singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
     val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
     val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
     val celsiusUnit = stringResource(R.string.unit_celsius)
+    val firstLine =
+        "${valueToString(outsideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}"
+    val secondLine =
+        "${valueToString(insideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}"
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -55,35 +62,36 @@ fun DashboardTempInOutWidgetItem(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "${valueToString(outsideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
-                fontSize = calculateResponsiveFontSize(
+            if (showTitle) {
+                val titleFont = calculateResponsiveFontSize(
                     containerHeight = availableHeight,
-                    textType = TextType.VALUE
-                ),
-                fontWeight = FontWeight.Medium,
-                color = resolvedTextColor,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .wrapContentHeight(Alignment.CenterVertically)
-            )
-            Text(
-                text = "${valueToString(insideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
-                fontSize = calculateResponsiveFontSize(
-                    containerHeight = availableHeight,
-                    textType = TextType.VALUE
-                ),
-                fontWeight = FontWeight.Medium,
-                color = resolvedTextColor,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .wrapContentHeight(Alignment.CenterVertically)
+                    textType = TextType.TITLE
+                )
+                Text(
+                    text = stringResource(R.string.widget_title_temp_outside_inside),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically),
+                    fontSize = titleFont,
+                    lineHeight = titleFont * 1.3f,
+                    fontWeight = FontWeight.Medium,
+                    color = resolvedTextColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            DashboardDualMetricRows(
+                firstLine = firstLine,
+                secondLine = secondLine,
+                singleLineDualMetrics = singleLineDualMetrics,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor,
+                modifier = Modifier.weight(
+                    if (showTitle && !singleLineDualMetrics) 2f else 1f
+                )
             )
         }
     }

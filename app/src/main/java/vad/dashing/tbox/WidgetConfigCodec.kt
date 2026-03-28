@@ -67,6 +67,7 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("dataKey", config.dataKey)
         obj.put("showTitle", config.showTitle)
         obj.put("showUnit", config.showUnit)
+        obj.put("singleLineDualMetrics", config.singleLineDualMetrics)
         obj.put("scale", normalizeWidgetScale(config.scale))
         obj.put("shape", normalizeWidgetShape(config.shape))
         obj.put("textColorLight", config.textColorLight)
@@ -173,6 +174,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         dataKey = dataKey,
                         showTitle = item.optBoolean("showTitle", false),
                         showUnit = item.optBoolean("showUnit", true),
+                        singleLineDualMetrics = item.optBoolean("singleLineDualMetrics", false),
                         scale = normalizeWidgetScale(
                             item.optDouble("scale", DEFAULT_WIDGET_SCALE.toDouble()).toFloat()
                         ),
