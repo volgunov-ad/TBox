@@ -60,7 +60,7 @@ fun DashboardActiveTripWidgetItem(
         ) {
             if (trip == null) {
                 Text(
-                    text = stringResource(R.string.trips_empty),
+                    text = stringResource(R.string.trips_no_active),
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.VALUE
@@ -123,13 +123,6 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
-                        label = stringResource(R.string.trips_engine_start_count),
-                        value = valueToString(t.engineStartCount),
-                        unit = "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
                     val avgM = TripRepository.averageSpeedMovingKmH(t)
                     ActiveTripRow(
                         label = stringResource(R.string.trips_avg_speed_moving),
@@ -149,6 +142,13 @@ fun DashboardActiveTripWidgetItem(
                     ActiveTripRow(
                         label = stringResource(R.string.trips_fuel_used),
                         value = valueToString(t.fuelConsumedLiters, 1),
+                        unit = stringResource(R.string.unit_liter),
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    ActiveTripRow(
+                        label = stringResource(R.string.trips_fuel_refueled),
+                        value = valueToString(t.fuelRefueledLiters, 1),
                         unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
                         color = resolvedTextColor
@@ -196,6 +196,13 @@ fun DashboardActiveTripWidgetItem(
                             context,
                             t.movingTimeMs + t.idleTimeMs
                         ),
+                        unit = "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    ActiveTripRow(
+                        label = stringResource(R.string.trips_engine_start_count),
+                        value = valueToString(t.engineStartCount),
                         unit = "",
                         fontSize = rowFont,
                         color = resolvedTextColor

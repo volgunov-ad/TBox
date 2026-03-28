@@ -69,12 +69,12 @@ enum class SupportedMediaPlayer(
     YANDEX_MAPS(
         packageName = "ru.yandex.yandexmaps",
         titleRes = R.string.media_player_yandex_maps,
-        iconRes = R.drawable.player_yandex_music
+        iconRes = R.drawable.player_yandex_maps
     ),
     YANDEX_NAVI(
         packageName = "ru.yandex.yandexnavi",
         titleRes = R.string.media_player_yandex_navi,
-        iconRes = R.drawable.player_yandex_music
+        iconRes = R.drawable.player_yandex_navigator
     ),
     //WT_LOCAL_MULTIMEDIA(
     //    packageName = "com.wt.multimedia.local",
