@@ -243,7 +243,7 @@
     <string name="settings_backup_import_choose_file">Choose file</string>
     <string name="dialog_save_backup_downloads">Save full backup (settings and data) to the Downloads folder</string>
     <string name="dialog_backup_import_title">Import backup</string>
-    <string name="dialog_backup_import_message">Current settings and app data will be fully replaced by the backup. The active trip in memory and storage will match the backup (if the backup has no open trip, any current open trip is replaced by the imported list). Continue and choose a JSON file?</string>
+    <string name="dialog_backup_import_message">Current settings and app data will be fully replaced by the backup. The active trip in memory and storage will match the backup (if the backup has no open trip, any current open trip is replaced by the imported list). Tiles that host third-party app widgets are cleared after import (pick the widget again). Continue and choose a JSON file?</string>
     <string name="settings_expert_mode_title">Expert mode</string>
     <string name="settings_expert_mode_warning_desc">All changes in expert mode are made at your own risk.\nHowever, your actions in this mode cannot lead to irreversible consequences.</string>
     <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>

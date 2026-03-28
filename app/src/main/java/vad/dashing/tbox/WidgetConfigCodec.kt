@@ -97,6 +97,21 @@ fun serializeWidgetConfigsToJsonArray(
     return array
 }
 
+/**
+ * After backup import, third-party app widget IDs may be invalid (e.g. provider app reinstalled).
+ * Reset those tiles to empty slots while preserving layout/visual options.
+ */
+fun clearExternalAppWidgetsAfterBackupImport(
+    configs: List<FloatingDashboardWidgetConfig>
+): List<FloatingDashboardWidgetConfig> =
+    configs.map { cfg ->
+        if (cfg.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
+            cfg.copy(dataKey = "", appWidgetId = null)
+        } else {
+            cfg
+        }
+    }
+
 fun normalizeWidgetConfigs(
     configs: List<FloatingDashboardWidgetConfig>,
     widgetCount: Int
