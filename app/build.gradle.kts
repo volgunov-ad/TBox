@@ -63,6 +63,23 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Mengbo libmbcanclient.so / libmbutils.so list DT_NEEDED "libc++.so"; stock NDK uses libc++_shared.so.
+    // Ship a copy under the expected name so dlopen succeeds on the HU (see MbCanNative).
+    sourceSets.getByName("main") {
+        jniLibs.srcDir(layout.buildDirectory.dir("generated/jniLibsMbCanAlias"))
+    }
+}
+
+/**
+ * Copy libc++_shared.so → libc++.so for OEM MB-CAN stack (DT_NEEDED name mismatch).
+ */
+tasks.register<Copy>("copyLibcxxAliasForMbCan") {
+    val src = layout.projectDirectory.file("src/main/jniLibs/arm64-v8a/libc++_shared.so")
+    onlyIf { src.asFile.exists() }
+    from(src)
+    into(layout.buildDirectory.dir("generated/jniLibsMbCanAlias/arm64-v8a"))
+    rename { "libc++.so" }
 }
 
 /**
@@ -87,7 +104,7 @@ tasks.register<Exec>("alignMbCanFor16KPageSize") {
 }
 
 tasks.named("preBuild").configure {
-    dependsOn("alignMbCanFor16KPageSize")
+    dependsOn("copyLibcxxAliasForMbCan", "alignMbCanFor16KPageSize")
 }
 
 dependencies {
