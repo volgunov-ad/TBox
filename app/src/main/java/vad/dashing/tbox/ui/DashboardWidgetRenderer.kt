@@ -26,6 +26,7 @@ fun DashboardWidgetRenderer(
     dashboardChart: Boolean,
     tboxConnected: Boolean,
     restartEnabled: Boolean,
+    onTripFinishAndStart: () -> Unit,
     widgetTextColor: Color,
     widgetBackgroundColor: Color,
     onClick: () -> Unit,
@@ -195,6 +196,7 @@ fun DashboardWidgetRenderer(
             DashboardMusicWidgetItem(
                 widget = widget,
                 widgetConfig = widgetConfig,
+                canViewModel = canViewModel,
                 title = widgetConfig.showTitle,
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -219,6 +221,24 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        "activeTripWidget", "activeTripWidgetSimple" -> {
+            DashboardActiveTripWidgetItem(
+                widget = widget,
+                appDataViewModel = appDataViewModel,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {
+                    if (appDataViewModel.activeTrip.value?.isActive == true) {
+                        onTripFinishAndStart()
+                    }
+                },
+                elevation = elevation,
+                shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )

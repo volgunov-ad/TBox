@@ -8,10 +8,18 @@ class TboxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         val appDataManager = AppDataManager(this)
+        val settingsManager = SettingsManager(this)
         runBlocking {
+            settingsManager.migrateSelectedTabIndexIfNeeded()
             val saved = appDataManager.motorHoursFlow.first()
             CarDataRepository.setMotorHours(saved)
             CarDataRepository.markPersisted(saved)
+            val tripsJson = appDataManager.tripsJsonFlow.first()
+            val favJson = appDataManager.tripFavoritesJsonFlow.first()
+            TripRepository.setTripsFromStore(
+                tripsListFromJson(tripsJson),
+                favoritesSetFromJson(favJson)
+            )
         }
     }
 }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,7 +69,8 @@ fun TboxApp(
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
-    onMockLocationSettingChanged: (Boolean) -> Unit
+    onMockLocationSettingChanged: (Boolean) -> Unit,
+    onTripFinishAndStart: () -> Unit,
 ) {
     val viewModel: TboxViewModel = viewModel()
     val canViewModel: CanDataViewModel = viewModel()
@@ -94,6 +96,7 @@ fun TboxApp(
                 settingsViewModel = settingsViewModel,
                 onOpenConsole = { settingsViewModel.saveSelectedTab(0) },
                 onTboxRestart = onTboxRestart,
+                onTripFinishAndStart = onTripFinishAndStart,
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -104,15 +107,16 @@ fun TboxApp(
                 onTboxRestart = onTboxRestart,
                 onSaveToFile = onSaveToFile,
                 onServiceCommand = onServiceCommand,
-                onMockLocationSettingChanged = onMockLocationSettingChanged
+                onMockLocationSettingChanged = onMockLocationSettingChanged,
+                onTripFinishAndStart = onTripFinishAndStart,
             )
         }
     }
 }
 
 object TabItems {
-    /** Left menu order; tab index 9 is shown immediately after Settings (4). */
-    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 9, 5, 6, 7, 8)
+    /** Left menu order; tab index 10 is shown immediately after Settings (5). */
+    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 5, 10, 6, 7, 8, 9)
 
     @Composable
     fun getItems(): List<TabItem> {
@@ -121,6 +125,7 @@ object TabItems {
             TabItem(stringResource(R.string.tab_at_commands), ImageVector.vectorResource(R.drawable.menu_icon_at)),
             TabItem(stringResource(R.string.tab_geoposition), Icons.Filled.Place),
             TabItem(stringResource(R.string.tab_car_data), Icons.Filled.Build),
+            TabItem(stringResource(R.string.tab_trips), Icons.AutoMirrored.Filled.List),
             TabItem(stringResource(R.string.tab_settings), Icons.Filled.Settings),
             TabItem(stringResource(R.string.tab_logs), ImageVector.vectorResource(R.drawable.menu_icon_log)),
             TabItem(stringResource(R.string.tab_info), Icons.Filled.Info),
@@ -144,6 +149,7 @@ fun TboxScreen(
     onSaveToFile: (String, List<String>) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
+    onTripFinishAndStart: () -> Unit,
 ) {
     val canViewModel: CanDataViewModel = viewModel()
     val cycleViewModel: CycleDataViewModel = viewModel()
@@ -180,10 +186,10 @@ fun TboxScreen(
                 ""
             )
         }
-        if (selectedTab == 4) {
+        if (selectedTab == 5) {
             settingsViewModel.onSettingsTabSelected()
         }
-        if (selectedTab == 9) {
+        if (selectedTab == 10) {
             settingsViewModel.onMainScreenSettingsTabSelected()
         }
     }
@@ -246,7 +252,7 @@ fun TboxScreen(
                         TabItems.tabMenuDisplayOrder.forEach { index ->
                             if (index !in tabs.indices) return@forEach
                             val tab = tabs[index]
-                            if (isExpertModeEnabled || index !in setOf(1, 5, 7)) {
+                            if (isExpertModeEnabled || index !in setOf(1, 6, 8)) {
                                 TabMenuItem(
                                     title = tab.title,
                                     icon = tab.icon,
@@ -345,30 +351,37 @@ fun TboxScreen(
                         cycleViewModel,
                         appDataViewModel,
                         settingsViewModel)
-                    4 -> SettingsTab(
+                    4 -> TripsTab(
+                        appDataViewModel = appDataViewModel,
+                        settingsViewModel = settingsViewModel,
+                        onTripFinishAndStart = onTripFinishAndStart,
+                    )
+                    5 -> SettingsTab(
                         viewModel,
                         settingsViewModel,
                         onTboxRestart,
                         onMockLocationSettingChanged,
                         onServiceCommand)
-                    5 -> if (isExpertModeEnabled) {
+                    6 -> if (isExpertModeEnabled) {
                         LogsTab(viewModel, settingsViewModel, onSaveToFile)
                     } else {
                         ModemTab(viewModel, onServiceCommand)
                     }
-                    6 -> InfoTab(viewModel, settingsViewModel, onServiceCommand)
-                    7 -> if (isExpertModeEnabled) {
+                    7 -> InfoTab(viewModel, settingsViewModel, onServiceCommand)
+                    8 -> if (isExpertModeEnabled) {
                         CanTab(viewModel, canViewModel, onSaveToFile)
                     } else {
                         ModemTab(viewModel, onServiceCommand)
                     }
-                    8 -> MainDashboardTab(
+                    9 -> MainDashboardTab(
                         viewModel,
                         canViewModel,
                         settingsViewModel,
                         appDataViewModel,
-                        onTboxRestart)
-                    9 -> MainScreenSettingsTab(settingsViewModel = settingsViewModel)
+                        onTboxRestart,
+                        onTripFinishAndStart = onTripFinishAndStart,
+                    )
+                    10 -> MainScreenSettingsTab(settingsViewModel = settingsViewModel)
                     else -> ModemTab(viewModel, onServiceCommand)
                 }
             }

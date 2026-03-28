@@ -37,6 +37,8 @@ data class FloatingDashboardWidgetConfig(
     val mediaPlayers: List<String> = emptyList(),
     val mediaSelectedPlayer: String = "",
     val mediaAutoPlayOnInit: Boolean = false,
+    /** If true (and [mediaAutoPlayOnInit]), delay auto-play until engine RPM is greater than zero. */
+    val mediaAutoPlayOnlyWhenEngineRunning: Boolean = false,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
@@ -143,6 +145,8 @@ class SettingsManager(private val context: Context) {
         private val DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_cols")
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
         private val CAN_DATA_SAVE_COUNT_KEY = intPreferencesKey("${KEY_PREFIX}can_data_save_count")
+        private val FUEL_TANK_LITERS_KEY = intPreferencesKey("${KEY_PREFIX}fuel_tank_liters")
+        private val SPLIT_TRIP_TIME_MINUTES_KEY = intPreferencesKey("${KEY_PREFIX}split_trip_time_minutes")
 
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
@@ -179,6 +183,8 @@ class SettingsManager(private val context: Context) {
         /** Copied image for MainScreen when global app theme is dark (theme == 2). */
         const val MAIN_SCREEN_WALLPAPER_DARK_FILE = "main_screen_wallpaper/dark"
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
+        private const val DEFAULT_FUEL_TANK_LITERS = 57
+        private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
@@ -341,6 +347,14 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[CAN_DATA_SAVE_COUNT_KEY] ?: DEFAULT_CAN_DATA_SAVE_COUNT }
         .distinctUntilChanged()
 
+    val fuelTankLitersFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS }
+        .distinctUntilChanged()
+
+    val splitTripTimeMinutesFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[SPLIT_TRIP_TIME_MINUTES_KEY] ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES }
+        .distinctUntilChanged()
+
     // Suspend функции для сохранения настроек
 
     // Сохранение конфигурации виджетов
@@ -474,6 +488,19 @@ class SettingsManager(private val context: Context) {
     suspend fun saveSelectedTab(tabIndex: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[SELECTED_TAB_KEY] = tabIndex.toString()
+        }
+    }
+
+    /**
+     * One-time: after adding the Trips tab, shift stored indices 5–9 by +1 so the same
+     * screen stays selected (Main screen index 100 is unchanged).
+     */
+    suspend fun migrateSelectedTabIndexIfNeeded() {
+        val raw = context.settingsDataStore.data.first()[SELECTED_TAB_KEY]?.toIntOrNull()
+            ?: return
+        if (raw == MAIN_SCREEN_SELECTED_TAB_INDEX) return
+        if (raw in 5..9) {
+            saveSelectedTab(raw + 1)
         }
     }
 
@@ -612,6 +639,18 @@ class SettingsManager(private val context: Context) {
     suspend fun saveCanDataSaveCount(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[CAN_DATA_SAVE_COUNT_KEY] = config
+        }
+    }
+
+    suspend fun saveFuelTankLiters(liters: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_TANK_LITERS_KEY] = liters.coerceIn(1, 500)
+        }
+    }
+
+    suspend fun saveSplitTripTimeMinutes(minutes: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[SPLIT_TRIP_TIME_MINUTES_KEY] = minutes.coerceIn(1, 120)
         }
     }
 
@@ -776,4 +815,5 @@ class SettingsManager(private val context: Context) {
         }
         return array.toString()
     }
+
 }

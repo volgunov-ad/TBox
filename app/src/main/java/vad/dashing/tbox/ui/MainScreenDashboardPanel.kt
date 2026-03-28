@@ -98,6 +98,7 @@ fun MainScreenDashboardPanel(
     appDataViewModel: AppDataViewModel,
     settingsViewModel: SettingsViewModel,
     onRebootTbox: () -> Unit,
+    onTripFinishAndStart: () -> Unit,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -175,7 +176,7 @@ fun MainScreenDashboardPanel(
     }
 
     val dataProvider = remember(context) {
-        TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, context)
+        TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, settingsViewModel, context)
     }
 
     LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols, context) {
@@ -322,6 +323,7 @@ fun MainScreenDashboardPanel(
             tboxConnected = tboxConnected,
             currentTheme = currentTheme,
             restartEnabled = restartEnabled,
+            onTripFinishAndStart = onTripFinishAndStart,
             isEditMode = isEditMode,
             showDialogOpen = showDialogForIndex != null,
             widgetInteractionPolicy = widgetInteractionPolicy,

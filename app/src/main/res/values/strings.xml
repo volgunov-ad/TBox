@@ -39,6 +39,7 @@
     <string name="tab_at_commands">AT команды</string>
     <string name="tab_geoposition">Геопозиция</string>
     <string name="tab_car_data">Данные авто</string>
+    <string name="tab_trips">Поездки</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_main_screen_settings">Настройки главного экрана</string>
     <string name="tab_logs">Журнал</string>
@@ -84,6 +85,7 @@
     <string name="widget_music_players_hint">Выберите один или несколько плееров</string>
     <string name="widget_music_players_required">Выберите минимум один плеер</string>
     <string name="widget_music_auto_play_on_init">Автоматически запускать воспроизведение</string>
+    <string name="widget_music_auto_play_only_engine">Запускать только при включении двигателя</string>
     <string name="widget_music_no_artist">Исполнитель не определён</string>
     <string name="widget_music_no_track">Трек не определён</string>
     <string name="widget_music_player_none">Плеер не найден</string>
@@ -103,6 +105,8 @@
     <string name="media_player_jetaudioplus">jetAudioPlus</string>
     <string name="media_player_fmplay">FMPlay</string>
     <string name="media_player_yandex_radio">Яндекс.Радио</string>
+    <string name="media_player_yandex_maps">Яндекс.Карты</string>
+    <string name="media_player_yandex_navi">Яндекс.Навигатор</string>
     <string name="media_player_wt_local_multimedia">Штатный плеер</string>
     <string name="media_player_bluetooth_phone">Bluetooth с телефона</string>
     <string name="media_player_vkx">VKX</string>
@@ -364,6 +368,40 @@
     <string name="data_title_motor_hours">Моточасы двигателя</string>
     <string name="data_title_motor_hours_trip">Моточасы двигателя за поездку</string>
     <string name="data_title_motor_hours_widget">Виджет моточасов</string>
+    <string name="data_title_active_trip_widget">Текущая поездка</string>
+    <string name="data_title_active_trip_widget_simple">Текущая поездка (упрощённый)</string>
+
+    <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
+    <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
+
+    <string name="trips_delete">Удалить поездку</string>
+    <string name="trips_finish">Завершить</string>
+    <string name="trips_name_label">Название поездки</string>
+    <string name="trips_add_favorite">В избранное</string>
+    <string name="trips_remove_favorite">Убрать из избранного</string>
+    <string name="trips_empty">Нет сохранённых поездок</string>
+    <string name="trips_active_trip">Текущая поездка</string>
+    <string name="trips_start_time">Начало</string>
+    <string name="trips_end_time">Окончание</string>
+    <string name="trips_odometer_start">Одометр в начале поездки</string>
+    <string name="trips_distance">Пробег</string>
+    <string name="trips_moving_time">Время в движении</string>
+    <string name="trips_idle_time">Время в простое</string>
+    <string name="trips_total_time">Общее время</string>
+    <string name="trips_format_hours_minutes_seconds">%1$d ч %2$d мин %3$d с</string>
+    <string name="trips_format_minutes_seconds">%1$d мин %2$d с</string>
+    <string name="trips_format_seconds_only">%1$d с</string>
+    <string name="trips_max_speed">Макс. скорость</string>
+    <string name="trips_max_engine_temp">Макс. температура двигателя</string>
+    <string name="trips_max_gearbox_temp">Макс. температура масла КПП</string>
+    <string name="trips_min_outside_temp">Мин. температура на улице</string>
+    <string name="trips_max_outside_temp">Макс. температура на улице</string>
+    <string name="trips_avg_speed_moving">Средняя скорость без простоев</string>
+    <string name="trips_avg_speed_trip">Средняя скорость</string>
+    <string name="trips_fuel_used">Израсходовано топлива</string>
+    <string name="trips_fuel_refueled">Заправлено топлива</string>
+    <string name="trips_refuel_count">Заправки</string>
+    <string name="trips_engine_start_count">Запуски двигателя</string>
     <string name="data_title_net_widget">Виджет сигнала сети</string>
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>
     <string name="data_title_net_widget_colored">Виджет сигнала сети (цветной)</string>

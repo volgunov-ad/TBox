@@ -264,6 +264,8 @@ fun SettingsTabContent(
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
 
     val canDataSaveCount by settingsViewModel.canDataSaveCount.collectAsStateWithLifecycle()
+    val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
+    val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
@@ -565,6 +567,22 @@ fun SettingsTabContent(
         )
 
         SettingsTitle(stringResource(R.string.settings_misc_title))
+        SettingInt(
+            fuelTankLiters,
+            { value -> settingsViewModel.saveFuelTankLiters(value) },
+            stringResource(R.string.settings_fuel_tank_liters_title),
+            "",
+            1,
+            500
+        )
+        SettingInt(
+            splitTripTimeMinutes,
+            { value -> settingsViewModel.saveSplitTripTimeMinutes(value) },
+            stringResource(R.string.settings_split_trip_time_title),
+            "",
+            1,
+            120
+        )
         SettingSwitch(
             isExpertModeEnabled,
             { enabled ->

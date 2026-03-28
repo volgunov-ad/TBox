@@ -66,6 +66,16 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_yandex_radio,
         iconRes = R.drawable.player_yandex_radio
     ),
+    YANDEX_MAPS(
+        packageName = "ru.yandex.yandexmaps",
+        titleRes = R.string.media_player_yandex_maps,
+        iconRes = R.drawable.player_yandex_music
+    ),
+    YANDEX_NAVI(
+        packageName = "ru.yandex.yandexnavi",
+        titleRes = R.string.media_player_yandex_navi,
+        iconRes = R.drawable.player_yandex_music
+    ),
     //WT_LOCAL_MULTIMEDIA(
     //    packageName = "com.wt.multimedia.local",
     //    titleRes = R.string.media_player_wt_local_multimedia,
@@ -680,7 +690,7 @@ private fun sendMediaPlayKeyEvent(context: Context, packageName: String) {
 
 private fun launchPlayerApp(context: Context, packageName: String) {
     val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
-    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
     runCatching {
         context.startActivity(launchIntent)
     }
