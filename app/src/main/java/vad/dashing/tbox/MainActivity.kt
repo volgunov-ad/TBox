@@ -87,6 +87,7 @@ class MainActivity : ComponentActivity() {
             val result = settingsManager.importFullBackupJson(appDataManager, text)
             withContext(Dispatchers.Main) {
                 if (result.isSuccess) {
+                    serviceCommand(BackgroundService.ACTION_RELOAD_TRIPS_FROM_STORE, "", "")
                     Toast.makeText(
                         this@MainActivity,
                         getString(R.string.toast_backup_import_ok),
