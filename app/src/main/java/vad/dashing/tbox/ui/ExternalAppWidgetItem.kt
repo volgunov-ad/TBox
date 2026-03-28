@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -18,6 +19,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -42,7 +46,9 @@ fun ExternalAppWidgetItem(
     onLongClick: () -> Unit = {},
     elevation: Dp = 0.dp,
     shape: Dp = 0.dp,
-    backgroundColor: Color? = null
+    backgroundColor: Color? = null,
+    /** Matches title styling on other dashboard tiles ([DashboardWidgetItem] title row). */
+    textColor: Color? = null,
 ) {
     val context = LocalContext.current
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
@@ -107,10 +113,22 @@ fun ExternalAppWidgetItem(
                 }
                 // No AppWidget host view: LongPressInterceptLayout is absent, so long-press would
                 // not reach the panel's edit handler unless we capture it here.
-                Box(modifier = Modifier.fillMaxSize()) {
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val titleFont = calculateResponsiveFontSize(
+                        containerHeight = maxHeight,
+                        textType = TextType.TITLE
+                    )
+                    val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
                     Text(
                         text = placeholder,
-                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = titleFont,
+                        fontWeight = FontWeight.Medium,
+                        color = resolvedColor,
+                        textAlign = TextAlign.Center,
+                        maxLines = 3,
+                        lineHeight = titleFont * 1.3f,
+                        softWrap = true,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.align(Alignment.Center)
                     )
                     if (!isEditMode) {
