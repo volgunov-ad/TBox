@@ -236,6 +236,14 @@
     <string name="settings_get_geo_data_title">Получать данные о геопозиции от TBox</string>
 
     <string name="settings_misc_title">Прочее</string>
+    <string name="settings_backup_title">Резервная копия</string>
+    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Файлы обоев главного экрана в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
+    <string name="settings_backup_export">Экспорт JSON</string>
+    <string name="settings_backup_import">Импорт JSON</string>
+    <string name="settings_backup_import_choose_file">Выбрать файл</string>
+    <string name="dialog_save_backup_downloads">Сохранить полную резервную копию (настройки и данные) в папку Загрузки</string>
+    <string name="dialog_backup_import_title">Импорт резервной копии</string>
+    <string name="dialog_backup_import_message">Текущие настройки и данные приложения будут полностью заменены содержимым файла. Продолжить и выбрать JSON-файл?</string>
     <string name="settings_expert_mode_title">Экспертный режим</string>
     <string name="settings_expert_mode_warning_desc">Все изменения в экспертном режиме вы делаете на свой страх и риск.\nНо к необратимым последствиям ваши действия в этом режиме привести не могут</string>
     <string name="settings_can_frames_count_title">Количество сохраняемых CAN фреймов (1…3600)</string>
@@ -291,6 +299,13 @@
     <string name="toast_storage_permission_denied">Не удалось сохранить файл: нет разрешений на запись</string>
     <string name="toast_service_start_error">Ошибка запуска службы</string>
     <string name="toast_mock_location_permissions_required">Для подмены местоположения нужны разрешения геолокации</string>
+    <string name="toast_backup_export_error">Ошибка экспорта резервной копии: %1$s</string>
+    <string name="toast_backup_import_ok">Резервная копия импортирована</string>
+    <string name="toast_backup_import_read_error">Не удалось прочитать файл</string>
+    <string name="toast_backup_import_error_invalid_json">Файл не является корректным JSON</string>
+    <string name="toast_backup_import_error_format">Неподдерживаемый формат резервной копии</string>
+    <string name="toast_backup_import_error_missing">В файле нет разделов настроек или данных</string>
+    <string name="toast_backup_import_error">Ошибка импорта: %1$s</string>
 
     <string name="widget_text_tbox">TBox</string>
     <string name="widget_text_res">RES</string>

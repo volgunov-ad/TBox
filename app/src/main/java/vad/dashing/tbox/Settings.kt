@@ -22,7 +22,7 @@ import org.json.JSONObject
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
 // Используем extension property для DataStore
-private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
+internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
 
 data class FloatingDashboardWidgetConfig(
     val dataKey: String,
@@ -817,5 +817,20 @@ class SettingsManager(private val context: Context) {
         }
         return array.toString()
     }
+
+    suspend fun exportFullBackupJson(appDataManager: AppDataManager): String =
+        SettingsBackupCoordinator.exportFullJson(
+            context.packageName,
+            context.settingsDataStore,
+            appDataManager.preferencesDataStore,
+        )
+
+    suspend fun importFullBackupJson(appDataManager: AppDataManager, json: String): Result<Unit> =
+        SettingsBackupCoordinator.importFullJson(
+            appDataManager,
+            context.settingsDataStore,
+            appDataManager.preferencesDataStore,
+            json,
+        )
 
 }

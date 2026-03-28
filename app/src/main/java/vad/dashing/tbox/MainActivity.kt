@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -13,6 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
@@ -23,6 +25,7 @@ import vad.dashing.tbox.ui.TboxApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -59,6 +62,52 @@ class MainActivity : ComponentActivity() {
     // Переменные для хранения данных/тега, которые нужно сохранить после получения разрешений
     private var pendingSaveTag: String? = null
     private var pendingDataToSave: List<String>? = null
+    private var pendingJsonBackup: String? = null
+
+    private val importBackupLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch(Dispatchers.IO) {
+            val text = runCatching {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    input.bufferedReader().readText()
+                }.orEmpty()
+            }.getOrElse { "" }
+            if (text.isBlank()) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_backup_import_read_error),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return@launch
+            }
+            val result = settingsManager.importFullBackupJson(appDataManager, text)
+            withContext(Dispatchers.Main) {
+                if (result.isSuccess) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_backup_import_ok),
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    val msg = when (result.exceptionOrNull()?.message) {
+                        "invalid_json" -> getString(R.string.toast_backup_import_error_invalid_json)
+                        "unsupported_format" -> getString(R.string.toast_backup_import_error_format)
+                        "missing_settings" -> getString(R.string.toast_backup_import_error_missing)
+                        "missing_app_data" -> getString(R.string.toast_backup_import_error_missing)
+                        else -> getString(
+                            R.string.toast_backup_import_error,
+                            result.exceptionOrNull()?.message ?: ""
+                        )
+                    }
+                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     // Флаг для отслеживания состояния переключателя mock-локации
     private var isMockLocationSettingPending = false
@@ -82,6 +131,10 @@ class MainActivity : ComponentActivity() {
                     onTboxRestart = { rebootTBox() },
                     onSaveToFile = { tag, dataList ->
                         saveDataToFile(tag, dataList)
+                    },
+                    onExportSettingsBackup = { exportSettingsAndAppDataBackup() },
+                    onImportSettingsBackup = {
+                        importBackupLauncher.launch(arrayOf("application/json", "application/*", "*/*"))
                     },
                     onServiceCommand = { sendAction, extraName, extraValue ->
                         serviceCommand(sendAction, extraName, extraValue)
@@ -246,6 +299,71 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }*/
 
+    private fun exportSettingsAndAppDataBackup() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val json = runCatching {
+                settingsManager.exportFullBackupJson(appDataManager)
+            }.getOrElse { e ->
+                Log.e(TAG, "Ошибка формирования резервной копии", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_backup_export_error, e.message ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                saveJsonBackupToDownloads(json)
+            }
+        }
+    }
+
+    private fun saveJsonBackupToDownloads(json: String) {
+        if (hasStoragePermissions()) {
+            performJsonBackupSave(json)
+        } else {
+            pendingJsonBackup = json
+            requestStoragePermissions()
+        }
+    }
+
+    private fun performJsonBackupSave(json: String) {
+        try {
+            val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+            } else {
+                Environment.getExternalStorageDirectory().absolutePath + "/Download"
+            }
+            val saveDir = File(savePath)
+            if (!saveDir.exists()) {
+                saveDir.mkdirs()
+            }
+            val timestamp = SimpleDateFormat(
+                "yyyy-MM-dd_HH-mm-ss",
+                Locale.getDefault()
+            ).format(Date())
+            val dataFile = File(savePath, "tbox_backup_$timestamp.json")
+            FileWriter(dataFile).use { writer ->
+                writer.write(json)
+            }
+            Toast.makeText(
+                this,
+                getString(R.string.toast_saved_to, dataFile.absolutePath),
+                Toast.LENGTH_LONG
+            ).show()
+            Log.d(TAG, "Резервная копия сохранена: ${dataFile.absolutePath}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка сохранения резервной копии", e)
+            Toast.makeText(
+                this,
+                getString(R.string.toast_save_error, e.message ?: ""),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     private fun saveDataToFile(tag: String, dataList: List<String>) {
         // Проверяем есть ли уже разрешения
         if (hasStoragePermissions()) {
@@ -355,6 +473,10 @@ class MainActivity : ComponentActivity() {
             pendingSaveTag = null
             pendingDataToSave = null
         }
+        pendingJsonBackup?.let { json ->
+            performJsonBackupSave(json)
+            pendingJsonBackup = null
+        }
     }
 
     private fun onStoragePermissionsDenied() {
@@ -362,6 +484,7 @@ class MainActivity : ComponentActivity() {
         Toast.makeText(this, getString(R.string.toast_storage_permission_denied), Toast.LENGTH_LONG).show()
         pendingSaveTag = null
         pendingDataToSave = null
+        pendingJsonBackup = null
     }
 
     private fun startServiceSafely(intent: Intent) {

@@ -13,9 +13,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 private const val APP_DATA_NAME = "vad.dashing.tbox.app_data"
 
-private val Context.appDataStore: DataStore<Preferences> by preferencesDataStore(name = APP_DATA_NAME)
+internal val Context.appDataStore: DataStore<Preferences> by preferencesDataStore(name = APP_DATA_NAME)
 
 class AppDataManager(private val context: Context) {
+
+    internal val preferencesDataStore: DataStore<Preferences>
+        get() = context.appDataStore
 
     companion object {
         private const val KEY_PREFIX = "vad.dashing.tbox.data."

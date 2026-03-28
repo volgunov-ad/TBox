@@ -68,6 +68,8 @@ fun TboxApp(
     appDataManager: AppDataManager,
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
+    onExportSettingsBackup: () -> Unit,
+    onImportSettingsBackup: () -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onTripFinishAndStart: () -> Unit,
@@ -106,6 +108,8 @@ fun TboxApp(
                 appDataViewModel = appDataViewModel,
                 onTboxRestart = onTboxRestart,
                 onSaveToFile = onSaveToFile,
+                onExportSettingsBackup = onExportSettingsBackup,
+                onImportSettingsBackup = onImportSettingsBackup,
                 onServiceCommand = onServiceCommand,
                 onMockLocationSettingChanged = onMockLocationSettingChanged,
                 onTripFinishAndStart = onTripFinishAndStart,
@@ -147,6 +151,8 @@ fun TboxScreen(
     appDataViewModel: AppDataViewModel,
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
+    onExportSettingsBackup: () -> Unit,
+    onImportSettingsBackup: () -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onTripFinishAndStart: () -> Unit,
@@ -362,7 +368,10 @@ fun TboxScreen(
                         settingsViewModel,
                         onTboxRestart,
                         onMockLocationSettingChanged,
-                        onServiceCommand)
+                        onServiceCommand,
+                        onExportSettingsBackup = onExportSettingsBackup,
+                        onImportSettingsBackup = onImportSettingsBackup,
+                    )
                     6 -> if (isExpertModeEnabled) {
                         LogsTab(viewModel, settingsViewModel, onSaveToFile)
                     } else {
@@ -421,13 +430,17 @@ fun SettingsTab(
     onTboxRestartClick: () -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
+    onExportSettingsBackup: () -> Unit,
+    onImportSettingsBackup: () -> Unit,
 ) {
     SettingsTabContent(
         viewModel = viewModel,
         settingsViewModel = settingsViewModel,
         onTboxRestartClick = onTboxRestartClick,
         onMockLocationSettingChanged = onMockLocationSettingChanged,
-        onServiceCommand = onServiceCommand
+        onServiceCommand = onServiceCommand,
+        onExportSettingsBackup = onExportSettingsBackup,
+        onImportSettingsBackup = onImportSettingsBackup,
     )
 }
 
