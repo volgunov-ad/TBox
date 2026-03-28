@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,6 +24,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -59,6 +62,7 @@ fun TripsTab(
     appDataViewModel: AppDataViewModel,
     settingsViewModel: SettingsViewModel,
     onTripFinishAndStart: () -> Unit,
+    onSaveToFile: (String, List<String>) -> Unit,
 ) {
     val trips by appDataViewModel.trips.collectAsStateWithLifecycle()
     val favorites by appDataViewModel.favoriteTripIds.collectAsStateWithLifecycle()
@@ -107,6 +111,8 @@ fun TripsTab(
         lineHeight = 24.sp * 1.3f,
         color = MaterialTheme.colorScheme.onSurface
     )
+
+    var showExportDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -200,6 +206,49 @@ fun TripsTab(
             modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
             color = MaterialTheme.colorScheme.outlineVariant
         )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Button(
+                onClick = { if (trips.isNotEmpty()) showExportDialog = true },
+                enabled = trips.isNotEmpty()
+            ) {
+                Text(stringResource(R.string.trips_export), fontSize = 24.sp)
+            }
+        }
+
+        if (showExportDialog) {
+            AlertDialog(
+                onDismissRequest = { showExportDialog = false },
+                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
+                text = { Text(stringResource(R.string.dialog_save_trips_downloads)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val lines = buildTripExportLines(
+                                context = context,
+                                trips = trips,
+                                favorites = favorites,
+                                dateTimeFormat = dateTimeFormat,
+                            )
+                            onSaveToFile("trips", lines)
+                            showExportDialog = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.action_save))
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showExportDialog = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
+        }
 
         selectedTrip?.let { trip ->
             OutlinedTextField(
@@ -421,3 +470,132 @@ fun TripsTab(
 
 private fun formatWithUnit(value: String, unit: String): String =
     if (value.isBlank()) value else "$value\u2009$unit"
+
+private fun MutableList<String>.appendStatusLine(label: String, value: String) {
+    add("$label\t$value")
+}
+
+/**
+ * Lines for export: same field order and formatted values as [TripsTab] list for one trip.
+ * Trips are ordered like the dropdown (newest first, favorites before non-favorites at same start time).
+ */
+internal fun buildTripExportLines(
+    context: Context,
+    trips: List<TripRecord>,
+    favorites: Set<String>,
+    dateTimeFormat: SimpleDateFormat,
+): List<String> {
+    val favSet = favorites
+    val sorted = trips.sortedWith(
+        compareByDescending<TripRecord> { it.startTimeEpochMs }
+            .thenBy { if (favSet.contains(it.id)) 0 else 1 }
+    )
+    val sep = context.getString(R.string.trips_export_separator)
+    val yes = context.getString(R.string.value_yes)
+    val noData = context.getString(R.string.value_no_data)
+    val km = context.getString(R.string.unit_km)
+    val kmh = context.getString(R.string.unit_kmh)
+    val celsius = context.getString(R.string.unit_celsius)
+    val liter = context.getString(R.string.unit_liter)
+
+    return buildList {
+        sorted.forEachIndexed { index, trip ->
+            if (index > 0) add(sep)
+
+            val star = if (favSet.contains(trip.id)) " ★" else ""
+            val title = trip.name.trim()
+            val titleSuffix = if (title.isNotEmpty()) " — $title" else ""
+            add("${dateTimeFormat.format(Date(trip.startTimeEpochMs))}$titleSuffix$star")
+
+            if (trip.isActive) {
+                appendStatusLine(context.getString(R.string.trips_active_trip), yes)
+            }
+            appendStatusLine(
+                context.getString(R.string.trips_start_time),
+                dateTimeFormat.format(Date(trip.startTimeEpochMs))
+            )
+            trip.endTimeEpochMs?.let { end ->
+                appendStatusLine(
+                    context.getString(R.string.trips_end_time),
+                    dateTimeFormat.format(Date(end))
+                )
+            }
+            appendStatusLine(
+                context.getString(R.string.trips_odometer_start),
+                trip.odometerStartKm?.let { odo ->
+                    formatWithUnit(valueToString(odo, 0), km)
+                } ?: noData
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_distance),
+                formatWithUnit(valueToString(trip.distanceKm, 0), km)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_moving_time),
+                formatTripDurationHuman(context, trip.movingTimeMs)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_idle_time),
+                formatTripDurationHuman(context, trip.idleTimeMs)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_total_time),
+                formatTripDurationHuman(context, trip.movingTimeMs + trip.idleTimeMs)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_engine_start_count),
+                valueToString(trip.engineStartCount)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_max_speed),
+                formatWithUnit(valueToString(trip.maxSpeed, 1), kmh)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_max_engine_temp),
+                trip.maxEngineTemp?.let {
+                    formatWithUnit(valueToString(it, 1), celsius)
+                } ?: noData
+            )
+            trip.maxGearboxOilTemp?.let { gb ->
+                appendStatusLine(
+                    context.getString(R.string.trips_max_gearbox_temp),
+                    formatWithUnit(valueToString(gb), celsius)
+                )
+            }
+            appendStatusLine(
+                context.getString(R.string.trips_min_outside_temp),
+                trip.minOutsideTemp?.let {
+                    formatWithUnit(valueToString(it, 1), celsius)
+                } ?: noData
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_max_outside_temp),
+                trip.maxOutsideTemp?.let {
+                    formatWithUnit(valueToString(it, 1), celsius)
+                } ?: noData
+            )
+            val avgM = TripRepository.averageSpeedMovingKmH(trip)
+            appendStatusLine(
+                context.getString(R.string.trips_avg_speed_moving),
+                avgM?.let { formatWithUnit(valueToString(it, 1), kmh) } ?: noData
+            )
+            val avgT = TripRepository.averageSpeedTripKmH(trip)
+            appendStatusLine(
+                context.getString(R.string.trips_avg_speed_trip),
+                avgT?.let { formatWithUnit(valueToString(it, 1), kmh) } ?: noData
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_fuel_used),
+                formatWithUnit(valueToString(trip.fuelConsumedLiters, 1), liter)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_fuel_refueled),
+                formatWithUnit(valueToString(trip.fuelRefueledLiters, 1), liter)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_refuel_count),
+                valueToString(trip.refuelCount)
+            )
+        }
+    }
+}

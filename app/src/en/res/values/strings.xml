@@ -411,6 +411,9 @@
     <string name="trips_fuel_refueled">Fuel refueled</string>
     <string name="trips_refuel_count">Refuelings</string>
     <string name="trips_engine_start_count">Engine starts</string>
+    <string name="trips_export">Export</string>
+    <string name="dialog_save_trips_downloads">Save all trips to one file in the Downloads folder</string>
+    <string name="trips_export_separator">----------------------------------------</string>
     <string name="data_title_net_widget">Network signal widget</string>
     <string name="data_title_net_widget_new">Network signal widget (new)</string>
     <string name="data_title_net_widget_colored">Network signal widget (colored)</string>

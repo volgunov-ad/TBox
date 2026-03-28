@@ -355,6 +355,7 @@ fun TboxScreen(
                         appDataViewModel = appDataViewModel,
                         settingsViewModel = settingsViewModel,
                         onTripFinishAndStart = onTripFinishAndStart,
+                        onSaveToFile = onSaveToFile,
                     )
                     5 -> SettingsTab(
                         viewModel,
