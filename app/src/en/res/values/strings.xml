@@ -108,6 +108,7 @@
     <string name="media_player_poweramp">Poweramp</string>
     <string name="media_player_aimp">AIMP</string>
     <string name="media_player_record_radio">RecordRadio</string>
+    <string name="media_player_pcradio">PCRadio</string>
     <string name="media_player_jetaudio">jetAudio</string>
     <string name="media_player_jetaudioplus">jetAudioPlus</string>
     <string name="media_player_fmplay">FMPlay</string>

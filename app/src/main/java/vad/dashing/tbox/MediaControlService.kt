@@ -46,6 +46,11 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_record_radio,
         iconRes = R.drawable.player_record_radio
     ),
+    PCRADIO(
+        packageName = "com.maxxt.pcradio",
+        titleRes = R.string.media_player_pcradio,
+        iconRes = R.drawable.player_pcradio
+    ),
     JETAUDIO(
         packageName = "com.jetappfactory.jetaudio",
         titleRes = R.string.media_player_jetaudio,
