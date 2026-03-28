@@ -230,6 +230,7 @@ fun DashboardWidgetRenderer(
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
+                showTitle = widgetConfig.showTitle,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {

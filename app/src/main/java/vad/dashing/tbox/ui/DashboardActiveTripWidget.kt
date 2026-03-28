@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +32,7 @@ import java.util.Locale
 fun DashboardActiveTripWidgetItem(
     widget: DashboardWidget,
     appDataViewModel: AppDataViewModel,
+    showTitle: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
@@ -52,23 +54,35 @@ fun DashboardActiveTripWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
+        val titleFont = calculateResponsiveFontSize(
+            containerHeight = availableHeight,
+            textType = TextType.TITLE
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp),
             horizontalAlignment = Alignment.Start
         ) {
+            if (showTitle) {
+                Text(
+                    text = stringResource(R.string.trips_active_trip),
+                    modifier = Modifier.fillMaxWidth(),
+                    fontSize = titleFont,
+                    lineHeight = titleFont * 1.3f,
+                    fontWeight = FontWeight.Medium,
+                    color = resolvedTextColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             if (trip == null) {
                 Text(
                     text = stringResource(R.string.trips_no_active),
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ),
-                    lineHeight = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.VALUE
-                    ) * 1.3f,
+                    fontSize = titleFont,
+                    lineHeight = titleFont * 1.3f,
                     fontWeight = FontWeight.Medium,
                     color = resolvedTextColor,
                     textAlign = TextAlign.Start,
@@ -78,10 +92,7 @@ fun DashboardActiveTripWidgetItem(
                 )
             } else {
                 val t = trip ?: return@DashboardWidgetScaffold
-                val rowFont = calculateResponsiveFontSize(
-                    containerHeight = availableHeight,
-                    textType = TextType.VALUE
-                )
+                val rowFont = titleFont
                 val simplified = widget.dataKey == "activeTripWidgetSimple"
                 if (simplified) {
                     ActiveTripRow(
