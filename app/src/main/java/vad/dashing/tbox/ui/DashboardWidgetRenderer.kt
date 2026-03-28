@@ -2,7 +2,6 @@ package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -228,11 +227,10 @@ fun DashboardWidgetRenderer(
         }
 
         "activeTripWidget", "activeTripWidgetSimple" -> {
-            val context = LocalContext.current
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
-                onClick = { openMainActivityTripsTab(context) },
+                onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
                     if (appDataViewModel.activeTrip.value?.isActive == true) {

@@ -110,9 +110,6 @@ class SettingsManager(private val context: Context) {
         /** Tab index that shows the home [vad.dashing.tbox.ui.MainScreen] instead of [vad.dashing.tbox.ui.TboxScreen]. */
         const val MAIN_SCREEN_SELECTED_TAB_INDEX = 100
 
-        /** [TboxScreen] tab index for [vad.dashing.tbox.ui.TripsTab] (see [vad.dashing.tbox.ui.TabItems]). */
-        const val TRIPS_TAB_INDEX = 4
-
         private const val KEY_PREFIX = "vad.dashing.tbox."
 
         // Boolean настройки

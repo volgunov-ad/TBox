@@ -23,7 +23,6 @@ import vad.dashing.tbox.ui.TboxApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,7 +31,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
-        const val ACTION_OPEN_TRIPS_TAB = "vad.dashing.tbox.action.OPEN_TRIPS_TAB"
     }
 
     // Контракт для стандартных разрешений (Android 10-)
@@ -74,12 +72,6 @@ class MainActivity : ComponentActivity() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
 
-        if (shouldOpenTripsTabFromIntent(intent)) {
-            runBlocking {
-                settingsManager.saveSelectedTab(SettingsManager.TRIPS_TAB_INDEX)
-            }
-        }
-
         setContent {
             Surface(
                 modifier = Modifier.fillMaxSize()
@@ -99,26 +91,13 @@ class MainActivity : ComponentActivity() {
                     },
                     onTripFinishAndStart = {
                         serviceCommand(BackgroundService.ACTION_TRIP_FINISH_AND_START, "", "")
-                    },
+                    }
                 )
             }
         }
 
         startBackgroundService()
     }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        if (shouldOpenTripsTabFromIntent(intent)) {
-            runBlocking {
-                settingsManager.saveSelectedTab(SettingsManager.TRIPS_TAB_INDEX)
-            }
-        }
-    }
-
-    private fun shouldOpenTripsTabFromIntent(intent: Intent?): Boolean =
-        intent?.action == ACTION_OPEN_TRIPS_TAB
 
     override fun onRestart() {
         super.onRestart()
