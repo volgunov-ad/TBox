@@ -34,12 +34,17 @@ fun DashboardTempInOutWidgetItem(
     shape: Dp = 12.dp,
     units: Boolean = true,
     showTitle: Boolean = false,
+    singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
     val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
     val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
     val celsiusUnit = stringResource(R.string.unit_celsius)
+    val firstLine =
+        "${valueToString(outsideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}"
+    val secondLine =
+        "${valueToString(insideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}"
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -78,37 +83,15 @@ fun DashboardTempInOutWidgetItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Text(
-                text = "${valueToString(outsideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
-                fontSize = calculateResponsiveFontSize(
-                    containerHeight = availableHeight,
-                    textType = TextType.VALUE
-                ),
-                fontWeight = FontWeight.Medium,
-                color = resolvedTextColor,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .wrapContentHeight(Alignment.CenterVertically)
-            )
-            Text(
-                text = "${valueToString(insideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}",
-                fontSize = calculateResponsiveFontSize(
-                    containerHeight = availableHeight,
-                    textType = TextType.VALUE
-                ),
-                fontWeight = FontWeight.Medium,
-                color = resolvedTextColor,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .wrapContentHeight(Alignment.CenterVertically)
+            DashboardDualMetricRows(
+                firstLine = firstLine,
+                secondLine = secondLine,
+                singleLineDualMetrics = singleLineDualMetrics,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor,
+                modifier = Modifier.weight(
+                    if (showTitle && !singleLineDualMetrics) 2f else 1f
+                )
             )
         }
     }

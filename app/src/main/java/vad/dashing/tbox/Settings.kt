@@ -28,6 +28,8 @@ data class FloatingDashboardWidgetConfig(
     val dataKey: String,
     val showTitle: Boolean = false,
     val showUnit: Boolean = true,
+    /** When true, composite two-metric widgets show both values on one line (em-space separated). */
+    val singleLineDualMetrics: Boolean = false,
     val scale: Float = 1.0f,
     val shape: Int = 0,
     val textColorLight: Int = DEFAULT_WIDGET_TEXT_COLOR_LIGHT,

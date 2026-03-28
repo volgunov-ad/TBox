@@ -69,6 +69,10 @@ internal class WidgetSelectionDialogState(
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
     var showUnit by mutableStateOf(initialConfig.showUnit)
+    var singleLineDualMetrics by mutableStateOf(
+        initialConfig.singleLineDualMetrics &&
+            WidgetsRepository.supportsSingleLineDualMetrics(initialConfig.dataKey)
+    )
     var scale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
     var shape by mutableIntStateOf(normalizeWidgetShape(initialConfig.shape))
     var textColorLight by mutableIntStateOf(initialConfig.textColorLight)
@@ -262,6 +266,15 @@ internal fun WidgetSelectionDialogForm(
                         "",
                         state.togglesEnabled
                     )
+                    if (WidgetsRepository.supportsSingleLineDualMetrics(state.selectedDataKey)) {
+                        SettingSwitch(
+                            state.singleLineDualMetrics,
+                            { state.singleLineDualMetrics = it },
+                            stringResource(R.string.widget_single_line_dual_metrics),
+                            "",
+                            state.togglesEnabled
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -366,13 +379,23 @@ internal fun WidgetSelectionDialogForm(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { state.selectedDataKey = key }
+                                .clickable {
+                                    state.selectedDataKey = key
+                                    if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
+                                        state.singleLineDualMetrics = false
+                                    }
+                                }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
                                 selected = state.selectedDataKey == key,
-                                onClick = { state.selectedDataKey = key }
+                                onClick = {
+                                    state.selectedDataKey = key
+                                    if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
+                                        state.singleLineDualMetrics = false
+                                    }
+                                }
                             )
                             Text(
                                 text = displayName,
@@ -510,6 +533,14 @@ internal fun applyWidgetSelectionChanges(
             dataKey = state.selectedDataKey,
             showTitle = state.showTitle,
             showUnit = state.showUnit,
+            singleLineDualMetrics = if (WidgetsRepository.supportsSingleLineDualMetrics(
+                    state.selectedDataKey
+                )
+            ) {
+                state.singleLineDualMetrics
+            } else {
+                false
+            },
             scale = normalizedScale,
             shape = normalizedShape,
             textColorLight = state.textColorLight,

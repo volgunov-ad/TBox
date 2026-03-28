@@ -25,26 +25,22 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.valueToString
 
 @Composable
-fun DashboardVoltEngTempWidgetItem(
+fun DashboardAirQualityWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     canViewModel: CanDataViewModel,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    units: Boolean = true,
     showTitle: Boolean = false,
     singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
-    val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
-    val engineTemperature by canViewModel.engineTemperature.collectAsStateWithLifecycle()
-    val voltUnit = stringResource(R.string.unit_volt)
-    val celsiusUnit = stringResource(R.string.unit_celsius)
-    val firstLine = "${valueToString(voltage, 1)}${if (units) "\u2009$voltUnit" else ""}"
-    val secondLine =
-        "${valueToString(engineTemperature, 0)}${if (units) "\u2009$celsiusUnit" else ""}"
+    val outside by canViewModel.outsideAirQuality.collectAsStateWithLifecycle()
+    val inside by canViewModel.insideAirQuality.collectAsStateWithLifecycle()
+    val firstLine = valueToString(outside)
+    val secondLine = valueToString(inside)
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -68,7 +64,7 @@ fun DashboardVoltEngTempWidgetItem(
                     textType = TextType.TITLE
                 )
                 Text(
-                    text = stringResource(R.string.widget_title_voltage_engine_temp),
+                    text = stringResource(R.string.widget_title_air_quality_outside_inside),
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()

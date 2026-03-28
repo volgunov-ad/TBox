@@ -391,6 +391,8 @@ object WidgetsRepository {
             R.string.unit_bar_celsius
         ),
         "tempInOutWidget" to DataTitle(R.string.data_title_temp_in_out_widget),
+        "fuelLevelWidget" to DataTitle(R.string.data_title_fuel_level_widget),
+        "airQualityWidget" to DataTitle(R.string.data_title_air_quality_widget),
         "musicWidget" to DataTitle(R.string.data_title_music_widget),
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
@@ -426,6 +428,18 @@ object WidgetsRepository {
 
     fun getAvailableDataKeysWidgets(): List<String> {
         return dataKeyTitlesWidgets.keys.toList()
+    }
+
+    /** Widget types that support optional single-line layout for two metrics. */
+    fun supportsSingleLineDualMetrics(dataKey: String): Boolean {
+        return dataKey in setOf(
+            "gearBoxWidget",
+            "motorHoursWidget",
+            "tempInOutWidget",
+            "voltage+engineTemperatureWidget",
+            "fuelLevelWidget",
+            "airQualityWidget"
+        )
     }
 }
 
