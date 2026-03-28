@@ -26,3 +26,15 @@ internal fun openMainActivityFromWidget(context: Context) {
         e.printStackTrace()
     }
 }
+
+internal fun openMainActivityTripsTab(context: Context) {
+    try {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            action = MainActivity.ACTION_OPEN_TRIPS_TAB
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
