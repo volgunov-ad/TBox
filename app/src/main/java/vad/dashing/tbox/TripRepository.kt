@@ -122,7 +122,10 @@ object TripRepository {
     fun updateActiveTrip(transform: (TripRecord) -> TripRecord) {
         synchronized(lock) {
             val cur = _activeTrip.value ?: return
-            val next = transform(cur).copy(odometerStartKm = cur.odometerStartKm)
+            val transformed = transform(cur)
+            // First non-null wins: allow backfilling start odometer when CAN was late; never overwrite once set.
+            val mergedOdo = cur.odometerStartKm ?: transformed.odometerStartKm
+            val next = transformed.copy(odometerStartKm = mergedOdo)
             _trips.update { list ->
                 val idx = list.indexOfFirst { it.id == next.id }
                 if (idx < 0) list else list.toMutableList().apply { this[idx] = next }

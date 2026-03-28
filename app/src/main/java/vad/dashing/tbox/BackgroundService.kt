@@ -769,6 +769,20 @@ class BackgroundService : Service() {
     private fun isTripEngineStartEdge(prevRpm: Float, rpm: Float): Boolean =
         rpm > 0f && prevRpm <= 0f
 
+    /**
+     * If the active trip has no start odometer yet but [CanDataRepository.odometer] is available,
+     * persist it once and align [tripStartOdometer]/[tripLastOdometer] for distance math.
+     */
+    private fun maybeBackfillActiveTripOdometerStart() {
+        TripRepository.updateActiveTrip { cur ->
+            if (cur.odometerStartKm != null) return@updateActiveTrip cur
+            val odo = CanDataRepository.odometer.value ?: return@updateActiveTrip cur
+            tripStartOdometer = odo
+            if (tripLastOdometer == null) tripLastOdometer = odo
+            cur.copy(odometerStartKm = odo)
+        }
+    }
+
     /** Updates consumption, refuel count, persisted fuel baseline; uses [tripLastFuelPercent] as prior sample. */
     private fun applyActiveTripFuelStep(tankL: Float) {
         val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
@@ -794,6 +808,10 @@ class BackgroundService : Service() {
             val wallNow = System.currentTimeMillis()
             val splitWindowMs = splitTripTimeMinutesSetting.value * 60_000L
             val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+
+            if (TripRepository.activeTrip.value != null) {
+                maybeBackfillActiveTripOdometerStart()
+            }
 
             if (rpm > 0f) {
                 tripRpmWasPositiveSinceService = true
