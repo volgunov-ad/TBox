@@ -13,6 +13,8 @@ object TripRules {
     fun shouldResumeLastTripOnColdStart(last: TripRecord, nowMs: Long, splitWindowMs: Long): Boolean {
         if (last.isActive) return true
         val end = last.endTimeEpochMs ?: return false
+        // HU clock behind real time (e.g. battery disconnect): do not treat as "recent end".
+        if (nowMs < end) return false
         return nowMs - end <= splitWindowMs
     }
 
@@ -35,7 +37,7 @@ object TripRules {
         }
         val inWindow = trips.mapNotNull { t ->
             val end = t.endTimeEpochMs ?: return@mapNotNull null
-            if (nowMs - end <= splitWindowMs) Pair(t, end) else null
+            if (nowMs >= end && nowMs - end <= splitWindowMs) Pair(t, end) else null
         }
         return inWindow.maxByOrNull { it.second }?.first
     }

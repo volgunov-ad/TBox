@@ -1022,7 +1022,7 @@ class BackgroundService : Service() {
             val lastStored = TripRepository.trips.value.lastOrNull()
             if (lastStored != null && !lastStored.isActive) {
                 val end = lastStored.endTimeEpochMs
-                if (end != null && nowWall - end <= splitWindowMs) {
+                if (end != null && nowWall >= end && nowWall - end <= splitWindowMs) {
                     tripPendingSplitTripId = lastStored.id
                 }
             }

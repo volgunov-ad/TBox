@@ -36,6 +36,14 @@ class TripRulesTest {
     }
 
     @Test
+    fun coldStart_endedButClockBehindHu_doesNotResume() {
+        val end = 1_000_000L
+        val last = TripRecord(startTimeEpochMs = 0L, endTimeEpochMs = end)
+        assertFalse(TripRules.shouldResumeLastTripOnColdStart(last, nowMs = end - 1, splitWindowMs = splitMs))
+        assertFalse(TripRules.shouldResumeLastTripOnColdStart(last, nowMs = end - 60_000L, splitWindowMs = splitMs))
+    }
+
+    @Test
     fun engineOffPause_withinSplit_continuesSameTrip() {
         assertTrue(TripRules.shouldContinueTripAfterEngineOffPause(pauseMs = 60_000L, splitWindowMs = splitMs))
         assertTrue(TripRules.shouldContinueTripAfterEngineOffPause(pauseMs = splitMs, splitWindowMs = splitMs))
@@ -65,5 +73,15 @@ class TripRulesTest {
         val picked = TripRules.findResumeCandidate(listOf(old, newer), nowMs = now, splitWindowMs = splitMs)
         assertNotNull(picked)
         assertEquals("n", picked!!.id)
+    }
+
+    @Test
+    fun findResumeCandidate_clockBehindEnd_ignoresEndedTrips() {
+        val end = 1_000_000L
+        val ended = TripRecord(id = "e", startTimeEpochMs = 0L, endTimeEpochMs = end)
+        assertEquals(
+            null,
+            TripRules.findResumeCandidate(listOf(ended), nowMs = end - 1, splitWindowMs = splitMs)
+        )
     }
 }
