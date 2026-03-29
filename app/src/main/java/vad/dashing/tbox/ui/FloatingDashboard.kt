@@ -355,7 +355,8 @@ fun FloatingDashboard(
                     showTboxDisconnectIndicator = panelConfig.showTboxDisconnectIndicator,
                     enableMusicInnerInteractions = !isEditMode,
                     externalWidgetHost = appWidgetHost,
-                    fuelTankLiters = fuelTankLiters
+                    fuelTankLiters = fuelTankLiters,
+                    useFloatingEditTapOverlay = true
                 )
             }
         }

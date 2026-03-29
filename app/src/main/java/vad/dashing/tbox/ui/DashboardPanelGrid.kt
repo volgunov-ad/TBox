@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,12 @@ internal fun DashboardPanelGridAndFrames(
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 4.dp,
     fuelTankLiters: Int = 57,
+    /**
+     * When true and [isEditMode], a full-cell transparent layer sits above the widget and handles
+     * tap/long-press. Needed for overlay windows where inner [AndroidView] / nested click targets
+     * otherwise steal or break gestures for non-first tiles.
+     */
+    useFloatingEditTapOverlay: Boolean = false,
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val hasConfiguredWidgets = normalizedConfigs.any { config ->
@@ -200,6 +208,19 @@ internal fun DashboardPanelGridAndFrames(
                                     shape = normalizeWidgetShape(widgetConfig.shape).dp,
                                     enableMusicInnerInteractions = enableMusicInnerInteractions,
                                     fuelTankLiters = fuelTankLiters
+                                )
+                            }
+                            if (isEditMode && useFloatingEditTapOverlay) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        // Stable key per cell only — avoids canceling the detector on recomposition.
+                                        .pointerInput(index) {
+                                            detectTapGestures(
+                                                onTap = { onWidgetClick(index) },
+                                                onLongPress = { onWidgetLongClick() }
+                                            )
+                                        }
                                 )
                             }
                         }
