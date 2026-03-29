@@ -15,8 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -231,6 +233,8 @@ fun SettingsTabContent(
     onTboxRestartClick: () -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
+    onExportSettingsBackup: () -> Unit,
+    onImportSettingsBackup: () -> Unit,
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
@@ -279,6 +283,9 @@ fun SettingsTabContent(
     val newFloatingPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
+
+    var showExportBackupDialog by remember { mutableStateOf(false) }
+    var showImportBackupDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -637,6 +644,88 @@ fun SettingsTabContent(
                         .padding(top = 4.dp)
                 )
             }
+        }
+
+        SettingsTitle(stringResource(R.string.settings_backup_title))
+        Text(
+            text = stringResource(R.string.settings_backup_desc),
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = { showExportBackupDialog = true },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_backup_export),
+                    fontSize = 22.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Button(
+                onClick = { showImportBackupDialog = true },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_backup_import),
+                    fontSize = 22.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        if (showExportBackupDialog) {
+            AlertDialog(
+                onDismissRequest = { showExportBackupDialog = false },
+                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
+                text = { Text(stringResource(R.string.dialog_save_backup_downloads)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onExportSettingsBackup()
+                            showExportBackupDialog = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.action_save))
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showExportBackupDialog = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
+        }
+
+        if (showImportBackupDialog) {
+            AlertDialog(
+                onDismissRequest = { showImportBackupDialog = false },
+                title = { Text(stringResource(R.string.dialog_backup_import_title)) },
+                text = { Text(stringResource(R.string.dialog_backup_import_message)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onImportSettingsBackup()
+                            showImportBackupDialog = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.settings_backup_import_choose_file))
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showImportBackupDialog = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
         }
 
         Row(

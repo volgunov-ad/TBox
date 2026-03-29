@@ -213,7 +213,8 @@ fun DashboardWidgetRenderer(
                 onLongClick = onLongClick,
                 elevation = elevation,
                 shape = shape,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
             )
         }
 

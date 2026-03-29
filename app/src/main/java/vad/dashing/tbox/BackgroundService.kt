@@ -202,6 +202,11 @@ class BackgroundService : Service() {
         const val ACTION_READ_ALL_SMS = "vad.dashing.tbox.READ_ALL_SMS"
         /** End current active trip and start a new one (same as manual "finish" in UI). */
         const val ACTION_TRIP_FINISH_AND_START = "vad.dashing.tbox.TRIP_FINISH_AND_START"
+        /**
+         * Reload trips from DataStore and reset in-RAM trip tracking buffers (odometer, fuel step,
+         * persist snapshot). Used after settings backup import while the service is running.
+         */
+        const val ACTION_RELOAD_TRIPS_FROM_STORE = "vad.dashing.tbox.RELOAD_TRIPS_FROM_STORE"
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
@@ -348,6 +353,17 @@ class BackgroundService : Service() {
                     if (startFromBoot) {
                         maybeOpenMainScreenAfterBoot()
                     }
+                }
+            }
+            ACTION_RELOAD_TRIPS_FROM_STORE -> {
+                if (isRunning) {
+                    reloadTripsFromDataStore()
+                    val splitWindowMs = runBlocking {
+                        splitTripTimeMinutesSetting.first().toLong() * 60_000L
+                    }
+                    resetTripStateForNewServiceSession(splitWindowMs)
+                    // Do not call applyTripResumeIfLastTripContinues: imported DataStore snapshot
+                    // is authoritative; resume logic could reopen a recently ended trip within split window.
                 }
             }
             ACTION_STOP -> {

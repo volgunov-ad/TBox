@@ -236,6 +236,14 @@
     <string name="settings_get_geo_data_title">Receive location data from TBox</string>
 
     <string name="settings_misc_title">Misc</string>
+    <string name="settings_backup_title">Backup</string>
+    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper image files on the device are not included—re-pick wallpapers after import if needed.</string>
+    <string name="settings_backup_export">Export JSON</string>
+    <string name="settings_backup_import">Import JSON</string>
+    <string name="settings_backup_import_choose_file">Choose file</string>
+    <string name="dialog_save_backup_downloads">Save full backup (settings and data) to the Downloads folder</string>
+    <string name="dialog_backup_import_title">Import backup</string>
+    <string name="dialog_backup_import_message">Current settings and app data will be fully replaced by the backup. The active trip in memory and storage will match the backup (if the backup has no open trip, any current open trip is replaced by the imported list). Tiles that host third-party app widgets are cleared after import (pick the widget again). Continue and choose a JSON file?</string>
     <string name="settings_expert_mode_title">Expert mode</string>
     <string name="settings_expert_mode_warning_desc">All changes in expert mode are made at your own risk.\nHowever, your actions in this mode cannot lead to irreversible consequences.</string>
     <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>
@@ -291,6 +299,13 @@
     <string name="toast_storage_permission_denied">Could not save file: no write permission</string>
     <string name="toast_service_start_error">Service start error</string>
     <string name="toast_mock_location_permissions_required">Location permissions are required for mock location</string>
+    <string name="toast_backup_export_error">Backup export error: %1$s</string>
+    <string name="toast_backup_import_ok">Backup imported</string>
+    <string name="toast_backup_import_read_error">Could not read the file</string>
+    <string name="toast_backup_import_error_invalid_json">File is not valid JSON</string>
+    <string name="toast_backup_import_error_format">Unsupported backup format</string>
+    <string name="toast_backup_import_error_missing">File is missing settings or data sections</string>
+    <string name="toast_backup_import_error">Import error: %1$s</string>
 
     <string name="widget_text_tbox">TBox</string>
     <string name="widget_text_res">RES</string>
@@ -411,6 +426,9 @@
     <string name="trips_fuel_refueled">Fuel refueled</string>
     <string name="trips_refuel_count">Refuelings</string>
     <string name="trips_engine_start_count">Engine starts</string>
+    <string name="trips_export">Export</string>
+    <string name="dialog_save_trips_downloads">Save all trips to one file in the Downloads folder</string>
+    <string name="trips_export_separator">----------------------------------------</string>
     <string name="data_title_net_widget">Network signal widget</string>
     <string name="data_title_net_widget_new">Network signal widget (new)</string>
     <string name="data_title_net_widget_colored">Network signal widget (colored)</string>

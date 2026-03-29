@@ -22,7 +22,7 @@ import org.json.JSONObject
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
 // Используем extension property для DataStore
-private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
+internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
 
 data class FloatingDashboardWidgetConfig(
     val dataKey: String,
@@ -816,6 +816,59 @@ class SettingsManager(private val context: Context) {
             array.put(obj)
         }
         return array.toString()
+    }
+
+    suspend fun exportFullBackupJson(appDataManager: AppDataManager): String =
+        SettingsBackupCoordinator.exportFullJson(
+            context.packageName,
+            context.settingsDataStore,
+            appDataManager.preferencesDataStore,
+        )
+
+    suspend fun importFullBackupJson(appDataManager: AppDataManager, json: String): Result<Unit> {
+        val result = SettingsBackupCoordinator.importFullJson(
+            appDataManager,
+            context.settingsDataStore,
+            appDataManager.preferencesDataStore,
+            json,
+        )
+        if (result.isSuccess) {
+            sanitizeExternalAppWidgetsAfterBackupImport()
+        }
+        return result
+    }
+
+    private suspend fun sanitizeExternalAppWidgetsAfterBackupImport() {
+        context.settingsDataStore.edit { prefs ->
+            val dashKey = DASHBOARD_WIDGETS_KEY
+            val oldDash = parseWidgetConfigsFromString(prefs[dashKey] ?: "")
+            val newDash = clearExternalAppWidgetsAfterBackupImport(oldDash)
+            if (newDash != oldDash) {
+                prefs[dashKey] = serializeWidgetConfigs(newDash)
+            }
+
+            val floatKey = getStringKey(FLOATING_DASHBOARDS_LIST_KEY)
+            val floatRaw = prefs[floatKey] ?: ""
+            val floatList = parseFloatingDashboardsJson(floatRaw)
+            val newFloat = floatList.map { panel ->
+                val w = clearExternalAppWidgetsAfterBackupImport(panel.widgetsConfig)
+                if (w == panel.widgetsConfig) panel else panel.copy(widgetsConfig = w)
+            }
+            if (newFloat != floatList) {
+                prefs[floatKey] = serializeFloatingDashboards(newFloat)
+            }
+
+            val mainKey = getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)
+            val mainRaw = prefs[mainKey] ?: ""
+            val mainList = parseMainScreenDashboardsJson(mainRaw)
+            val newMain = mainList.map { panel ->
+                val w = clearExternalAppWidgetsAfterBackupImport(panel.widgetsConfig)
+                if (w == panel.widgetsConfig) panel else panel.copy(widgetsConfig = w)
+            }
+            if (newMain != mainList) {
+                prefs[mainKey] = serializeMainScreenDashboards(newMain)
+            }
+        }
     }
 
 }

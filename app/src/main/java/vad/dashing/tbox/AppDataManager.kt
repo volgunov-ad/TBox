@@ -13,15 +13,21 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 private const val APP_DATA_NAME = "vad.dashing.tbox.app_data"
 
-private val Context.appDataStore: DataStore<Preferences> by preferencesDataStore(name = APP_DATA_NAME)
+internal val Context.appDataStore: DataStore<Preferences> by preferencesDataStore(name = APP_DATA_NAME)
 
 class AppDataManager(private val context: Context) {
+
+    internal val preferencesDataStore: DataStore<Preferences>
+        get() = context.appDataStore
 
     companion object {
         private const val KEY_PREFIX = "vad.dashing.tbox.data."
 
+        /** Full preference name for [TRIPS_JSON_KEY] (backup export matches on this). */
+        internal const val TRIPS_JSON_PREFERENCE_NAME = "${KEY_PREFIX}trips_json"
+
         private val MOTOR_HOURS_KEY = floatPreferencesKey("${KEY_PREFIX}motor_hours")
-        private val TRIPS_JSON_KEY = stringPreferencesKey("${KEY_PREFIX}trips_json")
+        private val TRIPS_JSON_KEY = stringPreferencesKey(TRIPS_JSON_PREFERENCE_NAME)
         private val TRIP_FAVORITES_JSON_KEY = stringPreferencesKey("${KEY_PREFIX}trip_favorites_json")
     }
 
