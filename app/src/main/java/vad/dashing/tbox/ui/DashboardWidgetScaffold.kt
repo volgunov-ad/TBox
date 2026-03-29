@@ -12,6 +12,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -32,6 +34,8 @@ fun DashboardWidgetScaffold(
 ) {
     val resolvedInteractionPolicy = LocalDashboardWidgetInteractionPolicy.current
     val useCardClickable = resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD
+    val latestOnClick by rememberUpdatedState(onClick)
+    val latestOnLongClick by rememberUpdatedState(onLongClick)
     Card(
         modifier = modifier
             .fillMaxSize()
@@ -63,10 +67,11 @@ fun DashboardWidgetScaffold(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            // Do not use onClick/onLongClick as keys: new lambda instances every
+                            // recomposition cancel this detector (bad for live-updating tiles).
                             .pointerInput(
-                                resolvedInteractionPolicy,
-                                onClick,
-                                onLongClick
+                                resolvedInteractionPolicy.mode,
+                                resolvedInteractionPolicy.exclusions.size
                             ) {
                                 detectTapGestures(
                                     onTap = { offset ->
@@ -76,7 +81,7 @@ fun DashboardWidgetScaffold(
                                                 height = size.height.toFloat()
                                             )
                                         ) {
-                                            onClick()
+                                            latestOnClick()
                                         }
                                     },
                                     onLongPress = { offset ->
@@ -86,7 +91,7 @@ fun DashboardWidgetScaffold(
                                                 height = size.height.toFloat()
                                             )
                                         ) {
-                                            onLongClick()
+                                            latestOnLongClick()
                                         }
                                     }
                                 )

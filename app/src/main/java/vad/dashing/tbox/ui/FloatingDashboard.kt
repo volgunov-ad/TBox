@@ -2,7 +2,7 @@ package vad.dashing.tbox.ui
 
 import android.view.WindowManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -229,12 +229,10 @@ fun FloatingDashboard(
                     .then(
                         if (canManipulatePanel) {
                             // Avoid width/height in keys: they change while resizing and cancel the drag.
-                            // After long-press so a normal tap (slight finger motion) does not start a
-                            // drag and leave isDraggingMode true, which would block opening tile settings.
                             Modifier.pointerInput(panelId) {
-                                detectDragGesturesAfterLongPress(
+                                detectDragGestures(
                                     onDragStart = { startOffset ->
-                                        if (!isEditModeForGestures) return@detectDragGesturesAfterLongPress
+                                        if (!isEditModeForGestures) return@detectDragGestures
                                         val isNearBottomRight = isInResizeHandleArea(
                                             offset = startOffset,
                                             width = size.width.toFloat(),
@@ -249,7 +247,7 @@ fun FloatingDashboard(
                                         }
                                     },
                                     onDrag = { change, dragAmount ->
-                                        if (!isEditModeForGestures) return@detectDragGesturesAfterLongPress
+                                        if (!isEditModeForGestures) return@detectDragGestures
                                         change.consume()
                                         if (isDraggingMode) {
                                             val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
@@ -267,7 +265,7 @@ fun FloatingDashboard(
                                         if (!isEditModeForGestures) {
                                             isDraggingMode = false
                                             isResizingMode = false
-                                            return@detectDragGesturesAfterLongPress
+                                            return@detectDragGestures
                                         }
                                         if (isDraggingMode) {
                                             settingsViewModel.saveFloatingDashboardPosition(
@@ -317,7 +315,7 @@ fun FloatingDashboard(
                     widgetCardElevation = FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
                     onWidgetClick = { index ->
                         val cfg = widgetConfigs.getOrNull(index)
-                        if (isEditMode && !isDraggingMode && !isResizingMode) {
+                        if (isEditMode) {
                             FloatingPanelWidgetSelectionActivity.start(
                                 context = context,
                                 panelId = panelId,

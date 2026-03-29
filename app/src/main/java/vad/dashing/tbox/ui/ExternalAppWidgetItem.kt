@@ -14,8 +14,10 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,6 +53,8 @@ fun ExternalAppWidgetItem(
     textColor: Color? = null,
 ) {
     val context = LocalContext.current
+    val latestOnClick by rememberUpdatedState(onClick)
+    val latestOnLongClick by rememberUpdatedState(onLongClick)
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
     val appWidgetId = widgetConfig.appWidgetId ?: AppWidgetManager.INVALID_APPWIDGET_ID
     val appWidgetInfo = remember(appWidgetId) {
@@ -211,7 +215,10 @@ fun ExternalAppWidgetItem(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(interactionPolicy, onClick, onLongClick) {
+                        .pointerInput(
+                            interactionPolicy.mode,
+                            interactionPolicy.exclusions.size
+                        ) {
                             detectTapGestures(
                                 onTap = { offset ->
                                     if (interactionPolicy.isActionAllowed(
@@ -220,7 +227,7 @@ fun ExternalAppWidgetItem(
                                             height = size.height.toFloat()
                                         )
                                     ) {
-                                        onClick()
+                                        latestOnClick()
                                     }
                                 },
                                 onLongPress = { offset ->
@@ -230,7 +237,7 @@ fun ExternalAppWidgetItem(
                                             height = size.height.toFloat()
                                         )
                                     ) {
-                                        onLongClick()
+                                        latestOnLongClick()
                                     }
                                 }
                             )
