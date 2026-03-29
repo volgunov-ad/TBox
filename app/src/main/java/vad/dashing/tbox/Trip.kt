@@ -131,6 +131,37 @@ internal fun tripsListFromJson(raw: String): List<TripRecord> {
     }
 }
 
+/**
+ * JSON snapshot of trips for backup export only: the current active trip (last in array order among
+ * those without [JSON_END]) is written with [JSON_END] = [endTimeEpochMs]. Does not modify storage
+ * or [TripRepository].
+ */
+internal fun tripsJsonForBackupExport(raw: String, endTimeEpochMs: Long): String {
+    if (raw.isBlank()) return raw
+    return try {
+        val arr = JSONArray(raw)
+        var lastActiveIndex = -1
+        var lastActiveStart = Long.MIN_VALUE
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            if (!o.has(JSON_END) || o.isNull(JSON_END)) {
+                val start = o.optLong(JSON_START, Long.MIN_VALUE)
+                if (start >= lastActiveStart) {
+                    lastActiveStart = start
+                    lastActiveIndex = i
+                }
+            }
+        }
+        if (lastActiveIndex < 0) return raw
+        val obj = arr.getJSONObject(lastActiveIndex)
+        val start = obj.optLong(JSON_START)
+        obj.put(JSON_END, endTimeEpochMs.coerceAtLeast(start))
+        arr.toString()
+    } catch (_: Exception) {
+        raw
+    }
+}
+
 internal fun favoritesSetToJson(ids: Set<String>): String {
     val arr = JSONArray()
     ids.forEach { arr.put(it) }

@@ -19,16 +19,16 @@ import org.json.JSONObject
  */
 object PreferenceStoreBackup {
 
-    private const val K_NAME = "n"
-    private const val K_TYPE = "t"
-    private const val K_VALUE = "v"
+    internal const val K_NAME = "n"
+    internal const val K_TYPE = "t"
+    internal const val K_VALUE = "v"
 
-    private const val T_BOOL = "boolean"
-    private const val T_INT = "int"
-    private const val T_LONG = "long"
-    private const val T_FLOAT = "float"
-    private const val T_STRING = "string"
-    private const val T_STRING_SET = "string_set"
+    internal const val T_BOOL = "boolean"
+    internal const val T_INT = "int"
+    internal const val T_LONG = "long"
+    internal const val T_FLOAT = "float"
+    internal const val T_STRING = "string"
+    internal const val T_STRING_SET = "string_set"
 
     suspend fun exportEntries(dataStore: DataStore<Preferences>): JSONArray {
         val prefs = dataStore.data.first()
@@ -131,13 +131,34 @@ object SettingsBackupCoordinator {
         settingsStore: DataStore<Preferences>,
         appDataStore: DataStore<Preferences>,
     ): String {
+        val exportedAt = System.currentTimeMillis()
         val root = JSONObject()
         root.put(KEY_FORMAT, FORMAT_VERSION)
         root.put(KEY_PACKAGE, packageName)
-        root.put(KEY_EXPORTED_AT, System.currentTimeMillis())
+        root.put(KEY_EXPORTED_AT, exportedAt)
         root.put(KEY_SETTINGS, PreferenceStoreBackup.exportEntries(settingsStore))
-        root.put(KEY_APP_DATA, PreferenceStoreBackup.exportEntries(appDataStore))
+        val appDataArr = PreferenceStoreBackup.exportEntries(appDataStore)
+        patchTripsJsonInExportedAppData(appDataArr, exportedAt)
+        root.put(KEY_APP_DATA, appDataArr)
         return root.toString(2)
+    }
+
+    /**
+     * For backup file only: close the active trip in serialized [trips_json] so importers see a
+     * completed trip; runtime DataStore and [TripRepository] are unchanged.
+     */
+    private fun patchTripsJsonInExportedAppData(entries: JSONArray, endTimeEpochMs: Long) {
+        for (i in 0 until entries.length()) {
+            val o = entries.optJSONObject(i) ?: continue
+            if (o.optString(PreferenceStoreBackup.K_NAME) != AppDataManager.TRIPS_JSON_PREFERENCE_NAME) {
+                continue
+            }
+            if (o.optString(PreferenceStoreBackup.K_TYPE) != PreferenceStoreBackup.T_STRING) {
+                continue
+            }
+            val raw = o.optString(PreferenceStoreBackup.K_VALUE)
+            o.put(PreferenceStoreBackup.K_VALUE, tripsJsonForBackupExport(raw, endTimeEpochMs))
+        }
     }
 
     /**
