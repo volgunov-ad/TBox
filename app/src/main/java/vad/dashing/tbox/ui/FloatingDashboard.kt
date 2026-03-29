@@ -190,16 +190,9 @@ fun FloatingDashboard(
     }
 
     var restartEnabled by remember { mutableStateOf(true) }
-    val widgetInteractionPolicy = remember(isEditMode) {
-        if (isEditMode) {
-            DashboardWidgetInteractionPolicy(
-                mode = DashboardWidgetInteractionMode.EDIT,
-                exclusions = listOf(ResizeHandleWidgetHitExclusion)
-            )
-        } else {
-            DashboardWidgetInteractionPolicy()
-        }
-    }
+    // Match pre-refactor floating panel: use STANDARD so tile clicks go through Card
+    // combinedClickable (EDIT mode + ResizeHandle exclusion blocked most taps and corners).
+    val widgetInteractionPolicy = DashboardWidgetInteractionPolicy()
 
     LaunchedEffect(restartEnabled) {
         if (!restartEnabled) {
