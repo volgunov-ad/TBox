@@ -176,7 +176,12 @@ object TripRepository {
             val resumed = if (candidate.isActive) {
                 candidate
             } else {
-                candidate.copy(endTimeEpochMs = null)
+                val endedAt = candidate.endTimeEpochMs ?: return false
+                val parkedMs = (now - endedAt).coerceAtLeast(0L)
+                candidate.copy(
+                    endTimeEpochMs = null,
+                    idleTimeMs = candidate.idleTimeMs + parkedMs,
+                )
             }
             _trips.update { cur ->
                 val mapped = cur.map { t ->
