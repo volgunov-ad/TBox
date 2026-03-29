@@ -164,6 +164,7 @@ object TripRepository {
     /**
      * When the service starts, continue the last saved trip if it is still active (no end time)
      * or the end time was less than [splitWindowMs] ago (short stop / restart within split window).
+     * If wall clock is before the stored end (e.g. HU time reset), a finished trip is not resumed.
      * Returns true if a trip was resumed (or was already active).
      */
     fun tryResumeLastTripAfterServiceStart(splitWindowMs: Long): Boolean {
@@ -176,7 +177,12 @@ object TripRepository {
             val resumed = if (candidate.isActive) {
                 candidate
             } else {
-                candidate.copy(endTimeEpochMs = null)
+                val endedAt = candidate.endTimeEpochMs ?: return false
+                val parkedMs = (now - endedAt).coerceAtLeast(0L)
+                candidate.copy(
+                    endTimeEpochMs = null,
+                    idleTimeMs = candidate.idleTimeMs + parkedMs,
+                )
             }
             _trips.update { cur ->
                 val mapped = cur.map { t ->
