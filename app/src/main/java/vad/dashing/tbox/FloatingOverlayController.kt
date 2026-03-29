@@ -35,6 +35,15 @@ internal class FloatingOverlayController(
         private const val TAG = "Floating Dashboard"
         private const val MAX_OVERLAY_RETRIES = 3
         private const val MIN_OVERLAY_SIZE = 50
+
+        /** Base flags for overlay windows; [FLAG_NOT_FOCUSABLE] is toggled when a dialog needs IME/text input. */
+        private val OVERLAY_WINDOW_FLAGS_BASE =
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+
+        private val OVERLAY_WINDOW_FLAGS_NOT_FOCUSABLE =
+            OVERLAY_WINDOW_FLAGS_BASE or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
     }
 
     fun suspendOverlays() {
@@ -160,10 +169,7 @@ internal class FloatingOverlayController(
             config.width.coerceAtLeast(MIN_OVERLAY_SIZE),
             config.height.coerceAtLeast(MIN_OVERLAY_SIZE),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+            OVERLAY_WINDOW_FLAGS_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -188,6 +194,9 @@ internal class FloatingOverlayController(
                         },
                         onUpdateWindowPosition = { panelId, x, y ->
                             updateWindowPosition(panelId, x, y)
+                        },
+                        onFloatingOverlayFocusRequest = { focusable ->
+                            setFloatingDashboardOverlayFocusable(config.id, focusable)
                         },
                         onRebootTbox = onRebootTbox,
                         onTripFinishAndStart = onTripFinishAndStart,
@@ -277,6 +286,22 @@ internal class FloatingOverlayController(
         params.x = newX
         params.y = newY
         overlayViews[config.id]?.let { view ->
+            windowManager?.updateViewLayout(view, params)
+        }
+    }
+
+    /**
+     * While [focusable] is true, the overlay can receive focus so embedded dialogs (e.g. hex color fields)
+     * work with the soft keyboard. Restores [FLAG_NOT_FOCUSABLE] when false so touches outside the overlay
+     * still reach the system UI.
+     */
+    fun setFloatingDashboardOverlayFocusable(panelId: String, focusable: Boolean) {
+        val params = overlayParams[panelId] ?: return
+        val newFlags =
+            if (focusable) OVERLAY_WINDOW_FLAGS_BASE else OVERLAY_WINDOW_FLAGS_NOT_FOCUSABLE
+        if (params.flags == newFlags) return
+        params.flags = newFlags
+        overlayViews[panelId]?.let { view ->
             windowManager?.updateViewLayout(view, params)
         }
     }

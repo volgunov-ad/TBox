@@ -63,6 +63,7 @@ fun FloatingDashboardUI(
     appDataManager: AppDataManager,
     onUpdateWindowSize: (String, Int, Int) -> Unit,
     onUpdateWindowPosition: (String, Int, Int) -> Unit,
+    onFloatingOverlayFocusRequest: (Boolean) -> Unit = {},
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
     panelId: String,
@@ -105,6 +106,7 @@ fun FloatingDashboardUI(
                 panelId = panelId,
                 onUpdateWindowSize = onUpdateWindowSize,
                 onUpdateWindowPosition = onUpdateWindowPosition,
+                onFloatingOverlayFocusRequest = onFloatingOverlayFocusRequest,
                 onRebootTbox = onRebootTbox,
                 onTripFinishAndStart = onTripFinishAndStart,
                 windowParams = params
@@ -122,6 +124,7 @@ fun FloatingDashboard(
     panelId: String,
     onUpdateWindowSize: (String, Int, Int) -> Unit,
     onUpdateWindowPosition: (String, Int, Int) -> Unit,
+    onFloatingOverlayFocusRequest: (Boolean) -> Unit = {},
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
     windowParams: WindowManager.LayoutParams
@@ -160,6 +163,16 @@ fun FloatingDashboard(
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
     val canManipulatePanel = isEditMode && showDialogForIndex == null
+
+    val dialogOpenForFocus = showDialogForIndex != null
+    LaunchedEffect(dialogOpenForFocus) {
+        onFloatingOverlayFocusRequest(dialogOpenForFocus)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            onFloatingOverlayFocusRequest(false)
+        }
+    }
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
