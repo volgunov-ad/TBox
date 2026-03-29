@@ -15,7 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 
 /** Separator between two inline metrics (em spaces). */
-internal const val DUAL_METRIC_INLINE_SEPARATOR = "\u2003\u2003"
+internal const val DUAL_METRIC_INLINE_SEPARATOR = "\u2003"
 
 /**
  * Two dashboard metrics: either stacked (equal vertical weight) or one line with [DUAL_METRIC_INLINE_SEPARATOR].
