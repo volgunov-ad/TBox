@@ -12,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -190,9 +191,19 @@ fun FloatingDashboard(
     }
 
     var restartEnabled by remember { mutableStateOf(true) }
-    // Match pre-refactor floating panel: use STANDARD so tile clicks go through Card
-    // combinedClickable (EDIT mode + ResizeHandle exclusion blocked most taps and corners).
-    val widgetInteractionPolicy = DashboardWidgetInteractionPolicy()
+    // EDIT + empty exclusions: tap overlay sits above tile innards (music rows, etc.) so every
+    // cell opens settings; ResizeHandleWidgetHitExclusion is only for MainScreen (panel drag).
+    val widgetInteractionPolicy = remember(isEditMode) {
+        if (isEditMode) {
+            DashboardWidgetInteractionPolicy(
+                mode = DashboardWidgetInteractionMode.EDIT,
+                exclusions = emptyList()
+            )
+        } else {
+            DashboardWidgetInteractionPolicy()
+        }
+    }
+    val isEditModeForGestures by rememberUpdatedState(isEditMode)
 
     LaunchedEffect(restartEnabled) {
         if (!restartEnabled) {
@@ -221,6 +232,7 @@ fun FloatingDashboard(
                             Modifier.pointerInput(panelId) {
                                 detectDragGestures(
                                     onDragStart = { startOffset ->
+                                        if (!isEditModeForGestures) return@detectDragGestures
                                         val isNearBottomRight = isInResizeHandleArea(
                                             offset = startOffset,
                                             width = size.width.toFloat(),
@@ -235,6 +247,7 @@ fun FloatingDashboard(
                                         }
                                     },
                                     onDrag = { change, dragAmount ->
+                                        if (!isEditModeForGestures) return@detectDragGestures
                                         change.consume()
                                         if (isDraggingMode) {
                                             val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
@@ -249,6 +262,11 @@ fun FloatingDashboard(
                                         }
                                     },
                                     onDragEnd = {
+                                        if (!isEditModeForGestures) {
+                                            isDraggingMode = false
+                                            isResizingMode = false
+                                            return@detectDragGestures
+                                        }
                                         if (isDraggingMode) {
                                             settingsViewModel.saveFloatingDashboardPosition(
                                                 panelId,
