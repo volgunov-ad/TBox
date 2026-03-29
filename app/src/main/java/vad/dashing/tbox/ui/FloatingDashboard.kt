@@ -2,32 +2,21 @@ package vad.dashing.tbox.ui
 
 import android.view.WindowManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults.cardElevation
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -39,23 +28,21 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.DashboardManager
-import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.ExternalWidgetHostManager
-import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.FloatingDashboardViewModel
+import vad.dashing.tbox.FloatingDashboardViewModelFactory
+import vad.dashing.tbox.FloatingPanelWidgetSelectionActivity
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
-import vad.dashing.tbox.FloatingDashboardViewModel
-import vad.dashing.tbox.FloatingDashboardViewModelFactory
-import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.SharedMediaControlService
-import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.ui.theme.TboxAppTheme
+import androidx.compose.material3.Surface
 
 @Composable
 fun FloatingDashboardUI(
@@ -156,10 +143,9 @@ fun FloatingDashboard(
 
     // Состояния
     var isEditMode by remember { mutableStateOf(false) }
-    var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
-    val canManipulatePanel = isEditMode && showDialogForIndex == null
+    val canManipulatePanel = isEditMode
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
@@ -168,50 +154,7 @@ fun FloatingDashboard(
                 isEditMode = false
                 isDraggingMode = false
                 isResizingMode = false
-                showDialogForIndex = null
             }
-        }
-    }
-
-    // Используем rememberUpdatedState для отслеживания текущих значений windowParams
-    val currentWindowParams by rememberUpdatedState(windowParams)
-
-    // Сохраняем состояние оригинальных размеров с помощью StateFlow
-    val originalWidth = remember { mutableIntStateOf(currentWindowParams.width) }
-    val originalHeight = remember { mutableIntStateOf(currentWindowParams.height) }
-    val originalX = remember { mutableIntStateOf(currentWindowParams.x) }
-    val originalY = remember { mutableIntStateOf(currentWindowParams.y) }
-
-    // Получаем информацию о текущем окне
-    val windowInfo = LocalWindowInfo.current
-    val containerSize = windowInfo.containerSize
-
-    // Увеличиваем окно при показе диалога и возвращаем при закрытии
-    LaunchedEffect(showDialogForIndex) {
-        if (showDialogForIndex != null) {
-            // Сохраняем текущие размеры как оригинальные перед увеличением
-            originalWidth.intValue = currentWindowParams.width
-            originalHeight.intValue = currentWindowParams.height
-            originalX.intValue = currentWindowParams.x
-            originalY.intValue = currentWindowParams.y
-
-            // Увеличиваем окно для диалога
-            val dialogWidth = (containerSize.width * 0.6f).toInt()
-            val dialogHeight = (containerSize.height * 0.8f).toInt()
-
-            val newWidth = dialogWidth.coerceAtMost(containerSize.width)
-            val newHeight = dialogHeight.coerceAtMost(containerSize.height)
-
-            onUpdateWindowSize(panelId, newWidth, newHeight)
-
-            // Центрируем окно
-            val centerX = (containerSize.width - newWidth) / 2 + 100
-            val centerY = (containerSize.height - newHeight) / 2 + 100
-            onUpdateWindowPosition(panelId, centerX, centerY)
-        } else {
-            // Восстанавливаем оригинальные размеры и положение
-            onUpdateWindowSize(panelId, originalWidth.intValue, originalHeight.intValue)
-            onUpdateWindowPosition(panelId, originalX.intValue, originalY.intValue)
         }
     }
 
@@ -356,13 +299,18 @@ fun FloatingDashboard(
                     restartEnabled = restartEnabled,
                     onTripFinishAndStart = onTripFinishAndStart,
                     isEditMode = isEditMode,
-                    showDialogOpen = showDialogForIndex != null,
+                    showDialogOpen = false,
                     widgetInteractionPolicy = widgetInteractionPolicy,
                     widgetCardElevation = FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
                     onWidgetClick = { index ->
                         val cfg = widgetConfigs.getOrNull(index)
                         if (isEditMode && !isDraggingMode && !isResizingMode) {
-                            showDialogForIndex = index
+                            FloatingPanelWidgetSelectionActivity.start(
+                                context = context,
+                                panelId = panelId,
+                                widgetIndex = index,
+                                theme = currentTheme
+                            )
                         } else if (
                             cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                             cfg.launcherAppPackage.isNotBlank()
@@ -399,127 +347,6 @@ fun FloatingDashboard(
                     fuelTankLiters = fuelTankLiters
                 )
             }
-        }
-
-        // Показываем кастомный диалог когда есть showDialogForIndex
-        showDialogForIndex?.let { index ->
-            OverlayWidgetSelectionDialog(
-                panelId = panelId,
-                widgetIndex = index,
-                currentWidgets = dashboardState.widgets,
-                currentWidgetConfigs = widgetConfigs,
-                settingsViewModel = settingsViewModel,
-                dashboardManager = dashboardViewModel.dashboardManager,
-                onDismiss = { showDialogForIndex = null }
-            )
-        }
-    }
-}
-
-@Composable
-fun OverlayWidgetSelectionDialog(
-    panelId: String,
-    widgetIndex: Int,
-    currentWidgets: List<DashboardWidget>,
-    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
-    settingsViewModel: SettingsViewModel,
-    dashboardManager: DashboardManager,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    val state = rememberWidgetSelectionDialogState(
-        widgetIndex = widgetIndex,
-        currentWidgets = currentWidgets,
-        currentWidgetConfigs = currentWidgetConfigs,
-        defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
-        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
-    )
-
-    Card(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(enabled = false, onClick = {}),
-        elevation = cardElevation(8.dp),
-        shape = MaterialTheme.shapes.extraLarge
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp)
-        ) {
-            WidgetSelectionDialogForm(
-                titleText = if (state.showAdvancedSettings) {
-                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                } else {
-                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
-                },
-                state = state,
-                modifier = Modifier
-                    .weight(1f),
-                bottomContent = {
-                    if (state.isExternalAppWidgetSelected) {
-                        ExternalAppWidgetPickerSection(
-                            appWidgetId = externalAppWidgetIdForApply(
-                                state,
-                                currentWidgetConfigs,
-                                widgetIndex
-                            ),
-                            onPickClick = {
-                                WidgetPickerActivity.start(
-                                    context = context,
-                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
-                                    panelId = panelId,
-                                    widgetIndex = widgetIndex,
-                                    showTitle = state.showTitle,
-                                    showUnit = state.showUnit
-                                )
-                                onDismiss()
-                            }
-                        )
-                    }
-                }
-            )
-
-            // Кнопки действий
-            WidgetSelectionDialogActions(
-                state = state,
-                onDismiss = onDismiss,
-                onSave = {
-                    if (tryLaunchExternalWidgetPicker(
-                            context = context,
-                            saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
-                            panelId = panelId,
-                            widgetIndex = widgetIndex,
-                            state = state,
-                            currentWidgetConfigs = currentWidgetConfigs,
-                            onDismiss = onDismiss
-                        )
-                    ) {
-                        return@WidgetSelectionDialogActions
-                    }
-                    applyWidgetSelectionChanges(
-                        context = context,
-                        dashboardManager = dashboardManager,
-                        currentWidgets = currentWidgets,
-                        currentWidgetConfigs = currentWidgetConfigs,
-                        widgetIndex = widgetIndex,
-                        state = state,
-                        saveConfigs = { configs ->
-                            settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
-                        },
-                        externalAppWidgetId = externalAppWidgetIdForApply(
-                            state,
-                            currentWidgetConfigs,
-                            widgetIndex
-                        )
-                    )
-                    onDismiss()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 20.dp),
-                saveTextFontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-            )
         }
     }
 }

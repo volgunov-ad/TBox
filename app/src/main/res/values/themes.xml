@@ -2,4 +2,9 @@
 <resources>
 
     <style name="Theme.TBox" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.TBox.Translucent" parent="Theme.TBox">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
 </resources>

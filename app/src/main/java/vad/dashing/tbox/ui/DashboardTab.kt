@@ -445,3 +445,109 @@ fun MainScreenPanelWidgetSelectionDialog(
     )
 }
 
+/**
+ * Same [AlertDialog] + form as [MainScreenPanelWidgetSelectionDialog], without the delete-panel action.
+ * Used from [vad.dashing.tbox.FloatingPanelWidgetSelectionActivity] so the floating overlay keeps its size.
+ */
+@Composable
+fun FloatingPanelWidgetSelectionDialog(
+    dashboardManager: DashboardManager,
+    settingsViewModel: SettingsViewModel,
+    panelId: String,
+    widgetIndex: Int,
+    currentWidgets: List<DashboardWidget>,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val state = rememberWidgetSelectionDialogState(
+        widgetIndex = widgetIndex,
+        currentWidgets = currentWidgets,
+        currentWidgetConfigs = currentWidgetConfigs,
+        defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
+        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { },
+        modifier = Modifier.fillMaxWidth(0.8f),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        text = {
+            WidgetSelectionDialogForm(
+                titleText = if (state.showAdvancedSettings) {
+                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                } else {
+                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
+                },
+                state = state,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                bottomContent = {
+                    if (state.isExternalAppWidgetSelected) {
+                        ExternalAppWidgetPickerSection(
+                            appWidgetId = externalAppWidgetIdForApply(
+                                state,
+                                currentWidgetConfigs,
+                                widgetIndex
+                            ),
+                            onPickClick = {
+                                WidgetPickerActivity.start(
+                                    context = context,
+                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
+                                    panelId = panelId,
+                                    widgetIndex = widgetIndex,
+                                    showTitle = state.showTitle,
+                                    showUnit = state.showUnit
+                                )
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
+            )
+        },
+        confirmButton = {
+            WidgetSelectionDialogActions(
+                state = state,
+                onDismiss = onDismiss,
+                onSave = {
+                    if (tryLaunchExternalWidgetPicker(
+                            context = context,
+                            saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
+                            panelId = panelId,
+                            widgetIndex = widgetIndex,
+                            state = state,
+                            currentWidgetConfigs = currentWidgetConfigs,
+                            onDismiss = onDismiss
+                        )
+                    ) {
+                        return@WidgetSelectionDialogActions
+                    }
+                    applyWidgetSelectionChanges(
+                        context = context,
+                        dashboardManager = dashboardManager,
+                        currentWidgets = currentWidgets,
+                        currentWidgetConfigs = currentWidgetConfigs,
+                        widgetIndex = widgetIndex,
+                        state = state,
+                        saveConfigs = { configs ->
+                            settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
+                        },
+                        externalAppWidgetId = externalAppWidgetIdForApply(
+                            state,
+                            currentWidgetConfigs,
+                            widgetIndex
+                        )
+                    )
+                    onDismiss()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                saveTextFontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+            )
+        },
+        dismissButton = {}
+    )
+}
+
