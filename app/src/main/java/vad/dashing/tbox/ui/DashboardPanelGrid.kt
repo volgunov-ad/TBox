@@ -69,7 +69,63 @@ internal fun DashboardPanelGridAndFrames(
         config.dataKey.isNotBlank() && config.dataKey != "null"
     }
 
+    val showEditIndicators = isEditMode && !showDialogOpen
+    val showTboxDisconnectFrame = showTboxDisconnectIndicator && !tboxConnected
+    val showOverlayCanvas = !hasConfiguredWidgets || showTboxDisconnectFrame || showEditIndicators
+
     Box(modifier = Modifier.fillMaxSize()) {
+        // Draw overlay strokes behind the grid so they do not steal touches from tiles.
+        if (showOverlayCanvas) {
+            Canvas(
+                modifier = Modifier.matchParentSize()
+            ) {
+                val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                if (!hasConfiguredWidgets) {
+                    val inset = 4.dp.toPx()
+                    drawRect(
+                        color = Color(0xFF008507),
+                        topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
+                        size = androidx.compose.ui.geometry.Size(
+                            width = (size.width - inset * 2f).coerceAtLeast(0f),
+                            height = (size.height - inset * 2f).coerceAtLeast(0f)
+                        ),
+                        style = stroke
+                    )
+                }
+                if (showTboxDisconnectFrame) {
+                    drawRect(
+                        color = Color(0xD9FF9800),
+                        style = stroke
+                    )
+                }
+                if (showEditIndicators) {
+                    val editInset = 2.dp.toPx()
+                    drawRect(
+                        color = Color(0xFF00BCD4),
+                        topLeft = androidx.compose.ui.geometry.Offset(editInset, editInset),
+                        size = androidx.compose.ui.geometry.Size(
+                            width = (size.width - editInset * 2f).coerceAtLeast(0f),
+                            height = (size.height - editInset * 2f).coerceAtLeast(0f)
+                        ),
+                        style = stroke
+                    )
+                    val topLeft = resizeHandleAreaTopLeft(
+                        width = size.width,
+                        height = size.height
+                    )
+                    val handleSize = resizeHandleAreaSize(
+                        width = size.width,
+                        height = size.height
+                    )
+                    drawRect(
+                        color = Color(0xFF00BCD4),
+                        topLeft = topLeft,
+                        size = handleSize,
+                        style = stroke
+                    )
+                }
+            }
+        }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -149,60 +205,6 @@ internal fun DashboardPanelGridAndFrames(
                         }
                     }
                 }
-            }
-        }
-    }
-
-    val showEditIndicators = isEditMode && !showDialogOpen
-    val showTboxDisconnectFrame = showTboxDisconnectIndicator && !tboxConnected
-    if (!hasConfiguredWidgets || showTboxDisconnectFrame || showEditIndicators) {
-        Canvas(
-            modifier = Modifier.matchParentSize()
-        ) {
-            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-            if (!hasConfiguredWidgets) {
-                val inset = 4.dp.toPx()
-                drawRect(
-                    color = Color(0xFF008507),
-                    topLeft = androidx.compose.ui.geometry.Offset(inset, inset),
-                    size = androidx.compose.ui.geometry.Size(
-                        width = (size.width - inset * 2f).coerceAtLeast(0f),
-                        height = (size.height - inset * 2f).coerceAtLeast(0f)
-                    ),
-                    style = stroke
-                )
-            }
-            if (showTboxDisconnectFrame) {
-                drawRect(
-                    color = Color(0xD9FF9800),
-                    style = stroke
-                )
-            }
-            if (showEditIndicators) {
-                val editInset = 2.dp.toPx()
-                drawRect(
-                    color = Color(0xFF00BCD4),
-                    topLeft = androidx.compose.ui.geometry.Offset(editInset, editInset),
-                    size = androidx.compose.ui.geometry.Size(
-                        width = (size.width - editInset * 2f).coerceAtLeast(0f),
-                        height = (size.height - editInset * 2f).coerceAtLeast(0f)
-                    ),
-                    style = stroke
-                )
-                val topLeft = resizeHandleAreaTopLeft(
-                    width = size.width,
-                    height = size.height
-                )
-                val handleSize = resizeHandleAreaSize(
-                    width = size.width,
-                    height = size.height
-                )
-                drawRect(
-                    color = Color(0xFF00BCD4),
-                    topLeft = topLeft,
-                    size = handleSize,
-                    style = stroke
-                )
             }
         }
     }
