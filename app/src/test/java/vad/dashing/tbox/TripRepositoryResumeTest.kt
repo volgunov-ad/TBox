@@ -46,7 +46,7 @@ class TripRepositoryResumeTest {
             TripRecord(id = "newer", startTimeEpochMs = endOld + 1L, endTimeEpochMs = endNew)
         )
         val splitMs = 5 * 60_000L
-        assertTrue(TripRepository.tryResumeLastTripAfterServiceStart(splitMs))
+        assertTrue(TripRepository.tryResumeLastTripAfterServiceStart(splitMs).resumed)
         val active = TripRepository.activeTrip.first()
         assertNotNull(active)
         assertEquals("newer", active!!.id)
@@ -67,7 +67,14 @@ class TripRepositoryResumeTest {
             )
         )
         val splitMs = 5 * 60_000L
-        assertTrue(TripRepository.tryResumeLastTripAfterServiceStart(splitMs))
+        val resumeResult = TripRepository.tryResumeLastTripAfterServiceStart(splitMs)
+        assertTrue(resumeResult.resumed)
+        assertNotNull(resumeResult.reopenedEndedTrip)
+        assertEquals("parked", resumeResult.reopenedEndedTrip!!.tripId)
+        assertEquals(endMs, resumeResult.reopenedEndedTrip!!.previousEndTimeEpochMs)
+        assertTrue(
+            resumeResult.reopenedEndedTrip!!.parkedMsAddedToIdle in 115_000L..125_000L
+        )
         val active = TripRepository.activeTrip.first()
         assertNotNull(active)
         assertEquals("parked", active!!.id)
@@ -78,5 +85,22 @@ class TripRepositoryResumeTest {
             "parked segment should be ~120s, was ${addedIdle}ms",
             addedIdle in 115_000L..125_000L
         )
+    }
+
+    @Test
+    fun tryResume_alreadyActive_reopenedEndedTripIsNull() = runBlocking {
+        val nowWall = System.currentTimeMillis()
+        TripRepository.appendTrip(
+            TripRecord(
+                id = "running",
+                startTimeEpochMs = nowWall - 3_600_000L,
+                endTimeEpochMs = null,
+            )
+        )
+        val splitMs = 5 * 60_000L
+        val r = TripRepository.tryResumeLastTripAfterServiceStart(splitMs)
+        assertTrue(r.resumed)
+        assertNull(r.reopenedEndedTrip)
+        assertEquals("running", TripRepository.activeTrip.first()?.id)
     }
 }

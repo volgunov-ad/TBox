@@ -7,6 +7,22 @@ import kotlinx.coroutines.flow.update
 import kotlin.math.abs
 import kotlin.math.max
 
+/**
+ * When a trip that had [TripRecord.endTimeEpochMs] is reopened on service start, [BackgroundService]
+ * may revert that reopen on HU shutdown if the engine never ran this session — see [parkedMsAddedToIdle].
+ */
+data class ColdResumeReopenedEndedTrip(
+    val tripId: String,
+    val previousEndTimeEpochMs: Long,
+    val parkedMsAddedToIdle: Long,
+)
+
+data class TripResumeStartResult(
+    val resumed: Boolean,
+    /** Non-null only if a finished trip was reopened (split window); used to revert HU-off without engine start. */
+    val reopenedEndedTrip: ColdResumeReopenedEndedTrip?,
+)
+
 object TripRepository {
     const val MAX_TRIPS = 31
     const val MAX_FAVORITES = 25
@@ -64,6 +80,7 @@ object TripRepository {
         }
     }
 
+    /** Replaces one trip by id in the list; updates [activeTrip] if the record is active or was active. */
     fun replaceTrip(updated: TripRecord) {
         synchronized(lock) {
             val list = _trips.value
@@ -138,6 +155,10 @@ object TripRepository {
         }
     }
 
+    /**
+     * Appends a new active trip and closes any other active trip with a wall-clock end time.
+     * Caller (e.g. [BackgroundService]) sets [TripRecord.startTimeEpochMs] and odometer/fuel baseline.
+     */
     fun startTrip(record: TripRecord) {
         synchronized(lock) {
             val now = System.currentTimeMillis()
@@ -166,21 +187,35 @@ object TripRepository {
      * or the end time was less than [splitWindowMs] ago (short stop / restart within split window).
      * If wall clock is before the stored end (e.g. HU time reset), a finished trip is not resumed.
      * Returns true if a trip was resumed (or was already active).
+     *
+     * For a trip that had [TripRecord.endTimeEpochMs] set, the gap until `now` is treated as parking
+     * and **added** to existing [TripRecord.idleTimeMs] (not replaced).
      */
-    fun tryResumeLastTripAfterServiceStart(splitWindowMs: Long): Boolean {
+    fun tryResumeLastTripAfterServiceStart(splitWindowMs: Long): TripResumeStartResult {
         synchronized(lock) {
             val list = _trips.value
-            if (list.isEmpty()) return false
+            if (list.isEmpty()) return TripResumeStartResult(false, null)
             val now = System.currentTimeMillis()
-            val candidate = TripRules.findResumeCandidate(list, now, splitWindowMs) ?: return false
-            if (!TripRules.shouldResumeLastTripOnColdStart(candidate, now, splitWindowMs)) return false
+            val candidate = TripRules.findResumeCandidate(list, now, splitWindowMs)
+                ?: return TripResumeStartResult(false, null)
+            if (!TripRules.shouldResumeLastTripOnColdStart(candidate, now, splitWindowMs)) {
+                return TripResumeStartResult(false, null)
+            }
+            val reopenInfo: ColdResumeReopenedEndedTrip?
             val resumed = if (candidate.isActive) {
+                reopenInfo = null
                 candidate
             } else {
-                val endedAt = candidate.endTimeEpochMs ?: return false
+                val endedAt = candidate.endTimeEpochMs ?: return TripResumeStartResult(false, null)
                 val parkedMs = (now - endedAt).coerceAtLeast(0L)
+                reopenInfo = ColdResumeReopenedEndedTrip(
+                    tripId = candidate.id,
+                    previousEndTimeEpochMs = endedAt,
+                    parkedMsAddedToIdle = parkedMs,
+                )
                 candidate.copy(
                     endTimeEpochMs = null,
+                    // Cumulative idle: time already accrued on the trip plus the off-line / parked segment.
                     idleTimeMs = candidate.idleTimeMs + parkedMs,
                 )
             }
@@ -191,7 +226,7 @@ object TripRepository {
                 normalizeTripsList(mapped)
             }
             _activeTrip.value = _trips.value.lastOrNull { it.isActive }
-            return true
+            return TripResumeStartResult(true, reopenInfo)
         }
     }
 
