@@ -220,42 +220,40 @@ class BackgroundService : Service() {
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
 
-        // Lazily subscribed StateFlows: defaults match Settings.kt so .value is safe before
-        // the first DataStore read; avoids N× eager DataStore reads during service creation.
+        // Eagerly subscribed StateFlows so .value always tracks DataStore (Lazily would keep
+        // initial values until some code path called collect on that flow).
         autoModemRestart = settingsManager.autoModemRestartFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         autoTboxReboot = settingsManager.autoTboxRebootFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         autoSuspendTboxApp = settingsManager.autoSuspendTboxAppFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         autoStopTboxApp = settingsManager.autoStopTboxAppFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         autoSuspendTboxMdc = settingsManager.autoSuspendTboxMdcFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         autoStopTboxMdc = settingsManager.autoStopTboxMdcFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         autoSuspendTboxSwd = settingsManager.autoSuspendTboxSwdFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         autoPreventTboxRestart = settingsManager.autoPreventTboxRestartFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         getCanFrame = settingsManager.getCanFrameFlow
-            .stateIn(scope, SharingStarted.Lazily, true)
+            .stateIn(scope, SharingStarted.Eagerly, true)
         getCycleSignal = settingsManager.getCycleSignalFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         getLocData = settingsManager.getLocDataFlow
-            .stateIn(scope, SharingStarted.Lazily, true)
+            .stateIn(scope, SharingStarted.Eagerly, true)
         widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         mockLocation = settingsManager.mockLocationFlow
-            .stateIn(scope, SharingStarted.Lazily, false)
+            .stateIn(scope, SharingStarted.Eagerly, false)
         floatingDashboards = settingsManager.floatingDashboardsFlow
-            .stateIn(scope, SharingStarted.Lazily, emptyList())
+            .stateIn(scope, SharingStarted.Eagerly, emptyList())
         canDataSaveCount = settingsManager.canDataSaveCountFlow
-            .stateIn(scope, SharingStarted.Lazily, 5)
-        // Eagerly: trip resume on service start must see saved settings, not Lazily initial values (race
-        // with first RPM sample / DataStore read).
+            .stateIn(scope, SharingStarted.Eagerly, 5)
         fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
             .stateIn(scope, SharingStarted.Eagerly, 57)
         splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
