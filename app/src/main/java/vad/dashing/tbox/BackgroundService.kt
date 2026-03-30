@@ -127,16 +127,27 @@ class BackgroundService : Service() {
     private var motorHoursBuffer = MotorHoursBuffer(0.05f)
     private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
 
+    /**
+     * In-RAM state for automatic trips: each CAN RPM sample drives [onTripRpmSample]. Split-window
+     * length comes from [splitTripTimeMinutesSetting] (same semantics as [TripRules]).
+     */
     private var tripPrevRpmForStart = 0f
+    /** True once we have seen RPM > 0 this service session; blocks spurious "new trip" on first samples. */
     private var tripRpmWasPositiveSinceService = false
+    /**
+     * After engine-off, the ended trip id if we might merge it back when RPM returns within the split window.
+     */
     private var tripPendingSplitTripId: String? = null
+    /** Wall clock when RPM last went to zero while a trip was active; used to measure off-engine pause. */
     private var tripRpmZeroAtMs: Long? = null
     private var tripLastSampleElapsedMs: Long = 0L
     private var tripLastOdometer: UInt? = null
     private var tripStartOdometer: UInt? = null
+    /** Last fuel % used for step consumption between samples; aligned with [TripRecord.fuelBaselinePercent]. */
     private var tripLastFuelPercent: Float? = null
     private var tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
     private var tripLastPersistedSnapshot: TripRecord? = null
+    /** First RPM sample after service start or reload: special-case resume vs new trip without double-counting. */
     private var tripFirstSampleAfterSessionStart = true
 
     private var isLastSMS: Boolean = false
@@ -817,6 +828,11 @@ class BackgroundService : Service() {
         }
     }
 
+    /**
+     * One decision per RPM sample: maintain active trip, end on engine off, optionally reopen the same
+     * trip after a short stop, or start a new trip after a longer gap. Moving vs idle time uses speed
+     * (not RPM) for samples while the trip is active and RPM > 0.
+     */
     private fun onTripRpmSample(rpm: Float, prevRpm: Float, nowElapsedMs: Long) {
         synchronized(TripRepository.lock) {
             val wallNow = System.currentTimeMillis()
@@ -831,9 +847,11 @@ class BackgroundService : Service() {
                 tripRpmWasPositiveSinceService = true
             }
 
+            // Branch: first sample after ACTION_START / reload — align buffers with store or create trip.
             if (tripFirstSampleAfterSessionStart) {
                 tripFirstSampleAfterSessionStart = false
                 if (TripRepository.activeTrip.value != null) {
+                    // Resumed or still-active trip from store: do not advance moving/idle until next sample.
                     tripLastSampleElapsedMs = nowElapsedMs
                     tripPrevRpmForStart = rpm
                     if (tripLastFuelPercent == null) {
@@ -850,6 +868,7 @@ class BackgroundService : Service() {
                     }
                     return@synchronized
                 }
+                // No active trip in store: start one only if engine already running at first sample.
                 if (rpm > 0f) {
                     val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
                     val odoStart = CanDataRepository.odometer.value
@@ -874,7 +893,7 @@ class BackgroundService : Service() {
                 }
             }
 
-            // Short stop: continue the same trip if RPM returns before split window
+            // Engine back on after off: same trip if pause ≤ split window; add off time to idle (cumulative).
             if (rpm > 0f && tripRpmZeroAtMs != null) {
                 val zeroStart = tripRpmZeroAtMs!!
                 val pauseMs = wallNow - zeroStart
@@ -899,6 +918,7 @@ class BackgroundService : Service() {
                 applyActiveTripFuelStep(tankL)
             }
 
+            // Active trip and engine running: accumulate distance and moving vs idle from elapsed CAN period.
             var active = TripRepository.activeTrip.value
             if (active != null && rpm > 0f) {
                 val dt = if (tripLastSampleElapsedMs == 0L) {
@@ -946,6 +966,7 @@ class BackgroundService : Service() {
                 applyActiveTripFuelStep(tankL)
             }
 
+            // Engine-off edge: end active trip; same trip may reopen above if RPM returns within split window.
             active = TripRepository.activeTrip.value
             if (active != null && prevRpm > 0f && rpm == 0f) {
                 val endedTripId = active.id
@@ -956,6 +977,7 @@ class BackgroundService : Service() {
                 maybePersistTrips(force = true)
             }
 
+            // No active trip but engine running: new trip only after a stable zero-RPM edge (avoids duplicates).
             if (rpm > 0f && TripRepository.activeTrip.value == null) {
                 val canStart = prevRpm <= 0f && tripPrevRpmForStart <= 0f && tripRpmWasPositiveSinceService
                 if (canStart) {
@@ -987,6 +1009,7 @@ class BackgroundService : Service() {
             tripLastSampleElapsedMs = nowElapsedMs
             tripPrevRpmForStart = rpm
 
+            // Throttled JSON persist so DataStore is not written on every RPM tick.
             val rtNow = SystemClock.elapsedRealtime()
             if (rtNow - tripLastPeriodicPersistAt >= TRIPS_PERSIST_INTERVAL_MS) {
                 tripLastPeriodicPersistAt = rtNow
@@ -1027,6 +1050,11 @@ class BackgroundService : Service() {
         }
     }
 
+    /**
+     * Clears sample buffers for a new service session. If the last persisted trip ended recently
+     * (within split window) but [applyTripResumeIfLastTripContinues] has not run yet, seed
+     * [tripPendingSplitTripId] so the first RPM>0 sample can merge engine-off idle like in-session logic.
+     */
     private fun resetTripStateForNewServiceSession(splitWindowMs: Long) {
         synchronized(TripRepository.lock) {
             tripPrevRpmForStart = 0f
@@ -1053,7 +1081,8 @@ class BackgroundService : Service() {
 
     /**
      * If the last stored trip should continue (active or ended within split window), resume it
-     * and seed odometer/fuel buffers so [onTripRpmSample] extends the same trip.
+     * and seed odometer/fuel buffers so [onTripRpmSample] extends the same trip. Parked time before
+     * resume is added to [TripRecord.idleTimeMs] inside [TripRepository.tryResumeLastTripAfterServiceStart].
      */
     private fun applyTripResumeIfLastTripContinues(splitWindowMs: Long) {
         synchronized(TripRepository.lock) {

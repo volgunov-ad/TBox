@@ -64,6 +64,7 @@ object TripRepository {
         }
     }
 
+    /** Replaces one trip by id in the list; updates [activeTrip] if the record is active or was active. */
     fun replaceTrip(updated: TripRecord) {
         synchronized(lock) {
             val list = _trips.value
@@ -138,6 +139,10 @@ object TripRepository {
         }
     }
 
+    /**
+     * Appends a new active trip and closes any other active trip with a wall-clock end time.
+     * Caller (e.g. [BackgroundService]) sets [TripRecord.startTimeEpochMs] and odometer/fuel baseline.
+     */
     fun startTrip(record: TripRecord) {
         synchronized(lock) {
             val now = System.currentTimeMillis()
@@ -166,6 +171,9 @@ object TripRepository {
      * or the end time was less than [splitWindowMs] ago (short stop / restart within split window).
      * If wall clock is before the stored end (e.g. HU time reset), a finished trip is not resumed.
      * Returns true if a trip was resumed (or was already active).
+     *
+     * For a trip that had [TripRecord.endTimeEpochMs] set, the gap until `now` is treated as parking
+     * and **added** to existing [TripRecord.idleTimeMs] (not replaced).
      */
     fun tryResumeLastTripAfterServiceStart(splitWindowMs: Long): Boolean {
         synchronized(lock) {
@@ -181,6 +189,7 @@ object TripRepository {
                 val parkedMs = (now - endedAt).coerceAtLeast(0L)
                 candidate.copy(
                     endTimeEpochMs = null,
+                    // Cumulative idle: time already accrued on the trip plus the off-line / parked segment.
                     idleTimeMs = candidate.idleTimeMs + parkedMs,
                 )
             }
