@@ -149,6 +149,12 @@ class BackgroundService : Service() {
     private var tripLastPersistedSnapshot: TripRecord? = null
     /** First RPM sample after service start or reload: special-case resume vs new trip without double-counting. */
     private var tripFirstSampleAfterSessionStart = true
+    /**
+     * Set when cold-start resume reopened a trip that had [TripRecord.endTimeEpochMs]. Cleared on first RPM>0
+     * this session. If the HU stops the service before the engine runs, [finalizeTripsOnServiceStop] restores
+     * the previous end time and rolls back the resume-only idle delta to avoid double-counting on next boot.
+     */
+    private var tripColdResumeReopenedEndedTrip: ColdResumeReopenedEndedTrip? = null
 
     private var isLastSMS: Boolean = false
 
@@ -845,6 +851,7 @@ class BackgroundService : Service() {
 
             if (rpm > 0f) {
                 tripRpmWasPositiveSinceService = true
+                tripColdResumeReopenedEndedTrip = null
             }
 
             // Branch: first sample after ACTION_START / reload — align buffers with store or create trip.
@@ -1057,6 +1064,7 @@ class BackgroundService : Service() {
      */
     private fun resetTripStateForNewServiceSession(splitWindowMs: Long) {
         synchronized(TripRepository.lock) {
+            tripColdResumeReopenedEndedTrip = null
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
@@ -1083,10 +1091,14 @@ class BackgroundService : Service() {
      * If the last stored trip should continue (active or ended within split window), resume it
      * and seed odometer/fuel buffers so [onTripRpmSample] extends the same trip. Parked time before
      * resume is added to [TripRecord.idleTimeMs] inside [TripRepository.tryResumeLastTripAfterServiceStart].
+     * If that reopen was from a finished trip and the HU stops the service before RPM>0, [finalizeTripsOnServiceStop]
+     * restores the stored end time and rolls back that idle delta so the next boot counts one continuous off segment.
      */
     private fun applyTripResumeIfLastTripContinues(splitWindowMs: Long) {
         synchronized(TripRepository.lock) {
-            if (!TripRepository.tryResumeLastTripAfterServiceStart(splitWindowMs)) return
+            val resumeResult = TripRepository.tryResumeLastTripAfterServiceStart(splitWindowMs)
+            if (!resumeResult.resumed) return
+            tripColdResumeReopenedEndedTrip = resumeResult.reopenedEndedTrip
             tripLastOdometer = CanDataRepository.odometer.value
             tripStartOdometer = tripLastOdometer
             val active = TripRepository.activeTrip.value
@@ -1105,6 +1117,7 @@ class BackgroundService : Service() {
             TripRepository.activeTrip.value?.let { cur ->
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
+            tripColdResumeReopenedEndedTrip = null
             val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
             val odoStart = CanDataRepository.odometer.value
             val rpmNow = CanDataRepository.engineRPM.value ?: 0f
@@ -1137,10 +1150,26 @@ class BackgroundService : Service() {
     private suspend fun finalizeTripsOnServiceStop() {
         val wallNow = System.currentTimeMillis()
         synchronized(TripRepository.lock) {
+            val cold = tripColdResumeReopenedEndedTrip
             val active = TripRepository.activeTrip.value
-            if (active != null) {
+            if (active != null && cold != null && active.id == cold.tripId) {
+                val rpmNow = CanDataRepository.engineRPM.value ?: 0f
+                if (rpmNow <= 0f) {
+                    // HU off before engine start after cold resume: keep original trip end and idle
+                    // so the next session can add one parked segment (HU off + sit) without double idle.
+                    TripRepository.replaceTrip(
+                        active.copy(
+                            endTimeEpochMs = cold.previousEndTimeEpochMs,
+                            idleTimeMs = (active.idleTimeMs - cold.parkedMsAddedToIdle).coerceAtLeast(0L),
+                        )
+                    )
+                } else {
+                    TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
+                }
+            } else if (active != null) {
                 TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
             }
+            tripColdResumeReopenedEndedTrip = null
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
