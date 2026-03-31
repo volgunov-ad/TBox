@@ -84,7 +84,7 @@ fun StatusRow(
         Text(
             text = label,
             modifier = Modifier
-                .weight(1f)
+                .weight(0.6f)
                 .padding(end = 8.dp),
             fontSize = fontSize,
             lineHeight = lineHeight,
@@ -96,7 +96,7 @@ fun StatusRow(
         Text(
             text = valueWithUnit,
             modifier = Modifier
-                .weight(1f)
+                .weight(0.4f)
                 .padding(start = 8.dp),
             fontSize = fontSize,
             lineHeight = lineHeight,
