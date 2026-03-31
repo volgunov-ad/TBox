@@ -1,9 +1,13 @@
 package vad.dashing.tbox
 
+import android.app.AppOpsManager
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadata
+import android.os.Build
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -195,7 +199,11 @@ object SharedMediaControlService {
 
     private val autoCollapseHandler = Handler(Looper.getMainLooper())
     private var autoCollapseTokenSeq: Long = 0L
-    private data class PendingPlayerLaunchAutoCollapse(val token: Long, val packageName: String)
+    private data class PendingPlayerLaunchAutoCollapse(
+        val token: Long,
+        val packageName: String,
+        val returnToPackage: String?
+    )
 
     private var pendingPlayerLaunchAutoCollapse: PendingPlayerLaunchAutoCollapse? = null
     private var playerLaunchAutoCollapseTimeoutRunnable: Runnable? = null
@@ -338,8 +346,13 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
-        if (launchPlayerApp(context.applicationContext, targetPackage)) {
-            scheduleAutoCollapseAfterPlayerLaunch(context.applicationContext, targetPackage)
+        val launchResult = launchPlayerApp(context.applicationContext, targetPackage)
+        if (launchResult.started) {
+            scheduleAutoCollapseAfterPlayerLaunch(
+                context.applicationContext,
+                targetPackage,
+                launchResult.returnToPackage
+            )
         }
     }
 
@@ -370,8 +383,13 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
-        if (launchPlayerApp(context.applicationContext, targetPackage)) {
-            scheduleAutoCollapseAfterPlayerLaunch(context.applicationContext, targetPackage)
+        val launchResult = launchPlayerApp(context.applicationContext, targetPackage)
+        if (launchResult.started) {
+            scheduleAutoCollapseAfterPlayerLaunch(
+                context.applicationContext,
+                targetPackage,
+                launchResult.returnToPackage
+            )
         }
     }
 
@@ -630,19 +648,24 @@ object SharedMediaControlService {
                 }
                 val ctx = appContext
                 if (ctx != null) {
-                    autoCollapseHandler.post { navigateHome(ctx) }
+                    autoCollapseHandler.post { restorePreviousApp(ctx, pending.returnToPackage) }
                 }
             }
         }
     }
 
-    private fun scheduleAutoCollapseAfterPlayerLaunch(context: Context, packageName: String) {
+    private fun scheduleAutoCollapseAfterPlayerLaunch(
+        context: Context,
+        packageName: String,
+        returnToPackage: String?
+    ) {
         synchronized(this) {
             initializeLocked(context)
             playerLaunchAutoCollapseTimeoutRunnable?.let { autoCollapseHandler.removeCallbacks(it) }
             autoCollapseTokenSeq += 1
             val token = autoCollapseTokenSeq
-            pendingPlayerLaunchAutoCollapse = PendingPlayerLaunchAutoCollapse(token, packageName)
+            pendingPlayerLaunchAutoCollapse =
+                PendingPlayerLaunchAutoCollapse(token, packageName, returnToPackage)
             val timeoutRunnable = Runnable {
                 synchronized(this@SharedMediaControlService) {
                     val pending = pendingPlayerLaunchAutoCollapse
@@ -744,12 +767,83 @@ private fun sendMediaPlayKeyEvent(context: Context, packageName: String) {
     context.sendOrderedBroadcast(keyUp, null)
 }
 
-private fun launchPlayerApp(context: Context, packageName: String): Boolean {
-    val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
+private data class LaunchPlayerAppResult(val started: Boolean, val returnToPackage: String?)
+
+private fun launchPlayerApp(context: Context, packageName: String): LaunchPlayerAppResult {
+    val appCtx = context.applicationContext
+    val exclude = setOf(appCtx.packageName, packageName)
+    val returnToPackage = queryRecentForegroundPackage(appCtx, exclude)
+    val launchIntent = appCtx.packageManager.getLaunchIntentForPackage(packageName)
+        ?: return LaunchPlayerAppResult(false, returnToPackage)
     launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-    return runCatching {
-        context.startActivity(launchIntent)
+    val started = runCatching {
+        appCtx.startActivity(launchIntent)
     }.isSuccess
+    return LaunchPlayerAppResult(started, returnToPackage)
+}
+
+private fun hasUsageStatsAccess(context: Context): Boolean {
+    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+    val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        appOps.unsafeCheckOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            context.packageName
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            context.packageName
+        )
+    }
+    return mode == AppOpsManager.MODE_ALLOWED
+}
+
+private fun queryRecentForegroundPackage(
+    context: Context,
+    excludePackages: Set<String>
+): String? {
+    if (!hasUsageStatsAccess(context)) return null
+    val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val end = System.currentTimeMillis()
+    val begin = end - 10 * 60_000L
+    val events = usm.queryEvents(begin, end) ?: return null
+    val event = UsageEvents.Event()
+    val foregrounds = ArrayList<Pair<Long, String>>(64)
+    while (events.hasNextEvent()) {
+        events.getNextEvent(event)
+        if (event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) {
+            foregrounds.add(event.timeStamp to event.packageName)
+        }
+    }
+    if (foregrounds.isEmpty()) return null
+    foregrounds.sortByDescending { it.first }
+    for ((_, pkg) in foregrounds) {
+        if (pkg in excludePackages) continue
+        return pkg
+    }
+    return null
+}
+
+private fun restorePreviousApp(context: Context, returnToPackage: String?) {
+    if (returnToPackage.isNullOrBlank()) {
+        navigateHome(context)
+        return
+    }
+    val launch = context.packageManager.getLaunchIntentForPackage(returnToPackage)
+    if (launch == null) {
+        navigateHome(context)
+        return
+    }
+    launch.addFlags(
+        Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+    )
+    val ok = runCatching { context.startActivity(launch) }.isSuccess
+    if (!ok) {
+        navigateHome(context)
+    }
 }
 
 private fun navigateHome(context: Context) {
