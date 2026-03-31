@@ -405,6 +405,7 @@
     <string name="trips_empty">No saved trips</string>
     <string name="trips_no_active">No active trip</string>
     <string name="trips_active_trip">Current trip</string>
+    <string name="trips_last_trip_widget_title">Last trip</string>
     <string name="trips_start_time">Start</string>
     <string name="trips_end_time">End</string>
     <string name="trips_odometer_start">Odometer at trip start</string>

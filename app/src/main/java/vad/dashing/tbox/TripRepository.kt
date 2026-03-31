@@ -230,6 +230,17 @@ object TripRepository {
         }
     }
 
+    /**
+     * Most recently finished trip in [trips] by [TripRecord.endTimeEpochMs] (then [TripRecord.startTimeEpochMs]),
+     * for UI when there is no active trip. Returns null if there are no ended trips.
+     */
+    fun latestFinishedTrip(trips: List<TripRecord>): TripRecord? =
+        trips.filter { !it.isActive && it.endTimeEpochMs != null }
+            .maxWithOrNull(
+                compareBy<TripRecord> { it.endTimeEpochMs!! }
+                    .thenBy { it.startTimeEpochMs }
+            )
+
     fun averageSpeedMovingKmH(t: TripRecord): Float? {
         val d = t.distanceKm
         val sec = t.movingTimeMs / 1000f

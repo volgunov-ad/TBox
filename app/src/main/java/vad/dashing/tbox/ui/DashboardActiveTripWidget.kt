@@ -42,7 +42,10 @@ fun DashboardActiveTripWidgetItem(
     backgroundColor: Color? = null
 ) {
     val context = LocalContext.current
-    val trip by appDataViewModel.activeTrip.collectAsStateWithLifecycle()
+    val activeTrip by appDataViewModel.activeTrip.collectAsStateWithLifecycle()
+    val trips by appDataViewModel.trips.collectAsStateWithLifecycle()
+    val displayTrip = activeTrip ?: TripRepository.latestFinishedTrip(trips)
+    val showingLastFinishedTrip = displayTrip != null && !displayTrip.isActive
     val dateFmt = rememberTripDateFormat()
 
     DashboardWidgetScaffold(
@@ -66,7 +69,13 @@ fun DashboardActiveTripWidgetItem(
         ) {
             if (showTitle) {
                 Text(
-                    text = stringResource(R.string.trips_active_trip),
+                    text = stringResource(
+                        if (showingLastFinishedTrip) {
+                            R.string.trips_last_trip_widget_title
+                        } else {
+                            R.string.trips_active_trip
+                        }
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     fontSize = titleFont,
                     lineHeight = titleFont * 1.3f,
@@ -78,7 +87,7 @@ fun DashboardActiveTripWidgetItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (trip == null) {
+            if (displayTrip == null) {
                 Text(
                     text = stringResource(R.string.trips_no_active),
                     fontSize = titleFont,
@@ -91,18 +100,27 @@ fun DashboardActiveTripWidgetItem(
                     overflow = TextOverflow.Ellipsis
                 )
             } else {
-                val t = trip ?: return@DashboardWidgetScaffold
+                val t = displayTrip ?: return@DashboardWidgetScaffold
                 val rowFont = titleFont
                 val simplified = widget.dataKey == "activeTripWidgetSimple"
                 if (simplified) {
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_start_time),
                         value = dateFmt.format(Date(t.startTimeEpochMs)),
                         unit = "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    t.endTimeEpochMs?.let { endMs ->
+                        StatusRow(
+                            label = stringResource(R.string.trips_end_time),
+                            value = dateFmt.format(Date(endMs)),
+                            unit = "",
+                            fontSize = rowFont,
+                            color = resolvedTextColor
+                        )
+                    }
+                    StatusRow(
                         label = stringResource(R.string.trips_odometer_start),
                         value = t.odometerStartKm?.let { valueToString(it, 0) }
                             ?: stringResource(R.string.value_no_data),
@@ -110,28 +128,28 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_distance),
                         value = valueToString(t.distanceKm, 0),
                         unit = stringResource(R.string.unit_km),
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_moving_time),
                         value = formatTripDurationHuman(context, t.movingTimeMs),
                         unit = "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_idle_time),
                         value = formatTripDurationHuman(context, t.idleTimeMs),
                         unit = "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_total_time),
                         value = formatTripDurationHuman(
                             context,
@@ -142,7 +160,7 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     val avgM = TripRepository.averageSpeedMovingKmH(t)
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_avg_speed_moving),
                         value = avgM?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (avgM != null) stringResource(R.string.unit_kmh) else "",
@@ -150,21 +168,21 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     val avgT = TripRepository.averageSpeedTripKmH(t)
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_avg_speed_trip),
                         value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (avgT != null) stringResource(R.string.unit_kmh) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_fuel_used),
                         value = valueToString(t.fuelConsumedLiters, 1),
                         unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_fuel_refueled),
                         value = valueToString(t.fuelRefueledLiters, 1),
                         unit = stringResource(R.string.unit_liter),
@@ -172,14 +190,23 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                 } else {
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_start_time),
                         value = dateFmt.format(Date(t.startTimeEpochMs)),
                         unit = "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    t.endTimeEpochMs?.let { endMs ->
+                        StatusRow(
+                            label = stringResource(R.string.trips_end_time),
+                            value = dateFmt.format(Date(endMs)),
+                            unit = "",
+                            fontSize = rowFont,
+                            color = resolvedTextColor
+                        )
+                    }
+                    StatusRow(
                         label = stringResource(R.string.trips_odometer_start),
                         value = t.odometerStartKm?.let { valueToString(it, 0) }
                             ?: stringResource(R.string.value_no_data),
@@ -187,28 +214,28 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_distance),
                         value = valueToString(t.distanceKm, 0),
                         unit = stringResource(R.string.unit_km),
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_moving_time),
                         value = formatTripDurationHuman(context, t.movingTimeMs),
                         unit = "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_idle_time),
                         value = formatTripDurationHuman(context, t.idleTimeMs),
                         unit = "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_total_time),
                         value = formatTripDurationHuman(
                             context,
@@ -218,21 +245,21 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_engine_start_count),
                         value = valueToString(t.engineStartCount),
                         unit = "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_max_speed),
                         value = valueToString(t.maxSpeed, 1),
                         unit = stringResource(R.string.unit_kmh),
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_max_engine_temp),
                         value = t.maxEngineTemp?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (t.maxEngineTemp != null) stringResource(R.string.unit_celsius) else "",
@@ -240,7 +267,7 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     t.maxGearboxOilTemp?.let { gb ->
-                        ActiveTripRow(
+                        StatusRow(
                             label = stringResource(R.string.trips_max_gearbox_temp),
                             value = valueToString(gb),
                             unit = stringResource(R.string.unit_celsius),
@@ -248,7 +275,7 @@ fun DashboardActiveTripWidgetItem(
                             color = resolvedTextColor
                         )
                     }
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_min_outside_temp),
                         value = t.minOutsideTemp?.let { valueToString(it, 1) }
                             ?: stringResource(R.string.value_no_data),
@@ -256,7 +283,7 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_max_outside_temp),
                         value = t.maxOutsideTemp?.let { valueToString(it, 1) }
                             ?: stringResource(R.string.value_no_data),
@@ -265,7 +292,7 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     val avgM = TripRepository.averageSpeedMovingKmH(t)
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_avg_speed_moving),
                         value = avgM?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (avgM != null) stringResource(R.string.unit_kmh) else "",
@@ -273,28 +300,28 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     val avgT = TripRepository.averageSpeedTripKmH(t)
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_avg_speed_trip),
                         value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (avgT != null) stringResource(R.string.unit_kmh) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_fuel_used),
                         value = valueToString(t.fuelConsumedLiters, 1),
                         unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_fuel_refueled),
                         value = valueToString(t.fuelRefueledLiters, 1),
                         unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    ActiveTripRow(
+                    StatusRow(
                         label = stringResource(R.string.trips_refuel_count),
                         value = valueToString(t.refuelCount),
                         unit = "",
@@ -310,26 +337,5 @@ fun DashboardActiveTripWidgetItem(
 @Composable
 private fun rememberTripDateFormat() = androidx.compose.runtime.remember {
     SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
-}
-
-@Composable
-private fun ActiveTripRow(
-    label: String,
-    value: String,
-    unit: String,
-    fontSize: androidx.compose.ui.unit.TextUnit,
-    color: Color
-) {
-    val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
-    Text(
-        text = "$label: $valueWithUnit",
-        fontSize = fontSize,
-        lineHeight = fontSize * 1.3f,
-        fontWeight = FontWeight.Normal,
-        color = color,
-        maxLines = 4,
-        softWrap = true,
-        overflow = TextOverflow.Ellipsis
-    )
 }
 
