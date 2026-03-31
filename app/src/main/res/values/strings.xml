@@ -405,6 +405,7 @@
     <string name="trips_empty">Нет сохранённых поездок</string>
     <string name="trips_no_active">Нет активной поездки</string>
     <string name="trips_active_trip">Текущая поездка</string>
+    <string name="trips_last_trip_widget_title">Последняя поездка</string>
     <string name="trips_start_time">Начало</string>
     <string name="trips_end_time">Окончание</string>
     <string name="trips_odometer_start">Одометр в начале поездки</string>

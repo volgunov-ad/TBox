@@ -42,7 +42,10 @@ fun DashboardActiveTripWidgetItem(
     backgroundColor: Color? = null
 ) {
     val context = LocalContext.current
-    val trip by appDataViewModel.activeTrip.collectAsStateWithLifecycle()
+    val activeTrip by appDataViewModel.activeTrip.collectAsStateWithLifecycle()
+    val trips by appDataViewModel.trips.collectAsStateWithLifecycle()
+    val displayTrip = activeTrip ?: TripRepository.latestFinishedTrip(trips)
+    val showingLastFinishedTrip = displayTrip != null && !displayTrip.isActive
     val dateFmt = rememberTripDateFormat()
 
     DashboardWidgetScaffold(
@@ -66,7 +69,13 @@ fun DashboardActiveTripWidgetItem(
         ) {
             if (showTitle) {
                 Text(
-                    text = stringResource(R.string.trips_active_trip),
+                    text = stringResource(
+                        if (showingLastFinishedTrip) {
+                            R.string.trips_last_trip_widget_title
+                        } else {
+                            R.string.trips_active_trip
+                        }
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     fontSize = titleFont,
                     lineHeight = titleFont * 1.3f,
@@ -78,7 +87,7 @@ fun DashboardActiveTripWidgetItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (trip == null) {
+            if (displayTrip == null) {
                 Text(
                     text = stringResource(R.string.trips_no_active),
                     fontSize = titleFont,
@@ -91,7 +100,7 @@ fun DashboardActiveTripWidgetItem(
                     overflow = TextOverflow.Ellipsis
                 )
             } else {
-                val t = trip ?: return@DashboardWidgetScaffold
+                val t = displayTrip ?: return@DashboardWidgetScaffold
                 val rowFont = titleFont
                 val simplified = widget.dataKey == "activeTripWidgetSimple"
                 if (simplified) {
@@ -102,6 +111,15 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
+                    t.endTimeEpochMs?.let { endMs ->
+                        ActiveTripRow(
+                            label = stringResource(R.string.trips_end_time),
+                            value = dateFmt.format(Date(endMs)),
+                            unit = "",
+                            fontSize = rowFont,
+                            color = resolvedTextColor
+                        )
+                    }
                     ActiveTripRow(
                         label = stringResource(R.string.trips_odometer_start),
                         value = t.odometerStartKm?.let { valueToString(it, 0) }
@@ -179,6 +197,15 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
+                    t.endTimeEpochMs?.let { endMs ->
+                        ActiveTripRow(
+                            label = stringResource(R.string.trips_end_time),
+                            value = dateFmt.format(Date(endMs)),
+                            unit = "",
+                            fontSize = rowFont,
+                            color = resolvedTextColor
+                        )
+                    }
                     ActiveTripRow(
                         label = stringResource(R.string.trips_odometer_start),
                         value = t.odometerStartKm?.let { valueToString(it, 0) }
