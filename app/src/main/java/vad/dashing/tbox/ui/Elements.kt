@@ -66,7 +66,16 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 
 @Composable
-fun StatusRow(label: String, value: String) {
+fun StatusRow(
+    label: String,
+    value: String,
+    unit: String = "",
+    fontSize: TextUnit = 24.sp,
+    color: Color? = null,
+) {
+    val textColor = color ?: MaterialTheme.colorScheme.onSurface
+    val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
+    val lineHeight = fontSize * 1.3f
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -77,22 +86,24 @@ fun StatusRow(label: String, value: String) {
             modifier = Modifier
                 .weight(1f)
                 .padding(end = 8.dp),
-            fontSize = 24.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = Int.MAX_VALUE,
+            fontSize = fontSize,
+            lineHeight = lineHeight,
+            color = textColor,
+            maxLines = 2,
             softWrap = true,
-            overflow = TextOverflow.Visible
+            overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = value,
+            text = valueWithUnit,
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 8.dp),
-            fontSize = 24.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = Int.MAX_VALUE,
+            fontSize = fontSize,
+            lineHeight = lineHeight,
+            color = textColor,
+            maxLines = 2,
             softWrap = true,
-            overflow = TextOverflow.Visible,
+            overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Start
         )
     }
