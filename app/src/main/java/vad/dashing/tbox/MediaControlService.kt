@@ -7,6 +7,8 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.provider.Settings
@@ -15,6 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
+
+private const val PLAYER_LAUNCH_AUTO_COLLAPSE_TIMEOUT_MS = 5000L
 
 enum class SupportedMediaPlayer(
     val packageName: String,
@@ -189,6 +193,13 @@ object SharedMediaControlService {
     private val _playerStates = MutableStateFlow<Map<String, MediaPlayerState>>(emptyMap())
     val playerStates: StateFlow<Map<String, MediaPlayerState>> = _playerStates.asStateFlow()
 
+    private val autoCollapseHandler = Handler(Looper.getMainLooper())
+    private var autoCollapseTokenSeq: Long = 0L
+    private data class PendingPlayerLaunchAutoCollapse(val token: Long, val packageName: String)
+
+    private var pendingPlayerLaunchAutoCollapse: PendingPlayerLaunchAutoCollapse? = null
+    private var playerLaunchAutoCollapseTimeoutRunnable: Runnable? = null
+
     private val activeSessionsListener = MediaSessionManager.OnActiveSessionsChangedListener {
             activeControllers ->
         synchronized(this) {
@@ -327,7 +338,9 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
-        launchPlayerApp(context.applicationContext, targetPackage)
+        if (launchPlayerApp(context.applicationContext, targetPackage)) {
+            scheduleAutoCollapseAfterPlayerLaunch(context.applicationContext, targetPackage)
+        }
     }
 
     fun play(
@@ -357,7 +370,9 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
-        launchPlayerApp(context.applicationContext, targetPackage)
+        if (launchPlayerApp(context.applicationContext, targetPackage)) {
+            scheduleAutoCollapseAfterPlayerLaunch(context.applicationContext, targetPackage)
+        }
     }
 
     fun skipToNext(selectedPackages: Set<String>, preferredPackage: String = "") {
@@ -603,6 +618,42 @@ object SharedMediaControlService {
         }
 
         _playerStates.value = updatedStates
+
+        val pending = pendingPlayerLaunchAutoCollapse
+        if (pending != null) {
+            val state = updatedStates[pending.packageName]
+            if (state?.isPlaying == true) {
+                pendingPlayerLaunchAutoCollapse = null
+                playerLaunchAutoCollapseTimeoutRunnable?.let { runnable ->
+                    autoCollapseHandler.removeCallbacks(runnable)
+                    playerLaunchAutoCollapseTimeoutRunnable = null
+                }
+                val ctx = appContext
+                if (ctx != null) {
+                    autoCollapseHandler.post { navigateHome(ctx) }
+                }
+            }
+        }
+    }
+
+    private fun scheduleAutoCollapseAfterPlayerLaunch(context: Context, packageName: String) {
+        synchronized(this) {
+            initializeLocked(context)
+            playerLaunchAutoCollapseTimeoutRunnable?.let { autoCollapseHandler.removeCallbacks(it) }
+            autoCollapseTokenSeq += 1
+            val token = autoCollapseTokenSeq
+            pendingPlayerLaunchAutoCollapse = PendingPlayerLaunchAutoCollapse(token, packageName)
+            val timeoutRunnable = Runnable {
+                synchronized(this@SharedMediaControlService) {
+                    val pending = pendingPlayerLaunchAutoCollapse
+                    if (pending == null || pending.token != token) return@Runnable
+                    pendingPlayerLaunchAutoCollapse = null
+                    playerLaunchAutoCollapseTimeoutRunnable = null
+                }
+            }
+            playerLaunchAutoCollapseTimeoutRunnable = timeoutRunnable
+            autoCollapseHandler.postDelayed(timeoutRunnable, PLAYER_LAUNCH_AUTO_COLLAPSE_TIMEOUT_MS)
+        }
     }
 
     private fun isNotificationAccessGranted(): Boolean {
@@ -693,10 +744,20 @@ private fun sendMediaPlayKeyEvent(context: Context, packageName: String) {
     context.sendOrderedBroadcast(keyUp, null)
 }
 
-private fun launchPlayerApp(context: Context, packageName: String) {
-    val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
+private fun launchPlayerApp(context: Context, packageName: String): Boolean {
+    val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
     launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-    runCatching {
+    return runCatching {
         context.startActivity(launchIntent)
+    }.isSuccess
+}
+
+private fun navigateHome(context: Context) {
+    val intent = Intent(Intent.ACTION_MAIN).apply {
+        addCategory(Intent.CATEGORY_HOME)
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+    runCatching {
+        context.startActivity(intent)
     }
 }
