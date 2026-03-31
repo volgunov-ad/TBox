@@ -179,6 +179,21 @@ fun MainScreenMapWindowOverlay(
             )
         }
 
+        if (isEditMode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                isEditMode = false
+                                dragPreview = null
+                            },
+                        )
+                    },
+            )
+        }
+
         if (!isEditMode) {
             Box(
                 modifier = Modifier
