@@ -89,11 +89,11 @@ enum class SupportedMediaPlayer(
         titleRes = R.string.media_player_yandex_navi,
         iconRes = R.drawable.player_yandex_navigator
     ),
-    //WT_LOCAL_MULTIMEDIA(
-    //    packageName = "com.wt.multimedia.local",
-    //    titleRes = R.string.media_player_wt_local_multimedia,
-    //    iconRes = R.drawable.player_unknown
-    //),
+    WT_LOCAL_MULTIMEDIA(
+        packageName = "com.wt.multimedia.local",
+        titleRes = R.string.media_player_wt_local_multimedia,
+        iconRes = R.drawable.player_unknown
+    ),
     BLUETOOTH_PHONE(
         packageName = "com.android.bluetooth",
         titleRes = R.string.media_player_bluetooth_phone,
@@ -111,6 +111,10 @@ enum class SupportedMediaPlayer(
             if (normalizedPackage.isBlank()) return null
             val resolvedPackage = when (normalizedPackage) {
                 "ru.yandex.radio" -> "ru.yandex.mobile.fmradio"
+                "com.wt.wtbtservice",
+                "com.nforetek.bt",
+                "com.wt.openbt.server" -> "com.android.bluetooth"
+                "com.wt.multimedia.platform3" -> "com.wt.multimedia.local"
                 else -> normalizedPackage
             }
             return entries.firstOrNull { it.packageName == resolvedPackage }
