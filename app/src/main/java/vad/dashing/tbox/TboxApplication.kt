@@ -1,12 +1,15 @@
 package vad.dashing.tbox
 
 import android.app.Application
+import com.yandex.mapkit.MapKitFactory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 class TboxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        MapKitFactory.setApiKey(BuildConfig.MAPKIT_API_KEY)
+        MapKitFactory.initialize(this)
         val appDataManager = AppDataManager(this)
         val settingsManager = SettingsManager(this)
         runBlocking {

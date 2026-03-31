@@ -23,6 +23,7 @@ savedstate = "1.4.0"
 lifecycleRuntime = "2.10.0"
 lifecycleViewmodelSavedstate = "2.10.0"
 tboxProxy = "1.0.4"
+mapkitMapsMobile = "4.33.1-lite"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -52,6 +53,7 @@ androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifec
 androidx-savedstate = { group = "androidx.savedstate", name = "savedstate", version.ref = "savedstate" }
 androidx-lifecycle-runtime = { group = "androidx.lifecycle", name = "lifecycle-runtime", version.ref = "lifecycleRuntime" }
 androidx-lifecycle-viewmodel-savedstate = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-savedstate", version.ref = "lifecycleViewmodelSavedstate" }
+yandex-maps-mobile = { group = "com.yandex.android", name = "maps.mobile", version.ref = "mapkitMapsMobile" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -70,6 +70,32 @@ data class MainScreenAddButtonPosition(
 }
 
 /**
+ * Floating Yandex MapKit map window on [vad.dashing.tbox.ui.MainScreen].
+ * Same relative layout convention as [MainScreenPanelConfig] (see that type).
+ */
+data class MainScreenMapWindowConfig(
+    val enabled: Boolean,
+    val relX: Float,
+    val relY: Float,
+    val relWidth: Float,
+    val relHeight: Float,
+) {
+    companion object {
+        const val DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_X = 0.55f
+        const val DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_Y = 0.55f
+        const val DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_WIDTH = 0.42f
+        const val DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_HEIGHT = 0.38f
+        val Default = MainScreenMapWindowConfig(
+            enabled = false,
+            relX = DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_X,
+            relY = DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_Y,
+            relWidth = DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_WIDTH,
+            relHeight = DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_HEIGHT,
+        )
+    }
+}
+
+/**
  * Dashboard panel on the in-app MainScreen (not a system overlay).
  * Position uses the same convention as [MainScreenSettingsButtonPosition]: normalized against
  * `(containerSize - panelSize)` along each axis. [relWidth] / [relHeight] are fractions of the full container.
@@ -179,6 +205,7 @@ class SettingsManager(private val context: Context) {
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
         private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
+        private const val MAIN_SCREEN_MAP_WINDOW_KEY = "main_screen_map_window"
 
         /** Copied image for MainScreen when global app theme is light (theme != 2). */
         const val MAIN_SCREEN_WALLPAPER_LIGHT_FILE = "main_screen_wallpaper/light"
@@ -306,6 +333,15 @@ class SettingsManager(private val context: Context) {
             .map { preferences ->
                 parseMainScreenAddButtonJson(
                     preferences[getStringKey(MAIN_SCREEN_ADD_BUTTON_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
+
+    val mainScreenMapWindowFlow: Flow<MainScreenMapWindowConfig> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenMapWindowJson(
+                    preferences[getStringKey(MAIN_SCREEN_MAP_WINDOW_KEY)] ?: ""
                 )
             }
             .distinctUntilChanged()
@@ -520,6 +556,42 @@ class SettingsManager(private val context: Context) {
         saveCustomString(MAIN_SCREEN_ADD_BUTTON_KEY, obj.toString())
     }
 
+    suspend fun saveMainScreenMapWindowEnabled(enabled: Boolean) {
+        val cur = context.settingsDataStore.data.first().let { prefs ->
+            parseMainScreenMapWindowJson(prefs[getStringKey(MAIN_SCREEN_MAP_WINDOW_KEY)] ?: "")
+        }
+        saveMainScreenMapWindow(cur.copy(enabled = enabled))
+    }
+
+    suspend fun saveMainScreenMapWindowLayout(
+        relX: Float,
+        relY: Float,
+        relWidth: Float,
+        relHeight: Float,
+    ) {
+        val cur = context.settingsDataStore.data.first().let { prefs ->
+            parseMainScreenMapWindowJson(prefs[getStringKey(MAIN_SCREEN_MAP_WINDOW_KEY)] ?: "")
+        }
+        saveMainScreenMapWindow(
+            cur.copy(
+                relX = relX.coerceIn(0f, 1f),
+                relY = relY.coerceIn(0f, 1f),
+                relWidth = relWidth.coerceIn(0.08f, 1f),
+                relHeight = relHeight.coerceIn(0.08f, 1f),
+            )
+        )
+    }
+
+    private suspend fun saveMainScreenMapWindow(config: MainScreenMapWindowConfig) {
+        val obj = JSONObject()
+        obj.put("enabled", config.enabled)
+        obj.put("relX", config.relX.coerceIn(0f, 1f).toDouble())
+        obj.put("relY", config.relY.coerceIn(0f, 1f).toDouble())
+        obj.put("relWidth", config.relWidth.coerceIn(0.08f, 1f).toDouble())
+        obj.put("relHeight", config.relHeight.coerceIn(0.08f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_MAP_WINDOW_KEY, obj.toString())
+    }
+
     suspend fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] = enabled
@@ -687,6 +759,34 @@ class SettingsManager(private val context: Context) {
             )
         } catch (_: Exception) {
             MainScreenAddButtonPosition.Default
+        }
+    }
+
+    private fun parseMainScreenMapWindowJson(raw: String): MainScreenMapWindowConfig {
+        if (raw.isBlank()) return MainScreenMapWindowConfig.Default
+        return try {
+            val o = JSONObject(raw)
+            MainScreenMapWindowConfig(
+                enabled = o.optBoolean("enabled", MainScreenMapWindowConfig.Default.enabled),
+                relX = o.optDouble(
+                    "relX",
+                    MainScreenMapWindowConfig.DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_X.toDouble()
+                ).toFloat().coerceIn(0f, 1f),
+                relY = o.optDouble(
+                    "relY",
+                    MainScreenMapWindowConfig.DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_Y.toDouble()
+                ).toFloat().coerceIn(0f, 1f),
+                relWidth = o.optDouble(
+                    "relWidth",
+                    MainScreenMapWindowConfig.DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_WIDTH.toDouble()
+                ).toFloat().coerceIn(0.08f, 1f),
+                relHeight = o.optDouble(
+                    "relHeight",
+                    MainScreenMapWindowConfig.DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_HEIGHT.toDouble()
+                ).toFloat().coerceIn(0.08f, 1f),
+            )
+        } catch (_: Exception) {
+            MainScreenMapWindowConfig.Default
         }
     }
 

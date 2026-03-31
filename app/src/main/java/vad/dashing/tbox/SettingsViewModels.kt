@@ -45,6 +45,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private val DEFAULT_MAIN_SCREEN_PANEL_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
+        private val DEFAULT_MAIN_SCREEN_MAP_WINDOW = MainScreenMapWindowConfig.Default
     }
 
     private fun createDefaultMainScreenPanel(id: String, name: String): MainScreenPanelConfig {
@@ -395,6 +396,53 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = MainScreenAddButtonPosition.Default
+        )
+
+    val mainScreenMapWindowConfig = settingsManager.mainScreenMapWindowFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_MAIN_SCREEN_MAP_WINDOW
+        )
+
+    val isMainScreenMapWindowEnabled = mainScreenMapWindowConfig
+        .map { it.enabled }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val mainScreenMapWindowRelXPercent = mainScreenMapWindowConfig
+        .map { (it.relX * 100f).toInt().coerceIn(0, 100) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = (MainScreenMapWindowConfig.DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_X * 100f).toInt()
+        )
+
+    val mainScreenMapWindowRelYPercent = mainScreenMapWindowConfig
+        .map { (it.relY * 100f).toInt().coerceIn(0, 100) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = (MainScreenMapWindowConfig.DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_Y * 100f).toInt()
+        )
+
+    val mainScreenMapWindowRelWidthPercent = mainScreenMapWindowConfig
+        .map { (it.relWidth * 100f).toInt().coerceIn(8, 100) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = (MainScreenMapWindowConfig.DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_WIDTH * 100f).toInt()
+        )
+
+    val mainScreenMapWindowRelHeightPercent = mainScreenMapWindowConfig
+        .map { (it.relHeight * 100f).toInt().coerceIn(8, 100) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = (MainScreenMapWindowConfig.DEFAULT_MAIN_SCREEN_MAP_WINDOW_REL_HEIGHT * 100f).toInt()
         )
 
     val isMainScreenOpenOnBootEnabled = settingsManager.mainScreenOpenOnBootFlow
@@ -890,6 +938,71 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenAddButton(position: MainScreenAddButtonPosition) {
         viewModelScope.launch {
             settingsManager.saveMainScreenAddButton(position)
+        }
+    }
+
+    fun saveMainScreenMapWindowEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenMapWindowEnabled(enabled)
+        }
+    }
+
+    fun saveMainScreenMapWindowLayout(
+        relX: Float,
+        relY: Float,
+        relWidth: Float,
+        relHeight: Float,
+    ) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenMapWindowLayout(relX, relY, relWidth, relHeight)
+        }
+    }
+
+    fun saveMainScreenMapWindowRelXPercent(percent: Int) {
+        viewModelScope.launch {
+            val c = mainScreenMapWindowConfig.value
+            settingsManager.saveMainScreenMapWindowLayout(
+                relX = percent / 100f,
+                relY = c.relY,
+                relWidth = c.relWidth,
+                relHeight = c.relHeight,
+            )
+        }
+    }
+
+    fun saveMainScreenMapWindowRelYPercent(percent: Int) {
+        viewModelScope.launch {
+            val c = mainScreenMapWindowConfig.value
+            settingsManager.saveMainScreenMapWindowLayout(
+                relX = c.relX,
+                relY = percent / 100f,
+                relWidth = c.relWidth,
+                relHeight = c.relHeight,
+            )
+        }
+    }
+
+    fun saveMainScreenMapWindowRelWidthPercent(percent: Int) {
+        viewModelScope.launch {
+            val c = mainScreenMapWindowConfig.value
+            settingsManager.saveMainScreenMapWindowLayout(
+                relX = c.relX,
+                relY = c.relY,
+                relWidth = percent / 100f,
+                relHeight = c.relHeight,
+            )
+        }
+    }
+
+    fun saveMainScreenMapWindowRelHeightPercent(percent: Int) {
+        viewModelScope.launch {
+            val c = mainScreenMapWindowConfig.value
+            settingsManager.saveMainScreenMapWindowLayout(
+                relX = c.relX,
+                relY = c.relY,
+                relWidth = c.relWidth,
+                relHeight = percent / 100f,
+            )
         }
     }
 

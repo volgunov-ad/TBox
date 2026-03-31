@@ -214,6 +214,9 @@
     <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
+    <string name="settings_main_screen_mapkit_window_title">Окно Яндекс.Карт (MapKit)</string>
+    <string name="settings_main_screen_mapkit_window_desc">Показывать на главном экране перемещаемое окно с картой. Долгий тап в левом нижнем углу окна — режим настройки (перемещение: правый верхний угол, размер: правый нижний). Нужен ключ API в local.properties (MAPKIT_API_KEY).</string>
+    <string name="main_screen_map_window_missing_key">Укажите MAPKIT_API_KEY в local.properties и пересоберите приложение.</string>
     <string name="settings_show_main_screen_panel_title">Показывать панель на главном экране</string>
     <string name="main_screen_panel_rel_width_pct">Ширина панели, % экрана (8–100)</string>
     <string name="main_screen_panel_rel_height_pct">Высота панели, % экрана (8–100)</string>

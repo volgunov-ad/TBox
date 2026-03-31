@@ -974,6 +974,103 @@ fun MainScreenPanelRelativeLayoutSettings(
 }
 
 @Composable
+fun MainScreenMapWindowRelativeLayoutSettings(
+    settingsViewModel: SettingsViewModel,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val relX by settingsViewModel.mainScreenMapWindowRelXPercent.collectAsStateWithLifecycle()
+    val relY by settingsViewModel.mainScreenMapWindowRelYPercent.collectAsStateWithLifecycle()
+    val relW by settingsViewModel.mainScreenMapWindowRelWidthPercent.collectAsStateWithLifecycle()
+    val relH by settingsViewModel.mainScreenMapWindowRelHeightPercent.collectAsStateWithLifecycle()
+
+    Column(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.main_screen_panel_rel_width_pct),
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = relW,
+                    onValueChange = { newValue ->
+                        if (newValue in 8..100) {
+                            settingsViewModel.saveMainScreenMapWindowRelWidthPercent(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.main_screen_panel_rel_height_pct),
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = relH,
+                    onValueChange = { newValue ->
+                        if (newValue in 8..100) {
+                            settingsViewModel.saveMainScreenMapWindowRelHeightPercent(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.main_screen_panel_rel_x_pct),
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = relX,
+                    onValueChange = { newValue ->
+                        if (newValue in 0..100) {
+                            settingsViewModel.saveMainScreenMapWindowRelXPercent(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.main_screen_panel_rel_y_pct),
+                    fontSize = 24.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                IntInputField(
+                    value = relY,
+                    onValueChange = { newValue ->
+                        if (newValue in 0..100) {
+                            settingsViewModel.saveMainScreenMapWindowRelYPercent(newValue)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun FloatingDashboardPositionSizeSettings(
     settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier,

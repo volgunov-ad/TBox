@@ -214,6 +214,9 @@
     <string name="settings_main_screen_wallpaper_scale_crop_title">Background scale: Crop (fill screen)</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">On — fill the screen, excess image cropped (ContentScale.Crop). Off — show full image, theme-colored bars if needed (ContentScale.Fit).</string>
     <string name="settings_main_screen_panels_title">Main screen panels</string>
+    <string name="settings_main_screen_mapkit_window_title">Yandex Maps window (MapKit)</string>
+    <string name="settings_main_screen_mapkit_window_desc">Show a movable map window on the main screen. Long-press the bottom-left corner of the window to enter layout mode (move: top-right handle, resize: bottom-right). Requires MAPKIT_API_KEY in local.properties.</string>
+    <string name="main_screen_map_window_missing_key">Set MAPKIT_API_KEY in local.properties and rebuild the app.</string>
     <string name="settings_show_main_screen_panel_title">Show panel on main screen</string>
     <string name="main_screen_panel_rel_width_pct">Panel width, % of screen (8–100)</string>
     <string name="main_screen_panel_rel_height_pct">Panel height, % of screen (8–100)</string>
