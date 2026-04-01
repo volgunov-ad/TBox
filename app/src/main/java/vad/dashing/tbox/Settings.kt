@@ -652,7 +652,7 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveSplitTripTimeMinutes(minutes: Int) {
         context.settingsDataStore.edit { preferences ->
-            preferences[SPLIT_TRIP_TIME_MINUTES_KEY] = minutes.coerceIn(1, 120)
+            preferences[SPLIT_TRIP_TIME_MINUTES_KEY] = minutes.coerceIn(1, 100000)
         }
     }
 
