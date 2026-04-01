@@ -47,8 +47,8 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.CanDataViewModel
-import vad.dashing.tbox.DeferredMainActivityRequest
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
@@ -480,8 +480,7 @@ private fun openSelectedPlayer(context: Context, packageName: String) {
             null
         }
         ?: return
-    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(context)
+    MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
     runCatching {
         context.startActivity(launchIntent)
     }
