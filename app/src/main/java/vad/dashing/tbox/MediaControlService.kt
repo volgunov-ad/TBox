@@ -696,6 +696,7 @@ private fun sendMediaPlayKeyEvent(context: Context, packageName: String) {
 private fun launchPlayerApp(context: Context, packageName: String) {
     val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
     launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(context)
     runCatching {
         context.startActivity(launchIntent)
     }
