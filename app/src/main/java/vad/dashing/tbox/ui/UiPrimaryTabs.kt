@@ -588,7 +588,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_split_trip_time_title),
             "",
             1,
-            120
+            100000
         )
         SettingSwitch(
             isExpertModeEnabled,
