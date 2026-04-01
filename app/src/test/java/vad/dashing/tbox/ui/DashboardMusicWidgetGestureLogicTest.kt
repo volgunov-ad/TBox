@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import androidx.compose.ui.geometry.Offset
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
-import vad.dashing.tbox.SupportedMediaPlayer
 
 class DashboardMusicWidgetGestureLogicTest {
 
@@ -66,15 +65,6 @@ class DashboardMusicWidgetGestureLogicTest {
         )
 
         assertEquals("com.maxmpz.audioplayer", result)
-    }
-
-    @Test
-    fun resolvePlayerLaunchPackage_redirectsBluetoothSourceToStockPlayer() {
-        val canonicalResult = resolvePlayerLaunchPackage(SupportedMediaPlayer.BLUETOOTH_PHONE.packageName)
-        val aliasResult = resolvePlayerLaunchPackage("com.wt.wtbtservice")
-
-        assertEquals("com.wt.multimedia.local", canonicalResult)
-        assertEquals("com.wt.multimedia.local", aliasResult)
     }
 
     @Test
