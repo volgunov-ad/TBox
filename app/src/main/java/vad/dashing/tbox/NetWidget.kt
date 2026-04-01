@@ -296,8 +296,7 @@ class NetWidget : AppWidgetProvider() {
 
     private fun getPendingIntent(context: Context): android.app.PendingIntent {
         if (cachedPendingIntent == null) {
-            cachedPendingIntent = Intent(context, MainActivity::class.java).let { intent ->
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            cachedPendingIntent = MainActivityIntentHelper.createBringToFrontIntent(context).let { intent ->
                 android.app.PendingIntent.getActivity(
                     context,
                     0,

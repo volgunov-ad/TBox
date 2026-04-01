@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 class TboxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        MainActivityForegroundTracker.register(this)
         val appDataManager = AppDataManager(this)
         val settingsManager = SettingsManager(this)
         runBlocking {
