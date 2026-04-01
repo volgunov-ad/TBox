@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
 
 /** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
-private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 2500L
+private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 3500L
 
 enum class SupportedMediaPlayer(
     val packageName: String,

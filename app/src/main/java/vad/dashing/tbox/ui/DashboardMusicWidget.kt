@@ -522,7 +522,7 @@ internal fun resolveNextCarouselPackage(
 }
 
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
-private const val AUTO_PLAY_VERIFY_DELAY_MS = 2500L
+private const val AUTO_PLAY_VERIFY_DELAY_MS = 3500L
 private const val ENGINE_AUTO_PLAY_WAIT_MS = 120_000L
 private const val PROGRESS_REFRESH_INTERVAL_MS = 5000L
 
