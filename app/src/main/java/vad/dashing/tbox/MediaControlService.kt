@@ -10,11 +10,19 @@ import android.media.session.PlaybackState
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.provider.Settings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
+
+/** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
+private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 3500L
 
 enum class SupportedMediaPlayer(
     val packageName: String,
@@ -174,6 +182,8 @@ fun collectMediaPlayersFromWidgetConfigs(
 }
 
 object SharedMediaControlService {
+    private val launchPlayerVerifyScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     private var appContext: Context? = null
     private var mediaSessionManager: MediaSessionManager? = null
     private var activeSessionsListenerRegistered: Boolean = false
@@ -327,7 +337,7 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
-        launchPlayerApp(context.applicationContext, targetPackage)
+        launchPlayerApp(context.applicationContext, targetPackage, scheduleColdStartPlayRetry = true)
     }
 
     fun play(
@@ -357,7 +367,7 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
-        launchPlayerApp(context.applicationContext, targetPackage)
+        launchPlayerApp(context.applicationContext, targetPackage, scheduleColdStartPlayRetry = true)
     }
 
     fun skipToNext(selectedPackages: Set<String>, preferredPackage: String = "") {
@@ -370,6 +380,25 @@ object SharedMediaControlService {
             )
                 ?.transportControls
                 ?.skipToNext()
+        }
+    }
+
+    internal fun scheduleColdStartPlayRetryIfNeeded(appContext: Context, targetPackage: String) {
+        launchPlayerVerifyScope.launch {
+            delay(LAUNCH_PLAYER_VERIFY_DELAY_MS)
+            val needsRetry = synchronized(this@SharedMediaControlService) {
+                initializeLocked(appContext)
+                syncControllersLocked()
+                val controller = resolveControllerLocked(
+                    selectedPackages = setOf(targetPackage),
+                    preferredPackage = targetPackage,
+                    strictPreferred = true
+                )
+                controller == null || !controller.playbackState.isPlayingState()
+            }
+            if (!needsRetry) return@launch
+            sendMediaPlayKeyEvent(appContext, targetPackage)
+            launchPlayerApp(appContext, targetPackage, scheduleColdStartPlayRetry = false)
         }
     }
 
@@ -693,10 +722,18 @@ private fun sendMediaPlayKeyEvent(context: Context, packageName: String) {
     context.sendOrderedBroadcast(keyUp, null)
 }
 
-private fun launchPlayerApp(context: Context, packageName: String) {
+private fun launchPlayerApp(
+    context: Context,
+    packageName: String,
+    scheduleColdStartPlayRetry: Boolean = true
+) {
     val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
-    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
+    DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(context)
     runCatching {
         context.startActivity(launchIntent)
+    }
+    if (scheduleColdStartPlayRetry) {
+        SharedMediaControlService.scheduleColdStartPlayRetryIfNeeded(context.applicationContext, packageName)
     }
 }

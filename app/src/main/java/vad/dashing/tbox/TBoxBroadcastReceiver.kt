@@ -107,15 +107,7 @@ class TboxBroadcastReceiver : BroadcastReceiver() {
     }
 
     private fun showMainActivity(context: Context) {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            // Добавляем любые дополнительные данные, если нужно
-            // putExtra("key", "value")
-
-            // Можно также установить действие, если MainActivity обрабатывает разные действия
-            // action = "CUSTOM_ACTION"
-        }
-
+        val intent = MainActivityIntentHelper.createBringToFrontIntent(context)
         context.startActivity(intent)
     }
 

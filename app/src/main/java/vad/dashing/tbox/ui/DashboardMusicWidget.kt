@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
@@ -479,7 +480,7 @@ private fun openSelectedPlayer(context: Context, packageName: String) {
             null
         }
         ?: return
-    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
     runCatching {
         context.startActivity(launchIntent)
     }
@@ -521,7 +522,7 @@ internal fun resolveNextCarouselPackage(
 }
 
 internal const val CAROUSEL_SWIPE_THRESHOLD_PX = 80f
-private const val AUTO_PLAY_VERIFY_DELAY_MS = 2500L
+private const val AUTO_PLAY_VERIFY_DELAY_MS = 3500L
 private const val ENGINE_AUTO_PLAY_WAIT_MS = 120_000L
 private const val PROGRESS_REFRESH_INTERVAL_MS = 5000L
 

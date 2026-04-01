@@ -94,6 +94,8 @@ class BackgroundService : Service() {
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
     private var getSMSJob: Job? = null
+    /** Serializes delayed / repeated "open MainActivity" commands: each new request replaces the previous. */
+    private var openMainActivityJob: Job? = null
     private var packetSilenceChecks: Int = 0
 
     private var netUpdateTime: Long = 5000
@@ -224,6 +226,12 @@ class BackgroundService : Service() {
          * persist snapshot). Used after settings backup import while the service is running.
          */
         const val ACTION_RELOAD_TRIPS_FROM_STORE = "vad.dashing.tbox.RELOAD_TRIPS_FROM_STORE"
+        /**
+         * Bring [MainActivity] to the foreground (singleTask). Optional delay via [EXTRA_OPEN_MAIN_DELAY_MS].
+         * Repeated intents cancel the previous scheduled launch and start a new timer.
+         */
+        const val ACTION_OPEN_MAIN_ACTIVITY = "vad.dashing.tbox.OPEN_MAIN_ACTIVITY"
+        const val EXTRA_OPEN_MAIN_DELAY_MS = "vad.dashing.tbox.EXTRA_OPEN_MAIN_DELAY_MS"
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
@@ -383,6 +391,8 @@ class BackgroundService : Service() {
             }
             ACTION_STOP -> {
                 if (isRunning) {
+                    openMainActivityJob?.cancel()
+                    openMainActivityJob = null
                     isRunning = false
                     TboxRepository.addLog("INFO", "Service", "Stop service")
                     stopNetUpdater()
@@ -460,6 +470,10 @@ class BackgroundService : Service() {
                         finishActiveTripAndStartNew()
                     }
                 }
+            }
+            ACTION_OPEN_MAIN_ACTIVITY -> {
+                val delayMs = intent.getLongExtra(EXTRA_OPEN_MAIN_DELAY_MS, 0L).coerceAtLeast(0L)
+                scheduleOpenMainActivity(delayMs)
             }
         }
         return START_STICKY
@@ -1934,9 +1948,27 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob, getSMSJob
+            settingsListenerJob, dataListenerJob, getSMSJob, openMainActivityJob
         ).forEach { job ->
             job?.cancel()
+        }
+    }
+
+    private fun scheduleOpenMainActivity(delayMs: Long) {
+        openMainActivityJob?.cancel()
+        openMainActivityJob = scope.launch(exceptionHandler) {
+            if (delayMs > 0) {
+                delay(delayMs)
+            }
+            withContext(Dispatchers.Main) {
+                try {
+                    val launchIntent = MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
+                    startActivity(launchIntent)
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "Open MainActivity failed", e)
+                    TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")
+                }
+            }
         }
     }
 
@@ -3117,14 +3149,7 @@ class BackgroundService : Service() {
                 val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
                 if (!enabled) return@launch
                 settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
-                withContext(Dispatchers.Main) {
-                    val launchIntent = Intent(this@BackgroundService, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                            Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    }
-                    startActivity(launchIntent)
-                }
+                scheduleOpenMainActivity(0L)
             } catch (e: Exception) {
                 Log.e("BackgroundService", "Open main screen after boot failed", e)
                 TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")

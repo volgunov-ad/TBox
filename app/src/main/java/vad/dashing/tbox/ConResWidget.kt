@@ -209,8 +209,7 @@ class ConResWidget : AppWidgetProvider() {
 
     private fun getMainPendingIntent(context: Context): android.app.PendingIntent {
         if (cachedMainPendingIntent == null) {
-            cachedMainPendingIntent = Intent(context, MainActivity::class.java).let { intent ->
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            cachedMainPendingIntent = MainActivityIntentHelper.createBringToFrontIntent(context).let { intent ->
                 android.app.PendingIntent.getActivity(
                     context,
                     0,
