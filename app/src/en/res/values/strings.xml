@@ -77,6 +77,10 @@
     <string name="widget_external_tile_empty">No widget selected</string>
     <string name="widget_external_tile_unavailable">Widget unavailable</string>
     <string name="widget_toggle_advanced">Advanced</string>
+    <string name="widget_toggle_whole_panel">Whole panel</string>
+    <string name="widget_panel_settings_title">Panel settings</string>
+    <string name="widget_color_theme_segment_light">Light theme settings</string>
+    <string name="widget_color_theme_segment_dark">Dark theme settings</string>
     <string name="widget_scale">Widget scale: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_shape">Corner rounding: %1$d</string>
@@ -201,6 +205,7 @@
     <string name="settings_enable_floating_bg_title">Enable floating panel background</string>
     <string name="settings_enable_floating_bg_desc">If disabled, the background is transparent</string>
     <string name="settings_open_app_on_panel_click_title">Open app window on single tap on floating panel element</string>
+    <string name="settings_open_app_on_main_screen_panel_click_title">Open app window on single tap on main screen panel element</string>
     <string name="settings_floating_tbox_disconnect_indicator_title">TBox disconnect indicator</string>
     <string name="settings_floating_rows_title">Number of tile rows in floating panel</string>
     <string name="settings_floating_cols_title">Number of tile columns in floating panel</string>

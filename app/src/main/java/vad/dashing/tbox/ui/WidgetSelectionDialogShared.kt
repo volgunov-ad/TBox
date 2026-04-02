@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
@@ -46,6 +47,7 @@ import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.WidgetPickerActivity
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
@@ -96,6 +98,9 @@ internal class WidgetSelectionDialogState(
         initialConfig.mediaAutoPlayOnlyWhenEngineRunning
     )
     var showAdvancedSettings by mutableStateOf(false)
+    var showWholePanelSettings by mutableStateOf(false)
+    /** 0 = light theme colors, 1 = dark theme colors (advanced settings only). */
+    var advancedColorThemeSegment by mutableIntStateOf(0)
     var launcherAppPackage by mutableStateOf(
         if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
             initialConfig.launcherAppPackage
@@ -184,12 +189,135 @@ internal fun ExternalAppWidgetPickerSection(
 }
 
 @Composable
+private fun WidgetColorThemeSegmentRow(
+    selectedSegment: Int,
+    onSegmentSelected: (Int) -> Unit,
+    enabled: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedButton(
+            onClick = { onSegmentSelected(0) },
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            border = BorderStroke(
+                1.dp,
+                if (selectedSegment == 0) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline
+                }
+            ),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (selectedSegment == 0) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                } else {
+                    Color.Transparent
+                },
+                contentColor = if (selectedSegment == 0) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+        ) {
+            Text(
+                text = stringResource(R.string.widget_color_theme_segment_light),
+                fontSize = 18.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        OutlinedButton(
+            onClick = { onSegmentSelected(1) },
+            enabled = enabled,
+            modifier = Modifier.weight(1f),
+            border = BorderStroke(
+                1.dp,
+                if (selectedSegment == 1) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline
+                }
+            ),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (selectedSegment == 1) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                } else {
+                    Color.Transparent
+                },
+                contentColor = if (selectedSegment == 1) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+        ) {
+            Text(
+                text = stringResource(R.string.widget_color_theme_segment_dark),
+                fontSize = 18.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun MainScreenPanelWholeSettingsSection(
+    settingsViewModel: SettingsViewModel,
+    panelId: String,
+    enabled: Boolean,
+) {
+    val panelConfig by settingsViewModel.mainScreenPanelConfig(panelId)
+        .collectAsStateWithLifecycle()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SettingSwitch(
+            panelConfig.clickAction,
+            { settingsViewModel.saveMainScreenPanelClickAction(it, panelId) },
+            stringResource(R.string.settings_open_app_on_main_screen_panel_click_title),
+            "",
+            enabled
+        )
+        SettingSwitch(
+            panelConfig.showTboxDisconnectIndicator,
+            { settingsViewModel.saveMainScreenPanelShowTboxDisconnectIndicator(it, panelId) },
+            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
+            "",
+            enabled
+        )
+        SettingDropdownGeneric(
+            panelConfig.rows,
+            { settingsViewModel.saveMainScreenPanelRows(it, panelId) },
+            stringResource(R.string.settings_floating_rows_title),
+            "",
+            enabled,
+            listOf(1, 2, 3, 4, 5, 6)
+        )
+        SettingDropdownGeneric(
+            panelConfig.cols,
+            { settingsViewModel.saveMainScreenPanelCols(it, panelId) },
+            stringResource(R.string.settings_floating_cols_title),
+            "",
+            enabled,
+            listOf(1, 2, 3, 4, 5, 6)
+        )
+    }
+}
+
+@Composable
 internal fun WidgetSelectionDialogForm(
     titleText: String,
     state: WidgetSelectionDialogState,
     modifier: Modifier = Modifier,
     dataKeyFilter: (String) -> Boolean = { true },
-    bottomContent: (@Composable () -> Unit)? = null
+    bottomContent: (@Composable () -> Unit)? = null,
+    mainScreenPanelSettingsViewModel: SettingsViewModel? = null,
+    mainScreenPanelId: String = "",
 ) {
     val context = LocalContext.current
     val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
@@ -208,7 +336,24 @@ internal fun WidgetSelectionDialogForm(
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            if (state.showAdvancedSettings) {
+            when {
+                state.showWholePanelSettings &&
+                    mainScreenPanelSettingsViewModel != null &&
+                    mainScreenPanelId.isNotBlank() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        MainScreenPanelWholeSettingsSection(
+                            settingsViewModel = mainScreenPanelSettingsViewModel,
+                            panelId = mainScreenPanelId,
+                            enabled = true
+                        )
+                    }
+                }
+                state.showAdvancedSettings -> {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -327,54 +472,63 @@ internal fun WidgetSelectionDialogForm(
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
-                    WidgetTextColorSetting(
-                        title = stringResource(R.string.widget_text_color_light),
-                        colorValue = state.textColorLight,
-                        enabled = state.togglesEnabled,
-                        onColorChange = { state.textColorLight = it },
-                        presetColors = listOf(
-                            LIGHT_THEME_TEXT_COLOR_PRESET_1_INT,
-                            LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
-                        )
+                    WidgetColorThemeSegmentRow(
+                        selectedSegment = state.advancedColorThemeSegment,
+                        onSegmentSelected = { state.advancedColorThemeSegment = it },
+                        enabled = state.togglesEnabled
                     )
-                    WidgetTextColorSetting(
-                        title = stringResource(R.string.widget_text_color_dark),
-                        colorValue = state.textColorDark,
-                        enabled = state.togglesEnabled,
-                        onColorChange = { state.textColorDark = it },
-                        presetColors = listOf(
-                            DARK_THEME_TEXT_COLOR_PRESET_1_INT,
-                            DARK_THEME_TEXT_COLOR_PRESET_2_INT
+                    if (state.advancedColorThemeSegment == 0) {
+                        WidgetTextColorSetting(
+                            title = stringResource(R.string.widget_text_color_light),
+                            colorValue = state.textColorLight,
+                            enabled = state.togglesEnabled,
+                            onColorChange = { state.textColorLight = it },
+                            presetColors = listOf(
+                                LIGHT_THEME_TEXT_COLOR_PRESET_1_INT,
+                                LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
+                            )
                         )
-                    )
-                    WidgetTextColorSetting(
-                        title = stringResource(R.string.widget_background_color_light),
-                        colorValue = state.backgroundColorLight,
-                        enabled = state.togglesEnabled,
-                        onColorChange = { state.backgroundColorLight = it },
-                        presetColors = listOf(
-                            LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT,
-                            LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+                        WidgetTextColorSetting(
+                            title = stringResource(R.string.widget_background_color_light),
+                            colorValue = state.backgroundColorLight,
+                            enabled = state.togglesEnabled,
+                            onColorChange = { state.backgroundColorLight = it },
+                            presetColors = listOf(
+                                LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT,
+                                LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+                            )
                         )
-                    )
-                    WidgetTextColorSetting(
-                        title = stringResource(R.string.widget_background_color_dark),
-                        colorValue = state.backgroundColorDark,
-                        enabled = state.togglesEnabled,
-                        onColorChange = { state.backgroundColorDark = it },
-                        presetColors = listOf(
-                            DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT,
-                            DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+                    } else {
+                        WidgetTextColorSetting(
+                            title = stringResource(R.string.widget_text_color_dark),
+                            colorValue = state.textColorDark,
+                            enabled = state.togglesEnabled,
+                            onColorChange = { state.textColorDark = it },
+                            presetColors = listOf(
+                                DARK_THEME_TEXT_COLOR_PRESET_1_INT,
+                                DARK_THEME_TEXT_COLOR_PRESET_2_INT
+                            )
                         )
-                    )
+                        WidgetTextColorSetting(
+                            title = stringResource(R.string.widget_background_color_dark),
+                            colorValue = state.backgroundColorDark,
+                            enabled = state.togglesEnabled,
+                            onColorChange = { state.backgroundColorDark = it },
+                            presetColors = listOf(
+                                DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT,
+                                DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+                            )
+                        )
+                    }
                 }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                        .padding(12.dp)
-                ) {
+                }
+                else -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                            .padding(12.dp)
+                    ) {
                     availableOptions.forEach { (key, displayName) ->
                         Row(
                             modifier = Modifier
@@ -408,6 +562,7 @@ internal fun WidgetSelectionDialogForm(
                             )
                         }
                     }
+                    }
                 }
             }
         }
@@ -422,7 +577,8 @@ internal fun WidgetSelectionDialogActions(
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
     saveTextFontWeight: FontWeight = FontWeight.Normal,
-    leadingExtra: (@Composable RowScope.() -> Unit)? = null
+    leadingExtra: (@Composable RowScope.() -> Unit)? = null,
+    showWholePanelButton: Boolean = false,
 ) {
     Row(
         modifier = modifier,
@@ -433,32 +589,88 @@ internal fun WidgetSelectionDialogActions(
         if (leadingExtra != null) {
             Spacer(modifier = Modifier.width(8.dp))
         }
-        OutlinedButton(
-            onClick = { state.showAdvancedSettings = !state.showAdvancedSettings },
-            border = BorderStroke(
-                width = 1.dp,
-                color = if (state.showAdvancedSettings) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.outline
-                }
-            ),
-            colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = if (state.showAdvancedSettings) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                } else {
-                    Color.Transparent
-                },
-                contentColor = if (state.showAdvancedSettings) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }
-            )
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = stringResource(R.string.widget_toggle_advanced), fontSize = 20.sp)
+            OutlinedButton(
+                onClick = {
+                    val next = !state.showAdvancedSettings
+                    state.showAdvancedSettings = next
+                    if (next) {
+                        state.showWholePanelSettings = false
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (state.showAdvancedSettings) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    }
+                ),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (state.showAdvancedSettings) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                    } else {
+                        Color.Transparent
+                    },
+                    contentColor = if (state.showAdvancedSettings) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+            ) {
+                Text(
+                    text = stringResource(R.string.widget_toggle_advanced),
+                    fontSize = 18.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (showWholePanelButton) {
+                OutlinedButton(
+                    onClick = {
+                        val next = !state.showWholePanelSettings
+                        state.showWholePanelSettings = next
+                        if (next) {
+                            state.showAdvancedSettings = false
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (state.showWholePanelSettings) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        }
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (state.showWholePanelSettings) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                        } else {
+                            Color.Transparent
+                        },
+                        contentColor = if (state.showWholePanelSettings) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                ) {
+                    Text(
+                        text = stringResource(R.string.widget_toggle_whole_panel),
+                        fontSize = 18.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
-        Box(modifier = Modifier.weight(1f))
         OutlinedButton(
             onClick = onDismiss,
             modifier = Modifier.padding(end = 12.dp)

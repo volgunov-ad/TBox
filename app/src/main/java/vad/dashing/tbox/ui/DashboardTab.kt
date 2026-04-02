@@ -356,15 +356,20 @@ fun MainScreenPanelWidgetSelectionDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
         text = {
             WidgetSelectionDialogForm(
-                titleText = if (state.showAdvancedSettings) {
-                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                } else {
-                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
+                titleText = when {
+                    state.showWholePanelSettings ->
+                        stringResource(R.string.widget_panel_settings_title)
+                    state.showAdvancedSettings ->
+                        stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                    else ->
+                        stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                 },
                 state = state,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp),
+                mainScreenPanelSettingsViewModel = settingsViewModel,
+                mainScreenPanelId = panelId,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -391,6 +396,7 @@ fun MainScreenPanelWidgetSelectionDialog(
         },
         confirmButton = {
             WidgetSelectionDialogActions(
+                showWholePanelButton = true,
                 leadingExtra = {
                     OutlinedButton(
                         onClick = {
