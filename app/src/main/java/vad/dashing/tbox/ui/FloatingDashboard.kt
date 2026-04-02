@@ -457,14 +457,19 @@ fun OverlayWidgetSelectionDialog(
                 .padding(8.dp)
         ) {
             WidgetSelectionDialogForm(
-                titleText = if (state.showAdvancedSettings) {
-                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                } else {
-                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
+                titleText = when {
+                    state.showWholePanelSettings ->
+                        stringResource(R.string.widget_panel_settings_title)
+                    state.showAdvancedSettings ->
+                        stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                    else ->
+                        stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                 },
                 state = state,
                 modifier = Modifier
                     .weight(1f),
+                floatingDashboardSettingsViewModel = settingsViewModel,
+                floatingDashboardPanelId = panelId,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -491,6 +496,7 @@ fun OverlayWidgetSelectionDialog(
 
             // Кнопки действий
             WidgetSelectionDialogActions(
+                showWholePanelButton = true,
                 state = state,
                 onDismiss = onDismiss,
                 onSave = {
@@ -526,8 +532,7 @@ fun OverlayWidgetSelectionDialog(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 20.dp),
-                saveTextFontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    .padding(top = 20.dp)
             )
         }
     }

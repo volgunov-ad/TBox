@@ -1085,15 +1085,25 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateFloatingDashboard(panelId) { it.copy(widgetsConfig = config) }
     }
 
-    fun saveFloatingDashboardRows(rows: Int) {
-        if (rows in 1..6) {
-            updateSelectedFloatingDashboard { it.copy(rows = rows) }
+    fun saveFloatingDashboardRows(rows: Int, panelId: String? = null) {
+        if (rows !in 1..6) return
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
+            { it.copy(rows = rows) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
         }
     }
 
-    fun saveFloatingDashboardCols(cols: Int) {
-        if (cols in 1..6) {
-            updateSelectedFloatingDashboard { it.copy(cols = cols) }
+    fun saveFloatingDashboardCols(cols: Int, panelId: String? = null) {
+        if (cols !in 1..6) return
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
+            { it.copy(cols = cols) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
         }
     }
 
@@ -1121,12 +1131,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateFloatingDashboard(panelId) { it.copy(startX = x, startY = y) }
     }
 
-    fun saveFloatingDashboardClickAction(enabled: Boolean) {
-        updateSelectedFloatingDashboard { it.copy(clickAction = enabled) }
+    fun saveFloatingDashboardClickAction(enabled: Boolean, panelId: String? = null) {
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
+            { it.copy(clickAction = enabled) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
+        }
     }
 
-    fun saveFloatingDashboardShowTboxDisconnectIndicator(enabled: Boolean) {
-        updateSelectedFloatingDashboard { it.copy(showTboxDisconnectIndicator = enabled) }
+    fun saveFloatingDashboardShowTboxDisconnectIndicator(
+        enabled: Boolean,
+        panelId: String? = null
+    ) {
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
+            { it.copy(showTboxDisconnectIndicator = enabled) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
+        }
     }
 
     fun saveFloatingDashboardName(panelId: String, name: String) {

@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -61,6 +59,8 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_1_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
+
+private val WidgetSelectionDialogActionButtonFontSize = 22.sp
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
@@ -277,13 +277,6 @@ private fun MainScreenPanelWholeSettingsSection(
         .collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxWidth()) {
         SettingSwitch(
-            panelConfig.clickAction,
-            { settingsViewModel.saveMainScreenPanelClickAction(it, panelId) },
-            stringResource(R.string.settings_open_app_on_main_screen_panel_click_title),
-            "",
-            enabled
-        )
-        SettingSwitch(
             panelConfig.showTboxDisconnectIndicator,
             { settingsViewModel.saveMainScreenPanelShowTboxDisconnectIndicator(it, panelId) },
             stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
@@ -310,6 +303,48 @@ private fun MainScreenPanelWholeSettingsSection(
 }
 
 @Composable
+private fun FloatingDashboardWholeSettingsSection(
+    settingsViewModel: SettingsViewModel,
+    panelId: String,
+    enabled: Boolean,
+) {
+    val panelConfig by settingsViewModel.floatingDashboardConfig(panelId)
+        .collectAsStateWithLifecycle()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SettingSwitch(
+            panelConfig.clickAction,
+            { settingsViewModel.saveFloatingDashboardClickAction(it, panelId) },
+            stringResource(R.string.settings_open_app_on_panel_click_title),
+            "",
+            enabled
+        )
+        SettingSwitch(
+            panelConfig.showTboxDisconnectIndicator,
+            { settingsViewModel.saveFloatingDashboardShowTboxDisconnectIndicator(it, panelId) },
+            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
+            "",
+            enabled
+        )
+        SettingDropdownGeneric(
+            panelConfig.rows,
+            { settingsViewModel.saveFloatingDashboardRows(it, panelId) },
+            stringResource(R.string.settings_floating_rows_title),
+            "",
+            enabled,
+            listOf(1, 2, 3, 4, 5, 6)
+        )
+        SettingDropdownGeneric(
+            panelConfig.cols,
+            { settingsViewModel.saveFloatingDashboardCols(it, panelId) },
+            stringResource(R.string.settings_floating_cols_title),
+            "",
+            enabled,
+            listOf(1, 2, 3, 4, 5, 6)
+        )
+    }
+}
+
+@Composable
 internal fun WidgetSelectionDialogForm(
     titleText: String,
     state: WidgetSelectionDialogState,
@@ -318,6 +353,8 @@ internal fun WidgetSelectionDialogForm(
     bottomContent: (@Composable () -> Unit)? = null,
     mainScreenPanelSettingsViewModel: SettingsViewModel? = null,
     mainScreenPanelId: String = "",
+    floatingDashboardSettingsViewModel: SettingsViewModel? = null,
+    floatingDashboardPanelId: String = "",
 ) {
     val context = LocalContext.current
     val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
@@ -349,6 +386,22 @@ internal fun WidgetSelectionDialogForm(
                         MainScreenPanelWholeSettingsSection(
                             settingsViewModel = mainScreenPanelSettingsViewModel,
                             panelId = mainScreenPanelId,
+                            enabled = true
+                        )
+                    }
+                }
+                state.showWholePanelSettings &&
+                    floatingDashboardSettingsViewModel != null &&
+                    floatingDashboardPanelId.isNotBlank() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        FloatingDashboardWholeSettingsSection(
+                            settingsViewModel = floatingDashboardSettingsViewModel,
+                            panelId = floatingDashboardPanelId,
                             enabled = true
                         )
                     }
@@ -577,18 +630,14 @@ internal fun WidgetSelectionDialogActions(
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
     saveTextFontWeight: FontWeight = FontWeight.Normal,
-    leadingExtra: (@Composable RowScope.() -> Unit)? = null,
     showWholePanelButton: Boolean = false,
+    deleteAfterWholePanel: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        leadingExtra?.invoke(this)
-        if (leadingExtra != null) {
-            Spacer(modifier = Modifier.width(8.dp))
-        }
         Row(
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -626,7 +675,7 @@ internal fun WidgetSelectionDialogActions(
             ) {
                 Text(
                     text = stringResource(R.string.widget_toggle_advanced),
-                    fontSize = 18.sp,
+                    fontSize = WidgetSelectionDialogActionButtonFontSize,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -664,18 +713,22 @@ internal fun WidgetSelectionDialogActions(
                 ) {
                     Text(
                         text = stringResource(R.string.widget_toggle_whole_panel),
-                        fontSize = 18.sp,
+                        fontSize = WidgetSelectionDialogActionButtonFontSize,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
+            deleteAfterWholePanel?.invoke(this)
         }
         OutlinedButton(
             onClick = onDismiss,
             modifier = Modifier.padding(end = 12.dp)
         ) {
-            Text(text = stringResource(R.string.action_cancel), fontSize = 24.sp)
+            Text(
+                text = stringResource(R.string.action_cancel),
+                fontSize = WidgetSelectionDialogActionButtonFontSize
+            )
         }
         Button(
             enabled = state.canSaveSelection,
@@ -683,7 +736,7 @@ internal fun WidgetSelectionDialogActions(
         ) {
             Text(
                 text = stringResource(R.string.action_save),
-                fontSize = 24.sp,
+                fontSize = WidgetSelectionDialogActionButtonFontSize,
                 fontWeight = saveTextFontWeight
             )
         }

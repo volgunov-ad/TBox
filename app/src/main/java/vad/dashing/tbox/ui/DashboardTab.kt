@@ -397,18 +397,22 @@ fun MainScreenPanelWidgetSelectionDialog(
         confirmButton = {
             WidgetSelectionDialogActions(
                 showWholePanelButton = true,
-                leadingExtra = {
+                deleteAfterWholePanel = {
                     OutlinedButton(
                         onClick = {
                             onDeletePanel()
                             onDismiss()
                         },
+                        modifier = Modifier.weight(1f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Text(text = stringResource(R.string.action_delete), fontSize = 20.sp)
+                        Text(
+                            text = stringResource(R.string.action_delete),
+                            fontSize = 22.sp
+                        )
                     }
                 },
                 state = state,
