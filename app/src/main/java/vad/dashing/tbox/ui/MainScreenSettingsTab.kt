@@ -36,6 +36,12 @@ fun MainScreenSettingsTab(
     val mainScreenPanelDeleteInProgressId by
         settingsViewModel.mainScreenPanelDeleteInProgressId.collectAsStateWithLifecycle()
     val isMainScreenPanelEnabled by settingsViewModel.isMainScreenPanelEnabled.collectAsStateWithLifecycle()
+    val isMainScreenPanelClickAction by
+        settingsViewModel.isMainScreenPanelClickAction.collectAsStateWithLifecycle()
+    val isMainScreenPanelShowTboxDisconnectIndicator by
+        settingsViewModel.isMainScreenPanelShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
+    val mainScreenPanelRows by settingsViewModel.mainScreenPanelRows.collectAsStateWithLifecycle()
+    val mainScreenPanelCols by settingsViewModel.mainScreenPanelCols.collectAsStateWithLifecycle()
     val isMainScreenOpenOnBootEnabled by
         settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
     val isMainScreenWallpaperLightSet by
@@ -176,6 +182,44 @@ fun MainScreenSettingsTab(
             stringResource(R.string.settings_show_main_screen_panel_title),
             "",
             hasMainScreenPanels
+        )
+        SettingSwitch(
+            isMainScreenPanelClickAction,
+            { enabled ->
+                settingsViewModel.saveMainScreenPanelClickAction(enabled)
+            },
+            stringResource(R.string.settings_open_app_on_main_screen_panel_click_title),
+            "",
+            hasMainScreenPanels
+        )
+        SettingSwitch(
+            isMainScreenPanelShowTboxDisconnectIndicator,
+            { enabled ->
+                settingsViewModel.saveMainScreenPanelShowTboxDisconnectIndicator(enabled)
+            },
+            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
+            "",
+            hasMainScreenPanels
+        )
+        SettingDropdownGeneric(
+            mainScreenPanelRows,
+            { rows ->
+                settingsViewModel.saveMainScreenPanelRows(rows)
+            },
+            stringResource(R.string.settings_floating_rows_title),
+            "",
+            hasMainScreenPanels,
+            listOf(1, 2, 3, 4, 5, 6)
+        )
+        SettingDropdownGeneric(
+            mainScreenPanelCols,
+            { cols ->
+                settingsViewModel.saveMainScreenPanelCols(cols)
+            },
+            stringResource(R.string.settings_floating_cols_title),
+            "",
+            hasMainScreenPanels,
+            listOf(1, 2, 3, 4, 5, 6)
         )
         MainScreenPanelRelativeLayoutSettings(
             settingsViewModel = settingsViewModel,
