@@ -11,6 +11,8 @@ import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 
@@ -27,8 +29,6 @@ fun DashboardWidgetRenderer(
     tboxConnected: Boolean,
     restartEnabled: Boolean,
     onTripFinishAndStart: () -> Unit,
-    /** Single tap on active-trip tiles: open Trips tab (then usual onClick for launcher / floating clickAction). */
-    onActiveTripNavigateToTripsTab: () -> Unit = {},
     widgetTextColor: Color,
     widgetBackgroundColor: Color,
     onClick: () -> Unit,
@@ -270,17 +270,12 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        "activeTripWidget", "activeTripWidgetSimple" -> {
+        ACTIVE_TRIP_WIDGET_DATA_KEY, ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY -> {
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
                 showTitle = widgetConfig.showTitle,
-                onClick = {
-                    if (!isEditMode) {
-                        onActiveTripNavigateToTripsTab()
-                    }
-                    onClick()
-                },
+                onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
                     if (appDataViewModel.activeTrip.value?.isActive == true) {
