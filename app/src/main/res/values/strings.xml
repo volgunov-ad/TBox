@@ -205,6 +205,7 @@
     <string name="settings_enable_floating_bg_title">Включить фон плавающей панели</string>
     <string name="settings_enable_floating_bg_desc">Если выключено, то фон будет прозрачный</string>
     <string name="settings_open_app_on_panel_click_title">Открывать окно программы при одиночном нажатии на элемент плавающей панели</string>
+    <string name="settings_open_app_on_main_screen_panel_click_title">Открывать окно программы при одиночном нажатии на элемент панели главного экрана</string>
     <string name="settings_floating_tbox_disconnect_indicator_title">Индикатор отключения TBox</string>
     <string name="settings_floating_rows_title">Количество строк плиток плавающей панели</string>
     <string name="settings_floating_cols_title">Количество столбцов плиток плавающей панели</string>

@@ -112,7 +112,7 @@ internal class WidgetSelectionDialogState(
     var wholePanelShowTboxDisconnect by mutableStateOf(false)
     var wholePanelRows by mutableIntStateOf(2)
     var wholePanelCols by mutableIntStateOf(3)
-    /** Floating whole-panel only; main-screen panel omits click toggle in UI. */
+    /** Main-screen and floating whole-panel draft for clickAction. */
     var wholePanelClickAction by mutableStateOf(false)
     /**
      * True after draft was loaded from persisted config when user opened «Вся панель» in this dialog.
@@ -126,6 +126,7 @@ internal class WidgetSelectionDialogState(
         wholePanelShowTboxDisconnect = cfg.showTboxDisconnectIndicator
         wholePanelRows = cfg.rows
         wholePanelCols = cfg.cols
+        wholePanelClickAction = cfg.clickAction
     }
 
     fun syncWholePanelDraftFromFloating(cfg: FloatingDashboardConfig) {
@@ -322,6 +323,13 @@ private fun MainScreenPanelWholeSettingsSection(
                 )
             },
             textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+        )
+        SettingSwitch(
+            state.wholePanelClickAction,
+            { state.wholePanelClickAction = it },
+            stringResource(R.string.settings_open_app_on_main_screen_panel_click_title),
+            "",
+            enabled
         )
         SettingSwitch(
             state.wholePanelShowTboxDisconnect,
@@ -939,7 +947,8 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         name = state.wholePanelNameDraft.trim(),
         rows = state.wholePanelRows,
         cols = state.wholePanelCols,
-        showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect
+        showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
+        clickAction = state.wholePanelClickAction
     )
 }
 

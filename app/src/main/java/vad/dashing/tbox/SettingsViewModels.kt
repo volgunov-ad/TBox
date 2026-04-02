@@ -26,6 +26,7 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val rows: Int,
     val cols: Int,
     val showTboxDisconnectIndicator: Boolean,
+    val clickAction: Boolean,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -952,7 +953,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                         rows = wholePanelFromWidgetDialog.rows.coerceIn(1, 6),
                         cols = wholePanelFromWidgetDialog.cols.coerceIn(1, 6),
                         showTboxDisconnectIndicator =
-                            wholePanelFromWidgetDialog.showTboxDisconnectIndicator
+                            wholePanelFromWidgetDialog.showTboxDisconnectIndicator,
+                        clickAction = wholePanelFromWidgetDialog.clickAction
                     )
                 }
                 next
