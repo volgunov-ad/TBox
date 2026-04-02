@@ -27,7 +27,7 @@ fun DashboardWidgetRenderer(
     tboxConnected: Boolean,
     restartEnabled: Boolean,
     onTripFinishAndStart: () -> Unit,
-    /** After finishing active trip on double-tap; then open Trips tab (embedded vs overlay). */
+    /** Single tap on active-trip tiles: open Trips tab (then usual onClick for launcher / floating clickAction). */
     onActiveTripNavigateToTripsTab: () -> Unit = {},
     widgetTextColor: Color,
     widgetBackgroundColor: Color,
@@ -275,13 +275,16 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
                 showTitle = widgetConfig.showTitle,
-                onClick = onClick,
+                onClick = {
+                    if (!isEditMode) {
+                        onActiveTripNavigateToTripsTab()
+                    }
+                    onClick()
+                },
                 onLongClick = onLongClick,
                 onDoubleClick = {
                     if (appDataViewModel.activeTrip.value?.isActive == true) {
                         onTripFinishAndStart()
-                    } else {
-                        onActiveTripNavigateToTripsTab()
                     }
                 },
                 elevation = elevation,
