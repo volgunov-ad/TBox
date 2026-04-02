@@ -436,6 +436,8 @@ fun OverlayWidgetSelectionDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val floatingDashboardSnapshot by settingsViewModel.floatingDashboardConfig(panelId)
+        .collectAsStateWithLifecycle()
     val state = rememberWidgetSelectionDialogState(
         widgetIndex = widgetIndex,
         currentWidgets = currentWidgets,
@@ -468,8 +470,8 @@ fun OverlayWidgetSelectionDialog(
                 state = state,
                 modifier = Modifier
                     .weight(1f),
-                floatingDashboardSettingsViewModel = settingsViewModel,
                 floatingDashboardPanelId = panelId,
+                floatingDashboardSnapshot = floatingDashboardSnapshot,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -512,6 +514,12 @@ fun OverlayWidgetSelectionDialog(
                     ) {
                         return@WidgetSelectionDialogActions
                     }
+                    applyWholePanelSettingsIfAny(
+                        settingsViewModel = settingsViewModel,
+                        state = state,
+                        mainScreenPanelId = null,
+                        floatingDashboardPanelId = panelId
+                    )
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,

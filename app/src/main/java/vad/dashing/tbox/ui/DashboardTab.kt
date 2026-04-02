@@ -341,6 +341,8 @@ fun MainScreenPanelWidgetSelectionDialog(
     onDeletePanel: () -> Unit,
 ) {
     val context = LocalContext.current
+    val mainScreenPanelSnapshot by settingsViewModel.mainScreenPanelConfig(panelId)
+        .collectAsStateWithLifecycle()
     val state = rememberWidgetSelectionDialogState(
         widgetIndex = widgetIndex,
         currentWidgets = currentWidgets,
@@ -368,8 +370,8 @@ fun MainScreenPanelWidgetSelectionDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp),
-                mainScreenPanelSettingsViewModel = settingsViewModel,
                 mainScreenPanelId = panelId,
+                mainScreenPanelSnapshot = mainScreenPanelSnapshot,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -430,6 +432,12 @@ fun MainScreenPanelWidgetSelectionDialog(
                     ) {
                         return@WidgetSelectionDialogActions
                     }
+                    applyWholePanelSettingsIfAny(
+                        settingsViewModel = settingsViewModel,
+                        state = state,
+                        mainScreenPanelId = panelId,
+                        floatingDashboardPanelId = null
+                    )
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,

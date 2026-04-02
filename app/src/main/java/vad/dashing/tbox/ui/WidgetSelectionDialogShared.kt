@@ -39,9 +39,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DashboardManager
+import vad.dashing.tbox.FloatingDashboardConfig
+import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
@@ -64,52 +65,6 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_1_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 
 private val WidgetSelectionDialogActionButtonFontSize = 22.sp
-
-@Composable
-private fun WholePanelNameFieldRow(
-    panelId: String,
-    currentName: String,
-    enabled: Boolean,
-    onApplyName: (String) -> Unit,
-) {
-    var draftName by remember(panelId) { mutableStateOf(currentName) }
-    LaunchedEffect(panelId, currentName) {
-        draftName = currentName
-    }
-    val trimmed = draftName.trim()
-    val dirty = trimmed != currentName
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        OutlinedTextField(
-            value = draftName,
-            onValueChange = { draftName = it },
-            modifier = Modifier.weight(1f),
-            enabled = enabled,
-            singleLine = true,
-            label = {
-                Text(
-                    text = stringResource(R.string.floating_panel_name_label),
-                    fontSize = 16.sp
-                )
-            },
-            textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
-        )
-        Button(
-            onClick = { onApplyName(trimmed) },
-            enabled = enabled && dirty
-        ) {
-            Text(
-                text = stringResource(R.string.floating_panel_rename_button),
-                fontSize = WidgetSelectionDialogActionButtonFontSize
-            )
-        }
-    }
-}
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
@@ -150,6 +105,34 @@ internal class WidgetSelectionDialogState(
     var showWholePanelSettings by mutableStateOf(false)
     /** 0 = light theme colors, 1 = dark theme colors (advanced settings only). */
     var advancedColorThemeSegment by mutableIntStateOf(0)
+    /** Draft for «Вся панель»; persisted only on dialog Save. */
+    var wholePanelNameDraft by mutableStateOf("")
+    var wholePanelShowTboxDisconnect by mutableStateOf(false)
+    var wholePanelRows by mutableIntStateOf(2)
+    var wholePanelCols by mutableIntStateOf(3)
+    /** Floating whole-panel only; main-screen panel omits click toggle in UI. */
+    var wholePanelClickAction by mutableStateOf(false)
+    /**
+     * True after draft was loaded from persisted config for «Вся панель» in this dialog.
+     * Reset when user closes that section so the next open re-syncs from storage.
+     * On Save, panel fields are written only if this is true (user opened the section at least once).
+     */
+    var wholePanelDraftSeeded by mutableStateOf(false)
+
+    fun syncWholePanelDraftFromMainScreen(cfg: MainScreenPanelConfig) {
+        wholePanelNameDraft = cfg.name
+        wholePanelShowTboxDisconnect = cfg.showTboxDisconnectIndicator
+        wholePanelRows = cfg.rows
+        wholePanelCols = cfg.cols
+    }
+
+    fun syncWholePanelDraftFromFloating(cfg: FloatingDashboardConfig) {
+        wholePanelNameDraft = cfg.name
+        wholePanelShowTboxDisconnect = cfg.showTboxDisconnectIndicator
+        wholePanelRows = cfg.rows
+        wholePanelCols = cfg.cols
+        wholePanelClickAction = cfg.clickAction
+    }
     var launcherAppPackage by mutableStateOf(
         if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
             initialConfig.launcherAppPackage
@@ -185,7 +168,7 @@ internal fun rememberWidgetSelectionDialogState(
     currentWidgets: List<DashboardWidget>,
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     defaultBackgroundLight: Int,
-    defaultBackgroundDark: Int
+    defaultBackgroundDark: Int,
 ): WidgetSelectionDialogState {
     val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
         ?: FloatingDashboardWidgetConfig(dataKey = "")
@@ -318,37 +301,44 @@ private fun WidgetColorThemeSegmentRow(
 
 @Composable
 private fun MainScreenPanelWholeSettingsSection(
-    settingsViewModel: SettingsViewModel,
-    panelId: String,
+    state: WidgetSelectionDialogState,
     enabled: Boolean,
 ) {
-    val panelConfig by settingsViewModel.mainScreenPanelConfig(panelId)
-        .collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxWidth()) {
-        WholePanelNameFieldRow(
-            panelId = panelId,
-            currentName = panelConfig.name,
+        OutlinedTextField(
+            value = state.wholePanelNameDraft,
+            onValueChange = { state.wholePanelNameDraft = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
             enabled = enabled,
-            onApplyName = { settingsViewModel.saveMainScreenPanelName(panelId, it) }
+            singleLine = true,
+            label = {
+                Text(
+                    text = stringResource(R.string.floating_panel_name_label),
+                    fontSize = 16.sp
+                )
+            },
+            textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
         )
         SettingSwitch(
-            panelConfig.showTboxDisconnectIndicator,
-            { settingsViewModel.saveMainScreenPanelShowTboxDisconnectIndicator(it, panelId) },
+            state.wholePanelShowTboxDisconnect,
+            { state.wholePanelShowTboxDisconnect = it },
             stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
             "",
             enabled
         )
         SettingDropdownGeneric(
-            panelConfig.rows,
-            { settingsViewModel.saveMainScreenPanelRows(it, panelId) },
+            state.wholePanelRows,
+            { state.wholePanelRows = it },
             stringResource(R.string.settings_floating_rows_title),
             "",
             enabled,
             listOf(1, 2, 3, 4, 5, 6)
         )
         SettingDropdownGeneric(
-            panelConfig.cols,
-            { settingsViewModel.saveMainScreenPanelCols(it, panelId) },
+            state.wholePanelCols,
+            { state.wholePanelCols = it },
             stringResource(R.string.settings_floating_cols_title),
             "",
             enabled,
@@ -359,44 +349,51 @@ private fun MainScreenPanelWholeSettingsSection(
 
 @Composable
 private fun FloatingDashboardWholeSettingsSection(
-    settingsViewModel: SettingsViewModel,
-    panelId: String,
+    state: WidgetSelectionDialogState,
     enabled: Boolean,
 ) {
-    val panelConfig by settingsViewModel.floatingDashboardConfig(panelId)
-        .collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxWidth()) {
-        WholePanelNameFieldRow(
-            panelId = panelId,
-            currentName = panelConfig.name,
+        OutlinedTextField(
+            value = state.wholePanelNameDraft,
+            onValueChange = { state.wholePanelNameDraft = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
             enabled = enabled,
-            onApplyName = { settingsViewModel.saveFloatingDashboardName(panelId, it) }
+            singleLine = true,
+            label = {
+                Text(
+                    text = stringResource(R.string.floating_panel_name_label),
+                    fontSize = 16.sp
+                )
+            },
+            textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
         )
         SettingSwitch(
-            panelConfig.clickAction,
-            { settingsViewModel.saveFloatingDashboardClickAction(it, panelId) },
+            state.wholePanelClickAction,
+            { state.wholePanelClickAction = it },
             stringResource(R.string.settings_open_app_on_panel_click_title),
             "",
             enabled
         )
         SettingSwitch(
-            panelConfig.showTboxDisconnectIndicator,
-            { settingsViewModel.saveFloatingDashboardShowTboxDisconnectIndicator(it, panelId) },
+            state.wholePanelShowTboxDisconnect,
+            { state.wholePanelShowTboxDisconnect = it },
             stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
             "",
             enabled
         )
         SettingDropdownGeneric(
-            panelConfig.rows,
-            { settingsViewModel.saveFloatingDashboardRows(it, panelId) },
+            state.wholePanelRows,
+            { state.wholePanelRows = it },
             stringResource(R.string.settings_floating_rows_title),
             "",
             enabled,
             listOf(1, 2, 3, 4, 5, 6)
         )
         SettingDropdownGeneric(
-            panelConfig.cols,
-            { settingsViewModel.saveFloatingDashboardCols(it, panelId) },
+            state.wholePanelCols,
+            { state.wholePanelCols = it },
             stringResource(R.string.settings_floating_cols_title),
             "",
             enabled,
@@ -412,12 +409,32 @@ internal fun WidgetSelectionDialogForm(
     modifier: Modifier = Modifier,
     dataKeyFilter: (String) -> Boolean = { true },
     bottomContent: (@Composable () -> Unit)? = null,
-    mainScreenPanelSettingsViewModel: SettingsViewModel? = null,
     mainScreenPanelId: String = "",
-    floatingDashboardSettingsViewModel: SettingsViewModel? = null,
     floatingDashboardPanelId: String = "",
+    mainScreenPanelSnapshot: MainScreenPanelConfig? = null,
+    floatingDashboardSnapshot: FloatingDashboardConfig? = null,
 ) {
     val context = LocalContext.current
+    LaunchedEffect(mainScreenPanelSnapshot, mainScreenPanelId, state.showWholePanelSettings) {
+        if (mainScreenPanelId.isNotBlank() &&
+            state.showWholePanelSettings &&
+            mainScreenPanelSnapshot != null &&
+            !state.wholePanelDraftSeeded
+        ) {
+            state.syncWholePanelDraftFromMainScreen(mainScreenPanelSnapshot)
+            state.wholePanelDraftSeeded = true
+        }
+    }
+    LaunchedEffect(floatingDashboardSnapshot, floatingDashboardPanelId, state.showWholePanelSettings) {
+        if (floatingDashboardPanelId.isNotBlank() &&
+            state.showWholePanelSettings &&
+            floatingDashboardSnapshot != null &&
+            !state.wholePanelDraftSeeded
+        ) {
+            state.syncWholePanelDraftFromFloating(floatingDashboardSnapshot)
+            state.wholePanelDraftSeeded = true
+        }
+    }
     val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
             WidgetsRepository.getAvailableDataKeysWidgets()
                 .filter { it.isNotEmpty() && dataKeyFilter(it) }
@@ -435,9 +452,7 @@ internal fun WidgetSelectionDialogForm(
                 .weight(1f)
         ) {
             when {
-                state.showWholePanelSettings &&
-                    mainScreenPanelSettingsViewModel != null &&
-                    mainScreenPanelId.isNotBlank() -> {
+                state.showWholePanelSettings && mainScreenPanelId.isNotBlank() -> {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -445,15 +460,12 @@ internal fun WidgetSelectionDialogForm(
                             .padding(12.dp)
                     ) {
                         MainScreenPanelWholeSettingsSection(
-                            settingsViewModel = mainScreenPanelSettingsViewModel,
-                            panelId = mainScreenPanelId,
+                            state = state,
                             enabled = true
                         )
                     }
                 }
-                state.showWholePanelSettings &&
-                    floatingDashboardSettingsViewModel != null &&
-                    floatingDashboardPanelId.isNotBlank() -> {
+                state.showWholePanelSettings && floatingDashboardPanelId.isNotBlank() -> {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -461,8 +473,7 @@ internal fun WidgetSelectionDialogForm(
                             .padding(12.dp)
                     ) {
                         FloatingDashboardWholeSettingsSection(
-                            settingsViewModel = floatingDashboardSettingsViewModel,
-                            panelId = floatingDashboardPanelId,
+                            state = state,
                             enabled = true
                         )
                     }
@@ -748,6 +759,8 @@ internal fun WidgetSelectionDialogActions(
                         state.showWholePanelSettings = next
                         if (next) {
                             state.showAdvancedSettings = false
+                        } else {
+                            state.wholePanelDraftSeeded = false
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -916,6 +929,35 @@ internal fun applyWidgetSelectionChanges(
     }
     saveConfigs(normalizedConfigs)
     dashboardManager.clearWidgetHistory(currentWidget.id)
+}
+
+internal fun applyWholePanelSettingsIfAny(
+    settingsViewModel: SettingsViewModel,
+    state: WidgetSelectionDialogState,
+    mainScreenPanelId: String?,
+    floatingDashboardPanelId: String?,
+) {
+    if (!state.wholePanelDraftSeeded) return
+    val name = state.wholePanelNameDraft.trim()
+    mainScreenPanelId?.takeIf { it.isNotBlank() }?.let { id ->
+        settingsViewModel.saveMainScreenPanelName(id, name)
+        settingsViewModel.saveMainScreenPanelShowTboxDisconnectIndicator(
+            state.wholePanelShowTboxDisconnect,
+            id
+        )
+        settingsViewModel.saveMainScreenPanelRows(state.wholePanelRows, id)
+        settingsViewModel.saveMainScreenPanelCols(state.wholePanelCols, id)
+    }
+    floatingDashboardPanelId?.takeIf { it.isNotBlank() }?.let { id ->
+        settingsViewModel.saveFloatingDashboardName(id, name)
+        settingsViewModel.saveFloatingDashboardClickAction(state.wholePanelClickAction, id)
+        settingsViewModel.saveFloatingDashboardShowTboxDisconnectIndicator(
+            state.wholePanelShowTboxDisconnect,
+            id
+        )
+        settingsViewModel.saveFloatingDashboardRows(state.wholePanelRows, id)
+        settingsViewModel.saveFloatingDashboardCols(state.wholePanelCols, id)
+    }
 }
 
 internal fun externalAppWidgetIdForApply(
