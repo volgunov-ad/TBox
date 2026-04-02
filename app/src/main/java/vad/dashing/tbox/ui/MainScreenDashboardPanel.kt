@@ -31,6 +31,7 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
@@ -326,6 +327,9 @@ fun MainScreenDashboardPanel(
             currentTheme = currentTheme,
             restartEnabled = restartEnabled,
             onTripFinishAndStart = onTripFinishAndStart,
+            onActiveTripNavigateToTripsTab = {
+                settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_SELECTED_TAB_INDEX)
+            },
             isEditMode = isEditMode,
             showDialogOpen = showDialogForIndex != null,
             widgetInteractionPolicy = widgetInteractionPolicy,
@@ -339,8 +343,6 @@ fun MainScreenDashboardPanel(
                     cfg.launcherAppPackage.isNotBlank()
                 ) {
                     launchAppFromWidget(context, cfg.launcherAppPackage)
-                } else if (panel.clickAction) {
-                    openMainActivityFromWidget(context)
                 }
             },
             onWidgetLongClick = {

@@ -364,6 +364,10 @@ fun FloatingDashboard(
                     currentTheme = currentTheme,
                     restartEnabled = restartEnabled,
                     onTripFinishAndStart = onTripFinishAndStart,
+                    onActiveTripNavigateToTripsTab = {
+                        settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_SELECTED_TAB_INDEX)
+                        openMainActivityFromWidget(context)
+                    },
                     isEditMode = isEditMode,
                     showDialogOpen = showDialogForIndex != null,
                     widgetInteractionPolicy = widgetInteractionPolicy,

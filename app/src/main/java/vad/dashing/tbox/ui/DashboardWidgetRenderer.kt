@@ -27,6 +27,8 @@ fun DashboardWidgetRenderer(
     tboxConnected: Boolean,
     restartEnabled: Boolean,
     onTripFinishAndStart: () -> Unit,
+    /** After finishing active trip on double-tap; then open Trips tab (embedded vs overlay). */
+    onActiveTripNavigateToTripsTab: () -> Unit = {},
     widgetTextColor: Color,
     widgetBackgroundColor: Color,
     onClick: () -> Unit,
@@ -278,6 +280,8 @@ fun DashboardWidgetRenderer(
                 onDoubleClick = {
                     if (appDataViewModel.activeTrip.value?.isActive == true) {
                         onTripFinishAndStart()
+                    } else {
+                        onActiveTripNavigateToTripsTab()
                     }
                 },
                 elevation = elevation,

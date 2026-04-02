@@ -50,6 +50,7 @@ internal fun DashboardPanelGridAndFrames(
     currentTheme: Int,
     restartEnabled: Boolean,
     onTripFinishAndStart: () -> Unit,
+    onActiveTripNavigateToTripsTab: (widgetIndex: Int) -> Unit = { _ -> },
     isEditMode: Boolean,
     showDialogOpen: Boolean,
     widgetInteractionPolicy: DashboardWidgetInteractionPolicy,
@@ -130,6 +131,9 @@ internal fun DashboardPanelGridAndFrames(
                                     tboxConnected = tboxConnected,
                                     restartEnabled = restartEnabled,
                                     onTripFinishAndStart = onTripFinishAndStart,
+                                    onActiveTripNavigateToTripsTab = {
+                                        onActiveTripNavigateToTripsTab(index)
+                                    },
                                     widgetTextColor = widgetTextColor,
                                     widgetBackgroundColor = widgetBackgroundColor,
                                     onClick = { onWidgetClick(index) },
