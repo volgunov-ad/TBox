@@ -29,8 +29,22 @@ object TripRepository {
 
     val lock = Any()
 
+    /**
+     * When false, RPM-driven trip accounting ([BackgroundService.onTripRpmSample]) is skipped.
+     * Disk load and [responseWork] gating use separate flags in the service.
+     */
+    @Volatile
+    private var tripsProcessingEnabled: Boolean = true
+
+    fun setTripsProcessingEnabled(enabled: Boolean) {
+        tripsProcessingEnabled = enabled
+    }
+
+    fun isTripsProcessingEnabled(): Boolean = tripsProcessingEnabled
+
     /** Clears in-memory state without org.json (JVM unit tests use stubbed android JSON). */
     internal fun resetForUnitTests() {
+        tripsProcessingEnabled = true
         synchronized(lock) {
             _trips.value = emptyList()
             _favoriteIds.value = emptySet()

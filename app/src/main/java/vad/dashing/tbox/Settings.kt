@@ -106,6 +106,31 @@ data class FloatingDashboardConfig(
     val showTboxDisconnectIndicator: Boolean = true
 )
 
+/**
+ * One-shot read of all preferences used by [BackgroundService] `stateIn` flows, so the service
+ * can subscribe with [SharingStarted.Eagerly] using persisted values without N separate DataStore reads.
+ */
+data class BackgroundServiceSettingsSnapshot(
+    val autoModemRestart: Boolean,
+    val autoTboxReboot: Boolean,
+    val autoSuspendTboxApp: Boolean,
+    val autoStopTboxApp: Boolean,
+    val autoSuspendTboxMdc: Boolean,
+    val autoStopTboxMdc: Boolean,
+    val autoSuspendTboxSwd: Boolean,
+    val autoPreventTboxRestart: Boolean,
+    val getCanFrame: Boolean,
+    val getCycleSignal: Boolean,
+    val getLocData: Boolean,
+    val widgetShowIndicator: Boolean,
+    val widgetShowLocIndicator: Boolean,
+    val mockLocation: Boolean,
+    val floatingDashboards: List<FloatingDashboardConfig>,
+    val canDataSaveCount: Int,
+    val fuelTankLiters: Int,
+    val splitTripTimeMinutes: Int,
+)
+
 class SettingsManager(private val context: Context) {
 
     companion object {
@@ -356,6 +381,38 @@ class SettingsManager(private val context: Context) {
     val splitTripTimeMinutesFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[SPLIT_TRIP_TIME_MINUTES_KEY] ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES }
         .distinctUntilChanged()
+
+    /**
+     * Single DataStore read for all keys backing [BackgroundService] setting [StateFlow]s.
+     */
+    suspend fun readBackgroundServiceSettingsSnapshot(): BackgroundServiceSettingsSnapshot =
+        context.settingsDataStore.data.first().let { backgroundSnapshotFromPreferences(it) }
+
+    /** Exposed for unit tests mapping empty/custom [Preferences] without a DataStore. */
+    internal fun backgroundSnapshotFromPreferences(preferences: Preferences): BackgroundServiceSettingsSnapshot {
+        val floatingRaw = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
+        return BackgroundServiceSettingsSnapshot(
+            autoModemRestart = preferences[AUTO_MODEM_RESTART_KEY] ?: false,
+            autoTboxReboot = preferences[AUTO_TBOX_REBOOT_KEY] ?: false,
+            autoSuspendTboxApp = preferences[AUTO_SUSPEND_TBOX_APP_KEY] ?: false,
+            autoStopTboxApp = preferences[AUTO_STOP_TBOX_APP_KEY] ?: false,
+            autoSuspendTboxMdc = preferences[AUTO_SUSPEND_TBOX_MDC_KEY] ?: false,
+            autoStopTboxMdc = preferences[AUTO_STOP_TBOX_MDC_KEY] ?: false,
+            autoSuspendTboxSwd = preferences[AUTO_SUSPEND_TBOX_SWD_KEY] ?: false,
+            autoPreventTboxRestart = preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false,
+            getCanFrame = preferences[GET_CAN_FRAME_KEY] ?: true,
+            getCycleSignal = preferences[GET_CYCLE_SIGNAL_KEY] ?: false,
+            getLocData = preferences[GET_LOC_DATA_KEY] ?: true,
+            widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
+            widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
+            mockLocation = preferences[MOCK_LOCATION] ?: false,
+            floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
+            canDataSaveCount = preferences[CAN_DATA_SAVE_COUNT_KEY] ?: DEFAULT_CAN_DATA_SAVE_COUNT,
+            fuelTankLiters = preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS,
+            splitTripTimeMinutes = preferences[SPLIT_TRIP_TIME_MINUTES_KEY]
+                ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES,
+        )
+    }
 
     // Suspend функции для сохранения настроек
 
