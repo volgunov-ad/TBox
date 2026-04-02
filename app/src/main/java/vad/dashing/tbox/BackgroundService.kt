@@ -70,7 +70,9 @@ class BackgroundService : Service() {
     private var tBoxClient: TBoxClient? = null
     @Volatile
     private var lastPacketAtMs: Long = 0
-    private val mutex = Mutex()
+    private val sendRawMessageMutex = Mutex()
+    /** Serializes [onStartCommand] handling so each intent awaits settings snapshot and runs in order. */
+    private val commandRouterMutex = Mutex()
     private val tripsPersistMutex = Mutex()
     private val packetProcessingDispatcher =
         Executors.newSingleThreadExecutor { runnable ->
@@ -391,83 +393,92 @@ class BackgroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Lazily-bound setting flows: block briefly until the warm-up coroutine has subscribed once,
-        // so [.value] matches DataStore for every action (including early intents after cold start).
-        if (!settingsSnapshotReady.isCompleted) {
-            try {
-                runBlocking { settingsSnapshotReady.await() }
-            } catch (_: Exception) {
-                // Warm-up failed; proceed with defaults — same as incomplete DataStore read.
+        scope.launch(Dispatchers.Main.immediate + exceptionHandler) {
+            commandRouterMutex.withLock {
+                val kickoffStart = intent?.action == ACTION_START && !isRunning
+                if (kickoffStart) {
+                    isRunning = true
+                    startForeground(NOTIFICATION_ID, createNotification("Start service"))
+                    TboxRepository.addLog("INFO", "Service", "Start service")
+                }
+                awaitSettingsSnapshotIgnoringFailure()
+                handleStartCommandIntent(intent, flags, startId, kickoffStart)
             }
         }
+        return START_STICKY
+    }
 
+    private suspend fun awaitSettingsSnapshotIgnoringFailure() {
+        try {
+            settingsSnapshotReady.await()
+        } catch (_: Exception) {
+            // Warm-up failed; [.value] may stay at Lazily defaults until flows emit.
+        }
+    }
+
+    private suspend fun handleStartCommandIntent(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+        kickoffStart: Boolean,
+    ) {
         when (intent?.action) {
             ACTION_START -> {
-                if (!isRunning) {
-                    isRunning = true
-                    val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
-                    val notification = createNotification("Start service")
-                    startForeground(NOTIFICATION_ID, notification)
-                    TboxRepository.addLog("INFO", "Service", "Start service")
-                    serviceStartupJob?.cancel()
-                    serviceStartupJob = scope.launch(exceptionHandler) {
-                        try {
-                            settingsSnapshotReady.await()
-                            if (!isRunning) return@launch
-                            reloadTripsFromDataStoreSuspend()
-                            if (!isRunning) return@launch
-                            TboxRepository.updateServiceStartTime()
-                            val splitWindowMs =
-                                splitTripTimeMinutesSetting.value.toLong() * 60_000L
-                            resetTripStateForNewServiceSession(splitWindowMs)
-                            applyTripResumeIfLastTripContinues(splitWindowMs)
-                            if (startFromBoot) {
-                                maybeOpenMainScreenAfterBootSuspend()
-                            }
-                            if (!isRunning) return@launch
-                            connectTboxClient()
-                            startSettingsListener()
-                            startNetUpdater()
-                            startAPNUpdater()
-                            startCheckConnection()
-                            startPeriodicJob()
-                            startDataListener()
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Log.e("Background Service", "Service startup pipeline failed", e)
-                            TboxRepository.addLog(
-                                "ERROR",
-                                "Service",
-                                "Startup failed: ${e.message}"
-                            )
+                if (!kickoffStart) return
+                val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
+                serviceStartupJob?.cancel()
+                serviceStartupJob = scope.launch(exceptionHandler) {
+                    try {
+                        if (!isRunning) return@launch
+                        reloadTripsFromDataStoreSuspend()
+                        if (!isRunning) return@launch
+                        TboxRepository.updateServiceStartTime()
+                        val splitWindowMs =
+                            splitTripTimeMinutesSetting.value.toLong() * 60_000L
+                        resetTripStateForNewServiceSession(splitWindowMs)
+                        applyTripResumeIfLastTripContinues(splitWindowMs)
+                        if (startFromBoot) {
+                            maybeOpenMainScreenAfterBootSuspend()
                         }
+                        if (!isRunning) return@launch
+                        connectTboxClient()
+                        startSettingsListener()
+                        startNetUpdater()
+                        startAPNUpdater()
+                        startCheckConnection()
+                        startPeriodicJob()
+                        startDataListener()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e("Background Service", "Service startup pipeline failed", e)
+                        TboxRepository.addLog(
+                            "ERROR",
+                            "Service",
+                            "Startup failed: ${e.message}"
+                        )
                     }
                 }
             }
             ACTION_RELOAD_TRIPS_FROM_STORE -> {
                 if (isRunning) {
-                    scope.launch(exceptionHandler) {
-                        try {
-                            settingsSnapshotReady.await()
-                            if (!isRunning) return@launch
-                            reloadTripsFromDataStoreSuspend()
-                            if (!isRunning) return@launch
-                            val splitWindowMs =
-                                splitTripTimeMinutesSetting.value.toLong() * 60_000L
-                            resetTripStateForNewServiceSession(splitWindowMs)
-                            // Do not call applyTripResumeIfLastTripContinues: imported DataStore snapshot
-                            // is authoritative; resume logic could reopen a recently ended trip within split window.
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Log.e("Background Service", "Reload trips failed", e)
-                            TboxRepository.addLog(
-                                "ERROR",
-                                "Service",
-                                "Reload trips: ${e.message}"
-                            )
-                        }
+                    try {
+                        reloadTripsFromDataStoreSuspend()
+                        if (!isRunning) return
+                        val splitWindowMs =
+                            splitTripTimeMinutesSetting.value.toLong() * 60_000L
+                        resetTripStateForNewServiceSession(splitWindowMs)
+                        // Do not call applyTripResumeIfLastTripContinues: imported DataStore snapshot
+                        // is authoritative; resume logic could reopen a recently ended trip within split window.
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e("Background Service", "Reload trips failed", e)
+                        TboxRepository.addLog(
+                            "ERROR",
+                            "Service",
+                            "Reload trips: ${e.message}"
+                        )
                     }
                 }
             }
@@ -561,7 +572,6 @@ class BackgroundService : Service() {
                 scheduleOpenMainActivity(delayMs)
             }
         }
-        return START_STICKY
     }
 
     private fun createNotificationChannel() {
@@ -2134,7 +2144,7 @@ class BackgroundService : Service() {
             var data = fillHeader(msg.size, tid, sid, cmd) + msg
             val checkSum = xorSum(data)
             data += checkSum
-            mutex.withLock {
+            sendRawMessageMutex.withLock {
                 withTimeout(1000) { // Таймаут на отправку
                     client.sendRawMessage(data)
                 }
