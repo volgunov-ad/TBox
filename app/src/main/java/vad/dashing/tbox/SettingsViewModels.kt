@@ -42,7 +42,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT = 0.3f
         private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
         private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
-        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = false
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private val DEFAULT_MAIN_SCREEN_PANEL_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
@@ -1001,23 +1001,48 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateSelectedMainScreenPanel { it.copy(enabled = enabled) }
     }
 
-    fun saveMainScreenPanelClickAction(enabled: Boolean) {
-        updateSelectedMainScreenPanel { it.copy(clickAction = enabled) }
-    }
-
-    fun saveMainScreenPanelShowTboxDisconnectIndicator(enabled: Boolean) {
-        updateSelectedMainScreenPanel { it.copy(showTboxDisconnectIndicator = enabled) }
-    }
-
-    fun saveMainScreenPanelRows(rows: Int) {
-        if (rows in 1..6) {
-            updateSelectedMainScreenPanel { it.copy(rows = rows) }
+    fun saveMainScreenPanelClickAction(enabled: Boolean, panelId: String? = null) {
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(clickAction = enabled) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
         }
     }
 
-    fun saveMainScreenPanelCols(cols: Int) {
-        if (cols in 1..6) {
-            updateSelectedMainScreenPanel { it.copy(cols = cols) }
+    fun saveMainScreenPanelShowTboxDisconnectIndicator(
+        enabled: Boolean,
+        panelId: String? = null
+    ) {
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(showTboxDisconnectIndicator = enabled) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
+        }
+    }
+
+    fun saveMainScreenPanelRows(rows: Int, panelId: String? = null) {
+        if (rows !in 1..6) return
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(rows = rows) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
+        }
+    }
+
+    fun saveMainScreenPanelCols(cols: Int, panelId: String? = null) {
+        if (cols !in 1..6) return
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(cols = cols) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
         }
     }
 

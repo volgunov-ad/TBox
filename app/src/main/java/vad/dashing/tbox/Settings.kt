@@ -173,7 +173,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT = 0.3f
         private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
         private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
-        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = false
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
