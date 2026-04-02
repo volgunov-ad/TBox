@@ -113,9 +113,9 @@ internal class WidgetSelectionDialogState(
     /** Floating whole-panel only; main-screen panel omits click toggle in UI. */
     var wholePanelClickAction by mutableStateOf(false)
     /**
-     * True after draft was loaded from persisted config for «Вся панель» in this dialog.
-     * Reset when user closes that section so the next open re-syncs from storage.
-     * On Save, panel fields are written only if this is true (user opened the section at least once).
+     * True after draft was loaded from persisted config when user opened «Вся панель» in this dialog.
+     * Not cleared when switching back to Advanced / tile list — Save must still persist whole-panel edits.
+     * Reset only when this dialog state is recreated (new dialog session).
      */
     var wholePanelDraftSeeded by mutableStateOf(false)
 
@@ -759,8 +759,6 @@ internal fun WidgetSelectionDialogActions(
                         state.showWholePanelSettings = next
                         if (next) {
                             state.showAdvancedSettings = false
-                        } else {
-                            state.wholePanelDraftSeeded = false
                         }
                     },
                     modifier = Modifier.weight(1f),
