@@ -14,7 +14,7 @@ object CanFramesProcess {
         .map { it.toByte() }
         .toSet()
 
-    private val fuelLevelPercentageBuffer = FuelLevelBuffer(10)
+    private val fuelLevelPercentageBuffer = FuelLevelBuffer(15)
     private val canIdStringCache = mutableMapOf<Int, String>()
 
     private var carType: String = "1.5_6MT"
