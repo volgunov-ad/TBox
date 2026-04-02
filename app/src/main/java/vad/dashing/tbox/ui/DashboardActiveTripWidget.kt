@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.formatTripDurationHuman
@@ -102,7 +103,7 @@ fun DashboardActiveTripWidgetItem(
             } else {
                 val t = displayTrip ?: return@DashboardWidgetScaffold
                 val rowFont = titleFont
-                val simplified = widget.dataKey == "activeTripWidgetSimple"
+                val simplified = widget.dataKey == ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
                 if (simplified) {
                     StatusRow(
                         label = stringResource(R.string.trips_start_time),

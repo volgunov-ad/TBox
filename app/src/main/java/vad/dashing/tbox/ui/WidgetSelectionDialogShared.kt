@@ -22,7 +22,6 @@ import android.appwidget.AppWidgetManager
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -341,7 +340,7 @@ private fun MainScreenPanelWholeSettingsSection(
         SettingDropdownGeneric(
             state.wholePanelRows,
             { state.wholePanelRows = it },
-            stringResource(R.string.settings_floating_rows_title),
+            stringResource(R.string.settings_main_screen_panel_rows_title),
             "",
             enabled,
             listOf(1, 2, 3, 4, 5, 6)
@@ -349,7 +348,7 @@ private fun MainScreenPanelWholeSettingsSection(
         SettingDropdownGeneric(
             state.wholePanelCols,
             { state.wholePanelCols = it },
-            stringResource(R.string.settings_floating_cols_title),
+            stringResource(R.string.settings_main_screen_panel_cols_title),
             "",
             enabled,
             listOf(1, 2, 3, 4, 5, 6)
@@ -421,30 +420,8 @@ internal fun WidgetSelectionDialogForm(
     bottomContent: (@Composable () -> Unit)? = null,
     mainScreenPanelId: String = "",
     floatingDashboardPanelId: String = "",
-    mainScreenPanelSnapshot: MainScreenPanelConfig? = null,
-    floatingDashboardSnapshot: FloatingDashboardConfig? = null,
 ) {
     val context = LocalContext.current
-    LaunchedEffect(mainScreenPanelSnapshot, mainScreenPanelId, state.showWholePanelSettings) {
-        if (mainScreenPanelId.isNotBlank() &&
-            state.showWholePanelSettings &&
-            mainScreenPanelSnapshot != null &&
-            !state.wholePanelDraftSeeded
-        ) {
-            state.syncWholePanelDraftFromMainScreen(mainScreenPanelSnapshot)
-            state.wholePanelDraftSeeded = true
-        }
-    }
-    LaunchedEffect(floatingDashboardSnapshot, floatingDashboardPanelId, state.showWholePanelSettings) {
-        if (floatingDashboardPanelId.isNotBlank() &&
-            state.showWholePanelSettings &&
-            floatingDashboardSnapshot != null &&
-            !state.wholePanelDraftSeeded
-        ) {
-            state.syncWholePanelDraftFromFloating(floatingDashboardSnapshot)
-            state.wholePanelDraftSeeded = true
-        }
-    }
     val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
             WidgetsRepository.getAvailableDataKeysWidgets()
                 .filter { it.isNotEmpty() && dataKeyFilter(it) }
@@ -714,6 +691,8 @@ internal fun WidgetSelectionDialogActions(
     saveTextFontWeight: FontWeight = FontWeight.Normal,
     showWholePanelButton: Boolean = false,
     deleteAfterWholePanel: (@Composable RowScope.() -> Unit)? = null,
+    /** Load whole-panel draft from persisted config once when user opens «Вся панель». */
+    onWholePanelSectionOpened: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier,
@@ -769,6 +748,9 @@ internal fun WidgetSelectionDialogActions(
                         state.showWholePanelSettings = next
                         if (next) {
                             state.showAdvancedSettings = false
+                            if (!state.wholePanelDraftSeeded) {
+                                onWholePanelSectionOpened?.invoke()
+                            }
                         }
                     },
                     modifier = Modifier.weight(1f),

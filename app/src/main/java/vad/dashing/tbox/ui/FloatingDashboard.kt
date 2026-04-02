@@ -378,14 +378,10 @@ fun FloatingDashboard(
                             cfg.launcherAppPackage.isNotBlank()
                         ) {
                             launchAppFromWidget(context, cfg.launcherAppPackage)
-                        } else if (
-                            isFloatingDashboardClickAction &&
-                            cfg != null &&
-                            isActiveTripWidgetDataKey(cfg.dataKey)
-                        ) {
-                            settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_SELECTED_TAB_INDEX)
-                            openMainActivityFromWidget(context)
                         } else if (isFloatingDashboardClickAction) {
+                            if (cfg != null && isActiveTripWidgetDataKey(cfg.dataKey)) {
+                                settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_SELECTED_TAB_INDEX)
+                            }
                             openMainActivityFromWidget(context)
                         }
                     },
@@ -479,7 +475,6 @@ fun OverlayWidgetSelectionDialog(
                 modifier = Modifier
                     .weight(1f),
                 floatingDashboardPanelId = panelId,
-                floatingDashboardSnapshot = floatingDashboardSnapshot,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -507,6 +502,12 @@ fun OverlayWidgetSelectionDialog(
             // Кнопки действий
             WidgetSelectionDialogActions(
                 showWholePanelButton = true,
+                onWholePanelSectionOpened = {
+                    floatingDashboardSnapshot?.let { snap ->
+                        state.syncWholePanelDraftFromFloating(snap)
+                        state.wholePanelDraftSeeded = true
+                    }
+                },
                 state = state,
                 onDismiss = onDismiss,
                 onSave = {

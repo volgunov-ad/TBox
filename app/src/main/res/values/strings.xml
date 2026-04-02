@@ -91,7 +91,7 @@
     <string name="widget_background_color_dark">Цвет фона (тёмная тема)</string>
     <string name="widget_color_value_label">Значение цвета</string>
     <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
-    <string name="widget_color_alpha">Прозрачность: %1$d%%</string>
+    <string name="widget_color_alpha">Непрозрачность: %1$d%%</string>
     <string name="widget_music_players">Плееры для виджета музыки</string>
     <string name="widget_music_players_hint">Выберите один или несколько плееров</string>
     <string name="widget_music_players_required">Выберите минимум один плеер</string>
@@ -219,6 +219,8 @@
     <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
+    <string name="settings_main_screen_panel_rows_title">Количество строк плиток панели главного экрана</string>
+    <string name="settings_main_screen_panel_cols_title">Количество столбцов плиток панели главного экрана</string>
     <string name="settings_show_main_screen_panel_title">Показывать панель на главном экране</string>
     <string name="main_screen_panel_rel_width_pct">Ширина панели, % экрана (8–100)</string>
     <string name="main_screen_panel_rel_height_pct">Высота панели, % экрана (8–100)</string>

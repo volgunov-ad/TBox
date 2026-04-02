@@ -37,6 +37,39 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val clickAction: Boolean,
 )
 
+/** Merges widget list and optional whole-panel draft; used by [SettingsViewModel] and unit tests. */
+internal fun mergeMainScreenPanelForWidgetDialogSave(
+    current: MainScreenPanelConfig,
+    widgetsConfig: List<FloatingDashboardWidgetConfig>,
+    wholePanelFromWidgetDialog: MainScreenWholePanelFieldsForWidgetDialogSave?,
+): MainScreenPanelConfig {
+    val base = current.copy(widgetsConfig = widgetsConfig)
+    val w = wholePanelFromWidgetDialog ?: return base
+    return base.copy(
+        name = w.name,
+        rows = w.rows.coerceIn(1, 6),
+        cols = w.cols.coerceIn(1, 6),
+        showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
+        clickAction = w.clickAction
+    )
+}
+
+internal fun mergeFloatingDashboardForWidgetDialogSave(
+    current: FloatingDashboardConfig,
+    widgetsConfig: List<FloatingDashboardWidgetConfig>,
+    wholePanelFromWidgetDialog: FloatingWholePanelFieldsForWidgetDialogSave?,
+): FloatingDashboardConfig {
+    val base = current.copy(widgetsConfig = widgetsConfig)
+    val w = wholePanelFromWidgetDialog ?: return base
+    return base.copy(
+        name = w.name,
+        rows = w.rows.coerceIn(1, 6),
+        cols = w.cols.coerceIn(1, 6),
+        showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
+        clickAction = w.clickAction
+    )
+}
+
 class SettingsViewModel(private val settingsManager: SettingsManager) : ViewModel() {
 
     companion object {
@@ -946,18 +979,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     ) {
         viewModelScope.launch {
             applyMainScreenPanelUpdate(panelId) { cur ->
-                var next = cur.copy(widgetsConfig = config)
-                if (wholePanelFromWidgetDialog != null) {
-                    next = next.copy(
-                        name = wholePanelFromWidgetDialog.name,
-                        rows = wholePanelFromWidgetDialog.rows.coerceIn(1, 6),
-                        cols = wholePanelFromWidgetDialog.cols.coerceIn(1, 6),
-                        showTboxDisconnectIndicator =
-                            wholePanelFromWidgetDialog.showTboxDisconnectIndicator,
-                        clickAction = wholePanelFromWidgetDialog.clickAction
-                    )
-                }
-                next
+                mergeMainScreenPanelForWidgetDialogSave(cur, config, wholePanelFromWidgetDialog)
             }
         }
     }
@@ -1121,18 +1143,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     ) {
         viewModelScope.launch {
             applyFloatingDashboardUpdate(panelId) { cur ->
-                var next = cur.copy(widgetsConfig = config)
-                if (wholePanelFromWidgetDialog != null) {
-                    next = next.copy(
-                        name = wholePanelFromWidgetDialog.name,
-                        rows = wholePanelFromWidgetDialog.rows.coerceIn(1, 6),
-                        cols = wholePanelFromWidgetDialog.cols.coerceIn(1, 6),
-                        showTboxDisconnectIndicator =
-                            wholePanelFromWidgetDialog.showTboxDisconnectIndicator,
-                        clickAction = wholePanelFromWidgetDialog.clickAction
-                    )
-                }
-                next
+                mergeFloatingDashboardForWidgetDialogSave(cur, config, wholePanelFromWidgetDialog)
             }
         }
     }

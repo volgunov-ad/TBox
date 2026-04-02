@@ -371,7 +371,6 @@ fun MainScreenPanelWidgetSelectionDialog(
                     .fillMaxSize()
                     .padding(8.dp),
                 mainScreenPanelId = panelId,
-                mainScreenPanelSnapshot = mainScreenPanelSnapshot,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -399,6 +398,12 @@ fun MainScreenPanelWidgetSelectionDialog(
         confirmButton = {
             WidgetSelectionDialogActions(
                 showWholePanelButton = true,
+                onWholePanelSectionOpened = {
+                    mainScreenPanelSnapshot?.let { snap ->
+                        state.syncWholePanelDraftFromMainScreen(snap)
+                        state.wholePanelDraftSeeded = true
+                    }
+                },
                 deleteAfterWholePanel = {
                     OutlinedButton(
                         onClick = {
