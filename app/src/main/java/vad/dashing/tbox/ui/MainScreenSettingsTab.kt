@@ -36,8 +36,6 @@ fun MainScreenSettingsTab(
     val mainScreenPanelDeleteInProgressId by
         settingsViewModel.mainScreenPanelDeleteInProgressId.collectAsStateWithLifecycle()
     val isMainScreenPanelEnabled by settingsViewModel.isMainScreenPanelEnabled.collectAsStateWithLifecycle()
-    val isMainScreenPanelClickAction by
-        settingsViewModel.isMainScreenPanelClickAction.collectAsStateWithLifecycle()
     val isMainScreenPanelShowTboxDisconnectIndicator by
         settingsViewModel.isMainScreenPanelShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
     val mainScreenPanelRows by settingsViewModel.mainScreenPanelRows.collectAsStateWithLifecycle()
@@ -180,15 +178,6 @@ fun MainScreenSettingsTab(
                 settingsViewModel.saveMainScreenPanelSetting(enabled)
             },
             stringResource(R.string.settings_show_main_screen_panel_title),
-            "",
-            hasMainScreenPanels
-        )
-        SettingSwitch(
-            isMainScreenPanelClickAction,
-            { enabled ->
-                settingsViewModel.saveMainScreenPanelClickAction(enabled)
-            },
-            stringResource(R.string.settings_open_app_on_main_screen_panel_click_title),
             "",
             hasMainScreenPanels
         )
