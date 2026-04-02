@@ -432,12 +432,7 @@ fun MainScreenPanelWidgetSelectionDialog(
                     ) {
                         return@WidgetSelectionDialogActions
                     }
-                    applyWholePanelSettingsIfAny(
-                        settingsViewModel = settingsViewModel,
-                        state = state,
-                        mainScreenPanelId = panelId,
-                        floatingDashboardPanelId = null
-                    )
+                    val wholePanelPayload = mainScreenWholePanelSavePayloadIfSeeded(state)
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,
@@ -446,7 +441,11 @@ fun MainScreenPanelWidgetSelectionDialog(
                         widgetIndex = widgetIndex,
                         state = state,
                         saveConfigs = { configs ->
-                            settingsViewModel.saveMainScreenDashboardWidgets(panelId, configs)
+                            settingsViewModel.saveMainScreenDashboardWidgets(
+                                panelId,
+                                configs,
+                                wholePanelFromWidgetDialog = wholePanelPayload
+                            )
                         },
                         externalAppWidgetId = externalAppWidgetIdForApply(
                             state,

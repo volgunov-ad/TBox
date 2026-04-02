@@ -514,12 +514,7 @@ fun OverlayWidgetSelectionDialog(
                     ) {
                         return@WidgetSelectionDialogActions
                     }
-                    applyWholePanelSettingsIfAny(
-                        settingsViewModel = settingsViewModel,
-                        state = state,
-                        mainScreenPanelId = null,
-                        floatingDashboardPanelId = panelId
-                    )
+                    val wholePanelPayload = floatingWholePanelSavePayloadIfSeeded(state)
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,
@@ -528,7 +523,11 @@ fun OverlayWidgetSelectionDialog(
                         widgetIndex = widgetIndex,
                         state = state,
                         saveConfigs = { configs ->
-                            settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
+                            settingsViewModel.saveFloatingDashboardWidgets(
+                                panelId,
+                                configs,
+                                wholePanelFromWidgetDialog = wholePanelPayload
+                            )
                         },
                         externalAppWidgetId = externalAppWidgetIdForApply(
                             state,

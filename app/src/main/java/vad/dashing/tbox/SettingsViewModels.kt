@@ -17,6 +17,25 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.Boolean
 
+/**
+ * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
+ * to avoid lost updates when multiple coroutines read stale [mainScreenDashboards] snapshots.
+ */
+data class MainScreenWholePanelFieldsForWidgetDialogSave(
+    val name: String,
+    val rows: Int,
+    val cols: Int,
+    val showTboxDisconnectIndicator: Boolean,
+)
+
+data class FloatingWholePanelFieldsForWidgetDialogSave(
+    val name: String,
+    val rows: Int,
+    val cols: Int,
+    val showTboxDisconnectIndicator: Boolean,
+    val clickAction: Boolean,
+)
+
 class SettingsViewModel(private val settingsManager: SettingsManager) : ViewModel() {
 
     companion object {
@@ -921,9 +940,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveMainScreenDashboardWidgets(
         panelId: String,
-        config: List<FloatingDashboardWidgetConfig>
+        config: List<FloatingDashboardWidgetConfig>,
+        wholePanelFromWidgetDialog: MainScreenWholePanelFieldsForWidgetDialogSave? = null
     ) {
-        updateMainScreenPanel(panelId) { it.copy(widgetsConfig = config) }
+        viewModelScope.launch {
+            applyMainScreenPanelUpdate(panelId) { cur ->
+                var next = cur.copy(widgetsConfig = config)
+                if (wholePanelFromWidgetDialog != null) {
+                    next = next.copy(
+                        name = wholePanelFromWidgetDialog.name,
+                        rows = wholePanelFromWidgetDialog.rows.coerceIn(1, 6),
+                        cols = wholePanelFromWidgetDialog.cols.coerceIn(1, 6),
+                        showTboxDisconnectIndicator =
+                            wholePanelFromWidgetDialog.showTboxDisconnectIndicator
+                    )
+                }
+                next
+            }
+        }
     }
 
     fun saveMainScreenPanelLayout(
@@ -1080,9 +1114,25 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveFloatingDashboardWidgets(
         panelId: String,
-        config: List<FloatingDashboardWidgetConfig>
+        config: List<FloatingDashboardWidgetConfig>,
+        wholePanelFromWidgetDialog: FloatingWholePanelFieldsForWidgetDialogSave? = null
     ) {
-        updateFloatingDashboard(panelId) { it.copy(widgetsConfig = config) }
+        viewModelScope.launch {
+            applyFloatingDashboardUpdate(panelId) { cur ->
+                var next = cur.copy(widgetsConfig = config)
+                if (wholePanelFromWidgetDialog != null) {
+                    next = next.copy(
+                        name = wholePanelFromWidgetDialog.name,
+                        rows = wholePanelFromWidgetDialog.rows.coerceIn(1, 6),
+                        cols = wholePanelFromWidgetDialog.cols.coerceIn(1, 6),
+                        showTboxDisconnectIndicator =
+                            wholePanelFromWidgetDialog.showTboxDisconnectIndicator,
+                        clickAction = wholePanelFromWidgetDialog.clickAction
+                    )
+                }
+                next
+            }
+        }
     }
 
     fun saveFloatingDashboardRows(rows: Int, panelId: String? = null) {

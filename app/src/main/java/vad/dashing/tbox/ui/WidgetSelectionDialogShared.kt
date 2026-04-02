@@ -49,6 +49,8 @@ import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.WidgetPickerActivity
+import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
+import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
@@ -929,33 +931,29 @@ internal fun applyWidgetSelectionChanges(
     dashboardManager.clearWidgetHistory(currentWidget.id)
 }
 
-internal fun applyWholePanelSettingsIfAny(
-    settingsViewModel: SettingsViewModel,
-    state: WidgetSelectionDialogState,
-    mainScreenPanelId: String?,
-    floatingDashboardPanelId: String?,
-) {
-    if (!state.wholePanelDraftSeeded) return
-    val name = state.wholePanelNameDraft.trim()
-    mainScreenPanelId?.takeIf { it.isNotBlank() }?.let { id ->
-        settingsViewModel.saveMainScreenPanelName(id, name)
-        settingsViewModel.saveMainScreenPanelShowTboxDisconnectIndicator(
-            state.wholePanelShowTboxDisconnect,
-            id
-        )
-        settingsViewModel.saveMainScreenPanelRows(state.wholePanelRows, id)
-        settingsViewModel.saveMainScreenPanelCols(state.wholePanelCols, id)
-    }
-    floatingDashboardPanelId?.takeIf { it.isNotBlank() }?.let { id ->
-        settingsViewModel.saveFloatingDashboardName(id, name)
-        settingsViewModel.saveFloatingDashboardClickAction(state.wholePanelClickAction, id)
-        settingsViewModel.saveFloatingDashboardShowTboxDisconnectIndicator(
-            state.wholePanelShowTboxDisconnect,
-            id
-        )
-        settingsViewModel.saveFloatingDashboardRows(state.wholePanelRows, id)
-        settingsViewModel.saveFloatingDashboardCols(state.wholePanelCols, id)
-    }
+internal fun mainScreenWholePanelSavePayloadIfSeeded(
+    state: WidgetSelectionDialogState
+): MainScreenWholePanelFieldsForWidgetDialogSave? {
+    if (!state.wholePanelDraftSeeded) return null
+    return MainScreenWholePanelFieldsForWidgetDialogSave(
+        name = state.wholePanelNameDraft.trim(),
+        rows = state.wholePanelRows,
+        cols = state.wholePanelCols,
+        showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect
+    )
+}
+
+internal fun floatingWholePanelSavePayloadIfSeeded(
+    state: WidgetSelectionDialogState
+): FloatingWholePanelFieldsForWidgetDialogSave? {
+    if (!state.wholePanelDraftSeeded) return null
+    return FloatingWholePanelFieldsForWidgetDialogSave(
+        name = state.wholePanelNameDraft.trim(),
+        rows = state.wholePanelRows,
+        cols = state.wholePanelCols,
+        showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
+        clickAction = state.wholePanelClickAction
+    )
 }
 
 internal fun externalAppWidgetIdForApply(
