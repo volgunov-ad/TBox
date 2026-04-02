@@ -58,6 +58,13 @@ import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
+private fun FloatingDashboardAppLauncherIconCacheDisposeEffect(panelId: String) {
+    DisposableEffect(panelId) {
+        onDispose { disposeAppLauncherPickerIconCache() }
+    }
+}
+
+@Composable
 fun FloatingDashboardUI(
     settingsManager: SettingsManager,
     appDataManager: AppDataManager,
@@ -79,6 +86,8 @@ fun FloatingDashboardUI(
     )
     )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
+
+    FloatingDashboardAppLauncherIconCacheDisposeEffect(panelId)
 
     // Эффект при появлении окна
     LaunchedEffect(panelId) {

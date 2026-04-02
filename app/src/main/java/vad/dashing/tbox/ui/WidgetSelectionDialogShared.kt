@@ -408,10 +408,6 @@ internal fun WidgetSelectionDialogForm(
                             )
                         }
                     }
-                    AppLauncherWidgetSettingsSection(
-                        state = state,
-                        modifier = Modifier.padding(top = 12.dp)
-                    )
                 }
             }
         }
