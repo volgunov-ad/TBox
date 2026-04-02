@@ -14,12 +14,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import android.appwidget.AppWidgetManager
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -61,6 +64,52 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_1_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 
 private val WidgetSelectionDialogActionButtonFontSize = 22.sp
+
+@Composable
+private fun WholePanelNameFieldRow(
+    panelId: String,
+    currentName: String,
+    enabled: Boolean,
+    onApplyName: (String) -> Unit,
+) {
+    var draftName by remember(panelId) { mutableStateOf(currentName) }
+    LaunchedEffect(panelId, currentName) {
+        draftName = currentName
+    }
+    val trimmed = draftName.trim()
+    val dirty = trimmed != currentName
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = draftName,
+            onValueChange = { draftName = it },
+            modifier = Modifier.weight(1f),
+            enabled = enabled,
+            singleLine = true,
+            label = {
+                Text(
+                    text = stringResource(R.string.floating_panel_name_label),
+                    fontSize = 16.sp
+                )
+            },
+            textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+        )
+        Button(
+            onClick = { onApplyName(trimmed) },
+            enabled = enabled && dirty
+        ) {
+            Text(
+                text = stringResource(R.string.floating_panel_rename_button),
+                fontSize = WidgetSelectionDialogActionButtonFontSize
+            )
+        }
+    }
+}
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
@@ -276,6 +325,12 @@ private fun MainScreenPanelWholeSettingsSection(
     val panelConfig by settingsViewModel.mainScreenPanelConfig(panelId)
         .collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxWidth()) {
+        WholePanelNameFieldRow(
+            panelId = panelId,
+            currentName = panelConfig.name,
+            enabled = enabled,
+            onApplyName = { settingsViewModel.saveMainScreenPanelName(panelId, it) }
+        )
         SettingSwitch(
             panelConfig.showTboxDisconnectIndicator,
             { settingsViewModel.saveMainScreenPanelShowTboxDisconnectIndicator(it, panelId) },
@@ -311,6 +366,12 @@ private fun FloatingDashboardWholeSettingsSection(
     val panelConfig by settingsViewModel.floatingDashboardConfig(panelId)
         .collectAsStateWithLifecycle()
     Column(modifier = Modifier.fillMaxWidth()) {
+        WholePanelNameFieldRow(
+            panelId = panelId,
+            currentName = panelConfig.name,
+            enabled = enabled,
+            onApplyName = { settingsViewModel.saveFloatingDashboardName(panelId, it) }
+        )
         SettingSwitch(
             panelConfig.clickAction,
             { settingsViewModel.saveFloatingDashboardClickAction(it, panelId) },
