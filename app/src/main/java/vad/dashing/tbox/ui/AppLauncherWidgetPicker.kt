@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import android.content.Context
 import vad.dashing.tbox.R
 
 internal data class LaunchableAppEntry(
@@ -38,29 +39,71 @@ internal data class LaunchableAppEntry(
     val icon: ImageBitmap?
 )
 
+/**
+ * In-process list of launcher apps with decoded icons. Survives closing the widget dialog so
+ * reopening the picker on the same screen does not re-query and re-decode. Cleared when the host
+ * [androidx.lifecycle.LifecycleOwner] receives [Lifecycle.Event.ON_DESTROY].
+ */
+private object LaunchableAppsWithIconsCache {
+    private var cachedIconSizePx: Int? = null
+    private var entries: List<LaunchableAppEntry>? = null
+
+    fun getOrLoad(iconSizePx: Int, load: () -> List<LaunchableAppEntry>): List<LaunchableAppEntry> {
+        synchronized(this) {
+            if (cachedIconSizePx == iconSizePx && entries != null) {
+                return entries!!
+            }
+            val list = load()
+            cachedIconSizePx = iconSizePx
+            entries = list
+            return list
+        }
+    }
+
+    fun clear() {
+        synchronized(this) {
+            cachedIconSizePx = null
+            entries = null
+        }
+    }
+}
+
+/** Drop decoded picker icons when the host Compose tree is torn down (Activity or overlay). */
+internal fun disposeAppLauncherPickerIconCache() {
+    LaunchableAppsWithIconsCache.clear()
+}
+
+private fun loadLaunchableAppEntries(appContext: Context, iconSizePx: Int): List<LaunchableAppEntry> {
+    val pm = appContext.packageManager
+    val intent = Intent(Intent.ACTION_MAIN).apply {
+        addCategory(Intent.CATEGORY_LAUNCHER)
+    }
+    @Suppress("QueryPermissionsNeeded", "DEPRECATION")
+    val resolves: List<ResolveInfo> = pm.queryIntentActivities(intent, 0)
+    return resolves
+        .map { ri ->
+            val pkg = ri.activityInfo.packageName
+            val label = ri.loadLabel(pm).toString()
+            val bitmap = runCatching {
+                ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
+            }.getOrNull()
+            LaunchableAppEntry(packageName = pkg, label = label, icon = bitmap)
+        }
+        .distinctBy { it.packageName }
+        .sortedBy { it.label.lowercase() }
+}
+
 @Composable
 internal fun rememberLaunchableAppEntries(): List<LaunchableAppEntry> {
     val context = LocalContext.current
-    return remember {
-        val appContext = context.applicationContext
-        val pm = appContext.packageManager
-        val iconSizePx = (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
-        val intent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_LAUNCHER)
+    val appContext = context.applicationContext
+    val iconSizePx = remember(appContext) {
+        (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
+    }
+    return remember(appContext, iconSizePx) {
+        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx) {
+            loadLaunchableAppEntries(appContext, iconSizePx)
         }
-        @Suppress("QueryPermissionsNeeded")
-        val resolves: List<ResolveInfo> = pm.queryIntentActivities(intent, 0)
-        resolves
-            .map { ri ->
-                val pkg = ri.activityInfo.packageName
-                val label = ri.loadLabel(pm).toString()
-                val bitmap = runCatching {
-                    ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
-                }.getOrNull()
-                LaunchableAppEntry(packageName = pkg, label = label, icon = bitmap)
-            }
-            .distinctBy { it.packageName }
-            .sortedBy { it.label.lowercase() }
     }
 }
 

@@ -17,11 +17,13 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
 import vad.dashing.tbox.ui.TboxApp
+import vad.dashing.tbox.ui.disposeAppLauncherPickerIconCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -123,6 +125,9 @@ class MainActivity : ComponentActivity() {
         appDataManager = AppDataManager(this)
 
         setContent {
+            DisposableEffect(Unit) {
+                onDispose { disposeAppLauncherPickerIconCache() }
+            }
             Surface(
                 modifier = Modifier.fillMaxSize()
             ) {
