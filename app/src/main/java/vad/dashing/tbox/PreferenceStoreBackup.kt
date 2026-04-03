@@ -130,6 +130,7 @@ object SettingsBackupCoordinator {
         packageName: String,
         settingsStore: DataStore<Preferences>,
         appDataStore: DataStore<Preferences>,
+        excludeTripLists: Boolean = false,
     ): String {
         val exportedAt = System.currentTimeMillis()
         val root = JSONObject()
@@ -137,10 +138,29 @@ object SettingsBackupCoordinator {
         root.put(KEY_PACKAGE, packageName)
         root.put(KEY_EXPORTED_AT, exportedAt)
         root.put(KEY_SETTINGS, PreferenceStoreBackup.exportEntries(settingsStore))
-        val appDataArr = PreferenceStoreBackup.exportEntries(appDataStore)
-        patchTripsJsonInExportedAppData(appDataArr, exportedAt)
+        var appDataArr = PreferenceStoreBackup.exportEntries(appDataStore)
+        if (excludeTripLists) {
+            appDataArr = filterOutTripListPreferences(appDataArr)
+        } else {
+            patchTripsJsonInExportedAppData(appDataArr, exportedAt)
+        }
         root.put(KEY_APP_DATA, appDataArr)
         return root.toString(2)
+    }
+
+    private fun filterOutTripListPreferences(entries: JSONArray): JSONArray {
+        val out = JSONArray()
+        for (i in 0 until entries.length()) {
+            val o = entries.optJSONObject(i) ?: continue
+            val name = o.optString(PreferenceStoreBackup.K_NAME)
+            if (name == AppDataManager.TRIPS_JSON_PREFERENCE_NAME ||
+                name == AppDataManager.TRIP_FAVORITES_JSON_PREFERENCE_NAME
+            ) {
+                continue
+            }
+            out.put(o)
+        }
+        return out
     }
 
     /**

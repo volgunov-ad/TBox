@@ -26,9 +26,12 @@ class AppDataManager(private val context: Context) {
         /** Full preference name for [TRIPS_JSON_KEY] (backup export matches on this). */
         internal const val TRIPS_JSON_PREFERENCE_NAME = "${KEY_PREFIX}trips_json"
 
+        internal const val TRIP_FAVORITES_JSON_PREFERENCE_NAME = "${KEY_PREFIX}trip_favorites_json"
+
         private val MOTOR_HOURS_KEY = floatPreferencesKey("${KEY_PREFIX}motor_hours")
         private val TRIPS_JSON_KEY = stringPreferencesKey(TRIPS_JSON_PREFERENCE_NAME)
-        private val TRIP_FAVORITES_JSON_KEY = stringPreferencesKey("${KEY_PREFIX}trip_favorites_json")
+        private val TRIP_FAVORITES_JSON_KEY =
+            stringPreferencesKey(TRIP_FAVORITES_JSON_PREFERENCE_NAME)
     }
 
     // Flow для моторных часов

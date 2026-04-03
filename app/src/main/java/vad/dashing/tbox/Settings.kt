@@ -838,11 +838,15 @@ class SettingsManager(private val context: Context) {
         return array.toString()
     }
 
-    suspend fun exportFullBackupJson(appDataManager: AppDataManager): String =
+    suspend fun exportFullBackupJson(
+        appDataManager: AppDataManager,
+        excludeTripLists: Boolean = false,
+    ): String =
         SettingsBackupCoordinator.exportFullJson(
             context.packageName,
             context.settingsDataStore,
             appDataManager.preferencesDataStore,
+            excludeTripLists = excludeTripLists,
         )
 
     suspend fun importFullBackupJson(appDataManager: AppDataManager, json: String): Result<Unit> {

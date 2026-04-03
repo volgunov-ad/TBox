@@ -235,6 +235,7 @@ fun SettingsTabContent(
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onExportSettingsBackup: () -> Unit,
+    onExportSettingsBackupWithoutTrips: () -> Unit,
     onImportSettingsBackup: () -> Unit,
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
@@ -286,6 +287,7 @@ fun SettingsTabContent(
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
     var showExportBackupDialog by remember { mutableStateOf(false) }
+    var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
@@ -682,6 +684,19 @@ fun SettingsTabContent(
                 )
             }
         }
+        Button(
+            onClick = { showExportBackupNoTripsDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.settings_backup_export_without_trips),
+                fontSize = 22.sp,
+                maxLines = 2,
+                textAlign = TextAlign.Center
+            )
+        }
 
         if (showExportBackupDialog) {
             AlertDialog(
@@ -700,6 +715,29 @@ fun SettingsTabContent(
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showExportBackupDialog = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
+        }
+
+        if (showExportBackupNoTripsDialog) {
+            AlertDialog(
+                onDismissRequest = { showExportBackupNoTripsDialog = false },
+                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
+                text = { Text(stringResource(R.string.dialog_save_backup_downloads_no_trips)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onExportSettingsBackupWithoutTrips()
+                            showExportBackupNoTripsDialog = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.action_save))
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showExportBackupNoTripsDialog = false }) {
                         Text(stringResource(R.string.action_cancel))
                     }
                 }

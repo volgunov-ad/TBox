@@ -246,9 +246,11 @@
     <string name="settings_backup_title">Backup</string>
     <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper image files on the device are not included—re-pick wallpapers after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>
+    <string name="settings_backup_export_without_trips">Export JSON without trips</string>
     <string name="settings_backup_import">Import JSON</string>
     <string name="settings_backup_import_choose_file">Choose file</string>
     <string name="dialog_save_backup_downloads">Save full backup (settings and data) to the Downloads folder</string>
+    <string name="dialog_save_backup_downloads_no_trips">Save backup (settings and other app data, without trip list or trip favorites) to the Downloads folder</string>
     <string name="dialog_backup_import_title">Import backup</string>
     <string name="dialog_backup_import_message">Current settings and app data will be fully replaced by the backup. The active trip in memory and storage will match the backup (if the backup has no open trip, any current open trip is replaced by the imported list). Tiles that host third-party app widgets are cleared after import (pick the widget again). Continue and choose a JSON file?</string>
     <string name="settings_expert_mode_title">Expert mode</string>
