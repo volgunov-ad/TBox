@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.valueToString
@@ -234,6 +235,7 @@ fun SettingsTabContent(
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onExportSettingsBackup: () -> Unit,
+    onExportSettingsBackupWithoutTrips: () -> Unit,
     onImportSettingsBackup: () -> Unit,
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
@@ -285,6 +287,7 @@ fun SettingsTabContent(
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
     var showExportBackupDialog by remember { mutableStateOf(false) }
+    var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
@@ -484,7 +487,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_floating_rows_title),
             "",
             hasFloatingPanels,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
         SettingDropdownGeneric(
             floatingDashboardCols,
@@ -494,7 +497,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_floating_cols_title),
             "",
             hasFloatingPanels,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
         FloatingDashboardPositionSizeSettings(
             settingsViewModel,
@@ -540,7 +543,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_dashboard_rows_title),
             "",
             true,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.MAIN_TAB_DASHBOARD_GRID_OPTIONS
         )
         SettingDropdownGeneric(
             dashboardCols,
@@ -550,7 +553,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_dashboard_cols_title),
             "",
             true,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.MAIN_TAB_DASHBOARD_GRID_OPTIONS
         )
 
         SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
@@ -681,6 +684,19 @@ fun SettingsTabContent(
                 )
             }
         }
+        Button(
+            onClick = { showExportBackupNoTripsDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.settings_backup_export_without_trips),
+                fontSize = 22.sp,
+                maxLines = 2,
+                textAlign = TextAlign.Center
+            )
+        }
 
         if (showExportBackupDialog) {
             AlertDialog(
@@ -699,6 +715,29 @@ fun SettingsTabContent(
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showExportBackupDialog = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
+        }
+
+        if (showExportBackupNoTripsDialog) {
+            AlertDialog(
+                onDismissRequest = { showExportBackupNoTripsDialog = false },
+                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
+                text = { Text(stringResource(R.string.dialog_save_backup_downloads_no_trips)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onExportSettingsBackupWithoutTrips()
+                            showExportBackupNoTripsDialog = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.action_save))
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showExportBackupNoTripsDialog = false }) {
                         Text(stringResource(R.string.action_cancel))
                     }
                 }

@@ -137,6 +137,22 @@ class SettingsManager(private val context: Context) {
         /** Tab index that shows the home [vad.dashing.tbox.ui.MainScreen] instead of [vad.dashing.tbox.ui.TboxScreen]. */
         const val MAIN_SCREEN_SELECTED_TAB_INDEX = 100
 
+        /** Left menu tab index for the Trips section ([vad.dashing.tbox.ui.TabItems]). */
+        const val TRIPS_SELECTED_TAB_INDEX = 4
+
+        /** Max tile rows/columns for main-screen embedded panels and floating overlay dashboards. */
+        const val DASHBOARD_PANEL_MAX_GRID_DIMENSION = 10
+
+        /** Dropdown options 1…[DASHBOARD_PANEL_MAX_GRID_DIMENSION] for panel grid settings. */
+        val DASHBOARD_PANEL_GRID_OPTIONS: List<Int> =
+            (1..DASHBOARD_PANEL_MAX_GRID_DIMENSION).toList()
+
+        /** Max rows/cols for the in-app «Плитки» tab grid (not floating / main-screen panels). */
+        const val MAIN_TAB_DASHBOARD_MAX_GRID_DIMENSION = 6
+
+        val MAIN_TAB_DASHBOARD_GRID_OPTIONS: List<Int> =
+            (1..MAIN_TAB_DASHBOARD_MAX_GRID_DIMENSION).toList()
+
         private const val KEY_PREFIX = "vad.dashing.tbox."
 
         // Boolean настройки
@@ -198,7 +214,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT = 0.3f
         private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
         private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
-        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = false
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
@@ -537,8 +553,8 @@ class SettingsManager(private val context: Context) {
             .distinctBy { it.id }
             .map {
                 it.copy(
-                    rows = it.rows.coerceIn(1, 6),
-                    cols = it.cols.coerceIn(1, 6)
+                    rows = it.rows.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+                    cols = it.cols.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION)
                 )
             }
         saveCustomString(FLOATING_DASHBOARDS_LIST_KEY, serializeFloatingDashboards(normalized))
@@ -641,8 +657,8 @@ class SettingsManager(private val context: Context) {
             .distinctBy { it.id }
             .map {
                 it.copy(
-                    rows = it.rows.coerceIn(1, 6),
-                    cols = it.cols.coerceIn(1, 6),
+                    rows = it.rows.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+                    cols = it.cols.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
                     relX = it.relX.coerceIn(0f, 1f),
                     relY = it.relY.coerceIn(0f, 1f),
                     relWidth = it.relWidth.coerceIn(0.08f, 1f),
@@ -772,8 +788,10 @@ class SettingsManager(private val context: Context) {
             name = name,
             enabled = obj.optBoolean("enabled", DEFAULT_MAIN_SCREEN_PANEL_ENABLED),
             widgetsConfig = parseWidgetConfigsFromAny(obj.opt("widgetsConfig")),
-            rows = obj.optInt("rows", DEFAULT_MAIN_SCREEN_PANEL_ROWS).coerceIn(1, 6),
-            cols = obj.optInt("cols", DEFAULT_MAIN_SCREEN_PANEL_COLS).coerceIn(1, 6),
+            rows = obj.optInt("rows", DEFAULT_MAIN_SCREEN_PANEL_ROWS)
+                .coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+            cols = obj.optInt("cols", DEFAULT_MAIN_SCREEN_PANEL_COLS)
+                .coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
             relX = obj.optDouble("relX", DEFAULT_MAIN_SCREEN_PANEL_REL_X.toDouble()).toFloat()
                 .coerceIn(0f, 1f),
             relY = obj.optDouble("relY", DEFAULT_MAIN_SCREEN_PANEL_REL_Y.toDouble()).toFloat()
@@ -838,8 +856,10 @@ class SettingsManager(private val context: Context) {
             name = name,
             enabled = obj.optBoolean("enabled", DEFAULT_FLOATING_DASHBOARD_ENABLED),
             widgetsConfig = parseWidgetConfigsFromAny(obj.opt("widgetsConfig")),
-            rows = obj.optInt("rows", DEFAULT_FLOATING_DASHBOARD_ROWS).coerceIn(1, 6),
-            cols = obj.optInt("cols", DEFAULT_FLOATING_DASHBOARD_COLS).coerceIn(1, 6),
+            rows = obj.optInt("rows", DEFAULT_FLOATING_DASHBOARD_ROWS)
+                .coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+            cols = obj.optInt("cols", DEFAULT_FLOATING_DASHBOARD_COLS)
+                .coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
             width = obj.optInt("width", DEFAULT_FLOATING_DASHBOARD_WIDTH),
             height = obj.optInt("height", DEFAULT_FLOATING_DASHBOARD_HEIGHT),
             startX = obj.optInt("startX", DEFAULT_FLOATING_DASHBOARD_START_X),
@@ -875,11 +895,15 @@ class SettingsManager(private val context: Context) {
         return array.toString()
     }
 
-    suspend fun exportFullBackupJson(appDataManager: AppDataManager): String =
+    suspend fun exportFullBackupJson(
+        appDataManager: AppDataManager,
+        excludeTripLists: Boolean = false,
+    ): String =
         SettingsBackupCoordinator.exportFullJson(
             context.packageName,
             context.settingsDataStore,
             appDataManager.preferencesDataStore,
+            excludeTripLists = excludeTripLists,
         )
 
     suspend fun importFullBackupJson(appDataManager: AppDataManager, json: String): Result<Unit> {
