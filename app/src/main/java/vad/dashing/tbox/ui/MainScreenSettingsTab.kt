@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 
 @Composable
@@ -209,7 +210,7 @@ fun MainScreenSettingsTab(
             stringResource(R.string.settings_main_screen_panel_rows_title),
             "",
             hasMainScreenPanels,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
         SettingDropdownGeneric(
             mainScreenPanelCols,
@@ -219,7 +220,7 @@ fun MainScreenSettingsTab(
             stringResource(R.string.settings_main_screen_panel_cols_title),
             "",
             hasMainScreenPanels,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
         MainScreenPanelRelativeLayoutSettings(
             settingsViewModel = settingsViewModel,

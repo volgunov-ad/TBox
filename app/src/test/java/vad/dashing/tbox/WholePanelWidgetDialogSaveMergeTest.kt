@@ -62,7 +62,7 @@ class WholePanelWidgetDialogSaveMergeTest {
         val merged = mergeMainScreenPanelForWidgetDialogSave(baseMain, newWidgets, draft)
         assertEquals(newWidgets, merged.widgetsConfig)
         assertEquals("New", merged.name)
-        assertEquals(6, merged.rows)
+        assertEquals(SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION, merged.rows)
         assertEquals(1, merged.cols)
         assertEquals(true, merged.showTboxDisconnectIndicator)
         assertEquals(true, merged.clickAction)

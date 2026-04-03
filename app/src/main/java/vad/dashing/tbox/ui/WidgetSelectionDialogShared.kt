@@ -46,6 +46,7 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
@@ -343,7 +344,7 @@ private fun MainScreenPanelWholeSettingsSection(
             stringResource(R.string.settings_main_screen_panel_rows_title),
             "",
             enabled,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
         SettingDropdownGeneric(
             state.wholePanelCols,
@@ -351,7 +352,7 @@ private fun MainScreenPanelWholeSettingsSection(
             stringResource(R.string.settings_main_screen_panel_cols_title),
             "",
             enabled,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
     }
 }
@@ -398,7 +399,7 @@ private fun FloatingDashboardWholeSettingsSection(
             stringResource(R.string.settings_floating_rows_title),
             "",
             enabled,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
         SettingDropdownGeneric(
             state.wholePanelCols,
@@ -406,7 +407,7 @@ private fun FloatingDashboardWholeSettingsSection(
             stringResource(R.string.settings_floating_cols_title),
             "",
             enabled,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
     }
 }

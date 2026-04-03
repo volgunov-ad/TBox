@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.valueToString
@@ -484,7 +485,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_floating_rows_title),
             "",
             hasFloatingPanels,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
         SettingDropdownGeneric(
             floatingDashboardCols,
@@ -494,7 +495,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_floating_cols_title),
             "",
             hasFloatingPanels,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
         FloatingDashboardPositionSizeSettings(
             settingsViewModel,
@@ -540,7 +541,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_dashboard_rows_title),
             "",
             true,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.MAIN_TAB_DASHBOARD_GRID_OPTIONS
         )
         SettingDropdownGeneric(
             dashboardCols,
@@ -550,7 +551,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_dashboard_cols_title),
             "",
             true,
-            listOf(1, 2, 3, 4, 5, 6)
+            SettingsManager.MAIN_TAB_DASHBOARD_GRID_OPTIONS
         )
 
         SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))

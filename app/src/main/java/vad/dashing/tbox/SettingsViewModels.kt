@@ -47,8 +47,8 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
     val w = wholePanelFromWidgetDialog ?: return base
     return base.copy(
         name = w.name,
-        rows = w.rows.coerceIn(1, 6),
-        cols = w.cols.coerceIn(1, 6),
+        rows = w.rows.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+        cols = w.cols.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
         clickAction = w.clickAction
     )
@@ -63,8 +63,8 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
     val w = wholePanelFromWidgetDialog ?: return base
     return base.copy(
         name = w.name,
-        rows = w.rows.coerceIn(1, 6),
-        cols = w.cols.coerceIn(1, 6),
+        rows = w.rows.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+        cols = w.cols.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
         clickAction = w.clickAction
     )
@@ -1083,7 +1083,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveMainScreenPanelRows(rows: Int, panelId: String? = null) {
-        if (rows !in 1..6) return
+        if (rows !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
         val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
             { it.copy(rows = rows) }
         if (panelId != null) {
@@ -1094,7 +1094,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveMainScreenPanelCols(cols: Int, panelId: String? = null) {
-        if (cols !in 1..6) return
+        if (cols !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
         val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
             { it.copy(cols = cols) }
         if (panelId != null) {
@@ -1149,7 +1149,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveFloatingDashboardRows(rows: Int, panelId: String? = null) {
-        if (rows !in 1..6) return
+        if (rows !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
         val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
             { it.copy(rows = rows) }
         if (panelId != null) {
@@ -1160,7 +1160,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveFloatingDashboardCols(cols: Int, panelId: String? = null) {
-        if (cols !in 1..6) return
+        if (cols !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
         val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
             { it.copy(cols = cols) }
         if (panelId != null) {
@@ -1292,7 +1292,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveDashboardRows(config: Int) {
-        if (config in 1..6) {
+        if (config in 1..SettingsManager.MAIN_TAB_DASHBOARD_MAX_GRID_DIMENSION) {
             viewModelScope.launch {
                 settingsManager.saveDashboardRows(config)
             }
@@ -1300,7 +1300,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveDashboardCols(config: Int) {
-        if (config in 1..6) {
+        if (config in 1..SettingsManager.MAIN_TAB_DASHBOARD_MAX_GRID_DIMENSION) {
             viewModelScope.launch {
                 settingsManager.saveDashboardCols(config)
             }
