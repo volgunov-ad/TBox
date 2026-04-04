@@ -45,6 +45,7 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
@@ -378,6 +379,9 @@ fun FloatingDashboard(
                         ) {
                             launchAppFromWidget(context, cfg.launcherAppPackage)
                         } else if (isFloatingDashboardClickAction) {
+                            if (cfg != null && isActiveTripWidgetDataKey(cfg.dataKey)) {
+                                settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_SELECTED_TAB_INDEX)
+                            }
                             openMainActivityFromWidget(context)
                         }
                     },
@@ -436,6 +440,8 @@ fun OverlayWidgetSelectionDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val floatingDashboardSnapshot by settingsViewModel.floatingDashboardConfig(panelId)
+        .collectAsStateWithLifecycle()
     val state = rememberWidgetSelectionDialogState(
         widgetIndex = widgetIndex,
         currentWidgets = currentWidgets,
@@ -457,14 +463,18 @@ fun OverlayWidgetSelectionDialog(
                 .padding(8.dp)
         ) {
             WidgetSelectionDialogForm(
-                titleText = if (state.showAdvancedSettings) {
-                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                } else {
-                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
+                titleText = when {
+                    state.showWholePanelSettings ->
+                        stringResource(R.string.widget_panel_settings_title)
+                    state.showAdvancedSettings ->
+                        stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                    else ->
+                        stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                 },
                 state = state,
                 modifier = Modifier
                     .weight(1f),
+                floatingDashboardPanelId = panelId,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -491,6 +501,13 @@ fun OverlayWidgetSelectionDialog(
 
             // Кнопки действий
             WidgetSelectionDialogActions(
+                showWholePanelButton = true,
+                onWholePanelSectionOpened = {
+                    floatingDashboardSnapshot?.let { snap ->
+                        state.syncWholePanelDraftFromFloating(snap)
+                        state.wholePanelDraftSeeded = true
+                    }
+                },
                 state = state,
                 onDismiss = onDismiss,
                 onSave = {
@@ -506,6 +523,7 @@ fun OverlayWidgetSelectionDialog(
                     ) {
                         return@WidgetSelectionDialogActions
                     }
+                    val wholePanelPayload = floatingWholePanelSavePayloadIfSeeded(state)
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,
@@ -514,7 +532,11 @@ fun OverlayWidgetSelectionDialog(
                         widgetIndex = widgetIndex,
                         state = state,
                         saveConfigs = { configs ->
-                            settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
+                            settingsViewModel.saveFloatingDashboardWidgets(
+                                panelId,
+                                configs,
+                                wholePanelFromWidgetDialog = wholePanelPayload
+                            )
                         },
                         externalAppWidgetId = externalAppWidgetIdForApply(
                             state,
@@ -526,8 +548,7 @@ fun OverlayWidgetSelectionDialog(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 20.dp),
-                saveTextFontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    .padding(top = 20.dp)
             )
         }
     }

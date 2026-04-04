@@ -69,6 +69,7 @@ fun TboxApp(
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
     onExportSettingsBackup: () -> Unit,
+    onExportSettingsBackupWithoutTrips: () -> Unit,
     onImportSettingsBackup: () -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
@@ -109,6 +110,7 @@ fun TboxApp(
                 onTboxRestart = onTboxRestart,
                 onSaveToFile = onSaveToFile,
                 onExportSettingsBackup = onExportSettingsBackup,
+                onExportSettingsBackupWithoutTrips = onExportSettingsBackupWithoutTrips,
                 onImportSettingsBackup = onImportSettingsBackup,
                 onServiceCommand = onServiceCommand,
                 onMockLocationSettingChanged = onMockLocationSettingChanged,
@@ -152,6 +154,7 @@ fun TboxScreen(
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
     onExportSettingsBackup: () -> Unit,
+    onExportSettingsBackupWithoutTrips: () -> Unit,
     onImportSettingsBackup: () -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
@@ -370,6 +373,7 @@ fun TboxScreen(
                         onMockLocationSettingChanged,
                         onServiceCommand,
                         onExportSettingsBackup = onExportSettingsBackup,
+                        onExportSettingsBackupWithoutTrips = onExportSettingsBackupWithoutTrips,
                         onImportSettingsBackup = onImportSettingsBackup,
                     )
                     6 -> if (isExpertModeEnabled) {
@@ -431,6 +435,7 @@ fun SettingsTab(
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
     onExportSettingsBackup: () -> Unit,
+    onExportSettingsBackupWithoutTrips: () -> Unit,
     onImportSettingsBackup: () -> Unit,
 ) {
     SettingsTabContent(
@@ -440,6 +445,7 @@ fun SettingsTab(
         onMockLocationSettingChanged = onMockLocationSettingChanged,
         onServiceCommand = onServiceCommand,
         onExportSettingsBackup = onExportSettingsBackup,
+        onExportSettingsBackupWithoutTrips = onExportSettingsBackupWithoutTrips,
         onImportSettingsBackup = onImportSettingsBackup,
     )
 }

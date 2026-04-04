@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.runBlocking
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -69,7 +71,9 @@ class BackgroundService : Service() {
     private var tBoxClient: TBoxClient? = null
     @Volatile
     private var lastPacketAtMs: Long = 0
-    private val mutex = Mutex()
+    private val sendRawMessageMutex = Mutex()
+    /** Serializes [onStartCommand] handling so each intent awaits settings snapshot and runs in order. */
+    private val commandRouterMutex = Mutex()
     private val tripsPersistMutex = Mutex()
     private val packetProcessingDispatcher =
         Executors.newSingleThreadExecutor { runnable ->
@@ -96,7 +100,16 @@ class BackgroundService : Service() {
     private var getSMSJob: Job? = null
     /** Serializes delayed / repeated "open MainActivity" commands: each new request replaces the previous. */
     private var openMainActivityJob: Job? = null
+    /** Cancels in-flight [ACTION_START] bootstrap if [ACTION_STOP] runs mid-startup. */
+    private var serviceStartupJob: Job? = null
     private var packetSilenceChecks: Int = 0
+
+    @Volatile
+    var servicePhase: ServiceLifecyclePhase = ServiceLifecyclePhase.Idle
+        internal set
+
+    /** True after [reloadTripsFromDataStoreSuspend] has applied disk trips to [TripRepository]. */
+    private val tripsFromDiskReady = AtomicBoolean(false)
 
     private var netUpdateTime: Long = 5000
     private var apnUpdateTime: Long = 10000
@@ -245,44 +258,111 @@ class BackgroundService : Service() {
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
 
-        // Eagerly subscribed StateFlows so .value always tracks DataStore (Lazily would keep
-        // initial values until some code path called collect on that flow).
-        autoModemRestart = settingsManager.autoModemRestartFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        autoTboxReboot = settingsManager.autoTboxRebootFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        autoSuspendTboxApp = settingsManager.autoSuspendTboxAppFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        autoStopTboxApp = settingsManager.autoStopTboxAppFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        autoSuspendTboxMdc = settingsManager.autoSuspendTboxMdcFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        autoStopTboxMdc = settingsManager.autoStopTboxMdcFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        autoSuspendTboxSwd = settingsManager.autoSuspendTboxSwdFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        autoPreventTboxRestart = settingsManager.autoPreventTboxRestartFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        getCanFrame = settingsManager.getCanFrameFlow
-            .stateIn(scope, SharingStarted.Eagerly, true)
-        getCycleSignal = settingsManager.getCycleSignalFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        getLocData = settingsManager.getLocDataFlow
-            .stateIn(scope, SharingStarted.Eagerly, true)
-        widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        mockLocation = settingsManager.mockLocationFlow
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        floatingDashboards = settingsManager.floatingDashboardsFlow
-            .stateIn(scope, SharingStarted.Eagerly, emptyList())
-        canDataSaveCount = settingsManager.canDataSaveCountFlow
-            .stateIn(scope, SharingStarted.Eagerly, 5)
-        fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
-            .stateIn(scope, SharingStarted.Eagerly, 57)
-        splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
-            .stateIn(scope, SharingStarted.Eagerly, 5)
+        val settingsSnap = runBlocking(Dispatchers.IO) {
+            try {
+                settingsManager.readBackgroundServiceSettingsSnapshot()
+            } catch (e: Exception) {
+                Log.e("Background Service", "Initial settings snapshot read failed", e)
+                TboxRepository.addLog(
+                    "ERROR",
+                    "Background Service",
+                    "Settings snapshot: ${e.message}"
+                )
+                null
+            }
+        }
+        if (settingsSnap != null) {
+            autoModemRestart = settingsManager.autoModemRestartFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.autoModemRestart)
+            autoTboxReboot = settingsManager.autoTboxRebootFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.autoTboxReboot)
+            autoSuspendTboxApp = settingsManager.autoSuspendTboxAppFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.autoSuspendTboxApp)
+            autoStopTboxApp = settingsManager.autoStopTboxAppFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.autoStopTboxApp)
+            autoSuspendTboxMdc = settingsManager.autoSuspendTboxMdcFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.autoSuspendTboxMdc)
+            autoStopTboxMdc = settingsManager.autoStopTboxMdcFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.autoStopTboxMdc)
+            autoSuspendTboxSwd = settingsManager.autoSuspendTboxSwdFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.autoSuspendTboxSwd)
+            autoPreventTboxRestart = settingsManager.autoPreventTboxRestartFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.autoPreventTboxRestart)
+            getCanFrame = settingsManager.getCanFrameFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.getCanFrame)
+            getCycleSignal = settingsManager.getCycleSignalFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.getCycleSignal)
+            getLocData = settingsManager.getLocDataFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.getLocData)
+            widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.widgetShowIndicator)
+            widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.widgetShowLocIndicator)
+            mockLocation = settingsManager.mockLocationFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.mockLocation)
+            floatingDashboards = settingsManager.floatingDashboardsFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.floatingDashboards)
+            canDataSaveCount = settingsManager.canDataSaveCountFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.canDataSaveCount)
+            fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.fuelTankLiters)
+            splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
+                .stateIn(scope, SharingStarted.Eagerly, settingsSnap.splitTripTimeMinutes)
+        } else {
+            autoModemRestart = settingsManager.autoModemRestartFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            autoTboxReboot = settingsManager.autoTboxRebootFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            autoSuspendTboxApp = settingsManager.autoSuspendTboxAppFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            autoStopTboxApp = settingsManager.autoStopTboxAppFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            autoSuspendTboxMdc = settingsManager.autoSuspendTboxMdcFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            autoStopTboxMdc = settingsManager.autoStopTboxMdcFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            autoSuspendTboxSwd = settingsManager.autoSuspendTboxSwdFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            autoPreventTboxRestart = settingsManager.autoPreventTboxRestartFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            getCanFrame = settingsManager.getCanFrameFlow
+                .stateIn(scope, SharingStarted.Eagerly, true)
+            getCycleSignal = settingsManager.getCycleSignalFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            getLocData = settingsManager.getLocDataFlow
+                .stateIn(scope, SharingStarted.Eagerly, true)
+            widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            widgetShowLocIndicator = settingsManager.widgetShowLocIndicatorFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            mockLocation = settingsManager.mockLocationFlow
+                .stateIn(scope, SharingStarted.Eagerly, false)
+            floatingDashboards = settingsManager.floatingDashboardsFlow
+                .stateIn(scope, SharingStarted.Eagerly, emptyList())
+            canDataSaveCount = settingsManager.canDataSaveCountFlow
+                .stateIn(scope, SharingStarted.Eagerly, 5)
+            fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
+                .stateIn(scope, SharingStarted.Eagerly, 57)
+            splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
+                .stateIn(scope, SharingStarted.Eagerly, 5)
+        }
+
+        runBlocking(Dispatchers.IO) {
+            try {
+                val tripsJson = appDataManager.tripsJsonFlow.first()
+                val favJson = appDataManager.tripFavoritesJsonFlow.first()
+                TripRepository.setTripsFromStore(
+                    tripsListFromJson(tripsJson),
+                    favoritesSetFromJson(favJson)
+                )
+                tripsFromDiskReady.set(true)
+            } catch (e: Exception) {
+                Log.e("Background Service", "Initial trips load failed", e)
+                TboxRepository.addLog("ERROR", "Background Service", "Initial trips: ${e.message}")
+                // Keep processing: [TboxApplication] may have populated trips; blocking TBox would be worse.
+                tripsFromDiskReady.set(true)
+            }
+        }
 
         val filter = IntentFilter().apply {
             addAction(TboxBroadcastReceiver.MAIN_ACTION)
@@ -347,50 +427,109 @@ class BackgroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-
-        when (intent?.action) {
-            ACTION_START -> {
-                if (!isRunning) {
+        scope.launch(Dispatchers.Main.immediate + exceptionHandler) {
+            commandRouterMutex.withLock {
+                val kickoffStart = intent?.action == ACTION_START && !isRunning
+                if (kickoffStart) {
                     isRunning = true
-                    val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
-                    val notification = createNotification("Start service")
+                    val notification = withContext(Dispatchers.Default) {
+                        createNotification("Start service")
+                    }
                     startForeground(NOTIFICATION_ID, notification)
                     TboxRepository.addLog("INFO", "Service", "Start service")
-                    connectTboxClient()
-                    TboxRepository.updateServiceStartTime()
-                    // Process may start the service without Application.onCreate (e.g. killed HU);
-                    // reload trips so split-window resume sees persisted data.
-                    reloadTripsFromDataStore()
-                    val splitWindowMs = runBlocking {
-                        splitTripTimeMinutesSetting.first().toLong() * 60_000L
-                    }
-                    resetTripStateForNewServiceSession(splitWindowMs)
-                    applyTripResumeIfLastTripContinues(splitWindowMs)
-                    startSettingsListener()
-                    startNetUpdater()
-                    startAPNUpdater()
-                    startCheckConnection()
-                    //startCheckGateVersion()
-                    startPeriodicJob()
-                    startDataListener()
-                    if (startFromBoot) {
-                        maybeOpenMainScreenAfterBoot()
+                }
+                handleStartCommandIntent(intent, flags, startId, kickoffStart)
+            }
+        }
+        return START_STICKY
+    }
+
+    private suspend fun handleStartCommandIntent(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+        kickoffStart: Boolean,
+    ) {
+        when (intent?.action) {
+            ACTION_START -> {
+                if (!kickoffStart) return
+                val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
+                serviceStartupJob?.cancel()
+                serviceStartupJob = scope.launch(exceptionHandler) {
+                    try {
+                        if (!isRunning) return@launch
+                        servicePhase = ServiceLifecyclePhase.Starting
+                        TripRepository.setTripsProcessingEnabled(false)
+                        reloadTripsFromDataStoreSuspend()
+                        if (!isRunning) return@launch
+                        TboxRepository.updateServiceStartTime()
+                        val splitWindowMs =
+                            splitTripTimeMinutesSetting.value.toLong() * 60_000L
+                        resetTripStateForNewServiceSession(splitWindowMs)
+                        applyTripResumeIfLastTripContinues(splitWindowMs)
+                        if (startFromBoot) {
+                            maybeOpenMainScreenAfterBootSuspend()
+                        }
+                        if (!isRunning) return@launch
+                        connectTboxClient()
+                        startSettingsListener()
+                        startNetUpdater()
+                        startAPNUpdater()
+                        startCheckConnection()
+                        startPeriodicJob()
+                        startDataListener()
+                        TripRepository.setTripsProcessingEnabled(true)
+                        servicePhase = ServiceLifecyclePhase.Running
+                    } catch (e: CancellationException) {
+                        servicePhase = ServiceLifecyclePhase.Idle
+                        TripRepository.setTripsProcessingEnabled(false)
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e("Background Service", "Service startup pipeline failed", e)
+                        TboxRepository.addLog(
+                            "ERROR",
+                            "Service",
+                            "Startup failed: ${e.message}"
+                        )
+                        servicePhase = ServiceLifecyclePhase.Idle
+                        TripRepository.setTripsProcessingEnabled(false)
                     }
                 }
             }
             ACTION_RELOAD_TRIPS_FROM_STORE -> {
                 if (isRunning) {
-                    reloadTripsFromDataStore()
-                    val splitWindowMs = runBlocking {
-                        splitTripTimeMinutesSetting.first().toLong() * 60_000L
+                    TripRepository.setTripsProcessingEnabled(false)
+                    try {
+                        reloadTripsFromDataStoreSuspend()
+                        if (!isRunning) return
+                        val splitWindowMs =
+                            splitTripTimeMinutesSetting.value.toLong() * 60_000L
+                        resetTripStateForNewServiceSession(splitWindowMs)
+                        // Do not call applyTripResumeIfLastTripContinues: imported DataStore snapshot
+                        // is authoritative; resume logic could reopen a recently ended trip within split window.
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e("Background Service", "Reload trips failed", e)
+                        TboxRepository.addLog(
+                            "ERROR",
+                            "Service",
+                            "Reload trips: ${e.message}"
+                        )
+                    } finally {
+                        if (isRunning) {
+                            TripRepository.setTripsProcessingEnabled(true)
+                        }
                     }
-                    resetTripStateForNewServiceSession(splitWindowMs)
-                    // Do not call applyTripResumeIfLastTripContinues: imported DataStore snapshot
-                    // is authoritative; resume logic could reopen a recently ended trip within split window.
                 }
             }
             ACTION_STOP -> {
                 if (isRunning) {
+                    servicePhase = ServiceLifecyclePhase.Stopping
+                    TripRepository.setTripsProcessingEnabled(false)
+                    serviceStartupJob?.cancel()
+                    serviceStartupJob = null
+                    tripsFromDiskReady.set(false)
                     openMainActivityJob?.cancel()
                     openMainActivityJob = null
                     isRunning = false
@@ -405,9 +544,12 @@ class BackgroundService : Service() {
                     stopStateBroadcastListener()
                     stopReadAllSMS()
                     disconnectTboxClient()
-                    val notification = createNotification("Stop service")
+                    val notification = withContext(Dispatchers.Default) {
+                        createNotification("Stop service")
+                    }
                     startForeground(NOTIFICATION_ID, notification)
                     overlayController.closeAllOverlays()
+                    servicePhase = ServiceLifecyclePhase.Idle
                 }
             }
             ACTION_SEND_AT -> {
@@ -476,7 +618,6 @@ class BackgroundService : Service() {
                 scheduleOpenMainActivity(delayMs)
             }
         }
-        return START_STICKY
     }
 
     private fun createNotificationChannel() {
@@ -854,6 +995,7 @@ class BackgroundService : Service() {
      * (not RPM) for samples while the trip is active and RPM > 0.
      */
     private fun onTripRpmSample(rpm: Float, prevRpm: Float, nowElapsedMs: Long) {
+        if (!TripRepository.isTripsProcessingEnabled()) return
         synchronized(TripRepository.lock) {
             val wallNow = System.currentTimeMillis()
             val splitWindowMs = splitTripTimeMinutesSetting.value * 60_000L
@@ -1047,14 +1189,32 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun reloadTripsFromDataStore() {
-        runBlocking {
-            val tripsJson = appDataManager.tripsJsonFlow.first()
-            val favJson = appDataManager.tripFavoritesJsonFlow.first()
-            TripRepository.setTripsFromStore(
-                tripsListFromJson(tripsJson),
-                favoritesSetFromJson(favJson)
-            )
+    /**
+     * Loads trips and favorites from disk in parallel. Clears [tripsFromDiskReady] until
+     * [TripRepository] has the new snapshot so [responseWork] does not run trip/CAN side effects mid-load.
+     */
+    private suspend fun reloadTripsFromDataStoreSuspend() {
+        tripsFromDiskReady.set(false)
+        try {
+            coroutineScope {
+                val tripsJsonDeferred = async(Dispatchers.IO) {
+                    appDataManager.tripsJsonFlow.first()
+                }
+                val favoritesJsonDeferred = async(Dispatchers.IO) {
+                    appDataManager.tripFavoritesJsonFlow.first()
+                }
+                TripRepository.setTripsFromStore(
+                    tripsListFromJson(tripsJsonDeferred.await()),
+                    favoritesSetFromJson(favoritesJsonDeferred.await())
+                )
+            }
+            tripsFromDiskReady.set(true)
+        } catch (e: CancellationException) {
+            tripsFromDiskReady.set(false)
+            throw e
+        } catch (e: Exception) {
+            tripsFromDiskReady.set(false)
+            throw e
         }
     }
 
@@ -1945,6 +2105,7 @@ class BackgroundService : Service() {
 
     private fun cancelAllJobs() {
         listOf(
+            serviceStartupJob,
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
@@ -2030,7 +2191,7 @@ class BackgroundService : Service() {
             var data = fillHeader(msg.size, tid, sid, cmd) + msg
             val checkSum = xorSum(data)
             data += checkSum
-            mutex.withLock {
+            sendRawMessageMutex.withLock {
                 withTimeout(1000) { // Таймаут на отправку
                     client.sendRawMessage(data)
                 }
@@ -2049,6 +2210,9 @@ class BackgroundService : Service() {
     }
 
     private fun responseWork(receivePacket: DatagramPacket) {
+        if (!tripsFromDiskReady.get()) {
+            return
+        }
         val fromAddress = receivePacket.address.hostAddress
         val fromPort = receivePacket.port
         if (!checkPacket(receivePacket.data)) {
@@ -3139,21 +3303,19 @@ class BackgroundService : Service() {
     }
 
     /**
-     * After boot-time service start: wait for core jobs to spin up, then optionally bring
-     * [MainActivity] to the foreground on the home main screen (tab 100).
+     * After boot-time service start: once trips and settings snapshot are ready, optionally bring
+     * [MainActivity] to the foreground on the home main screen (tab 100). Runs before TBox connect
+     * so the UI can appear earlier.
      */
-    private fun maybeOpenMainScreenAfterBoot() {
-        scope.launch {
-            delay(2000)
-            try {
-                val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
-                if (!enabled) return@launch
-                settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
-                scheduleOpenMainActivity(0L)
-            } catch (e: Exception) {
-                Log.e("BackgroundService", "Open main screen after boot failed", e)
-                TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")
-            }
+    private suspend fun maybeOpenMainScreenAfterBootSuspend() {
+        try {
+            val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
+            if (!enabled) return
+            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
+            scheduleOpenMainActivity(0L)
+        } catch (e: Exception) {
+            Log.e("BackgroundService", "Open main screen after boot failed", e)
+            TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")
         }
     }
 }

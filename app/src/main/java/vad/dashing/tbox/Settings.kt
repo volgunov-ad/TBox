@@ -106,11 +106,52 @@ data class FloatingDashboardConfig(
     val showTboxDisconnectIndicator: Boolean = true
 )
 
+/**
+ * One-shot read of all preferences used by [BackgroundService] `stateIn` flows, so the service
+ * can subscribe with [SharingStarted.Eagerly] using persisted values without N separate DataStore reads.
+ */
+data class BackgroundServiceSettingsSnapshot(
+    val autoModemRestart: Boolean,
+    val autoTboxReboot: Boolean,
+    val autoSuspendTboxApp: Boolean,
+    val autoStopTboxApp: Boolean,
+    val autoSuspendTboxMdc: Boolean,
+    val autoStopTboxMdc: Boolean,
+    val autoSuspendTboxSwd: Boolean,
+    val autoPreventTboxRestart: Boolean,
+    val getCanFrame: Boolean,
+    val getCycleSignal: Boolean,
+    val getLocData: Boolean,
+    val widgetShowIndicator: Boolean,
+    val widgetShowLocIndicator: Boolean,
+    val mockLocation: Boolean,
+    val floatingDashboards: List<FloatingDashboardConfig>,
+    val canDataSaveCount: Int,
+    val fuelTankLiters: Int,
+    val splitTripTimeMinutes: Int,
+)
+
 class SettingsManager(private val context: Context) {
 
     companion object {
         /** Tab index that shows the home [vad.dashing.tbox.ui.MainScreen] instead of [vad.dashing.tbox.ui.TboxScreen]. */
         const val MAIN_SCREEN_SELECTED_TAB_INDEX = 100
+
+        /** Left menu tab index for the Trips section ([vad.dashing.tbox.ui.TabItems]). */
+        const val TRIPS_SELECTED_TAB_INDEX = 4
+
+        /** Max tile rows/columns for main-screen embedded panels and floating overlay dashboards. */
+        const val DASHBOARD_PANEL_MAX_GRID_DIMENSION = 10
+
+        /** Dropdown options 1…[DASHBOARD_PANEL_MAX_GRID_DIMENSION] for panel grid settings. */
+        val DASHBOARD_PANEL_GRID_OPTIONS: List<Int> =
+            (1..DASHBOARD_PANEL_MAX_GRID_DIMENSION).toList()
+
+        /** Max rows/cols for the in-app «Плитки» tab grid (not floating / main-screen panels). */
+        const val MAIN_TAB_DASHBOARD_MAX_GRID_DIMENSION = 6
+
+        val MAIN_TAB_DASHBOARD_GRID_OPTIONS: List<Int> =
+            (1..MAIN_TAB_DASHBOARD_MAX_GRID_DIMENSION).toList()
 
         private const val KEY_PREFIX = "vad.dashing.tbox."
 
@@ -173,7 +214,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT = 0.3f
         private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
         private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
-        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = false
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
@@ -357,6 +398,38 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[SPLIT_TRIP_TIME_MINUTES_KEY] ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES }
         .distinctUntilChanged()
 
+    /**
+     * Single DataStore read for all keys backing [BackgroundService] setting [StateFlow]s.
+     */
+    suspend fun readBackgroundServiceSettingsSnapshot(): BackgroundServiceSettingsSnapshot =
+        context.settingsDataStore.data.first().let { backgroundSnapshotFromPreferences(it) }
+
+    /** Exposed for unit tests mapping empty/custom [Preferences] without a DataStore. */
+    internal fun backgroundSnapshotFromPreferences(preferences: Preferences): BackgroundServiceSettingsSnapshot {
+        val floatingRaw = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
+        return BackgroundServiceSettingsSnapshot(
+            autoModemRestart = preferences[AUTO_MODEM_RESTART_KEY] ?: false,
+            autoTboxReboot = preferences[AUTO_TBOX_REBOOT_KEY] ?: false,
+            autoSuspendTboxApp = preferences[AUTO_SUSPEND_TBOX_APP_KEY] ?: false,
+            autoStopTboxApp = preferences[AUTO_STOP_TBOX_APP_KEY] ?: false,
+            autoSuspendTboxMdc = preferences[AUTO_SUSPEND_TBOX_MDC_KEY] ?: false,
+            autoStopTboxMdc = preferences[AUTO_STOP_TBOX_MDC_KEY] ?: false,
+            autoSuspendTboxSwd = preferences[AUTO_SUSPEND_TBOX_SWD_KEY] ?: false,
+            autoPreventTboxRestart = preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false,
+            getCanFrame = preferences[GET_CAN_FRAME_KEY] ?: true,
+            getCycleSignal = preferences[GET_CYCLE_SIGNAL_KEY] ?: false,
+            getLocData = preferences[GET_LOC_DATA_KEY] ?: true,
+            widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
+            widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
+            mockLocation = preferences[MOCK_LOCATION] ?: false,
+            floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
+            canDataSaveCount = preferences[CAN_DATA_SAVE_COUNT_KEY] ?: DEFAULT_CAN_DATA_SAVE_COUNT,
+            fuelTankLiters = preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS,
+            splitTripTimeMinutes = preferences[SPLIT_TRIP_TIME_MINUTES_KEY]
+                ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES,
+        )
+    }
+
     // Suspend функции для сохранения настроек
 
     // Сохранение конфигурации виджетов
@@ -480,8 +553,8 @@ class SettingsManager(private val context: Context) {
             .distinctBy { it.id }
             .map {
                 it.copy(
-                    rows = it.rows.coerceIn(1, 6),
-                    cols = it.cols.coerceIn(1, 6)
+                    rows = it.rows.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+                    cols = it.cols.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION)
                 )
             }
         saveCustomString(FLOATING_DASHBOARDS_LIST_KEY, serializeFloatingDashboards(normalized))
@@ -584,8 +657,8 @@ class SettingsManager(private val context: Context) {
             .distinctBy { it.id }
             .map {
                 it.copy(
-                    rows = it.rows.coerceIn(1, 6),
-                    cols = it.cols.coerceIn(1, 6),
+                    rows = it.rows.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+                    cols = it.cols.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
                     relX = it.relX.coerceIn(0f, 1f),
                     relY = it.relY.coerceIn(0f, 1f),
                     relWidth = it.relWidth.coerceIn(0.08f, 1f),
@@ -715,8 +788,10 @@ class SettingsManager(private val context: Context) {
             name = name,
             enabled = obj.optBoolean("enabled", DEFAULT_MAIN_SCREEN_PANEL_ENABLED),
             widgetsConfig = parseWidgetConfigsFromAny(obj.opt("widgetsConfig")),
-            rows = obj.optInt("rows", DEFAULT_MAIN_SCREEN_PANEL_ROWS).coerceIn(1, 6),
-            cols = obj.optInt("cols", DEFAULT_MAIN_SCREEN_PANEL_COLS).coerceIn(1, 6),
+            rows = obj.optInt("rows", DEFAULT_MAIN_SCREEN_PANEL_ROWS)
+                .coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+            cols = obj.optInt("cols", DEFAULT_MAIN_SCREEN_PANEL_COLS)
+                .coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
             relX = obj.optDouble("relX", DEFAULT_MAIN_SCREEN_PANEL_REL_X.toDouble()).toFloat()
                 .coerceIn(0f, 1f),
             relY = obj.optDouble("relY", DEFAULT_MAIN_SCREEN_PANEL_REL_Y.toDouble()).toFloat()
@@ -781,8 +856,10 @@ class SettingsManager(private val context: Context) {
             name = name,
             enabled = obj.optBoolean("enabled", DEFAULT_FLOATING_DASHBOARD_ENABLED),
             widgetsConfig = parseWidgetConfigsFromAny(obj.opt("widgetsConfig")),
-            rows = obj.optInt("rows", DEFAULT_FLOATING_DASHBOARD_ROWS).coerceIn(1, 6),
-            cols = obj.optInt("cols", DEFAULT_FLOATING_DASHBOARD_COLS).coerceIn(1, 6),
+            rows = obj.optInt("rows", DEFAULT_FLOATING_DASHBOARD_ROWS)
+                .coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+            cols = obj.optInt("cols", DEFAULT_FLOATING_DASHBOARD_COLS)
+                .coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
             width = obj.optInt("width", DEFAULT_FLOATING_DASHBOARD_WIDTH),
             height = obj.optInt("height", DEFAULT_FLOATING_DASHBOARD_HEIGHT),
             startX = obj.optInt("startX", DEFAULT_FLOATING_DASHBOARD_START_X),
@@ -818,11 +895,15 @@ class SettingsManager(private val context: Context) {
         return array.toString()
     }
 
-    suspend fun exportFullBackupJson(appDataManager: AppDataManager): String =
+    suspend fun exportFullBackupJson(
+        appDataManager: AppDataManager,
+        excludeTripLists: Boolean = false,
+    ): String =
         SettingsBackupCoordinator.exportFullJson(
             context.packageName,
             context.settingsDataStore,
             appDataManager.preferencesDataStore,
+            excludeTripLists = excludeTripLists,
         )
 
     suspend fun importFullBackupJson(appDataManager: AppDataManager, json: String): Result<Unit> {

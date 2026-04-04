@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
     private var pendingSaveTag: String? = null
     private var pendingDataToSave: List<String>? = null
     private var pendingJsonBackup: String? = null
+    private var pendingJsonBackupExcludeTripLists: Boolean = false
 
     private val importBackupLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -138,7 +139,10 @@ class MainActivity : ComponentActivity() {
                     onSaveToFile = { tag, dataList ->
                         saveDataToFile(tag, dataList)
                     },
-                    onExportSettingsBackup = { exportSettingsAndAppDataBackup() },
+                    onExportSettingsBackup = { exportSettingsAndAppDataBackup(excludeTripLists = false) },
+                    onExportSettingsBackupWithoutTrips = {
+                        exportSettingsAndAppDataBackup(excludeTripLists = true)
+                    },
                     onImportSettingsBackup = {
                         importBackupLauncher.launch(arrayOf("application/json", "application/*", "*/*"))
                     },
@@ -305,10 +309,13 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }*/
 
-    private fun exportSettingsAndAppDataBackup() {
+    private fun exportSettingsAndAppDataBackup(excludeTripLists: Boolean) {
         lifecycleScope.launch(Dispatchers.IO) {
             val json = runCatching {
-                settingsManager.exportFullBackupJson(appDataManager)
+                settingsManager.exportFullBackupJson(
+                    appDataManager,
+                    excludeTripLists = excludeTripLists
+                )
             }.getOrElse { e ->
                 Log.e(TAG, "Ошибка формирования резервной копии", e)
                 withContext(Dispatchers.Main) {
@@ -321,21 +328,22 @@ class MainActivity : ComponentActivity() {
                 return@launch
             }
             withContext(Dispatchers.Main) {
-                saveJsonBackupToDownloads(json)
+                saveJsonBackupToDownloads(json, excludeTripLists)
             }
         }
     }
 
-    private fun saveJsonBackupToDownloads(json: String) {
+    private fun saveJsonBackupToDownloads(json: String, excludeTripLists: Boolean) {
         if (hasStoragePermissions()) {
-            performJsonBackupSave(json)
+            performJsonBackupSave(json, excludeTripLists)
         } else {
             pendingJsonBackup = json
+            pendingJsonBackupExcludeTripLists = excludeTripLists
             requestStoragePermissions()
         }
     }
 
-    private fun performJsonBackupSave(json: String) {
+    private fun performJsonBackupSave(json: String, excludeTripLists: Boolean) {
         try {
             val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
@@ -350,7 +358,12 @@ class MainActivity : ComponentActivity() {
                 "yyyy-MM-dd_HH-mm-ss",
                 Locale.getDefault()
             ).format(Date())
-            val dataFile = File(savePath, "tbox_backup_$timestamp.json")
+            val fileName = if (excludeTripLists) {
+                "tbox_backup_no_trips_$timestamp.json"
+            } else {
+                "tbox_backup_$timestamp.json"
+            }
+            val dataFile = File(savePath, fileName)
             FileWriter(dataFile).use { writer ->
                 writer.write(json)
             }
@@ -480,8 +493,9 @@ class MainActivity : ComponentActivity() {
             pendingDataToSave = null
         }
         pendingJsonBackup?.let { json ->
-            performJsonBackupSave(json)
+            performJsonBackupSave(json, pendingJsonBackupExcludeTripLists)
             pendingJsonBackup = null
+            pendingJsonBackupExcludeTripLists = false
         }
     }
 
@@ -491,6 +505,7 @@ class MainActivity : ComponentActivity() {
         pendingSaveTag = null
         pendingDataToSave = null
         pendingJsonBackup = null
+        pendingJsonBackupExcludeTripLists = false
     }
 
     private fun startServiceSafely(intent: Intent) {

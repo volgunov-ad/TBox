@@ -1,26 +1,50 @@
 package vad.dashing.tbox
 
 import android.app.Application
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 
 class TboxApplication : Application() {
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     override fun onCreate() {
         super.onCreate()
         MainActivityForegroundTracker.register(this)
         val appDataManager = AppDataManager(this)
         val settingsManager = SettingsManager(this)
-        runBlocking {
-            settingsManager.migrateSelectedTabIndexIfNeeded()
-            val saved = appDataManager.motorHoursFlow.first()
-            CarDataRepository.setMotorHours(saved)
-            CarDataRepository.markPersisted(saved)
-            val tripsJson = appDataManager.tripsJsonFlow.first()
-            val favJson = appDataManager.tripFavoritesJsonFlow.first()
-            TripRepository.setTripsFromStore(
-                tripsListFromJson(tripsJson),
-                favoritesSetFromJson(favJson)
-            )
+        applicationScope.launch {
+            try {
+                settingsManager.migrateSelectedTabIndexIfNeeded()
+            } catch (_: Exception) {
+                // Non-fatal; settings screen can retry migrations if needed.
+            }
+            try {
+                coroutineScope {
+                    val motorDeferred = async(Dispatchers.IO) {
+                        appDataManager.motorHoursFlow.first()
+                    }
+                    val tripsDeferred = async(Dispatchers.IO) {
+                        appDataManager.tripsJsonFlow.first()
+                    }
+                    val favDeferred = async(Dispatchers.IO) {
+                        appDataManager.tripFavoritesJsonFlow.first()
+                    }
+                    val saved = motorDeferred.await()
+                    CarDataRepository.setMotorHours(saved)
+                    CarDataRepository.markPersisted(saved)
+                    TripRepository.setTripsFromStore(
+                        tripsListFromJson(tripsDeferred.await()),
+                        favoritesSetFromJson(favDeferred.await())
+                    )
+                }
+            } catch (_: Exception) {
+                // [BackgroundService.onCreate] reloads trips; motor hours stay at default until service.
+            }
         }
     }
 }

@@ -77,6 +77,10 @@
     <string name="widget_external_tile_empty">Виджет не выбран</string>
     <string name="widget_external_tile_unavailable">Виджет недоступен</string>
     <string name="widget_toggle_advanced">Дополнительно</string>
+    <string name="widget_toggle_whole_panel">Вся панель</string>
+    <string name="widget_panel_settings_title">Настройки панели</string>
+    <string name="widget_color_theme_segment_light">Настройки для светлой темы</string>
+    <string name="widget_color_theme_segment_dark">Настройки для тёмной темы</string>
     <string name="widget_scale">Масштаб виджета: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
     <string name="widget_shape">Скругление углов: %1$d</string>
@@ -87,7 +91,7 @@
     <string name="widget_background_color_dark">Цвет фона (тёмная тема)</string>
     <string name="widget_color_value_label">Значение цвета</string>
     <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
-    <string name="widget_color_alpha">Прозрачность: %1$d%%</string>
+    <string name="widget_color_alpha">Непрозрачность: %1$d%%</string>
     <string name="widget_music_players">Плееры для виджета музыки</string>
     <string name="widget_music_players_hint">Выберите один или несколько плееров</string>
     <string name="widget_music_players_required">Выберите минимум один плеер</string>
@@ -201,6 +205,7 @@
     <string name="settings_enable_floating_bg_title">Включить фон плавающей панели</string>
     <string name="settings_enable_floating_bg_desc">Если выключено, то фон будет прозрачный</string>
     <string name="settings_open_app_on_panel_click_title">Открывать окно программы при одиночном нажатии на элемент плавающей панели</string>
+    <string name="settings_open_app_on_main_screen_panel_click_title">Открывать окно программы при одиночном нажатии на элемент панели главного экрана</string>
     <string name="settings_floating_tbox_disconnect_indicator_title">Индикатор отключения TBox</string>
     <string name="settings_floating_rows_title">Количество строк плиток плавающей панели</string>
     <string name="settings_floating_cols_title">Количество столбцов плиток плавающей панели</string>
@@ -214,6 +219,8 @@
     <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
+    <string name="settings_main_screen_panel_rows_title">Количество строк плиток панели главного экрана</string>
+    <string name="settings_main_screen_panel_cols_title">Количество столбцов плиток панели главного экрана</string>
     <string name="settings_show_main_screen_panel_title">Показывать панель на главном экране</string>
     <string name="main_screen_panel_rel_width_pct">Ширина панели, % экрана (8–100)</string>
     <string name="main_screen_panel_rel_height_pct">Высота панели, % экрана (8–100)</string>
@@ -239,9 +246,11 @@
     <string name="settings_backup_title">Резервная копия</string>
     <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Файлы обоев главного экрана в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
     <string name="settings_backup_export">Экспорт JSON</string>
+    <string name="settings_backup_export_without_trips">Экспорт JSON без поездок</string>
     <string name="settings_backup_import">Импорт JSON</string>
     <string name="settings_backup_import_choose_file">Выбрать файл</string>
     <string name="dialog_save_backup_downloads">Сохранить полную резервную копию (настройки и данные) в папку Загрузки</string>
+    <string name="dialog_save_backup_downloads_no_trips">Сохранить резервную копию (настройки и прочие данные приложения без списка поездок и избранного поездок) в папку Загрузки</string>
     <string name="dialog_backup_import_title">Импорт резервной копии</string>
     <string name="dialog_backup_import_message">Текущие настройки и данные приложения будут полностью заменены содержимым файла. Активная поездка в памяти и в файле станет такой, как в резервной копии (если в копии нет незавершённой поездки — текущая будет завершена в данных). Плитки с виджетами сторонних приложений после импорта сбрасываются (нужно выбрать виджет заново). Продолжить и выбрать JSON-файл?</string>
     <string name="settings_expert_mode_title">Экспертный режим</string>

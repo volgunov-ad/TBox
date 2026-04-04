@@ -1,0 +1,7 @@
+# Startup-oriented baseline profile. Regenerate with Macrobenchmark / `adb` ART profile
+# capture for fuller coverage; see https://developer.android.com/topic/performance/baselineprofiles
+HSPLvad/dashing/tbox/TboxApplication;-><init>()V
+HSPLvad/dashing/tbox/TboxApplication;->onCreate()V
+HSPLvad/dashing/tbox/BackgroundService;-><init>()V
+HSPLvad/dashing/tbox/BackgroundService;->onCreate()V
+HSPLvad/dashing/tbox/BackgroundService;->onStartCommand(Landroid/content/Intent;II)I

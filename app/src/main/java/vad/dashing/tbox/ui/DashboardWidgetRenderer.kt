@@ -11,6 +11,8 @@ import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 
@@ -268,7 +270,7 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        "activeTripWidget", "activeTripWidgetSimple" -> {
+        ACTIVE_TRIP_WIDGET_DATA_KEY, ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY -> {
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
