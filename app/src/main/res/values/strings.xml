@@ -93,7 +93,7 @@
     <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
     <string name="widget_color_alpha">Непрозрачность: %1$d%%</string>
     <string name="widget_music_players">Плееры для виджета музыки</string>
-    <string name="widget_music_players_hint">Выберите одно или несколько приложений из списка (как в виджете запуска)</string>
+    <string name="widget_music_players_hint">Выберите одно или несколько приложений из списка</string>
     <string name="widget_music_players_required">Выберите минимум одно приложение</string>
     <string name="widget_music_auto_play_on_init">Автоматически запускать воспроизведение</string>
     <string name="widget_music_auto_play_only_engine">Запускать только при включении двигателя</string>
