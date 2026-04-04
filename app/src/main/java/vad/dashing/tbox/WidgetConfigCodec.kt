@@ -266,7 +266,7 @@ private fun parseSelectedMediaPlayer(
     mediaPlayers: List<String>
 ): String {
     val value = item.optString("mediaSelectedPlayer")
-    val selected = normalizeMediaPlayerPackages(listOf(value)).firstOrNull().orEmpty()
+    val selected = canonicalMediaPlayerPackage(value).orEmpty()
     return if (selected in mediaPlayers) selected else ""
 }
 

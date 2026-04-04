@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,17 +11,27 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SupportedMediaPlayer
+import vad.dashing.tbox.canonicalMediaPlayerPackage
 import vad.dashing.tbox.defaultMediaPlayerPackages
 import vad.dashing.tbox.normalizeMediaPlayerPackages
 import vad.dashing.tbox.orderedMediaPlayerPackages
@@ -40,6 +51,34 @@ fun MediaPlayersInlineSelection(
     onSelectionChange: (Set<String>) -> Unit,
     enabled: Boolean
 ) {
+    val context = LocalContext.current
+    val apps = rememberLaunchableAppEntries()
+    val appPackageSet = remember(apps) { apps.mapTo(mutableSetOf()) { it.packageName } }
+    val extraSupportedPlayers = remember(appPackageSet) {
+        SupportedMediaPlayer.entries.filter { it.packageName !in appPackageSet }
+    }
+    var filterText by rememberSaveable { mutableStateOf("") }
+    val needle = filterText.trim().lowercase()
+    val filtered = remember(apps, needle) {
+        if (needle.isEmpty()) {
+            apps
+        } else {
+            apps.filter {
+                it.label.lowercase().contains(needle) ||
+                    it.packageName.lowercase().contains(needle)
+            }
+        }
+    }
+    val filteredExtraPlayers = remember(needle, extraSupportedPlayers, context) {
+        if (needle.isEmpty()) {
+            extraSupportedPlayers
+        } else {
+            extraSupportedPlayers.filter { player ->
+                context.getString(player.titleRes).lowercase().contains(needle) ||
+                    player.packageName.lowercase().contains(needle)
+            }
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -56,22 +95,37 @@ fun MediaPlayersInlineSelection(
             fontSize = 20.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        SupportedMediaPlayer.entries.forEach { player ->
-            val isChecked = player.packageName in selectedPlayers
+        OutlinedTextField(
+            value = filterText,
+            onValueChange = { filterText = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 8.dp),
+            label = {
+                Text(
+                    text = stringResource(R.string.widget_app_launcher_search),
+                    fontSize = 18.sp
+                )
+            },
+            singleLine = true,
+            enabled = enabled
+        )
+        filteredExtraPlayers.forEach { player ->
+            val pkg = player.packageName
+            val isChecked = pkg in selectedPlayers
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(enabled = enabled) {
                         val updated = selectedPlayers.toMutableSet()
                         if (isChecked) {
-                            updated.remove(player.packageName)
+                            updated.remove(pkg)
                         } else {
-                            updated.add(player.packageName)
+                            updated.add(pkg)
                         }
                         onSelectionChange(normalizeMediaPlayerPackages(updated))
                     }
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
@@ -79,9 +133,9 @@ fun MediaPlayersInlineSelection(
                     onCheckedChange = { checked ->
                         val updated = selectedPlayers.toMutableSet()
                         if (checked) {
-                            updated.add(player.packageName)
+                            updated.add(pkg)
                         } else {
-                            updated.remove(player.packageName)
+                            updated.remove(pkg)
                         }
                         onSelectionChange(normalizeMediaPlayerPackages(updated))
                     },
@@ -89,17 +143,83 @@ fun MediaPlayersInlineSelection(
                 )
                 Icon(
                     painter = painterResource(id = player.iconRes),
-                    contentDescription = stringResource(player.titleRes),
+                    contentDescription = null,
                     tint = Color.Unspecified,
                     modifier = Modifier
-                        .padding(start = 8.dp)
-                        .size(24.dp)
+                        .padding(start = 4.dp)
+                        .size(40.dp)
                 )
                 Text(
                     text = stringResource(player.titleRes),
-                    fontSize = 22.sp,
-                    modifier = Modifier.padding(start = 10.dp),
-                    color = MaterialTheme.colorScheme.onSurface
+                    fontSize = 20.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .weight(1f)
+                )
+            }
+        }
+        filtered.forEach { app ->
+            val pkg = canonicalMediaPlayerPackage(app.packageName) ?: return@forEach
+            val isChecked = pkg in selectedPlayers
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = enabled) {
+                        val updated = selectedPlayers.toMutableSet()
+                        if (isChecked) {
+                            updated.remove(pkg)
+                        } else {
+                            updated.add(pkg)
+                        }
+                        onSelectionChange(normalizeMediaPlayerPackages(updated))
+                    }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = isChecked,
+                    onCheckedChange = { checked ->
+                        val updated = selectedPlayers.toMutableSet()
+                        if (checked) {
+                            updated.add(pkg)
+                        } else {
+                            updated.remove(pkg)
+                        }
+                        onSelectionChange(normalizeMediaPlayerPackages(updated))
+                    },
+                    enabled = enabled
+                )
+                if (app.icon != null) {
+                    Image(
+                        bitmap = app.icon,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(40.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.widget_app_launcher_no_icon),
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(40.dp)
+                    )
+                }
+                Text(
+                    text = app.label,
+                    fontSize = 20.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .weight(1f)
                 )
             }
         }
