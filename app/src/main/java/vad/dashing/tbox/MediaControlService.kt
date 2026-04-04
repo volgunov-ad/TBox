@@ -30,91 +30,17 @@ enum class SupportedMediaPlayer(
     val titleRes: Int,
     val iconRes: Int
 ) {
-    YANDEX_MUSIC(
-        packageName = "ru.yandex.music",
-        titleRes = R.string.media_player_yandex_music,
-        iconRes = R.drawable.player_yandex_music
-    ),
-    YANDEX_MUSIC_AUTO_PLAY(
-        packageName = "ru.auto.music",
-        titleRes = R.string.media_player_yandex_music_auto_play,
-        iconRes = R.drawable.player_yandex_music
-    ),
-    POWERAMP(
-        packageName = "com.maxmpz.audioplayer",
-        titleRes = R.string.media_player_poweramp,
-        iconRes = R.drawable.player_poweramp
-    ),
-    AIMP(
-        packageName = "com.aimp.player",
-        titleRes = R.string.media_player_aimp,
-        iconRes = R.drawable.player_aimp
-    ),
-    RECORD_RADIO(
-        packageName = "com.maxxt.recordradio",
-        titleRes = R.string.media_player_record_radio,
-        iconRes = R.drawable.player_record_radio
-    ),
-    PCRADIO(
-        packageName = "com.maxxt.pcradio",
-        titleRes = R.string.media_player_pcradio,
-        iconRes = R.drawable.player_pcradio
-    ),
-    JETAUDIO(
-        packageName = "com.jetappfactory.jetaudio",
-        titleRes = R.string.media_player_jetaudio,
-        iconRes = R.drawable.player_jetaudio
-    ),
-    JETAUDIOPLUS(
-        packageName = "com.jetappfactory.jetaudioplus",
-        titleRes = R.string.media_player_jetaudioplus,
-        iconRes = R.drawable.player_jetaudio
-    ),
-    FMPLAY(
-        packageName = "ru.fmplay",
-        titleRes = R.string.media_player_fmplay,
-        iconRes = R.drawable.player_fmplay
-    ),
-    YANDEX_RADIO(
-        packageName = "ru.yandex.mobile.fmradio",
-        titleRes = R.string.media_player_yandex_radio,
-        iconRes = R.drawable.player_yandex_radio
-    ),
-    YANDEX_MAPS(
-        packageName = "ru.yandex.yandexmaps",
-        titleRes = R.string.media_player_yandex_maps,
-        iconRes = R.drawable.player_yandex_maps
-    ),
-    YANDEX_NAVI(
-        packageName = "ru.yandex.yandexnavi",
-        titleRes = R.string.media_player_yandex_navi,
-        iconRes = R.drawable.player_yandex_navigator
-    ),
-    //WT_LOCAL_MULTIMEDIA(
-    //    packageName = "com.wt.multimedia.local",
-    //    titleRes = R.string.media_player_wt_local_multimedia,
-    //    iconRes = R.drawable.player_unknown
-    //),
     BLUETOOTH_PHONE(
         packageName = "com.android.bluetooth",
         titleRes = R.string.media_player_bluetooth_phone,
         iconRes = R.drawable.player_bluetooth
-    ),
-    VKX(
-        packageName = "ua.itaysonlab.vkx",
-        titleRes = R.string.media_player_vkx,
-        iconRes = R.drawable.player_vkx
     );
 
     companion object {
         fun fromPackage(packageName: String): SupportedMediaPlayer? {
             val normalizedPackage = packageName.trim().lowercase()
             if (normalizedPackage.isBlank()) return null
-            val resolvedPackage = when (normalizedPackage) {
-                "ru.yandex.radio" -> "ru.yandex.mobile.fmradio"
-                else -> normalizedPackage
-            }
-            return entries.firstOrNull { it.packageName == resolvedPackage }
+            return entries.firstOrNull { it.packageName == normalizedPackage }
         }
     }
 }
@@ -176,9 +102,7 @@ fun normalizeMediaPlayerPackages(rawPackages: Collection<String>): Set<String> {
     return out
 }
 
-fun defaultMediaPlayerPackages(): Set<String> {
-    return SupportedMediaPlayer.entries.map { it.packageName }.toSet()
-}
+fun defaultMediaPlayerPackages(): Set<String> = emptySet()
 
 fun orderedMediaPlayerPackages(rawPackages: Collection<String>): List<String> {
     val orderedUnique = LinkedHashSet<String>()

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -20,12 +21,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SupportedMediaPlayer
 import vad.dashing.tbox.canonicalMediaPlayerPackage
 import vad.dashing.tbox.defaultMediaPlayerPackages
 import vad.dashing.tbox.normalizeMediaPlayerPackages
@@ -46,7 +51,12 @@ fun MediaPlayersInlineSelection(
     onSelectionChange: (Set<String>) -> Unit,
     enabled: Boolean
 ) {
+    val context = LocalContext.current
     val apps = rememberLaunchableAppEntries()
+    val appPackageSet = remember(apps) { apps.mapTo(mutableSetOf()) { it.packageName } }
+    val extraSupportedPlayers = remember(appPackageSet) {
+        SupportedMediaPlayer.entries.filter { it.packageName !in appPackageSet }
+    }
     var filterText by rememberSaveable { mutableStateOf("") }
     val needle = filterText.trim().lowercase()
     val filtered = remember(apps, needle) {
@@ -56,6 +66,16 @@ fun MediaPlayersInlineSelection(
             apps.filter {
                 it.label.lowercase().contains(needle) ||
                     it.packageName.lowercase().contains(needle)
+            }
+        }
+    }
+    val filteredExtraPlayers = remember(needle, extraSupportedPlayers, context) {
+        if (needle.isEmpty()) {
+            extraSupportedPlayers
+        } else {
+            extraSupportedPlayers.filter { player ->
+                context.getString(player.titleRes).lowercase().contains(needle) ||
+                    player.packageName.lowercase().contains(needle)
             }
         }
     }
@@ -90,6 +110,57 @@ fun MediaPlayersInlineSelection(
             singleLine = true,
             enabled = enabled
         )
+        filteredExtraPlayers.forEach { player ->
+            val pkg = player.packageName
+            val isChecked = pkg in selectedPlayers
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = enabled) {
+                        val updated = selectedPlayers.toMutableSet()
+                        if (isChecked) {
+                            updated.remove(pkg)
+                        } else {
+                            updated.add(pkg)
+                        }
+                        onSelectionChange(normalizeMediaPlayerPackages(updated))
+                    }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = isChecked,
+                    onCheckedChange = { checked ->
+                        val updated = selectedPlayers.toMutableSet()
+                        if (checked) {
+                            updated.add(pkg)
+                        } else {
+                            updated.remove(pkg)
+                        }
+                        onSelectionChange(normalizeMediaPlayerPackages(updated))
+                    },
+                    enabled = enabled
+                )
+                Icon(
+                    painter = painterResource(id = player.iconRes),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier
+                        .padding(start = 4.dp)
+                        .size(40.dp)
+                )
+                Text(
+                    text = stringResource(player.titleRes),
+                    fontSize = 20.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .weight(1f)
+                )
+            }
+        }
         filtered.forEach { app ->
             val pkg = canonicalMediaPlayerPackage(app.packageName) ?: return@forEach
             val isChecked = pkg in selectedPlayers
