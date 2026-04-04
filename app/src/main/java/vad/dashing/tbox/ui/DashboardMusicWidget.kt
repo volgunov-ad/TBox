@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.Settings
 import android.os.SystemClock
 import androidx.compose.foundation.background
@@ -100,9 +101,24 @@ fun DashboardMusicWidgetItem(
     val selectedPlayer = remember(selectedPackage, mediaState.player) {
         SupportedMediaPlayer.fromPackage(selectedPackage) ?: mediaState.player
     }
+    val unknownAppLabel = remember(selectedPackage, context) {
+        if (selectedPackage.isBlank() || SupportedMediaPlayer.fromPackage(selectedPackage) != null) {
+            null
+        } else {
+            runCatching {
+                context.packageManager.getApplicationLabel(
+                    context.packageManager.getApplicationInfo(
+                        selectedPackage,
+                        PackageManager.GET_META_DATA
+                    )
+                ).toString()
+            }.getOrNull()?.takeIf { it.isNotBlank() }
+        }
+    }
 
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     val basePlayerLabel = selectedPlayer?.let { stringResource(it.titleRes) }
+        ?: unknownAppLabel
         ?: stringResource(R.string.widget_music_player_none)
     val isSelectedPlayerRunning = selectedPlayerState?.hasSession == true
     val playerLabel = if (selectedPackage.isNotBlank() && !isSelectedPlayerRunning) {

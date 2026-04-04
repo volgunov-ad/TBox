@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.LinkedHashSet
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
 
@@ -119,7 +120,8 @@ enum class SupportedMediaPlayer(
 }
 
 data class MediaPlayerState(
-    val player: SupportedMediaPlayer,
+    /** Non-null when [packageName] matches a built-in entry; otherwise UI uses a generic icon/label. */
+    val player: SupportedMediaPlayer?,
     val artist: String = "",
     val track: String = "",
     val durationMs: Long = 0L,
@@ -143,11 +145,35 @@ data class MediaWidgetState(
     val notificationAccessGranted: Boolean = false
 )
 
+/**
+ * Canonical package name for media widget selection and MediaSession matching.
+ * Accepts any plausible Android package id (launcher apps); known players use enum aliases.
+ */
+fun canonicalMediaPlayerPackage(raw: String): String? {
+    val trimmed = raw.trim().lowercase()
+    if (trimmed.isBlank()) return null
+    val mapped = when (trimmed) {
+        "ru.yandex.radio" -> "ru.yandex.mobile.fmradio"
+        else -> trimmed
+    }
+    SupportedMediaPlayer.fromPackage(mapped)?.packageName?.let { return it }
+    if (!mapped.contains('.')) return null
+    if (mapped.length > 200) return null
+    if (mapped.any { ch ->
+            ch !in 'a'..'z' && ch !in '0'..'9' && ch != '.' && ch != '_'
+        }
+    ) {
+        return null
+    }
+    return mapped
+}
+
 fun normalizeMediaPlayerPackages(rawPackages: Collection<String>): Set<String> {
-    return rawPackages
-        .map { it.trim().lowercase() }
-        .mapNotNull { SupportedMediaPlayer.fromPackage(it)?.packageName }
-        .toSet()
+    val out = LinkedHashSet<String>()
+    for (raw in rawPackages) {
+        canonicalMediaPlayerPackage(raw)?.let { out.add(it) }
+    }
+    return out
 }
 
 fun defaultMediaPlayerPackages(): Set<String> {
@@ -155,10 +181,17 @@ fun defaultMediaPlayerPackages(): Set<String> {
 }
 
 fun orderedMediaPlayerPackages(rawPackages: Collection<String>): List<String> {
-    val normalized = normalizeMediaPlayerPackages(rawPackages)
-    return SupportedMediaPlayer.entries
+    val orderedUnique = LinkedHashSet<String>()
+    for (raw in rawPackages) {
+        canonicalMediaPlayerPackage(raw)?.let { orderedUnique.add(it) }
+    }
+    if (orderedUnique.isEmpty()) return emptyList()
+    val knownOrdered = SupportedMediaPlayer.entries
         .map { it.packageName }
-        .filter { it in normalized }
+        .filter { it in orderedUnique }
+    val knownSet = knownOrdered.toSet()
+    val extras = orderedUnique.filter { it !in knownSet }
+    return knownOrdered + extras
 }
 
 fun resolveMediaPlayersForWidget(config: FloatingDashboardWidgetConfig): Set<String> {
@@ -168,7 +201,7 @@ fun resolveMediaPlayersForWidget(config: FloatingDashboardWidgetConfig): Set<Str
 }
 
 fun resolveSelectedMediaPlayerForWidget(config: FloatingDashboardWidgetConfig): String {
-    return normalizeMediaPlayerPackages(listOf(config.mediaSelectedPlayer)).firstOrNull().orEmpty()
+    return canonicalMediaPlayerPackage(config.mediaSelectedPlayer).orEmpty()
 }
 
 fun collectMediaPlayersFromWidgetConfigs(
@@ -471,13 +504,12 @@ object SharedMediaControlService {
     ) {
         val activeByPackage = activeControllers
             .mapNotNull { controller ->
-                val supportedPackage = SupportedMediaPlayer
-                    .fromPackage(controller.packageName)
-                    ?.packageName
-                if (supportedPackage == null || supportedPackage !in requestedPackages) {
+                val canonical = canonicalMediaPlayerPackage(controller.packageName)
+                    ?: return@mapNotNull null
+                if (canonical !in requestedPackages) {
                     null
                 } else {
-                    supportedPackage to controller
+                    canonical to controller
                 }
             }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
@@ -582,7 +614,7 @@ object SharedMediaControlService {
         if (candidates.isEmpty()) return null
         if (normalizedPreferred != null) {
             val preferredController = candidates.firstOrNull {
-                SupportedMediaPlayer.fromPackage(it.packageName)?.packageName == normalizedPreferred
+                canonicalMediaPlayerPackage(it.packageName) == normalizedPreferred
             }
             if (strictPreferred) {
                 return preferredController
@@ -612,7 +644,7 @@ object SharedMediaControlService {
         val orderedPackages = orderedMediaPlayerPackages(requestedPackages)
         val updatedStates = mutableMapOf<String, MediaPlayerState>()
         orderedPackages.forEach { packageName ->
-            val player = SupportedMediaPlayer.fromPackage(packageName) ?: return@forEach
+            val player = SupportedMediaPlayer.fromPackage(packageName)
             val controller = controllers[packageName]
             val metadata = controller?.metadata
             val playbackState = controller?.playbackState
