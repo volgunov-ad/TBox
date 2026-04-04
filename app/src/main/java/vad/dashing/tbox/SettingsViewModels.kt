@@ -17,6 +17,59 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.Boolean
 
+/**
+ * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
+ * to avoid lost updates when multiple coroutines read stale [mainScreenDashboards] snapshots.
+ */
+data class MainScreenWholePanelFieldsForWidgetDialogSave(
+    val name: String,
+    val rows: Int,
+    val cols: Int,
+    val showTboxDisconnectIndicator: Boolean,
+    val clickAction: Boolean,
+)
+
+data class FloatingWholePanelFieldsForWidgetDialogSave(
+    val name: String,
+    val rows: Int,
+    val cols: Int,
+    val showTboxDisconnectIndicator: Boolean,
+    val clickAction: Boolean,
+)
+
+/** Merges widget list and optional whole-panel draft; used by [SettingsViewModel] and unit tests. */
+internal fun mergeMainScreenPanelForWidgetDialogSave(
+    current: MainScreenPanelConfig,
+    widgetsConfig: List<FloatingDashboardWidgetConfig>,
+    wholePanelFromWidgetDialog: MainScreenWholePanelFieldsForWidgetDialogSave?,
+): MainScreenPanelConfig {
+    val base = current.copy(widgetsConfig = widgetsConfig)
+    val w = wholePanelFromWidgetDialog ?: return base
+    return base.copy(
+        name = w.name,
+        rows = w.rows.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+        cols = w.cols.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+        showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
+        clickAction = w.clickAction
+    )
+}
+
+internal fun mergeFloatingDashboardForWidgetDialogSave(
+    current: FloatingDashboardConfig,
+    widgetsConfig: List<FloatingDashboardWidgetConfig>,
+    wholePanelFromWidgetDialog: FloatingWholePanelFieldsForWidgetDialogSave?,
+): FloatingDashboardConfig {
+    val base = current.copy(widgetsConfig = widgetsConfig)
+    val w = wholePanelFromWidgetDialog ?: return base
+    return base.copy(
+        name = w.name,
+        rows = w.rows.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+        cols = w.cols.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
+        showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
+        clickAction = w.clickAction
+    )
+}
+
 class SettingsViewModel(private val settingsManager: SettingsManager) : ViewModel() {
 
     companion object {
@@ -42,7 +95,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT = 0.3f
         private const val DEFAULT_MAIN_SCREEN_PANEL_ENABLED = true
         private const val DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND = false
-        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = true
+        private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = false
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private val DEFAULT_MAIN_SCREEN_PANEL_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
@@ -921,9 +974,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveMainScreenDashboardWidgets(
         panelId: String,
-        config: List<FloatingDashboardWidgetConfig>
+        config: List<FloatingDashboardWidgetConfig>,
+        wholePanelFromWidgetDialog: MainScreenWholePanelFieldsForWidgetDialogSave? = null
     ) {
-        updateMainScreenPanel(panelId) { it.copy(widgetsConfig = config) }
+        viewModelScope.launch {
+            applyMainScreenPanelUpdate(panelId) { cur ->
+                mergeMainScreenPanelForWidgetDialogSave(cur, config, wholePanelFromWidgetDialog)
+            }
+        }
     }
 
     fun saveMainScreenPanelLayout(
@@ -1001,23 +1059,48 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateSelectedMainScreenPanel { it.copy(enabled = enabled) }
     }
 
-    fun saveMainScreenPanelClickAction(enabled: Boolean) {
-        updateSelectedMainScreenPanel { it.copy(clickAction = enabled) }
-    }
-
-    fun saveMainScreenPanelShowTboxDisconnectIndicator(enabled: Boolean) {
-        updateSelectedMainScreenPanel { it.copy(showTboxDisconnectIndicator = enabled) }
-    }
-
-    fun saveMainScreenPanelRows(rows: Int) {
-        if (rows in 1..6) {
-            updateSelectedMainScreenPanel { it.copy(rows = rows) }
+    fun saveMainScreenPanelClickAction(enabled: Boolean, panelId: String? = null) {
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(clickAction = enabled) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
         }
     }
 
-    fun saveMainScreenPanelCols(cols: Int) {
-        if (cols in 1..6) {
-            updateSelectedMainScreenPanel { it.copy(cols = cols) }
+    fun saveMainScreenPanelShowTboxDisconnectIndicator(
+        enabled: Boolean,
+        panelId: String? = null
+    ) {
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(showTboxDisconnectIndicator = enabled) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
+        }
+    }
+
+    fun saveMainScreenPanelRows(rows: Int, panelId: String? = null) {
+        if (rows !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(rows = rows) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
+        }
+    }
+
+    fun saveMainScreenPanelCols(cols: Int, panelId: String? = null) {
+        if (cols !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(cols = cols) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
         }
     }
 
@@ -1055,20 +1138,35 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveFloatingDashboardWidgets(
         panelId: String,
-        config: List<FloatingDashboardWidgetConfig>
+        config: List<FloatingDashboardWidgetConfig>,
+        wholePanelFromWidgetDialog: FloatingWholePanelFieldsForWidgetDialogSave? = null
     ) {
-        updateFloatingDashboard(panelId) { it.copy(widgetsConfig = config) }
-    }
-
-    fun saveFloatingDashboardRows(rows: Int) {
-        if (rows in 1..6) {
-            updateSelectedFloatingDashboard { it.copy(rows = rows) }
+        viewModelScope.launch {
+            applyFloatingDashboardUpdate(panelId) { cur ->
+                mergeFloatingDashboardForWidgetDialogSave(cur, config, wholePanelFromWidgetDialog)
+            }
         }
     }
 
-    fun saveFloatingDashboardCols(cols: Int) {
-        if (cols in 1..6) {
-            updateSelectedFloatingDashboard { it.copy(cols = cols) }
+    fun saveFloatingDashboardRows(rows: Int, panelId: String? = null) {
+        if (rows !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
+            { it.copy(rows = rows) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
+        }
+    }
+
+    fun saveFloatingDashboardCols(cols: Int, panelId: String? = null) {
+        if (cols !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
+            { it.copy(cols = cols) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
         }
     }
 
@@ -1096,12 +1194,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         updateFloatingDashboard(panelId) { it.copy(startX = x, startY = y) }
     }
 
-    fun saveFloatingDashboardClickAction(enabled: Boolean) {
-        updateSelectedFloatingDashboard { it.copy(clickAction = enabled) }
+    fun saveFloatingDashboardClickAction(enabled: Boolean, panelId: String? = null) {
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
+            { it.copy(clickAction = enabled) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
+        }
     }
 
-    fun saveFloatingDashboardShowTboxDisconnectIndicator(enabled: Boolean) {
-        updateSelectedFloatingDashboard { it.copy(showTboxDisconnectIndicator = enabled) }
+    fun saveFloatingDashboardShowTboxDisconnectIndicator(
+        enabled: Boolean,
+        panelId: String? = null
+    ) {
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
+            { it.copy(showTboxDisconnectIndicator = enabled) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
+        }
     }
 
     fun saveFloatingDashboardName(panelId: String, name: String) {
@@ -1179,7 +1292,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveDashboardRows(config: Int) {
-        if (config in 1..6) {
+        if (config in 1..SettingsManager.MAIN_TAB_DASHBOARD_MAX_GRID_DIMENSION) {
             viewModelScope.launch {
                 settingsManager.saveDashboardRows(config)
             }
@@ -1187,7 +1300,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun saveDashboardCols(config: Int) {
-        if (config in 1..6) {
+        if (config in 1..SettingsManager.MAIN_TAB_DASHBOARD_MAX_GRID_DIMENSION) {
             viewModelScope.launch {
                 settingsManager.saveDashboardCols(config)
             }

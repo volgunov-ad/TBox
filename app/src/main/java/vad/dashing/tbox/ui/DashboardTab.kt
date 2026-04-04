@@ -341,6 +341,8 @@ fun MainScreenPanelWidgetSelectionDialog(
     onDeletePanel: () -> Unit,
 ) {
     val context = LocalContext.current
+    val mainScreenPanelSnapshot by settingsViewModel.mainScreenPanelConfig(panelId)
+        .collectAsStateWithLifecycle()
     val state = rememberWidgetSelectionDialogState(
         widgetIndex = widgetIndex,
         currentWidgets = currentWidgets,
@@ -356,15 +358,19 @@ fun MainScreenPanelWidgetSelectionDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
         text = {
             WidgetSelectionDialogForm(
-                titleText = if (state.showAdvancedSettings) {
-                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                } else {
-                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
+                titleText = when {
+                    state.showWholePanelSettings ->
+                        stringResource(R.string.widget_panel_settings_title)
+                    state.showAdvancedSettings ->
+                        stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                    else ->
+                        stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                 },
                 state = state,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp),
+                mainScreenPanelId = panelId,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -391,18 +397,29 @@ fun MainScreenPanelWidgetSelectionDialog(
         },
         confirmButton = {
             WidgetSelectionDialogActions(
-                leadingExtra = {
+                showWholePanelButton = true,
+                onWholePanelSectionOpened = {
+                    mainScreenPanelSnapshot?.let { snap ->
+                        state.syncWholePanelDraftFromMainScreen(snap)
+                        state.wholePanelDraftSeeded = true
+                    }
+                },
+                deleteAfterWholePanel = {
                     OutlinedButton(
                         onClick = {
                             onDeletePanel()
                             onDismiss()
                         },
+                        modifier = Modifier.weight(1f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Text(text = stringResource(R.string.action_delete), fontSize = 20.sp)
+                        Text(
+                            text = stringResource(R.string.action_delete),
+                            fontSize = 22.sp
+                        )
                     }
                 },
                 state = state,
@@ -420,6 +437,7 @@ fun MainScreenPanelWidgetSelectionDialog(
                     ) {
                         return@WidgetSelectionDialogActions
                     }
+                    val wholePanelPayload = mainScreenWholePanelSavePayloadIfSeeded(state)
                     applyWidgetSelectionChanges(
                         context = context,
                         dashboardManager = dashboardManager,
@@ -428,7 +446,11 @@ fun MainScreenPanelWidgetSelectionDialog(
                         widgetIndex = widgetIndex,
                         state = state,
                         saveConfigs = { configs ->
-                            settingsViewModel.saveMainScreenDashboardWidgets(panelId, configs)
+                            settingsViewModel.saveMainScreenDashboardWidgets(
+                                panelId,
+                                configs,
+                                wholePanelFromWidgetDialog = wholePanelPayload
+                            )
                         },
                         externalAppWidgetId = externalAppWidgetIdForApply(
                             state,

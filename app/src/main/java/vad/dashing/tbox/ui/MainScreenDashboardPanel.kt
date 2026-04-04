@@ -31,9 +31,11 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
@@ -339,8 +341,12 @@ fun MainScreenDashboardPanel(
                     cfg.launcherAppPackage.isNotBlank()
                 ) {
                     launchAppFromWidget(context, cfg.launcherAppPackage)
-                } else if (panel.clickAction) {
-                    openMainActivityFromWidget(context)
+                } else if (
+                    panel.clickAction &&
+                    cfg != null &&
+                    isActiveTripWidgetDataKey(cfg.dataKey)
+                ) {
+                    settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_SELECTED_TAB_INDEX)
                 }
             },
             onWidgetLongClick = {
