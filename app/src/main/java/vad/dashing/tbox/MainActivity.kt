@@ -125,6 +125,8 @@ class MainActivity : ComponentActivity() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
 
+        consumeFloatingDashboardTileEditIntent(intent)
+
         setContent {
             DisposableEffect(Unit) {
                 onDispose { disposeAppLauncherPickerIconCache() }
@@ -160,6 +162,31 @@ class MainActivity : ComponentActivity() {
         }
 
         startBackgroundService()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeFloatingDashboardTileEditIntent(intent)
+    }
+
+    /**
+     * When started from a floating overlay to edit a tile, switch to the home main screen and
+     * queue the dialog request for [MainScreen].
+     */
+    private fun consumeFloatingDashboardTileEditIntent(intent: Intent?) {
+        val i = intent ?: return
+        val panelId = i.getStringExtra(MainActivityIntentHelper.EXTRA_FLOATING_DASHBOARD_PANEL_ID)
+            .orEmpty()
+        val widgetIndex = i.getIntExtra(
+            MainActivityIntentHelper.EXTRA_FLOATING_DASHBOARD_WIDGET_INDEX,
+            -1
+        )
+        if (panelId.isBlank() || widgetIndex < 0) return
+        FloatingDashboardTileEditRequestBus.post(panelId, widgetIndex)
+        lifecycleScope.launch(Dispatchers.IO) {
+            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
+        }
     }
 
     override fun onRestart() {
