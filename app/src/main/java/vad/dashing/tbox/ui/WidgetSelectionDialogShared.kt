@@ -423,12 +423,26 @@ internal fun WidgetSelectionDialogForm(
     floatingDashboardPanelId: String = "",
 ) {
     val context = LocalContext.current
-    val availableOptions = listOf("" to stringResource(R.string.widget_option_not_selected)) +
-            WidgetsRepository.getAvailableDataKeysWidgets()
-                .filter { it.isNotEmpty() && dataKeyFilter(it) }
-                .map { key ->
-                    key to WidgetsRepository.getTitleUnitForDataKey(context, key)
-                }
+    val notSelectedLabel = stringResource(R.string.widget_option_not_selected)
+    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets()
+        .filter { it.isNotEmpty() && dataKeyFilter(it) }
+        .map { key ->
+            key to WidgetsRepository.getTitleUnitForDataKey(context, key)
+        }
+    val selectedKey = state.selectedDataKey
+    val availableOptions = if (selectedKey.isEmpty()) {
+        listOf("" to notSelectedLabel) + widgetPairs.sortedBy { it.second }
+    } else {
+        val selectedPair = widgetPairs.find { it.first == selectedKey }
+        val othersSorted = widgetPairs
+            .filter { it.first != selectedKey }
+            .sortedBy { it.second }
+        buildList {
+            add("" to notSelectedLabel)
+            if (selectedPair != null) add(selectedPair)
+            addAll(othersSorted)
+        }
+    }
 
     Column(
         modifier = modifier

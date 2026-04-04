@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.LinkedHashSet
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
 
@@ -29,97 +30,24 @@ enum class SupportedMediaPlayer(
     val titleRes: Int,
     val iconRes: Int
 ) {
-    YANDEX_MUSIC(
-        packageName = "ru.yandex.music",
-        titleRes = R.string.media_player_yandex_music,
-        iconRes = R.drawable.player_yandex_music
-    ),
-    YANDEX_MUSIC_AUTO_PLAY(
-        packageName = "ru.auto.music",
-        titleRes = R.string.media_player_yandex_music_auto_play,
-        iconRes = R.drawable.player_yandex_music
-    ),
-    POWERAMP(
-        packageName = "com.maxmpz.audioplayer",
-        titleRes = R.string.media_player_poweramp,
-        iconRes = R.drawable.player_poweramp
-    ),
-    AIMP(
-        packageName = "com.aimp.player",
-        titleRes = R.string.media_player_aimp,
-        iconRes = R.drawable.player_aimp
-    ),
-    RECORD_RADIO(
-        packageName = "com.maxxt.recordradio",
-        titleRes = R.string.media_player_record_radio,
-        iconRes = R.drawable.player_record_radio
-    ),
-    PCRADIO(
-        packageName = "com.maxxt.pcradio",
-        titleRes = R.string.media_player_pcradio,
-        iconRes = R.drawable.player_pcradio
-    ),
-    JETAUDIO(
-        packageName = "com.jetappfactory.jetaudio",
-        titleRes = R.string.media_player_jetaudio,
-        iconRes = R.drawable.player_jetaudio
-    ),
-    JETAUDIOPLUS(
-        packageName = "com.jetappfactory.jetaudioplus",
-        titleRes = R.string.media_player_jetaudioplus,
-        iconRes = R.drawable.player_jetaudio
-    ),
-    FMPLAY(
-        packageName = "ru.fmplay",
-        titleRes = R.string.media_player_fmplay,
-        iconRes = R.drawable.player_fmplay
-    ),
-    YANDEX_RADIO(
-        packageName = "ru.yandex.mobile.fmradio",
-        titleRes = R.string.media_player_yandex_radio,
-        iconRes = R.drawable.player_yandex_radio
-    ),
-    YANDEX_MAPS(
-        packageName = "ru.yandex.yandexmaps",
-        titleRes = R.string.media_player_yandex_maps,
-        iconRes = R.drawable.player_yandex_maps
-    ),
-    YANDEX_NAVI(
-        packageName = "ru.yandex.yandexnavi",
-        titleRes = R.string.media_player_yandex_navi,
-        iconRes = R.drawable.player_yandex_navigator
-    ),
-    //WT_LOCAL_MULTIMEDIA(
-    //    packageName = "com.wt.multimedia.local",
-    //    titleRes = R.string.media_player_wt_local_multimedia,
-    //    iconRes = R.drawable.player_unknown
-    //),
     BLUETOOTH_PHONE(
         packageName = "com.android.bluetooth",
         titleRes = R.string.media_player_bluetooth_phone,
         iconRes = R.drawable.player_bluetooth
-    ),
-    VKX(
-        packageName = "ua.itaysonlab.vkx",
-        titleRes = R.string.media_player_vkx,
-        iconRes = R.drawable.player_vkx
     );
 
     companion object {
         fun fromPackage(packageName: String): SupportedMediaPlayer? {
             val normalizedPackage = packageName.trim().lowercase()
             if (normalizedPackage.isBlank()) return null
-            val resolvedPackage = when (normalizedPackage) {
-                "ru.yandex.radio" -> "ru.yandex.mobile.fmradio"
-                else -> normalizedPackage
-            }
-            return entries.firstOrNull { it.packageName == resolvedPackage }
+            return entries.firstOrNull { it.packageName == normalizedPackage }
         }
     }
 }
 
 data class MediaPlayerState(
-    val player: SupportedMediaPlayer,
+    /** Non-null when [packageName] matches a built-in entry; otherwise UI uses a generic icon/label. */
+    val player: SupportedMediaPlayer?,
     val artist: String = "",
     val track: String = "",
     val durationMs: Long = 0L,
@@ -143,22 +71,51 @@ data class MediaWidgetState(
     val notificationAccessGranted: Boolean = false
 )
 
-fun normalizeMediaPlayerPackages(rawPackages: Collection<String>): Set<String> {
-    return rawPackages
-        .map { it.trim().lowercase() }
-        .mapNotNull { SupportedMediaPlayer.fromPackage(it)?.packageName }
-        .toSet()
+/**
+ * Canonical package name for media widget selection and MediaSession matching.
+ * Accepts any plausible Android package id (launcher apps); known players use enum aliases.
+ */
+fun canonicalMediaPlayerPackage(raw: String): String? {
+    val trimmed = raw.trim().lowercase()
+    if (trimmed.isBlank()) return null
+    val mapped = when (trimmed) {
+        "ru.yandex.radio" -> "ru.yandex.mobile.fmradio"
+        else -> trimmed
+    }
+    SupportedMediaPlayer.fromPackage(mapped)?.packageName?.let { return it }
+    if (!mapped.contains('.')) return null
+    if (mapped.length > 200) return null
+    if (mapped.any { ch ->
+            ch !in 'a'..'z' && ch !in '0'..'9' && ch != '.' && ch != '_'
+        }
+    ) {
+        return null
+    }
+    return mapped
 }
 
-fun defaultMediaPlayerPackages(): Set<String> {
-    return SupportedMediaPlayer.entries.map { it.packageName }.toSet()
+fun normalizeMediaPlayerPackages(rawPackages: Collection<String>): Set<String> {
+    val out = LinkedHashSet<String>()
+    for (raw in rawPackages) {
+        canonicalMediaPlayerPackage(raw)?.let { out.add(it) }
+    }
+    return out
 }
+
+fun defaultMediaPlayerPackages(): Set<String> = emptySet()
 
 fun orderedMediaPlayerPackages(rawPackages: Collection<String>): List<String> {
-    val normalized = normalizeMediaPlayerPackages(rawPackages)
-    return SupportedMediaPlayer.entries
+    val orderedUnique = LinkedHashSet<String>()
+    for (raw in rawPackages) {
+        canonicalMediaPlayerPackage(raw)?.let { orderedUnique.add(it) }
+    }
+    if (orderedUnique.isEmpty()) return emptyList()
+    val knownOrdered = SupportedMediaPlayer.entries
         .map { it.packageName }
-        .filter { it in normalized }
+        .filter { it in orderedUnique }
+    val knownSet = knownOrdered.toSet()
+    val extras = orderedUnique.filter { it !in knownSet }
+    return knownOrdered + extras
 }
 
 fun resolveMediaPlayersForWidget(config: FloatingDashboardWidgetConfig): Set<String> {
@@ -168,7 +125,7 @@ fun resolveMediaPlayersForWidget(config: FloatingDashboardWidgetConfig): Set<Str
 }
 
 fun resolveSelectedMediaPlayerForWidget(config: FloatingDashboardWidgetConfig): String {
-    return normalizeMediaPlayerPackages(listOf(config.mediaSelectedPlayer)).firstOrNull().orEmpty()
+    return canonicalMediaPlayerPackage(config.mediaSelectedPlayer).orEmpty()
 }
 
 fun collectMediaPlayersFromWidgetConfigs(
@@ -471,13 +428,12 @@ object SharedMediaControlService {
     ) {
         val activeByPackage = activeControllers
             .mapNotNull { controller ->
-                val supportedPackage = SupportedMediaPlayer
-                    .fromPackage(controller.packageName)
-                    ?.packageName
-                if (supportedPackage == null || supportedPackage !in requestedPackages) {
+                val canonical = canonicalMediaPlayerPackage(controller.packageName)
+                    ?: return@mapNotNull null
+                if (canonical !in requestedPackages) {
                     null
                 } else {
-                    supportedPackage to controller
+                    canonical to controller
                 }
             }
             .groupBy(keySelector = { it.first }, valueTransform = { it.second })
@@ -582,7 +538,7 @@ object SharedMediaControlService {
         if (candidates.isEmpty()) return null
         if (normalizedPreferred != null) {
             val preferredController = candidates.firstOrNull {
-                SupportedMediaPlayer.fromPackage(it.packageName)?.packageName == normalizedPreferred
+                canonicalMediaPlayerPackage(it.packageName) == normalizedPreferred
             }
             if (strictPreferred) {
                 return preferredController
@@ -612,7 +568,7 @@ object SharedMediaControlService {
         val orderedPackages = orderedMediaPlayerPackages(requestedPackages)
         val updatedStates = mutableMapOf<String, MediaPlayerState>()
         orderedPackages.forEach { packageName ->
-            val player = SupportedMediaPlayer.fromPackage(packageName) ?: return@forEach
+            val player = SupportedMediaPlayer.fromPackage(packageName)
             val controller = controllers[packageName]
             val metadata = controller?.metadata
             val playbackState = controller?.playbackState
