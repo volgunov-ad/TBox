@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -430,19 +431,6 @@ internal fun WidgetSelectionDialogForm(
             key to WidgetsRepository.getTitleUnitForDataKey(context, key)
         }
     val selectedKey = state.selectedDataKey
-    val availableOptions = if (selectedKey.isEmpty()) {
-        listOf("" to notSelectedLabel) + widgetPairs.sortedBy { it.second }
-    } else {
-        val selectedPair = widgetPairs.find { it.first == selectedKey }
-        val othersSorted = widgetPairs
-            .filter { it.first != selectedKey }
-            .sortedBy { it.second }
-        buildList {
-            add("" to notSelectedLabel)
-            if (selectedPair != null) add(selectedPair)
-            addAll(othersSorted)
-        }
-    }
 
     Column(
         modifier = modifier
@@ -650,13 +638,62 @@ internal fun WidgetSelectionDialogForm(
                 }
                 }
                 else -> {
+                    var dataKeyFilterText by rememberSaveable { mutableStateOf("") }
+                    val needle = dataKeyFilterText.trim().lowercase()
+                    fun optionMatches(pair: Pair<String, String>): Boolean {
+                        if (needle.isEmpty()) return true
+                        return pair.second.lowercase().contains(needle) ||
+                            pair.first.lowercase().contains(needle)
+                    }
+                    val filteredTileOptions = if (selectedKey.isEmpty()) {
+                        val head = if (needle.isEmpty() ||
+                            notSelectedLabel.lowercase().contains(needle)
+                        ) {
+                            listOf("" to notSelectedLabel)
+                        } else {
+                            emptyList()
+                        }
+                        head + widgetPairs.filter { optionMatches(it) }.sortedBy { it.second }
+                    } else {
+                        val selectedPair = widgetPairs.find { it.first == selectedKey }
+                        buildList {
+                            if (needle.isEmpty() ||
+                                notSelectedLabel.lowercase().contains(needle)
+                            ) {
+                                add("" to notSelectedLabel)
+                            }
+                            if (selectedPair != null) {
+                                add(selectedPair)
+                            }
+                            addAll(
+                                widgetPairs
+                                    .filter { it.first != selectedKey }
+                                    .filter { optionMatches(it) }
+                                    .sortedBy { it.second }
+                            )
+                        }
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .verticalScroll(androidx.compose.foundation.rememberScrollState())
                             .padding(12.dp)
                     ) {
-                    availableOptions.forEach { (key, displayName) ->
+                    OutlinedTextField(
+                        value = dataKeyFilterText,
+                        onValueChange = { dataKeyFilterText = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        label = {
+                            Text(
+                                text = stringResource(R.string.widget_app_launcher_search),
+                                fontSize = 18.sp
+                            )
+                        },
+                        singleLine = true,
+                    )
+                    filteredTileOptions.forEach { (key, displayName) ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
