@@ -95,9 +95,9 @@ fun DashboardMediaVolumeWidgetItem(
 
     fun applyVolumeDelta(increase: Boolean) {
         if (increase && volumeState.muted) {
-            unmuteMediaStream(audioManager, lastNonZeroVolume)
+            unmuteGlobalVolume(audioManager)
         }
-        volumeState = changeMediaVolumeByStep(
+        volumeState = changeGlobalVolumeByStep(
             audioManager = audioManager,
             increase = increase
         )
@@ -108,12 +108,12 @@ fun DashboardMediaVolumeWidgetItem(
 
     fun toggleMute() {
         if (volumeState.muted) {
-            unmuteMediaStream(audioManager, lastNonZeroVolume)
+            unmuteGlobalVolume(audioManager)
         } else {
             if (volumeState.current > 0) {
                 lastNonZeroVolume = volumeState.current
             }
-            muteMediaStream(audioManager)
+            muteGlobalVolume(audioManager)
         }
         volumeState = readMediaVolumeState(audioManager)
         if (!volumeState.muted && volumeState.current > 0) {
@@ -371,6 +371,7 @@ private fun MediaVolumeActionButton(
 }
 
 private fun readMediaVolumeState(audioManager: AudioManager): MediaVolumeState {
+    // Keep widget value aligned with what user observes from hardware/system volume UI.
     val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(0)
     val muted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         audioManager.isStreamMute(AudioManager.STREAM_MUSIC) || currentVolume == 0
@@ -383,87 +384,74 @@ private fun readMediaVolumeState(audioManager: AudioManager): MediaVolumeState {
     )
 }
 
-private fun changeMediaVolumeByStep(
+private fun changeGlobalVolumeByStep(
     audioManager: AudioManager,
     increase: Boolean
 ): MediaVolumeState {
-    val before = readMediaVolumeState(audioManager)
     val direction = if (increase) {
         AudioManager.ADJUST_RAISE
     } else {
         AudioManager.ADJUST_LOWER
     }
 
-    // Some HU/ROMs ignore adjustVolume() for overlay/non-focused app windows.
+    val before = readMediaVolumeState(audioManager)
     runCatching {
-        audioManager.adjustVolume(direction, 0)
+        // Closer to hardware volume keys behavior than direct stream change.
+        audioManager.adjustSuggestedStreamVolume(direction, AudioManager.USE_DEFAULT_STREAM_TYPE, 0)
     }
     var after = readMediaVolumeState(audioManager)
     if (after.current == before.current && after.muted == before.muted) {
         runCatching {
-            audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
+            audioManager.adjustVolume(direction, 0)
         }
         after = readMediaVolumeState(audioManager)
     }
     return after
 }
 
-private fun muteMediaStream(audioManager: AudioManager) {
-    val before = readMediaVolumeState(audioManager)
+private fun muteGlobalVolume(audioManager: AudioManager) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         runCatching {
-            audioManager.adjustVolume(AudioManager.ADJUST_MUTE, 0)
+            audioManager.adjustSuggestedStreamVolume(
+                AudioManager.ADJUST_MUTE,
+                AudioManager.USE_DEFAULT_STREAM_TYPE,
+                0
+            )
         }
     } else {
         runCatching {
-            audioManager.adjustVolume(AudioManager.ADJUST_LOWER, 0)
-        }
-    }
-    val afterAdjustVolume = readMediaVolumeState(audioManager)
-    if (afterAdjustVolume.current == before.current && !afterAdjustVolume.muted) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            runCatching {
-                audioManager.adjustStreamVolume(
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.ADJUST_MUTE,
-                    0
-                )
-            }
-        } else {
-            runCatching {
-                audioManager.adjustStreamVolume(
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.ADJUST_LOWER,
-                    0
-                )
-            }
+            audioManager.adjustSuggestedStreamVolume(
+                AudioManager.ADJUST_LOWER,
+                AudioManager.USE_DEFAULT_STREAM_TYPE,
+                0
+            )
         }
     }
     runCatching {
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+        audioManager.adjustVolume(AudioManager.ADJUST_MUTE, 0)
     }
 }
 
-private fun unmuteMediaStream(audioManager: AudioManager, fallbackVolume: Int) {
+private fun unmuteGlobalVolume(audioManager: AudioManager) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         runCatching {
-            audioManager.adjustVolume(AudioManager.ADJUST_UNMUTE, 0)
-        }
-        if (readMediaVolumeState(audioManager).muted) {
-            runCatching {
-                audioManager.adjustStreamVolume(
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.ADJUST_UNMUTE,
-                    0
-                )
-            }
+            audioManager.adjustSuggestedStreamVolume(
+                AudioManager.ADJUST_UNMUTE,
+                AudioManager.USE_DEFAULT_STREAM_TYPE,
+                0
+            )
         }
     }
-    val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-    val restoreVolume = fallbackVolume.coerceIn(1, maxVolume)
-    if (audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) <= 0) {
+    runCatching {
+        audioManager.adjustVolume(AudioManager.ADJUST_UNMUTE, 0)
+    }
+    if (readMediaVolumeState(audioManager).current <= 0) {
         runCatching {
-            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, restoreVolume, 0)
+            audioManager.adjustSuggestedStreamVolume(
+                AudioManager.ADJUST_RAISE,
+                AudioManager.USE_DEFAULT_STREAM_TYPE,
+                0
+            )
         }
     }
 }
