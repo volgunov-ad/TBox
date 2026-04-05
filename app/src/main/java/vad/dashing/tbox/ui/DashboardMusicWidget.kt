@@ -287,24 +287,37 @@ fun DashboardMusicWidgetItem(
         }
     ) { availableHeight, _ ->
         if (isTransparentWidgetSelected) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(6.dp)
             ) {
-                if (title) {
-                    Row(
+                AndroidView(
+                    factory = { viewContext ->
+                        LongPressInterceptLayout(viewContext).apply {
+                            interceptLongPress = true
+                            onLongPress = onLongClick
+                        }
+                    },
+                    update = { view ->
+                        view.interceptLongPress = true
+                        view.onLongPress = onLongClick
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopStart),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MusicWidgetPlayerAvatar(
+                        selectedPackage = selectedPackage,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        MusicWidgetPlayerAvatar(
-                            selectedPackage = selectedPackage,
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .aspectRatio(1f)
-                        )
+                            .fillMaxHeight(0.28f)
+                            .aspectRatio(1f)
+                    )
+                    if (title) {
                         Text(
                             text = playerLabel,
                             color = resolvedTextColor,
@@ -330,19 +343,6 @@ fun DashboardMusicWidgetItem(
                         }
                     }
                 }
-                AndroidView(
-                    factory = { viewContext ->
-                        LongPressInterceptLayout(viewContext).apply {
-                            interceptLongPress = true
-                            onLongPress = onLongClick
-                        }
-                    },
-                    update = { view ->
-                        view.interceptLongPress = true
-                        view.onLongPress = onLongClick
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
             }
             return@DashboardWidgetScaffold
         }
