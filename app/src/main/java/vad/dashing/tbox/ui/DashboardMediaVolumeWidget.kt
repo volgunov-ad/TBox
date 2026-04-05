@@ -94,15 +94,13 @@ fun DashboardMediaVolumeWidgetItem(
     }
 
     fun applyVolumeDelta(increase: Boolean) {
-        if (increase) {
-            if (volumeState.muted) {
-                unmuteMediaStream(audioManager, lastNonZeroVolume)
-            }
-            audioManager.adjustVolume(AudioManager.ADJUST_RAISE, 0)
-        } else {
-            audioManager.adjustVolume(AudioManager.ADJUST_LOWER, 0)
+        if (increase && volumeState.muted) {
+            unmuteMediaStream(audioManager, lastNonZeroVolume)
         }
-        volumeState = readMediaVolumeState(audioManager)
+        volumeState = changeMediaVolumeByStep(
+            audioManager = audioManager,
+            increase = increase
+        )
         if (!volumeState.muted && volumeState.current > 0) {
             lastNonZeroVolume = volumeState.current
         }
@@ -385,22 +383,87 @@ private fun readMediaVolumeState(audioManager: AudioManager): MediaVolumeState {
     )
 }
 
-private fun muteMediaStream(audioManager: AudioManager) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        audioManager.adjustVolume(AudioManager.ADJUST_MUTE, 0)
+private fun changeMediaVolumeByStep(
+    audioManager: AudioManager,
+    increase: Boolean
+): MediaVolumeState {
+    val before = readMediaVolumeState(audioManager)
+    val direction = if (increase) {
+        AudioManager.ADJUST_RAISE
     } else {
-        audioManager.adjustVolume(AudioManager.ADJUST_LOWER, 0)
+        AudioManager.ADJUST_LOWER
     }
-    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+
+    // Some HU/ROMs ignore adjustVolume() for overlay/non-focused app windows.
+    runCatching {
+        audioManager.adjustVolume(direction, 0)
+    }
+    var after = readMediaVolumeState(audioManager)
+    if (after.current == before.current && after.muted == before.muted) {
+        runCatching {
+            audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
+        }
+        after = readMediaVolumeState(audioManager)
+    }
+    return after
+}
+
+private fun muteMediaStream(audioManager: AudioManager) {
+    val before = readMediaVolumeState(audioManager)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        runCatching {
+            audioManager.adjustVolume(AudioManager.ADJUST_MUTE, 0)
+        }
+    } else {
+        runCatching {
+            audioManager.adjustVolume(AudioManager.ADJUST_LOWER, 0)
+        }
+    }
+    val afterAdjustVolume = readMediaVolumeState(audioManager)
+    if (afterAdjustVolume.current == before.current && !afterAdjustVolume.muted) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            runCatching {
+                audioManager.adjustStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.ADJUST_MUTE,
+                    0
+                )
+            }
+        } else {
+            runCatching {
+                audioManager.adjustStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.ADJUST_LOWER,
+                    0
+                )
+            }
+        }
+    }
+    runCatching {
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+    }
 }
 
 private fun unmuteMediaStream(audioManager: AudioManager, fallbackVolume: Int) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        audioManager.adjustVolume(AudioManager.ADJUST_UNMUTE, 0)
+        runCatching {
+            audioManager.adjustVolume(AudioManager.ADJUST_UNMUTE, 0)
+        }
+        if (readMediaVolumeState(audioManager).muted) {
+            runCatching {
+                audioManager.adjustStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.ADJUST_UNMUTE,
+                    0
+                )
+            }
+        }
     }
     val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
     val restoreVolume = fallbackVolume.coerceIn(1, maxVolume)
     if (audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) <= 0) {
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, restoreVolume, 0)
+        runCatching {
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, restoreVolume, 0)
+        }
     }
 }
