@@ -107,6 +107,10 @@
     <string name="widget_music_action_next">Next track</string>
     <string name="widget_music_access_required">Notification access is required for track data and controls</string>
     <string name="widget_music_open_access_settings">Open access settings</string>
+    <string name="widget_media_volume_title">Media volume</string>
+    <string name="widget_media_volume_action_increase">Increase media volume</string>
+    <string name="widget_media_volume_action_decrease">Decrease media volume</string>
+    <string name="widget_media_volume_action_mute">Toggle media mute</string>
     <string name="media_player_yandex_music">Yandex Music</string>
     <string name="media_player_yandex_music_auto_play">Yandex Music (Auto)</string>
     <string name="media_player_poweramp">Poweramp</string>
@@ -452,6 +456,8 @@
     <string name="data_title_air_quality_widget">Air quality widget</string>
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
+    <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
+    <string name="data_title_media_volume_widget_vertical">Media volume widget (vertical)</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
     <string name="data_title_external_app_widget">Third-party app widget</string>
     <string name="widget_app_launcher_selected">Selected: %1$s</string>

@@ -394,6 +394,12 @@ object WidgetsRepository {
         "fuelLevelWidget" to DataTitle(R.string.data_title_fuel_level_widget),
         "airQualityWidget" to DataTitle(R.string.data_title_air_quality_widget),
         "musicWidget" to DataTitle(R.string.data_title_music_widget),
+        MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_media_volume_widget_horizontal
+        ),
+        MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_media_volume_widget_vertical
+        ),
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),

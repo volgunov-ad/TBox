@@ -107,6 +107,10 @@
     <string name="widget_music_action_next">Следующий трек</string>
     <string name="widget_music_access_required">Нужен доступ к уведомлениям для чтения трека и управления</string>
     <string name="widget_music_open_access_settings">Открыть доступ</string>
+    <string name="widget_media_volume_title">Громкость медиа</string>
+    <string name="widget_media_volume_action_increase">Увеличить громкость</string>
+    <string name="widget_media_volume_action_decrease">Уменьшить громкость</string>
+    <string name="widget_media_volume_action_mute">Включить или выключить звук</string>
     <string name="media_player_yandex_music">Я.Музыка</string>
     <string name="media_player_yandex_music_auto_play">Я.Музыка (Auto)</string>
     <string name="media_player_poweramp">Poweramp</string>
@@ -452,6 +456,8 @@
     <string name="data_title_air_quality_widget">Виджет качества воздуха</string>
     <string name="data_title_restart_tbox">Кнопка перезагрузки TBox</string>
     <string name="data_title_music_widget">Виджет управления музыкой</string>
+    <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
+    <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
     <string name="widget_app_launcher_selected">Выбрано: %1$s</string>

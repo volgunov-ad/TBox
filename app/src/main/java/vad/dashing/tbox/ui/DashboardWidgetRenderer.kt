@@ -14,6 +14,8 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 
 @Composable
@@ -246,6 +248,36 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 enableInnerInteractions = enableMusicInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardMediaVolumeWidgetItem(
+                widget = widget,
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableMusicInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardMediaVolumeWidgetItem(
+                widget = widget,
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableMusicInnerInteractions,
+                elevation = elevation,
+                shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
