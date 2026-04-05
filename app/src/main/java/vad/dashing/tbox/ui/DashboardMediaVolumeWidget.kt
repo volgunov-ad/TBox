@@ -98,9 +98,9 @@ fun DashboardMediaVolumeWidgetItem(
             if (volumeState.muted) {
                 unmuteMediaStream(audioManager, lastNonZeroVolume)
             }
-            audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0)
+            audioManager.adjustVolume(AudioManager.ADJUST_RAISE, 0)
         } else {
-            audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, 0)
+            audioManager.adjustVolume(AudioManager.ADJUST_LOWER, 0)
         }
         volumeState = readMediaVolumeState(audioManager)
         if (!volumeState.muted && volumeState.current > 0) {
@@ -387,14 +387,16 @@ private fun readMediaVolumeState(audioManager: AudioManager): MediaVolumeState {
 
 private fun muteMediaStream(audioManager: AudioManager) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+        audioManager.adjustVolume(AudioManager.ADJUST_MUTE, 0)
+    } else {
+        audioManager.adjustVolume(AudioManager.ADJUST_LOWER, 0)
     }
     audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
 }
 
 private fun unmuteMediaStream(audioManager: AudioManager, fallbackVolume: Int) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+        audioManager.adjustVolume(AudioManager.ADJUST_UNMUTE, 0)
     }
     val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
     val restoreVolume = fallbackVolume.coerceIn(1, maxVolume)
