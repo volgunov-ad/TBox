@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -196,7 +194,7 @@ fun DashboardMediaVolumeWidgetItem(
                             .weight(1f),
                         icon = {
                             Icon(
-                                imageVector = Icons.Filled.Add,
+                                painter = painterResource(id = R.drawable.ic_media_volume_plus),
                                 contentDescription = stringResource(R.string.widget_media_volume_action_increase),
                                 tint = resolvedTextColor,
                                 modifier = Modifier
@@ -225,15 +223,13 @@ fun DashboardMediaVolumeWidgetItem(
                             .fillMaxWidth()
                             .weight(1f),
                         icon = {
-                            Text(
-                                text = "-",
-                                color = resolvedTextColor,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = calculateResponsiveFontSize(
-                                    containerHeight = availableHeight,
-                                    textType = TextType.VALUE
-                                ),
-                                textAlign = TextAlign.Center
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_media_volume_minus),
+                                contentDescription = stringResource(R.string.widget_media_volume_action_decrease),
+                                tint = resolvedTextColor,
+                                modifier = Modifier
+                                    .fillMaxHeight(0.58f)
+                                    .aspectRatio(1f)
                             )
                         },
                         interactionEnabled = enableInnerInteractions,
@@ -253,15 +249,13 @@ fun DashboardMediaVolumeWidgetItem(
                             .fillMaxHeight()
                             .weight(1f),
                         icon = {
-                            Text(
-                                text = "-",
-                                color = resolvedTextColor,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = calculateResponsiveFontSize(
-                                    containerHeight = availableHeight,
-                                    textType = TextType.VALUE
-                                ),
-                                textAlign = TextAlign.Center
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_media_volume_minus),
+                                contentDescription = stringResource(R.string.widget_media_volume_action_decrease),
+                                tint = resolvedTextColor,
+                                modifier = Modifier
+                                    .fillMaxHeight(0.58f)
+                                    .aspectRatio(1f)
                             )
                         },
                         interactionEnabled = enableInnerInteractions,
@@ -286,7 +280,7 @@ fun DashboardMediaVolumeWidgetItem(
                             .weight(1f),
                         icon = {
                             Icon(
-                                imageVector = Icons.Filled.Add,
+                                painter = painterResource(id = R.drawable.ic_media_volume_plus),
                                 contentDescription = stringResource(R.string.widget_media_volume_action_increase),
                                 tint = resolvedTextColor,
                                 modifier = Modifier
@@ -316,9 +310,9 @@ private fun MediaVolumeCenterButton(
     onToggleMute: () -> Unit
 ) {
     val iconRes = if (muted) {
-        android.R.drawable.ic_lock_silent_mode
+        R.drawable.ic_media_volume_mute
     } else {
-        android.R.drawable.ic_lock_silent_mode_off
+        R.drawable.ic_media_volume_audio
     }
     MediaVolumeActionButton(
         modifier = modifier,
