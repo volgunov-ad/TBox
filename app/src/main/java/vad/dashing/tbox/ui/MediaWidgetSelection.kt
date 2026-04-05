@@ -33,6 +33,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SupportedMediaPlayer
 import vad.dashing.tbox.canonicalMediaPlayerPackage
 import vad.dashing.tbox.defaultMediaPlayerPackages
+import vad.dashing.tbox.TRANSPARENT_WIDGET_PLAYER_PACKAGE
 import vad.dashing.tbox.normalizeMediaPlayerPackages
 import vad.dashing.tbox.orderedMediaPlayerPackages
 
@@ -123,7 +124,7 @@ fun MediaPlayersInlineSelection(
                         } else {
                             updated.add(pkg)
                         }
-                        onSelectionChange(normalizeMediaPlayerPackages(updated))
+                        onSelectionChange(normalizeMediaPlayersWithTransparentWidget(updated))
                     }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -137,7 +138,7 @@ fun MediaPlayersInlineSelection(
                         } else {
                             updated.remove(pkg)
                         }
-                        onSelectionChange(normalizeMediaPlayerPackages(updated))
+                        onSelectionChange(normalizeMediaPlayersWithTransparentWidget(updated))
                     },
                     enabled = enabled
                 )
@@ -174,7 +175,7 @@ fun MediaPlayersInlineSelection(
                         } else {
                             updated.add(pkg)
                         }
-                        onSelectionChange(normalizeMediaPlayerPackages(updated))
+                        onSelectionChange(normalizeMediaPlayersWithTransparentWidget(updated))
                     }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -188,7 +189,7 @@ fun MediaPlayersInlineSelection(
                         } else {
                             updated.remove(pkg)
                         }
-                        onSelectionChange(normalizeMediaPlayerPackages(updated))
+                        onSelectionChange(normalizeMediaPlayersWithTransparentWidget(updated))
                     },
                     enabled = enabled
                 )
@@ -228,4 +229,16 @@ fun MediaPlayersInlineSelection(
 
 fun orderedMediaPlayersForStorage(selectedPlayers: Set<String>): List<String> {
     return orderedMediaPlayerPackages(selectedPlayers)
+}
+
+private fun normalizeMediaPlayersWithTransparentWidget(rawPackages: Collection<String>): Set<String> {
+    val normalized = normalizeMediaPlayerPackages(rawPackages)
+    val hasTransparentWidget = rawPackages.any { raw ->
+        raw.trim().lowercase() == TRANSPARENT_WIDGET_PLAYER_PACKAGE
+    }
+    return if (hasTransparentWidget) {
+        (normalized + TRANSPARENT_WIDGET_PLAYER_PACKAGE).toSet()
+    } else {
+        normalized
+    }
 }

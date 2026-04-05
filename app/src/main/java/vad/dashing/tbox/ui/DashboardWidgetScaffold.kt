@@ -24,6 +24,7 @@ fun DashboardWidgetScaffold(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: (() -> Unit)? = null,
+    enableCardInteractions: Boolean = true,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     textColor: Color? = null,
@@ -31,7 +32,8 @@ fun DashboardWidgetScaffold(
     content: @Composable BoxWithConstraintsScope.(availableHeight: Dp, resolvedTextColor: Color) -> Unit
 ) {
     val resolvedInteractionPolicy = LocalDashboardWidgetInteractionPolicy.current
-    val useCardClickable = resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD
+    val useCardClickable = resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD &&
+        enableCardInteractions
     Card(
         modifier = modifier
             .fillMaxSize()
@@ -59,7 +61,7 @@ fun DashboardWidgetScaffold(
             val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
             Box(modifier = Modifier.fillMaxSize()) {
                 this@BoxWithConstraints.content(availableHeight, resolvedTextColor)
-                if (!useCardClickable) {
+                if (resolvedInteractionPolicy.mode != DashboardWidgetInteractionMode.STANDARD) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()

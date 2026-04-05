@@ -54,9 +54,11 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.TRANSPARENT_WIDGET_PLAYER_PACKAGE
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.SupportedMediaPlayer
+import vad.dashing.tbox.isTransparentMediaPlayerPackage
 import vad.dashing.tbox.orderedMediaPlayerPackages
 import vad.dashing.tbox.resolveMediaPlayersForWidget
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
@@ -84,16 +86,21 @@ fun DashboardMusicWidgetItem(
     val carouselPackages = remember(selectedPlayers) {
         orderedMediaPlayerPackages(selectedPlayers)
     }
+    val controllablePackages = remember(selectedPlayers) {
+        selectedPlayers.filterNot(::isTransparentMediaPlayerPackage).toSet()
+    }
     var selectedPackage by remember(widget.id, carouselPackages, widgetConfig.mediaSelectedPlayer) {
         mutableStateOf(resolveInitialSelectedPackage(widgetConfig, carouselPackages))
     }
     var horizontalDragDistance by remember(widget.id, carouselPackages) {
         mutableFloatStateOf(0f)
     }
+    val isTransparentWidgetSelected = selectedPackage == TRANSPARENT_WIDGET_PLAYER_PACKAGE
+    val effectiveInteractionsEnabled = enableInnerInteractions && !isTransparentWidgetSelected
     val playerStates by SharedMediaControlService.playerStates.collectAsStateWithLifecycle()
-    val mediaState = remember(selectedPlayers, playerStates, selectedPackage) {
+    val mediaState = remember(controllablePackages, playerStates, selectedPackage) {
         SharedMediaControlService.resolveWidgetState(
-            selectedPackages = selectedPlayers,
+            selectedPackages = controllablePackages,
             currentStates = playerStates,
             preferredPackage = selectedPackage
         )
@@ -121,7 +128,9 @@ fun DashboardMusicWidgetItem(
         ?: unknownAppLabel
         ?: stringResource(R.string.widget_music_player_none)
     val isSelectedPlayerRunning = selectedPlayerState?.hasSession == true
-    val playerLabel = if (selectedPackage.isNotBlank() && !isSelectedPlayerRunning) {
+    val playerLabel = if (isTransparentWidgetSelected) {
+        ""
+    } else if (selectedPackage.isNotBlank() && !isSelectedPlayerRunning) {
         stringResource(R.string.widget_music_player_with_state_off, basePlayerLabel)
     } else {
         basePlayerLabel
@@ -139,8 +148,12 @@ fun DashboardMusicWidgetItem(
             ?: stringResource(R.string.widget_music_no_track)
     }
     val playPauseIcon = if (selectedPlayerState?.isPlaying == true) R.drawable.pause else R.drawable.play
-    val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()
-    val canSendSkip = mediaState.notificationAccessGranted && isSelectedPlayerRunning
+    val canSendPlay = !isTransparentWidgetSelected &&
+        mediaState.notificationAccessGranted &&
+        selectedPackage.isNotBlank()
+    val canSendSkip = !isTransparentWidgetSelected &&
+        mediaState.notificationAccessGranted &&
+        isSelectedPlayerRunning
     val isPlaying = selectedPlayerState?.isPlaying ?: mediaState.isPlaying
     val durationMs = selectedPlayerState?.durationMs ?: mediaState.durationMs
     val positionMs = selectedPlayerState?.positionMs ?: mediaState.positionMs
@@ -180,6 +193,10 @@ fun DashboardMusicWidgetItem(
     ) {
         if (!widgetConfig.mediaAutoPlayOnInit) return@LaunchedEffect
         if (autoPlayTriggered) return@LaunchedEffect
+        if (isTransparentWidgetSelected) {
+            autoPlayTriggered = true
+            return@LaunchedEffect
+        }
         if (selectedPackage.isBlank()) return@LaunchedEffect
         if (widgetConfig.mediaAutoPlayOnlyWhenEngineRunning) {
             // engineRPM uses WhileSubscribed(5000): polling .value never subscribes, so RPM may never
@@ -201,7 +218,7 @@ fun DashboardMusicWidgetItem(
         val autoPlayPackage = selectedPackage
         SharedMediaControlService.play(
             context = context,
-            selectedPackages = selectedPlayers,
+            selectedPackages = controllablePackages,
             preferredPackage = autoPlayPackage
         )
         delay(AUTO_PLAY_VERIFY_DELAY_MS)
@@ -209,7 +226,7 @@ fun DashboardMusicWidgetItem(
         if (!isPlaying) {
             SharedMediaControlService.play(
                 context = context,
-                selectedPackages = selectedPlayers,
+                selectedPackages = controllablePackages,
                 preferredPackage = autoPlayPackage
             )
         }
@@ -258,11 +275,36 @@ fun DashboardMusicWidgetItem(
         ),
         onClick = onClick,
         onLongClick = onLongClick,
+        enableCardInteractions = !isTransparentWidgetSelected,
         elevation = elevation,
         shape = shape,
         textColor = textColor,
-        backgroundColor = backgroundColor
+        backgroundColor = if (isTransparentWidgetSelected) {
+            Color.Transparent
+        } else {
+            backgroundColor
+        }
     ) { availableHeight, _ ->
+        if (isTransparentWidgetSelected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(6.dp),
+                contentAlignment = Alignment.TopEnd
+            ) {
+                if (carouselPackages.size > 1) {
+                    Text(
+                        text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
+                        color = resolvedTextColor,
+                        fontSize = calculateResponsiveFontSize(
+                            containerHeight = availableHeight,
+                            textType = TextType.UNIT
+                        ) * 0.8f
+                    )
+                }
+            }
+            return@DashboardWidgetScaffold
+        }
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
@@ -313,11 +355,11 @@ fun DashboardMusicWidgetItem(
                         .fillMaxWidth()
                         .weight(1.5f)
                         .combinedClickable(
-                            enabled = enableInnerInteractions,
+                            enabled = effectiveInteractionsEnabled,
                             onClick = {},
                             onLongClick = onLongClick,
                             onDoubleClick = {
-                                if (enableInnerInteractions) {
+                                if (effectiveInteractionsEnabled) {
                                     openSelectedPlayer(context, selectedPackage)
                                 }
                             }
@@ -363,7 +405,7 @@ fun DashboardMusicWidgetItem(
                         .weight(1.5f)
                         .clip(RoundedCornerShape(8.dp))
                         .combinedClickable(
-                            enabled = enableInnerInteractions,
+                            enabled = effectiveInteractionsEnabled,
                             onClick = {
                                 if (!mediaState.notificationAccessGranted) {
                                     openNotificationListenerSettings(context)
@@ -371,7 +413,7 @@ fun DashboardMusicWidgetItem(
                             },
                             onLongClick = onLongClick,
                             onDoubleClick = {
-                                if (enableInnerInteractions) {
+                                if (effectiveInteractionsEnabled) {
                                     openSelectedPlayer(context, selectedPackage)
                                 }
                             }
@@ -408,11 +450,11 @@ fun DashboardMusicWidgetItem(
                         contentDescription = stringResource(R.string.widget_music_action_previous),
                         iconTint = resolvedTextColor,
                         actionEnabled = canSendSkip,
-                        interactionEnabled = enableInnerInteractions,
+                        interactionEnabled = effectiveInteractionsEnabled,
                         onLongClick = onLongClick,
                         onClick = {
                             SharedMediaControlService.skipToPrevious(
-                                selectedPackages = selectedPlayers,
+                                selectedPackages = controllablePackages,
                                 preferredPackage = selectedPackage
                             )
                         }
@@ -425,12 +467,12 @@ fun DashboardMusicWidgetItem(
                         contentDescription = stringResource(R.string.widget_music_action_play_pause),
                         iconTint = resolvedTextColor,
                         actionEnabled = canSendPlay,
-                        interactionEnabled = enableInnerInteractions,
+                        interactionEnabled = effectiveInteractionsEnabled,
                         onLongClick = onLongClick,
                         onClick = {
                             SharedMediaControlService.playPause(
                                 context = context,
-                                selectedPackages = selectedPlayers,
+                                selectedPackages = controllablePackages,
                                 preferredPackage = selectedPackage
                             )
                         }
@@ -443,11 +485,11 @@ fun DashboardMusicWidgetItem(
                         contentDescription = stringResource(R.string.widget_music_action_next),
                         iconTint = resolvedTextColor,
                         actionEnabled = canSendSkip,
-                        interactionEnabled = enableInnerInteractions,
+                        interactionEnabled = effectiveInteractionsEnabled,
                         onLongClick = onLongClick,
                         onClick = {
                             SharedMediaControlService.skipToNext(
-                                selectedPackages = selectedPlayers,
+                                selectedPackages = controllablePackages,
                                 preferredPackage = selectedPackage
                             )
                         }
