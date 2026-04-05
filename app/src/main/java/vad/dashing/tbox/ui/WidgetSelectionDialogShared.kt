@@ -645,33 +645,18 @@ internal fun WidgetSelectionDialogForm(
                         return pair.second.lowercase().contains(needle) ||
                             pair.first.lowercase().contains(needle)
                     }
-                    val filteredTileOptions = if (selectedKey.isEmpty()) {
-                        val head = if (needle.isEmpty() ||
-                            notSelectedLabel.lowercase().contains(needle)
-                        ) {
-                            listOf("" to notSelectedLabel)
-                        } else {
-                            emptyList()
+                    val selectedPair = widgetPairs.find { it.first == selectedKey }
+                    val filteredTileOptions = buildList {
+                        add("" to notSelectedLabel)
+                        if (selectedKey.isNotEmpty() && selectedPair != null) {
+                            add(selectedPair)
                         }
-                        head + widgetPairs.filter { optionMatches(it) }.sortedBy { it.second }
-                    } else {
-                        val selectedPair = widgetPairs.find { it.first == selectedKey }
-                        buildList {
-                            if (needle.isEmpty() ||
-                                notSelectedLabel.lowercase().contains(needle)
-                            ) {
-                                add("" to notSelectedLabel)
-                            }
-                            if (selectedPair != null) {
-                                add(selectedPair)
-                            }
-                            addAll(
-                                widgetPairs
-                                    .filter { it.first != selectedKey }
-                                    .filter { optionMatches(it) }
-                                    .sortedBy { it.second }
-                            )
-                        }
+                        addAll(
+                            widgetPairs
+                                .filter { it.first != selectedKey }
+                                .filter { optionMatches(it) }
+                                .sortedBy { it.second }
+                        )
                     }
                     Column(
                         modifier = Modifier
