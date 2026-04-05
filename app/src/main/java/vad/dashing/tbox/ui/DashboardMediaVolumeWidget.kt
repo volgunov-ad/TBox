@@ -45,24 +45,10 @@ import vad.dashing.tbox.R
 
 private const val MEDIA_VOLUME_SWIPE_STEP_PX = 58f
 private const val MEDIA_VOLUME_POLL_DELAY_MS = 350L
-private val GLOBAL_VOLUME_STREAMS = intArrayOf(
-    AudioManager.STREAM_MUSIC,
-    AudioManager.STREAM_RING,
-    AudioManager.STREAM_NOTIFICATION,
-    AudioManager.STREAM_ALARM,
-    AudioManager.STREAM_SYSTEM,
-    AudioManager.STREAM_VOICE_CALL
-)
 
 private data class MediaVolumeState(
     val current: Int = 0,
-    val muted: Boolean = false,
-    val streamType: Int = AudioManager.STREAM_MUSIC
-)
-
-private data class GlobalVolumeResult(
-    val state: MediaVolumeState,
-    val snapshot: IntArray
+    val muted: Boolean = false
 )
 
 @Composable
@@ -86,11 +72,8 @@ fun DashboardMediaVolumeWidgetItem(
     var volumeState by remember(widget.id, isVertical) {
         mutableStateOf(readMediaVolumeState(audioManager))
     }
-    var trackedStreamType by remember(widget.id, isVertical) {
-        mutableIntStateOf(volumeState.streamType)
-    }
-    var trackedSnapshot by remember(widget.id, isVertical) {
-        mutableStateOf(takeGlobalVolumeSnapshot(audioManager))
+    var lastNonZeroVolume by remember(widget.id, isVertical) {
+        mutableIntStateOf(kotlin.math.max(volumeState.current, 1))
     }
     var swipeAccumulator by remember(widget.id, isVertical) {
         mutableFloatStateOf(0f)
@@ -98,17 +81,12 @@ fun DashboardMediaVolumeWidgetItem(
 
     LaunchedEffect(widget.id, isVertical) {
         while (true) {
-            val snapshot = takeGlobalVolumeSnapshot(audioManager)
-            val changedStream = resolveChangedStreamType(
-                before = trackedSnapshot,
-                after = snapshot,
-                preferredStream = trackedStreamType
-            )
-            trackedStreamType = changedStream
-            trackedSnapshot = snapshot
-            val updated = readMediaVolumeState(audioManager, trackedStreamType)
+            val updated = readMediaVolumeState(audioManager)
             if (updated != volumeState) {
                 volumeState = updated
+            }
+            if (!updated.muted && updated.current > 0) {
+                lastNonZeroVolume = updated.current
             }
             delay(MEDIA_VOLUME_POLL_DELAY_MS)
         }
@@ -116,41 +94,29 @@ fun DashboardMediaVolumeWidgetItem(
 
     fun applyVolumeDelta(increase: Boolean) {
         if (increase && volumeState.muted) {
-            val unmuteResult = unmuteGlobalVolume(
-                audioManager = audioManager,
-                preferredStreamType = trackedStreamType
-            )
-            trackedStreamType = unmuteResult.state.streamType
-            trackedSnapshot = unmuteResult.snapshot
-            volumeState = unmuteResult.state
+            unmuteMediaStream(audioManager, lastNonZeroVolume)
         }
-        val changeResult = changeGlobalVolumeByStep(
+        volumeState = changeMediaVolumeByStep(
             audioManager = audioManager,
-            increase = increase,
-            preferredStreamType = trackedStreamType
+            increase = increase
         )
-        trackedStreamType = changeResult.state.streamType
-        trackedSnapshot = changeResult.snapshot
-        volumeState = changeResult.state
+        if (!volumeState.muted && volumeState.current > 0) {
+            lastNonZeroVolume = volumeState.current
+        }
     }
 
     fun toggleMute() {
         if (volumeState.muted) {
-            val unmuteResult = unmuteGlobalVolume(
-                audioManager = audioManager,
-                preferredStreamType = trackedStreamType
-            )
-            trackedStreamType = unmuteResult.state.streamType
-            trackedSnapshot = unmuteResult.snapshot
-            volumeState = unmuteResult.state
+            unmuteMediaStream(audioManager, lastNonZeroVolume)
         } else {
-            val muteResult = muteGlobalVolume(
-                audioManager = audioManager,
-                preferredStreamType = trackedStreamType
-            )
-            trackedStreamType = muteResult.state.streamType
-            trackedSnapshot = muteResult.snapshot
-            volumeState = muteResult.state
+            if (volumeState.current > 0) {
+                lastNonZeroVolume = volumeState.current
+            }
+            muteMediaStream(audioManager)
+        }
+        volumeState = readMediaVolumeState(audioManager)
+        if (!volumeState.muted && volumeState.current > 0) {
+            lastNonZeroVolume = volumeState.current
         }
     }
 
@@ -403,190 +369,89 @@ private fun MediaVolumeActionButton(
     }
 }
 
-private fun readMediaVolumeState(
-    audioManager: AudioManager,
-    preferredStreamType: Int = AudioManager.STREAM_MUSIC
-): MediaVolumeState {
-    val streamType = resolveActiveSystemStream(audioManager, preferredStreamType)
+private fun readMediaVolumeState(audioManager: AudioManager): MediaVolumeState {
     val currentVolume = runCatching {
-        audioManager.getStreamVolume(streamType).coerceAtLeast(0)
+        audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(0)
     }.getOrDefault(0)
     val mutedBySystem = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        runCatching { audioManager.isStreamMute(streamType) }.getOrDefault(currentVolume == 0)
+        runCatching { audioManager.isStreamMute(AudioManager.STREAM_MUSIC) }.getOrDefault(currentVolume == 0)
     } else {
         false
     }
     return MediaVolumeState(
         current = currentVolume,
-        muted = mutedBySystem || currentVolume == 0,
-        streamType = streamType
+        muted = mutedBySystem || currentVolume == 0
     )
 }
 
-private fun resolveActiveSystemStream(
+private fun changeMediaVolumeByStep(
     audioManager: AudioManager,
-    preferredStreamType: Int
-): Int {
-    if (GLOBAL_VOLUME_STREAMS.contains(preferredStreamType)) {
-        return preferredStreamType
-    }
-    return GLOBAL_VOLUME_STREAMS.firstOrNull { stream ->
-        runCatching { audioManager.getStreamVolume(stream) > 0 }.getOrDefault(false)
-    } ?: AudioManager.STREAM_MUSIC
-}
-
-private fun takeGlobalVolumeSnapshot(audioManager: AudioManager): IntArray {
-    return IntArray(GLOBAL_VOLUME_STREAMS.size) { index ->
-        runCatching {
-            audioManager.getStreamVolume(GLOBAL_VOLUME_STREAMS[index]).coerceAtLeast(0)
-        }.getOrDefault(0)
-    }
-}
-
-private fun resolveChangedStreamType(
-    before: IntArray,
-    after: IntArray,
-    preferredStream: Int
-): Int {
-    var changedStream = preferredStream
-    var bestDelta = 0
-    for (index in GLOBAL_VOLUME_STREAMS.indices) {
-        val delta = abs(after[index] - before[index])
-        if (delta > bestDelta) {
-            bestDelta = delta
-            changedStream = GLOBAL_VOLUME_STREAMS[index]
-        }
-    }
-    return if (bestDelta > 0) {
-        changedStream
-    } else if (GLOBAL_VOLUME_STREAMS.contains(preferredStream)) {
-        preferredStream
-    } else {
-        AudioManager.STREAM_MUSIC
-    }
-}
-
-private fun changeGlobalVolumeByStep(
-    audioManager: AudioManager,
-    increase: Boolean,
-    preferredStreamType: Int
-): GlobalVolumeResult {
+    increase: Boolean
+): MediaVolumeState {
     val direction = if (increase) {
         AudioManager.ADJUST_RAISE
     } else {
         AudioManager.ADJUST_LOWER
     }
 
-    val beforeSnapshot = takeGlobalVolumeSnapshot(audioManager)
-    val beforeState = readMediaVolumeState(audioManager, preferredStreamType)
-
+    val beforeState = readMediaVolumeState(audioManager)
     runCatching {
-        audioManager.adjustSuggestedStreamVolume(
-            direction,
-            AudioManager.USE_DEFAULT_STREAM_TYPE,
-            0
-        )
+        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
     }
-
-    var afterSnapshot = takeGlobalVolumeSnapshot(audioManager)
-    var resolvedStream = resolveChangedStreamType(
-        before = beforeSnapshot,
-        after = afterSnapshot,
-        preferredStream = beforeState.streamType
-    )
-    var afterState = readMediaVolumeState(audioManager, resolvedStream)
-
+    var afterState = readMediaVolumeState(audioManager)
     if (afterState.current == beforeState.current && afterState.muted == beforeState.muted) {
         runCatching {
-            audioManager.adjustVolume(direction, 0)
+            audioManager.adjustSuggestedStreamVolume(
+                direction,
+                AudioManager.STREAM_MUSIC,
+                0
+            )
         }
-        afterSnapshot = takeGlobalVolumeSnapshot(audioManager)
-        resolvedStream = resolveChangedStreamType(
-            before = beforeSnapshot,
-            after = afterSnapshot,
-            preferredStream = resolvedStream
-        )
-        afterState = readMediaVolumeState(audioManager, resolvedStream)
+        afterState = readMediaVolumeState(audioManager)
     }
-
-    return GlobalVolumeResult(
-        state = afterState,
-        snapshot = afterSnapshot
-    )
+    return afterState
 }
 
-private fun muteGlobalVolume(
-    audioManager: AudioManager,
-    preferredStreamType: Int
-): GlobalVolumeResult {
-    val beforeSnapshot = takeGlobalVolumeSnapshot(audioManager)
+private fun muteMediaStream(audioManager: AudioManager) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         runCatching {
-            audioManager.adjustSuggestedStreamVolume(
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
                 AudioManager.ADJUST_MUTE,
-                AudioManager.USE_DEFAULT_STREAM_TYPE,
                 0
             )
         }
     } else {
         runCatching {
-            audioManager.adjustSuggestedStreamVolume(
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
                 AudioManager.ADJUST_LOWER,
-                AudioManager.USE_DEFAULT_STREAM_TYPE,
                 0
             )
         }
     }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        runCatching {
-            audioManager.adjustVolume(AudioManager.ADJUST_MUTE, 0)
-        }
+    runCatching {
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
     }
-    val afterSnapshot = takeGlobalVolumeSnapshot(audioManager)
-    val resolvedStream = resolveChangedStreamType(
-        before = beforeSnapshot,
-        after = afterSnapshot,
-        preferredStream = preferredStreamType
-    )
-    return GlobalVolumeResult(
-        state = readMediaVolumeState(audioManager, resolvedStream),
-        snapshot = afterSnapshot
-    )
 }
 
-private fun unmuteGlobalVolume(
-    audioManager: AudioManager,
-    preferredStreamType: Int
-): GlobalVolumeResult {
-    val beforeSnapshot = takeGlobalVolumeSnapshot(audioManager)
+private fun unmuteMediaStream(audioManager: AudioManager, fallbackVolume: Int) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         runCatching {
-            audioManager.adjustSuggestedStreamVolume(
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
                 AudioManager.ADJUST_UNMUTE,
-                AudioManager.USE_DEFAULT_STREAM_TYPE,
                 0
             )
         }
+    }
+    val maxVolume = runCatching {
+        audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+    }.getOrDefault(1).coerceAtLeast(1)
+    val restoreVolume = fallbackVolume.coerceIn(1, maxVolume)
+    if (runCatching { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrDefault(0) <= 0) {
         runCatching {
-            audioManager.adjustVolume(AudioManager.ADJUST_UNMUTE, 0)
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, restoreVolume, 0)
         }
     }
-    // Ensure unmute visibly restores at least one step on systems that keep zero after unmute.
-    runCatching {
-        audioManager.adjustSuggestedStreamVolume(
-            AudioManager.ADJUST_RAISE,
-            AudioManager.USE_DEFAULT_STREAM_TYPE,
-            0
-        )
-    }
-    val afterSnapshot = takeGlobalVolumeSnapshot(audioManager)
-    val resolvedStream = resolveChangedStreamType(
-        before = beforeSnapshot,
-        after = afterSnapshot,
-        preferredStream = preferredStreamType
-    )
-    return GlobalVolumeResult(
-        state = readMediaVolumeState(audioManager, resolvedStream),
-        snapshot = afterSnapshot
-    )
 }
