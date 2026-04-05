@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -286,22 +287,62 @@ fun DashboardMusicWidgetItem(
         }
     ) { availableHeight, _ ->
         if (isTransparentWidgetSelected) {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(6.dp),
-                contentAlignment = Alignment.TopEnd
+                    .padding(6.dp)
             ) {
-                if (carouselPackages.size > 1) {
-                    Text(
-                        text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
-                        color = resolvedTextColor,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.UNIT
-                        ) * 0.8f
-                    )
+                if (title) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MusicWidgetPlayerAvatar(
+                            selectedPackage = selectedPackage,
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(1f)
+                        )
+                        Text(
+                            text = playerLabel,
+                            color = resolvedTextColor,
+                            fontSize = calculateResponsiveFontSize(
+                                containerHeight = availableHeight,
+                                textType = TextType.UNIT
+                            ) * 0.8f,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 8.dp)
+                        )
+                        if (carouselPackages.size > 1) {
+                            Text(
+                                text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
+                                color = resolvedTextColor,
+                                fontSize = calculateResponsiveFontSize(
+                                    containerHeight = availableHeight,
+                                    textType = TextType.UNIT
+                                ) * 0.8f
+                            )
+                        }
+                    }
                 }
+                AndroidView(
+                    factory = { viewContext ->
+                        LongPressInterceptLayout(viewContext).apply {
+                            interceptLongPress = true
+                            onLongPress = onLongClick
+                        }
+                    },
+                    update = { view ->
+                        view.interceptLongPress = true
+                        view.onLongPress = onLongClick
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
             return@DashboardWidgetScaffold
         }
