@@ -639,21 +639,24 @@ internal fun WidgetSelectionDialogForm(
                 }
                 else -> {
                     var dataKeyFilterText by rememberSaveable { mutableStateOf("") }
+                    val initialListSelectedKey = rememberSaveable {
+                        state.selectedDataKey
+                    }
                     val needle = dataKeyFilterText.trim().lowercase()
                     fun optionMatches(pair: Pair<String, String>): Boolean {
                         if (needle.isEmpty()) return true
                         return pair.second.lowercase().contains(needle) ||
                             pair.first.lowercase().contains(needle)
                     }
-                    val selectedPair = widgetPairs.find { it.first == selectedKey }
+                    val selectedPair = widgetPairs.find { it.first == initialListSelectedKey }
                     val filteredTileOptions = buildList {
                         add("" to notSelectedLabel)
-                        if (selectedKey.isNotEmpty() && selectedPair != null) {
+                        if (initialListSelectedKey.isNotEmpty() && selectedPair != null) {
                             add(selectedPair)
                         }
                         addAll(
                             widgetPairs
-                                .filter { it.first != selectedKey }
+                                .filter { it.first != initialListSelectedKey }
                                 .filter { optionMatches(it) }
                                 .sortedBy { it.second }
                         )
