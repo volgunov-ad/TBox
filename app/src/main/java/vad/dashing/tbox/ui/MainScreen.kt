@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import android.graphics.BitmapFactory
 import java.io.File
 import kotlin.math.roundToInt
@@ -43,12 +45,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
+import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.FloatingDashboardTileEditRequestBus
+import vad.dashing.tbox.FloatingDashboardViewModel
+import vad.dashing.tbox.FloatingDashboardViewModelFactory
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.MainScreenAddButtonPosition
 import vad.dashing.tbox.MainScreenSettingsButtonPosition
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.loadWidgetsFromConfig
 
 private val MainScreenSettingsIconSize = 32.dp
 private val MainScreenAddIconSize = 32.dp
@@ -69,6 +78,16 @@ fun MainScreen(
     val addBtnPos by settingsViewModel.mainScreenAddButtonPosition.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
+
+    var floatingOverlayEditRequest by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    val pendingFloatingTileEdit by FloatingDashboardTileEditRequestBus.pending
+        .collectAsStateWithLifecycle()
+    LaunchedEffect(pendingFloatingTileEdit) {
+        pendingFloatingTileEdit?.let { req ->
+            floatingOverlayEditRequest = req
+            FloatingDashboardTileEditRequestBus.clear()
+        }
+    }
 
     BoxWithConstraints(
         modifier = modifier.fillMaxSize()
@@ -126,6 +145,57 @@ fun MainScreen(
                 settingsViewModel.addMainScreenDashboard(newMainPanelDefaultName)
             },
         )
+
+        floatingOverlayEditRequest?.let { (panelId, widgetIndex) ->
+            val context = LocalContext.current
+            val overlayEditHost = remember(panelId, widgetIndex) {
+                ExternalWidgetHostManager.acquireHost(context)
+            }
+            DisposableEffect(overlayEditHost) {
+                onDispose { ExternalWidgetHostManager.releaseHost() }
+            }
+            val dashboardViewModel: FloatingDashboardViewModel = viewModel(
+                key = "floating-overlay-edit-$panelId",
+                factory = FloatingDashboardViewModelFactory(panelId)
+            )
+            val dashboardState by dashboardViewModel.dashboardManager.dashboardState
+                .collectAsStateWithLifecycle()
+            val panelConfig by settingsViewModel.floatingDashboardConfig(panelId)
+                .collectAsStateWithLifecycle()
+            val widgetConfigs = panelConfig.widgetsConfig
+            val totalTiles = panelConfig.rows * panelConfig.cols
+            if (widgetIndex !in 0 until totalTiles) {
+                LaunchedEffect(panelId, widgetIndex) {
+                    floatingOverlayEditRequest = null
+                }
+            } else {
+                LaunchedEffect(
+                    widgetConfigs,
+                    panelConfig.rows,
+                    panelConfig.cols,
+                    context
+                ) {
+                    val totalWidgets = panelConfig.rows * panelConfig.cols
+                    val widgets = loadWidgetsFromConfig(
+                        configs = widgetConfigs,
+                        widgetCount = totalWidgets,
+                        context = context,
+                        defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
+                        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+                    )
+                    dashboardViewModel.dashboardManager.updateWidgets(widgets)
+                }
+                FloatingOverlayFloatingPanelWidgetSelectionDialog(
+                    dashboardManager = dashboardViewModel.dashboardManager,
+                    settingsViewModel = settingsViewModel,
+                    panelId = panelId,
+                    widgetIndex = widgetIndex,
+                    currentWidgets = dashboardState.widgets,
+                    currentWidgetConfigs = widgetConfigs,
+                    onDismiss = { floatingOverlayEditRequest = null },
+                )
+            }
+        }
     }
 }
 
