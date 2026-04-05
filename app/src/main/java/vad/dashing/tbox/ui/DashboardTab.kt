@@ -53,6 +53,7 @@ import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
 
 @Composable
@@ -447,6 +448,129 @@ fun MainScreenPanelWidgetSelectionDialog(
                         state = state,
                         saveConfigs = { configs ->
                             settingsViewModel.saveMainScreenDashboardWidgets(
+                                panelId,
+                                configs,
+                                wholePanelFromWidgetDialog = wholePanelPayload
+                            )
+                        },
+                        externalAppWidgetId = externalAppWidgetIdForApply(
+                            state,
+                            currentWidgetConfigs,
+                            widgetIndex
+                        )
+                    )
+                    onDismiss()
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        dismissButton = {}
+    )
+}
+
+/**
+ * [AlertDialog]-style widget editor for a **floating overlay** panel, shown from [MainScreen] when
+ * the user starts edit from the overlay (same UX as [MainScreenPanelWidgetSelectionDialog]).
+ */
+@Composable
+fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
+    dashboardManager: DashboardManager,
+    settingsViewModel: SettingsViewModel,
+    panelId: String,
+    widgetIndex: Int,
+    currentWidgets: List<DashboardWidget>,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val floatingDashboardSnapshot by settingsViewModel.floatingDashboardConfig(panelId)
+        .collectAsStateWithLifecycle()
+    val state = rememberWidgetSelectionDialogState(
+        widgetIndex = widgetIndex,
+        currentWidgets = currentWidgets,
+        currentWidgetConfigs = currentWidgetConfigs,
+        defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
+        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { },
+        modifier = Modifier.fillMaxWidth(0.8f),
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        text = {
+            WidgetSelectionDialogForm(
+                titleText = when {
+                    state.showWholePanelSettings ->
+                        stringResource(R.string.widget_panel_settings_title)
+                    state.showAdvancedSettings ->
+                        stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
+                    else ->
+                        stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
+                },
+                state = state,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                floatingDashboardPanelId = panelId,
+                bottomContent = {
+                    if (state.isExternalAppWidgetSelected) {
+                        ExternalAppWidgetPickerSection(
+                            appWidgetId = externalAppWidgetIdForApply(
+                                state,
+                                currentWidgetConfigs,
+                                widgetIndex
+                            ),
+                            onPickClick = {
+                                WidgetPickerActivity.start(
+                                    context = context,
+                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
+                                    panelId = panelId,
+                                    widgetIndex = widgetIndex,
+                                    showTitle = state.showTitle,
+                                    showUnit = state.showUnit
+                                )
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
+            )
+        },
+        confirmButton = {
+            WidgetSelectionDialogActions(
+                showWholePanelButton = true,
+                onWholePanelSectionOpened = {
+                    floatingDashboardSnapshot?.let { snap: FloatingDashboardConfig ->
+                        state.syncWholePanelDraftFromFloating(snap)
+                        state.wholePanelDraftSeeded = true
+                    }
+                },
+                state = state,
+                onDismiss = onDismiss,
+                onSave = {
+                    if (tryLaunchExternalWidgetPicker(
+                            context = context,
+                            saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
+                            panelId = panelId,
+                            widgetIndex = widgetIndex,
+                            state = state,
+                            currentWidgetConfigs = currentWidgetConfigs,
+                            onDismiss = onDismiss
+                        )
+                    ) {
+                        return@WidgetSelectionDialogActions
+                    }
+                    val wholePanelPayload = floatingWholePanelSavePayloadIfSeeded(state)
+                    applyWidgetSelectionChanges(
+                        context = context,
+                        dashboardManager = dashboardManager,
+                        currentWidgets = currentWidgets,
+                        currentWidgetConfigs = currentWidgetConfigs,
+                        widgetIndex = widgetIndex,
+                        state = state,
+                        saveConfigs = { configs ->
+                            settingsViewModel.saveFloatingDashboardWidgets(
                                 panelId,
                                 configs,
                                 wholePanelFromWidgetDialog = wholePanelPayload
