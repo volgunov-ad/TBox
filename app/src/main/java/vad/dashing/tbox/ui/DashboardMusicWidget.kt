@@ -44,7 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -55,11 +54,9 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
-import vad.dashing.tbox.TRANSPARENT_WIDGET_PLAYER_PACKAGE
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.SupportedMediaPlayer
-import vad.dashing.tbox.isTransparentMediaPlayerPackage
 import vad.dashing.tbox.orderedMediaPlayerPackages
 import vad.dashing.tbox.resolveMediaPlayersForWidget
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
@@ -87,21 +84,16 @@ fun DashboardMusicWidgetItem(
     val carouselPackages = remember(selectedPlayers) {
         orderedMediaPlayerPackages(selectedPlayers)
     }
-    val controllablePackages = remember(selectedPlayers) {
-        selectedPlayers.filterNot(::isTransparentMediaPlayerPackage).toSet()
-    }
     var selectedPackage by remember(widget.id, carouselPackages, widgetConfig.mediaSelectedPlayer) {
         mutableStateOf(resolveInitialSelectedPackage(widgetConfig, carouselPackages))
     }
     var horizontalDragDistance by remember(widget.id, carouselPackages) {
         mutableFloatStateOf(0f)
     }
-    val isTransparentWidgetSelected = selectedPackage == TRANSPARENT_WIDGET_PLAYER_PACKAGE
-    val effectiveInteractionsEnabled = enableInnerInteractions && !isTransparentWidgetSelected
     val playerStates by SharedMediaControlService.playerStates.collectAsStateWithLifecycle()
-    val mediaState = remember(controllablePackages, playerStates, selectedPackage) {
+    val mediaState = remember(selectedPlayers, playerStates, selectedPackage) {
         SharedMediaControlService.resolveWidgetState(
-            selectedPackages = controllablePackages,
+            selectedPackages = selectedPlayers,
             currentStates = playerStates,
             preferredPackage = selectedPackage
         )
@@ -129,9 +121,7 @@ fun DashboardMusicWidgetItem(
         ?: unknownAppLabel
         ?: stringResource(R.string.widget_music_player_none)
     val isSelectedPlayerRunning = selectedPlayerState?.hasSession == true
-    val playerLabel = if (isTransparentWidgetSelected) {
-        ""
-    } else if (selectedPackage.isNotBlank() && !isSelectedPlayerRunning) {
+    val playerLabel = if (selectedPackage.isNotBlank() && !isSelectedPlayerRunning) {
         stringResource(R.string.widget_music_player_with_state_off, basePlayerLabel)
     } else {
         basePlayerLabel
@@ -149,12 +139,8 @@ fun DashboardMusicWidgetItem(
             ?: stringResource(R.string.widget_music_no_track)
     }
     val playPauseIcon = if (selectedPlayerState?.isPlaying == true) R.drawable.pause else R.drawable.play
-    val canSendPlay = !isTransparentWidgetSelected &&
-        mediaState.notificationAccessGranted &&
-        selectedPackage.isNotBlank()
-    val canSendSkip = !isTransparentWidgetSelected &&
-        mediaState.notificationAccessGranted &&
-        isSelectedPlayerRunning
+    val canSendPlay = mediaState.notificationAccessGranted && selectedPackage.isNotBlank()
+    val canSendSkip = mediaState.notificationAccessGranted && isSelectedPlayerRunning
     val isPlaying = selectedPlayerState?.isPlaying ?: mediaState.isPlaying
     val durationMs = selectedPlayerState?.durationMs ?: mediaState.durationMs
     val positionMs = selectedPlayerState?.positionMs ?: mediaState.positionMs
@@ -194,10 +180,6 @@ fun DashboardMusicWidgetItem(
     ) {
         if (!widgetConfig.mediaAutoPlayOnInit) return@LaunchedEffect
         if (autoPlayTriggered) return@LaunchedEffect
-        if (isTransparentWidgetSelected) {
-            autoPlayTriggered = true
-            return@LaunchedEffect
-        }
         if (selectedPackage.isBlank()) return@LaunchedEffect
         if (widgetConfig.mediaAutoPlayOnlyWhenEngineRunning) {
             // engineRPM uses WhileSubscribed(5000): polling .value never subscribes, so RPM may never
@@ -219,7 +201,7 @@ fun DashboardMusicWidgetItem(
         val autoPlayPackage = selectedPackage
         SharedMediaControlService.play(
             context = context,
-            selectedPackages = controllablePackages,
+            selectedPackages = selectedPlayers,
             preferredPackage = autoPlayPackage
         )
         delay(AUTO_PLAY_VERIFY_DELAY_MS)
@@ -227,7 +209,7 @@ fun DashboardMusicWidgetItem(
         if (!isPlaying) {
             SharedMediaControlService.play(
                 context = context,
-                selectedPackages = controllablePackages,
+                selectedPackages = selectedPlayers,
                 preferredPackage = autoPlayPackage
             )
         }
@@ -276,76 +258,11 @@ fun DashboardMusicWidgetItem(
         ),
         onClick = onClick,
         onLongClick = onLongClick,
-        enableCardInteractions = !isTransparentWidgetSelected,
         elevation = elevation,
         shape = shape,
         textColor = textColor,
-        backgroundColor = if (isTransparentWidgetSelected) {
-            Color.Transparent
-        } else {
-            backgroundColor
-        }
+        backgroundColor = backgroundColor
     ) { availableHeight, _ ->
-        if (isTransparentWidgetSelected) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(6.dp)
-            ) {
-                AndroidView(
-                    factory = { viewContext ->
-                        LongPressInterceptLayout(viewContext).apply {
-                            interceptLongPress = true
-                            onLongPress = onLongClick
-                        }
-                    },
-                    update = { view ->
-                        view.interceptLongPress = true
-                        view.onLongPress = onLongClick
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopStart),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MusicWidgetPlayerAvatar(
-                        selectedPackage = selectedPackage,
-                        modifier = Modifier
-                            .fillMaxHeight(0.28f)
-                            .aspectRatio(1f)
-                    )
-                    if (title) {
-                        Text(
-                            text = playerLabel,
-                            color = resolvedTextColor,
-                            fontSize = calculateResponsiveFontSize(
-                                containerHeight = availableHeight,
-                                textType = TextType.UNIT
-                            ) * 0.8f,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 8.dp)
-                        )
-                        if (carouselPackages.size > 1) {
-                            Text(
-                                text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
-                                color = resolvedTextColor,
-                                fontSize = calculateResponsiveFontSize(
-                                    containerHeight = availableHeight,
-                                    textType = TextType.UNIT
-                                ) * 0.8f
-                            )
-                        }
-                    }
-                }
-            }
-            return@DashboardWidgetScaffold
-        }
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
@@ -396,11 +313,11 @@ fun DashboardMusicWidgetItem(
                         .fillMaxWidth()
                         .weight(1.5f)
                         .combinedClickable(
-                            enabled = effectiveInteractionsEnabled,
+                            enabled = enableInnerInteractions,
                             onClick = {},
                             onLongClick = onLongClick,
                             onDoubleClick = {
-                                if (effectiveInteractionsEnabled) {
+                                if (enableInnerInteractions) {
                                     openSelectedPlayer(context, selectedPackage)
                                 }
                             }
@@ -446,7 +363,7 @@ fun DashboardMusicWidgetItem(
                         .weight(1.5f)
                         .clip(RoundedCornerShape(8.dp))
                         .combinedClickable(
-                            enabled = effectiveInteractionsEnabled,
+                            enabled = enableInnerInteractions,
                             onClick = {
                                 if (!mediaState.notificationAccessGranted) {
                                     openNotificationListenerSettings(context)
@@ -454,7 +371,7 @@ fun DashboardMusicWidgetItem(
                             },
                             onLongClick = onLongClick,
                             onDoubleClick = {
-                                if (effectiveInteractionsEnabled) {
+                                if (enableInnerInteractions) {
                                     openSelectedPlayer(context, selectedPackage)
                                 }
                             }
@@ -491,11 +408,11 @@ fun DashboardMusicWidgetItem(
                         contentDescription = stringResource(R.string.widget_music_action_previous),
                         iconTint = resolvedTextColor,
                         actionEnabled = canSendSkip,
-                        interactionEnabled = effectiveInteractionsEnabled,
+                        interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = {
                             SharedMediaControlService.skipToPrevious(
-                                selectedPackages = controllablePackages,
+                                selectedPackages = selectedPlayers,
                                 preferredPackage = selectedPackage
                             )
                         }
@@ -508,12 +425,12 @@ fun DashboardMusicWidgetItem(
                         contentDescription = stringResource(R.string.widget_music_action_play_pause),
                         iconTint = resolvedTextColor,
                         actionEnabled = canSendPlay,
-                        interactionEnabled = effectiveInteractionsEnabled,
+                        interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = {
                             SharedMediaControlService.playPause(
                                 context = context,
-                                selectedPackages = controllablePackages,
+                                selectedPackages = selectedPlayers,
                                 preferredPackage = selectedPackage
                             )
                         }
@@ -526,11 +443,11 @@ fun DashboardMusicWidgetItem(
                         contentDescription = stringResource(R.string.widget_music_action_next),
                         iconTint = resolvedTextColor,
                         actionEnabled = canSendSkip,
-                        interactionEnabled = effectiveInteractionsEnabled,
+                        interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = {
                             SharedMediaControlService.skipToNext(
-                                selectedPackages = controllablePackages,
+                                selectedPackages = selectedPlayers,
                                 preferredPackage = selectedPackage
                             )
                         }

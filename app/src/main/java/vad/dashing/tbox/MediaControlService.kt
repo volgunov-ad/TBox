@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
 import java.util.LinkedHashSet
 
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
-const val TRANSPARENT_WIDGET_PLAYER_PACKAGE = "vad.dashing.tbox.transparent.widget"
 
 /** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
 private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 3500L
@@ -31,11 +30,6 @@ enum class SupportedMediaPlayer(
     val titleRes: Int,
     val iconRes: Int
 ) {
-    TRANSPARENT_WIDGET(
-        packageName = TRANSPARENT_WIDGET_PLAYER_PACKAGE,
-        titleRes = R.string.media_player_transparent_widget,
-        iconRes = R.drawable.player_transparent_widget
-    ),
     BLUETOOTH_PHONE(
         packageName = "com.android.bluetooth",
         titleRes = R.string.media_player_bluetooth_phone,
@@ -49,10 +43,6 @@ enum class SupportedMediaPlayer(
             return entries.firstOrNull { it.packageName == normalizedPackage }
         }
     }
-}
-
-fun isTransparentMediaPlayerPackage(packageName: String): Boolean {
-    return packageName.trim().lowercase() == TRANSPARENT_WIDGET_PLAYER_PACKAGE
 }
 
 data class MediaPlayerState(

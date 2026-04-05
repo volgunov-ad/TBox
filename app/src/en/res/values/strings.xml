@@ -126,7 +126,6 @@
     <string name="media_player_wt_local_multimedia">Stock Player</string>
     <string name="media_player_bluetooth_phone">Bluetooth from phone</string>
     <string name="media_player_vkx">VKX</string>
-    <string name="media_player_transparent_widget">Transparent widget</string>
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
     <string name="logs_filter_placeholder">Enter text to search…</string>
