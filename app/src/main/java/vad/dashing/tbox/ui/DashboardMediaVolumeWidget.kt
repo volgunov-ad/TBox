@@ -18,9 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -53,7 +51,6 @@ private const val MEDIA_VOLUME_POLL_DELAY_MS = 350L
 
 private data class MediaVolumeState(
     val current: Int = 0,
-    val max: Int = 0,
     val muted: Boolean = false
 )
 
@@ -228,13 +225,15 @@ fun DashboardMediaVolumeWidgetItem(
                             .fillMaxWidth()
                             .weight(1f),
                         icon = {
-                            Icon(
-                                imageVector = Icons.Filled.Remove,
-                                contentDescription = stringResource(R.string.widget_media_volume_action_decrease),
-                                tint = resolvedTextColor,
-                                modifier = Modifier
-                                    .fillMaxHeight(0.58f)
-                                    .aspectRatio(1f)
+                            Text(
+                                text = "-",
+                                color = resolvedTextColor,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = calculateResponsiveFontSize(
+                                    containerHeight = availableHeight,
+                                    textType = TextType.VALUE
+                                ),
+                                textAlign = TextAlign.Center
                             )
                         },
                         interactionEnabled = enableInnerInteractions,
@@ -254,13 +253,15 @@ fun DashboardMediaVolumeWidgetItem(
                             .fillMaxHeight()
                             .weight(1f),
                         icon = {
-                            Icon(
-                                imageVector = Icons.Filled.Remove,
-                                contentDescription = stringResource(R.string.widget_media_volume_action_decrease),
-                                tint = resolvedTextColor,
-                                modifier = Modifier
-                                    .fillMaxHeight(0.58f)
-                                    .aspectRatio(1f)
+                            Text(
+                                text = "-",
+                                color = resolvedTextColor,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = calculateResponsiveFontSize(
+                                    containerHeight = availableHeight,
+                                    textType = TextType.VALUE
+                                ),
+                                textAlign = TextAlign.Center
                             )
                         },
                         interactionEnabled = enableInnerInteractions,
@@ -314,10 +315,10 @@ private fun MediaVolumeCenterButton(
     onLongClick: () -> Unit,
     onToggleMute: () -> Unit
 ) {
-    val iconVector = if (muted) {
-        Icons.Filled.VolumeOff
+    val iconRes = if (muted) {
+        android.R.drawable.ic_lock_silent_mode
     } else {
-        Icons.Filled.VolumeUp
+        android.R.drawable.ic_lock_silent_mode_off
     }
     MediaVolumeActionButton(
         modifier = modifier,
@@ -328,7 +329,7 @@ private fun MediaVolumeCenterButton(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
-                    imageVector = iconVector,
+                    painter = painterResource(id = iconRes),
                     contentDescription = stringResource(R.string.widget_media_volume_action_mute),
                     tint = textColor,
                     modifier = Modifier
@@ -378,7 +379,6 @@ private fun MediaVolumeActionButton(
 }
 
 private fun readMediaVolumeState(audioManager: AudioManager): MediaVolumeState {
-    val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(0)
     val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(0)
     val muted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         audioManager.isStreamMute(AudioManager.STREAM_MUSIC) || currentVolume == 0
@@ -387,7 +387,6 @@ private fun readMediaVolumeState(audioManager: AudioManager): MediaVolumeState {
     }
     return MediaVolumeState(
         current = currentVolume,
-        max = maxVolume,
         muted = muted
     )
 }
