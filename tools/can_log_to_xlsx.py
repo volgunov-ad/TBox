@@ -5,6 +5,8 @@ Convert TBox Monitor CAN export (.txt) to a wide Excel table.
 Parses lines saved by the app (timestamp; CAN id hex; payload hex; ; dec bytes...)
 and applies the same decoding rules as CanFramesProcess.kt. Column headers match
 Russian titles (+ units) from strings.xml / CarDataTabContent (via WidgetsRepository).
+Trailing columns: raw payload bytes per seen CAN ID, headers «00 00 00 C4 : 0» … : 7 (UINT 0–255),
+last value carried forward like decoded fields.
 """
 
 from __future__ import annotations
@@ -12,7 +14,6 @@ from __future__ import annotations
 import argparse
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -99,10 +100,6 @@ RU_COLUMNS: list[tuple[str, str]] = [
 ]
 
 
-def title_with_unit(title: str, unit: str) -> str:
-    return f"{title}, {unit}"
-
-
 SEAT_MODE_LABELS: dict[int, str] = {
     1: "выключено",
     2: "обогрев 1",
@@ -165,6 +162,11 @@ def right_nibble(b: int) -> int:
 
 def hex_byte(b: int) -> str:
     return f"{u8(b):02X}"
+
+
+def can_id_to_hex_spaced(can_id: int) -> str:
+    """Same visual form as in the exported log (big-endian bytes)."""
+    return " ".join(f"{(can_id >> s) & 0xFF:02X}" for s in (24, 16, 8, 0))
 
 
 def fmt_float(v: Optional[float], decimals: int) -> Any:
@@ -515,12 +517,52 @@ def parse_can_line(line: str) -> Optional[tuple[str, int, bytes]]:
     return ts, cid, payload
 
 
+def collect_sorted_can_ids(path: Path) -> list[int]:
+    ids: set[int] = set()
+    with path.open(encoding="utf-8", errors="replace") as f:
+        for raw in f:
+            parsed = parse_can_line(raw)
+            if not parsed:
+                continue
+            _, cid, _ = parsed
+            if cid != 0:
+                ids.add(cid)
+    return sorted(ids)
+
+
+def raw_column_headers(sorted_can_ids: list[int]) -> list[str]:
+    headers: list[str] = []
+    for cid in sorted_can_ids:
+        prefix = can_id_to_hex_spaced(cid)
+        for byte_idx in range(8):
+            headers.append(f"{prefix} : {byte_idx}")
+    return headers
+
+
+def append_raw_uint_row(
+    row: list[Any],
+    sorted_can_ids: list[int],
+    last_raw_by_id: dict[int, tuple[int, ...]],
+) -> None:
+    """Append UINT8 (0–255) for each byte of last seen payload per CAN ID."""
+    for cid in sorted_can_ids:
+        tup = last_raw_by_id.get(cid)
+        if tup is None:
+            row.extend([""] * 8)
+        else:
+            row.extend(tup)
+
+
 def process_file(
     path: Path,
     tank_liters: Optional[float],
 ) -> tuple[list[list[Any]], list[str]]:
+    sorted_can_ids = collect_sorted_can_ids(path)
+    raw_headers = raw_column_headers(sorted_can_ids)
+    headers = [t for _, t in RU_COLUMNS] + raw_headers
+
     state = CarState()
-    headers = [t for _, t in RU_COLUMNS]
+    last_raw_by_id: dict[int, tuple[int, ...]] = {}
     rows: list[list[Any]] = []
 
     with path.open(encoding="utf-8", errors="replace") as f:
@@ -532,7 +574,10 @@ def process_file(
             if can_id == 0:
                 continue
             state.process_frame(can_id, payload)
-            rows.append(state.row_values(ts, tank_liters))
+            last_raw_by_id[can_id] = tuple(u8(x) for x in payload[:8])
+            row = state.row_values(ts, tank_liters)
+            append_raw_uint_row(row, sorted_can_ids, last_raw_by_id)
+            rows.append(row)
 
     return rows, headers
 
@@ -544,7 +589,7 @@ def write_xlsx(rows: list[list[Any]], headers: list[str], out_path: Path) -> Non
     ws.append(headers)
     for row in rows:
         ws.append(row)
-    max_row = min(len(rows) + 1, 500)
+    max_row = len(rows) + 1
     for col_idx, header in enumerate(headers, start=1):
         letter = get_column_letter(col_idx)
         max_len = len(header)
