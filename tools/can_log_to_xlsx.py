@@ -5,8 +5,8 @@ Convert TBox Monitor CAN export (.txt) to a wide Excel table.
 Parses lines saved by the app (timestamp; CAN id hex; payload hex; ; dec bytes...)
 and applies the same decoding rules as CanFramesProcess.kt. Column headers match
 Russian titles (+ units) from strings.xml / CarDataTabContent (via WidgetsRepository).
-Trailing columns: raw UINT8 (0–255) payload bytes only for CAN IDs **not** handled in
-CanFramesProcess.kt; headers «00 00 00 XX : 0» … : 7; last value carried forward per ID.
+Trailing columns: for every CAN ID seen in the file, all 8 payload bytes as UINT8 (0–255);
+headers «00 00 00 XX : 0» … : 7; last value carried forward per ID (alongside decoded fields).
 """
 
 from __future__ import annotations
@@ -41,32 +41,6 @@ CAN_ID_IN_OUT_TEMP = 0x00000535
 CAN_ID_AIR_QUALITY = 0x0000053A
 CAN_ID_SEAT_MODES = 0x000005C4
 CAN_ID_WINDOWS_BLOCKED = 0x000005FF
-
-# IDs decoded in process_frame / CanFramesProcess.kt — no duplicate raw byte columns for these
-DECODED_CAN_IDS: frozenset[int] = frozenset(
-    (
-        CAN_ID_STEER,
-        CAN_ID_ENGINE_PARAMS,
-        CAN_ID_PARAM_3,
-        CAN_ID_PARAM_4,
-        CAN_ID_DISTANCE_TO_MAINTENANCE,
-        CAN_ID_BREAKING_FORCE,
-        CAN_ID_GEARBOX,
-        CAN_ID_CRUISE,
-        CAN_ID_WHEEL_SPEED,
-        CAN_ID_SPEED_VOLTAGE_FUEL,
-        CAN_ID_FUEL_CONSUMPTION,
-        CAN_ID_ENGINE_TEMP,
-        CAN_ID_SPEED_ACCURATE,
-        CAN_ID_WHEELS_TPMS,
-        CAN_ID_CLIMATE_SET,
-        CAN_ID_DISTANCE_TO_FUEL_EMPTY,
-        CAN_ID_IN_OUT_TEMP,
-        CAN_ID_AIR_QUALITY,
-        CAN_ID_SEAT_MODES,
-        CAN_ID_WINDOWS_BLOCKED,
-    )
-)
 
 GEAR_BOX_7_DRIVE_MODES = {0x1B, 0x2B, 0x3B, 0x4B, 0x5B, 0x6B, 0x7B}
 GEAR_BOX_7_PREPARED_DRIVE_MODES = {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70}
@@ -543,8 +517,8 @@ def parse_can_line(line: str) -> Optional[tuple[str, int, bytes]]:
     return ts, cid, payload
 
 
-def collect_sorted_unknown_can_ids(path: Path) -> list[int]:
-    """CAN IDs present in the log that CanFramesProcess.kt does not decode."""
+def collect_sorted_can_ids(path: Path) -> list[int]:
+    """All non-zero CAN IDs present in the log (sorted ascending)."""
     ids: set[int] = set()
     with path.open(encoding="utf-8", errors="replace") as f:
         for raw in f:
@@ -552,7 +526,7 @@ def collect_sorted_unknown_can_ids(path: Path) -> list[int]:
             if not parsed:
                 continue
             _, cid, _ = parsed
-            if cid != 0 and cid not in DECODED_CAN_IDS:
+            if cid != 0:
                 ids.add(cid)
     return sorted(ids)
 
@@ -584,7 +558,7 @@ def process_file(
     path: Path,
     tank_liters: Optional[float],
 ) -> tuple[list[list[Any]], list[str]]:
-    sorted_can_ids = collect_sorted_unknown_can_ids(path)
+    sorted_can_ids = collect_sorted_can_ids(path)
     raw_headers = raw_column_headers(sorted_can_ids)
     headers = [t for _, t in RU_COLUMNS] + raw_headers
 
@@ -601,8 +575,7 @@ def process_file(
             if can_id == 0:
                 continue
             state.process_frame(can_id, payload)
-            if can_id not in DECODED_CAN_IDS:
-                last_raw_by_id[can_id] = tuple(u8(x) for x in payload[:8])
+            last_raw_by_id[can_id] = tuple(u8(x) for x in payload[:8])
             row = state.row_values(ts, tank_liters)
             append_raw_uint_row(row, sorted_can_ids, last_raw_by_id)
             rows.append(row)
