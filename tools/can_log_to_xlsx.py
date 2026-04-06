@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
+from tqdm import tqdm
 
 # --- CAN IDs (same as CanFramesProcess.kt) ---
 CAN_ID_STEER = 0x000000C4
@@ -517,18 +519,29 @@ def parse_can_line(line: str) -> Optional[tuple[str, int, bytes]]:
     return ts, cid, payload
 
 
-def collect_sorted_can_ids(path: Path) -> list[int]:
-    """All non-zero CAN IDs present in the log (sorted ascending)."""
+def scan_file_for_can_ids(
+    path: Path,
+    show_progress: bool,
+) -> tuple[list[int], int]:
+    """Collect non-zero CAN IDs and count lines (for progress on the second pass)."""
     ids: set[int] = set()
+    n_lines = 0
     with path.open(encoding="utf-8", errors="replace") as f:
-        for raw in f:
+        for raw in tqdm(
+            f,
+            desc="Сканирование файла",
+            unit="стр",
+            disable=not show_progress,
+            file=sys.stderr,
+        ):
+            n_lines += 1
             parsed = parse_can_line(raw)
             if not parsed:
                 continue
             _, cid, _ = parsed
             if cid != 0:
                 ids.add(cid)
-    return sorted(ids)
+    return sorted(ids), n_lines
 
 
 def raw_column_headers(sorted_can_ids: list[int]) -> list[str]:
@@ -557,8 +570,9 @@ def append_raw_uint_row(
 def process_file(
     path: Path,
     tank_liters: Optional[float],
+    show_progress: bool,
 ) -> tuple[list[list[Any]], list[str]]:
-    sorted_can_ids = collect_sorted_can_ids(path)
+    sorted_can_ids, n_lines = scan_file_for_can_ids(path, show_progress)
     raw_headers = raw_column_headers(sorted_can_ids)
     headers = [t for _, t in RU_COLUMNS] + raw_headers
 
@@ -567,7 +581,14 @@ def process_file(
     rows: list[list[Any]] = []
 
     with path.open(encoding="utf-8", errors="replace") as f:
-        for raw in f:
+        for raw in tqdm(
+            f,
+            total=n_lines,
+            desc="Разбор CAN и строк таблицы",
+            unit="стр",
+            disable=not show_progress,
+            file=sys.stderr,
+        ):
             parsed = parse_can_line(raw)
             if not parsed:
                 continue
@@ -583,15 +604,34 @@ def process_file(
     return rows, headers
 
 
-def write_xlsx(rows: list[list[Any]], headers: list[str], out_path: Path) -> None:
+def write_xlsx(
+    rows: list[list[Any]],
+    headers: list[str],
+    out_path: Path,
+    show_progress: bool,
+) -> None:
     wb = Workbook()
     ws = wb.active
     ws.title = "CAN"
     ws.append(headers)
-    for row in rows:
+    for row in tqdm(
+        rows,
+        desc="Запись строк в XLSX",
+        unit="стр",
+        disable=not show_progress,
+        file=sys.stderr,
+    ):
         ws.append(row)
     max_row = len(rows) + 1
-    for col_idx, header in enumerate(headers, start=1):
+    col_iter = enumerate(headers, start=1)
+    if show_progress:
+        col_iter = tqdm(
+            list(enumerate(headers, start=1)),
+            desc="Ширина столбцов",
+            unit="кол",
+            file=sys.stderr,
+        )
+    for col_idx, header in col_iter:
         letter = get_column_letter(col_idx)
         max_len = len(header)
         for r in range(1, max_row + 1):
@@ -599,6 +639,8 @@ def write_xlsx(rows: list[list[Any]], headers: list[str], out_path: Path) -> Non
             if v is not None:
                 max_len = max(max_len, len(str(v)))
         ws.column_dimensions[letter].width = min(max_len + 2, 50)
+    if show_progress:
+        tqdm.write(f"Сохранение файла: {out_path}", file=sys.stderr)
     wb.save(out_path)
 
 
@@ -621,11 +663,18 @@ def main() -> None:
         metavar="L",
         help="Fuel tank volume in liters (for «Уровень топлива в литрах» column, like app settings)",
     )
+    ap.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Не показывать прогресс (полезно в скриптах и при перенаправлении вывода)",
+    )
     args = ap.parse_args()
     inp: Path = args.input
     out = args.output or inp.with_suffix(".xlsx")
-    rows, headers = process_file(inp, args.tank_liters)
-    write_xlsx(rows, headers, out)
+    show_progress = not args.quiet
+    rows, headers = process_file(inp, args.tank_liters, show_progress)
+    write_xlsx(rows, headers, out, show_progress)
     print(f"Wrote {len(rows)} rows to {out}")
 
 
