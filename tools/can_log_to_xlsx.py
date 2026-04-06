@@ -7,6 +7,10 @@ and applies the same decoding rules as CanFramesProcess.kt. Column headers match
 Russian titles (+ units) from strings.xml / CarDataTabContent (via WidgetsRepository).
 Trailing columns: for every CAN ID seen in the file, all 8 payload bytes as UINT8 (0–255);
 headers «00 00 00 XX : 0» … : 7; last value carried forward per ID (alongside decoded fields).
+
+Rows are one per **unique timestamp** (seconds): all lines sharing the same «YYYY-MM-DD HH:MM:SS»
+are merged — CAN frames in that group are applied in file order, then one table row is emitted
+(sorted globally by time, then original line order within the same second).
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ import argparse
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -518,6 +523,30 @@ def parse_can_line(line: str) -> Optional[tuple[str, int, bytes]]:
     return ts, cid, payload
 
 
+def parse_timestamp_key(ts: str) -> datetime:
+    return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+
+
+def group_records_by_timestamp(
+    records: list[tuple[int, str, int, bytes]],
+) -> list[list[tuple[int, str, int, bytes]]]:
+    """Split sorted records into groups with the same timestamp string."""
+    if not records:
+        return []
+    groups: list[list[tuple[int, str, int, bytes]]] = []
+    cur_ts = records[0][1]
+    cur: list[tuple[int, str, int, bytes]] = []
+    for r in records:
+        if r[1] == cur_ts:
+            cur.append(r)
+        else:
+            groups.append(cur)
+            cur = [r]
+            cur_ts = r[1]
+    groups.append(cur)
+    return groups
+
+
 def scan_file_for_can_ids(
     path: Path,
     show_progress: bool,
@@ -575,18 +604,18 @@ def process_file(
     raw_headers = raw_column_headers(sorted_can_ids)
     headers = [t for _, t in RU_COLUMNS] + raw_headers
 
-    state = CarState()
-    last_raw_by_id: dict[int, tuple[int, ...]] = {}
-    rows: list[list[Any]] = []
-
+    # (line_index, timestamp_str, can_id, payload); line_index preserves file order within same second
+    records: list[tuple[int, str, int, bytes]] = []
     with path.open(encoding="utf-8", errors="replace") as f:
-        for raw in tqdm(
-            f,
-            total=n_lines,
-            desc="Разбор CAN и строк таблицы",
-            unit="стр",
-            disable=not show_progress,
-            file=sys.stderr,
+        for line_no, raw in enumerate(
+            tqdm(
+                f,
+                total=n_lines,
+                desc="Чтение кадров из файла",
+                unit="стр",
+                disable=not show_progress,
+                file=sys.stderr,
+            )
         ):
             parsed = parse_can_line(raw)
             if not parsed:
@@ -594,11 +623,29 @@ def process_file(
             ts, can_id, payload = parsed
             if can_id == 0:
                 continue
+            records.append((line_no, ts, can_id, payload))
+
+    records.sort(key=lambda r: (parse_timestamp_key(r[1]), r[0]))
+    groups = group_records_by_timestamp(records)
+
+    state = CarState()
+    last_raw_by_id: dict[int, tuple[int, ...]] = {}
+    rows: list[list[Any]] = []
+
+    for group in tqdm(
+        groups,
+        desc="Строки по меткам времени",
+        unit="меток",
+        disable=not show_progress,
+        file=sys.stderr,
+    ):
+        ts = group[0][1]
+        for _line_no, _ts, can_id, payload in group:
             state.process_frame(can_id, payload)
             last_raw_by_id[can_id] = tuple(u8(x) for x in payload[:8])
-            row = state.row_values(ts, tank_liters)
-            append_raw_uint_row(row, sorted_can_ids, last_raw_by_id)
-            rows.append(row)
+        row = state.row_values(ts, tank_liters)
+        append_raw_uint_row(row, sorted_can_ids, last_raw_by_id)
+        rows.append(row)
 
     return rows, headers
 
