@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
 from tqdm import tqdm
 
 # --- CAN IDs (same as CanFramesProcess.kt) ---
@@ -622,23 +621,6 @@ def write_xlsx(
         file=sys.stderr,
     ):
         ws.append(row)
-    max_row = len(rows) + 1
-    col_iter = enumerate(headers, start=1)
-    if show_progress:
-        col_iter = tqdm(
-            list(enumerate(headers, start=1)),
-            desc="Ширина столбцов",
-            unit="кол",
-            file=sys.stderr,
-        )
-    for col_idx, header in col_iter:
-        letter = get_column_letter(col_idx)
-        max_len = len(header)
-        for r in range(1, max_row + 1):
-            v = ws.cell(row=r, column=col_idx).value
-            if v is not None:
-                max_len = max(max_len, len(str(v)))
-        ws.column_dimensions[letter].width = min(max_len + 2, 50)
     if show_progress:
         tqdm.write(f"Сохранение файла: {out_path}", file=sys.stderr)
     wb.save(out_path)
