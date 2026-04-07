@@ -24,7 +24,16 @@ from pathlib import Path
 from typing import Any, Optional
 
 from openpyxl import Workbook
+from openpyxl.styles import Alignment
 from tqdm import tqdm
+
+# Первая строка — заголовки; поворот 90° (чтение снизу вверх), как «Повернуть текст вверх» в Excel
+HEADER_ALIGNMENT = Alignment(
+    text_rotation=90,
+    horizontal="center",
+    vertical="bottom",
+    wrap_text=True,
+)
 
 # --- CAN IDs (same as CanFramesProcess.kt) ---
 CAN_ID_STEER = 0x000000C4
@@ -660,6 +669,8 @@ def write_xlsx(
     ws = wb.active
     ws.title = "CAN"
     ws.append(headers)
+    for col in range(1, len(headers) + 1):
+        ws.cell(row=1, column=col).alignment = HEADER_ALIGNMENT
     for row in tqdm(
         rows,
         desc="Запись строк в XLSX",
