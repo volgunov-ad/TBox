@@ -16,6 +16,7 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.STEERING_WHEEL_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 
 @Composable
@@ -187,6 +188,19 @@ fun DashboardWidgetRenderer(
                 units = widgetConfig.showUnit,
                 showTitle = widgetConfig.showTitle,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        STEERING_WHEEL_HEAT_WIDGET_DATA_KEY -> {
+            DashboardSteeringWheelHeatWidgetItem(
+                widget = widget,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                showTitle = widgetConfig.showTitle,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )

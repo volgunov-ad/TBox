@@ -370,6 +370,20 @@
     <string name="data_title_voltage">Напряжение</string>
     <string name="data_title_steer_angle">Угол поворота руля</string>
     <string name="data_title_steer_speed">Скорость вращения руля</string>
+    <string name="data_title_steering_wheel_heat_widget">Обогрев руля (MB-CAN)</string>
+    <string name="steering_heat_on">Вкл.</string>
+    <string name="steering_heat_off">Выкл.</string>
+    <string name="mb_vehicle_waiting">Ожидание шины MB-CAN…</string>
+    <string name="mb_vehicle_error_short">Ошибка MB-CAN</string>
+    <string name="mb_vehicle_console_header">Шина головного устройства (Mengbo MB-CAN)</string>
+    <string name="mb_vehicle_property_id_hint">ID свойства (0–324, см. MBVehicleProperty в проекте)</string>
+    <string name="mb_vehicle_value_int_hint">Целое значение</string>
+    <string name="mb_vehicle_value_string_hint">Строковое значение</string>
+    <string name="mb_vehicle_action_get">Прочитать</string>
+    <string name="mb_vehicle_action_set_int">Записать int</string>
+    <string name="mb_vehicle_action_set_string">Записать строку</string>
+    <string name="mb_vehicle_action_poll">Запустить опрос</string>
+    <string name="mb_vehicle_mfs_heat_id_label">Обогрев руля: id=%1$d (eVEHICLE_SET_MFS_HEAT_SWITCH)</string>
     <string name="data_title_engine_rpm">Обороты двигателя</string>
     <string name="data_title_throttle_position">Параметр 5</string>
     <string name="data_title_car_speed">Скорость автомобиля</string>

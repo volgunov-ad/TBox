@@ -33,6 +33,8 @@ import vad.dashing.tbox.utils.CanFramesProcess.toUInt
 import vad.dashing.tbox.utils.CsnOperatorResolver
 import vad.dashing.tbox.utils.MotorHoursBuffer
 import vad.dashing.tbox.utils.ThemeObserver
+import com.mengbo.mbCan.MBCanEngine
+import com.mengbo.mbCan.defines.MBVehicleProperty
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.nio.ByteBuffer
@@ -100,6 +102,9 @@ class BackgroundService : Service() {
     private var getSMSJob: Job? = null
     /** Serializes delayed / repeated "open MainActivity" commands: each new request replaces the previous. */
     private var openMainActivityJob: Job? = null
+    private var mbVehiclePollJob: Job? = null
+    @Volatile
+    private var mbVehicleEngineReady: Boolean = false
     /** Cancels in-flight [ACTION_START] bootstrap if [ACTION_STOP] runs mid-startup. */
     private var serviceStartupJob: Job? = null
     private var packetSilenceChecks: Int = 0
@@ -204,6 +209,19 @@ class BackgroundService : Service() {
         const val EXTRA_LOC_SET_POSITION = "vad.dashing.tbox.EXTRA_LOC_SET_POSITION"
         const val EXTRA_LOC_TRUE_POSITION = "vad.dashing.tbox.EXTRA_LOC_TRUE_POSITION"
         const val EXTRA_APP_NAME = "vad.dashing.tbox.EXTRA_APP_NAME"
+
+        /** Poll Mengbo MB-CAN vehicle properties (steering heat, etc.) into [MbVehicleRepository]. */
+        const val ACTION_MB_VEHICLE_POLL = "vad.dashing.tbox.MB_VEHICLE_POLL"
+        /** One-shot read: logs result and updates [MbVehicleRepository] if property is steering heat. */
+        const val ACTION_MB_VEHICLE_GET_PARAM = "vad.dashing.tbox.MB_VEHICLE_GET_PARAM"
+        /** Set int vehicle param (same encoding as Factory Mode TXEntity / [MBCanEngine.canSetVehicleParam]). */
+        const val ACTION_MB_VEHICLE_SET_PARAM = "vad.dashing.tbox.MB_VEHICLE_SET_PARAM"
+        /** Set string vehicle param. */
+        const val ACTION_MB_VEHICLE_SET_PARAM_STRING = "vad.dashing.tbox.MB_VEHICLE_SET_PARAM_STRING"
+
+        const val EXTRA_MB_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MB_PROPERTY_ID"
+        const val EXTRA_MB_VALUE_INT = "vad.dashing.tbox.EXTRA_MB_VALUE_INT"
+        const val EXTRA_MB_VALUE_STRING = "vad.dashing.tbox.EXTRA_MB_VALUE_STRING"
 
         const val ACTION_START = "vad.dashing.tbox.START"
         /** Present when [ACTION_START] was triggered after [android.content.Intent.ACTION_BOOT_COMPLETED]. */
@@ -480,6 +498,7 @@ class BackgroundService : Service() {
                         startDataListener()
                         TripRepository.setTripsProcessingEnabled(true)
                         servicePhase = ServiceLifecyclePhase.Running
+                        startMbVehiclePolling()
                     } catch (e: CancellationException) {
                         servicePhase = ServiceLifecyclePhase.Idle
                         TripRepository.setTripsProcessingEnabled(false)
@@ -529,6 +548,7 @@ class BackgroundService : Service() {
                     TripRepository.setTripsProcessingEnabled(false)
                     serviceStartupJob?.cancel()
                     serviceStartupJob = null
+                    stopMbVehiclePollingAndRelease()
                     tripsFromDiskReady.set(false)
                     openMainActivityJob?.cancel()
                     openMainActivityJob = null
@@ -617,7 +637,110 @@ class BackgroundService : Service() {
                 val delayMs = intent.getLongExtra(EXTRA_OPEN_MAIN_DELAY_MS, 0L).coerceAtLeast(0L)
                 scheduleOpenMainActivity(delayMs)
             }
+            ACTION_MB_VEHICLE_POLL -> {
+                if (isRunning) startMbVehiclePolling()
+            }
+            ACTION_MB_VEHICLE_GET_PARAM -> {
+                val propId = intent.getIntExtra(EXTRA_MB_PROPERTY_ID, -1)
+                if (propId >= 0 && isRunning) {
+                    scope.launch(exceptionHandler + Dispatchers.Default) {
+                        mbVehicleRunWithEngine { engine ->
+                            val v = engine.canGetVehicleParam(propId)
+                            val raw = engine.canGetVehicleValue(propId)
+                            val hex = raw?.joinToString(" ") { b -> "%02X".format(b) }.orEmpty()
+                            TboxRepository.addLog(
+                                "INFO",
+                                "MB-Vehicle",
+                                "GET id=$propId value=$v bytes=$hex"
+                            )
+                            if (propId == MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH.nativeValue) {
+                                MbVehicleRepository.updateMfsHeatRead(v, raw)
+                            }
+                        }
+                    }
+                }
+            }
+            ACTION_MB_VEHICLE_SET_PARAM -> {
+                val propId = intent.getIntExtra(EXTRA_MB_PROPERTY_ID, -1)
+                val value = intent.getIntExtra(EXTRA_MB_VALUE_INT, 0)
+                if (propId >= 0 && isRunning) {
+                    scope.launch(exceptionHandler + Dispatchers.Default) {
+                        mbVehicleRunWithEngine { engine ->
+                            val rc = engine.canSetVehicleParam(propId, value)
+                            TboxRepository.addLog(
+                                "INFO",
+                                "MB-Vehicle",
+                                "SET id=$propId value=$value rc=$rc"
+                            )
+                        }
+                    }
+                }
+            }
+            ACTION_MB_VEHICLE_SET_PARAM_STRING -> {
+                val propId = intent.getIntExtra(EXTRA_MB_PROPERTY_ID, -1)
+                val str = intent.getStringExtra(EXTRA_MB_VALUE_STRING).orEmpty()
+                if (propId >= 0 && isRunning) {
+                    scope.launch(exceptionHandler + Dispatchers.Default) {
+                        mbVehicleRunWithEngine { engine ->
+                            val rc = engine.canSetVehicleParamString(propId, str)
+                            TboxRepository.addLog(
+                                "INFO",
+                                "MB-Vehicle",
+                                "SET_STR id=$propId rc=$rc"
+                            )
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    private fun startMbVehiclePolling() {
+        mbVehiclePollJob?.cancel()
+        mbVehiclePollJob = scope.launch(exceptionHandler + Dispatchers.Default) {
+            while (isActive && isRunning) {
+                pollMbVehicleSteeringHeatOnce()
+                delay(1500)
+            }
+        }
+    }
+
+    private suspend fun pollMbVehicleSteeringHeatOnce() {
+        val propId = MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH.nativeValue
+        mbVehicleRunWithEngine { engine ->
+            val p = engine.canGetVehicleParam(propId)
+            val raw = engine.canGetVehicleValue(propId)
+            MbVehicleRepository.updateMfsHeatRead(p, raw)
+        }
+    }
+
+    private inline fun mbVehicleRunWithEngine(block: (MBCanEngine) -> Unit) {
+        try {
+            if (!mbVehicleEngineReady) {
+                MBCanEngine.getInstance()
+                mbVehicleEngineReady = true
+                MbVehicleRepository.setClientAvailable(true)
+                MbVehicleRepository.setLastError(null)
+            }
+            block(MBCanEngine.getInstance())
+        } catch (e: Throwable) {
+            MbVehicleRepository.setLastError(e.message)
+            Log.w("MBVehicle", "MB-CAN call failed", e)
+            TboxRepository.addLog("WARN", "MB-Vehicle", e.message ?: "error")
+        }
+    }
+
+    private fun stopMbVehiclePollingAndRelease() {
+        mbVehiclePollJob?.cancel()
+        mbVehiclePollJob = null
+        if (!mbVehicleEngineReady) return
+        try {
+            MBCanEngine.getInstance().release()
+        } catch (e: Throwable) {
+            Log.w("MBVehicle", "release failed", e)
+        }
+        mbVehicleEngineReady = false
+        MbVehicleRepository.setClientAvailable(false)
     }
 
     private fun createNotificationChannel() {
@@ -2109,7 +2232,8 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob, getSMSJob, openMainActivityJob
+            settingsListenerJob, dataListenerJob, getSMSJob, openMainActivityJob,
+            mbVehiclePollJob
         ).forEach { job ->
             job?.cancel()
         }

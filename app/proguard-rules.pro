@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Mengbo MB-CAN JNI (libmbCan.so): keep package names and native method names
+-keep class com.mengbo.mbCan.** { *; }
+-keepclassmembers class com.mengbo.mbCan.MBCanClient {
+    native <methods>;
+}
