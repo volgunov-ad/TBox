@@ -198,6 +198,13 @@ class TboxViewModel : ViewModel() {
             initialValue = 1
         )
 
+    val themeAutoFollowsSystem: StateFlow<Boolean> = TboxRepository.themeAutoFollowsSystem
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     val voltages: StateFlow<VoltagesState> = TboxRepository.voltages
         .stateIn(
             scope = viewModelScope,
@@ -403,6 +410,7 @@ object WidgetsRepository {
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
+        THEME_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_theme_mode_widget),
     )
 
     private fun getDataTitle(dataKey: String): DataTitle? {

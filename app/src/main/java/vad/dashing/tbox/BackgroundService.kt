@@ -405,21 +405,22 @@ class BackgroundService : Service() {
 
     private fun setupThemeObserver() {
         try {
-            themeObserver = ThemeObserver(this) { themeMode ->
-                handleThemeChange(themeMode)
+            themeObserver = ThemeObserver(this) { themeMode, themeAutoFollowsSystem ->
+                handleThemeChange(themeMode, themeAutoFollowsSystem)
             }
             themeObserver?.startObserving()
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Failed to setup theme observer")
             Log.e("Theme Service", "Failed to setup theme observer", e)
             // Используем тему по умолчанию
-            handleThemeChange(1)
+            handleThemeChange(1, true)
         }
     }
 
-    private fun handleThemeChange(themeMode: Int) {
+    private fun handleThemeChange(themeMode: Int, themeAutoFollowsSystem: Boolean) {
         try {
             TboxRepository.updateCurrentTheme(themeMode)
+            TboxRepository.updateThemeAutoFollowsSystem(themeAutoFollowsSystem)
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Error handling theme change")
             Log.e("Theme Service", "Error handling theme change", e)

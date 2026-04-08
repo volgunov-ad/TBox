@@ -179,6 +179,10 @@ object TboxRepository {
     private val _currentTheme = MutableStateFlow(1)
     val currentTheme: StateFlow<Int> = _currentTheme.asStateFlow()
 
+    /** When true, head unit follows system day/night ([ThemeObserver] auto mode == 1). */
+    private val _themeAutoFollowsSystem = MutableStateFlow(true)
+    val themeAutoFollowsSystem: StateFlow<Boolean> = _themeAutoFollowsSystem.asStateFlow()
+
     private val _canFrameTime = MutableStateFlow<Date?>(null)
     val canFrameTime: StateFlow<Date?> = _canFrameTime.asStateFlow()
 
@@ -275,6 +279,10 @@ object TboxRepository {
 
     fun updateCurrentTheme(value: Int) {
         _currentTheme.setIfChanged(value)
+    }
+
+    fun updateThemeAutoFollowsSystem(value: Boolean) {
+        _themeAutoFollowsSystem.setIfChanged(value)
     }
 
     fun updateNetState(newState: NetState) {

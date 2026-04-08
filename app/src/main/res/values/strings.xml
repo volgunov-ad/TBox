@@ -455,6 +455,10 @@
     <string name="data_title_fuel_level_widget">Виджет уровня топлива</string>
     <string name="data_title_air_quality_widget">Виджет качества воздуха</string>
     <string name="data_title_restart_tbox">Кнопка перезагрузки TBox</string>
+    <string name="data_title_theme_mode_widget">Тема интерфейса</string>
+    <string name="widget_theme_mode_light">Светлая</string>
+    <string name="widget_theme_mode_dark">Тёмная</string>
+    <string name="widget_theme_mode_auto">Авто</string>
     <string name="data_title_music_widget">Виджет управления музыкой</string>
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>

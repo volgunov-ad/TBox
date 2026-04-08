@@ -9,7 +9,7 @@ import android.util.Log
 
 class ThemeObserver(
     context: Context,
-    private val callback: (themeMode: Int) -> Unit
+    private val callback: (themeMode: Int, themeAutoFollowsSystem: Boolean) -> Unit
 ) : ContentObserver(Handler(Looper.getMainLooper())) {
 
     private val contentResolver = context.contentResolver
@@ -38,10 +38,10 @@ class ThemeObserver(
             onChange(false)
         } catch (e: SecurityException) {
             Log.e("ThemeObserver", "SecurityException: Missing READ_SETTINGS permission", e)
-            callback(1) // Возвращаем светлую тему по умолчанию
+            callback(1, true)
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Failed to start observing theme changes", e)
-            callback(1) // Возвращаем светлую тему по умолчанию
+            callback(1, true)
         }
     }
 
@@ -60,25 +60,27 @@ class ThemeObserver(
     override fun onChange(selfChange: Boolean) {
         super.onChange(selfChange)
         try {
-            val normalizedTheme = getNormalizedThemeMode()
-            callback(normalizedTheme)
+            val autoMode = getAutoMode()
+            val normalizedTheme = getNormalizedThemeMode(autoMode)
+            callback(normalizedTheme, isAutoFollowSystem(autoMode))
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Error in onChange callback", e)
-            callback(1) // Возвращаем светлую тему по умолчанию при ошибке
+            callback(1, true)
         }
     }
 
-    private fun getNormalizedThemeMode(): Int {
+    private fun isAutoFollowSystem(autoMode: Int): Boolean = autoMode == 1
+
+    private fun getNormalizedThemeMode(autoMode: Int): Int {
         return try {
-            val autoMode = getAutoMode()
             when (autoMode) {
-                0 -> 1 // Light
-                2 -> 2 // Dark
+                0 -> 1 // Light (fixed)
+                2 -> 2 // Dark (fixed)
                 else -> getDayNightMode()
             }
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Error getting normalized theme mode", e)
-            1 // Возвращаем светлую тему по умолчанию при ошибке
+            1
         }
     }
 
