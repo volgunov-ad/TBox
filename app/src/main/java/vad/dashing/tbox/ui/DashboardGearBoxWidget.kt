@@ -90,7 +90,7 @@ fun DashboardGearBoxWidgetItem(
                 availableHeight = availableHeight,
                 resolvedTextColor = resolvedTextColor,
                 modifier = Modifier.weight(
-                    if (showTitle && !singleLineDualMetrics) 2f else 1f
+                    if (showTitle && !singleLineDualMetrics) 2f else 2f
                 )
             )
         }
