@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.provider.Settings
+import android.widget.Toast
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxRepository
@@ -46,6 +46,8 @@ internal fun DashboardThemeModeWidgetItem(
     val context = LocalContext.current
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
     val autoFollow by viewModel.themeAutoFollowsSystem.collectAsStateWithLifecycle()
+    val pkg = context.packageName
+    val adbHint = ThemeSettingsController.adbGrantWriteSecureSettingsCommand(pkg)
 
     DashboardWidgetScaffold(
         modifier = Modifier.fillMaxSize(),
@@ -72,16 +74,17 @@ internal fun DashboardThemeModeWidgetItem(
                     .weight(1f)
                     .fillMaxHeight(),
                 onClick = {
-                    if (ThemeSettingsController.applyLightFixed(context)) {
-                        TboxRepository.updateThemeAutoFollowsSystem(false)
-                        TboxRepository.updateCurrentTheme(1)
-                    } else {
-                        TboxRepository.addLog(
-                            "WARN",
-                            "Theme widget",
-                            "Не удалось переключить на светлую тему (нет прав на запись настроек)"
-                        )
-                    }
+                    handleThemeApply(
+                        context = context,
+                        outcome = ThemeSettingsController.applyLightFixed(context),
+                        onSuccess = {
+                            TboxRepository.updateThemeAutoFollowsSystem(false)
+                            TboxRepository.updateCurrentTheme(1)
+                        },
+                        adbHint = adbHint,
+                        deniedLogRu = "Светлая тема: нет прав на запись настроек",
+                        syncUiFromDayNightIfGlobalDenied = true,
+                    )
                 }
             )
             ThemeModeToggleButton(
@@ -92,16 +95,17 @@ internal fun DashboardThemeModeWidgetItem(
                     .weight(1f)
                     .fillMaxHeight(),
                 onClick = {
-                    if (ThemeSettingsController.applyDarkFixed(context)) {
-                        TboxRepository.updateThemeAutoFollowsSystem(false)
-                        TboxRepository.updateCurrentTheme(2)
-                    } else {
-                        TboxRepository.addLog(
-                            "WARN",
-                            "Theme widget",
-                            "Не удалось переключить на тёмную тему (нет прав на запись настроек)"
-                        )
-                    }
+                    handleThemeApply(
+                        context = context,
+                        outcome = ThemeSettingsController.applyDarkFixed(context),
+                        onSuccess = {
+                            TboxRepository.updateThemeAutoFollowsSystem(false)
+                            TboxRepository.updateCurrentTheme(2)
+                        },
+                        adbHint = adbHint,
+                        deniedLogRu = "Тёмная тема: нет прав на запись настроек",
+                        syncUiFromDayNightIfGlobalDenied = true,
+                    )
                 }
             )
             ThemeModeToggleButton(
@@ -112,29 +116,80 @@ internal fun DashboardThemeModeWidgetItem(
                     .weight(1f)
                     .fillMaxHeight(),
                 onClick = {
-                    if (ThemeSettingsController.applyFollowSystem(context)) {
-                        TboxRepository.updateThemeAutoFollowsSystem(true)
-                        val cr = context.contentResolver
-                        val effective = runCatching {
-                            val dn = Settings.System.getInt(
-                                cr,
-                                ThemeSettingsController.DAY_NIGHT_STATUS_KEY,
-                                1
-                            )
-                            if (dn == 2) 2 else 1
-                        }.getOrDefault(1)
-                        TboxRepository.updateCurrentTheme(effective)
-                    } else {
-                        TboxRepository.addLog(
-                            "WARN",
-                            "Theme widget",
-                            "Не удалось включить авто-тему (нет прав на запись настроек)"
-                        )
-                    }
+                    handleThemeApply(
+                        context = context,
+                        outcome = ThemeSettingsController.applyFollowSystem(context),
+                        onSuccess = {
+                            TboxRepository.updateThemeAutoFollowsSystem(true)
+                            val cr = context.contentResolver
+                            val dn = ThemeSettingsController.readDayNightRaw(cr)
+                            val effective = if (dn == 2) 2 else 1
+                            TboxRepository.updateCurrentTheme(effective)
+                        },
+                        adbHint = adbHint,
+                        deniedLogRu = "Авто-тема: нет прав на запись глобальных настроек (night_mode_auto)",
+                        syncUiFromDayNightIfGlobalDenied = false,
+                    )
                 }
             )
         }
     }
+}
+
+private fun handleThemeApply(
+    context: android.content.Context,
+    outcome: ThemeSettingsController.ApplyOutcome,
+    onSuccess: () -> Unit,
+    adbHint: String,
+    deniedLogRu: String,
+    syncUiFromDayNightIfGlobalDenied: Boolean,
+) {
+    when (outcome) {
+        ThemeSettingsController.ApplyOutcome.Success -> onSuccess()
+        ThemeSettingsController.ApplyOutcome.GlobalDenied -> {
+            if (!ThemeSettingsController.canWriteSystemSettings(context)) {
+                ThemeSettingsController.openManageWriteSettingsScreen(context)
+                toast(context, R.string.widget_theme_mode_toast_opening_write_settings)
+            } else {
+                toast(context, context.getString(R.string.widget_theme_mode_toast_need_secure_adb, adbHint))
+            }
+            TboxRepository.addLog("WARN", "Theme widget", deniedLogRu)
+        }
+        ThemeSettingsController.ApplyOutcome.SystemDenied -> {
+            if (!ThemeSettingsController.canWriteSystemSettings(context)) {
+                ThemeSettingsController.openManageWriteSettingsScreen(context)
+                toast(context, R.string.widget_theme_mode_toast_opening_write_settings)
+            } else {
+                toast(context, R.string.widget_theme_mode_toast_need_write_settings)
+            }
+            TboxRepository.addLog("WARN", "Theme widget", "$deniedLogRu (DAY_NIGHT_STATUS)")
+        }
+        ThemeSettingsController.ApplyOutcome.BothDenied -> {
+            if (!ThemeSettingsController.canWriteSystemSettings(context)) {
+                ThemeSettingsController.openManageWriteSettingsScreen(context)
+                toast(context, R.string.widget_theme_mode_toast_opening_write_settings)
+            } else {
+                toast(context, context.getString(R.string.widget_theme_mode_toast_need_secure_adb, adbHint))
+            }
+            TboxRepository.addLog("WARN", "Theme widget", deniedLogRu)
+        }
+    }
+    if (syncUiFromDayNightIfGlobalDenied && outcome == ThemeSettingsController.ApplyOutcome.GlobalDenied) {
+        val cr = context.contentResolver
+        val dn = ThemeSettingsController.readDayNightRaw(cr)
+        val effective = if (dn == 2) 2 else 1
+        TboxRepository.updateThemeAutoFollowsSystem(false)
+        TboxRepository.updateCurrentTheme(effective)
+        toast(context, R.string.widget_theme_mode_toast_partial_day_night_only)
+    }
+}
+
+private fun toast(context: android.content.Context, resId: Int) {
+    Toast.makeText(context.applicationContext, resId, Toast.LENGTH_LONG).show()
+}
+
+private fun toast(context: android.content.Context, message: String) {
+    Toast.makeText(context.applicationContext, message, Toast.LENGTH_LONG).show()
 }
 
 @Composable

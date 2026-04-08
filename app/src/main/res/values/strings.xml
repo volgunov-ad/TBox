@@ -459,6 +459,10 @@
     <string name="widget_theme_mode_light">Светлая</string>
     <string name="widget_theme_mode_dark">Тёмная</string>
     <string name="widget_theme_mode_auto">Авто</string>
+    <string name="widget_theme_mode_toast_opening_write_settings">Открываю настройки разрешения «Изменение системных настроек»…</string>
+    <string name="widget_theme_mode_toast_need_write_settings">Нужно разрешение «Изменение системных настроек» для записи DAY_NIGHT_STATUS</string>
+    <string name="widget_theme_mode_toast_need_secure_adb">Для ключа night_mode_auto нужно: %1$s</string>
+    <string name="widget_theme_mode_toast_partial_day_night_only">Тема сменилась частично: без WRITE_SECURE_SETTINGS режим «Авто» в системе не переключается</string>
     <string name="data_title_music_widget">Виджет управления музыкой</string>
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
