@@ -343,6 +343,7 @@
     <string name="data_title_param_2">Parameter 2</string>
     <string name="data_title_param_3">Parameter 3</string>
     <string name="data_title_param_4">Parameter 4</string>
+    <string name="data_title_param_5">Parameter 5</string>
     <string name="data_title_wheel_speed_1">Wheel speed 1</string>
     <string name="data_title_wheel_speed_2">Wheel speed 2</string>
     <string name="data_title_wheel_speed_3">Wheel speed 3</string>
@@ -371,7 +372,6 @@
     <string name="data_title_steer_angle">Steering wheel angle</string>
     <string name="data_title_steer_speed">Steering wheel speed</string>
     <string name="data_title_engine_rpm">Engine RPM</string>
-    <string name="data_title_throttle_position">Parameter 5</string>
     <string name="data_title_car_speed">Vehicle speed</string>
     <string name="data_title_car_speed_accurate">Precise vehicle speed</string>
     <string name="data_title_cruise_set_speed">Cruise control set speed</string>
