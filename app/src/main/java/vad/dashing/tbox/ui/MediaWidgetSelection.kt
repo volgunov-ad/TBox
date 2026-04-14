@@ -49,10 +49,11 @@ fun normalizeMediaPlayersSelection(rawPackages: Collection<String>): Set<String>
 fun MediaPlayersInlineSelection(
     selectedPlayers: Set<String>,
     onSelectionChange: (Set<String>) -> Unit,
-    enabled: Boolean
+    enabled: Boolean,
+    launcherAppIconRevision: Int = 0,
 ) {
     val context = LocalContext.current
-    val apps = rememberLaunchableAppEntries()
+    val apps = rememberLaunchableAppEntries(launcherAppIconRevision)
     val appPackageSet = remember(apps) { apps.mapTo(mutableSetOf()) { it.packageName } }
     val extraSupportedPlayers = remember(appPackageSet) {
         SupportedMediaPlayer.entries.filter { it.packageName !in appPackageSet }

@@ -1,5 +1,7 @@
 package vad.dashing.tbox.ui
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.net.Uri
@@ -38,8 +40,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import android.content.Context
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.io.File
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 
 internal data class LaunchableAppEntry(
@@ -55,15 +59,24 @@ internal data class LaunchableAppEntry(
  */
 private object LaunchableAppsWithIconsCache {
     private var cachedIconSizePx: Int? = null
+    private var cachedIconRevision: Int? = null
     private var entries: List<LaunchableAppEntry>? = null
 
-    fun getOrLoad(iconSizePx: Int, load: () -> List<LaunchableAppEntry>): List<LaunchableAppEntry> {
+    fun getOrLoad(
+        iconSizePx: Int,
+        iconRevision: Int,
+        load: () -> List<LaunchableAppEntry>,
+    ): List<LaunchableAppEntry> {
         synchronized(this) {
-            if (cachedIconSizePx == iconSizePx && entries != null) {
+            if (cachedIconSizePx == iconSizePx &&
+                cachedIconRevision == iconRevision &&
+                entries != null
+            ) {
                 return entries!!
             }
             val list = load()
             cachedIconSizePx = iconSizePx
+            cachedIconRevision = iconRevision
             entries = list
             return list
         }
@@ -72,6 +85,7 @@ private object LaunchableAppsWithIconsCache {
     fun clear() {
         synchronized(this) {
             cachedIconSizePx = null
+            cachedIconRevision = null
             entries = null
         }
     }
@@ -82,7 +96,27 @@ internal fun disposeAppLauncherPickerIconCache() {
     LaunchableAppsWithIconsCache.clear()
 }
 
-private fun loadLaunchableAppEntries(appContext: Context, iconSizePx: Int): List<LaunchableAppEntry> {
+private fun decodeCustomLauncherIconIfPresent(
+    appContext: Context,
+    packageName: String,
+    iconSizePx: Int,
+): ImageBitmap? = runCatching {
+    val f = File(appContext.filesDir, "${SettingsManager.LAUNCHER_APP_ICONS_DIR}/$packageName")
+    if (!f.isFile || f.length() <= 0L) return@runCatching null
+    val decoded = BitmapFactory.decodeFile(f.absolutePath) ?: return@runCatching null
+    if (decoded.width == iconSizePx && decoded.height == iconSizePx) {
+        return@runCatching decoded.asImageBitmap()
+    }
+    val scaled = Bitmap.createScaledBitmap(decoded, iconSizePx, iconSizePx, true)
+    if (scaled != decoded) decoded.recycle()
+    scaled.asImageBitmap()
+}.getOrNull()
+
+private fun loadLaunchableAppEntries(
+    appContext: Context,
+    iconSizePx: Int,
+    @Suppress("UNUSED_PARAMETER") iconRevision: Int,
+): List<LaunchableAppEntry> {
     val pm = appContext.packageManager
     val intent = Intent(Intent.ACTION_MAIN).apply {
         addCategory(Intent.CATEGORY_LAUNCHER)
@@ -93,9 +127,10 @@ private fun loadLaunchableAppEntries(appContext: Context, iconSizePx: Int): List
         .map { ri ->
             val pkg = ri.activityInfo.packageName
             val label = ri.loadLabel(pm).toString()
-            val bitmap = runCatching {
-                ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
-            }.getOrNull()
+            val bitmap = decodeCustomLauncherIconIfPresent(appContext, pkg, iconSizePx)
+                ?: runCatching {
+                    ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
+                }.getOrNull()
             LaunchableAppEntry(packageName = pkg, label = label, icon = bitmap)
         }
         .distinctBy { it.packageName }
@@ -103,15 +138,15 @@ private fun loadLaunchableAppEntries(appContext: Context, iconSizePx: Int): List
 }
 
 @Composable
-internal fun rememberLaunchableAppEntries(): List<LaunchableAppEntry> {
+internal fun rememberLaunchableAppEntries(launcherIconRevision: Int = 0): List<LaunchableAppEntry> {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val iconSizePx = remember(appContext) {
         (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
     }
-    return remember(appContext, iconSizePx) {
-        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx) {
-            loadLaunchableAppEntries(appContext, iconSizePx)
+    return remember(appContext, iconSizePx, launcherIconRevision) {
+        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx, launcherIconRevision) {
+            loadLaunchableAppEntries(appContext, iconSizePx, launcherIconRevision)
         }
     }
 }
@@ -128,7 +163,8 @@ internal fun AppLauncherWidgetSettingsSection(
 ) {
     if (!state.isAppLauncherWidgetSelected) return
     val context = LocalContext.current
-    val apps = rememberLaunchableAppEntries()
+    val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val apps = rememberLaunchableAppEntries(iconRevision)
     val selectedLabel = apps.find { it.packageName == state.launcherAppPackage }?.label
     var filterText by rememberSaveable { mutableStateOf("") }
     val needle = filterText.trim().lowercase()
@@ -142,7 +178,6 @@ internal fun AppLauncherWidgetSettingsSection(
             }
         }
     }
-    val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     var selectedHasCustomIcon by remember { mutableStateOf(false) }
     LaunchedEffect(state.launcherAppPackage, iconRevision) {
         selectedHasCustomIcon = if (state.launcherAppPackage.isNotBlank()) {

@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DashboardManager
@@ -470,6 +471,7 @@ internal fun WidgetSelectionDialogForm(
                     }
                 }
                 state.showAdvancedSettings -> {
+                val launcherIconRev by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -480,7 +482,8 @@ internal fun WidgetSelectionDialogForm(
                         MediaPlayersInlineSelection(
                             selectedPlayers = state.selectedMediaPlayers,
                             onSelectionChange = { state.selectedMediaPlayers = it },
-                            enabled = state.togglesEnabled
+                            enabled = state.togglesEnabled,
+                            launcherAppIconRevision = launcherIconRev
                         )
                         if (state.selectedMediaPlayers.isEmpty()) {
                             Text(
