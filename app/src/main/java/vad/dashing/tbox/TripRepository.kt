@@ -9,11 +9,12 @@ import kotlin.math.max
 
 /**
  * When a trip that had [TripRecord.endTimeEpochMs] is reopened on service start, [BackgroundService]
- * may revert that reopen on HU shutdown if the engine never ran this session — see [parkedMsAddedToIdle].
+ * may revert that reopen on HU shutdown if the engine never ran this session.
  */
 data class ColdResumeReopenedEndedTrip(
     val tripId: String,
     val previousEndTimeEpochMs: Long,
+    val previousIdleTimeMs: Long,
     val parkedMsAddedToIdle: Long,
 )
 
@@ -202,8 +203,9 @@ object TripRepository {
      * If wall clock is before the stored end (e.g. HU time reset), a finished trip is not resumed.
      * Returns true if a trip was resumed (or was already active).
      *
-     * For a trip that had [TripRecord.endTimeEpochMs] set, the gap until `now` is treated as parking
-     * and **added** to existing [TripRecord.idleTimeMs] (not replaced).
+     * For a trip that had [TripRecord.endTimeEpochMs] set, this method only reopens it and keeps the
+     * previous idle unchanged. The parked segment is applied later on first engine start in
+     * [BackgroundService.onTripRpmSample] so HU-on time before RPM>0 is counted once.
      */
     fun tryResumeLastTripAfterServiceStart(splitWindowMs: Long): TripResumeStartResult {
         synchronized(lock) {
@@ -225,12 +227,12 @@ object TripRepository {
                 reopenInfo = ColdResumeReopenedEndedTrip(
                     tripId = candidate.id,
                     previousEndTimeEpochMs = endedAt,
+                    previousIdleTimeMs = candidate.idleTimeMs,
                     parkedMsAddedToIdle = parkedMs,
                 )
                 candidate.copy(
                     endTimeEpochMs = null,
-                    // Cumulative idle: time already accrued on the trip plus the off-line / parked segment.
-                    idleTimeMs = candidate.idleTimeMs + parkedMs,
+                    idleTimeMs = candidate.idleTimeMs,
                 )
             }
             _trips.update { cur ->

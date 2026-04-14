@@ -54,7 +54,7 @@ class TripRepositoryResumeTest {
     }
 
     @Test
-    fun tryResume_endedWithinSplit_addsParkedTimeToIdle() = runBlocking {
+    fun tryResume_endedWithinSplit_reopensWithoutChangingIdleYet() = runBlocking {
         val nowWall = System.currentTimeMillis()
         val endMs = nowWall - 120_000L
         val priorIdle = 30_000L
@@ -72,6 +72,7 @@ class TripRepositoryResumeTest {
         assertNotNull(resumeResult.reopenedEndedTrip)
         assertEquals("parked", resumeResult.reopenedEndedTrip!!.tripId)
         assertEquals(endMs, resumeResult.reopenedEndedTrip!!.previousEndTimeEpochMs)
+        assertEquals(priorIdle, resumeResult.reopenedEndedTrip!!.previousIdleTimeMs)
         assertTrue(
             resumeResult.reopenedEndedTrip!!.parkedMsAddedToIdle in 115_000L..125_000L
         )
@@ -79,11 +80,10 @@ class TripRepositoryResumeTest {
         assertNotNull(active)
         assertEquals("parked", active!!.id)
         assertNull(active.endTimeEpochMs)
-        val addedIdle = active!!.idleTimeMs - priorIdle
-        // ~2 min between persisted end and resume; allow clock skew across calls.
-        assertTrue(
-            "parked segment should be ~120s, was ${addedIdle}ms",
-            addedIdle in 115_000L..125_000L
+        assertEquals(
+            "cold resume should only reopen trip; parked idle is applied at first RPM>0 sample",
+            priorIdle,
+            active.idleTimeMs
         )
     }
 

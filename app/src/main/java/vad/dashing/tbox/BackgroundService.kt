@@ -170,6 +170,8 @@ class BackgroundService : Service() {
      * the previous end time and rolls back the resume-only idle delta to avoid double-counting on next boot.
      */
     private var tripColdResumeReopenedEndedTrip: ColdResumeReopenedEndedTrip? = null
+    /** True when cold resume reopened an ended trip, but parked idle should be applied only at first RPM>0. */
+    private var tripColdResumeApplyParkedIdleOnEngineStart: Boolean = false
 
     private var isLastSMS: Boolean = false
 
@@ -1006,6 +1008,15 @@ class BackgroundService : Service() {
             }
 
             if (rpm > 0f) {
+                if (tripColdResumeApplyParkedIdleOnEngineStart) {
+                    val cold = tripColdResumeReopenedEndedTrip
+                    if (cold != null) {
+                        TripRepository.updateActiveTrip { cur ->
+                            cur.copy(idleTimeMs = cur.idleTimeMs + cold.parkedMsAddedToIdle)
+                        }
+                    }
+                    tripColdResumeApplyParkedIdleOnEngineStart = false
+                }
                 tripRpmWasPositiveSinceService = true
                 tripColdResumeReopenedEndedTrip = null
             }
@@ -1239,6 +1250,7 @@ class BackgroundService : Service() {
     private fun resetTripStateForNewServiceSession(splitWindowMs: Long) {
         synchronized(TripRepository.lock) {
             tripColdResumeReopenedEndedTrip = null
+            tripColdResumeApplyParkedIdleOnEngineStart = false
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
@@ -1273,6 +1285,7 @@ class BackgroundService : Service() {
             val resumeResult = TripRepository.tryResumeLastTripAfterServiceStart(splitWindowMs)
             if (!resumeResult.resumed) return
             tripColdResumeReopenedEndedTrip = resumeResult.reopenedEndedTrip
+            tripColdResumeApplyParkedIdleOnEngineStart = resumeResult.reopenedEndedTrip != null
             tripLastOdometer = CanDataRepository.odometer.value
             tripStartOdometer = tripLastOdometer
             val active = TripRepository.activeTrip.value
@@ -1292,6 +1305,7 @@ class BackgroundService : Service() {
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
             tripColdResumeReopenedEndedTrip = null
+            tripColdResumeApplyParkedIdleOnEngineStart = false
             val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
             val odoStart = CanDataRepository.odometer.value
             val rpmNow = CanDataRepository.engineRPM.value ?: 0f
@@ -1334,7 +1348,7 @@ class BackgroundService : Service() {
                     TripRepository.replaceTrip(
                         active.copy(
                             endTimeEpochMs = cold.previousEndTimeEpochMs,
-                            idleTimeMs = (active.idleTimeMs - cold.parkedMsAddedToIdle).coerceAtLeast(0L),
+                            idleTimeMs = cold.previousIdleTimeMs,
                         )
                     )
                 } else {
@@ -1344,6 +1358,7 @@ class BackgroundService : Service() {
                 TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
             }
             tripColdResumeReopenedEndedTrip = null
+            tripColdResumeApplyParkedIdleOnEngineStart = false
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
