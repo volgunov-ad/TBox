@@ -450,6 +450,41 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = MainScreenAddButtonPosition.Default
         )
 
+    val mainScreenCornerButtonSizeDp = settingsManager.mainScreenCornerButtonSizeDpFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 32
+        )
+
+    val mainScreenCornerButtonBackgroundLight = settingsManager.mainScreenCornerButtonBackgroundLightFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
+        )
+
+    val mainScreenCornerButtonBackgroundDark = settingsManager.mainScreenCornerButtonBackgroundDarkFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+        )
+
+    val mainScreenCornerButtonIconLight = settingsManager.mainScreenCornerButtonIconLightFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+        )
+
+    val mainScreenCornerButtonIconDark = settingsManager.mainScreenCornerButtonIconDarkFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_WIDGET_TEXT_COLOR_DARK
+        )
+
     val isMainScreenOpenOnBootEnabled = settingsManager.mainScreenOpenOnBootFlow
         .stateIn(
             scope = viewModelScope,
@@ -949,6 +984,36 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMainScreenOpenOnBoot(enabled)
+        }
+    }
+
+    fun saveMainScreenCornerButtonSizeDp(sizeDp: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonSizeDp(sizeDp)
+        }
+    }
+
+    fun saveMainScreenCornerButtonBackgroundLight(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonBackgroundLight(color)
+        }
+    }
+
+    fun saveMainScreenCornerButtonBackgroundDark(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonBackgroundDark(color)
+        }
+    }
+
+    fun saveMainScreenCornerButtonIconLight(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonIconLight(color)
+        }
+    }
+
+    fun saveMainScreenCornerButtonIconDark(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonIconDark(color)
         }
     }
 

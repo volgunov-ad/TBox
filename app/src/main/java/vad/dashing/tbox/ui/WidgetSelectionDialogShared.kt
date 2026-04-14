@@ -225,7 +225,7 @@ internal fun ExternalAppWidgetPickerSection(
 }
 
 @Composable
-private fun WidgetColorThemeSegmentRow(
+internal fun WidgetColorThemeSegmentRow(
     selectedSegment: Int,
     onSegmentSelected: (Int) -> Unit,
     enabled: Boolean,

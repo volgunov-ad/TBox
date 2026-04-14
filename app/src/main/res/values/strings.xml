@@ -222,6 +222,14 @@
     <string name="settings_main_screen_wallpaper_pick">Выбрать изображение</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
+    <string name="settings_main_screen_corner_buttons_title">Кнопки «Настройки» и «Добавить виджет»</string>
+    <string name="settings_main_screen_corner_buttons_size">Размер кнопок: %1$d</string>
+    <string name="settings_main_screen_corner_buttons_size_hint">Диаметр круглых кнопок на главном экране в dp (1…100; по умолчанию 32).</string>
+    <string name="settings_main_screen_corner_buttons_bg_light">Цвет фона (светлая тема)</string>
+    <string name="settings_main_screen_corner_buttons_bg_dark">Цвет фона (тёмная тема)</string>
+    <string name="settings_main_screen_corner_buttons_icon_light">Цвет значка (светлая тема)</string>
+    <string name="settings_main_screen_corner_buttons_icon_dark">Цвет значка (тёмная тема)</string>
+    <string name="settings_main_screen_corner_buttons_reset">Сбросить размер и цвета</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
     <string name="settings_main_screen_panel_rows_title">Количество строк плиток панели главного экрана</string>
     <string name="settings_main_screen_panel_cols_title">Количество столбцов плиток панели главного экрана</string>

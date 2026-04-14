@@ -195,6 +195,17 @@ class SettingsManager(private val context: Context) {
         private val LAUNCHER_APP_ICON_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}launcher_app_icon_revision")
 
+        private val MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_button_size_dp")
+        private val MAIN_SCREEN_CORNER_BTN_BG_LIGHT_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_bg_light")
+        private val MAIN_SCREEN_CORNER_BTN_BG_DARK_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_bg_dark")
+        private val MAIN_SCREEN_CORNER_BTN_ICON_LIGHT_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_icon_light")
+        private val MAIN_SCREEN_CORNER_BTN_ICON_DARK_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_icon_dark")
+
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
@@ -245,6 +256,15 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
         private const val DEFAULT_FUEL_TANK_LITERS = 57
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 32
+        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_LIGHT =
+            DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
+        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_DARK =
+            DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_LIGHT =
+            DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK =
+            DEFAULT_WIDGET_TEXT_COLOR_DARK
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
@@ -388,6 +408,42 @@ class SettingsManager(private val context: Context) {
 
     val launcherAppIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0 }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonSizeDpFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP
+        }
+        .map { it.coerceIn(1, 100) }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonBackgroundLightFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_BG_LIGHT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_LIGHT
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonBackgroundDarkFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_BG_DARK_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_DARK
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonIconLightFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_ICON_LIGHT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_LIGHT
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonIconDarkFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_ICON_DARK_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK
+        }
         .distinctUntilChanged()
 
     // String flows
@@ -612,6 +668,36 @@ class SettingsManager(private val context: Context) {
         obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
         obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
         saveCustomString(MAIN_SCREEN_ADD_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenCornerButtonSizeDp(sizeDp: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY] = sizeDp.coerceIn(1, 100)
+        }
+    }
+
+    suspend fun saveMainScreenCornerButtonBackgroundLight(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_BG_LIGHT_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCornerButtonBackgroundDark(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_BG_DARK_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCornerButtonIconLight(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_ICON_LIGHT_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCornerButtonIconDark(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_ICON_DARK_KEY] = color
+        }
     }
 
     suspend fun saveMainScreenOpenOnBoot(enabled: Boolean) {

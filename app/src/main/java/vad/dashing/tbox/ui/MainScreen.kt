@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
@@ -23,7 +25,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -59,9 +63,6 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.loadWidgetsFromConfig
 
-private val MainScreenSettingsIconSize = 32.dp
-private val MainScreenAddIconSize = 32.dp
-
 @Composable
 fun MainScreen(
     tboxViewModel: TboxViewModel,
@@ -76,7 +77,19 @@ fun MainScreen(
     val mainPanels by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
     val settingsBtnPos by settingsViewModel.mainScreenSettingsButtonPosition.collectAsStateWithLifecycle()
     val addBtnPos by settingsViewModel.mainScreenAddButtonPosition.collectAsStateWithLifecycle()
+    val cornerBtnSizeDp by settingsViewModel.mainScreenCornerButtonSizeDp.collectAsStateWithLifecycle()
+    val cornerBtnBgLight by settingsViewModel.mainScreenCornerButtonBackgroundLight.collectAsStateWithLifecycle()
+    val cornerBtnBgDark by settingsViewModel.mainScreenCornerButtonBackgroundDark.collectAsStateWithLifecycle()
+    val cornerBtnIconLight by settingsViewModel.mainScreenCornerButtonIconLight.collectAsStateWithLifecycle()
+    val cornerBtnIconDark by settingsViewModel.mainScreenCornerButtonIconDark.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
+    val cornerIconSize = cornerBtnSizeDp.dp
+    val cornerBackgroundColor = Color(
+        if (currentTheme == 2) cornerBtnBgDark else cornerBtnBgLight
+    )
+    val cornerIconTint = Color(
+        if (currentTheme == 2) cornerBtnIconDark else cornerBtnIconLight
+    )
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
 
     var floatingOverlayEditRequest by remember { mutableStateOf<Pair<String, Int>?>(null) }
@@ -119,7 +132,9 @@ fun MainScreen(
         MainScreenDraggableCornerButton(
             icon = ImageVector.vectorResource(R.drawable.ic_main_open_console),
             contentDescription = stringResource(R.string.main_open_console_cd),
-            iconSize = MainScreenSettingsIconSize,
+            iconSize = cornerIconSize,
+            backgroundColor = cornerBackgroundColor,
+            iconTint = cornerIconTint,
             maxWidthPx = maxWpx,
             maxHeightPx = maxHpx,
             normalizedX = settingsBtnPos.x,
@@ -133,7 +148,9 @@ fun MainScreen(
         MainScreenDraggableCornerButton(
             icon = Icons.Filled.Add,
             contentDescription = stringResource(R.string.main_screen_add_panel_cd),
-            iconSize = MainScreenAddIconSize,
+            iconSize = cornerIconSize,
+            backgroundColor = cornerBackgroundColor,
+            iconTint = cornerIconTint,
             maxWidthPx = maxWpx,
             maxHeightPx = maxHpx,
             normalizedX = addBtnPos.x,
@@ -247,6 +264,8 @@ private fun MainScreenDraggableCornerButton(
     icon: ImageVector,
     contentDescription: String,
     iconSize: Dp,
+    backgroundColor: Color,
+    iconTint: Color,
     maxWidthPx: Float,
     maxHeightPx: Float,
     normalizedX: Float,
@@ -275,15 +294,14 @@ private fun MainScreenDraggableCornerButton(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurface,
+        Box(
             modifier = Modifier
                 .offset {
                     IntOffset(offsetPx.x.roundToInt(), offsetPx.y.roundToInt())
                 }
                 .size(iconSize)
+                .clip(CircleShape)
+                .background(backgroundColor)
                 .clickable(onClick = onClick)
                 .pointerInput(maxW, maxH, btnPx) {
                     detectDragGesturesAfterLongPress(
@@ -314,7 +332,15 @@ private fun MainScreenDraggableCornerButton(
                             )
                         }
                     )
-                }
-        )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = iconTint,
+                modifier = Modifier.fillMaxSize(0.62f)
+            )
+        }
     }
 }
