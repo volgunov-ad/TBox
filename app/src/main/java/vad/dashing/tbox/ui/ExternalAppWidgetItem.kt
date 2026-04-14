@@ -2,6 +2,8 @@ package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
+import android.content.Intent
+import android.util.Log
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,8 +16,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,11 +35,46 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
+
+private const val EXTERNAL_WIDGET_ITEM_TAG = "ExternalAppWidgetItem"
+
+private suspend fun awaitAppWidgetInfo(
+    appWidgetManager: AppWidgetManager,
+    appWidgetId: Int
+): android.appwidget.AppWidgetProviderInfo? {
+    var info = appWidgetManager.getAppWidgetInfo(appWidgetId)
+    if (info != null) return info
+    repeat(20) {
+        delay(150)
+        info = appWidgetManager.getAppWidgetInfo(appWidgetId)
+        if (info != null) return info
+    }
+    return null
+}
+
+private fun requestAppWidgetRefresh(
+    context: android.content.Context,
+    appWidgetId: Int,
+    appWidgetManager: AppWidgetManager
+) {
+    val provider = appWidgetManager.getAppWidgetInfo(appWidgetId)?.provider ?: return
+    try {
+        context.sendBroadcast(
+            Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+                component = provider
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
+            }
+        )
+    } catch (e: Exception) {
+        Log.w(EXTERNAL_WIDGET_ITEM_TAG, "Failed to request provider refresh for widget $appWidgetId", e)
+    }
+}
 
 @Composable
 fun ExternalAppWidgetItem(
@@ -53,11 +93,28 @@ fun ExternalAppWidgetItem(
     val context = LocalContext.current
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
     val appWidgetId = widgetConfig.appWidgetId ?: AppWidgetManager.INVALID_APPWIDGET_ID
-    val appWidgetInfo = remember(appWidgetId) {
+    var appWidgetInfo by remember(appWidgetId) {
+        mutableStateOf<android.appwidget.AppWidgetProviderInfo?>(
+            if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+                null
+            } else {
+                appWidgetManager.getAppWidgetInfo(appWidgetId)
+            }
+        )
+    }
+    LaunchedEffect(appWidgetId) {
         if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-            null
-        } else {
-            appWidgetManager.getAppWidgetInfo(appWidgetId)
+            appWidgetInfo = null
+            return@LaunchedEffect
+        }
+        appWidgetInfo = awaitAppWidgetInfo(appWidgetManager, appWidgetId)
+    }
+    LaunchedEffect(appWidgetId, appWidgetInfo) {
+        if (
+            appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID &&
+            appWidgetInfo != null
+        ) {
+            requestAppWidgetRefresh(context, appWidgetId, appWidgetManager)
         }
     }
     val density = LocalDensity.current
