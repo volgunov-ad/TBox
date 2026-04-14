@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -23,6 +24,14 @@ private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
 // Используем extension property для DataStore
 internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
+
+enum class SetLauncherAppCustomIconResult {
+    Success,
+    InvalidPackage,
+    DimensionsTooLarge,
+    NotImageOrUnreadable,
+    CopyFailed,
+}
 
 data class FloatingDashboardWidgetConfig(
     val dataKey: String,
@@ -182,6 +191,10 @@ class SettingsManager(private val context: Context) {
         private val MAIN_SCREEN_WALLPAPER_CROP_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_crop")
 
+        /** Bumped when launcher shortcut custom icons or wallpaper files are cleared — refreshes in-memory bitmaps. */
+        private val LAUNCHER_APP_ICON_REVISION_KEY =
+            intPreferencesKey("${KEY_PREFIX}launcher_app_icon_revision")
+
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
@@ -225,6 +238,10 @@ class SettingsManager(private val context: Context) {
         const val MAIN_SCREEN_WALLPAPER_LIGHT_FILE = "main_screen_wallpaper/light"
         /** Copied image for MainScreen when global app theme is dark (theme == 2). */
         const val MAIN_SCREEN_WALLPAPER_DARK_FILE = "main_screen_wallpaper/dark"
+        /** Per-package custom icons for the app-launcher widget (files only; not in JSON backup). */
+        const val LAUNCHER_APP_ICONS_DIR = "launcher_app_icons"
+        private const val MAX_LAUNCHER_APP_ICON_EDGE_PX = 512
+        private const val MAX_LAUNCHER_APP_ICON_BYTES = 512 * 1024L
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
         private const val DEFAULT_FUEL_TANK_LITERS = 57
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
@@ -367,6 +384,10 @@ class SettingsManager(private val context: Context) {
     /** `true`: fill screen with Crop; `false`: Fit (whole image, possible side bars). */
     val mainScreenWallpaperCropFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_CROP_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val launcherAppIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
 
     // String flows
@@ -651,6 +672,103 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    private fun launcherAppIconFile(packageName: String): File {
+        val dir = File(context.filesDir, LAUNCHER_APP_ICONS_DIR)
+        return File(dir, packageName)
+    }
+
+    suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
+        withContext(Dispatchers.IO) {
+            if (packageName.isBlank()) return@withContext false
+            val f = launcherAppIconFile(packageName)
+            f.isFile && f.length() > 0L
+        }
+
+    suspend fun clearCustomLauncherAppIcon(packageName: String) {
+        withContext(Dispatchers.IO) {
+            if (packageName.isBlank()) return@withContext
+            launcherAppIconFile(packageName).takeIf { it.exists() }?.delete()
+            bumpLauncherAppIconRevision()
+        }
+    }
+
+    /**
+     * Removes on-disk assets that are not part of the JSON backup (same idea as main-screen wallpapers).
+     * Call after a successful full settings import.
+     */
+    suspend fun clearNonExportedLocalAssetsAfterBackupImport() {
+        withContext(Dispatchers.IO) {
+            File(context.filesDir, LAUNCHER_APP_ICONS_DIR).takeIf { it.exists() }?.deleteRecursively()
+            listOf(MAIN_SCREEN_WALLPAPER_LIGHT_FILE, MAIN_SCREEN_WALLPAPER_DARK_FILE).forEach { rel ->
+                File(context.filesDir, rel).takeIf { it.exists() }?.delete()
+            }
+            context.settingsDataStore.edit { preferences ->
+                preferences[MAIN_SCREEN_WALLPAPER_LIGHT_SET_KEY] = false
+                preferences[MAIN_SCREEN_WALLPAPER_DARK_SET_KEY] = false
+                val cur = preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0
+                preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
+            }
+        }
+    }
+
+    private suspend fun bumpLauncherAppIconRevision() {
+        context.settingsDataStore.edit { preferences ->
+            val cur = preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0
+            preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
+        }
+    }
+
+    suspend fun setCustomLauncherAppIconFromUri(
+        packageName: String,
+        sourceUri: Uri?,
+    ): SetLauncherAppCustomIconResult {
+        if (packageName.isBlank()) return SetLauncherAppCustomIconResult.InvalidPackage
+        return withContext(Dispatchers.IO) {
+            val dest = launcherAppIconFile(packageName)
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                if (dest.exists()) dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.Success
+            }
+            val bounds = runCatching {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, opts)
+                }
+                opts
+            }.getOrNull() ?: return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            if (bounds.outWidth > MAX_LAUNCHER_APP_ICON_EDGE_PX ||
+                bounds.outHeight > MAX_LAUNCHER_APP_ICON_EDGE_PX
+            ) {
+                return@withContext SetLauncherAppCustomIconResult.DimensionsTooLarge
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L && dest.length() <= MAX_LAUNCHER_APP_ICON_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.CopyFailed
+            }
+            val decoded = BitmapFactory.decodeFile(dest.absolutePath)
+            if (decoded == null) {
+                dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            decoded.recycle()
+            bumpLauncherAppIconRevision()
+            SetLauncherAppCustomIconResult.Success
+        }
+    }
+
     suspend fun saveMainScreenDashboards(configs: List<MainScreenPanelConfig>) {
         val normalized = configs
             .filter { it.id.isNotBlank() }
@@ -914,6 +1032,7 @@ class SettingsManager(private val context: Context) {
             json,
         )
         if (result.isSuccess) {
+            clearNonExportedLocalAssetsAfterBackupImport()
             sanitizeExternalAppWidgetsAfterBackupImport()
         }
         return result

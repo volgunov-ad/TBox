@@ -248,7 +248,7 @@
 
     <string name="settings_misc_title">Misc</string>
     <string name="settings_backup_title">Backup</string>
-    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper image files on the device are not included—re-pick wallpapers after import if needed.</string>
+    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper image files and custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>
     <string name="settings_backup_export_without_trips">Export JSON without trips</string>
     <string name="settings_backup_import">Import JSON</string>
@@ -466,6 +466,12 @@
     <string name="widget_app_launcher_pick_title">Choose app</string>
     <string name="widget_app_launcher_search">Search</string>
     <string name="widget_app_launcher_no_icon">?</string>
+    <string name="widget_app_launcher_change_icon">Change icon</string>
+    <string name="widget_app_launcher_remove_icon">Remove icon</string>
+    <string name="widget_app_launcher_icon_saved">Icon saved</string>
+    <string name="widget_app_launcher_icon_too_large">Image is too large for an icon (max 512×512 px)</string>
+    <string name="widget_app_launcher_icon_invalid">Could not read the image</string>
+    <string name="widget_app_launcher_icon_copy_failed">Could not save the image</string>
 
     <string name="cycle_voltage">Cycle voltage, V</string>
     <string name="cycle_speed">Cycle speed, km/h</string>

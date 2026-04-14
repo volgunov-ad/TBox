@@ -416,6 +416,7 @@ private fun FloatingDashboardWholeSettingsSection(
 @Composable
 internal fun WidgetSelectionDialogForm(
     titleText: String,
+    settingsViewModel: SettingsViewModel,
     state: WidgetSelectionDialogState,
     modifier: Modifier = Modifier,
     dataKeyFilter: (String) -> Boolean = { true },
@@ -510,6 +511,7 @@ internal fun WidgetSelectionDialogForm(
                     }
                     AppLauncherWidgetSettingsSection(
                         state = state,
+                        settingsViewModel = settingsViewModel,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
                     SettingSwitch(

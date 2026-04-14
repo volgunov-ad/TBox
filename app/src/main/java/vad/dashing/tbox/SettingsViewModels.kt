@@ -972,6 +972,33 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    val launcherAppIconRevision = settingsManager.launcherAppIconRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
+    fun setCustomLauncherAppIconFromUri(
+        packageName: String,
+        sourceUri: Uri?,
+        onResult: (SetLauncherAppCustomIconResult) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val r = settingsManager.setCustomLauncherAppIconFromUri(packageName, sourceUri)
+            onResult(r)
+        }
+    }
+
+    fun clearCustomLauncherAppIcon(packageName: String) {
+        viewModelScope.launch {
+            settingsManager.clearCustomLauncherAppIcon(packageName)
+        }
+    }
+
+    suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
+        settingsManager.hasCustomLauncherAppIcon(packageName)
+
     fun saveMainScreenDashboardWidgets(
         panelId: String,
         config: List<FloatingDashboardWidgetConfig>,

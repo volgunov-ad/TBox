@@ -248,7 +248,7 @@
 
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_backup_title">Резервная копия</string>
-    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Файлы обоев главного экрана в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
+    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Файлы обоев главного экрана и пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
     <string name="settings_backup_export">Экспорт JSON</string>
     <string name="settings_backup_export_without_trips">Экспорт JSON без поездок</string>
     <string name="settings_backup_import">Импорт JSON</string>
@@ -466,6 +466,12 @@
     <string name="widget_app_launcher_pick_title">Выбор приложения</string>
     <string name="widget_app_launcher_search">Поиск</string>
     <string name="widget_app_launcher_no_icon">?</string>
+    <string name="widget_app_launcher_change_icon">Изменить иконку</string>
+    <string name="widget_app_launcher_remove_icon">Удалить иконку</string>
+    <string name="widget_app_launcher_icon_saved">Иконка сохранена</string>
+    <string name="widget_app_launcher_icon_too_large">Изображение слишком большое для иконки (макс. 512×512 px)</string>
+    <string name="widget_app_launcher_icon_invalid">Не удалось прочитать изображение</string>
+    <string name="widget_app_launcher_icon_copy_failed">Не удалось сохранить изображение</string>
 
     <string name="cycle_voltage">Cycle напряжение, В</string>
     <string name="cycle_speed">Cycle скорость, км/ч</string>

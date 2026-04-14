@@ -298,6 +298,7 @@ fun FloatingDashboard(
                     dashboardCols = dashboardCols,
                     dashboardState = dashboardState,
                     widgetConfigs = widgetConfigs,
+                    settingsViewModel = settingsViewModel,
                     tboxViewModel = tboxViewModel,
                     canViewModel = canViewModel,
                     appDataViewModel = appDataViewModel,
