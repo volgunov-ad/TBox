@@ -119,7 +119,7 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_total_time),
                         value = formatTripDurationHuman(
                             context,
-                            t.movingTimeMs + t.idleTimeMs
+                            t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs
                         ),
                         unit = "",
                         fontSize = rowFont,
@@ -189,7 +189,7 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_total_time),
                         value = formatTripDurationHuman(
                             context,
-                            t.movingTimeMs + t.idleTimeMs
+                            t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs
                         ),
                         unit = "",
                         fontSize = rowFont,
@@ -289,7 +289,7 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_total_time),
                         value = formatTripDurationHuman(
                             context,
-                            t.movingTimeMs + t.idleTimeMs
+                            t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs
                         ),
                         unit = "",
                         fontSize = rowFont,

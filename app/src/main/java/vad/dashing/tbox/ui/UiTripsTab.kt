@@ -378,7 +378,7 @@ fun TripsTab(
                         stringResource(R.string.trips_total_time),
                         formatTripDurationHuman(
                             context,
-                            trip.movingTimeMs + trip.idleTimeMs
+                            trip.movingTimeMs + trip.idleTimeMs + trip.parkingTimeMs
                         )
                     )
                 }
@@ -550,7 +550,10 @@ internal fun buildTripExportLines(
             )
             appendStatusLine(
                 context.getString(R.string.trips_total_time),
-                formatTripDurationHuman(context, trip.movingTimeMs + trip.idleTimeMs)
+                formatTripDurationHuman(
+                    context,
+                    trip.movingTimeMs + trip.idleTimeMs + trip.parkingTimeMs
+                )
             )
             appendStatusLine(
                 context.getString(R.string.trips_engine_start_count),
