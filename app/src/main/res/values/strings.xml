@@ -406,6 +406,7 @@
     <string name="data_title_motor_hours_widget">Виджет моточасов</string>
     <string name="data_title_active_trip_widget">Текущая поездка</string>
     <string name="data_title_active_trip_widget_simple">Текущая поездка (упрощённый)</string>
+    <string name="data_title_active_trip_widget_mini">Текущая поездка (мини)</string>
 
     <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
     <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
@@ -437,6 +438,7 @@
     <string name="trips_avg_speed_moving">Средняя скорость без простоев</string>
     <string name="trips_avg_speed_trip">Средняя скорость</string>
     <string name="trips_fuel_used">Израсходовано топлива</string>
+    <string name="trips_fuel_consumption_l_100km">Расход топлива</string>
     <string name="trips_fuel_refueled">Заправлено топлива</string>
     <string name="trips_refuel_count">Заправки</string>
     <string name="trips_engine_start_count">Запуски двигателя</string>

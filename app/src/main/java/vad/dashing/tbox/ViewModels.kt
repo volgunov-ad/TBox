@@ -379,6 +379,7 @@ object WidgetsRepository {
         "motorHoursWidget" to DataTitle(R.string.data_title_motor_hours_widget),
         "activeTripWidget" to DataTitle(R.string.data_title_active_trip_widget),
         "activeTripWidgetSimple" to DataTitle(R.string.data_title_active_trip_widget_simple),
+        "activeTripWidgetMini" to DataTitle(R.string.data_title_active_trip_widget_mini),
         "netWidget" to DataTitle(R.string.data_title_net_widget),
         "netWidgetNew" to DataTitle(R.string.data_title_net_widget_new),
         "netWidgetColored" to DataTitle(R.string.data_title_net_widget_colored),

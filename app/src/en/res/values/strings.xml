@@ -405,7 +405,8 @@
     <string name="data_title_motor_hours_trip">Trip engine hours</string>
     <string name="data_title_motor_hours_widget">Engine hours widget</string>
     <string name="data_title_active_trip_widget">Current trip</string>
-    <string name="data_title_active_trip_widget_simple">Current trip (compact)</string>
+    <string name="data_title_active_trip_widget_simple">Current trip (simple)</string>
+    <string name="data_title_active_trip_widget_mini">Current trip (mini)</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_split_trip_time_title">Trip split time, min</string>
@@ -437,6 +438,7 @@
     <string name="trips_avg_speed_moving">Average speed without idle</string>
     <string name="trips_avg_speed_trip">Average speed</string>
     <string name="trips_fuel_used">Fuel used</string>
+    <string name="trips_fuel_consumption_l_100km">Fuel consumption</string>
     <string name="trips_fuel_refueled">Fuel refueled</string>
     <string name="trips_refuel_count">Refuelings</string>
     <string name="trips_engine_start_count">Engine starts</string>

@@ -272,6 +272,13 @@ object TripRepository {
         return d / (sec / 3600f)
     }
 
+    /** Average trip fuel consumption in liters per 100 km. */
+    fun averageFuelConsumptionLitersPer100Km(t: TripRecord): Float? {
+        val d = t.distanceKm
+        if (d <= 0f) return null
+        return t.fuelConsumedLiters * 100f / d
+    }
+
     fun tripChangedEnough(a: TripRecord, b: TripRecord): Boolean {
         if (a.id != b.id) return true
         if (a.name != b.name) return true

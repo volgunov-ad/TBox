@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.formatTripDurationHuman
@@ -104,7 +105,34 @@ fun DashboardActiveTripWidgetItem(
                 val t = displayTrip ?: return@DashboardWidgetScaffold
                 val rowFont = titleFont
                 val simplified = widget.dataKey == ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
-                if (simplified) {
+                val mini = widget.dataKey == ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
+                val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(t)
+                if (mini) {
+                    StatusRow(
+                        label = stringResource(R.string.trips_distance),
+                        value = valueToString(t.distanceKm, 0),
+                        unit = stringResource(R.string.unit_km),
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_total_time),
+                        value = formatTripDurationHuman(
+                            context,
+                            t.movingTimeMs + t.idleTimeMs
+                        ),
+                        unit = "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
+                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                } else if (simplified) {
                     StatusRow(
                         label = stringResource(R.string.trips_start_time),
                         value = dateFmt.format(Date(t.startTimeEpochMs)),
@@ -187,6 +215,13 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_fuel_refueled),
                         value = valueToString(t.fuelRefueledLiters, 1),
                         unit = stringResource(R.string.unit_liter),
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
+                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
@@ -319,6 +354,13 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_fuel_refueled),
                         value = valueToString(t.fuelRefueledLiters, 1),
                         unit = stringResource(R.string.unit_liter),
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
+                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
