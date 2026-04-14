@@ -169,6 +169,7 @@ fun MainDashboardTab(
                                     DashboardWidgetRenderer(
                                         widget = widget,
                                         widgetConfig = widgetConfig,
+                                        settingsViewModel = settingsViewModel,
                                         tboxViewModel = tboxViewModel,
                                         canViewModel = canViewModel,
                                         appDataViewModel = appDataViewModel,
@@ -262,6 +263,7 @@ fun WidgetSelectionDialog(
                 } else {
                     stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                 },
+                settingsViewModel = settingsViewModel,
                 state = state,
                 modifier = Modifier
                     .fillMaxSize()
@@ -367,6 +369,7 @@ fun MainScreenPanelWidgetSelectionDialog(
                     else ->
                         stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                 },
+                settingsViewModel = settingsViewModel,
                 state = state,
                 modifier = Modifier
                     .fillMaxSize()
@@ -508,6 +511,7 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
                     else ->
                         stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
                 },
+                settingsViewModel = settingsViewModel,
                 state = state,
                 modifier = Modifier
                     .fillMaxSize()

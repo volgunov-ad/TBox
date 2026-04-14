@@ -2,6 +2,8 @@ package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -11,6 +13,7 @@ import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
@@ -23,6 +26,7 @@ import vad.dashing.tbox.WidgetsRepository
 fun DashboardWidgetRenderer(
     widget: DashboardWidget,
     widgetConfig: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
     tboxViewModel: TboxViewModel,
     canViewModel: CanDataViewModel,
     appDataViewModel: AppDataViewModel,
@@ -45,6 +49,7 @@ fun DashboardWidgetRenderer(
     enableMusicInnerInteractions: Boolean = true,
     fuelTankLiters: Int = 57
 ) {
+    val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     when (widget.dataKey) {
         "netWidget" -> {
             DashboardNetWidgetItem(
@@ -227,6 +232,7 @@ fun DashboardWidgetRenderer(
             DashboardAppLauncherWidgetItem(
                 widget = widget,
                 packageName = widgetConfig.launcherAppPackage,
+                customIconRevision = launcherAppIconRevision,
                 showTitle = widgetConfig.showTitle,
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -241,6 +247,7 @@ fun DashboardWidgetRenderer(
             DashboardMusicWidgetItem(
                 widget = widget,
                 widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
                 canViewModel = canViewModel,
                 title = widgetConfig.showTitle,
                 onClick = onClick,

@@ -222,6 +222,19 @@
     <string name="settings_main_screen_wallpaper_pick">Выбрать изображение</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
+    <string name="settings_main_screen_canvas_bg_title">Фон главного экрана (под панелями)</string>
+    <string name="settings_main_screen_canvas_bg_desc">Цвет области за панелями виджетов и под обоями (если обои не на весь экран). Отдельно для светлой и тёмной темы приложения.</string>
+    <string name="settings_main_screen_canvas_bg_light">Цвет фона (светлая тема)</string>
+    <string name="settings_main_screen_canvas_bg_dark">Цвет фона (тёмная тема)</string>
+    <string name="settings_main_screen_canvas_bg_reset">Сбросить цвета фона экрана</string>
+    <string name="settings_main_screen_corner_buttons_title">Кнопки «Настройки» и «Добавить виджет»</string>
+    <string name="settings_main_screen_corner_buttons_size">Размер кнопок: %1$d</string>
+    <string name="settings_main_screen_corner_buttons_size_hint">Диаметр кнопок на главном экране в dp (10…100; по умолчанию 32).</string>
+    <string name="settings_main_screen_corner_buttons_bg_light">Цвет фона (светлая тема)</string>
+    <string name="settings_main_screen_corner_buttons_bg_dark">Цвет фона (тёмная тема)</string>
+    <string name="settings_main_screen_corner_buttons_icon_light">Цвет значка (светлая тема)</string>
+    <string name="settings_main_screen_corner_buttons_icon_dark">Цвет значка (тёмная тема)</string>
+    <string name="settings_main_screen_corner_buttons_reset">Сбросить размер и цвета</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
     <string name="settings_main_screen_panel_rows_title">Количество строк плиток панели главного экрана</string>
     <string name="settings_main_screen_panel_cols_title">Количество столбцов плиток панели главного экрана</string>
@@ -248,7 +261,7 @@
 
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_backup_title">Резервная копия</string>
-    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Файлы обоев главного экрана в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
+    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Файлы обоев главного экрана и пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
     <string name="settings_backup_export">Экспорт JSON</string>
     <string name="settings_backup_export_without_trips">Экспорт JSON без поездок</string>
     <string name="settings_backup_import">Импорт JSON</string>
@@ -343,6 +356,7 @@
     <string name="data_title_param_2">Параметр 2</string>
     <string name="data_title_param_3">Параметр 3</string>
     <string name="data_title_param_4">Параметр 4</string>
+    <string name="data_title_param_5">Параметр 5</string>
     <string name="data_title_wheel_speed_1">Скорость колеса 1</string>
     <string name="data_title_wheel_speed_2">Скорость колеса 2</string>
     <string name="data_title_wheel_speed_3">Скорость колеса 3</string>
@@ -371,7 +385,6 @@
     <string name="data_title_steer_angle">Угол поворота руля</string>
     <string name="data_title_steer_speed">Скорость вращения руля</string>
     <string name="data_title_engine_rpm">Обороты двигателя</string>
-    <string name="data_title_throttle_position">Параметр 5</string>
     <string name="data_title_car_speed">Скорость автомобиля</string>
     <string name="data_title_car_speed_accurate">Точная скорость автомобиля</string>
     <string name="data_title_cruise_set_speed">Скорость круиз-контроля</string>
@@ -469,6 +482,12 @@
     <string name="widget_app_launcher_pick_title">Выбор приложения</string>
     <string name="widget_app_launcher_search">Поиск</string>
     <string name="widget_app_launcher_no_icon">?</string>
+    <string name="widget_app_launcher_change_icon">Изменить иконку</string>
+    <string name="widget_app_launcher_remove_icon">Удалить иконку</string>
+    <string name="widget_app_launcher_icon_saved">Иконка сохранена</string>
+    <string name="widget_app_launcher_icon_too_large">Изображение слишком большое для иконки (макс. 512×512 px)</string>
+    <string name="widget_app_launcher_icon_invalid">Не удалось прочитать изображение</string>
+    <string name="widget_app_launcher_icon_copy_failed">Не удалось сохранить изображение</string>
 
     <string name="cycle_voltage">Cycle напряжение, В</string>
     <string name="cycle_speed">Cycle скорость, км/ч</string>

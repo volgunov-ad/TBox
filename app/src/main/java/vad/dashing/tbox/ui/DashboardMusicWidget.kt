@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
@@ -66,6 +67,7 @@ import kotlin.math.abs
 fun DashboardMusicWidgetItem(
     widget: DashboardWidget,
     widgetConfig: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
     canViewModel: CanDataViewModel,
     title: Boolean = true,
     onClick: () -> Unit = {},
@@ -78,6 +80,7 @@ fun DashboardMusicWidgetItem(
     backgroundColor: Color? = null
 ) {
     val context = LocalContext.current
+    val launcherIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val selectedPlayers = remember(widget.dataKey, widgetConfig.mediaPlayers) {
         resolveMediaPlayersForWidget(widgetConfig)
     }
@@ -278,6 +281,7 @@ fun DashboardMusicWidgetItem(
                     ) {
                         MusicWidgetPlayerAvatar(
                             selectedPackage = selectedPackage,
+                            launcherIconRevision = launcherIconRevision,
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
@@ -327,6 +331,7 @@ fun DashboardMusicWidgetItem(
                     if (!title) {
                         MusicWidgetPlayerAvatar(
                             selectedPackage = selectedPackage,
+                            launcherIconRevision = launcherIconRevision,
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
@@ -474,21 +479,26 @@ fun DashboardMusicWidgetItem(
 @Composable
 private fun MusicWidgetPlayerAvatar(
     selectedPackage: String,
+    launcherIconRevision: Int,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val iconSizePx = remember(context) {
+        (48f * context.resources.displayMetrics.density).toInt().coerceIn(32, 96)
+    }
     val enumPlayer = remember(selectedPackage) {
         SupportedMediaPlayer.fromPackage(selectedPackage)
     }
-    val appIcon = remember(selectedPackage, context) {
+    val appIcon = remember(selectedPackage, context, launcherIconRevision, iconSizePx) {
         if (selectedPackage.isBlank() || enumPlayer != null) {
             null
         } else {
-            runCatching {
-                val pm = context.packageManager
-                val info = pm.getApplicationInfo(selectedPackage, 0)
-                info.loadIcon(pm).toBitmap().asImageBitmap()
-            }.getOrNull()
+            decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx)
+                ?: runCatching {
+                    val pm = context.packageManager
+                    val info = pm.getApplicationInfo(selectedPackage, 0)
+                    info.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
+                }.getOrNull()
         }
     }
     val clip = Modifier.clip(RoundedCornerShape(4.dp))

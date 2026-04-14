@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -18,11 +19,21 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
 // Используем extension property для DataStore
 internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
+
+enum class SetLauncherAppCustomIconResult {
+    Success,
+    InvalidPackage,
+    DimensionsTooLarge,
+    NotImageOrUnreadable,
+    CopyFailed,
+}
 
 data class FloatingDashboardWidgetConfig(
     val dataKey: String,
@@ -182,6 +193,25 @@ class SettingsManager(private val context: Context) {
         private val MAIN_SCREEN_WALLPAPER_CROP_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_crop")
 
+        /** Bumped when launcher shortcut custom icons or wallpaper files are cleared — refreshes in-memory bitmaps. */
+        private val LAUNCHER_APP_ICON_REVISION_KEY =
+            intPreferencesKey("${KEY_PREFIX}launcher_app_icon_revision")
+
+        private val MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_button_size_dp")
+        private val MAIN_SCREEN_CORNER_BTN_BG_LIGHT_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_bg_light")
+        private val MAIN_SCREEN_CORNER_BTN_BG_DARK_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_bg_dark")
+        private val MAIN_SCREEN_CORNER_BTN_ICON_LIGHT_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_icon_light")
+        private val MAIN_SCREEN_CORNER_BTN_ICON_DARK_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_icon_dark")
+        private val MAIN_SCREEN_CANVAS_BG_LIGHT_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_canvas_bg_light")
+        private val MAIN_SCREEN_CANVAS_BG_DARK_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_canvas_bg_dark")
+
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
@@ -225,9 +255,26 @@ class SettingsManager(private val context: Context) {
         const val MAIN_SCREEN_WALLPAPER_LIGHT_FILE = "main_screen_wallpaper/light"
         /** Copied image for MainScreen when global app theme is dark (theme == 2). */
         const val MAIN_SCREEN_WALLPAPER_DARK_FILE = "main_screen_wallpaper/dark"
+        /** Per-package custom icons for the app-launcher widget (files only; not in JSON backup). */
+        const val LAUNCHER_APP_ICONS_DIR = "launcher_app_icons"
+        private const val MAX_LAUNCHER_APP_ICON_EDGE_PX = 512
+        private const val MAX_LAUNCHER_APP_ICON_BYTES = 512 * 1024L
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
         private const val DEFAULT_FUEL_TANK_LITERS = 57
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
+        private const val MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 10
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 32
+        /** Fully transparent — only the icon is visible over the main-screen canvas. */
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_LIGHT = 0x00000000
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_DARK = 0x00000000
+        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_LIGHT =
+            DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK =
+            DEFAULT_WIDGET_TEXT_COLOR_DARK
+
+        /** Default main-screen canvas behind panels (matches app theme background). */
+        private val DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+        private val DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
@@ -367,6 +414,58 @@ class SettingsManager(private val context: Context) {
     /** `true`: fill screen with Crop; `false`: Fit (whole image, possible side bars). */
     val mainScreenWallpaperCropFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_CROP_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val launcherAppIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0 }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonSizeDpFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP
+        }
+        .map { it.coerceIn(MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP, 100) }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonBackgroundLightFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_BG_LIGHT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_LIGHT
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonBackgroundDarkFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_BG_DARK_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_DARK
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonIconLightFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_ICON_LIGHT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_LIGHT
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCornerButtonIconDarkFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_ICON_DARK_KEY]
+                ?: DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCanvasBackgroundLightFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CANVAS_BG_LIGHT_KEY] ?: DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCanvasBackgroundDarkFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CANVAS_BG_DARK_KEY] ?: DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK
+        }
         .distinctUntilChanged()
 
     // String flows
@@ -593,6 +692,49 @@ class SettingsManager(private val context: Context) {
         saveCustomString(MAIN_SCREEN_ADD_BUTTON_KEY, obj.toString())
     }
 
+    suspend fun saveMainScreenCornerButtonSizeDp(sizeDp: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY] =
+                sizeDp.coerceIn(MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP, 100)
+        }
+    }
+
+    suspend fun saveMainScreenCornerButtonBackgroundLight(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_BG_LIGHT_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCornerButtonBackgroundDark(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_BG_DARK_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCornerButtonIconLight(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_ICON_LIGHT_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCornerButtonIconDark(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CORNER_BTN_ICON_DARK_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCanvasBackgroundLight(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CANVAS_BG_LIGHT_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCanvasBackgroundDark(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CANVAS_BG_DARK_KEY] = color
+        }
+    }
+
     suspend fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] = enabled
@@ -648,6 +790,103 @@ class SettingsManager(private val context: Context) {
             context.settingsDataStore.edit { preferences ->
                 preferences[prefKey] = copiedOk
             }
+        }
+    }
+
+    private fun launcherAppIconFile(packageName: String): File {
+        val dir = File(context.filesDir, LAUNCHER_APP_ICONS_DIR)
+        return File(dir, packageName)
+    }
+
+    suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
+        withContext(Dispatchers.IO) {
+            if (packageName.isBlank()) return@withContext false
+            val f = launcherAppIconFile(packageName)
+            f.isFile && f.length() > 0L
+        }
+
+    suspend fun clearCustomLauncherAppIcon(packageName: String) {
+        withContext(Dispatchers.IO) {
+            if (packageName.isBlank()) return@withContext
+            launcherAppIconFile(packageName).takeIf { it.exists() }?.delete()
+            bumpLauncherAppIconRevision()
+        }
+    }
+
+    /**
+     * Removes on-disk assets that are not part of the JSON backup (same idea as main-screen wallpapers).
+     * Call after a successful full settings import.
+     */
+    suspend fun clearNonExportedLocalAssetsAfterBackupImport() {
+        withContext(Dispatchers.IO) {
+            File(context.filesDir, LAUNCHER_APP_ICONS_DIR).takeIf { it.exists() }?.deleteRecursively()
+            listOf(MAIN_SCREEN_WALLPAPER_LIGHT_FILE, MAIN_SCREEN_WALLPAPER_DARK_FILE).forEach { rel ->
+                File(context.filesDir, rel).takeIf { it.exists() }?.delete()
+            }
+            context.settingsDataStore.edit { preferences ->
+                preferences[MAIN_SCREEN_WALLPAPER_LIGHT_SET_KEY] = false
+                preferences[MAIN_SCREEN_WALLPAPER_DARK_SET_KEY] = false
+                val cur = preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0
+                preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
+            }
+        }
+    }
+
+    private suspend fun bumpLauncherAppIconRevision() {
+        context.settingsDataStore.edit { preferences ->
+            val cur = preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0
+            preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
+        }
+    }
+
+    suspend fun setCustomLauncherAppIconFromUri(
+        packageName: String,
+        sourceUri: Uri?,
+    ): SetLauncherAppCustomIconResult {
+        if (packageName.isBlank()) return SetLauncherAppCustomIconResult.InvalidPackage
+        return withContext(Dispatchers.IO) {
+            val dest = launcherAppIconFile(packageName)
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                if (dest.exists()) dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.Success
+            }
+            val bounds = runCatching {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, opts)
+                }
+                opts
+            }.getOrNull() ?: return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            if (bounds.outWidth > MAX_LAUNCHER_APP_ICON_EDGE_PX ||
+                bounds.outHeight > MAX_LAUNCHER_APP_ICON_EDGE_PX
+            ) {
+                return@withContext SetLauncherAppCustomIconResult.DimensionsTooLarge
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L && dest.length() <= MAX_LAUNCHER_APP_ICON_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.CopyFailed
+            }
+            val decoded = BitmapFactory.decodeFile(dest.absolutePath)
+            if (decoded == null) {
+                dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            decoded.recycle()
+            bumpLauncherAppIconRevision()
+            SetLauncherAppCustomIconResult.Success
         }
     }
 
@@ -914,6 +1153,7 @@ class SettingsManager(private val context: Context) {
             json,
         )
         if (result.isSuccess) {
+            clearNonExportedLocalAssetsAfterBackupImport()
             sanitizeExternalAppWidgetsAfterBackupImport()
         }
         return result

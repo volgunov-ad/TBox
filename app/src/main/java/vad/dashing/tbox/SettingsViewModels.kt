@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.Boolean
+import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -448,6 +450,55 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = MainScreenAddButtonPosition.Default
+        )
+
+    val mainScreenCornerButtonSizeDp = settingsManager.mainScreenCornerButtonSizeDpFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 32
+        )
+
+    val mainScreenCanvasBackgroundLight = settingsManager.mainScreenCanvasBackgroundLightFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+        )
+
+    val mainScreenCanvasBackgroundDark = settingsManager.mainScreenCanvasBackgroundDarkFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+        )
+
+    val mainScreenCornerButtonBackgroundLight = settingsManager.mainScreenCornerButtonBackgroundLightFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
+        )
+
+    val mainScreenCornerButtonBackgroundDark = settingsManager.mainScreenCornerButtonBackgroundDarkFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+        )
+
+    val mainScreenCornerButtonIconLight = settingsManager.mainScreenCornerButtonIconLightFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+        )
+
+    val mainScreenCornerButtonIconDark = settingsManager.mainScreenCornerButtonIconDarkFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_WIDGET_TEXT_COLOR_DARK
         )
 
     val isMainScreenOpenOnBootEnabled = settingsManager.mainScreenOpenOnBootFlow
@@ -952,6 +1003,48 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMainScreenCornerButtonSizeDp(sizeDp: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonSizeDp(sizeDp)
+        }
+    }
+
+    fun saveMainScreenCornerButtonBackgroundLight(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonBackgroundLight(color)
+        }
+    }
+
+    fun saveMainScreenCornerButtonBackgroundDark(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonBackgroundDark(color)
+        }
+    }
+
+    fun saveMainScreenCornerButtonIconLight(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonIconLight(color)
+        }
+    }
+
+    fun saveMainScreenCornerButtonIconDark(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCornerButtonIconDark(color)
+        }
+    }
+
+    fun saveMainScreenCanvasBackgroundLight(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCanvasBackgroundLight(color)
+        }
+    }
+
+    fun saveMainScreenCanvasBackgroundDark(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCanvasBackgroundDark(color)
+        }
+    }
+
     fun setMainScreenWallpaperLight(sourceUri: Uri?) {
         viewModelScope.launch {
             settingsManager.setMainScreenWallpaperLight(sourceUri)
@@ -971,6 +1064,33 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             settingsManager.saveMainScreenWallpaperCrop(crop)
         }
     }
+
+    val launcherAppIconRevision = settingsManager.launcherAppIconRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
+    fun setCustomLauncherAppIconFromUri(
+        packageName: String,
+        sourceUri: Uri?,
+        onResult: (SetLauncherAppCustomIconResult) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val r = settingsManager.setCustomLauncherAppIconFromUri(packageName, sourceUri)
+            onResult(r)
+        }
+    }
+
+    fun clearCustomLauncherAppIcon(packageName: String) {
+        viewModelScope.launch {
+            settingsManager.clearCustomLauncherAppIcon(packageName)
+        }
+    }
+
+    suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
+        settingsManager.hasCustomLauncherAppIcon(packageName)
 
     fun saveMainScreenDashboardWidgets(
         panelId: String,
