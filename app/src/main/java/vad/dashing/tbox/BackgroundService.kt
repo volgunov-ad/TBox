@@ -467,9 +467,6 @@ class BackgroundService : Service() {
                             splitTripTimeMinutesSetting.value.toLong() * 60_000L
                         resetTripStateForNewServiceSession(splitWindowMs)
                         applyTripResumeIfLastTripContinues(splitWindowMs)
-                        if (startFromBoot) {
-                            maybeOpenMainScreenAfterBootSuspend()
-                        }
                         if (!isRunning) return@launch
                         connectTboxClient()
                         startSettingsListener()
@@ -478,6 +475,9 @@ class BackgroundService : Service() {
                         startCheckConnection()
                         startPeriodicJob()
                         startDataListener()
+                        if (startFromBoot) {
+                            maybeOpenMainScreenAfterBootSuspend()
+                        }
                         TripRepository.setTripsProcessingEnabled(true)
                         servicePhase = ServiceLifecyclePhase.Running
                     } catch (e: CancellationException) {
@@ -3303,16 +3303,15 @@ class BackgroundService : Service() {
     }
 
     /**
-     * After boot-time service start: once trips and settings snapshot are ready, optionally bring
-     * [MainActivity] to the foreground on the home main screen (tab 100). Runs before TBox connect
-     * so the UI can appear earlier.
+     * After boot-time service start: once the data listener is running, optionally bring
+     * [MainActivity] to the foreground on the home main screen (tab 100) after a short delay.
      */
     private suspend fun maybeOpenMainScreenAfterBootSuspend() {
         try {
             val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
             if (!enabled) return
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
-            scheduleOpenMainActivity(0L)
+            scheduleOpenMainActivity(2000L)
         } catch (e: Exception) {
             Log.e("BackgroundService", "Open main screen after boot failed", e)
             TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")

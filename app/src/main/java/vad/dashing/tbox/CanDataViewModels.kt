@@ -172,7 +172,7 @@ class CanDataViewModel : ViewModel() {
             initialValue = null
         )
 
-    val throttlePosition: StateFlow<Float?> = CanDataRepository.throttlePosition
+    val param5: StateFlow<Float?> = CanDataRepository.param5
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

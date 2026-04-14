@@ -2,18 +2,25 @@ package vad.dashing.tbox.ui
 
 import android.content.Intent
 import android.content.pm.ResolveInfo
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,7 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import android.content.Context
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SetLauncherAppCustomIconResult
+import vad.dashing.tbox.SettingsViewModel
 
 internal data class LaunchableAppEntry(
     val packageName: String,
@@ -46,15 +56,24 @@ internal data class LaunchableAppEntry(
  */
 private object LaunchableAppsWithIconsCache {
     private var cachedIconSizePx: Int? = null
+    private var cachedIconRevision: Int? = null
     private var entries: List<LaunchableAppEntry>? = null
 
-    fun getOrLoad(iconSizePx: Int, load: () -> List<LaunchableAppEntry>): List<LaunchableAppEntry> {
+    fun getOrLoad(
+        iconSizePx: Int,
+        iconRevision: Int,
+        load: () -> List<LaunchableAppEntry>,
+    ): List<LaunchableAppEntry> {
         synchronized(this) {
-            if (cachedIconSizePx == iconSizePx && entries != null) {
+            if (cachedIconSizePx == iconSizePx &&
+                cachedIconRevision == iconRevision &&
+                entries != null
+            ) {
                 return entries!!
             }
             val list = load()
             cachedIconSizePx = iconSizePx
+            cachedIconRevision = iconRevision
             entries = list
             return list
         }
@@ -63,6 +82,7 @@ private object LaunchableAppsWithIconsCache {
     fun clear() {
         synchronized(this) {
             cachedIconSizePx = null
+            cachedIconRevision = null
             entries = null
         }
     }
@@ -73,7 +93,11 @@ internal fun disposeAppLauncherPickerIconCache() {
     LaunchableAppsWithIconsCache.clear()
 }
 
-private fun loadLaunchableAppEntries(appContext: Context, iconSizePx: Int): List<LaunchableAppEntry> {
+private fun loadLaunchableAppEntries(
+    appContext: Context,
+    iconSizePx: Int,
+    @Suppress("UNUSED_PARAMETER") iconRevision: Int,
+): List<LaunchableAppEntry> {
     val pm = appContext.packageManager
     val intent = Intent(Intent.ACTION_MAIN).apply {
         addCategory(Intent.CATEGORY_LAUNCHER)
@@ -84,9 +108,10 @@ private fun loadLaunchableAppEntries(appContext: Context, iconSizePx: Int): List
         .map { ri ->
             val pkg = ri.activityInfo.packageName
             val label = ri.loadLabel(pm).toString()
-            val bitmap = runCatching {
-                ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
-            }.getOrNull()
+            val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx)
+                ?: runCatching {
+                    ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
+                }.getOrNull()
             LaunchableAppEntry(packageName = pkg, label = label, icon = bitmap)
         }
         .distinctBy { it.packageName }
@@ -94,15 +119,15 @@ private fun loadLaunchableAppEntries(appContext: Context, iconSizePx: Int): List
 }
 
 @Composable
-internal fun rememberLaunchableAppEntries(): List<LaunchableAppEntry> {
+internal fun rememberLaunchableAppEntries(launcherIconRevision: Int = 0): List<LaunchableAppEntry> {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val iconSizePx = remember(appContext) {
         (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
     }
-    return remember(appContext, iconSizePx) {
-        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx) {
-            loadLaunchableAppEntries(appContext, iconSizePx)
+    return remember(appContext, iconSizePx, launcherIconRevision) {
+        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx, launcherIconRevision) {
+            loadLaunchableAppEntries(appContext, iconSizePx, launcherIconRevision)
         }
     }
 }
@@ -114,10 +139,13 @@ internal fun rememberLaunchableAppEntries(): List<LaunchableAppEntry> {
 @Composable
 internal fun AppLauncherWidgetSettingsSection(
     state: WidgetSelectionDialogState,
+    settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier
 ) {
     if (!state.isAppLauncherWidgetSelected) return
-    val apps = rememberLaunchableAppEntries()
+    val context = LocalContext.current
+    val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val apps = rememberLaunchableAppEntries(iconRevision)
     val selectedLabel = apps.find { it.packageName == state.launcherAppPackage }?.label
     var filterText by rememberSaveable { mutableStateOf("") }
     val needle = filterText.trim().lowercase()
@@ -128,6 +156,38 @@ internal fun AppLauncherWidgetSettingsSection(
             apps.filter {
                 it.label.lowercase().contains(needle) ||
                     it.packageName.lowercase().contains(needle)
+            }
+        }
+    }
+    var selectedHasCustomIcon by remember { mutableStateOf(false) }
+    LaunchedEffect(state.launcherAppPackage, iconRevision) {
+        selectedHasCustomIcon = if (state.launcherAppPackage.isNotBlank()) {
+            settingsViewModel.hasCustomLauncherAppIcon(state.launcherAppPackage)
+        } else {
+            false
+        }
+    }
+    var pendingIconPackage by remember { mutableStateOf<String?>(null) }
+    val pickCustomIcon = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val pkg = pendingIconPackage ?: return@rememberLauncherForActivityResult
+        pendingIconPackage = null
+        if (uri == null) return@rememberLauncherForActivityResult
+        settingsViewModel.setCustomLauncherAppIconFromUri(pkg, uri) { result ->
+            val msg = when (result) {
+                SetLauncherAppCustomIconResult.Success ->
+                    context.getString(R.string.widget_app_launcher_icon_saved)
+                SetLauncherAppCustomIconResult.DimensionsTooLarge ->
+                    context.getString(R.string.widget_app_launcher_icon_too_large)
+                SetLauncherAppCustomIconResult.NotImageOrUnreadable ->
+                    context.getString(R.string.widget_app_launcher_icon_invalid)
+                SetLauncherAppCustomIconResult.CopyFailed ->
+                    context.getString(R.string.widget_app_launcher_icon_copy_failed)
+                SetLauncherAppCustomIconResult.InvalidPackage -> null
+            }
+            if (msg != null) {
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -164,6 +224,7 @@ internal fun AppLauncherWidgetSettingsSection(
             enabled = state.togglesEnabled
         )
         filtered.forEach { app ->
+            val isSelected = state.launcherAppPackage == app.packageName
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -174,7 +235,7 @@ internal fun AppLauncherWidgetSettingsSection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RadioButton(
-                    selected = state.launcherAppPackage == app.packageName,
+                    selected = isSelected,
                     onClick = { state.launcherAppPackage = app.packageName },
                     enabled = state.togglesEnabled
                 )
@@ -197,16 +258,56 @@ internal fun AppLauncherWidgetSettingsSection(
                             .size(40.dp)
                     )
                 }
-                Text(
-                    text = app.label,
-                    fontSize = 20.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
+                Row(
                     modifier = Modifier
                         .padding(start = 8.dp)
-                        .weight(1f)
-                )
+                        .weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = app.label,
+                        fontSize = 20.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (isSelected) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    pendingIconPackage = app.packageName
+                                    pickCustomIcon.launch("image/*")
+                                },
+                                enabled = state.togglesEnabled,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.widget_app_launcher_change_icon),
+                                    fontSize = 18.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    settingsViewModel.clearCustomLauncherAppIcon(app.packageName)
+                                },
+                                enabled = state.togglesEnabled && selectedHasCustomIcon
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.widget_app_launcher_remove_icon),
+                                    fontSize = 18.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         if (state.launcherAppPackage.isBlank()) {

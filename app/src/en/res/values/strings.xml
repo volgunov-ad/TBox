@@ -222,6 +222,19 @@
     <string name="settings_main_screen_wallpaper_pick">Choose image</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Background scale: Crop (fill screen)</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">On — fill the screen, excess image cropped (ContentScale.Crop). Off — show full image, theme-colored bars if needed (ContentScale.Fit).</string>
+    <string name="settings_main_screen_canvas_bg_title">Main screen background (under panels)</string>
+    <string name="settings_main_screen_canvas_bg_desc">Color behind widget panels and under wallpaper letterboxing. Separate for light and dark app theme.</string>
+    <string name="settings_main_screen_canvas_bg_light">Background color (light theme)</string>
+    <string name="settings_main_screen_canvas_bg_dark">Background color (dark theme)</string>
+    <string name="settings_main_screen_canvas_bg_reset">Reset main screen background colors</string>
+    <string name="settings_main_screen_corner_buttons_title">Settings and Add widget buttons</string>
+    <string name="settings_main_screen_corner_buttons_size">Button size: %1$d</string>
+    <string name="settings_main_screen_corner_buttons_size_hint">Main-screen button diameter in dp (10…100; default 32).</string>
+    <string name="settings_main_screen_corner_buttons_bg_light">Background color (light theme)</string>
+    <string name="settings_main_screen_corner_buttons_bg_dark">Background color (dark theme)</string>
+    <string name="settings_main_screen_corner_buttons_icon_light">Icon color (light theme)</string>
+    <string name="settings_main_screen_corner_buttons_icon_dark">Icon color (dark theme)</string>
+    <string name="settings_main_screen_corner_buttons_reset">Reset size and colors</string>
     <string name="settings_main_screen_panels_title">Main screen panels</string>
     <string name="settings_main_screen_panel_rows_title">Number of tile rows on main screen panel</string>
     <string name="settings_main_screen_panel_cols_title">Number of tile columns on main screen panel</string>
@@ -248,7 +261,7 @@
 
     <string name="settings_misc_title">Misc</string>
     <string name="settings_backup_title">Backup</string>
-    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper image files on the device are not included—re-pick wallpapers after import if needed.</string>
+    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper image files and custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>
     <string name="settings_backup_export_without_trips">Export JSON without trips</string>
     <string name="settings_backup_import">Import JSON</string>
@@ -343,6 +356,7 @@
     <string name="data_title_param_2">Parameter 2</string>
     <string name="data_title_param_3">Parameter 3</string>
     <string name="data_title_param_4">Parameter 4</string>
+    <string name="data_title_param_5">Parameter 5</string>
     <string name="data_title_wheel_speed_1">Wheel speed 1</string>
     <string name="data_title_wheel_speed_2">Wheel speed 2</string>
     <string name="data_title_wheel_speed_3">Wheel speed 3</string>
@@ -371,7 +385,6 @@
     <string name="data_title_steer_angle">Steering wheel angle</string>
     <string name="data_title_steer_speed">Steering wheel speed</string>
     <string name="data_title_engine_rpm">Engine RPM</string>
-    <string name="data_title_throttle_position">Parameter 5</string>
     <string name="data_title_car_speed">Vehicle speed</string>
     <string name="data_title_car_speed_accurate">Precise vehicle speed</string>
     <string name="data_title_cruise_set_speed">Cruise control set speed</string>
@@ -466,6 +479,12 @@
     <string name="widget_app_launcher_pick_title">Choose app</string>
     <string name="widget_app_launcher_search">Search</string>
     <string name="widget_app_launcher_no_icon">?</string>
+    <string name="widget_app_launcher_change_icon">Change icon</string>
+    <string name="widget_app_launcher_remove_icon">Remove icon</string>
+    <string name="widget_app_launcher_icon_saved">Icon saved</string>
+    <string name="widget_app_launcher_icon_too_large">Image is too large for an icon (max 512×512 px)</string>
+    <string name="widget_app_launcher_icon_invalid">Could not read the image</string>
+    <string name="widget_app_launcher_icon_copy_failed">Could not save the image</string>
 
     <string name="cycle_voltage">Cycle voltage, V</string>
     <string name="cycle_speed">Cycle speed, km/h</string>

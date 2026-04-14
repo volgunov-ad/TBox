@@ -27,6 +27,7 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -40,6 +41,7 @@ internal fun DashboardPanelGridAndFrames(
     dashboardCols: Int,
     dashboardState: DashboardState,
     widgetConfigs: List<FloatingDashboardWidgetConfig>,
+    settingsViewModel: SettingsViewModel,
     tboxViewModel: TboxViewModel,
     canViewModel: CanDataViewModel,
     appDataViewModel: AppDataViewModel,
@@ -121,6 +123,7 @@ internal fun DashboardPanelGridAndFrames(
                                 DashboardWidgetRenderer(
                                     widget = widget,
                                     widgetConfig = widgetConfig,
+                                    settingsViewModel = settingsViewModel,
                                     tboxViewModel = tboxViewModel,
                                     canViewModel = canViewModel,
                                     appDataViewModel = appDataViewModel,

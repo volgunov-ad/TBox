@@ -225,7 +225,7 @@ internal fun ExternalAppWidgetPickerSection(
 }
 
 @Composable
-private fun WidgetColorThemeSegmentRow(
+internal fun WidgetColorThemeSegmentRow(
     selectedSegment: Int,
     onSegmentSelected: (Int) -> Unit,
     enabled: Boolean,
@@ -416,6 +416,7 @@ private fun FloatingDashboardWholeSettingsSection(
 @Composable
 internal fun WidgetSelectionDialogForm(
     titleText: String,
+    settingsViewModel: SettingsViewModel,
     state: WidgetSelectionDialogState,
     modifier: Modifier = Modifier,
     dataKeyFilter: (String) -> Boolean = { true },
@@ -477,9 +478,10 @@ internal fun WidgetSelectionDialogForm(
                 ) {
                     if (state.isMusicWidgetSelected) {
                         MediaPlayersInlineSelection(
+                            settingsViewModel = settingsViewModel,
                             selectedPlayers = state.selectedMediaPlayers,
                             onSelectionChange = { state.selectedMediaPlayers = it },
-                            enabled = state.togglesEnabled
+                            enabled = state.togglesEnabled,
                         )
                         if (state.selectedMediaPlayers.isEmpty()) {
                             Text(
@@ -510,6 +512,7 @@ internal fun WidgetSelectionDialogForm(
                     }
                     AppLauncherWidgetSettingsSection(
                         state = state,
+                        settingsViewModel = settingsViewModel,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
                     SettingSwitch(
