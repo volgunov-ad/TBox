@@ -27,8 +27,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
-import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.R
@@ -79,7 +77,12 @@ fun MainScreenSettingsTab(
         settingsViewModel.mainScreenCornerButtonIconLight.collectAsStateWithLifecycle()
     val mainScreenCornerBtnIconDark by
         settingsViewModel.mainScreenCornerButtonIconDark.collectAsStateWithLifecycle()
+    val mainScreenCanvasBgLight by
+        settingsViewModel.mainScreenCanvasBackgroundLight.collectAsStateWithLifecycle()
+    val mainScreenCanvasBgDark by
+        settingsViewModel.mainScreenCanvasBackgroundDark.collectAsStateWithLifecycle()
     var cornerColorSegment by remember { mutableIntStateOf(0) }
+    var mainScreenBgSegment by remember { mutableIntStateOf(0) }
 
     val pickWallpaperLight = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -174,6 +177,52 @@ fun MainScreenSettingsTab(
             stringResource(R.string.settings_main_screen_wallpaper_scale_crop_desc),
             true
         )
+        SettingsTitle(stringResource(R.string.settings_main_screen_canvas_bg_title))
+        Text(
+            text = stringResource(R.string.settings_main_screen_canvas_bg_desc),
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        WidgetColorThemeSegmentRow(
+            selectedSegment = mainScreenBgSegment,
+            onSegmentSelected = { mainScreenBgSegment = it },
+            enabled = true
+        )
+        if (mainScreenBgSegment == 0) {
+            WidgetTextColorSetting(
+                title = stringResource(R.string.settings_main_screen_canvas_bg_light),
+                colorValue = mainScreenCanvasBgLight,
+                enabled = true,
+                onColorChange = { settingsViewModel.saveMainScreenCanvasBackgroundLight(it) },
+                presetColors = listOf(
+                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT,
+                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT
+                )
+            )
+        } else {
+            WidgetTextColorSetting(
+                title = stringResource(R.string.settings_main_screen_canvas_bg_dark),
+                colorValue = mainScreenCanvasBgDark,
+                enabled = true,
+                onColorChange = { settingsViewModel.saveMainScreenCanvasBackgroundDark(it) },
+                presetColors = listOf(
+                    DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT,
+                    DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
+                )
+            )
+        }
+        OutlinedButton(
+            onClick = {
+                settingsViewModel.saveMainScreenCanvasBackgroundLight(LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT)
+                settingsViewModel.saveMainScreenCanvasBackgroundDark(DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            Text(stringResource(R.string.settings_main_screen_canvas_bg_reset), fontSize = 20.sp)
+        }
         SettingsTitle(stringResource(R.string.settings_main_screen_corner_buttons_title))
         Text(
             text = stringResource(R.string.settings_main_screen_corner_buttons_size, mainScreenCornerButtonSizeDp),
@@ -190,10 +239,10 @@ fun MainScreenSettingsTab(
         Slider(
             value = mainScreenCornerButtonSizeDp.toFloat(),
             onValueChange = { v ->
-                settingsViewModel.saveMainScreenCornerButtonSizeDp(v.roundToInt().coerceIn(1, 100))
+                settingsViewModel.saveMainScreenCornerButtonSizeDp(v.roundToInt().coerceIn(10, 100))
             },
-            valueRange = 1f..100f,
-            steps = 98,
+            valueRange = 10f..100f,
+            steps = 89,
             modifier = Modifier.padding(bottom = 12.dp)
         )
         WidgetColorThemeSegmentRow(
@@ -208,8 +257,8 @@ fun MainScreenSettingsTab(
                 enabled = true,
                 onColorChange = { settingsViewModel.saveMainScreenCornerButtonBackgroundLight(it) },
                 presetColors = listOf(
-                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT,
-                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+                    0x00000000,
+                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT
                 )
             )
             WidgetTextColorSetting(
@@ -229,8 +278,8 @@ fun MainScreenSettingsTab(
                 enabled = true,
                 onColorChange = { settingsViewModel.saveMainScreenCornerButtonBackgroundDark(it) },
                 presetColors = listOf(
-                    DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT,
-                    DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+                    0x00000000,
+                    DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
                 )
             )
             WidgetTextColorSetting(
@@ -253,12 +302,8 @@ fun MainScreenSettingsTab(
             OutlinedButton(
                 onClick = {
                     settingsViewModel.saveMainScreenCornerButtonSizeDp(32)
-                    settingsViewModel.saveMainScreenCornerButtonBackgroundLight(
-                        DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
-                    )
-                    settingsViewModel.saveMainScreenCornerButtonBackgroundDark(
-                        DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
-                    )
+                    settingsViewModel.saveMainScreenCornerButtonBackgroundLight(0x00000000)
+                    settingsViewModel.saveMainScreenCornerButtonBackgroundDark(0x00000000)
                     settingsViewModel.saveMainScreenCornerButtonIconLight(
                         DEFAULT_WIDGET_TEXT_COLOR_LIGHT
                     )

@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.Boolean
+import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -455,6 +457,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = 32
+        )
+
+    val mainScreenCanvasBackgroundLight = settingsManager.mainScreenCanvasBackgroundLightFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+        )
+
+    val mainScreenCanvasBackgroundDark = settingsManager.mainScreenCanvasBackgroundDarkFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
         )
 
     val mainScreenCornerButtonBackgroundLight = settingsManager.mainScreenCornerButtonBackgroundLightFlow
@@ -1014,6 +1030,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenCornerButtonIconDark(color: Int) {
         viewModelScope.launch {
             settingsManager.saveMainScreenCornerButtonIconDark(color)
+        }
+    }
+
+    fun saveMainScreenCanvasBackgroundLight(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCanvasBackgroundLight(color)
+        }
+    }
+
+    fun saveMainScreenCanvasBackgroundDark(color: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCanvasBackgroundDark(color)
         }
     }
 

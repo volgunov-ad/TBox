@@ -222,9 +222,14 @@
     <string name="settings_main_screen_wallpaper_pick">Choose image</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Background scale: Crop (fill screen)</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">On — fill the screen, excess image cropped (ContentScale.Crop). Off — show full image, theme-colored bars if needed (ContentScale.Fit).</string>
+    <string name="settings_main_screen_canvas_bg_title">Main screen background (under panels)</string>
+    <string name="settings_main_screen_canvas_bg_desc">Color behind widget panels and under wallpaper letterboxing. Separate for light and dark app theme.</string>
+    <string name="settings_main_screen_canvas_bg_light">Background color (light theme)</string>
+    <string name="settings_main_screen_canvas_bg_dark">Background color (dark theme)</string>
+    <string name="settings_main_screen_canvas_bg_reset">Reset main screen background colors</string>
     <string name="settings_main_screen_corner_buttons_title">Settings and Add widget buttons</string>
     <string name="settings_main_screen_corner_buttons_size">Button size: %1$d</string>
-    <string name="settings_main_screen_corner_buttons_size_hint">Diameter of the circular main-screen buttons in dp (1…100; default 32).</string>
+    <string name="settings_main_screen_corner_buttons_size_hint">Main-screen button diameter in dp (10…100; default 32).</string>
     <string name="settings_main_screen_corner_buttons_bg_light">Background color (light theme)</string>
     <string name="settings_main_screen_corner_buttons_bg_dark">Background color (dark theme)</string>
     <string name="settings_main_screen_corner_buttons_icon_light">Icon color (light theme)</string>

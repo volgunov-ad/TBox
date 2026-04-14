@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
@@ -205,6 +207,10 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_icon_light")
         private val MAIN_SCREEN_CORNER_BTN_ICON_DARK_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_corner_btn_icon_dark")
+        private val MAIN_SCREEN_CANVAS_BG_LIGHT_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_canvas_bg_light")
+        private val MAIN_SCREEN_CANVAS_BG_DARK_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_canvas_bg_dark")
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
@@ -256,15 +262,19 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
         private const val DEFAULT_FUEL_TANK_LITERS = 57
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
+        private const val MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 10
         private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 32
-        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_LIGHT =
-            DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN
-        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_DARK =
-            DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+        /** Fully transparent — only the icon is visible over the main-screen canvas. */
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_LIGHT = 0x00000000
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_DARK = 0x00000000
         private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_LIGHT =
             DEFAULT_WIDGET_TEXT_COLOR_LIGHT
         private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK =
             DEFAULT_WIDGET_TEXT_COLOR_DARK
+
+        /** Default main-screen canvas behind panels (matches app theme background). */
+        private val DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+        private val DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
@@ -415,7 +425,7 @@ class SettingsManager(private val context: Context) {
             preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY]
                 ?: DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP
         }
-        .map { it.coerceIn(1, 100) }
+        .map { it.coerceIn(MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP, 100) }
         .distinctUntilChanged()
 
     val mainScreenCornerButtonBackgroundLightFlow: Flow<Int> = context.settingsDataStore.data
@@ -443,6 +453,18 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             preferences[MAIN_SCREEN_CORNER_BTN_ICON_DARK_KEY]
                 ?: DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCanvasBackgroundLightFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CANVAS_BG_LIGHT_KEY] ?: DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCanvasBackgroundDarkFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_CANVAS_BG_DARK_KEY] ?: DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK
         }
         .distinctUntilChanged()
 
@@ -672,7 +694,8 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveMainScreenCornerButtonSizeDp(sizeDp: Int) {
         context.settingsDataStore.edit { preferences ->
-            preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY] = sizeDp.coerceIn(1, 100)
+            preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY] =
+                sizeDp.coerceIn(MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP, 100)
         }
     }
 
@@ -697,6 +720,18 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMainScreenCornerButtonIconDark(color: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_CORNER_BTN_ICON_DARK_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCanvasBackgroundLight(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CANVAS_BG_LIGHT_KEY] = color
+        }
+    }
+
+    suspend fun saveMainScreenCanvasBackgroundDark(color: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CANVAS_BG_DARK_KEY] = color
         }
     }
 

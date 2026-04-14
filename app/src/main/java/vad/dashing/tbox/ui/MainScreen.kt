@@ -14,7 +14,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -223,6 +222,9 @@ private fun MainScreenWallpaperBackground(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val canvasBgLight by settingsViewModel.mainScreenCanvasBackgroundLight.collectAsStateWithLifecycle()
+    val canvasBgDark by settingsViewModel.mainScreenCanvasBackgroundDark.collectAsStateWithLifecycle()
+    val canvasColor = Color(if (theme == 2) canvasBgDark else canvasBgLight)
     val hasLight by settingsViewModel.isMainScreenWallpaperLightSet.collectAsStateWithLifecycle()
     val hasDark by settingsViewModel.isMainScreenWallpaperDarkSet.collectAsStateWithLifecycle()
     val epoch by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
@@ -246,7 +248,7 @@ private fun MainScreenWallpaperBackground(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(canvasColor)
         )
         if (bitmap != null) {
             Image(
@@ -300,8 +302,13 @@ private fun MainScreenDraggableCornerButton(
                     IntOffset(offsetPx.x.roundToInt(), offsetPx.y.roundToInt())
                 }
                 .size(iconSize)
-                .clip(CircleShape)
-                .background(backgroundColor)
+                .then(
+                    if (backgroundColor.alpha > 0) {
+                        Modifier.clip(CircleShape).background(backgroundColor)
+                    } else {
+                        Modifier
+                    }
+                )
                 .clickable(onClick = onClick)
                 .pointerInput(maxW, maxH, btnPx) {
                     detectDragGesturesAfterLongPress(
