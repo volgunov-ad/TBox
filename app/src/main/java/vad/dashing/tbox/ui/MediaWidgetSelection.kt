@@ -182,10 +182,12 @@ fun MediaPlayersInlineSelection(
                         .padding(start = 4.dp)
                         .size(40.dp)
                 )
-                Column(
+                Row(
                     modifier = Modifier
                         .padding(start = 8.dp)
-                        .weight(1f)
+                        .weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = stringResource(player.titleRes),
@@ -193,11 +195,12 @@ fun MediaPlayersInlineSelection(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
                     )
                     if (isChecked) {
                         Row(
-                            modifier = Modifier.padding(top = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedButton(
                                 onClick = {
@@ -209,7 +212,7 @@ fun MediaPlayersInlineSelection(
                                 Text(
                                     stringResource(R.string.widget_app_launcher_change_icon),
                                     fontSize = 14.sp,
-                                    maxLines = 2,
+                                    maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
@@ -273,10 +276,12 @@ fun MediaPlayersInlineSelection(
                             .size(40.dp)
                     )
                 }
-                Column(
+                Row(
                     modifier = Modifier
                         .padding(start = 8.dp)
-                        .weight(1f)
+                        .weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = app.label,
@@ -284,11 +289,12 @@ fun MediaPlayersInlineSelection(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
                     )
                     if (isChecked) {
                         Row(
-                            modifier = Modifier.padding(top = 6.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedButton(
                                 onClick = {
@@ -300,7 +306,7 @@ fun MediaPlayersInlineSelection(
                                 Text(
                                     stringResource(R.string.widget_app_launcher_change_icon),
                                     fontSize = 14.sp,
-                                    maxLines = 2,
+                                    maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }

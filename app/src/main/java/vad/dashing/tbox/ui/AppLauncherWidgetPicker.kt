@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -257,48 +258,53 @@ internal fun AppLauncherWidgetSettingsSection(
                             .size(40.dp)
                     )
                 }
-                Text(
-                    text = app.label,
-                    fontSize = 20.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
+                Row(
                     modifier = Modifier
                         .padding(start = 8.dp)
-                        .weight(1f)
-                )
-                if (isSelected) {
-                    Column(
-                        modifier = Modifier.padding(start = 6.dp),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                pendingIconPackage = app.packageName
-                                pickCustomIcon.launch("image/*")
-                            },
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                        .weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = app.label,
+                        fontSize = 20.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (isSelected) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = stringResource(R.string.widget_app_launcher_change_icon),
-                                fontSize = 16.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                settingsViewModel.clearCustomLauncherAppIcon(app.packageName)
-                            },
-                            enabled = state.togglesEnabled && selectedHasCustomIcon
-                        ) {
-                            Text(
-                                text = stringResource(R.string.widget_app_launcher_remove_icon),
-                                fontSize = 16.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            OutlinedButton(
+                                onClick = {
+                                    pendingIconPackage = app.packageName
+                                    pickCustomIcon.launch("image/*")
+                                },
+                                enabled = state.togglesEnabled,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.widget_app_launcher_change_icon),
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    settingsViewModel.clearCustomLauncherAppIcon(app.packageName)
+                                },
+                                enabled = state.togglesEnabled && selectedHasCustomIcon
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.widget_app_launcher_remove_icon),
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
