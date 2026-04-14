@@ -211,7 +211,7 @@ fun MediaPlayersInlineSelection(
                             ) {
                                 Text(
                                     stringResource(R.string.widget_app_launcher_change_icon),
-                                    fontSize = 14.sp,
+                                    fontSize = 18.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -305,7 +305,7 @@ fun MediaPlayersInlineSelection(
                             ) {
                                 Text(
                                     stringResource(R.string.widget_app_launcher_change_icon),
-                                    fontSize = 14.sp,
+                                    fontSize = 18.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -340,7 +340,7 @@ private fun MusicPlayerIconDeleteButton(
     ) {
         Text(
             stringResource(R.string.widget_app_launcher_remove_icon),
-            fontSize = 14.sp,
+            fontSize = 18.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )

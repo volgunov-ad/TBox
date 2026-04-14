@@ -287,7 +287,7 @@ internal fun AppLauncherWidgetSettingsSection(
                             ) {
                                 Text(
                                     text = stringResource(R.string.widget_app_launcher_change_icon),
-                                    fontSize = 14.sp,
+                                    fontSize = 18.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -300,7 +300,7 @@ internal fun AppLauncherWidgetSettingsSection(
                             ) {
                                 Text(
                                     text = stringResource(R.string.widget_app_launcher_remove_icon),
-                                    fontSize = 14.sp,
+                                    fontSize = 18.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
