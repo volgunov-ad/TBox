@@ -179,13 +179,6 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     StatusRow(
-                        label = stringResource(R.string.trips_parking_time),
-                        value = formatTripDurationHuman(context, t.parkingTimeMs),
-                        unit = "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
                         label = stringResource(R.string.trips_total_time),
                         value = formatTripDurationHuman(
                             context,
