@@ -2,8 +2,6 @@ package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
-import android.content.Intent
-import android.util.Log
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,12 +36,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
-
-private const val EXTERNAL_WIDGET_ITEM_TAG = "ExternalAppWidgetItem"
 
 private suspend fun awaitAppWidgetInfo(
     appWidgetManager: AppWidgetManager,
@@ -57,24 +54,6 @@ private suspend fun awaitAppWidgetInfo(
         if (info != null) return info
     }
     return null
-}
-
-private fun requestAppWidgetRefresh(
-    context: android.content.Context,
-    appWidgetId: Int,
-    appWidgetManager: AppWidgetManager
-) {
-    val provider = appWidgetManager.getAppWidgetInfo(appWidgetId)?.provider ?: return
-    try {
-        context.sendBroadcast(
-            Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
-                component = provider
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
-            }
-        )
-    } catch (e: Exception) {
-        Log.w(EXTERNAL_WIDGET_ITEM_TAG, "Failed to request provider refresh for widget $appWidgetId", e)
-    }
 }
 
 @Composable
@@ -115,7 +94,10 @@ fun ExternalAppWidgetItem(
             appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID &&
             appWidgetInfo != null
         ) {
-            requestAppWidgetRefresh(context, appWidgetId, appWidgetManager)
+            ExternalWidgetHostManager.requestProviderRefreshOnce(
+                context = context,
+                appWidgetId = appWidgetId
+            )
         }
     }
     val density = LocalDensity.current
