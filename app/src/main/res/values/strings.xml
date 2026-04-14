@@ -426,6 +426,7 @@
     <string name="trips_distance">Пробег</string>
     <string name="trips_moving_time">Время в движении</string>
     <string name="trips_idle_time">Время в простое</string>
+    <string name="trips_parking_time">Время парковки</string>
     <string name="trips_total_time">Общее время</string>
     <string name="trips_format_hours_minutes_seconds">%1$d ч %2$d мин %3$d с</string>
     <string name="trips_format_minutes_seconds">%1$d мин %2$d с</string>

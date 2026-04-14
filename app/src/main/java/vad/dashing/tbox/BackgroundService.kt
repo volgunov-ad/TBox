@@ -170,7 +170,7 @@ class BackgroundService : Service() {
      * the previous end time and rolls back the resume-only idle delta to avoid double-counting on next boot.
      */
     private var tripColdResumeReopenedEndedTrip: ColdResumeReopenedEndedTrip? = null
-    /** True when cold resume reopened an ended trip, but parked idle should be applied only at first RPM>0. */
+    /** True when cold resume reopened an ended trip, but parked time should be applied only at first RPM>0. */
     private var tripColdResumeApplyParkedIdleOnEngineStart: Boolean = false
 
     private var isLastSMS: Boolean = false
@@ -1012,7 +1012,7 @@ class BackgroundService : Service() {
                     val cold = tripColdResumeReopenedEndedTrip
                     if (cold != null) {
                         TripRepository.updateActiveTrip { cur ->
-                            cur.copy(idleTimeMs = cur.idleTimeMs + cold.parkedMsAddedToIdle)
+                            cur.copy(parkingTimeMs = cur.parkingTimeMs + cold.parkedMsAddedToIdle)
                         }
                     }
                     tripColdResumeApplyParkedIdleOnEngineStart = false
@@ -1067,7 +1067,7 @@ class BackgroundService : Service() {
                 }
             }
 
-            // Engine back on after off: same trip if pause ≤ split window; add off time to idle (cumulative).
+            // Engine back on after off: same trip if pause ≤ split window; add off time to parking (cumulative).
             if (rpm > 0f && tripRpmZeroAtMs != null) {
                 val zeroStart = tripRpmZeroAtMs!!
                 val pauseMs = wallNow - zeroStart
@@ -1078,7 +1078,7 @@ class BackgroundService : Service() {
                         if (trip != null && !trip.isActive) {
                             TripRepository.replaceTrip(trip.copy(endTimeEpochMs = null))
                             TripRepository.updateActiveTrip { cur ->
-                                cur.copy(idleTimeMs = cur.idleTimeMs + pauseMs.coerceAtLeast(0L))
+                                cur.copy(parkingTimeMs = cur.parkingTimeMs + pauseMs.coerceAtLeast(0L))
                             }
                         }
                     }
@@ -1276,7 +1276,7 @@ class BackgroundService : Service() {
     /**
      * If the last stored trip should continue (active or ended within split window), resume it
      * and seed odometer/fuel buffers so [onTripRpmSample] extends the same trip. Parked time before
-     * resume is added to [TripRecord.idleTimeMs] inside [TripRepository.tryResumeLastTripAfterServiceStart].
+     * resume is added to [TripRecord.parkingTimeMs] on first RPM>0 sample.
      * If that reopen was from a finished trip and the HU stops the service before RPM>0, [finalizeTripsOnServiceStop]
      * restores the stored end time and rolls back that idle delta so the next boot counts one continuous off segment.
      */
@@ -1343,12 +1343,13 @@ class BackgroundService : Service() {
             if (active != null && cold != null && active.id == cold.tripId) {
                 val rpmNow = CanDataRepository.engineRPM.value ?: 0f
                 if (rpmNow <= 0f) {
-                    // HU off before engine start after cold resume: keep original trip end and idle
-                    // so the next session can add one parked segment (HU off + sit) without double idle.
+                    // HU off before engine start after cold resume: keep original trip end and times
+                    // so the next session can add one parked segment (HU off + sit) without double count.
                     TripRepository.replaceTrip(
                         active.copy(
                             endTimeEpochMs = cold.previousEndTimeEpochMs,
                             idleTimeMs = cold.previousIdleTimeMs,
+                            parkingTimeMs = cold.previousParkingTimeMs,
                         )
                     )
                 } else {

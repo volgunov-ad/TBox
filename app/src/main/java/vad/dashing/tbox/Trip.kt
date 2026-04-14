@@ -11,6 +11,7 @@ private const val JSON_END = "end"
 private const val JSON_DISTANCE_KM = "distanceKm"
 private const val JSON_MOVING_MS = "movingMs"
 private const val JSON_IDLE_MS = "idleMs"
+private const val JSON_PARKING_MS = "parkingMs"
 private const val JSON_MAX_SPEED = "maxSpeed"
 private const val JSON_MAX_ENGINE_TEMP = "maxEngineTemp"
 private const val JSON_MAX_GEARBOX_TEMP = "maxGearboxTemp"
@@ -33,6 +34,8 @@ data class TripRecord(
     val distanceKm: Float = 0f,
     val movingTimeMs: Long = 0L,
     val idleTimeMs: Long = 0L,
+    /** Time while engine is off (rpm = 0), including HU-off segments within split-window continuation. */
+    val parkingTimeMs: Long = 0L,
     val maxSpeed: Float = 0f,
     val maxEngineTemp: Float? = null,
     val maxGearboxOilTemp: Int? = null,
@@ -62,6 +65,7 @@ data class TripRecord(
         put(JSON_DISTANCE_KM, distanceKm.toDouble())
         put(JSON_MOVING_MS, movingTimeMs)
         put(JSON_IDLE_MS, idleTimeMs)
+        put(JSON_PARKING_MS, parkingTimeMs)
         put(JSON_MAX_SPEED, maxSpeed.toDouble())
         if (maxEngineTemp != null) put(JSON_MAX_ENGINE_TEMP, maxEngineTemp.toDouble())
         if (maxGearboxOilTemp != null) put(JSON_MAX_GEARBOX_TEMP, maxGearboxOilTemp)
@@ -86,6 +90,7 @@ data class TripRecord(
             distanceKm = o.optDouble(JSON_DISTANCE_KM, 0.0).toFloat(),
             movingTimeMs = o.optLong(JSON_MOVING_MS),
             idleTimeMs = o.optLong(JSON_IDLE_MS),
+            parkingTimeMs = o.optLong(JSON_PARKING_MS),
             maxSpeed = o.optDouble(JSON_MAX_SPEED, 0.0).toFloat(),
             maxEngineTemp = if (o.has(JSON_MAX_ENGINE_TEMP) && !o.isNull(JSON_MAX_ENGINE_TEMP)) {
                 o.optDouble(JSON_MAX_ENGINE_TEMP).toFloat()

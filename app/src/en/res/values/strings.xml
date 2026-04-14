@@ -425,7 +425,8 @@
     <string name="trips_odometer_start">Odometer at trip start</string>
     <string name="trips_distance">Distance</string>
     <string name="trips_moving_time">Moving time</string>
-    <string name="trips_idle_time">Idle time</string>
+    <string name="trips_idle_time">Idle time (engine on)</string>
+    <string name="trips_parking_time">Parking time</string>
     <string name="trips_total_time">Total time</string>
     <string name="trips_format_hours_minutes_seconds">%1$d h %2$d min %3$d s</string>
     <string name="trips_format_minutes_seconds">%1$d min %2$d s</string>

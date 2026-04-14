@@ -369,6 +369,12 @@ fun TripsTab(
                 }
                 item {
                     StatusRow(
+                        stringResource(R.string.trips_parking_time),
+                        formatTripDurationHuman(context, trip.parkingTimeMs)
+                    )
+                }
+                item {
+                    StatusRow(
                         stringResource(R.string.trips_total_time),
                         formatTripDurationHuman(
                             context,
@@ -537,6 +543,10 @@ internal fun buildTripExportLines(
             appendStatusLine(
                 context.getString(R.string.trips_idle_time),
                 formatTripDurationHuman(context, trip.idleTimeMs)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_parking_time),
+                formatTripDurationHuman(context, trip.parkingTimeMs)
             )
             appendStatusLine(
                 context.getString(R.string.trips_total_time),

@@ -15,6 +15,7 @@ data class ColdResumeReopenedEndedTrip(
     val tripId: String,
     val previousEndTimeEpochMs: Long,
     val previousIdleTimeMs: Long,
+    val previousParkingTimeMs: Long,
     val parkedMsAddedToIdle: Long,
 )
 
@@ -228,11 +229,12 @@ object TripRepository {
                     tripId = candidate.id,
                     previousEndTimeEpochMs = endedAt,
                     previousIdleTimeMs = candidate.idleTimeMs,
+                    previousParkingTimeMs = candidate.parkingTimeMs,
                     parkedMsAddedToIdle = parkedMs,
                 )
                 candidate.copy(
                     endTimeEpochMs = null,
-                    idleTimeMs = candidate.idleTimeMs,
+                    parkingTimeMs = candidate.parkingTimeMs,
                 )
             }
             _trips.update { cur ->
@@ -264,10 +266,10 @@ object TripRepository {
         return d / (sec / 3600f)
     }
 
+    /** Average speed for trip active engine time: moving + engine-on idle, without parking time. */
     fun averageSpeedTripKmH(t: TripRecord): Float? {
         val d = t.distanceKm
-        val totalMs = (t.endTimeEpochMs ?: System.currentTimeMillis()) - t.startTimeEpochMs
-        val sec = totalMs / 1000f
+        val sec = (t.movingTimeMs + t.idleTimeMs) / 1000f
         if (sec <= 0f || d <= 0f) return null
         return d / (sec / 3600f)
     }
@@ -297,6 +299,7 @@ object TripRepository {
         }
         if (kotlin.math.abs(a.movingTimeMs - b.movingTimeMs) > MS_EPS) return true
         if (kotlin.math.abs(a.idleTimeMs - b.idleTimeMs) > MS_EPS) return true
+        if (kotlin.math.abs(a.parkingTimeMs - b.parkingTimeMs) > MS_EPS) return true
         if (a.maxEngineTemp != b.maxEngineTemp) return true
         if (a.maxGearboxOilTemp != b.maxGearboxOilTemp) return true
         if (a.minOutsideTemp != b.minOutsideTemp) return true
