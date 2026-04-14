@@ -1,6 +1,8 @@
 package vad.dashing.tbox
 
 import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetManager
+import android.content.Intent
 import android.content.Context
 import android.util.Log
 
@@ -18,6 +20,7 @@ object ExternalWidgetHostManager {
     private var host: AppWidgetHost? = null
     private var refCount = 0
     private var listening = false
+    private val providerRefreshRequestedIds = mutableSetOf<Int>()
 
     @Synchronized
     private fun ensureHost(context: Context): AppWidgetHost {
@@ -69,6 +72,39 @@ object ExternalWidgetHostManager {
             ensureHost(context).deleteAppWidgetId(appWidgetId)
         } catch (_: Exception) {
             // Ignore delete errors to avoid crashing config flow.
+        }
+        providerRefreshRequestedIds.remove(appWidgetId)
+    }
+
+    /**
+     * Requests provider update broadcast at most once per appWidgetId lifecycle.
+     * Prevents redundant refresh storms when the same external widget is composed on
+     * multiple screens/panels or repeatedly re-attached after recomposition.
+     */
+    @Synchronized
+    fun requestProviderRefreshOnce(context: Context, appWidgetId: Int) {
+        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
+        if (!providerRefreshRequestedIds.add(appWidgetId)) return
+
+        val appWidgetManager = AppWidgetManager.getInstance(context.applicationContext)
+        val provider = appWidgetManager.getAppWidgetInfo(appWidgetId)?.provider
+        if (provider == null) {
+            // Provider info is not ready yet; allow a later successful retry.
+            providerRefreshRequestedIds.remove(appWidgetId)
+            return
+        }
+
+        try {
+            context.applicationContext.sendBroadcast(
+                Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+                    component = provider
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
+                }
+            )
+        } catch (e: Exception) {
+            // Allow retries if sending failed due to transient state.
+            providerRefreshRequestedIds.remove(appWidgetId)
+            Log.w(TAG, "Could not request provider refresh for appWidgetId=$appWidgetId", e)
         }
     }
 }

@@ -14,8 +14,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,11 +34,27 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
+
+private suspend fun awaitAppWidgetInfo(
+    appWidgetManager: AppWidgetManager,
+    appWidgetId: Int
+): android.appwidget.AppWidgetProviderInfo? {
+    var info = appWidgetManager.getAppWidgetInfo(appWidgetId)
+    if (info != null) return info
+    repeat(20) {
+        delay(150)
+        info = appWidgetManager.getAppWidgetInfo(appWidgetId)
+        if (info != null) return info
+    }
+    return null
+}
 
 @Composable
 fun ExternalAppWidgetItem(
@@ -53,11 +73,31 @@ fun ExternalAppWidgetItem(
     val context = LocalContext.current
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
     val appWidgetId = widgetConfig.appWidgetId ?: AppWidgetManager.INVALID_APPWIDGET_ID
-    val appWidgetInfo = remember(appWidgetId) {
+    var appWidgetInfo by remember(appWidgetId) {
+        mutableStateOf<android.appwidget.AppWidgetProviderInfo?>(
+            if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+                null
+            } else {
+                appWidgetManager.getAppWidgetInfo(appWidgetId)
+            }
+        )
+    }
+    LaunchedEffect(appWidgetId) {
         if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-            null
-        } else {
-            appWidgetManager.getAppWidgetInfo(appWidgetId)
+            appWidgetInfo = null
+            return@LaunchedEffect
+        }
+        appWidgetInfo = awaitAppWidgetInfo(appWidgetManager, appWidgetId)
+    }
+    LaunchedEffect(appWidgetId, appWidgetInfo) {
+        if (
+            appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID &&
+            appWidgetInfo != null
+        ) {
+            ExternalWidgetHostManager.requestProviderRefreshOnce(
+                context = context,
+                appWidgetId = appWidgetId
+            )
         }
     }
     val density = LocalDensity.current
