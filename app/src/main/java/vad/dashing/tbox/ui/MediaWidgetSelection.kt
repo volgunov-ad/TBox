@@ -1,5 +1,9 @@
 package vad.dashing.tbox.ui
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,9 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,7 +35,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SetLauncherAppCustomIconResult
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SupportedMediaPlayer
 import vad.dashing.tbox.canonicalMediaPlayerPackage
 import vad.dashing.tbox.defaultMediaPlayerPackages
@@ -47,13 +56,36 @@ fun normalizeMediaPlayersSelection(rawPackages: Collection<String>): Set<String>
 
 @Composable
 fun MediaPlayersInlineSelection(
+    settingsViewModel: SettingsViewModel,
     selectedPlayers: Set<String>,
     onSelectionChange: (Set<String>) -> Unit,
     enabled: Boolean,
-    launcherAppIconRevision: Int = 0,
 ) {
     val context = LocalContext.current
-    val apps = rememberLaunchableAppEntries(launcherAppIconRevision)
+    val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val apps = rememberLaunchableAppEntries(iconRevision)
+    var pendingIconPackage by remember { mutableStateOf<String?>(null) }
+    val pickCustomIcon = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val pkg = pendingIconPackage ?: return@rememberLauncherForActivityResult
+        pendingIconPackage = null
+        if (uri == null) return@rememberLauncherForActivityResult
+        settingsViewModel.setCustomLauncherAppIconFromUri(pkg, uri) { result ->
+            val msg = when (result) {
+                SetLauncherAppCustomIconResult.Success ->
+                    context.getString(R.string.widget_app_launcher_icon_saved)
+                SetLauncherAppCustomIconResult.DimensionsTooLarge ->
+                    context.getString(R.string.widget_app_launcher_icon_too_large)
+                SetLauncherAppCustomIconResult.NotImageOrUnreadable ->
+                    context.getString(R.string.widget_app_launcher_icon_invalid)
+                SetLauncherAppCustomIconResult.CopyFailed ->
+                    context.getString(R.string.widget_app_launcher_icon_copy_failed)
+                SetLauncherAppCustomIconResult.InvalidPackage -> null
+            }
+            if (msg != null) Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        }
+    }
     val appPackageSet = remember(apps) { apps.mapTo(mutableSetOf()) { it.packageName } }
     val extraSupportedPlayers = remember(appPackageSet) {
         SupportedMediaPlayer.entries.filter { it.packageName !in appPackageSet }
@@ -150,16 +182,45 @@ fun MediaPlayersInlineSelection(
                         .padding(start = 4.dp)
                         .size(40.dp)
                 )
-                Text(
-                    text = stringResource(player.titleRes),
-                    fontSize = 20.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
+                Column(
                     modifier = Modifier
                         .padding(start = 8.dp)
                         .weight(1f)
-                )
+                ) {
+                    Text(
+                        text = stringResource(player.titleRes),
+                        fontSize = 20.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (isChecked) {
+                        Row(
+                            modifier = Modifier.padding(top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    pendingIconPackage = pkg
+                                    pickCustomIcon.launch("image/*")
+                                },
+                                enabled = enabled,
+                            ) {
+                                Text(
+                                    stringResource(R.string.widget_app_launcher_change_icon),
+                                    fontSize = 14.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            MusicPlayerIconDeleteButton(
+                                packageName = pkg,
+                                enabled = enabled,
+                                settingsViewModel = settingsViewModel,
+                            )
+                        }
+                    }
+                }
             }
         }
         filtered.forEach { app ->
@@ -212,18 +273,71 @@ fun MediaPlayersInlineSelection(
                             .size(40.dp)
                     )
                 }
-                Text(
-                    text = app.label,
-                    fontSize = 20.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
+                Column(
                     modifier = Modifier
                         .padding(start = 8.dp)
                         .weight(1f)
-                )
+                ) {
+                    Text(
+                        text = app.label,
+                        fontSize = 20.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (isChecked) {
+                        Row(
+                            modifier = Modifier.padding(top = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    pendingIconPackage = pkg
+                                    pickCustomIcon.launch("image/*")
+                                },
+                                enabled = enabled,
+                            ) {
+                                Text(
+                                    stringResource(R.string.widget_app_launcher_change_icon),
+                                    fontSize = 14.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            MusicPlayerIconDeleteButton(
+                                packageName = pkg,
+                                enabled = enabled,
+                                settingsViewModel = settingsViewModel,
+                            )
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun MusicPlayerIconDeleteButton(
+    packageName: String,
+    enabled: Boolean,
+    settingsViewModel: SettingsViewModel,
+) {
+    var hasCustom by remember(packageName) { mutableStateOf(false) }
+    val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    LaunchedEffect(packageName, iconRevision) {
+        hasCustom = settingsViewModel.hasCustomLauncherAppIcon(packageName)
+    }
+    OutlinedButton(
+        onClick = { settingsViewModel.clearCustomLauncherAppIcon(packageName) },
+        enabled = enabled && hasCustom,
+    ) {
+        Text(
+            stringResource(R.string.widget_app_launcher_remove_icon),
+            fontSize = 14.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

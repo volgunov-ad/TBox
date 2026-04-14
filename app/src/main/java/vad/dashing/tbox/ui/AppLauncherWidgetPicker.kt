@@ -1,7 +1,5 @@
 package vad.dashing.tbox.ui
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.net.Uri
@@ -40,10 +38,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import android.content.Context
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.io.File
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
-import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 
 internal data class LaunchableAppEntry(
@@ -96,22 +92,6 @@ internal fun disposeAppLauncherPickerIconCache() {
     LaunchableAppsWithIconsCache.clear()
 }
 
-private fun decodeCustomLauncherIconIfPresent(
-    appContext: Context,
-    packageName: String,
-    iconSizePx: Int,
-): ImageBitmap? = runCatching {
-    val f = File(appContext.filesDir, "${SettingsManager.LAUNCHER_APP_ICONS_DIR}/$packageName")
-    if (!f.isFile || f.length() <= 0L) return@runCatching null
-    val decoded = BitmapFactory.decodeFile(f.absolutePath) ?: return@runCatching null
-    if (decoded.width == iconSizePx && decoded.height == iconSizePx) {
-        return@runCatching decoded.asImageBitmap()
-    }
-    val scaled = Bitmap.createScaledBitmap(decoded, iconSizePx, iconSizePx, true)
-    if (scaled != decoded) decoded.recycle()
-    scaled.asImageBitmap()
-}.getOrNull()
-
 private fun loadLaunchableAppEntries(
     appContext: Context,
     iconSizePx: Int,
@@ -127,7 +107,7 @@ private fun loadLaunchableAppEntries(
         .map { ri ->
             val pkg = ri.activityInfo.packageName
             val label = ri.loadLabel(pm).toString()
-            val bitmap = decodeCustomLauncherIconIfPresent(appContext, pkg, iconSizePx)
+            val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx)
                 ?: runCatching {
                     ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
                 }.getOrNull()
