@@ -451,6 +451,13 @@ fun TripsTab(
                     )
                 }
                 item {
+                    val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(trip)
+                    StatusRow(
+                        stringResource(R.string.trips_fuel_consumption_l_100km),
+                        formatWithUnit(avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data), if (avgFuel != null) stringResource(R.string.unit_l_100km) else "")
+                    )
+                }
+                item {
                     StatusRow(
                         stringResource(R.string.trips_fuel_refueled),
                         formatWithUnit(valueToString(trip.fuelRefueledLiters, 1), stringResource(R.string.unit_liter))

@@ -106,6 +106,7 @@ fun DashboardActiveTripWidgetItem(
                 val rowFont = titleFont
                 val simplified = widget.dataKey == ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
                 val mini = widget.dataKey == ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
+                val avgT = TripRepository.averageSpeedTripKmH(t)
                 val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(t)
                 if (mini) {
                     StatusRow(
@@ -122,6 +123,13 @@ fun DashboardActiveTripWidgetItem(
                             t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs
                         ),
                         unit = "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_avg_speed_trip),
+                        value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgT != null) stringResource(R.string.unit_kmh) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
@@ -196,7 +204,6 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    val avgT = TripRepository.averageSpeedTripKmH(t)
                     StatusRow(
                         label = stringResource(R.string.trips_avg_speed_trip),
                         value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
@@ -212,16 +219,16 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     StatusRow(
-                        label = stringResource(R.string.trips_fuel_refueled),
-                        value = valueToString(t.fuelRefueledLiters, 1),
-                        unit = stringResource(R.string.unit_liter),
+                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
+                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
                     StatusRow(
-                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
-                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
-                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
+                        label = stringResource(R.string.trips_fuel_refueled),
+                        value = valueToString(t.fuelRefueledLiters, 1),
+                        unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
@@ -342,7 +349,6 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    val avgT = TripRepository.averageSpeedTripKmH(t)
                     StatusRow(
                         label = stringResource(R.string.trips_avg_speed_trip),
                         value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
@@ -358,16 +364,16 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     StatusRow(
-                        label = stringResource(R.string.trips_fuel_refueled),
-                        value = valueToString(t.fuelRefueledLiters, 1),
-                        unit = stringResource(R.string.unit_liter),
+                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
+                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
                     StatusRow(
-                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
-                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
-                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
+                        label = stringResource(R.string.trips_fuel_refueled),
+                        value = valueToString(t.fuelRefueledLiters, 1),
+                        unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
