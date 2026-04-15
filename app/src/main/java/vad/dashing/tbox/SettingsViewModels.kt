@@ -456,7 +456,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 32
+            initialValue = 50
         )
 
     val mainScreenCanvasBackgroundLight = settingsManager.mainScreenCanvasBackgroundLightFlow

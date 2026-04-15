@@ -263,7 +263,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FUEL_TANK_LITERS = 57
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
         private const val MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 10
-        private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 32
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 50
         /** Fully transparent — only the icon is visible over the main-screen canvas. */
         private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_LIGHT = 0x00000000
         private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_DARK = 0x00000000
