@@ -26,8 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
-import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -37,7 +35,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
-import kotlin.math.hypot
 import kotlin.math.roundToInt
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -46,7 +43,6 @@ import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
 
 private const val EXTERNAL_WIDGET_PERIODIC_REFRESH_MS = 15 * 60 * 1000L
-private const val EXTERNAL_WIDGET_LONG_PRESS_HOTSPOT_DP = 36f
 
 private suspend fun awaitAppWidgetInfo(
     appWidgetManager: AppWidgetManager,
@@ -96,9 +92,7 @@ fun ExternalAppWidgetItem(
         appWidgetInfo = awaitAppWidgetInfo(appWidgetManager, appWidgetId)
     }
     var optionsApplied by remember(appWidgetId) { mutableStateOf(false) }
-    var hotspotTouchArmed by remember(appWidgetId) { mutableStateOf(false) }
     val density = LocalDensity.current
-    val longPressHotspotPx = with(density) { EXTERNAL_WIDGET_LONG_PRESS_HOTSPOT_DP.dp.toPx() }
     val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
     val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost) {
         if (
@@ -188,7 +182,7 @@ fun ExternalAppWidgetItem(
                             val frame = ExternalWidgetScaleFrame(viewContext)
                             val intercept = LongPressInterceptLayout(viewContext).apply {
                                 onLongPress = onLongClick
-                                interceptLongPress = false
+                                interceptLongPress = !isEditMode
                                 if (hostView.parent != null) {
                                     (hostView.parent as? ViewGroup)?.removeView(hostView)
                                 }
@@ -209,7 +203,7 @@ fun ExternalAppWidgetItem(
                             scaleFrame.displayScale = widgetDisplayScale
                             val intercept = scaleFrame.interceptChild ?: return@AndroidView
                             intercept.onLongPress = onLongClick
-                            intercept.interceptLongPress = !isEditMode && hotspotTouchArmed
+                            intercept.interceptLongPress = !isEditMode
                             val onlyChildIsCurrent =
                                 intercept.childCount == 1 && intercept.getChildAt(0) === hostView
                             if (!onlyChildIsCurrent) {
@@ -227,32 +221,6 @@ fun ExternalAppWidgetItem(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(Color.Transparent)
-                            .pointerInput(isEditMode, longPressHotspotPx) {
-                                if (isEditMode) {
-                                    hotspotTouchArmed = false
-                                    return@pointerInput
-                                }
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        val event = awaitPointerEvent()
-                                        val change = event.changes.firstOrNull() ?: continue
-                                        when {
-                                            change.changedToDownIgnoreConsumed() -> {
-                                                val x = change.position.x
-                                                val y = change.position.y
-                                                val right = size.width.toFloat()
-                                                val bottom = size.height.toFloat()
-                                                val dx = (right - x).coerceAtLeast(0f)
-                                                val dy = (bottom - y).coerceAtLeast(0f)
-                                                hotspotTouchArmed = hypot(dx, dy) <= longPressHotspotPx
-                                            }
-                                            change.changedToUpIgnoreConsumed() || !change.pressed -> {
-                                                hotspotTouchArmed = false
-                                            }
-                                        }
-                                    }
-                                }
-                            }
                             .onSizeChanged { size ->
                                 val minWidth = with(density) { size.width.toDp().value }.roundToInt()
                                 val minHeight = with(density) { size.height.toDp().value }.roundToInt()
