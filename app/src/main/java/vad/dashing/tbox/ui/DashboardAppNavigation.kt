@@ -26,13 +26,18 @@ internal fun openMainActivityFromWidget(context: Context) {
     }
 }
 
-internal fun sendToggleHideOtherFloatingPanels(context: Context, originPanelId: String) {
-    if (originPanelId.isBlank()) return
+internal fun sendToggleHideOtherFloatingPanels(
+    context: Context,
+    originPanelId: String,
+    excludeOriginPanel: Boolean = true
+) {
+    if (excludeOriginPanel && originPanelId.isBlank()) return
     try {
         context.startService(
             Intent(context, BackgroundService::class.java).apply {
                 action = BackgroundService.ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS
                 putExtra(BackgroundService.EXTRA_FLOATING_PANEL_ORIGIN_ID, originPanelId)
+                putExtra(BackgroundService.EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN, excludeOriginPanel)
             }
         )
     } catch (_: Exception) {

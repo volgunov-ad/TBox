@@ -251,6 +251,12 @@ class BackgroundService : Service() {
         const val ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS =
             "vad.dashing.tbox.TOGGLE_HIDE_OTHER_FLOATING_PANELS"
         const val EXTRA_FLOATING_PANEL_ORIGIN_ID = "vad.dashing.tbox.EXTRA_FLOATING_PANEL_ORIGIN_ID"
+        /**
+         * When true (default), [EXTRA_FLOATING_PANEL_ORIGIN_ID] is kept visible and the rest are hidden.
+         * When false (embedded dashboard / MainScreen), all currently shown floating panels are hidden.
+         */
+        const val EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN =
+            "vad.dashing.tbox.EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN"
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
@@ -624,12 +630,14 @@ class BackgroundService : Service() {
                 scheduleOpenMainActivity(delayMs)
             }
             ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS -> {
+                val excludeOrigin = intent.getBooleanExtra(EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN, true)
                 val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
-                if (originId.isNotBlank()) {
+                if (!(excludeOrigin && originId.isBlank())) {
                     scope.launch {
                         overlayController.toggleHideOtherFloatingPanels(
                             originPanelId = originId,
-                            currentlyShownIds = TboxRepository.floatingDashboardShownIds.value
+                            currentlyShownIds = TboxRepository.floatingDashboardShownIds.value,
+                            excludeOriginPanel = excludeOrigin
                         )
                         overlayController.syncFloatingDashboards(floatingDashboards.value)
                         overlayController.ensureFloatingDashboards(floatingDashboards.value)

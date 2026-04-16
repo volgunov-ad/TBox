@@ -300,18 +300,24 @@ internal class FloatingOverlayController(
      */
     suspend fun toggleHideOtherFloatingPanels(
         originPanelId: String,
-        currentlyShownIds: Set<String>
+        currentlyShownIds: Set<String>,
+        /** When false (e.g. tile on main tab / MainScreen), hide every currently shown floating panel. */
+        excludeOriginPanel: Boolean = true
     ) {
         withContext(Dispatchers.Main) {
             if (hiddenFloatingPanelIds.isNotEmpty()) {
                 hiddenFloatingPanelIds.clear()
                 return@withContext
             }
-            if (originPanelId.isBlank()) return@withContext
-            val others = currentlyShownIds - originPanelId
-            hiddenFloatingPanelIds.addAll(others)
-            others.forEach { panelId ->
-                if (panelId != originPanelId && overlayViews.containsKey(panelId)) {
+            if (excludeOriginPanel && originPanelId.isBlank()) return@withContext
+            val toHide = if (excludeOriginPanel) {
+                currentlyShownIds - originPanelId
+            } else {
+                currentlyShownIds
+            }
+            hiddenFloatingPanelIds.addAll(toHide)
+            toHide.forEach { panelId ->
+                if (overlayViews.containsKey(panelId)) {
                     closeOverlay(panelId)
                 }
             }
