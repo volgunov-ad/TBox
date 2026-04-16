@@ -14,7 +14,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -32,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -68,6 +68,11 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_1_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 
 private val WidgetSelectionDialogActionButtonFontSize = 22.sp
+
+/** Input / filter text in [WidgetSelectionDialogForm] (larger than theme default). */
+private val WidgetSelectionDialogFieldInputStyle = TextStyle(fontSize = 26.sp, lineHeight = 32.sp)
+private val WidgetSelectionDialogFieldLabelStyle = TextStyle(fontSize = 20.sp)
+private val WidgetSelectionDialogFieldPlaceholderStyle = TextStyle(fontSize = 18.sp)
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
@@ -321,10 +326,10 @@ private fun MainScreenPanelWholeSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.floating_panel_name_label),
-                    fontSize = 16.sp
+                    style = WidgetSelectionDialogFieldLabelStyle
                 )
             },
-            textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+            textStyle = WidgetSelectionDialogFieldInputStyle
         )
         SettingSwitch(
             state.wholePanelClickAction,
@@ -376,10 +381,10 @@ private fun FloatingDashboardWholeSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.floating_panel_name_label),
-                    fontSize = 16.sp
+                    style = WidgetSelectionDialogFieldLabelStyle
                 )
             },
-            textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+            textStyle = WidgetSelectionDialogFieldInputStyle
         )
         SettingSwitch(
             state.wholePanelClickAction,
@@ -527,8 +532,20 @@ internal fun WidgetSelectionDialogForm(
                         value = state.customTitle,
                         onValueChange = { state.customTitle = it },
                         enabled = state.togglesEnabled,
-                        label = { Text(stringResource(R.string.widget_custom_title_label)) },
-                        placeholder = { Text(stringResource(R.string.widget_custom_title_hint)) },
+                        textStyle = WidgetSelectionDialogFieldInputStyle,
+                        label = {
+                            Text(
+                                stringResource(R.string.widget_custom_title_label),
+                                style = WidgetSelectionDialogFieldLabelStyle
+                            )
+                        },
+                        placeholder = {
+                            Text(
+                                stringResource(R.string.widget_custom_title_hint),
+                                style = WidgetSelectionDialogFieldPlaceholderStyle,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
                         singleLine = false,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -613,6 +630,8 @@ internal fun WidgetSelectionDialogForm(
                             colorValue = state.textColorLight,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.textColorLight = it },
+                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
+                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                             presetColors = listOf(
                                 LIGHT_THEME_TEXT_COLOR_PRESET_1_INT,
                                 LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
@@ -623,6 +642,8 @@ internal fun WidgetSelectionDialogForm(
                             colorValue = state.backgroundColorLight,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.backgroundColorLight = it },
+                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
+                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                             presetColors = listOf(
                                 LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT,
                                 LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
@@ -634,6 +655,8 @@ internal fun WidgetSelectionDialogForm(
                             colorValue = state.textColorDark,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.textColorDark = it },
+                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
+                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                             presetColors = listOf(
                                 DARK_THEME_TEXT_COLOR_PRESET_1_INT,
                                 DARK_THEME_TEXT_COLOR_PRESET_2_INT
@@ -644,6 +667,8 @@ internal fun WidgetSelectionDialogForm(
                             colorValue = state.backgroundColorDark,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.backgroundColorDark = it },
+                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
+                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                             presetColors = listOf(
                                 DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT,
                                 DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
@@ -688,10 +713,11 @@ internal fun WidgetSelectionDialogForm(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
+                        textStyle = WidgetSelectionDialogFieldInputStyle,
                         label = {
                             Text(
                                 text = stringResource(R.string.widget_app_launcher_search),
-                                fontSize = 18.sp
+                                style = WidgetSelectionDialogFieldLabelStyle
                             )
                         },
                         singleLine = true,

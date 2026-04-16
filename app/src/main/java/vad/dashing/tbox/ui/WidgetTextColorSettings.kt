@@ -68,7 +68,10 @@ fun WidgetTextColorSetting(
     colorValue: Int,
     enabled: Boolean,
     onColorChange: (Int) -> Unit,
-    presetColors: List<Int> = emptyList()
+    presetColors: List<Int> = emptyList(),
+    /** Optional override for the hex input (e.g. widget dialog uses larger type). */
+    valueTextStyle: TextStyle = TextStyle(fontSize = 20.sp),
+    valueLabelStyle: TextStyle = TextStyle(fontSize = 20.sp),
 ) {
     var localColorValue by remember { mutableIntStateOf(colorValue) }
     var hueSliderPosition by remember {
@@ -122,7 +125,7 @@ fun WidgetTextColorSetting(
 
             OutlinedTextField(
                 value = textValue,
-                textStyle = TextStyle(fontSize = 20.sp),
+                textStyle = valueTextStyle,
                 onValueChange = { newText ->
                     textValue = newText
                     if (newText.isBlank()) {
@@ -147,8 +150,10 @@ fun WidgetTextColorSetting(
                 isError = isInputError,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 label = {
-                    Text(stringResource(R.string.widget_color_value_label),
-                        fontSize = 20.sp)
+                    Text(
+                        stringResource(R.string.widget_color_value_label),
+                        style = valueLabelStyle
+                    )
                 }
             )
 
