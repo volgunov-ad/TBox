@@ -62,6 +62,8 @@
     <string name="widget_select_data_for_tile">Select data for tile %1$d</string>
     <string name="widget_additional_settings_for_tile">Additional settings for tile %1$d</string>
     <string name="widget_show_title">Show title</string>
+    <string name="widget_custom_title_label">Title</string>
+    <string name="widget_custom_title_hint">Empty — default</string>
     <string name="widget_show_unit">Show unit</string>
     <string name="widget_title_gear_box_mode_temp">Transmission mode and temperature</string>
     <string name="widget_title_motor_hours_total_trip">Engine hours (total and trip)</string>
@@ -476,6 +478,8 @@
     <string name="data_title_media_volume_widget_vertical">Media volume widget (vertical)</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
     <string name="data_title_external_app_widget">Third-party app widget</string>
+    <string name="data_title_hide_floating_panels_widget">Hide floating panels</string>
+    <string name="data_title_toggle_floating_panels_enabled_widget">Disable floating panels</string>
     <string name="widget_app_launcher_selected">Selected: %1$s</string>
     <string name="widget_app_launcher_none_selected">No app selected</string>
     <string name="widget_app_launcher_required">Choose an app to save the widget</string>
