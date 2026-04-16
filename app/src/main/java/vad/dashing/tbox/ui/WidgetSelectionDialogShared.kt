@@ -69,10 +69,22 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 
 private val WidgetSelectionDialogActionButtonFontSize = 22.sp
 
-/** Input / filter text in [WidgetSelectionDialogForm] (larger than theme default). */
-private val WidgetSelectionDialogFieldInputStyle = TextStyle(fontSize = 26.sp, lineHeight = 32.sp)
-private val WidgetSelectionDialogFieldLabelStyle = TextStyle(fontSize = 20.sp)
-private val WidgetSelectionDialogFieldPlaceholderStyle = TextStyle(fontSize = 18.sp)
+/** Matches [SettingSwitch] primary row text (24.sp Medium). */
+private val WidgetSelectionDialogFieldInputStyle = TextStyle(
+    fontSize = 24.sp,
+    lineHeight = 24.sp * 1.3f,
+    fontWeight = FontWeight.Medium
+)
+/** OutlinedTextField labels in this dialog — same size as switch titles. */
+private val WidgetSelectionDialogFieldLabelStyle = TextStyle(
+    fontSize = 24.sp,
+    fontWeight = FontWeight.Medium
+)
+/** Placeholder / secondary — same as [SettingSwitch] description (20.sp). */
+private val WidgetSelectionDialogFieldPlaceholderStyle = TextStyle(
+    fontSize = 20.sp,
+    lineHeight = 20.sp
+)
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
