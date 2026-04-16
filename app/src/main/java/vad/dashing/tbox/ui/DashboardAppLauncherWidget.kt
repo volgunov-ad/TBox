@@ -37,6 +37,7 @@ internal fun DashboardAppLauncherWidgetItem(
     packageName: String,
     customIconRevision: Int,
     showTitle: Boolean,
+    titleOverride: String = "",
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     elevation: Dp,
@@ -108,13 +109,14 @@ internal fun DashboardAppLauncherWidgetItem(
                     )
                 }
             }
-            if (showTitle && appLabel.isNotEmpty()) {
+            val titleLine = titleOverride.trim().ifBlank { appLabel }
+            if (showTitle && titleLine.isNotEmpty()) {
                 val titleFontSize = calculateResponsiveFontSize(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
                 )
                 Text(
-                    text = appLabel,
+                    text = titleLine,
                     fontSize = titleFontSize,
                     fontWeight = FontWeight.Medium,
                     color = resolvedTextColor,

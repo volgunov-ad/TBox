@@ -35,6 +35,7 @@ fun DashboardActiveTripWidgetItem(
     widget: DashboardWidget,
     appDataViewModel: AppDataViewModel,
     showTitle: Boolean = false,
+    titleOverride: String = "",
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
@@ -49,6 +50,11 @@ fun DashboardActiveTripWidgetItem(
     val displayTrip = activeTrip ?: TripRepository.latestFinishedTrip(trips)
     val showingLastFinishedTrip = displayTrip != null && !displayTrip.isActive
     val dateFmt = rememberTripDateFormat()
+    val defaultActiveTitle = stringResource(R.string.trips_active_trip)
+    val defaultLastTitle = stringResource(R.string.trips_last_trip_widget_title)
+    val titleText = titleOverride.trim().ifBlank {
+        if (showingLastFinishedTrip) defaultLastTitle else defaultActiveTitle
+    }
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -71,13 +77,7 @@ fun DashboardActiveTripWidgetItem(
         ) {
             if (showTitle) {
                 Text(
-                    text = stringResource(
-                        if (showingLastFinishedTrip) {
-                            R.string.trips_last_trip_widget_title
-                        } else {
-                            R.string.trips_active_trip
-                        }
-                    ),
+                    text = titleText,
                     modifier = Modifier.fillMaxWidth(),
                     fontSize = titleFont,
                     lineHeight = titleFont * 1.3f,

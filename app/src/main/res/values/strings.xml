@@ -62,6 +62,8 @@
     <string name="widget_select_data_for_tile">Выберите данные для плитки %1$d</string>
     <string name="widget_additional_settings_for_tile">Дополнительные настройки плитки %1$d</string>
     <string name="widget_show_title">Отображать название</string>
+    <string name="widget_custom_title_label">Заголовок</string>
+    <string name="widget_custom_title_hint">Пусто — по умолчанию</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
     <string name="widget_title_gear_box_mode_temp">Режим и температура КПП</string>
     <string name="widget_title_motor_hours_total_trip">Моточасы (общ. и за поездку)</string>
@@ -476,6 +478,8 @@
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
+    <string name="data_title_hide_floating_panels_widget">Скрытие плавающих панелей</string>
+    <string name="data_title_toggle_floating_panels_enabled_widget">Отключение плавающих панелей</string>
     <string name="widget_app_launcher_selected">Выбрано: %1$s</string>
     <string name="widget_app_launcher_none_selected">Приложение не выбрано</string>
     <string name="widget_app_launcher_required">Выберите приложение, чтобы сохранить виджет</string>

@@ -56,6 +56,7 @@ fun DashboardMediaVolumeWidgetItem(
     widget: DashboardWidget,
     isVertical: Boolean,
     showTitle: Boolean = true,
+    titleOverride: String = "",
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     enableInnerInteractions: Boolean = true,
@@ -78,6 +79,9 @@ fun DashboardMediaVolumeWidgetItem(
     var swipeAccumulator by remember(widget.id, isVertical) {
         mutableFloatStateOf(0f)
     }
+
+    val defaultVolumeTitle = stringResource(R.string.widget_media_volume_title)
+    val volumeTitleText = titleOverride.trim().ifBlank { defaultVolumeTitle }
 
     LaunchedEffect(widget.id, isVertical) {
         while (true) {
@@ -166,7 +170,7 @@ fun DashboardMediaVolumeWidgetItem(
         ) {
             if (showTitle) {
                 Text(
-                    text = stringResource(R.string.widget_media_volume_title),
+                    text = volumeTitleText,
                     color = resolvedTextColor,
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,

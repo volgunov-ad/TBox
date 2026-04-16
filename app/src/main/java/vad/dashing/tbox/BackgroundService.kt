@@ -247,6 +247,21 @@ class BackgroundService : Service() {
          */
         const val ACTION_OPEN_MAIN_ACTIVITY = "vad.dashing.tbox.OPEN_MAIN_ACTIVITY"
         const val EXTRA_OPEN_MAIN_DELAY_MS = "vad.dashing.tbox.EXTRA_OPEN_MAIN_DELAY_MS"
+        /** Double-tap on «hide floating panels» tile: hide other overlays or restore them. */
+        const val ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS =
+            "vad.dashing.tbox.TOGGLE_HIDE_OTHER_FLOATING_PANELS"
+        const val EXTRA_FLOATING_PANEL_ORIGIN_ID = "vad.dashing.tbox.EXTRA_FLOATING_PANEL_ORIGIN_ID"
+        /**
+         * When true (default), [EXTRA_FLOATING_PANEL_ORIGIN_ID] is kept visible and the rest are hidden.
+         * When false (embedded dashboard / MainScreen), all currently shown floating panels are hidden.
+         */
+        const val EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN =
+            "vad.dashing.tbox.EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN"
+        /** Flip `enabled` on other floating panels (or all when extra is true). */
+        const val ACTION_TOGGLE_FLOATING_PANELS_ENABLED =
+            "vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED"
+        const val EXTRA_TOGGLE_FLOATING_ENABLED_ALL =
+            "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
@@ -618,6 +633,44 @@ class BackgroundService : Service() {
             ACTION_OPEN_MAIN_ACTIVITY -> {
                 val delayMs = intent.getLongExtra(EXTRA_OPEN_MAIN_DELAY_MS, 0L).coerceAtLeast(0L)
                 scheduleOpenMainActivity(delayMs)
+            }
+            ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS -> {
+                val excludeOrigin = intent.getBooleanExtra(EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN, true)
+                val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
+                if (!(excludeOrigin && originId.isBlank())) {
+                    scope.launch {
+                        overlayController.toggleHideOtherFloatingPanels(
+                            originPanelId = originId,
+                            currentlyShownIds = TboxRepository.floatingDashboardShownIds.value,
+                            excludeOriginPanel = excludeOrigin
+                        )
+                        overlayController.syncFloatingDashboards(floatingDashboards.value)
+                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                    }
+                }
+            }
+            ACTION_TOGGLE_FLOATING_PANELS_ENABLED -> {
+                val toggleAll = intent.getBooleanExtra(EXTRA_TOGGLE_FLOATING_ENABLED_ALL, false)
+                val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
+                if (toggleAll || originId.isNotBlank()) {
+                    scope.launch {
+                        val updated = withContext(Dispatchers.IO) {
+                            val current = settingsManager.floatingDashboardsFlow.first()
+                            val toggled = if (toggleAll) {
+                                current.map { it.copy(enabled = !it.enabled) }
+                            } else {
+                                current.map { cfg ->
+                                    if (cfg.id != originId) cfg.copy(enabled = !cfg.enabled) else cfg
+                                }
+                            }
+                            settingsManager.saveFloatingDashboards(toggled)
+                            toggled
+                        }
+                        overlayController.clearHiddenFloatingPanelIds()
+                        overlayController.syncFloatingDashboards(updated)
+                        overlayController.ensureFloatingDashboards(updated)
+                    }
+                }
             }
         }
     }
@@ -1420,9 +1473,7 @@ class BackgroundService : Service() {
                 floatingDashboards
                     .drop(1) // Пропускаем начальное значение
                     .collect { configs ->
-                        withContext(Dispatchers.Main) {
-                            overlayController.syncFloatingDashboards(configs)
-                        }
+                        overlayController.syncFloatingDashboards(configs)
                     }
             }
         }

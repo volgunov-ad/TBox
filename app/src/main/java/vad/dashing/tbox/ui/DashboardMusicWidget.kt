@@ -70,6 +70,7 @@ fun DashboardMusicWidgetItem(
     settingsViewModel: SettingsViewModel,
     canViewModel: CanDataViewModel,
     title: Boolean = true,
+    titleOverride: String = "",
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onSelectedPlayerChange: (String) -> Unit = {},
@@ -129,6 +130,7 @@ fun DashboardMusicWidgetItem(
     } else {
         basePlayerLabel
     }
+    val musicHeaderLabel = titleOverride.trim().ifBlank { playerLabel }
     val line2Text = if (!mediaState.notificationAccessGranted) {
         stringResource(R.string.widget_music_access_required)
     } else {
@@ -287,7 +289,7 @@ fun DashboardMusicWidgetItem(
                                 .aspectRatio(1f)
                         )
                         Text(
-                            text = playerLabel,
+                            text = musicHeaderLabel,
                             color = resolvedTextColor,
                             fontSize = calculateResponsiveFontSize(
                                 containerHeight = availableHeight,
