@@ -1445,9 +1445,7 @@ class BackgroundService : Service() {
                 floatingDashboards
                     .drop(1) // Пропускаем начальное значение
                     .collect { configs ->
-                        withContext(Dispatchers.Main) {
-                            overlayController.syncFloatingDashboards(configs)
-                        }
+                        overlayController.syncFloatingDashboards(configs)
                     }
             }
         }

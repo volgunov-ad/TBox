@@ -65,54 +65,59 @@ internal class FloatingOverlayController(
         windowManager = null
     }
 
-    fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
-        if (overlaysSuspended) {
-            if (overlayViews.isNotEmpty()) {
-                closeAllOverlays()
-            }
-            return
-        }
-        val configMap = configs.associateBy { it.id }
-        val enabledConfigs = configs.filter { it.enabled }
-
-        val enabledIds = enabledConfigs.map { it.id }.toSet()
-        val existingIds = overlayViews.keys.toSet()
-
-        // Remove counters for configs that no longer exist.
-        val removedIds = overlayRetryCounts.keys - configMap.keys
-        removedIds.forEach { id ->
-            overlayRetryCounts.remove(id)
-            overlayOffIds.remove(id)
-            hiddenFloatingPanelIds.remove(id)
-        }
-
-        enabledConfigs.forEach { config ->
-            if (hiddenFloatingPanelIds.contains(config.id)) {
-                if (overlayViews.containsKey(config.id)) {
-                    closeOverlay(config.id)
+    /**
+     * WindowManager / ComposeView must run on the main thread; callers may use any dispatcher.
+     */
+    suspend fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
+        withContext(Dispatchers.Main) {
+            if (overlaysSuspended) {
+                if (overlayViews.isNotEmpty()) {
+                    closeAllOverlays()
                 }
-                return@forEach
+                return@withContext
             }
-            overlayOffIds.remove(config.id)
+            val configMap = configs.associateBy { it.id }
+            val enabledConfigs = configs.filter { it.enabled }
 
-            val view = overlayViews[config.id]
-            if (view != null) {
-                updateOverlayLayout(config)
-            } else {
-                openOverlay(config)
+            val enabledIds = enabledConfigs.map { it.id }.toSet()
+            val existingIds = overlayViews.keys.toSet()
+
+            // Remove counters for configs that no longer exist.
+            val removedIds = overlayRetryCounts.keys - configMap.keys
+            removedIds.forEach { id ->
+                overlayRetryCounts.remove(id)
+                overlayOffIds.remove(id)
+                hiddenFloatingPanelIds.remove(id)
             }
-        }
 
-        val idsToClose = existingIds - enabledIds
-        idsToClose.forEach { id ->
-            closeOverlay(id)
-        }
+            enabledConfigs.forEach { config ->
+                if (hiddenFloatingPanelIds.contains(config.id)) {
+                    if (overlayViews.containsKey(config.id)) {
+                        closeOverlay(config.id)
+                    }
+                    return@forEach
+                }
+                overlayOffIds.remove(config.id)
 
-        val disabledIds = configMap.keys - enabledIds
-        disabledIds.forEach { id ->
-            overlayRetryCounts.remove(id)
-            overlayOffIds.remove(id)
-            hiddenFloatingPanelIds.remove(id)
+                val view = overlayViews[config.id]
+                if (view != null) {
+                    updateOverlayLayout(config)
+                } else {
+                    openOverlay(config)
+                }
+            }
+
+            val idsToClose = existingIds - enabledIds
+            idsToClose.forEach { id ->
+                closeOverlay(id)
+            }
+
+            val disabledIds = configMap.keys - enabledIds
+            disabledIds.forEach { id ->
+                overlayRetryCounts.remove(id)
+                overlayOffIds.remove(id)
+                hiddenFloatingPanelIds.remove(id)
+            }
         }
     }
 
