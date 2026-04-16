@@ -42,6 +42,8 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
 
+private const val EXTERNAL_WIDGET_PERIODIC_REFRESH_MS = 15 * 60 * 1000L
+
 private suspend fun awaitAppWidgetInfo(
     appWidgetManager: AppWidgetManager,
     appWidgetId: Int
@@ -89,17 +91,7 @@ fun ExternalAppWidgetItem(
         }
         appWidgetInfo = awaitAppWidgetInfo(appWidgetManager, appWidgetId)
     }
-    LaunchedEffect(appWidgetId, appWidgetInfo) {
-        if (
-            appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID &&
-            appWidgetInfo != null
-        ) {
-            ExternalWidgetHostManager.requestProviderRefreshOnce(
-                context = context,
-                appWidgetId = appWidgetId
-            )
-        }
-    }
+    var optionsApplied by remember(appWidgetId) { mutableStateOf(false) }
     val density = LocalDensity.current
     val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
     val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost) {
@@ -240,6 +232,7 @@ fun ExternalAppWidgetItem(
                                         minHeight
                                     )
                                     appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
+                                    optionsApplied = true
                                 }
                             }
                     )
@@ -277,6 +270,31 @@ fun ExternalAppWidgetItem(
                         }
                 )
             }
+        }
+    }
+
+    LaunchedEffect(appWidgetId, appWidgetInfo, optionsApplied) {
+        if (
+            appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
+            appWidgetInfo == null ||
+            !optionsApplied
+        ) {
+            return@LaunchedEffect
+        }
+
+        // First refresh only after view has real size/options; many providers need this.
+        ExternalWidgetHostManager.requestProviderRefresh(
+            context = context,
+            appWidgetId = appWidgetId,
+            force = true
+        )
+        while (true) {
+            delay(EXTERNAL_WIDGET_PERIODIC_REFRESH_MS)
+            // Soft periodic ping so weather/news providers that do not self-refresh still update.
+            ExternalWidgetHostManager.requestProviderRefresh(
+                context = context,
+                appWidgetId = appWidgetId
+            )
         }
     }
 }

@@ -269,16 +269,10 @@ class WidgetPickerActivity : ComponentActivity() {
 
     private fun requestProviderRefreshAfterConfigure() {
         if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
-        val info = appWidgetManager.getAppWidgetInfo(appWidgetId) ?: return
-        val provider = info.provider
-        try {
-            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
-                component = provider
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
-            }
-            sendBroadcast(intent)
-        } catch (e: Exception) {
-            Log.w("WidgetPicker", "Could not request widget provider refresh", e)
-        }
+        ExternalWidgetHostManager.requestProviderRefresh(
+            context = this,
+            appWidgetId = appWidgetId,
+            force = true
+        )
     }
 }
