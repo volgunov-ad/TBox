@@ -332,8 +332,6 @@ fun FloatingDashboard(
                             cfg.launcherAppPackage.isNotBlank()
                         ) {
                             launchAppFromWidget(context, cfg.launcherAppPackage)
-                        } else if (cfg?.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {
-                            openMainActivityFromWidget(context)
                         } else if (isFloatingDashboardClickAction) {
                             if (cfg != null && isActiveTripWidgetDataKey(cfg.dataKey)) {
                                 settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_SELECTED_TAB_INDEX)
