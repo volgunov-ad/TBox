@@ -257,6 +257,11 @@ class BackgroundService : Service() {
          */
         const val EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN =
             "vad.dashing.tbox.EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN"
+        /** Flip `enabled` on other floating panels (or all when extra is true). */
+        const val ACTION_TOGGLE_FLOATING_PANELS_ENABLED =
+            "vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED"
+        const val EXTRA_TOGGLE_FLOATING_ENABLED_ALL =
+            "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
@@ -641,6 +646,29 @@ class BackgroundService : Service() {
                         )
                         overlayController.syncFloatingDashboards(floatingDashboards.value)
                         overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                    }
+                }
+            }
+            ACTION_TOGGLE_FLOATING_PANELS_ENABLED -> {
+                val toggleAll = intent.getBooleanExtra(EXTRA_TOGGLE_FLOATING_ENABLED_ALL, false)
+                val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
+                if (toggleAll || originId.isNotBlank()) {
+                    scope.launch {
+                        val updated = withContext(Dispatchers.IO) {
+                            val current = settingsManager.floatingDashboardsFlow.first()
+                            val toggled = if (toggleAll) {
+                                current.map { it.copy(enabled = !it.enabled) }
+                            } else {
+                                current.map { cfg ->
+                                    if (cfg.id != originId) cfg.copy(enabled = !cfg.enabled) else cfg
+                                }
+                            }
+                            settingsManager.saveFloatingDashboards(toggled)
+                            toggled
+                        }
+                        overlayController.clearHiddenFloatingPanelIds()
+                        overlayController.syncFloatingDashboards(updated)
+                        overlayController.ensureFloatingDashboards(updated)
                     }
                 }
             }

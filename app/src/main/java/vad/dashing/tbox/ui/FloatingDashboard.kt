@@ -34,6 +34,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
+import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.FloatingDashboardViewModel
@@ -360,6 +361,16 @@ fun FloatingDashboard(
                             sendToggleHideOtherFloatingPanels(
                                 context = context,
                                 originPanelId = panelId
+                            )
+                        }
+                    },
+                    onToggleFloatingPanelsEnabledDoubleClick = {
+                        val cfg = widgetConfigs.getOrNull(it)
+                        if (cfg?.dataKey == TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY) {
+                            sendToggleFloatingPanelsEnabled(
+                                context = context,
+                                originPanelId = panelId,
+                                toggleAllPanels = false
                             )
                         }
                     },

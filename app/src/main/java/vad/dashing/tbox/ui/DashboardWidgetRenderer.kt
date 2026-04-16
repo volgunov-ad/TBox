@@ -19,6 +19,7 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
+import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
@@ -43,6 +44,7 @@ fun DashboardWidgetRenderer(
     onLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (String) -> Unit,
     onHideFloatingPanelsDoubleClick: () -> Unit = {},
+    onToggleFloatingPanelsEnabledDoubleClick: () -> Unit = {},
     onRestartRequested: () -> Unit,
     externalWidgetHost: AppWidgetHost? = null,
     isEditMode: Boolean = false,
@@ -375,6 +377,18 @@ fun DashboardWidgetRenderer(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = onHideFloatingPanelsDoubleClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY -> {
+            DashboardHideFloatingPanelsWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = onToggleFloatingPanelsEnabledDoubleClick,
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,

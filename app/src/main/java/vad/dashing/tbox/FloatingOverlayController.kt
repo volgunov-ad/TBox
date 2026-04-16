@@ -49,6 +49,13 @@ internal class FloatingOverlayController(
         overlaysSuspended = false
     }
 
+    /** Clears temporary hide list (e.g. after persisted floating `enabled` toggles). */
+    suspend fun clearHiddenFloatingPanelIds() {
+        withContext(Dispatchers.Main) {
+            hiddenFloatingPanelIds.clear()
+        }
+    }
+
     fun closeAllOverlays() {
         val ids = overlayViews.keys.toList()
         ids.forEach { closeOverlay(it) }

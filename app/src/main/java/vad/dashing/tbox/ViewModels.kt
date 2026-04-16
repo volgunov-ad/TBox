@@ -412,6 +412,9 @@ object WidgetsRepository {
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
         HIDE_FLOATING_PANELS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hide_floating_panels_widget),
+        TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY to DataTitle(
+            R.string.data_title_toggle_floating_panels_enabled_widget
+        ),
     )
 
     private fun getDataTitle(dataKey: String): DataTitle? {

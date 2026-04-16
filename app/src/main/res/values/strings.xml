@@ -479,6 +479,7 @@
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
     <string name="data_title_hide_floating_panels_widget">Скрытие плавающих панелей</string>
+    <string name="data_title_toggle_floating_panels_enabled_widget">Отключение плавающих панелей</string>
     <string name="widget_app_launcher_selected">Выбрано: %1$s</string>
     <string name="widget_app_launcher_none_selected">Приложение не выбрано</string>
     <string name="widget_app_launcher_required">Выберите приложение, чтобы сохранить виджет</string>

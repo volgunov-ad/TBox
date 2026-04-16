@@ -25,6 +25,7 @@ import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardState
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
+import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxViewModel
@@ -61,6 +62,7 @@ internal fun DashboardPanelGridAndFrames(
     onWidgetLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (widgetIndex: Int, selectedPackage: String) -> Unit,
     onHideFloatingPanelsDoubleClick: (widgetIndex: Int) -> Unit = {},
+    onToggleFloatingPanelsEnabledDoubleClick: (widgetIndex: Int) -> Unit = {},
     onRestartRequested: () -> Unit,
     showTboxDisconnectIndicator: Boolean,
     enableMusicInnerInteractions: Boolean,
@@ -145,6 +147,11 @@ internal fun DashboardPanelGridAndFrames(
                                     onHideFloatingPanelsDoubleClick = {
                                         if (widget.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {
                                             onHideFloatingPanelsDoubleClick(index)
+                                        }
+                                    },
+                                    onToggleFloatingPanelsEnabledDoubleClick = {
+                                        if (widget.dataKey == TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY) {
+                                            onToggleFloatingPanelsEnabledDoubleClick(index)
                                         }
                                     },
                                     onRestartRequested = onRestartRequested,

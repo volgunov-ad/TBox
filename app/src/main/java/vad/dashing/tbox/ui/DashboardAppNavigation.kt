@@ -43,3 +43,25 @@ internal fun sendToggleHideOtherFloatingPanels(
     } catch (_: Exception) {
     }
 }
+
+/**
+ * Double-tap on «toggle floating panels enabled» tile: flip [FloatingDashboardConfig.enabled]
+ * for every panel except [originPanelId], or for all panels when [toggleAllPanels] is true.
+ */
+internal fun sendToggleFloatingPanelsEnabled(
+    context: Context,
+    originPanelId: String,
+    toggleAllPanels: Boolean
+) {
+    if (!toggleAllPanels && originPanelId.isBlank()) return
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_TOGGLE_FLOATING_PANELS_ENABLED
+                putExtra(BackgroundService.EXTRA_FLOATING_PANEL_ORIGIN_ID, originPanelId)
+                putExtra(BackgroundService.EXTRA_TOGGLE_FLOATING_ENABLED_ALL, toggleAllPanels)
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
