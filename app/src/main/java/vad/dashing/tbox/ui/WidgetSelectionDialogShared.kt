@@ -78,6 +78,7 @@ internal class WidgetSelectionDialogState(
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
     var showUnit by mutableStateOf(initialConfig.showUnit)
+    var customTitle by mutableStateOf(initialConfig.customTitle)
     var singleLineDualMetrics by mutableStateOf(
         initialConfig.singleLineDualMetrics &&
             WidgetsRepository.supportsSingleLineDualMetrics(initialConfig.dataKey)
@@ -522,6 +523,17 @@ internal fun WidgetSelectionDialogForm(
                         "",
                         state.togglesEnabled
                     )
+                    OutlinedTextField(
+                        value = state.customTitle,
+                        onValueChange = { state.customTitle = it },
+                        enabled = state.togglesEnabled,
+                        label = { Text(stringResource(R.string.widget_custom_title_label)) },
+                        placeholder = { Text(stringResource(R.string.widget_custom_title_hint)) },
+                        singleLine = false,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 4.dp)
+                    )
                     SettingSwitch(
                         state.showUnit,
                         { state.showUnit = it },
@@ -901,6 +913,7 @@ internal fun applyWidgetSelectionChanges(
             dataKey = state.selectedDataKey,
             showTitle = state.showTitle,
             showUnit = state.showUnit,
+            customTitle = state.customTitle.trim(),
             singleLineDualMetrics = if (WidgetsRepository.supportsSingleLineDualMetrics(
                     state.selectedDataKey
                 )
@@ -950,7 +963,7 @@ internal fun applyWidgetSelectionChanges(
             }
         )
     } else {
-        FloatingDashboardWidgetConfig(dataKey = "")
+        FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
     }
     val newCfg = normalizedConfigs[widgetIndex]
     if (prevAppWidgetId != null) {

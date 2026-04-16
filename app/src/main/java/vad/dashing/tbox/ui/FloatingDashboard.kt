@@ -33,6 +33,7 @@ import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.FloatingDashboardViewModel
@@ -331,6 +332,8 @@ fun FloatingDashboard(
                             cfg.launcherAppPackage.isNotBlank()
                         ) {
                             launchAppFromWidget(context, cfg.launcherAppPackage)
+                        } else if (cfg?.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {
+                            openMainActivityFromWidget(context)
                         } else if (isFloatingDashboardClickAction) {
                             if (cfg != null && isActiveTripWidgetDataKey(cfg.dataKey)) {
                                 settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_SELECTED_TAB_INDEX)
@@ -352,6 +355,15 @@ fun FloatingDashboard(
                                 settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
                             }
                         )
+                    },
+                    onHideFloatingPanelsDoubleClick = {
+                        val cfg = widgetConfigs.getOrNull(it)
+                        if (cfg?.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {
+                            sendToggleHideOtherFloatingPanels(
+                                context = context,
+                                originPanelId = panelId
+                            )
+                        }
                     },
                     onRestartRequested = {
                         if (restartEnabled) {

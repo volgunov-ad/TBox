@@ -35,6 +35,7 @@ fun DashboardFuelLevelWidgetItem(
     shape: Dp = 12.dp,
     units: Boolean = true,
     showTitle: Boolean = false,
+    titleOverride: String = "",
     singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
@@ -48,6 +49,8 @@ fun DashboardFuelLevelWidgetItem(
         "${valueToString(pctFiltered)}${if (units) "\u2009$percentUnit" else ""}"
     val secondLine =
         "${valueToString(litersValue, 1)}${if (units) "\u2009$literUnit" else ""}"
+    val defaultTitle = stringResource(R.string.widget_title_fuel_level)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -71,7 +74,7 @@ fun DashboardFuelLevelWidgetItem(
                     textType = TextType.TITLE
                 )
                 Text(
-                    text = stringResource(R.string.widget_title_fuel_level),
+                    text = titleText,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()

@@ -33,6 +33,7 @@ fun DashboardAirQualityWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     showTitle: Boolean = false,
+    titleOverride: String = "",
     singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
@@ -41,6 +42,8 @@ fun DashboardAirQualityWidgetItem(
     val inside by canViewModel.insideAirQuality.collectAsStateWithLifecycle()
     val firstLine = valueToString(outside)
     val secondLine = valueToString(inside)
+    val defaultTitle = stringResource(R.string.widget_title_air_quality_outside_inside)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -64,7 +67,7 @@ fun DashboardAirQualityWidgetItem(
                     textType = TextType.TITLE
                 )
                 Text(
-                    text = stringResource(R.string.widget_title_air_quality_outside_inside),
+                    text = titleText,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()

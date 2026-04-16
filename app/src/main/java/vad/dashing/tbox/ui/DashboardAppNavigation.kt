@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import android.content.Intent
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.MainActivityIntentHelper
 
 internal fun launchAppFromWidget(context: Context, packageName: String) {
@@ -22,5 +23,18 @@ internal fun openMainActivityFromWidget(context: Context) {
         context.startActivity(intent)
     } catch (e: Exception) {
         e.printStackTrace()
+    }
+}
+
+internal fun sendToggleHideOtherFloatingPanels(context: Context, originPanelId: String) {
+    if (originPanelId.isBlank()) return
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS
+                putExtra(BackgroundService.EXTRA_FLOATING_PANEL_ORIGIN_ID, originPanelId)
+            }
+        )
+    } catch (_: Exception) {
     }
 }

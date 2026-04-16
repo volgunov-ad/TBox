@@ -247,6 +247,10 @@ class BackgroundService : Service() {
          */
         const val ACTION_OPEN_MAIN_ACTIVITY = "vad.dashing.tbox.OPEN_MAIN_ACTIVITY"
         const val EXTRA_OPEN_MAIN_DELAY_MS = "vad.dashing.tbox.EXTRA_OPEN_MAIN_DELAY_MS"
+        /** Double-tap on «hide floating panels» tile: hide other overlays or restore them. */
+        const val ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS =
+            "vad.dashing.tbox.TOGGLE_HIDE_OTHER_FLOATING_PANELS"
+        const val EXTRA_FLOATING_PANEL_ORIGIN_ID = "vad.dashing.tbox.EXTRA_FLOATING_PANEL_ORIGIN_ID"
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
@@ -618,6 +622,19 @@ class BackgroundService : Service() {
             ACTION_OPEN_MAIN_ACTIVITY -> {
                 val delayMs = intent.getLongExtra(EXTRA_OPEN_MAIN_DELAY_MS, 0L).coerceAtLeast(0L)
                 scheduleOpenMainActivity(delayMs)
+            }
+            ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS -> {
+                val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
+                if (originId.isNotBlank()) {
+                    scope.launch {
+                        overlayController.toggleHideOtherFloatingPanels(
+                            originPanelId = originId,
+                            currentlyShownIds = TboxRepository.floatingDashboardShownIds.value
+                        )
+                        overlayController.syncFloatingDashboards(floatingDashboards.value)
+                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                    }
+                }
             }
         }
     }
