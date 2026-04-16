@@ -72,13 +72,11 @@ private val WidgetSelectionDialogActionButtonFontSize = 22.sp
 /** Matches [SettingSwitch] primary row text (24.sp Medium). */
 private val WidgetSelectionDialogFieldInputStyle = TextStyle(
     fontSize = 24.sp,
-    lineHeight = 24.sp * 1.3f,
-    fontWeight = FontWeight.Medium
+    lineHeight = 24.sp * 1.3f
 )
-/** OutlinedTextField labels in this dialog — same size as switch titles. */
+/** OutlinedTextField labels in this dialog. */
 private val WidgetSelectionDialogFieldLabelStyle = TextStyle(
-    fontSize = 24.sp,
-    fontWeight = FontWeight.Medium
+    fontSize = 20.sp
 )
 /** Placeholder / secondary — same as [SettingSwitch] description (20.sp). */
 private val WidgetSelectionDialogFieldPlaceholderStyle = TextStyle(
