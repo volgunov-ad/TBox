@@ -53,15 +53,21 @@ object ExternalWidgetHostManager {
     private const val TAG = "ExternalWidgetHost"
     private const val HOST_ID = 1024
     private const val DEFAULT_PROVIDER_REFRESH_DEBOUNCE_MS = 60_000L
-    /** Max failed [AppWidgetHost.startListening] attempts from the main-looper retry runnable. */
-    private const val MAX_LISTENING_RETRY_ATTEMPTS = 5
+    /**
+     * Max failed [AppWidgetHost.startListening] attempts from the main-looper retry runnable
+     * (the first attempt runs separately in [ensureListening]'s posted block).
+     */
+    private const val LISTENING_RETRY_RUNNABLE_MAX_FAILURES = 5
+    /** Min interval between [kickListeningIfNeeded] scheduling another [ensureListening] pass. */
+    private const val KICK_LISTENING_DEBOUNCE_MS = 1_500L
     private val mainHandler = Handler(Looper.getMainLooper())
     private var host: AppWidgetHost? = null
     private var refCount = 0
     private var listening = false
     private var listenRetryAppContext: Context? = null
     private var listenRetryAttempt = 0
-    private val listenRetryDelaysMs = longArrayOf(400L, 900L, 2_000L, 4_000L, 8_000L, 15_000L)
+    private val listenRetryDelaysMs = longArrayOf(400L, 900L, 2_000L, 4_000L, 8_000L)
+    private var lastKickListeningElapsedMs = 0L
     private val providerRefreshLastAtMs = mutableMapOf<Int, Long>()
     private val remoteViewsReceivedAtMs = mutableMapOf<Int, Long>()
 
@@ -89,7 +95,7 @@ object ExternalWidgetHostManager {
                     )
                     listenRetryAttempt++
                     val delayMs = listenRetryDelaysMs.getOrElse(listenRetryAttempt - 1) { 15_000L }
-                    if (listenRetryAttempt < MAX_LISTENING_RETRY_ATTEMPTS) {
+                    if (listenRetryAttempt < LISTENING_RETRY_RUNNABLE_MAX_FAILURES) {
                         mainHandler.postDelayed(this, delayMs)
                     } else {
                         listenRetryAppContext = null
@@ -159,6 +165,26 @@ object ExternalWidgetHostManager {
     fun isListening(): Boolean = listening
 
     /**
+     * If embedded widgets are not receiving updates because [startListening] never succeeded,
+     * schedules another full [ensureListening] pass (debounced). Safe from any thread.
+     * Returns true when a new pass was scheduled.
+     */
+    @Synchronized
+    fun kickListeningIfNeeded(context: Context, reason: String = ""): Boolean {
+        if (listening) return false
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastKickListeningElapsedMs < KICK_LISTENING_DEBOUNCE_MS) {
+            return false
+        }
+        lastKickListeningElapsedMs = now
+        if (reason.isNotEmpty()) {
+            Log.d(TAG, "kickListeningIfNeeded: $reason")
+        }
+        ensureListening(context)
+        return true
+    }
+
+    /**
      * Suspends until [isListening] becomes true or [timeoutMs] elapses (embedded widgets need this
      * before [android.appwidget.AppWidgetHost.createView] for reliable first RemoteViews).
      */
@@ -168,6 +194,22 @@ object ExternalWidgetHostManager {
             if (isListening()) return
             delay(50)
         }
+    }
+
+    /**
+     * Waits for listening, then if still not active runs [kickListeningIfNeeded] and waits again
+     * (covers cold boot where the first [startListening] wave exhausted retries before widgets bind).
+     */
+    suspend fun awaitListeningReadyWithOptionalKick(
+        context: Context,
+        primaryTimeoutMs: Long = 12_000L,
+        afterKickWaitMs: Long = 2_500L
+    ) {
+        val appCtx = context.applicationContext
+        awaitListeningReady(primaryTimeoutMs)
+        if (isListening()) return
+        kickListeningIfNeeded(appCtx, "after-primary-await")
+        awaitListeningReady(afterKickWaitMs)
     }
 
     @Synchronized

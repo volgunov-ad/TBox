@@ -128,7 +128,11 @@ fun ExternalAppWidgetItem(
         }
         val staggerMs = (appWidgetId and 0x7) * EXTERNAL_WIDGET_ID_STAGGER_STEP_MS
         delay(EXTERNAL_WIDGET_DEFERRED_CREATE_MS + staggerMs)
-        ExternalWidgetHostManager.awaitListeningReady(12_000L)
+        ExternalWidgetHostManager.awaitListeningReadyWithOptionalKick(
+            context = context,
+            primaryTimeoutMs = 12_000L,
+            afterKickWaitMs = 2_500L
+        )
         val info = appWidgetInfo ?: return@LaunchedEffect
         var created: AppWidgetHostView? = null
         for (retryDelayMs in EXTERNAL_WIDGET_CREATE_RETRY_DELAYS_MS) {

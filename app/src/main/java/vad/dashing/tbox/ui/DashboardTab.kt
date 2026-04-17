@@ -75,6 +75,12 @@ fun MainDashboardTab(
             ExternalWidgetHostManager.releaseHost()
         }
     }
+    LaunchedEffect(Unit) {
+        ExternalWidgetHostManager.kickListeningIfNeeded(
+            context,
+            "MainDashboardTab.compose"
+        )
+    }
 
     val dashboardViewModel: MainDashboardViewModel = viewModel()
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
