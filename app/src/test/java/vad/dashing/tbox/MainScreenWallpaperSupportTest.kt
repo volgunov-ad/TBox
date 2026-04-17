@@ -1,10 +1,34 @@
 package vad.dashing.tbox
 
+import android.app.Application
+import android.net.Uri
+import androidx.test.core.app.ApplicationProvider
+import java.io.File
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class MainScreenWallpaperSupportTest {
+
+    @Test
+    fun resolveWallpaperSource_fileUri_usesParentFolder() {
+        val ctx = ApplicationProvider.getApplicationContext<Application>()
+        val dir = File(ctx.cacheDir, "wp_test_dir").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val img = File(dir, "hero.jpg").apply { writeText("x") }
+        val uri = Uri.fromFile(img)
+        val res = runBlocking { resolveWallpaperSourceFromPickedImageUri(ctx, uri) }
+        assertEquals(Uri.fromFile(dir).toString(), res?.folderUriString)
+        assertEquals("hero.jpg", res?.selectedFileName)
+    }
 
     @Test
     fun effectiveWallpaperFileName_prefersSavedWhenPresent() {

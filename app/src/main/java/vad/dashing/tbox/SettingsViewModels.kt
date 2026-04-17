@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import android.content.Context
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -1069,6 +1070,23 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenWallpaperDarkFolderUri(uriString: String?) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperDarkFolderUri(uriString)
+            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+        }
+    }
+
+    /**
+     * Picks one image via [GetContent]; uses parent folder when possible so carousel can list siblings.
+     */
+    fun applyMainScreenWallpaperFromPickedImage(context: Context, pickedUri: Uri, forLightTheme: Boolean) {
+        viewModelScope.launch {
+            val res = resolveWallpaperSourceFromPickedImageUri(context, pickedUri) ?: return@launch
+            if (forLightTheme) {
+                settingsManager.saveMainScreenWallpaperLightFolderUri(res.folderUriString)
+                settingsManager.saveMainScreenWallpaperLightSelectedFileName(res.selectedFileName)
+            } else {
+                settingsManager.saveMainScreenWallpaperDarkFolderUri(res.folderUriString)
+                settingsManager.saveMainScreenWallpaperDarkSelectedFileName(res.selectedFileName)
+            }
             _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
         }
     }

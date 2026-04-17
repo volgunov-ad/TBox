@@ -221,8 +221,9 @@
     <string name="settings_main_screen_wallpaper_title">Main screen background</string>
     <string name="settings_main_screen_wallpaper_light">Wallpaper folder (light theme)</string>
     <string name="settings_main_screen_wallpaper_dark">Wallpaper folder (dark theme)</string>
-    <string name="settings_main_screen_wallpaper_pick_folder">Choose folder</string>
-    <string name="settings_main_screen_wallpaper_folder_hint">Images are read from the folder (not copied into the app). Sorted by file name. On the main screen, swipe left/right on the background to change the wallpaper; gestures on panels and corner buttons stay with those controls.</string>
+    <string name="settings_main_screen_wallpaper_pick_source">Choose</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Wallpapers are not copied into the app. Where supported, pick a folder of images; on devices without a folder picker, pick one image in the desired folder—the app will try to use that folder for the carousel (if the OS does not expose sibling files, only the chosen image is used). Sorted by file name. On the main screen, swipe left/right on the background to change the wallpaper; gestures on panels and corner buttons stay with those controls.</string>
+    <string name="settings_main_screen_wallpaper_no_picker">No app on this device can pick an image.</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Background: fill the screen</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">On — the image covers the whole screen; what does not fit is cropped at the edges. Off — the whole image stays visible inside the screen; empty bands use the theme background color.</string>
     <string name="settings_main_screen_canvas_bg_title">Main screen background (under panels)</string>

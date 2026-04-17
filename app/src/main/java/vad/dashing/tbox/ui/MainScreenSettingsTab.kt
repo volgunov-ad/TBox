@@ -1,6 +1,8 @@
 package vad.dashing.tbox.ui
 
+import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -90,10 +92,12 @@ fun MainScreenSettingsTab(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
             settingsViewModel.saveMainScreenWallpaperLightFolderUri(uri.toString())
         }
     }
@@ -101,11 +105,80 @@ fun MainScreenSettingsTab(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
             settingsViewModel.saveMainScreenWallpaperDarkFolderUri(uri.toString())
+        }
+    }
+    val pickWallpaperLightImage = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            settingsViewModel.applyMainScreenWallpaperFromPickedImage(context, uri, forLightTheme = true)
+        }
+    }
+    val pickWallpaperDarkImage = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            settingsViewModel.applyMainScreenWallpaperFromPickedImage(context, uri, forLightTheme = false)
+        }
+    }
+    val openDocumentTreeIntent = remember {
+        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+    }
+    val canOpenDocumentTree = remember {
+        openDocumentTreeIntent.resolveActivity(context.packageManager) != null
+    }
+    fun launchLightWallpaperPicker() {
+        if (canOpenDocumentTree) {
+            pickWallpaperLightFolder.launch(null)
+        } else {
+            val getContent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
+            if (getContent.resolveActivity(context.packageManager) != null) {
+                pickWallpaperLightImage.launch("image/*")
+            } else {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+    fun launchDarkWallpaperPicker() {
+        if (canOpenDocumentTree) {
+            pickWallpaperDarkFolder.launch(null)
+        } else {
+            val getContent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
+            if (getContent.resolveActivity(context.packageManager) != null) {
+                pickWallpaperDarkImage.launch("image/*")
+            } else {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -147,10 +220,10 @@ fun MainScreenSettingsTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { pickWallpaperLightFolder.launch(null) },
+                onClick = { launchLightWallpaperPicker() },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_folder), fontSize = 22.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), fontSize = 22.sp)
             }
             OutlinedButton(
                 onClick = { settingsViewModel.saveMainScreenWallpaperLightFolderUri(null) },
@@ -173,10 +246,10 @@ fun MainScreenSettingsTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { pickWallpaperDarkFolder.launch(null) },
+                onClick = { launchDarkWallpaperPicker() },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_folder), fontSize = 22.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), fontSize = 22.sp)
             }
             OutlinedButton(
                 onClick = { settingsViewModel.saveMainScreenWallpaperDarkFolderUri(null) },

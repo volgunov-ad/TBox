@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.documentfile.provider.DocumentFile
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -42,16 +43,72 @@ internal suspend fun listSortedWallpaperImagesInFolder(
 ): List<Pair<String, Uri>> = withContext(Dispatchers.IO) {
     if (folderUri.scheme == "file") {
         val path = folderUri.path ?: return@withContext emptyList()
-        return@withContext listSortedImageFilesInDir(java.io.File(path))
+        return@withContext listSortedImageFilesInDir(File(path))
     }
-    val root = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext emptyList()
-    val files = root.listFiles().filter { isLikelyImageDocument(it) }
-    val pairs = files.mapNotNull { df ->
-        val n = df.name ?: return@mapNotNull null
-        n to df.uri
+    DocumentFile.fromTreeUri(context, folderUri)?.takeIf { it.isDirectory }?.let { root ->
+        val files = root.listFiles().filter { isLikelyImageDocument(it) }
+        return@withContext files.mapNotNull { df ->
+            val n = df.name ?: return@mapNotNull null
+            n to df.uri
+        }.sortedBy { it.first }
     }
-    pairs.sortedBy { it.first }
+    DocumentFile.fromSingleUri(context, folderUri)?.let { doc ->
+        when {
+            doc.isDirectory -> {
+                val files = doc.listFiles().filter { isLikelyImageDocument(it) }
+                return@withContext files.mapNotNull { df ->
+                    val n = df.name ?: return@mapNotNull null
+                    n to df.uri
+                }.sortedBy { it.first }
+            }
+            doc.isFile && isLikelyImageDocument(doc) -> {
+                val n = doc.name ?: return@withContext emptyList()
+                return@withContext listOf(n to doc.uri)
+            }
+            else -> return@withContext emptyList()
+        }
+    }
+    emptyList()
 }
+
+/**
+ * User picks one image; we try to use its parent directory as the wallpaper source (carousel).
+ * If the parent is not available (typical single-document [content] URIs), falls back to that file only.
+ */
+internal suspend fun resolveWallpaperSourceFromPickedImageUri(
+    context: Context,
+    pickedUri: Uri,
+): WallpaperPickResolution? = withContext(Dispatchers.IO) {
+    if (pickedUri.scheme.equals("file", ignoreCase = true)) {
+        val f = File(pickedUri.path ?: return@withContext null)
+        if (!f.isFile) return@withContext null
+        val parent = f.parentFile?.takeIf { it.isDirectory } ?: return@withContext null
+        return@withContext WallpaperPickResolution(
+            folderUriString = Uri.fromFile(parent).toString(),
+            selectedFileName = f.name,
+        )
+    }
+    val doc = DocumentFile.fromSingleUri(context, pickedUri) ?: return@withContext null
+    if (!doc.isFile || !isLikelyImageDocument(doc)) return@withContext null
+    val name = doc.name ?: return@withContext null
+    val parent = runCatching { doc.parentFile }.getOrNull()
+    if (parent != null && parent.isDirectory) {
+        WallpaperPickResolution(
+            folderUriString = parent.uri.toString(),
+            selectedFileName = name,
+        )
+    } else {
+        WallpaperPickResolution(
+            folderUriString = pickedUri.toString(),
+            selectedFileName = name,
+        )
+    }
+}
+
+internal data class WallpaperPickResolution(
+    val folderUriString: String,
+    val selectedFileName: String,
+)
 
 internal suspend fun decodeImageBitmapFromUri(
     context: Context,
