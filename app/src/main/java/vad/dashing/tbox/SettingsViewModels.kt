@@ -15,10 +15,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import android.content.Context
+import android.widget.Toast
+import vad.dashing.tbox.R
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -1079,7 +1083,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
      */
     fun applyMainScreenWallpaperFromPickedImage(context: Context, pickedUri: Uri, forLightTheme: Boolean) {
         viewModelScope.launch {
-            val res = resolveWallpaperSourceFromPickedImageUri(context, pickedUri) ?: return@launch
+            val res = resolveWallpaperSourceFromPickedImageUri(context, pickedUri)
+            if (res == null) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.settings_main_screen_wallpaper_file_too_large),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return@launch
+            }
             if (forLightTheme) {
                 settingsManager.saveMainScreenWallpaperLightFolderAndSelection(
                     res.folderUriString,

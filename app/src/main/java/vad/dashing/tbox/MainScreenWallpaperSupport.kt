@@ -7,8 +7,15 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
+import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+/** Skip wallpaper files larger than this (bytes) when listing and when applying a pick. */
+internal const val MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES = 10L * 1024 * 1024
+
+/** Long edge cap for decoded bitmap (px); keeps memory reasonable on head units. */
+private const val MAIN_SCREEN_WALLPAPER_DECODE_MAX_EDGE_PX = 4096
 
 private val IMAGE_EXTENSIONS = setOf(
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif"
@@ -16,10 +23,31 @@ private val IMAGE_EXTENSIONS = setOf(
 
 internal fun isLikelyImageDocument(file: DocumentFile): Boolean {
     if (!file.isFile) return false
+    val len = file.length()
+    if (len > 0L && len > MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES) return false
     val mime = file.type?.lowercase() ?: ""
     if (mime.startsWith("image/")) return true
     val name = file.name?.substringAfterLast('.', "")?.lowercase() ?: ""
     return name in IMAGE_EXTENSIONS
+}
+
+internal fun isWallpaperFileOverSizeLimit(context: Context, uri: Uri): Boolean {
+    return try {
+        when (uri.scheme?.lowercase()) {
+            "file" -> {
+                val f = File(uri.path ?: return false)
+                f.isFile && f.length() > MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES
+            }
+            else -> {
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    val len = pfd.statSize
+                    len > 0 && len > MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES
+                } ?: false
+            }
+        }
+    } catch (_: Exception) {
+        false
+    }
 }
 
 /**
@@ -47,6 +75,7 @@ private fun listSortedImageFilesInDir(dir: java.io.File): List<Pair<String, Uri>
     if (!dir.isDirectory) return emptyList()
     val pairs = dir.listFiles()?.mapNotNull { f ->
         if (!f.isFile) return@mapNotNull null
+        if (f.length() > MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES) return@mapNotNull null
         val n = f.name
         val ext = n.substringAfterLast('.', "").lowercase()
         if (ext !in IMAGE_EXTENSIONS) return@mapNotNull null
@@ -68,7 +97,7 @@ internal suspend fun listSortedWallpaperImagesInFolder(
             f.isDirectory -> return@withContext listSortedImageFilesInDir(f)
             f.isFile -> {
                 val ext = f.name.substringAfterLast('.', "").lowercase()
-                if (ext in IMAGE_EXTENSIONS) {
+                if (ext in IMAGE_EXTENSIONS && f.length() <= MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES) {
                     return@withContext listOf(f.name to Uri.fromFile(f))
                 }
             }
@@ -111,6 +140,9 @@ internal suspend fun resolveWallpaperSourceFromPickedImageUri(
     context: Context,
     pickedUri: Uri,
 ): WallpaperPickResolution? = withContext(Dispatchers.IO) {
+    if (isWallpaperFileOverSizeLimit(context, pickedUri)) {
+        return@withContext null
+    }
     if (pickedUri.scheme.equals("file", ignoreCase = true)) {
         val f = File(pickedUri.path ?: return@withContext null)
         if (!f.isFile) return@withContext null
@@ -155,13 +187,40 @@ internal data class WallpaperPickResolution(
     val selectedFileName: String,
 )
 
-internal suspend fun decodeImageBitmapFromUri(
+private fun computeInSampleSize(width: Int, height: Int, maxSidePx: Int): Int {
+    if (width <= 0 || height <= 0 || maxSidePx <= 0) return 1
+    var inSample = 1
+    val longEdge = max(width, height)
+    while (longEdge / (inSample * 2) >= maxSidePx) {
+        inSample *= 2
+    }
+    return inSample.coerceAtLeast(1)
+}
+
+/**
+ * Decodes a wallpaper with subsampling so long edge is at most [maxDecodeSidePx], and skips
+ * files over [MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES]. Returns null on failure / oversize.
+ */
+internal suspend fun decodeWallpaperImageBitmapFromUri(
     context: Context,
     uri: Uri,
+    maxDecodeSidePx: Int,
 ): ImageBitmap? = withContext(Dispatchers.IO) {
+    if (isWallpaperFileOverSizeLimit(context, uri)) {
+        return@withContext null
+    }
+    val cap = maxDecodeSidePx.coerceIn(512, MAIN_SCREEN_WALLPAPER_DECODE_MAX_EDGE_PX)
     runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { input ->
-            BitmapFactory.decodeStream(input)?.asImageBitmap()
+            BitmapFactory.decodeStream(input, null, bounds)
+        } ?: return@runCatching null
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = computeInSampleSize(bounds.outWidth, bounds.outHeight, cap)
+        }
+        context.contentResolver.openInputStream(uri)?.use { input2 ->
+            BitmapFactory.decodeStream(input2, null, opts)?.asImageBitmap()
         }
     }.getOrNull()
 }
