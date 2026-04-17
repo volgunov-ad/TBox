@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.app.Application
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertNotNull
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -15,6 +16,25 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class MainScreenWallpaperSupportTest {
+
+    @Test
+    fun localFileFromEmbeddedPath_stripsRootPrefix() {
+        val ctx = ApplicationProvider.getApplicationContext<Application>()
+        val sub = File(ctx.cacheDir, "light_test").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val img = File(sub, "a.jpg").apply { writeText("x") }
+        val fakePath = "/root" + img.absolutePath
+        val uri = Uri.Builder()
+            .scheme("content")
+            .authority("com.example.fileprovider")
+            .path(fakePath)
+            .build()
+        val resolved = localFileFromEmbeddedStoragePath(uri)
+        assertNotNull(resolved)
+        assertEquals(img.absolutePath, resolved!!.absolutePath)
+    }
 
     @Test
     fun resolveWallpaperSource_fileUri_usesParentFolder() {

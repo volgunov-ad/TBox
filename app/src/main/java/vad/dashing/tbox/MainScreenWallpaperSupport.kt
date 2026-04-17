@@ -25,6 +25,27 @@ internal fun isLikelyImageDocument(file: DocumentFile): Boolean {
 /**
  * Lists image files in a SAF tree root, sorted by display name (same order as [String.compareTo]).
  */
+/**
+ * Some third-party file managers return [content] URIs whose path embeds a real filesystem
+ * location (e.g. `/root/storage/emulated/0/...`). If that path exists, list it as a normal folder.
+ */
+internal fun localFileFromEmbeddedStoragePath(uri: Uri): File? {
+    if (!uri.scheme.equals("content", ignoreCase = true)) return null
+    val rawPath = (uri.encodedPath?.let { Uri.decode(it) } ?: uri.path) ?: return null
+    val candidates = LinkedHashSet<String>()
+    when {
+        rawPath.startsWith("/root/storage/") -> candidates.add(rawPath.removePrefix("/root"))
+        rawPath.startsWith("/storage/") -> candidates.add(rawPath)
+    }
+    if (rawPath.startsWith("/root/") && rawPath.length > 5) {
+        val stripped = rawPath.removePrefix("/root")
+        if (stripped.startsWith("/")) {
+            candidates.add(stripped)
+        }
+    }
+    return candidates.map { File(it) }.firstOrNull { it.exists() }
+}
+
 private fun listSortedImageFilesInDir(dir: java.io.File): List<Pair<String, Uri>> {
     if (!dir.isDirectory) return emptyList()
     val pairs = dir.listFiles()?.mapNotNull { f ->
@@ -45,13 +66,27 @@ internal suspend fun listSortedWallpaperImagesInFolder(
         val path = folderUri.path ?: return@withContext emptyList()
         return@withContext listSortedImageFilesInDir(File(path))
     }
-    DocumentFile.fromTreeUri(context, folderUri)?.takeIf { it.isDirectory }?.let { root ->
-        val files = root.listFiles().filter { isLikelyImageDocument(it) }
-        return@withContext files.mapNotNull { df ->
-            val n = df.name ?: return@mapNotNull null
-            n to df.uri
-        }.sortedBy { it.first }
+    localFileFromEmbeddedStoragePath(folderUri)?.let { f ->
+        when {
+            f.isDirectory -> return@withContext listSortedImageFilesInDir(f)
+            f.isFile -> {
+                val ext = f.name.substringAfterLast('.', "").lowercase()
+                if (ext in IMAGE_EXTENSIONS) {
+                    return@withContext listOf(f.name to Uri.fromFile(f))
+                }
+            }
+        }
     }
+    runCatching { DocumentFile.fromTreeUri(context, folderUri) }
+        .getOrNull()
+        ?.takeIf { it.isDirectory }
+        ?.let { root ->
+            val files = root.listFiles().filter { isLikelyImageDocument(it) }
+            return@withContext files.mapNotNull { df ->
+                val n = df.name ?: return@mapNotNull null
+                n to df.uri
+            }.sortedBy { it.first }
+        }
     DocumentFile.fromSingleUri(context, folderUri)?.let { doc ->
         when {
             doc.isDirectory -> {
@@ -88,13 +123,26 @@ internal suspend fun resolveWallpaperSourceFromPickedImageUri(
             selectedFileName = f.name,
         )
     }
+    localFileFromEmbeddedStoragePath(pickedUri)?.takeIf { it.isFile }?.let { f ->
+        val parent = f.parentFile?.takeIf { it.isDirectory } ?: return@withContext null
+        return@withContext WallpaperPickResolution(
+            folderUriString = Uri.fromFile(parent).toString(),
+            selectedFileName = f.name,
+        )
+    }
     val doc = DocumentFile.fromSingleUri(context, pickedUri) ?: return@withContext null
     if (!doc.isFile || !isLikelyImageDocument(doc)) return@withContext null
     val name = doc.name ?: return@withContext null
     val parent = runCatching { doc.parentFile }.getOrNull()
     if (parent != null && parent.isDirectory) {
+        val parentLocal = localFileFromEmbeddedStoragePath(parent.uri)
+        val folderStr = if (parentLocal != null && parentLocal.isDirectory) {
+            Uri.fromFile(parentLocal).toString()
+        } else {
+            parent.uri.toString()
+        }
         WallpaperPickResolution(
-            folderUriString = parent.uri.toString(),
+            folderUriString = folderStr,
             selectedFileName = name,
         )
     } else {
