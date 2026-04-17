@@ -30,4 +30,11 @@ class WallpaperFilesystemFolderTest {
     fun normalizeFilesystemWallpaperFolderPath_rejectsMissing() {
         assertNull(normalizeFilesystemWallpaperFolderPath("/no/such/folder/12345"))
     }
+
+    @Test
+    fun displayWallpaperFolderSummary_fileUri_showsPath() {
+        val path = "/storage/emulated/0/Download/light"
+        val summary = displayWallpaperFolderSummary(Uri.fromFile(File(path)).toString())
+        assertEquals(path, summary)
+    }
 }

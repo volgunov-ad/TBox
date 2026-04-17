@@ -229,6 +229,7 @@
     <string name="settings_main_screen_wallpaper_path_label">Путь к папке</string>
     <string name="settings_main_screen_wallpaper_apply_path">Применить путь</string>
     <string name="settings_main_screen_wallpaper_path_invalid">Папка не найдена или путь неверный</string>
+    <string name="settings_main_screen_wallpaper_current_path">Текущий источник: %1$s</string>
     <string name="settings_main_screen_wallpaper_no_picker">Нет приложения для выбора изображения на этом устройстве.</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Фон: на весь экран</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">Включено — картинка заполняет весь экран, лишнее по краям обрезается. Выключено — картинка видна целиком внутри экрана, свободные полосы заливаются цветом фона темы.</string>

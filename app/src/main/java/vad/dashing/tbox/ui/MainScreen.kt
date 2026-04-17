@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -262,17 +269,6 @@ private fun MainScreenWallpaperBackground(
             }
         }
     }
-    val imageUri = remember(sortedPairs, effectiveName) {
-        effectiveName?.let { n -> sortedPairs.firstOrNull { it.first == n }?.second }
-    }
-    var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(imageUri) {
-        bitmap = if (imageUri == null) {
-            null
-        } else {
-            decodeImageBitmapFromUri(context, imageUri)
-        }
-    }
     val swipeThresholdPx = with(density) { 48.dp.toPx() }
     val velocityThresholdPxPerSec = with(density) { 400.dp.toPx() }
     Box(
@@ -320,13 +316,52 @@ private fun MainScreenWallpaperBackground(
                 .fillMaxSize()
                 .background(canvasColor)
         )
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = if (wallpaperCrop) ContentScale.Crop else ContentScale.Fit
-            )
+        val animLabel = effectiveName ?: ""
+        AnimatedContent(
+            targetState = animLabel,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                val n = sortedNames.size
+                val oldIdx = sortedNames.indexOf(initialState)
+                val newIdx = sortedNames.indexOf(targetState)
+                val forward = if (n > 0 && oldIdx >= 0 && newIdx >= 0) {
+                    newIdx == (oldIdx + 1) % n
+                } else {
+                    true
+                }
+                val enter = slideInHorizontally(
+                    animationSpec = tween(280),
+                    initialOffsetX = { if (forward) it else -it }
+                ) + fadeIn(tween(220))
+                val exit = slideOutHorizontally(
+                    animationSpec = tween(280),
+                    targetOffsetX = { if (forward) -it else it }
+                ) + fadeOut(tween(220))
+                enter togetherWith exit
+            },
+            label = "main_screen_wallpaper"
+        ) { nameKey ->
+            if (nameKey.isEmpty()) {
+                Box(Modifier.fillMaxSize())
+            } else {
+            val uriForSlide = sortedPairs.firstOrNull { it.first == nameKey }?.second
+            var slideBitmap by remember(nameKey) { mutableStateOf<ImageBitmap?>(null) }
+            LaunchedEffect(nameKey, uriForSlide) {
+                slideBitmap = if (uriForSlide == null) {
+                    null
+                } else {
+                    decodeImageBitmapFromUri(context, uriForSlide)
+                }
+            }
+            if (slideBitmap != null) {
+                Image(
+                    bitmap = slideBitmap!!,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = if (wallpaperCrop) ContentScale.Crop else ContentScale.Fit
+                )
+            }
+            }
         }
     }
 }

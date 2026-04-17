@@ -74,6 +74,7 @@ fun TboxApp(
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onTripFinishAndStart: () -> Unit,
+    onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
 ) {
     val viewModel: TboxViewModel = viewModel()
     val canViewModel: CanDataViewModel = viewModel()
@@ -115,6 +116,7 @@ fun TboxApp(
                 onServiceCommand = onServiceCommand,
                 onMockLocationSettingChanged = onMockLocationSettingChanged,
                 onTripFinishAndStart = onTripFinishAndStart,
+                onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
             )
         }
     }
@@ -159,6 +161,7 @@ fun TboxScreen(
     onServiceCommand: (String, String, String) -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onTripFinishAndStart: () -> Unit,
+    onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
 ) {
     val canViewModel: CanDataViewModel = viewModel()
     val cycleViewModel: CycleDataViewModel = viewModel()
@@ -395,7 +398,10 @@ fun TboxScreen(
                         onTboxRestart,
                         onTripFinishAndStart = onTripFinishAndStart,
                     )
-                    10 -> MainScreenSettingsTab(settingsViewModel = settingsViewModel)
+                    10 -> MainScreenSettingsTab(
+                        settingsViewModel = settingsViewModel,
+                        onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
+                    )
                     else -> ModemTab(viewModel, onServiceCommand)
                 }
             }

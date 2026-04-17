@@ -229,6 +229,7 @@
     <string name="settings_main_screen_wallpaper_path_label">Folder path</string>
     <string name="settings_main_screen_wallpaper_apply_path">Apply path</string>
     <string name="settings_main_screen_wallpaper_path_invalid">Folder not found or path is invalid</string>
+    <string name="settings_main_screen_wallpaper_current_path">Current source: %1$s</string>
     <string name="settings_main_screen_wallpaper_no_picker">No app on this device can pick an image.</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Background: fill the screen</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">On — the image covers the whole screen; what does not fit is cropped at the edges. Off — the whole image stays visible inside the screen; empty bands use the theme background color.</string>

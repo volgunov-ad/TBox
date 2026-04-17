@@ -42,6 +42,7 @@ import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.displayWallpaperFolderSummary
 import vad.dashing.tbox.hasManageAllFilesAccess
 import vad.dashing.tbox.normalizeFilesystemWallpaperFolderPath
 import java.io.File
@@ -58,6 +59,7 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 @Composable
 fun MainScreenSettingsTab(
     settingsViewModel: SettingsViewModel,
+    onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -202,7 +204,12 @@ fun MainScreenSettingsTab(
         } else {
             val getContent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
             if (getContent.resolveActivity(context.packageManager) != null) {
-                pickWallpaperLightImage.launch("image/*")
+                val open = { pickWallpaperLightImage.launch("image/*") }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && onRequestWallpaperStorageAccess != null) {
+                    onRequestWallpaperStorageAccess(open)
+                } else {
+                    open()
+                }
             } else {
                 Toast.makeText(
                     context,
@@ -218,7 +225,12 @@ fun MainScreenSettingsTab(
         } else {
             val getContent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
             if (getContent.resolveActivity(context.packageManager) != null) {
-                pickWallpaperDarkImage.launch("image/*")
+                val open = { pickWallpaperDarkImage.launch("image/*") }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && onRequestWallpaperStorageAccess != null) {
+                    onRequestWallpaperStorageAccess(open)
+                } else {
+                    open()
+                }
             } else {
                 Toast.makeText(
                     context,
@@ -284,6 +296,17 @@ fun MainScreenSettingsTab(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
         )
+        if (mainScreenWallpaperLightFolderUri.isNotBlank()) {
+            Text(
+                text = stringResource(
+                    R.string.settings_main_screen_wallpaper_current_path,
+                    displayWallpaperFolderSummary(mainScreenWallpaperLightFolderUri)
+                ),
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -342,6 +365,17 @@ fun MainScreenSettingsTab(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 6.dp)
         )
+        if (mainScreenWallpaperDarkFolderUri.isNotBlank()) {
+            Text(
+                text = stringResource(
+                    R.string.settings_main_screen_wallpaper_current_path,
+                    displayWallpaperFolderSummary(mainScreenWallpaperDarkFolderUri)
+                ),
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()

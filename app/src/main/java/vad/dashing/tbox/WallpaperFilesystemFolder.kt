@@ -9,6 +9,18 @@ import java.io.File
 internal fun hasManageAllFilesAccess(): Boolean =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
 
+/** Short display for settings: absolute path for `file://`, full URI string otherwise. */
+internal fun displayWallpaperFolderSummary(uriString: String): String {
+    if (uriString.isBlank()) return ""
+    return runCatching {
+        val u = Uri.parse(uriString)
+        when {
+            u.scheme.equals("file", ignoreCase = true) -> u.path ?: uriString
+            else -> uriString
+        }
+    }.getOrDefault(uriString)
+}
+
 /**
  * Normalizes user input to a persisted `file://` URI of an existing directory, or null.
  * Accepts absolute paths or `file://` URIs. Uses canonical path.

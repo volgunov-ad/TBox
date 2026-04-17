@@ -66,6 +66,8 @@ class MainActivity : ComponentActivity() {
     private var pendingDataToSave: List<String>? = null
     private var pendingJsonBackup: String? = null
     private var pendingJsonBackupExcludeTripLists: Boolean = false
+    /** After MANAGE_EXTERNAL_STORAGE / legacy storage is granted, run this (e.g. open image picker for wallpapers). */
+    private var pendingWallpaperPickerAction: (() -> Unit)? = null
 
     private val importBackupLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -156,7 +158,10 @@ class MainActivity : ComponentActivity() {
                     },
                     onTripFinishAndStart = {
                         serviceCommand(BackgroundService.ACTION_TRIP_FINISH_AND_START, "", "")
-                    }
+                    },
+                    onRequestWallpaperStorageAccess = { afterGranted ->
+                        runWallpaperPickerWithStorageIfNeeded(afterGranted)
+                    },
                 )
             }
         }
@@ -510,6 +515,19 @@ class MainActivity : ComponentActivity() {
                 checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED)
     }
 
+    /**
+     * Opens the wallpaper image picker after storage access if needed (Android 11+: all files).
+     * Used when SAF tree is unavailable and [GetContent] needs broad storage to resolve sibling files.
+     */
+    private fun runWallpaperPickerWithStorageIfNeeded(action: () -> Unit) {
+        if (hasStoragePermissions()) {
+            action()
+        } else {
+            pendingWallpaperPickerAction = action
+            requestStoragePermissions()
+        }
+    }
+
     private fun onStoragePermissionsGranted() {
         Log.d(TAG, "Storage permissions granted")
         // Если есть ожидающие данные для сохранения - сохраняем их
@@ -524,6 +542,10 @@ class MainActivity : ComponentActivity() {
             pendingJsonBackup = null
             pendingJsonBackupExcludeTripLists = false
         }
+        pendingWallpaperPickerAction?.let { action ->
+            pendingWallpaperPickerAction = null
+            action()
+        }
     }
 
     private fun onStoragePermissionsDenied() {
@@ -533,6 +555,7 @@ class MainActivity : ComponentActivity() {
         pendingDataToSave = null
         pendingJsonBackup = null
         pendingJsonBackupExcludeTripLists = false
+        pendingWallpaperPickerAction = null
     }
 
     private fun startServiceSafely(intent: Intent) {
