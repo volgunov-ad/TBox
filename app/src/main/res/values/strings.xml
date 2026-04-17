@@ -384,6 +384,20 @@
     <string name="mb_vehicle_action_set_string">Записать строку</string>
     <string name="mb_vehicle_action_poll">Запустить опрос</string>
     <string name="mb_vehicle_mfs_heat_id_label">Обогрев руля: id=%1$d (eVEHICLE_SET_MFS_HEAT_SWITCH)</string>
+    <string name="mb_can_parallel_header">MB-CAN (параллельно с TBox)</string>
+    <string name="mb_can_parallel_subtitle">Снимок с ГУ через nativeGetCanDataWithType; список ниже — по UDP с модема, без смешивания.</string>
+    <string name="mb_can_parallel_inactive">Фоновая служба остановлена — опрос MB-CAN выключен.</string>
+    <string name="mb_can_parallel_last_native_type">Последний тип колбэка (MBCanDataType)</string>
+    <string name="mb_can_parallel_speed">Скорость (ГУ)</string>
+    <string name="mb_can_parallel_gear">Передача / режим (ГУ)</string>
+    <string name="mb_can_parallel_steer_angle">Угол руля (ГУ)</string>
+    <string name="mb_can_parallel_steer_rate">Скорость вращения руля (ГУ)</string>
+    <string name="mb_can_parallel_engine_rpm">Обороты (ГУ)</string>
+    <string name="mb_can_parallel_engine_temp">Темп. двигателя (ГУ)</string>
+    <string name="mb_can_parallel_odometer">Одометр (ГУ)</string>
+    <string name="mb_can_parallel_fuel_percent">Уровень топлива (ГУ)</string>
+    <string name="mb_can_parallel_dte">Запас хода (ГУ)</string>
+    <string name="mb_can_parallel_avg_consumption">Средний расход (ГУ)</string>
     <string name="data_title_engine_rpm">Обороты двигателя</string>
     <string name="data_title_throttle_position">Параметр 5</string>
     <string name="data_title_car_speed">Скорость автомобиля</string>

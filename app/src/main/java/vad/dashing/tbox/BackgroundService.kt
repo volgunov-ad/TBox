@@ -103,6 +103,8 @@ class BackgroundService : Service() {
     /** Serializes delayed / repeated "open MainActivity" commands: each new request replaces the previous. */
     private var openMainActivityJob: Job? = null
     private var mbVehiclePollJob: Job? = null
+    /** Polls Mengbo MB-CAN into [MbCanParallelRepository] (parallel to TBox UDP → [CanDataRepository]). */
+    private var mbCanParallelJob: Job? = null
     @Volatile
     private var mbVehicleEngineReady: Boolean = false
     /** Cancels in-flight [ACTION_START] bootstrap if [ACTION_STOP] runs mid-startup. */
@@ -499,6 +501,7 @@ class BackgroundService : Service() {
                         TripRepository.setTripsProcessingEnabled(true)
                         servicePhase = ServiceLifecyclePhase.Running
                         startMbVehiclePolling()
+                        startMbCanParallelPolling()
                     } catch (e: CancellationException) {
                         servicePhase = ServiceLifecyclePhase.Idle
                         TripRepository.setTripsProcessingEnabled(false)
@@ -705,6 +708,23 @@ class BackgroundService : Service() {
         }
     }
 
+    /**
+     * Head-unit MB-CAN snapshots into [MbCanParallelRepository] only (does not alter TBox UDP / [CanDataRepository]).
+     */
+    private fun startMbCanParallelPolling() {
+        mbCanParallelJob?.cancel()
+        MbCanParallelRepository.setEnabled(true)
+        MbCanParallelRepository.attachNativeRelay()
+        mbCanParallelJob = scope.launch(exceptionHandler + Dispatchers.Default) {
+            while (isActive && isRunning) {
+                mbVehicleRunWithEngine { engine ->
+                    MbCanParallelRepository.applyPoll(engine)
+                }
+                delay(400L)
+            }
+        }
+    }
+
     private suspend fun pollMbVehicleSteeringHeatOnce() {
         val propId = MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH.nativeValue
         mbVehicleRunWithEngine { engine ->
@@ -731,6 +751,9 @@ class BackgroundService : Service() {
     }
 
     private fun stopMbVehiclePollingAndRelease() {
+        mbCanParallelJob?.cancel()
+        mbCanParallelJob = null
+        MbCanParallelRepository.setEnabled(false)
         mbVehiclePollJob?.cancel()
         mbVehiclePollJob = null
         if (!mbVehicleEngineReady) return
