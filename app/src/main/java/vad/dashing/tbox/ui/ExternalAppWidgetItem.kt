@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
+import android.os.SystemClock
 import kotlin.math.roundToInt
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -43,6 +44,7 @@ import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
 
 private const val EXTERNAL_WIDGET_PERIODIC_REFRESH_MS = 15 * 60 * 1000L
+private val EXTERNAL_WIDGET_INITIAL_RETRY_DELAYS_MS = longArrayOf(3_000L, 5_000L, 60_000L)
 
 private suspend fun awaitAppWidgetInfo(
     appWidgetManager: AppWidgetManager,
@@ -283,11 +285,28 @@ fun ExternalAppWidgetItem(
         }
 
         // First refresh only after view has real size/options; many providers need this.
+        var refreshRequestedAt = SystemClock.elapsedRealtime()
         ExternalWidgetHostManager.requestProviderRefresh(
             context = context,
             appWidgetId = appWidgetId,
             force = true
         )
+        for (retryDelayMs in EXTERNAL_WIDGET_INITIAL_RETRY_DELAYS_MS) {
+            delay(retryDelayMs)
+            val hasData = ExternalWidgetHostManager.hasRemoteViewsSince(
+                appWidgetId = appWidgetId,
+                sinceElapsedRealtimeMs = refreshRequestedAt
+            )
+            if (hasData) {
+                break
+            }
+            refreshRequestedAt = SystemClock.elapsedRealtime()
+            ExternalWidgetHostManager.requestProviderRefresh(
+                context = context,
+                appWidgetId = appWidgetId,
+                force = true
+            )
+        }
         while (true) {
             delay(EXTERNAL_WIDGET_PERIODIC_REFRESH_MS)
             // Soft periodic ping so weather/news providers that do not self-refresh still update.

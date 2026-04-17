@@ -1,11 +1,42 @@
 package vad.dashing.tbox
 
 import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
 import android.content.Context
 import android.os.SystemClock
+import android.widget.RemoteViews
 import android.util.Log
+
+private class TrackingAppWidgetHost(
+    context: Context,
+    hostId: Int,
+    private val onRemoteViewsReceived: (Int) -> Unit
+) : AppWidgetHost(context, hostId) {
+    override fun onCreateView(
+        context: Context,
+        appWidgetId: Int,
+        appWidget: AppWidgetProviderInfo
+    ): AppWidgetHostView {
+        return TrackingAppWidgetHostView(context) { hasRemoteViews ->
+            if (hasRemoteViews) {
+                onRemoteViewsReceived(appWidgetId)
+            }
+        }
+    }
+}
+
+private class TrackingAppWidgetHostView(
+    context: Context,
+    private val onRemoteViewsUpdated: (Boolean) -> Unit
+) : AppWidgetHostView(context) {
+    override fun updateAppWidget(remoteViews: RemoteViews?) {
+        super.updateAppWidget(remoteViews)
+        onRemoteViewsUpdated(remoteViews != null)
+    }
+}
 
 /**
  * Single [AppWidgetHost] for embedded third-party widgets.
@@ -23,12 +54,23 @@ object ExternalWidgetHostManager {
     private var refCount = 0
     private var listening = false
     private val providerRefreshLastAtMs = mutableMapOf<Int, Long>()
+    private val remoteViewsReceivedAtMs = mutableMapOf<Int, Long>()
 
     @Synchronized
     private fun ensureHost(context: Context): AppWidgetHost {
-        return host ?: AppWidgetHost(context.applicationContext, HOST_ID).also {
+        return host ?: TrackingAppWidgetHost(
+            context = context.applicationContext,
+            hostId = HOST_ID,
+            onRemoteViewsReceived = ::markRemoteViewsReceived
+        ).also {
             host = it
         }
+    }
+
+    @Synchronized
+    private fun markRemoteViewsReceived(appWidgetId: Int) {
+        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
+        remoteViewsReceivedAtMs[appWidgetId] = SystemClock.elapsedRealtime()
     }
 
     @Synchronized
@@ -76,6 +118,14 @@ object ExternalWidgetHostManager {
             // Ignore delete errors to avoid crashing config flow.
         }
         providerRefreshLastAtMs.remove(appWidgetId)
+        remoteViewsReceivedAtMs.remove(appWidgetId)
+    }
+
+    @Synchronized
+    fun hasRemoteViewsSince(appWidgetId: Int, sinceElapsedRealtimeMs: Long): Boolean {
+        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return false
+        val lastAt = remoteViewsReceivedAtMs[appWidgetId] ?: return false
+        return lastAt >= sinceElapsedRealtimeMs
     }
 
     /**
