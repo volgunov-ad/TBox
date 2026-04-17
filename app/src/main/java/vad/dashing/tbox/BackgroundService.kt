@@ -244,6 +244,8 @@ class BackgroundService : Service() {
         /**
          * Bring [MainActivity] to the foreground (singleTask). Optional delay via [EXTRA_OPEN_MAIN_DELAY_MS].
          * Repeated intents cancel the previous scheduled launch and start a new timer.
+         * After the first launch, waits two seconds and, if [MainActivityForegroundTracker] still
+         * reports [MainActivity] not in the foreground, retries once.
          */
         const val ACTION_OPEN_MAIN_ACTIVITY = "vad.dashing.tbox.OPEN_MAIN_ACTIVITY"
         const val EXTRA_OPEN_MAIN_DELAY_MS = "vad.dashing.tbox.EXTRA_OPEN_MAIN_DELAY_MS"
@@ -265,6 +267,7 @@ class BackgroundService : Service() {
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
+        private const val OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS = 2000L
     }
 
 
@@ -2188,14 +2191,22 @@ class BackgroundService : Service() {
             if (delayMs > 0) {
                 delay(delayMs)
             }
-            withContext(Dispatchers.Main) {
-                try {
-                    val launchIntent = MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
-                    startActivity(launchIntent)
-                } catch (e: Exception) {
-                    Log.e("BackgroundService", "Open MainActivity failed", e)
-                    TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")
+            suspend fun tryBringMainToFront() {
+                withContext(Dispatchers.Main) {
+                    try {
+                        val launchIntent =
+                            MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
+                        startActivity(launchIntent)
+                    } catch (e: Exception) {
+                        Log.e("BackgroundService", "Open MainActivity failed", e)
+                        TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")
+                    }
                 }
+            }
+            tryBringMainToFront()
+            delay(OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS)
+            if (!MainActivityForegroundTracker.isMainActivityInForeground.value) {
+                tryBringMainToFront()
             }
         }
     }
