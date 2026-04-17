@@ -205,7 +205,7 @@ fun MainScreenSettingsTab(
             val getContent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
             if (getContent.resolveActivity(context.packageManager) != null) {
                 val open = { pickWallpaperLightImage.launch("image/*") }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && onRequestWallpaperStorageAccess != null) {
+                if (onRequestWallpaperStorageAccess != null) {
                     onRequestWallpaperStorageAccess(open)
                 } else {
                     open()
@@ -226,7 +226,7 @@ fun MainScreenSettingsTab(
             val getContent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
             if (getContent.resolveActivity(context.packageManager) != null) {
                 val open = { pickWallpaperDarkImage.launch("image/*") }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && onRequestWallpaperStorageAccess != null) {
+                if (onRequestWallpaperStorageAccess != null) {
                     onRequestWallpaperStorageAccess(open)
                 } else {
                     open()
