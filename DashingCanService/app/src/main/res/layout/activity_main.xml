@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <Button
+        android:id="@+id/button1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Код АСС"
+        android:textSize="25dp"
+        android:layout_margin="16dp" />
+
+    <TextView
+        android:id="@+id/textView1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="6dp"
+        android:layout_toRightOf="@id/button1"
+        android:text="0"
+        android:textSize="45sp" />
+
+    <Button
+        android:id="@+id/button2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Метод 2"
+        android:textSize="25dp"
+        android:layout_below="@id/button1"
+        android:layout_margin="16dp" />
+
+    <TextView
+        android:id="@+id/textView2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0"
+        android:textSize="25sp"
+        android:layout_toRightOf="@id/button2"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_alignBaseline="@id/button2" />
+
+    <Button
+        android:id="@+id/button3"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Get Prop"
+        android:textSize="25dp"
+        android:layout_below="@id/button2"
+        android:layout_margin="16dp" />
+
+    <EditText
+        android:id="@+id/editText3"
+        android:layout_width="700dp"
+        android:layout_height="wrap_content"
+        android:hint="0"
+        android:textSize="45sp"
+        android:layout_toRightOf="@id/button3"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_alignBaseline="@id/button3" />
+
+    <Button
+        android:id="@+id/button4"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Set Prop"
+        android:textSize="25dp"
+        android:layout_below="@id/button3"
+        android:layout_margin="16dp" />
+
+    <TextView
+        android:id="@+id/textView4"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0"
+        android:textSize="45sp"
+        android:layout_toRightOf="@id/button4"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_alignBaseline="@id/button4" />
+
+</RelativeLayout>
