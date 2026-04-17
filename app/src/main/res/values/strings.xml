@@ -219,9 +219,10 @@
     <string name="settings_main_screen_open_on_boot_title">Автоматически открывать главный экран при запуске</string>
     <string name="settings_main_screen_open_on_boot_desc">После загрузки устройства, когда фоновая служба стартует автоматически, открывается окно приложения на главном экране (плитки дома)</string>
     <string name="settings_main_screen_wallpaper_title">Фон главного экрана</string>
-    <string name="settings_main_screen_wallpaper_light">Светлая тема приложения</string>
-    <string name="settings_main_screen_wallpaper_dark">Тёмная тема приложения</string>
-    <string name="settings_main_screen_wallpaper_pick">Выбрать изображение</string>
+    <string name="settings_main_screen_wallpaper_light">Папка с обоями (светлая тема)</string>
+    <string name="settings_main_screen_wallpaper_dark">Папка с обоями (тёмная тема)</string>
+    <string name="settings_main_screen_wallpaper_pick_folder">Выбрать папку</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Изображения берутся из папки (без копирования в приложение). Сортировка по имени файла. На главном экране свайп влево/вправо по свободной области переключает обои.</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
     <string name="settings_main_screen_canvas_bg_title">Фон главного экрана (под панелями)</string>
@@ -263,7 +264,7 @@
 
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_backup_title">Резервная копия</string>
-    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Файлы обоев главного экрана и пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
+    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Пути к папкам обоев главного экрана и выбранные файлы сохраняются в JSON; сами изображения не копируются. Пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
     <string name="settings_backup_export">Экспорт JSON</string>
     <string name="settings_backup_export_without_trips">Экспорт JSON без поездок</string>
     <string name="settings_backup_import">Импорт JSON</string>

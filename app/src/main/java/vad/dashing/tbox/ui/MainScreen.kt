@@ -3,6 +3,9 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,10 +31,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -41,11 +45,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import android.graphics.BitmapFactory
-import java.io.File
+import android.net.Uri
 import kotlin.math.roundToInt
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.ExternalWidgetHostManager
@@ -55,10 +56,15 @@ import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.MainScreenAddButtonPosition
+import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.MainScreenSettingsButtonPosition
 import vad.dashing.tbox.R
-import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.decodeImageBitmapFromUri
+import vad.dashing.tbox.effectiveWallpaperFileName
+import vad.dashing.tbox.isPointInsideCornerButton
+import vad.dashing.tbox.listSortedWallpaperImagesInFolder
+import vad.dashing.tbox.panelRectsPx
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.loadWidgetsFromConfig
 
@@ -107,6 +113,10 @@ fun MainScreen(
         MainScreenWallpaperBackground(
             theme = currentTheme,
             settingsViewModel = settingsViewModel,
+            mainPanels = mainPanels,
+            settingsBtnPos = settingsBtnPos,
+            addBtnPos = addBtnPos,
+            cornerBtnSizeDp = cornerBtnSizeDp,
             modifier = Modifier.fillMaxSize()
         )
         val maxWpx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
@@ -219,32 +229,124 @@ fun MainScreen(
 private fun MainScreenWallpaperBackground(
     theme: Int,
     settingsViewModel: SettingsViewModel,
+    mainPanels: List<MainScreenPanelConfig>,
+    settingsBtnPos: MainScreenSettingsButtonPosition,
+    addBtnPos: MainScreenAddButtonPosition,
+    cornerBtnSizeDp: Int,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val canvasBgLight by settingsViewModel.mainScreenCanvasBackgroundLight.collectAsStateWithLifecycle()
     val canvasBgDark by settingsViewModel.mainScreenCanvasBackgroundDark.collectAsStateWithLifecycle()
     val canvasColor = Color(if (theme == 2) canvasBgDark else canvasBgLight)
-    val hasLight by settingsViewModel.isMainScreenWallpaperLightSet.collectAsStateWithLifecycle()
-    val hasDark by settingsViewModel.isMainScreenWallpaperDarkSet.collectAsStateWithLifecycle()
+    val folderLight by settingsViewModel.mainScreenWallpaperLightFolderUri.collectAsStateWithLifecycle()
+    val folderDark by settingsViewModel.mainScreenWallpaperDarkFolderUri.collectAsStateWithLifecycle()
+    val selectedLight by settingsViewModel.mainScreenWallpaperLightSelectedFile.collectAsStateWithLifecycle()
+    val selectedDark by settingsViewModel.mainScreenWallpaperDarkSelectedFile.collectAsStateWithLifecycle()
     val epoch by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
     val wallpaperCrop by settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
-    val useWallpaper = if (theme == 2) hasDark else hasLight
-    val relPath = if (theme == 2) {
-        SettingsManager.MAIN_SCREEN_WALLPAPER_DARK_FILE
-    } else {
-        SettingsManager.MAIN_SCREEN_WALLPAPER_LIGHT_FILE
+    val folderUriStr = if (theme == 2) folderDark else folderLight
+    val savedSelectedName = if (theme == 2) selectedDark else selectedLight
+    val folderUri = remember(folderUriStr) {
+        if (folderUriStr.isBlank()) null else Uri.parse(folderUriStr)
     }
-    var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(useWallpaper, relPath, epoch) {
-        bitmap = withContext(Dispatchers.IO) {
-            if (!useWallpaper) return@withContext null
-            val file = File(context.filesDir, relPath)
-            if (!file.isFile) return@withContext null
-            BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+    var sortedPairs by remember { mutableStateOf<List<Pair<String, Uri>>>(emptyList()) }
+    LaunchedEffect(folderUriStr, epoch) {
+        sortedPairs = if (folderUri == null) {
+            emptyList()
+        } else {
+            listSortedWallpaperImagesInFolder(context, folderUri)
         }
     }
-    Box(modifier = modifier.fillMaxSize()) {
+    val sortedNames = remember(sortedPairs) { sortedPairs.map { it.first } }
+    val effectiveName = remember(sortedNames, savedSelectedName) {
+        effectiveWallpaperFileName(sortedNames, savedSelectedName)
+    }
+    LaunchedEffect(effectiveName, savedSelectedName, sortedNames, theme) {
+        val want = effectiveName ?: return@LaunchedEffect
+        if (want != savedSelectedName) {
+            if (theme == 2) {
+                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(want)
+            } else {
+                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(want)
+            }
+        }
+    }
+    val imageUri = remember(sortedPairs, effectiveName) {
+        effectiveName?.let { n -> sortedPairs.firstOrNull { it.first == n }?.second }
+    }
+    var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(imageUri) {
+        bitmap = if (imageUri == null) {
+            null
+        } else {
+            decodeImageBitmapFromUri(context, imageUri)
+        }
+    }
+    val cornerBtnPx = with(density) { cornerBtnSizeDp.dp.toPx() }
+    val swipeThresholdPx = with(density) { 48.dp.toPx() }
+    val velocityThresholdPxPerSec = with(density) { 400.dp.toPx() }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .then(
+                if (sortedNames.size <= 1 || effectiveName == null) {
+                    Modifier
+                } else {
+                    Modifier.pointerInput(
+                        mainPanels,
+                        settingsBtnPos,
+                        addBtnPos,
+                        cornerBtnPx,
+                        sortedNames,
+                        effectiveName,
+                        theme,
+                    ) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val x = down.position.x
+                            val y = down.position.y
+                            val cw = size.width.toFloat().coerceAtLeast(1f)
+                            val ch = size.height.toFloat().coerceAtLeast(1f)
+                            val inPanel = panelRectsPx(mainPanels, cw, ch).any { it.contains(Offset(x, y)) }
+                            val inSettings = isPointInsideCornerButton(
+                                x, y, settingsBtnPos.x, settingsBtnPos.y, cornerBtnPx, cw, ch
+                            )
+                            val inAdd = isPointInsideCornerButton(
+                                x, y, addBtnPos.x, addBtnPos.y, cornerBtnPx, cw, ch
+                            )
+                            if (inPanel || inSettings || inAdd) return@awaitEachGesture
+                            val tracker = VelocityTracker()
+                            var totalDx = 0f
+                            horizontalDrag(down.id) { event ->
+                                tracker.addPosition(event.uptimeMillis, event.position)
+                                totalDx += event.positionChange().x
+                                if (event.positionChange() != Offset.Zero) {
+                                    event.consume()
+                                }
+                            }
+                            val vx = tracker.calculateVelocity().x
+                            val goNext = totalDx < -swipeThresholdPx || vx < -velocityThresholdPxPerSec
+                            val goPrev = totalDx > swipeThresholdPx || vx > velocityThresholdPxPerSec
+                            if (!goNext && !goPrev) return@awaitEachGesture
+                            val idx = sortedNames.indexOf(effectiveName).takeIf { it >= 0 } ?: return@awaitEachGesture
+                            val newIdx = when {
+                                goNext -> (idx + 1) % sortedNames.size
+                                goPrev -> (idx - 1 + sortedNames.size) % sortedNames.size
+                                else -> idx
+                            }
+                            val newName = sortedNames[newIdx]
+                            if (theme == 2) {
+                                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(newName)
+                            } else {
+                                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(newName)
+                            }
+                        }
+                    }
+                }
+            )
+    ) {
         Box(
             Modifier
                 .fillMaxSize()

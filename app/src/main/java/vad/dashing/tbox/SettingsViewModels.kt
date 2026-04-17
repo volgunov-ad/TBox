@@ -508,18 +508,32 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
-    val isMainScreenWallpaperLightSet = settingsManager.mainScreenWallpaperLightSetFlow
+    val mainScreenWallpaperLightFolderUri = settingsManager.mainScreenWallpaperLightFolderUriFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
+            initialValue = ""
         )
 
-    val isMainScreenWallpaperDarkSet = settingsManager.mainScreenWallpaperDarkSetFlow
+    val mainScreenWallpaperDarkFolderUri = settingsManager.mainScreenWallpaperDarkFolderUriFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
+            initialValue = ""
+        )
+
+    val mainScreenWallpaperLightSelectedFile = settingsManager.mainScreenWallpaperLightSelectedFileFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val mainScreenWallpaperDarkSelectedFile = settingsManager.mainScreenWallpaperDarkSelectedFileFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
         )
 
     val isMainScreenWallpaperCrop = settingsManager.mainScreenWallpaperCropFlow
@@ -1045,17 +1059,29 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun setMainScreenWallpaperLight(sourceUri: Uri?) {
+    fun saveMainScreenWallpaperLightFolderUri(uriString: String?) {
         viewModelScope.launch {
-            settingsManager.setMainScreenWallpaperLight(sourceUri)
+            settingsManager.saveMainScreenWallpaperLightFolderUri(uriString)
             _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
         }
     }
 
-    fun setMainScreenWallpaperDark(sourceUri: Uri?) {
+    fun saveMainScreenWallpaperDarkFolderUri(uriString: String?) {
         viewModelScope.launch {
-            settingsManager.setMainScreenWallpaperDark(sourceUri)
+            settingsManager.saveMainScreenWallpaperDarkFolderUri(uriString)
             _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+        }
+    }
+
+    fun saveMainScreenWallpaperLightSelectedFileName(fileName: String) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWallpaperLightSelectedFileName(fileName)
+        }
+    }
+
+    fun saveMainScreenWallpaperDarkSelectedFileName(fileName: String) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWallpaperDarkSelectedFileName(fileName)
         }
     }
 

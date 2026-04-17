@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +48,7 @@ fun MainScreenSettingsTab(
     settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val mainScreenPanelsList by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
     val hasMainScreenPanels = mainScreenPanelsList.isNotEmpty()
     val activeMainScreenPanelId by settingsViewModel.activeMainScreenPanelId.collectAsStateWithLifecycle()
@@ -61,10 +63,10 @@ fun MainScreenSettingsTab(
     val mainScreenPanelCols by settingsViewModel.mainScreenPanelCols.collectAsStateWithLifecycle()
     val isMainScreenOpenOnBootEnabled by
         settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
-    val isMainScreenWallpaperLightSet by
-        settingsViewModel.isMainScreenWallpaperLightSet.collectAsStateWithLifecycle()
-    val isMainScreenWallpaperDarkSet by
-        settingsViewModel.isMainScreenWallpaperDarkSet.collectAsStateWithLifecycle()
+    val mainScreenWallpaperLightFolderUri by
+        settingsViewModel.mainScreenWallpaperLightFolderUri.collectAsStateWithLifecycle()
+    val mainScreenWallpaperDarkFolderUri by
+        settingsViewModel.mainScreenWallpaperDarkFolderUri.collectAsStateWithLifecycle()
     val isMainScreenWallpaperCrop by
         settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
     val mainScreenCornerButtonSizeDp by
@@ -84,18 +86,26 @@ fun MainScreenSettingsTab(
     var cornerColorSegment by remember { mutableIntStateOf(0) }
     var mainScreenBgSegment by remember { mutableIntStateOf(0) }
 
-    val pickWallpaperLight = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+    val pickWallpaperLightFolder = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
-            settingsViewModel.setMainScreenWallpaperLight(uri)
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            settingsViewModel.saveMainScreenWallpaperLightFolderUri(uri.toString())
         }
     }
-    val pickWallpaperDark = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+    val pickWallpaperDarkFolder = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
-            settingsViewModel.setMainScreenWallpaperDark(uri)
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            settingsViewModel.saveMainScreenWallpaperDarkFolderUri(uri.toString())
         }
     }
 
@@ -119,6 +129,12 @@ fun MainScreenSettingsTab(
         )
         SettingsTitle(stringResource(R.string.settings_main_screen_wallpaper_title))
         Text(
+            text = stringResource(R.string.settings_main_screen_wallpaper_folder_hint),
+            fontSize = 18.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+        Text(
             text = stringResource(R.string.settings_main_screen_wallpaper_light),
             fontSize = 20.sp,
             color = MaterialTheme.colorScheme.onSurface,
@@ -131,14 +147,14 @@ fun MainScreenSettingsTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { pickWallpaperLight.launch("image/*") },
+                onClick = { pickWallpaperLightFolder.launch(null) },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_pick), fontSize = 22.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_folder), fontSize = 22.sp)
             }
             OutlinedButton(
-                onClick = { settingsViewModel.setMainScreenWallpaperLight(null) },
-                enabled = isMainScreenWallpaperLightSet,
+                onClick = { settingsViewModel.saveMainScreenWallpaperLightFolderUri(null) },
+                enabled = mainScreenWallpaperLightFolderUri.isNotBlank(),
                 modifier = Modifier.weight(1f)
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 22.sp)
@@ -157,14 +173,14 @@ fun MainScreenSettingsTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { pickWallpaperDark.launch("image/*") },
+                onClick = { pickWallpaperDarkFolder.launch(null) },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_pick), fontSize = 22.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_folder), fontSize = 22.sp)
             }
             OutlinedButton(
-                onClick = { settingsViewModel.setMainScreenWallpaperDark(null) },
-                enabled = isMainScreenWallpaperDarkSet,
+                onClick = { settingsViewModel.saveMainScreenWallpaperDarkFolderUri(null) },
+                enabled = mainScreenWallpaperDarkFolderUri.isNotBlank(),
                 modifier = Modifier.weight(1f)
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 22.sp)
