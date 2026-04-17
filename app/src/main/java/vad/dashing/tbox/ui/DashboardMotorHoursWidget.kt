@@ -33,6 +33,7 @@ fun DashboardMotorHoursWidgetItem(
     shape: Dp = 12.dp,
     units: Boolean = true,
     showTitle: Boolean = false,
+    titleOverride: String = "",
     singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
@@ -45,6 +46,8 @@ fun DashboardMotorHoursWidgetItem(
     val hourUnit = stringResource(R.string.unit_hours)
     val firstLine = "$motorHoursString${if (units) "\u2009$hourUnit" else ""}"
     val secondLine = "$motorHoursTripString${if (units) "\u2009$hourUnit" else ""}"
+    val defaultTitle = stringResource(R.string.widget_title_motor_hours_total_trip)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -69,7 +72,7 @@ fun DashboardMotorHoursWidgetItem(
                     textType = TextType.TITLE
                 )
                 Text(
-                    text = stringResource(R.string.widget_title_motor_hours_total_trip),
+                    text = titleText,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()

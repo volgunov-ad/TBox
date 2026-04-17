@@ -53,6 +53,7 @@ fun DashboardWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     title: Boolean = true,
+    titleOverride: String = "",
     units: Boolean = true,
     textColor: Color? = null,
     backgroundColor: Color? = null
@@ -84,6 +85,8 @@ fun DashboardWidgetItem(
         onlyText = false
     }
 
+    val displayTitle = titleOverride.trim().ifBlank { widget.title }
+
     DashboardWidgetScaffold(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -112,7 +115,7 @@ fun DashboardWidgetItem(
         ) {
             if (title && !onlyText) {
                 Text(
-                    text = widget.title,
+                    text = displayTitle,
                     fontSize = calculateResponsiveFontSize(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE

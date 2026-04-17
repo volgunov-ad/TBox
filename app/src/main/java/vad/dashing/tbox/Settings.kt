@@ -55,7 +55,12 @@ data class FloatingDashboardWidgetConfig(
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
-    val appWidgetId: Int? = null
+    val appWidgetId: Int? = null,
+    /**
+     * Optional tile title override. When blank, widgets use their default title strings.
+     * When non-blank, shown instead of the default title where a title row is displayed.
+     */
+    val customTitle: String = ""
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
