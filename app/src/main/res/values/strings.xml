@@ -222,7 +222,7 @@
     <string name="settings_main_screen_wallpaper_light">Папка с обоями (светлая тема)</string>
     <string name="settings_main_screen_wallpaper_dark">Папка с обоями (тёмная тема)</string>
     <string name="settings_main_screen_wallpaper_pick_folder">Выбрать папку</string>
-    <string name="settings_main_screen_wallpaper_folder_hint">Изображения берутся из папки (без копирования в приложение). Сортировка по имени файла. На главном экране свайп влево/вправо по свободной области переключает обои.</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Изображения берутся из папки (без копирования в приложение). Сортировка по имени файла. На главном экране свайп влево/вправо по фону переключает обои; жесты на панелях и угловых кнопках обрабатываются ими.</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Фон: на весь экран</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">Включено — картинка заполняет весь экран, лишнее по краям обрезается. Выключено — картинка видна целиком внутри экрана, свободные полосы заливаются цветом фона темы.</string>
     <string name="settings_main_screen_canvas_bg_title">Фон главного экрана (под панелями)</string>

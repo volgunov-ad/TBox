@@ -56,15 +56,12 @@ import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.MainScreenAddButtonPosition
-import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.MainScreenSettingsButtonPosition
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.decodeImageBitmapFromUri
 import vad.dashing.tbox.effectiveWallpaperFileName
-import vad.dashing.tbox.isPointInsideCornerButton
 import vad.dashing.tbox.listSortedWallpaperImagesInFolder
-import vad.dashing.tbox.panelRectsPx
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.loadWidgetsFromConfig
 
@@ -113,10 +110,6 @@ fun MainScreen(
         MainScreenWallpaperBackground(
             theme = currentTheme,
             settingsViewModel = settingsViewModel,
-            mainPanels = mainPanels,
-            settingsBtnPos = settingsBtnPos,
-            addBtnPos = addBtnPos,
-            cornerBtnSizeDp = cornerBtnSizeDp,
             modifier = Modifier.fillMaxSize()
         )
         val maxWpx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
@@ -229,10 +222,6 @@ fun MainScreen(
 private fun MainScreenWallpaperBackground(
     theme: Int,
     settingsViewModel: SettingsViewModel,
-    mainPanels: List<MainScreenPanelConfig>,
-    settingsBtnPos: MainScreenSettingsButtonPosition,
-    addBtnPos: MainScreenAddButtonPosition,
-    cornerBtnSizeDp: Int,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -284,7 +273,6 @@ private fun MainScreenWallpaperBackground(
             decodeImageBitmapFromUri(context, imageUri)
         }
     }
-    val cornerBtnPx = with(density) { cornerBtnSizeDp.dp.toPx() }
     val swipeThresholdPx = with(density) { 48.dp.toPx() }
     val velocityThresholdPxPerSec = with(density) { 400.dp.toPx() }
     Box(
@@ -294,29 +282,9 @@ private fun MainScreenWallpaperBackground(
                 if (sortedNames.size <= 1 || effectiveName == null) {
                     Modifier
                 } else {
-                    Modifier.pointerInput(
-                        mainPanels,
-                        settingsBtnPos,
-                        addBtnPos,
-                        cornerBtnPx,
-                        sortedNames,
-                        effectiveName,
-                        theme,
-                    ) {
+                    Modifier.pointerInput(sortedNames, effectiveName, theme) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
-                            val x = down.position.x
-                            val y = down.position.y
-                            val cw = size.width.toFloat().coerceAtLeast(1f)
-                            val ch = size.height.toFloat().coerceAtLeast(1f)
-                            val inPanel = panelRectsPx(mainPanels, cw, ch).any { it.contains(Offset(x, y)) }
-                            val inSettings = isPointInsideCornerButton(
-                                x, y, settingsBtnPos.x, settingsBtnPos.y, cornerBtnPx, cw, ch
-                            )
-                            val inAdd = isPointInsideCornerButton(
-                                x, y, addBtnPos.x, addBtnPos.y, cornerBtnPx, cw, ch
-                            )
-                            if (inPanel || inSettings || inAdd) return@awaitEachGesture
                             val tracker = VelocityTracker()
                             var totalDx = 0f
                             horizontalDrag(down.id) { event ->

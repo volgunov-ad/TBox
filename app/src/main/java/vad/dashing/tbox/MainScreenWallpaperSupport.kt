@@ -3,7 +3,6 @@ package vad.dashing.tbox
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.documentfile.provider.DocumentFile
@@ -74,40 +73,4 @@ internal fun effectiveWallpaperFileName(sortedNames: List<String>, savedFileName
         return savedFileName
     }
     return sortedNames.first()
-}
-
-internal fun panelRectsPx(
-    panels: List<MainScreenPanelConfig>,
-    containerWidthPx: Float,
-    containerHeightPx: Float,
-): List<Rect> {
-    val cw = containerWidthPx.coerceAtLeast(1f)
-    val ch = containerHeightPx.coerceAtLeast(1f)
-    return panels.filter { it.enabled }.map { panel ->
-        val w = (panel.relWidth * cw).coerceIn(1f, cw)
-        val h = (panel.relHeight * ch).coerceIn(1f, ch)
-        val rangeX = (cw - w).coerceAtLeast(0f)
-        val rangeY = (ch - h).coerceAtLeast(0f)
-        val x = (panel.relX * rangeX).coerceIn(0f, rangeX)
-        val y = (panel.relY * rangeY).coerceIn(0f, rangeY)
-        Rect(x, y, x + w, y + h)
-    }
-}
-
-internal fun isPointInsideCornerButton(
-    x: Float,
-    y: Float,
-    normalizedX: Float,
-    normalizedY: Float,
-    buttonSizePx: Float,
-    containerWidthPx: Float,
-    containerHeightPx: Float,
-): Boolean {
-    val cw = containerWidthPx.coerceAtLeast(1f)
-    val ch = containerHeightPx.coerceAtLeast(1f)
-    val rangeW = (cw - buttonSizePx).coerceAtLeast(0f)
-    val rangeH = (ch - buttonSizePx).coerceAtLeast(0f)
-    val left = normalizedX * rangeW
-    val top = normalizedY * rangeH
-    return x >= left && x <= left + buttonSizePx && y >= top && y <= top + buttonSizePx
 }
