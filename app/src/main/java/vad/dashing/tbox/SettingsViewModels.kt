@@ -1091,6 +1091,19 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    /** When [Environment.isExternalStorageManager] is true: set folder from absolute path or `file://` (validated). */
+    fun applyMainScreenWallpaperFilesystemFolderPath(rawPath: String, forLightTheme: Boolean) {
+        viewModelScope.launch {
+            val normalized = normalizeFilesystemWallpaperFolderPath(rawPath) ?: return@launch
+            if (forLightTheme) {
+                settingsManager.saveMainScreenWallpaperLightFolderUri(normalized)
+            } else {
+                settingsManager.saveMainScreenWallpaperDarkFolderUri(normalized)
+            }
+            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+        }
+    }
+
     fun saveMainScreenWallpaperLightSelectedFileName(fileName: String) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperLightSelectedFileName(fileName)

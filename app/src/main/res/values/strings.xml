@@ -223,6 +223,12 @@
     <string name="settings_main_screen_wallpaper_dark">Папка с обоями (тёмная тема)</string>
     <string name="settings_main_screen_wallpaper_pick_source">Выбрать</string>
     <string name="settings_main_screen_wallpaper_folder_hint">Обои не копируются в приложение. Где доступно выбор папки — выберите каталог с картинками; на устройствах без этого выберите один файл в нужной папке — приложение попытается использовать ту же папку для карусели (если система не даёт доступ к соседним файлам, будет только выбранное изображение). Сортировка по имени файла. На главном экране свайп влево/вправо по фону переключает обои; жесты на панелях и угловых кнопках обрабатываются ими.</string>
+    <string name="settings_main_screen_wallpaper_all_files_hint">Для надёжного доступа к папке по пути на диске включите «Доступ ко всем файлам» для приложения (Android 11+).</string>
+    <string name="settings_main_screen_wallpaper_open_all_files_settings">Открыть настройки доступа к файлам</string>
+    <string name="settings_main_screen_wallpaper_path_mode_hint">Указан полный доступ к хранилищу: можно ввести абсолютный путь к папке с обоями и нажать «Применить путь».</string>
+    <string name="settings_main_screen_wallpaper_path_label">Путь к папке</string>
+    <string name="settings_main_screen_wallpaper_apply_path">Применить путь</string>
+    <string name="settings_main_screen_wallpaper_path_invalid">Папка не найдена или путь неверный</string>
     <string name="settings_main_screen_wallpaper_no_picker">Нет приложения для выбора изображения на этом устройстве.</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Фон: на весь экран</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">Включено — картинка заполняет весь экран, лишнее по краям обрезается. Выключено — картинка видна целиком внутри экрана, свободные полосы заливаются цветом фона темы.</string>

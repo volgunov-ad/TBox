@@ -223,6 +223,12 @@
     <string name="settings_main_screen_wallpaper_dark">Wallpaper folder (dark theme)</string>
     <string name="settings_main_screen_wallpaper_pick_source">Choose</string>
     <string name="settings_main_screen_wallpaper_folder_hint">Wallpapers are not copied into the app. Where supported, pick a folder of images; on devices without a folder picker, pick one image in the desired folder—the app will try to use that folder for the carousel (if the OS does not expose sibling files, only the chosen image is used). Sorted by file name. On the main screen, swipe left/right on the background to change the wallpaper; gestures on panels and corner buttons stay with those controls.</string>
+    <string name="settings_main_screen_wallpaper_all_files_hint">For reliable access to a folder by disk path, enable All files access for this app (Android 11+).</string>
+    <string name="settings_main_screen_wallpaper_open_all_files_settings">Open all files access settings</string>
+    <string name="settings_main_screen_wallpaper_path_mode_hint">All files access is on: enter the absolute path to the wallpaper folder and tap Apply path.</string>
+    <string name="settings_main_screen_wallpaper_path_label">Folder path</string>
+    <string name="settings_main_screen_wallpaper_apply_path">Apply path</string>
+    <string name="settings_main_screen_wallpaper_path_invalid">Folder not found or path is invalid</string>
     <string name="settings_main_screen_wallpaper_no_picker">No app on this device can pick an image.</string>
     <string name="settings_main_screen_wallpaper_scale_crop_title">Background: fill the screen</string>
     <string name="settings_main_screen_wallpaper_scale_crop_desc">On — the image covers the whole screen; what does not fit is cropped at the edges. Off — the whole image stays visible inside the screen; empty bands use the theme background color.</string>

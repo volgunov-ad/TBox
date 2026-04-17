@@ -23,9 +23,6 @@ internal fun isLikelyImageDocument(file: DocumentFile): Boolean {
 }
 
 /**
- * Lists image files in a SAF tree root, sorted by display name (same order as [String.compareTo]).
- */
-/**
  * Some third-party file managers return [content] URIs whose path embeds a real filesystem
  * location (e.g. `/root/storage/emulated/0/...`). If that path exists, list it as a normal folder.
  */

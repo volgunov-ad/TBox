@@ -2,6 +2,8 @@ package vad.dashing.tbox.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,11 +19,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -29,12 +34,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.hasManageAllFilesAccess
+import vad.dashing.tbox.normalizeFilesystemWallpaperFolderPath
+import java.io.File
 import kotlin.math.roundToInt
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
@@ -87,6 +97,43 @@ fun MainScreenSettingsTab(
         settingsViewModel.mainScreenCanvasBackgroundDark.collectAsStateWithLifecycle()
     var cornerColorSegment by remember { mutableIntStateOf(0) }
     var mainScreenBgSegment by remember { mutableIntStateOf(0) }
+    var lightFolderPathInput by remember { mutableStateOf("") }
+    var darkFolderPathInput by remember { mutableStateOf("") }
+
+    LaunchedEffect(mainScreenWallpaperLightFolderUri) {
+        val u = mainScreenWallpaperLightFolderUri
+        lightFolderPathInput = if (u.startsWith("file://", ignoreCase = true)) {
+            runCatching { File(Uri.parse(u).path ?: "").absolutePath }.getOrDefault("")
+        } else {
+            ""
+        }
+    }
+    LaunchedEffect(mainScreenWallpaperDarkFolderUri) {
+        val u = mainScreenWallpaperDarkFolderUri
+        darkFolderPathInput = if (u.startsWith("file://", ignoreCase = true)) {
+            runCatching { File(Uri.parse(u).path ?: "").absolutePath }.getOrDefault("")
+        } else {
+            ""
+        }
+    }
+
+    var allFilesAccess by remember { mutableStateOf(hasManageAllFilesAccess()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        allFilesAccess = hasManageAllFilesAccess()
+    }
+    fun openManageAllFilesSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            runCatching {
+                context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            }
+        }
+    }
 
     val pickWallpaperLightFolder = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -207,6 +254,30 @@ fun MainScreenSettingsTab(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 10.dp)
         )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !allFilesAccess) {
+            Text(
+                text = stringResource(R.string.settings_main_screen_wallpaper_all_files_hint),
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            OutlinedButton(
+                onClick = { openManageAllFilesSettings() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Text(stringResource(R.string.settings_main_screen_wallpaper_open_all_files_settings), fontSize = 20.sp)
+            }
+        }
+        if (allFilesAccess) {
+            Text(
+                text = stringResource(R.string.settings_main_screen_wallpaper_path_mode_hint),
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
         Text(
             text = stringResource(R.string.settings_main_screen_wallpaper_light),
             fontSize = 20.sp,
@@ -233,6 +304,38 @@ fun MainScreenSettingsTab(
                 Text(stringResource(R.string.action_delete), fontSize = 22.sp)
             }
         }
+        if (allFilesAccess) {
+            OutlinedTextField(
+                value = lightFolderPathInput,
+                onValueChange = { lightFolderPathInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                label = { Text(stringResource(R.string.settings_main_screen_wallpaper_path_label)) },
+                singleLine = true,
+            )
+            OutlinedButton(
+                onClick = {
+                    if (normalizeFilesystemWallpaperFolderPath(lightFolderPathInput) != null) {
+                        settingsViewModel.applyMainScreenWallpaperFilesystemFolderPath(
+                            lightFolderPathInput,
+                            forLightTheme = true
+                        )
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.settings_main_screen_wallpaper_path_invalid),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Text(stringResource(R.string.settings_main_screen_wallpaper_apply_path), fontSize = 20.sp)
+            }
+        }
         Text(
             text = stringResource(R.string.settings_main_screen_wallpaper_dark),
             fontSize = 20.sp,
@@ -257,6 +360,38 @@ fun MainScreenSettingsTab(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 22.sp)
+            }
+        }
+        if (allFilesAccess) {
+            OutlinedTextField(
+                value = darkFolderPathInput,
+                onValueChange = { darkFolderPathInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                label = { Text(stringResource(R.string.settings_main_screen_wallpaper_path_label)) },
+                singleLine = true,
+            )
+            OutlinedButton(
+                onClick = {
+                    if (normalizeFilesystemWallpaperFolderPath(darkFolderPathInput) != null) {
+                        settingsViewModel.applyMainScreenWallpaperFilesystemFolderPath(
+                            darkFolderPathInput,
+                            forLightTheme = false
+                        )
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.settings_main_screen_wallpaper_path_invalid),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            ) {
+                Text(stringResource(R.string.settings_main_screen_wallpaper_apply_path), fontSize = 20.sp)
             }
         }
         SettingSwitch(
