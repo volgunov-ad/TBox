@@ -1081,11 +1081,15 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             val res = resolveWallpaperSourceFromPickedImageUri(context, pickedUri) ?: return@launch
             if (forLightTheme) {
-                settingsManager.saveMainScreenWallpaperLightFolderUri(res.folderUriString)
-                settingsManager.saveMainScreenWallpaperLightSelectedFileName(res.selectedFileName)
+                settingsManager.saveMainScreenWallpaperLightFolderAndSelection(
+                    res.folderUriString,
+                    res.selectedFileName,
+                )
             } else {
-                settingsManager.saveMainScreenWallpaperDarkFolderUri(res.folderUriString)
-                settingsManager.saveMainScreenWallpaperDarkSelectedFileName(res.selectedFileName)
+                settingsManager.saveMainScreenWallpaperDarkFolderAndSelection(
+                    res.folderUriString,
+                    res.selectedFileName,
+                )
             }
             _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
         }

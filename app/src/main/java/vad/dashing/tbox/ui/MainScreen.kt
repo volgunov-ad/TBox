@@ -250,6 +250,7 @@ private fun MainScreenWallpaperBackground(
         }
     }
     val sortedNames = remember(sortedPairs) { sortedPairs.map { it.first } }
+    val uriByFileName = remember(sortedPairs) { sortedPairs.toMap() }
     val effectiveName = remember(sortedNames, savedSelectedName) {
         effectiveWallpaperFileName(sortedNames, savedSelectedName)
     }
@@ -306,7 +307,7 @@ private fun MainScreenWallpaperBackground(
                 MainScreenWallpaperPagerPage(
                     page = page,
                     sortedNames = sortedNames,
-                    sortedPairs = sortedPairs,
+                    uriByFileName = uriByFileName,
                     context = context,
                     wallpaperCrop = wallpaperCrop,
                 )
@@ -319,12 +320,12 @@ private fun MainScreenWallpaperBackground(
 private fun MainScreenWallpaperPagerPage(
     page: Int,
     sortedNames: List<String>,
-    sortedPairs: List<Pair<String, Uri>>,
+    uriByFileName: Map<String, Uri>,
     context: Context,
     wallpaperCrop: Boolean,
 ) {
     val nameKey = sortedNames[page]
-    val uriForSlide = sortedPairs.firstOrNull { it.first == nameKey }?.second
+    val uriForSlide = uriByFileName[nameKey]
     var slideBitmap by remember(page, uriForSlide) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(uriForSlide) {
         slideBitmap = if (uriForSlide == null) {

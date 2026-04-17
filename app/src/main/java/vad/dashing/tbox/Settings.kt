@@ -868,6 +868,21 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    /** Single DataStore write when picking wallpaper (folder URI + selected file name). */
+    suspend fun saveMainScreenWallpaperLightFolderAndSelection(folderUriString: String, selectedFileName: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WALLPAPER_LIGHT_FOLDER_URI_KEY] = folderUriString
+            preferences[MAIN_SCREEN_WALLPAPER_LIGHT_SELECTED_FILE_KEY] = selectedFileName
+        }
+    }
+
+    suspend fun saveMainScreenWallpaperDarkFolderAndSelection(folderUriString: String, selectedFileName: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY] = folderUriString
+            preferences[MAIN_SCREEN_WALLPAPER_DARK_SELECTED_FILE_KEY] = selectedFileName
+        }
+    }
+
     suspend fun saveMainScreenWallpaperCrop(crop: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_WALLPAPER_CROP_KEY] = crop
