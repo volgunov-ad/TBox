@@ -1,6 +1,7 @@
 package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.view.ViewGroup
 import androidx.compose.foundation.background
@@ -35,7 +36,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import android.os.SystemClock
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -44,7 +47,10 @@ import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
 
 private const val EXTERNAL_WIDGET_PERIODIC_REFRESH_MS = 15 * 60 * 1000L
+private const val EXTERNAL_WIDGET_DEFERRED_CREATE_MS = 400L
+private const val EXTERNAL_WIDGET_ID_STAGGER_STEP_MS = 90L
 private val EXTERNAL_WIDGET_INITIAL_RETRY_DELAYS_MS = longArrayOf(3_000L, 5_000L, 60_000L)
+private val EXTERNAL_WIDGET_CREATE_RETRY_DELAYS_MS = longArrayOf(250L, 600L, 1_500L, 3_000L, 6_000L)
 
 private suspend fun awaitAppWidgetInfo(
     appWidgetManager: AppWidgetManager,
@@ -52,12 +58,28 @@ private suspend fun awaitAppWidgetInfo(
 ): android.appwidget.AppWidgetProviderInfo? {
     var info = appWidgetManager.getAppWidgetInfo(appWidgetId)
     if (info != null) return info
-    repeat(20) {
-        delay(150)
+    repeat(50) {
+        delay(200)
         info = appWidgetManager.getAppWidgetInfo(appWidgetId)
         if (info != null) return info
     }
     return null
+}
+
+private suspend fun createExternalHostView(
+    context: android.content.Context,
+    appWidgetHost: AppWidgetHost,
+    appWidgetId: Int,
+    appWidgetInfo: android.appwidget.AppWidgetProviderInfo
+): AppWidgetHostView? = withContext(Dispatchers.Main) {
+    try {
+        appWidgetHost.createView(context, appWidgetId, appWidgetInfo).apply {
+            setAppWidget(appWidgetId, appWidgetInfo)
+            setPadding(0, 0, 0, 0)
+        }
+    } catch (_: Exception) {
+        null
+    }
 }
 
 @Composable
@@ -94,26 +116,35 @@ fun ExternalAppWidgetItem(
         appWidgetInfo = awaitAppWidgetInfo(appWidgetManager, appWidgetId)
     }
     var optionsApplied by remember(appWidgetId) { mutableStateOf(false) }
-    val density = LocalDensity.current
-    val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
-    val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost) {
+    var hostView by remember(appWidgetId) { mutableStateOf<AppWidgetHostView?>(null) }
+    LaunchedEffect(appWidgetId, appWidgetHost, appWidgetInfo) {
+        hostView = null
         if (
             appWidgetHost == null ||
             appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
             appWidgetInfo == null
         ) {
-            null
-        } else {
-            try {
-                appWidgetHost.createView(context, appWidgetId, appWidgetInfo).apply {
-                    setAppWidget(appWidgetId, appWidgetInfo)
-                    setPadding(0, 0, 0, 0)
-                }
-            } catch (_: Exception) {
-                null
-            }
+            return@LaunchedEffect
         }
+        val staggerMs = (appWidgetId and 0x7) * EXTERNAL_WIDGET_ID_STAGGER_STEP_MS
+        delay(EXTERNAL_WIDGET_DEFERRED_CREATE_MS + staggerMs)
+        ExternalWidgetHostManager.awaitListeningReady(12_000L)
+        val info = appWidgetInfo ?: return@LaunchedEffect
+        var created: AppWidgetHostView? = null
+        for (retryDelayMs in EXTERNAL_WIDGET_CREATE_RETRY_DELAYS_MS) {
+            created = createExternalHostView(
+                context = context,
+                appWidgetHost = appWidgetHost,
+                appWidgetId = appWidgetId,
+                appWidgetInfo = info
+            )
+            if (created != null) break
+            delay(retryDelayMs)
+        }
+        hostView = created
     }
+    val density = LocalDensity.current
+    val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
 
     val clickModifier = if (!isEditMode && handleClick) {
         Modifier.clickable(onClick = onClick)
@@ -178,6 +209,7 @@ fun ExternalAppWidgetItem(
                     }
                 }
             } else {
+                val hostViewNonNull = checkNotNull(hostView)
                 key(appWidgetId) {
                     AndroidView(
                         factory = { viewContext ->
@@ -185,11 +217,12 @@ fun ExternalAppWidgetItem(
                             val intercept = LongPressInterceptLayout(viewContext).apply {
                                 onLongPress = onLongClick
                                 interceptLongPress = !isEditMode
-                                if (hostView.parent != null) {
-                                    (hostView.parent as? ViewGroup)?.removeView(hostView)
+                                if (hostViewNonNull.parent != null) {
+                                    (hostViewNonNull.parent as? ViewGroup)
+                                        ?.removeView(hostViewNonNull)
                                 }
                                 addView(
-                                    hostView,
+                                    hostViewNonNull,
                                     ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -207,12 +240,14 @@ fun ExternalAppWidgetItem(
                             intercept.onLongPress = onLongClick
                             intercept.interceptLongPress = !isEditMode
                             val onlyChildIsCurrent =
-                                intercept.childCount == 1 && intercept.getChildAt(0) === hostView
+                                intercept.childCount == 1 &&
+                                    intercept.getChildAt(0) === hostViewNonNull
                             if (!onlyChildIsCurrent) {
                                 intercept.removeAllViews()
-                                (hostView.parent as? ViewGroup)?.removeView(hostView)
+                                (hostViewNonNull.parent as? ViewGroup)
+                                    ?.removeView(hostViewNonNull)
                                 intercept.addView(
-                                    hostView,
+                                    hostViewNonNull,
                                     ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT
