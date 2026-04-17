@@ -60,8 +60,7 @@ import vad.dashing.tbox.MainScreenAddButtonPosition
 import vad.dashing.tbox.MainScreenSettingsButtonPosition
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.MainScreenWallpaperBitmapCache
-import vad.dashing.tbox.decodeWallpaperImageBitmapFromUri
+import vad.dashing.tbox.decodeImageBitmapFromUri
 import vad.dashing.tbox.effectiveWallpaperFileName
 import vad.dashing.tbox.listSortedWallpaperImagesInFolder
 import vad.dashing.tbox.TboxViewModel
@@ -112,7 +111,6 @@ fun MainScreen(
         MainScreenWallpaperBackground(
             theme = currentTheme,
             settingsViewModel = settingsViewModel,
-            maxDecodeSidePx = (maxOf(constraints.maxWidth, constraints.maxHeight) * 2).coerceIn(1024, 8192),
             modifier = Modifier.fillMaxSize()
         )
         val maxWpx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
@@ -226,7 +224,6 @@ fun MainScreen(
 private fun MainScreenWallpaperBackground(
     theme: Int,
     settingsViewModel: SettingsViewModel,
-    maxDecodeSidePx: Int,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -246,7 +243,6 @@ private fun MainScreenWallpaperBackground(
     }
     var sortedPairs by remember { mutableStateOf<List<Pair<String, Uri>>>(emptyList()) }
     LaunchedEffect(folderUriStr, epoch) {
-        MainScreenWallpaperBitmapCache.clear()
         sortedPairs = if (folderUri == null) {
             emptyList()
         } else {
@@ -314,7 +310,6 @@ private fun MainScreenWallpaperBackground(
                     uriByFileName = uriByFileName,
                     context = context,
                     wallpaperCrop = wallpaperCrop,
-                    maxDecodeSidePx = maxDecodeSidePx,
                 )
             }
         }
@@ -328,32 +323,16 @@ private fun MainScreenWallpaperPagerPage(
     uriByFileName: Map<String, Uri>,
     context: Context,
     wallpaperCrop: Boolean,
-    maxDecodeSidePx: Int,
 ) {
     val nameKey = sortedNames[page]
     val uriForSlide = uriByFileName[nameKey]
-    val uriString = uriForSlide?.toString().orEmpty()
-    var slideBitmap by remember(page, uriString) {
-        mutableStateOf(
-            if (uriString.isEmpty()) null else MainScreenWallpaperBitmapCache.get(uriString)
-        )
-    }
-    LaunchedEffect(uriString, maxDecodeSidePx) {
-        if (uriString.isEmpty()) {
-            slideBitmap = null
-            return@LaunchedEffect
+    var slideBitmap by remember(page, uriForSlide) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(uriForSlide) {
+        slideBitmap = if (uriForSlide == null) {
+            null
+        } else {
+            decodeImageBitmapFromUri(context, uriForSlide)
         }
-        val cached = MainScreenWallpaperBitmapCache.get(uriString)
-        if (cached != null) {
-            slideBitmap = cached
-            return@LaunchedEffect
-        }
-        val uri = uriForSlide ?: return@LaunchedEffect
-        val decoded = decodeWallpaperImageBitmapFromUri(context, uri, maxDecodeSidePx)
-        if (decoded != null) {
-            MainScreenWallpaperBitmapCache.put(uriString, decoded)
-        }
-        slideBitmap = decoded
     }
     Box(Modifier.fillMaxSize()) {
         if (slideBitmap != null) {

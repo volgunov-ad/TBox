@@ -7,15 +7,11 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
-import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** Skip wallpaper files larger than this (bytes) when listing and when applying a pick. */
 internal const val MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES = 10L * 1024 * 1024
-
-/** Long edge cap for decoded bitmap (px); keeps memory reasonable on head units. */
-private const val MAIN_SCREEN_WALLPAPER_DECODE_MAX_EDGE_PX = 4096
 
 private val IMAGE_EXTENSIONS = setOf(
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif"
@@ -187,53 +183,17 @@ internal data class WallpaperPickResolution(
     val selectedFileName: String,
 )
 
-/** Long edge after decode is ~original / inSampleSize; keep long edge ≤ [maxSidePx]. */
-private fun computeInSampleSize(width: Int, height: Int, maxSidePx: Int): Int {
-    if (width <= 0 || height <= 0 || maxSidePx <= 0) return 1
-    var inSample = 1
-    val longEdge = max(width, height)
-    while (longEdge / inSample > maxSidePx) {
-        inSample *= 2
-    }
-    return inSample.coerceAtLeast(1)
-}
-
-/**
- * Decodes a wallpaper with subsampling so long edge is at most [maxDecodeSidePx], and skips
- * files over [MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES]. Returns null on failure / oversize.
- */
-internal suspend fun decodeWallpaperImageBitmapFromUri(
+/** Full decode; skips files over [MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES]. */
+internal suspend fun decodeImageBitmapFromUri(
     context: Context,
     uri: Uri,
-    maxDecodeSidePx: Int,
 ): ImageBitmap? = withContext(Dispatchers.IO) {
     if (isWallpaperFileOverSizeLimit(context, uri)) {
         return@withContext null
     }
-    val cap = maxDecodeSidePx.coerceIn(512, MAIN_SCREEN_WALLPAPER_DECODE_MAX_EDGE_PX)
     runCatching {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { input ->
-            BitmapFactory.decodeStream(input, null, bounds)
-        } ?: return@runCatching null
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-            // Some providers do not fill bounds; try a plain decode once.
-            return@runCatching context.contentResolver.openInputStream(uri)?.use { input ->
-                BitmapFactory.decodeStream(input)?.asImageBitmap()
-            }
-        }
-        val opts = BitmapFactory.Options().apply {
-            inSampleSize = computeInSampleSize(bounds.outWidth, bounds.outHeight, cap)
-        }
-        val subsampled = context.contentResolver.openInputStream(uri)?.use { input2 ->
-            BitmapFactory.decodeStream(input2, null, opts)?.asImageBitmap()
-        }
-        if (subsampled != null) {
-            subsampled
-        } else {
-            context.contentResolver.openInputStream(uri)?.use { input3 ->
-                BitmapFactory.decodeStream(input3)?.asImageBitmap()
-            }
+            BitmapFactory.decodeStream(input)?.asImageBitmap()
         }
     }.getOrNull()
 }
