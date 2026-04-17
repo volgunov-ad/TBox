@@ -1,22 +1,16 @@
 package vad.dashing.tbox.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
+import android.content.Context
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
@@ -41,8 +35,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -54,6 +46,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.runtime.snapshotFlow
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.ExternalWidgetHostManager
@@ -225,6 +219,7 @@ fun MainScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MainScreenWallpaperBackground(
     theme: Int,
@@ -232,7 +227,6 @@ private fun MainScreenWallpaperBackground(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
     val canvasBgLight by settingsViewModel.mainScreenCanvasBackgroundLight.collectAsStateWithLifecycle()
     val canvasBgDark by settingsViewModel.mainScreenCanvasBackgroundDark.collectAsStateWithLifecycle()
     val canvasColor = Color(if (theme == 2) canvasBgDark else canvasBgLight)
@@ -269,99 +263,84 @@ private fun MainScreenWallpaperBackground(
             }
         }
     }
-    val swipeThresholdPx = with(density) { 48.dp.toPx() }
-    val velocityThresholdPxPerSec = with(density) { 400.dp.toPx() }
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .then(
-                if (sortedNames.size <= 1 || effectiveName == null) {
-                    Modifier
-                } else {
-                    Modifier.pointerInput(sortedNames, effectiveName, theme) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            val tracker = VelocityTracker()
-                            var totalDx = 0f
-                            horizontalDrag(down.id) { event ->
-                                tracker.addPosition(event.uptimeMillis, event.position)
-                                totalDx += event.positionChange().x
-                                if (event.positionChange() != Offset.Zero) {
-                                    event.consume()
-                                }
-                            }
-                            val vx = tracker.calculateVelocity().x
-                            val goNext = totalDx < -swipeThresholdPx || vx < -velocityThresholdPxPerSec
-                            val goPrev = totalDx > swipeThresholdPx || vx > velocityThresholdPxPerSec
-                            if (!goNext && !goPrev) return@awaitEachGesture
-                            val idx = sortedNames.indexOf(effectiveName).takeIf { it >= 0 } ?: return@awaitEachGesture
-                            val newIdx = when {
-                                goNext -> (idx + 1) % sortedNames.size
-                                goPrev -> (idx - 1 + sortedNames.size) % sortedNames.size
-                                else -> idx
-                            }
-                            val newName = sortedNames[newIdx]
-                            if (theme == 2) {
-                                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(newName)
-                            } else {
-                                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(newName)
-                            }
-                        }
-                    }
-                }
-            )
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
         Box(
             Modifier
                 .fillMaxSize()
                 .background(canvasColor)
         )
-        val animLabel = effectiveName ?: ""
-        AnimatedContent(
-            targetState = animLabel,
-            modifier = Modifier.fillMaxSize(),
-            transitionSpec = {
-                val n = sortedNames.size
-                val oldIdx = sortedNames.indexOf(initialState)
-                val newIdx = sortedNames.indexOf(targetState)
-                val forward = if (n > 0 && oldIdx >= 0 && newIdx >= 0) {
-                    newIdx == (oldIdx + 1) % n
-                } else {
-                    true
-                }
-                val enter = slideInHorizontally(
-                    animationSpec = tween(280),
-                    initialOffsetX = { if (forward) it else -it }
-                ) + fadeIn(tween(220))
-                val exit = slideOutHorizontally(
-                    animationSpec = tween(280),
-                    targetOffsetX = { if (forward) -it else it }
-                ) + fadeOut(tween(220))
-                enter togetherWith exit
-            },
-            label = "main_screen_wallpaper"
-        ) { nameKey ->
-            if (nameKey.isEmpty()) {
-                Box(Modifier.fillMaxSize())
-            } else {
-            val uriForSlide = sortedPairs.firstOrNull { it.first == nameKey }?.second
-            var slideBitmap by remember(nameKey) { mutableStateOf<ImageBitmap?>(null) }
-            LaunchedEffect(nameKey, uriForSlide) {
-                slideBitmap = if (uriForSlide == null) {
-                    null
-                } else {
-                    decodeImageBitmapFromUri(context, uriForSlide)
+        if (sortedNames.isEmpty() || effectiveName == null) {
+            return@Box
+        }
+        val targetIdx = sortedNames.indexOf(effectiveName).coerceIn(0, sortedNames.lastIndex)
+        key(folderUriStr, sortedNames.size) {
+            val pagerState = rememberPagerState(
+                initialPage = targetIdx,
+                pageCount = { sortedNames.size },
+            )
+            LaunchedEffect(targetIdx, folderUriStr, sortedNames) {
+                if (pagerState.currentPage != targetIdx) {
+                    pagerState.scrollToPage(targetIdx)
                 }
             }
-            if (slideBitmap != null) {
-                Image(
-                    bitmap = slideBitmap!!,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = if (wallpaperCrop) ContentScale.Crop else ContentScale.Fit
+            LaunchedEffect(pagerState, sortedNames, theme, savedSelectedName) {
+                snapshotFlow { pagerState.settledPage }
+                    .distinctUntilChanged()
+                    .collect { page ->
+                        if (page !in sortedNames.indices) return@collect
+                        val name = sortedNames[page]
+                        if (name != savedSelectedName) {
+                            if (theme == 2) {
+                                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(name)
+                            } else {
+                                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(name)
+                            }
+                        }
+                    }
+            }
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1,
+            ) { page ->
+                MainScreenWallpaperPagerPage(
+                    page = page,
+                    sortedNames = sortedNames,
+                    sortedPairs = sortedPairs,
+                    context = context,
+                    wallpaperCrop = wallpaperCrop,
                 )
             }
-            }
+        }
+    }
+}
+
+@Composable
+private fun MainScreenWallpaperPagerPage(
+    page: Int,
+    sortedNames: List<String>,
+    sortedPairs: List<Pair<String, Uri>>,
+    context: Context,
+    wallpaperCrop: Boolean,
+) {
+    val nameKey = sortedNames[page]
+    val uriForSlide = sortedPairs.firstOrNull { it.first == nameKey }?.second
+    var slideBitmap by remember(page, uriForSlide) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(uriForSlide) {
+        slideBitmap = if (uriForSlide == null) {
+            null
+        } else {
+            decodeImageBitmapFromUri(context, uriForSlide)
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        if (slideBitmap != null) {
+            Image(
+                bitmap = slideBitmap!!,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = if (wallpaperCrop) ContentScale.Crop else ContentScale.Fit
+            )
         }
     }
 }
