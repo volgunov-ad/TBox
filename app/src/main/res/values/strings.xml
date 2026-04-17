@@ -223,8 +223,8 @@
     <string name="settings_main_screen_wallpaper_dark">Папка с обоями (тёмная тема)</string>
     <string name="settings_main_screen_wallpaper_pick_folder">Выбрать папку</string>
     <string name="settings_main_screen_wallpaper_folder_hint">Изображения берутся из папки (без копирования в приложение). Сортировка по имени файла. На главном экране свайп влево/вправо по свободной области переключает обои.</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_title">Фон: на весь экран</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_desc">Включено — картинка заполняет весь экран, лишнее по краям обрезается. Выключено — картинка видна целиком внутри экрана, свободные полосы заливаются цветом фона темы.</string>
     <string name="settings_main_screen_canvas_bg_title">Фон главного экрана (под панелями)</string>
     <string name="settings_main_screen_canvas_bg_desc">Цвет области за панелями виджетов и под обоями (если обои не на весь экран). Отдельно для светлой и тёмной темы приложения.</string>
     <string name="settings_main_screen_canvas_bg_light">Цвет фона (светлая тема)</string>

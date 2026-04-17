@@ -223,8 +223,8 @@
     <string name="settings_main_screen_wallpaper_dark">Wallpaper folder (dark theme)</string>
     <string name="settings_main_screen_wallpaper_pick_folder">Choose folder</string>
     <string name="settings_main_screen_wallpaper_folder_hint">Images are read from the folder (not copied into the app). Sorted by file name. On the main screen, swipe left/right on empty areas to change the wallpaper.</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_title">Background scale: Crop (fill screen)</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_desc">On — fill the screen, excess image cropped (ContentScale.Crop). Off — show full image, theme-colored bars if needed (ContentScale.Fit).</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_title">Background: fill the screen</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_desc">On — the image covers the whole screen; what does not fit is cropped at the edges. Off — the whole image stays visible inside the screen; empty bands use the theme background color.</string>
     <string name="settings_main_screen_canvas_bg_title">Main screen background (under panels)</string>
     <string name="settings_main_screen_canvas_bg_desc">Color behind widget panels and under wallpaper letterboxing. Separate for light and dark app theme.</string>
     <string name="settings_main_screen_canvas_bg_light">Background color (light theme)</string>
