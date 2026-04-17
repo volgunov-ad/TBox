@@ -222,7 +222,7 @@
     <string name="settings_main_screen_wallpaper_light">Wallpaper folder (light theme)</string>
     <string name="settings_main_screen_wallpaper_dark">Wallpaper folder (dark theme)</string>
     <string name="settings_main_screen_wallpaper_pick_source">Choose</string>
-    <string name="settings_main_screen_wallpaper_folder_hint">Wallpapers are not copied into the app. Where supported, pick a folder of images; on devices without a folder picker, pick one image in the desired folder—the app will try to use that folder for the carousel (if the OS does not expose sibling files, only the chosen image is used). Sorted by file name. On the main screen, swipe left/right on the background to change the wallpaper; gestures on panels and corner buttons stay with those controls.</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Wallpapers are not copied into the app. Tap Choose and pick one image file inside the folder you want—the whole folder is then used for the background (all images in it, sorted by file name). If the system offers a folder picker, you can pick the folder directly. On the main screen, swipe the background horizontally; panels and corner buttons keep their own gestures.</string>
     <string name="settings_main_screen_wallpaper_all_files_hint">For reliable access to a folder by disk path, enable All files access for this app (Android 11+).</string>
     <string name="settings_main_screen_wallpaper_open_all_files_settings">Open all files access settings</string>
     <string name="settings_main_screen_wallpaper_path_mode_hint">All files access is on: enter the absolute path to the wallpaper folder and tap Apply path.</string>
