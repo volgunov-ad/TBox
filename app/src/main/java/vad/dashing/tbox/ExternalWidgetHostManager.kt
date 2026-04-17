@@ -53,6 +53,8 @@ object ExternalWidgetHostManager {
     private const val TAG = "ExternalWidgetHost"
     private const val HOST_ID = 1024
     private const val DEFAULT_PROVIDER_REFRESH_DEBOUNCE_MS = 60_000L
+    /** Max failed [AppWidgetHost.startListening] attempts from the main-looper retry runnable. */
+    private const val MAX_LISTENING_RETRY_ATTEMPTS = 5
     private val mainHandler = Handler(Looper.getMainLooper())
     private var host: AppWidgetHost? = null
     private var refCount = 0
@@ -87,7 +89,7 @@ object ExternalWidgetHostManager {
                     )
                     listenRetryAttempt++
                     val delayMs = listenRetryDelaysMs.getOrElse(listenRetryAttempt - 1) { 15_000L }
-                    if (listenRetryAttempt < 12) {
+                    if (listenRetryAttempt < MAX_LISTENING_RETRY_ATTEMPTS) {
                         mainHandler.postDelayed(this, delayMs)
                     } else {
                         listenRetryAppContext = null
