@@ -47,6 +47,7 @@ fun DashboardWidgetRenderer(
     onToggleFloatingPanelsEnabledDoubleClick: () -> Unit = {},
     onRestartRequested: () -> Unit,
     externalWidgetHost: AppWidgetHost? = null,
+    externalWidgetColdStartDelayMs: Long = 0L,
     isEditMode: Boolean = false,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
@@ -227,6 +228,7 @@ fun DashboardWidgetRenderer(
             ExternalAppWidgetItem(
                 widgetConfig = widgetConfig,
                 appWidgetHost = externalWidgetHost,
+                coldStartInitDelayMs = externalWidgetColdStartDelayMs,
                 isEditMode = isEditMode,
                 handleClick = false,
                 onClick = onClick,

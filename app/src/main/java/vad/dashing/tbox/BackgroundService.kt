@@ -471,6 +471,7 @@ class BackgroundService : Service() {
             ACTION_START -> {
                 if (!kickoffStart) return
                 val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
+                ExternalWidgetColdStartGate.resetFloatingSessionForNewServiceRun()
                 serviceStartupJob?.cancel()
                 serviceStartupJob = scope.launch(exceptionHandler) {
                     try {
@@ -2182,7 +2183,10 @@ class BackgroundService : Service() {
         }
     }
 
-    private fun scheduleOpenMainActivity(delayMs: Long) {
+    private fun scheduleOpenMainActivity(
+        delayMs: Long,
+        openedAfterBootService: Boolean = false,
+    ) {
         openMainActivityJob?.cancel()
         openMainActivityJob = scope.launch(exceptionHandler) {
             if (delayMs > 0) {
@@ -2190,7 +2194,10 @@ class BackgroundService : Service() {
             }
             withContext(Dispatchers.Main) {
                 try {
-                    val launchIntent = MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
+                    val launchIntent = MainActivityIntentHelper.createBringToFrontIntent(
+                        this@BackgroundService,
+                        openedAfterBootService = openedAfterBootService,
+                    )
                     startActivity(launchIntent)
                 } catch (e: Exception) {
                     Log.e("BackgroundService", "Open MainActivity failed", e)
@@ -3378,7 +3385,7 @@ class BackgroundService : Service() {
             val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
             if (!enabled) return
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
-            scheduleOpenMainActivity(2000L)
+            scheduleOpenMainActivity(delayMs = 2000L, openedAfterBootService = true)
         } catch (e: Exception) {
             Log.e("BackgroundService", "Open main screen after boot failed", e)
             TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")

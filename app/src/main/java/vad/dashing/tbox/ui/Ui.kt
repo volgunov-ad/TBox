@@ -66,6 +66,8 @@ data class TabItem(
 fun TboxApp(
     settingsManager: SettingsManager,
     appDataManager: AppDataManager,
+    /** One-shot delay for embedded third-party widgets on main screen after boot-open. */
+    mainScreenExternalWidgetInitDelayMs: Long = 0L,
     onTboxRestart: () -> Unit,
     onSaveToFile: (String, List<String>) -> Unit,
     onExportSettingsBackup: () -> Unit,
@@ -97,6 +99,7 @@ fun TboxApp(
                 canViewModel = canViewModel,
                 appDataViewModel = appDataViewModel,
                 settingsViewModel = settingsViewModel,
+                externalWidgetColdStartDelayMs = mainScreenExternalWidgetInitDelayMs,
                 onOpenConsole = { settingsViewModel.saveSelectedTab(0) },
                 onTboxRestart = onTboxRestart,
                 onTripFinishAndStart = onTripFinishAndStart,

@@ -86,6 +86,11 @@ private suspend fun createExternalHostView(
 fun ExternalAppWidgetItem(
     widgetConfig: FloatingDashboardWidgetConfig,
     appWidgetHost: AppWidgetHost?,
+    /**
+     * Before any [AppWidgetManager] / host work: show placeholder only (e.g. after boot or floating
+     * session cold start). Does not replace the normal staggered [createView] delay.
+     */
+    coldStartInitDelayMs: Long = 0L,
     isEditMode: Boolean,
     handleClick: Boolean,
     onClick: () -> Unit = {},
@@ -99,25 +104,28 @@ fun ExternalAppWidgetItem(
     val context = LocalContext.current
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
     val appWidgetId = widgetConfig.appWidgetId ?: AppWidgetManager.INVALID_APPWIDGET_ID
-    var appWidgetInfo by remember(appWidgetId) {
+    var appWidgetInfo by remember(appWidgetId, coldStartInitDelayMs) {
         mutableStateOf<android.appwidget.AppWidgetProviderInfo?>(
-            if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-                null
-            } else {
-                appWidgetManager.getAppWidgetInfo(appWidgetId)
+            when {
+                appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID -> null
+                coldStartInitDelayMs > 0L -> null
+                else -> appWidgetManager.getAppWidgetInfo(appWidgetId)
             }
         )
     }
-    LaunchedEffect(appWidgetId) {
+    LaunchedEffect(appWidgetId, coldStartInitDelayMs) {
         if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             appWidgetInfo = null
             return@LaunchedEffect
+        }
+        if (coldStartInitDelayMs > 0L) {
+            delay(coldStartInitDelayMs)
         }
         appWidgetInfo = awaitAppWidgetInfo(appWidgetManager, appWidgetId)
     }
     var optionsApplied by remember(appWidgetId) { mutableStateOf(false) }
     var hostView by remember(appWidgetId) { mutableStateOf<AppWidgetHostView?>(null) }
-    LaunchedEffect(appWidgetId, appWidgetHost, appWidgetInfo) {
+    LaunchedEffect(appWidgetId, appWidgetHost, appWidgetInfo, coldStartInitDelayMs) {
         hostView = null
         if (
             appWidgetHost == null ||

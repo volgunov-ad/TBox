@@ -68,6 +68,7 @@ fun MainScreen(
     canViewModel: CanDataViewModel,
     appDataViewModel: AppDataViewModel,
     settingsViewModel: SettingsViewModel,
+    externalWidgetColdStartDelayMs: Long = 0L,
     onOpenConsole: () -> Unit,
     onTboxRestart: () -> Unit,
     onTripFinishAndStart: () -> Unit,
@@ -122,6 +123,7 @@ fun MainScreen(
                     canViewModel = canViewModel,
                     appDataViewModel = appDataViewModel,
                     settingsViewModel = settingsViewModel,
+                    externalWidgetColdStartDelayMs = externalWidgetColdStartDelayMs,
                     onRebootTbox = onTboxRestart,
                     onTripFinishAndStart = onTripFinishAndStart,
                 )
