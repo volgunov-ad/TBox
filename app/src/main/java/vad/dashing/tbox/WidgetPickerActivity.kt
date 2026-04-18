@@ -197,7 +197,6 @@ class WidgetPickerActivity : ComponentActivity() {
                 SAVE_TARGET_MAIN_SCREEN -> saveMainScreen(settingsManager)
                 SAVE_TARGET_MAIN_DASHBOARD -> saveMainDashboard(settingsManager)
             }
-            requestProviderRefreshAfterConfigure()
             finish()
         }
     }
@@ -265,20 +264,5 @@ class WidgetPickerActivity : ComponentActivity() {
             ExternalWidgetHostManager.deleteAppWidgetId(this, appWidgetId)
         }
         finish()
-    }
-
-    private fun requestProviderRefreshAfterConfigure() {
-        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
-        val info = appWidgetManager.getAppWidgetInfo(appWidgetId) ?: return
-        val provider = info.provider
-        try {
-            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
-                component = provider
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
-            }
-            sendBroadcast(intent)
-        } catch (e: Exception) {
-            Log.w(TAG, "Could not request widget provider refresh", e)
-        }
     }
 }

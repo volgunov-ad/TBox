@@ -98,17 +98,6 @@ fun ExternalAppWidgetItem(
         }
         appWidgetInfo = awaitAppWidgetInfo(appWidgetManager, appWidgetId)
     }
-    LaunchedEffect(appWidgetId, appWidgetInfo) {
-        if (
-            appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID &&
-            appWidgetInfo != null
-        ) {
-            ExternalWidgetHostManager.requestProviderRefreshOnce(
-                context = context,
-                appWidgetId = appWidgetId
-            )
-        }
-    }
     val applySizeOptionsScope = rememberCoroutineScope()
     var applySizeOptionsJob by remember(appWidgetId) { mutableStateOf<Job?>(null) }
     DisposableEffect(appWidgetId) {
