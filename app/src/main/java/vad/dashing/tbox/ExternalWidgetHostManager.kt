@@ -119,8 +119,15 @@ object ExternalWidgetHostManager {
                     putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
                 }
             )
+        } catch (e: SecurityException) {
+            // OEM forbids APPWIDGET_UPDATE from our uid to the provider package — not transient.
+            // Keep appWidgetId in [providerRefreshRequestedIds] so we do not retry on every recomposition.
+            Log.w(
+                TAG,
+                "Provider refresh broadcast denied for appWidgetId=$appWidgetId (${provider.packageName})",
+                e
+            )
         } catch (e: Exception) {
-            // Allow retries if sending failed due to transient state.
             providerRefreshRequestedIds.remove(appWidgetId)
             Log.w(TAG, "Could not request provider refresh for appWidgetId=$appWidgetId", e)
         }
