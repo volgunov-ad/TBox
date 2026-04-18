@@ -1,6 +1,10 @@
 package vad.dashing.tbox.ui
 
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -15,23 +19,33 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.displayWallpaperFolderSummary
+import vad.dashing.tbox.hasManageAllFilesAccess
+import vad.dashing.tbox.normalizeFilesystemWallpaperFolderPath
+import java.io.File
 import kotlin.math.roundToInt
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
@@ -45,8 +59,10 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 @Composable
 fun MainScreenSettingsTab(
     settingsViewModel: SettingsViewModel,
+    onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val mainScreenPanelsList by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
     val hasMainScreenPanels = mainScreenPanelsList.isNotEmpty()
     val activeMainScreenPanelId by settingsViewModel.activeMainScreenPanelId.collectAsStateWithLifecycle()
@@ -61,10 +77,10 @@ fun MainScreenSettingsTab(
     val mainScreenPanelCols by settingsViewModel.mainScreenPanelCols.collectAsStateWithLifecycle()
     val isMainScreenOpenOnBootEnabled by
         settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
-    val isMainScreenWallpaperLightSet by
-        settingsViewModel.isMainScreenWallpaperLightSet.collectAsStateWithLifecycle()
-    val isMainScreenWallpaperDarkSet by
-        settingsViewModel.isMainScreenWallpaperDarkSet.collectAsStateWithLifecycle()
+    val mainScreenWallpaperLightFolderUri by
+        settingsViewModel.mainScreenWallpaperLightFolderUri.collectAsStateWithLifecycle()
+    val mainScreenWallpaperDarkFolderUri by
+        settingsViewModel.mainScreenWallpaperDarkFolderUri.collectAsStateWithLifecycle()
     val isMainScreenWallpaperCrop by
         settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
     val mainScreenCornerButtonSizeDp by
@@ -83,19 +99,145 @@ fun MainScreenSettingsTab(
         settingsViewModel.mainScreenCanvasBackgroundDark.collectAsStateWithLifecycle()
     var cornerColorSegment by remember { mutableIntStateOf(0) }
     var mainScreenBgSegment by remember { mutableIntStateOf(0) }
+    var lightFolderPathInput by remember { mutableStateOf("") }
+    var darkFolderPathInput by remember { mutableStateOf("") }
 
-    val pickWallpaperLight = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            settingsViewModel.setMainScreenWallpaperLight(uri)
+    LaunchedEffect(mainScreenWallpaperLightFolderUri) {
+        val u = mainScreenWallpaperLightFolderUri
+        lightFolderPathInput = if (u.startsWith("file://", ignoreCase = true)) {
+            runCatching { File(Uri.parse(u).path ?: "").absolutePath }.getOrDefault("")
+        } else {
+            ""
         }
     }
-    val pickWallpaperDark = rememberLauncherForActivityResult(
+    LaunchedEffect(mainScreenWallpaperDarkFolderUri) {
+        val u = mainScreenWallpaperDarkFolderUri
+        darkFolderPathInput = if (u.startsWith("file://", ignoreCase = true)) {
+            runCatching { File(Uri.parse(u).path ?: "").absolutePath }.getOrDefault("")
+        } else {
+            ""
+        }
+    }
+
+    var allFilesAccess by remember { mutableStateOf(hasManageAllFilesAccess()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        allFilesAccess = hasManageAllFilesAccess()
+    }
+    fun openManageAllFilesSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            runCatching {
+                context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            }
+        }
+    }
+
+    val pickWallpaperLightFolder = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            settingsViewModel.saveMainScreenWallpaperLightFolderUri(uri.toString())
+        }
+    }
+    val pickWallpaperDarkFolder = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            settingsViewModel.saveMainScreenWallpaperDarkFolderUri(uri.toString())
+        }
+    }
+    val pickWallpaperLightImage = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
-            settingsViewModel.setMainScreenWallpaperDark(uri)
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            settingsViewModel.applyMainScreenWallpaperFromPickedImage(context, uri, forLightTheme = true)
+        }
+    }
+    val pickWallpaperDarkImage = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            settingsViewModel.applyMainScreenWallpaperFromPickedImage(context, uri, forLightTheme = false)
+        }
+    }
+    val openDocumentTreeIntent = remember {
+        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+    }
+    val canOpenDocumentTree = remember {
+        openDocumentTreeIntent.resolveActivity(context.packageManager) != null
+    }
+    fun launchLightWallpaperPicker() {
+        if (canOpenDocumentTree) {
+            pickWallpaperLightFolder.launch(null)
+        } else {
+            val getContent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
+            if (getContent.resolveActivity(context.packageManager) != null) {
+                val open = { pickWallpaperLightImage.launch("image/*") }
+                if (onRequestWallpaperStorageAccess != null) {
+                    onRequestWallpaperStorageAccess(open)
+                } else {
+                    open()
+                }
+            } else {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+    fun launchDarkWallpaperPicker() {
+        if (canOpenDocumentTree) {
+            pickWallpaperDarkFolder.launch(null)
+        } else {
+            val getContent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
+            if (getContent.resolveActivity(context.packageManager) != null) {
+                val open = { pickWallpaperDarkImage.launch("image/*") }
+                if (onRequestWallpaperStorageAccess != null) {
+                    onRequestWallpaperStorageAccess(open)
+                } else {
+                    open()
+                }
+            } else {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -119,11 +261,52 @@ fun MainScreenSettingsTab(
         )
         SettingsTitle(stringResource(R.string.settings_main_screen_wallpaper_title))
         Text(
+            text = stringResource(R.string.settings_main_screen_wallpaper_folder_hint),
+            fontSize = 18.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !allFilesAccess) {
+            Text(
+                text = stringResource(R.string.settings_main_screen_wallpaper_all_files_hint),
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            OutlinedButton(
+                onClick = { openManageAllFilesSettings() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Text(stringResource(R.string.settings_main_screen_wallpaper_open_all_files_settings), fontSize = 20.sp)
+            }
+        }
+        if (allFilesAccess) {
+            Text(
+                text = stringResource(R.string.settings_main_screen_wallpaper_path_mode_hint),
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+        Text(
             text = stringResource(R.string.settings_main_screen_wallpaper_light),
             fontSize = 20.sp,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
         )
+        if (mainScreenWallpaperLightFolderUri.isNotBlank()) {
+            Text(
+                text = stringResource(
+                    R.string.settings_main_screen_wallpaper_current_path,
+                    displayWallpaperFolderSummary(mainScreenWallpaperLightFolderUri)
+                ),
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -131,17 +314,49 @@ fun MainScreenSettingsTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { pickWallpaperLight.launch("image/*") },
+                onClick = { launchLightWallpaperPicker() },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_pick), fontSize = 22.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), fontSize = 22.sp)
             }
             OutlinedButton(
-                onClick = { settingsViewModel.setMainScreenWallpaperLight(null) },
-                enabled = isMainScreenWallpaperLightSet,
+                onClick = { settingsViewModel.saveMainScreenWallpaperLightFolderUri(null) },
+                enabled = mainScreenWallpaperLightFolderUri.isNotBlank(),
                 modifier = Modifier.weight(1f)
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 22.sp)
+            }
+        }
+        if (allFilesAccess) {
+            OutlinedTextField(
+                value = lightFolderPathInput,
+                onValueChange = { lightFolderPathInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                label = { Text(stringResource(R.string.settings_main_screen_wallpaper_path_label)) },
+                singleLine = true,
+            )
+            OutlinedButton(
+                onClick = {
+                    if (normalizeFilesystemWallpaperFolderPath(lightFolderPathInput) != null) {
+                        settingsViewModel.applyMainScreenWallpaperFilesystemFolderPath(
+                            lightFolderPathInput,
+                            forLightTheme = true
+                        )
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.settings_main_screen_wallpaper_path_invalid),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Text(stringResource(R.string.settings_main_screen_wallpaper_apply_path), fontSize = 20.sp)
             }
         }
         Text(
@@ -150,6 +365,17 @@ fun MainScreenSettingsTab(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 6.dp)
         )
+        if (mainScreenWallpaperDarkFolderUri.isNotBlank()) {
+            Text(
+                text = stringResource(
+                    R.string.settings_main_screen_wallpaper_current_path,
+                    displayWallpaperFolderSummary(mainScreenWallpaperDarkFolderUri)
+                ),
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -157,17 +383,49 @@ fun MainScreenSettingsTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { pickWallpaperDark.launch("image/*") },
+                onClick = { launchDarkWallpaperPicker() },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_pick), fontSize = 22.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), fontSize = 22.sp)
             }
             OutlinedButton(
-                onClick = { settingsViewModel.setMainScreenWallpaperDark(null) },
-                enabled = isMainScreenWallpaperDarkSet,
+                onClick = { settingsViewModel.saveMainScreenWallpaperDarkFolderUri(null) },
+                enabled = mainScreenWallpaperDarkFolderUri.isNotBlank(),
                 modifier = Modifier.weight(1f)
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 22.sp)
+            }
+        }
+        if (allFilesAccess) {
+            OutlinedTextField(
+                value = darkFolderPathInput,
+                onValueChange = { darkFolderPathInput = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                label = { Text(stringResource(R.string.settings_main_screen_wallpaper_path_label)) },
+                singleLine = true,
+            )
+            OutlinedButton(
+                onClick = {
+                    if (normalizeFilesystemWallpaperFolderPath(darkFolderPathInput) != null) {
+                        settingsViewModel.applyMainScreenWallpaperFilesystemFolderPath(
+                            darkFolderPathInput,
+                            forLightTheme = false
+                        )
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.settings_main_screen_wallpaper_path_invalid),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            ) {
+                Text(stringResource(R.string.settings_main_screen_wallpaper_apply_path), fontSize = 20.sp)
             }
         }
         SettingSwitch(

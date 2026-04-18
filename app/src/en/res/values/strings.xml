@@ -219,11 +219,21 @@
     <string name="settings_main_screen_open_on_boot_title">Automatically open main screen on startup</string>
     <string name="settings_main_screen_open_on_boot_desc">After the device boots and the background service starts automatically, opens the app on the home main screen</string>
     <string name="settings_main_screen_wallpaper_title">Main screen background</string>
-    <string name="settings_main_screen_wallpaper_light">Light app theme</string>
-    <string name="settings_main_screen_wallpaper_dark">Dark app theme</string>
-    <string name="settings_main_screen_wallpaper_pick">Choose image</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_title">Background scale: Crop (fill screen)</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_desc">On — fill the screen, excess image cropped (ContentScale.Crop). Off — show full image, theme-colored bars if needed (ContentScale.Fit).</string>
+    <string name="settings_main_screen_wallpaper_light">Wallpaper folder (light theme)</string>
+    <string name="settings_main_screen_wallpaper_dark">Wallpaper folder (dark theme)</string>
+    <string name="settings_main_screen_wallpaper_pick_source">Choose</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Wallpapers are not copied into the app. Tap Choose and pick one image file inside the folder you want—the whole folder is then used for the background (all images in it, sorted by file name). If the system offers a folder picker, you can pick the folder directly. On the main screen, swipe the background horizontally; panels and corner buttons keep their own gestures.</string>
+    <string name="settings_main_screen_wallpaper_all_files_hint">For reliable access to a folder by disk path, enable All files access for this app (Android 11+).</string>
+    <string name="settings_main_screen_wallpaper_open_all_files_settings">Open all files access settings</string>
+    <string name="settings_main_screen_wallpaper_path_mode_hint">All files access is on: enter the absolute path to the wallpaper folder and tap Apply path.</string>
+    <string name="settings_main_screen_wallpaper_path_label">Folder path</string>
+    <string name="settings_main_screen_wallpaper_apply_path">Apply path</string>
+    <string name="settings_main_screen_wallpaper_path_invalid">Folder not found or path is invalid</string>
+    <string name="settings_main_screen_wallpaper_current_path">Current source: %1$s</string>
+    <string name="settings_main_screen_wallpaper_no_picker">No app on this device can pick an image.</string>
+    <string name="settings_main_screen_wallpaper_file_too_large">This file is over 10 MB — pick a smaller image.</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_title">Background: fill the screen</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_desc">On — the image covers the whole screen; what does not fit is cropped at the edges. Off — the whole image stays visible inside the screen; empty bands use the theme background color.</string>
     <string name="settings_main_screen_canvas_bg_title">Main screen background (under panels)</string>
     <string name="settings_main_screen_canvas_bg_desc">Color behind widget panels and under wallpaper letterboxing. Separate for light and dark app theme.</string>
     <string name="settings_main_screen_canvas_bg_light">Background color (light theme)</string>
@@ -263,7 +273,7 @@
 
     <string name="settings_misc_title">Misc</string>
     <string name="settings_backup_title">Backup</string>
-    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper image files and custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
+    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>
     <string name="settings_backup_export_without_trips">Export JSON without trips</string>
     <string name="settings_backup_import">Import JSON</string>

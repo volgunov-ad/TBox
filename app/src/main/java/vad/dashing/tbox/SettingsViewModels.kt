@@ -15,9 +15,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import android.content.Context
+import android.widget.Toast
+import vad.dashing.tbox.R
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -508,18 +513,32 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
-    val isMainScreenWallpaperLightSet = settingsManager.mainScreenWallpaperLightSetFlow
+    val mainScreenWallpaperLightFolderUri = settingsManager.mainScreenWallpaperLightFolderUriFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
+            initialValue = ""
         )
 
-    val isMainScreenWallpaperDarkSet = settingsManager.mainScreenWallpaperDarkSetFlow
+    val mainScreenWallpaperDarkFolderUri = settingsManager.mainScreenWallpaperDarkFolderUriFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = false
+            initialValue = ""
+        )
+
+    val mainScreenWallpaperLightSelectedFile = settingsManager.mainScreenWallpaperLightSelectedFileFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val mainScreenWallpaperDarkSelectedFile = settingsManager.mainScreenWallpaperDarkSelectedFileFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
         )
 
     val isMainScreenWallpaperCrop = settingsManager.mainScreenWallpaperCropFlow
@@ -1045,17 +1064,73 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun setMainScreenWallpaperLight(sourceUri: Uri?) {
+    fun saveMainScreenWallpaperLightFolderUri(uriString: String?) {
         viewModelScope.launch {
-            settingsManager.setMainScreenWallpaperLight(sourceUri)
+            settingsManager.saveMainScreenWallpaperLightFolderUri(uriString)
             _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
         }
     }
 
-    fun setMainScreenWallpaperDark(sourceUri: Uri?) {
+    fun saveMainScreenWallpaperDarkFolderUri(uriString: String?) {
         viewModelScope.launch {
-            settingsManager.setMainScreenWallpaperDark(sourceUri)
+            settingsManager.saveMainScreenWallpaperDarkFolderUri(uriString)
             _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+        }
+    }
+
+    /**
+     * Picks one image via [GetContent]; uses parent folder when possible so carousel can list siblings.
+     */
+    fun applyMainScreenWallpaperFromPickedImage(context: Context, pickedUri: Uri, forLightTheme: Boolean) {
+        viewModelScope.launch {
+            val res = resolveWallpaperSourceFromPickedImageUri(context, pickedUri)
+            if (res == null) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.settings_main_screen_wallpaper_file_too_large),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return@launch
+            }
+            if (forLightTheme) {
+                settingsManager.saveMainScreenWallpaperLightFolderAndSelection(
+                    res.folderUriString,
+                    res.selectedFileName,
+                )
+            } else {
+                settingsManager.saveMainScreenWallpaperDarkFolderAndSelection(
+                    res.folderUriString,
+                    res.selectedFileName,
+                )
+            }
+            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+        }
+    }
+
+    /** When [Environment.isExternalStorageManager] is true: set folder from absolute path or `file://` (validated). */
+    fun applyMainScreenWallpaperFilesystemFolderPath(rawPath: String, forLightTheme: Boolean) {
+        viewModelScope.launch {
+            val normalized = normalizeFilesystemWallpaperFolderPath(rawPath) ?: return@launch
+            if (forLightTheme) {
+                settingsManager.saveMainScreenWallpaperLightFolderUri(normalized)
+            } else {
+                settingsManager.saveMainScreenWallpaperDarkFolderUri(normalized)
+            }
+            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+        }
+    }
+
+    fun saveMainScreenWallpaperLightSelectedFileName(fileName: String) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWallpaperLightSelectedFileName(fileName)
+        }
+    }
+
+    fun saveMainScreenWallpaperDarkSelectedFileName(fileName: String) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWallpaperDarkSelectedFileName(fileName)
         }
     }
 

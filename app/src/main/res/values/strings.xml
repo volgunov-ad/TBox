@@ -219,11 +219,21 @@
     <string name="settings_main_screen_open_on_boot_title">Автоматически открывать главный экран при запуске</string>
     <string name="settings_main_screen_open_on_boot_desc">После загрузки устройства, когда фоновая служба стартует автоматически, открывается окно приложения на главном экране (плитки дома)</string>
     <string name="settings_main_screen_wallpaper_title">Фон главного экрана</string>
-    <string name="settings_main_screen_wallpaper_light">Светлая тема приложения</string>
-    <string name="settings_main_screen_wallpaper_dark">Тёмная тема приложения</string>
-    <string name="settings_main_screen_wallpaper_pick">Выбрать изображение</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
+    <string name="settings_main_screen_wallpaper_light">Папка с обоями (светлая тема)</string>
+    <string name="settings_main_screen_wallpaper_dark">Папка с обоями (тёмная тема)</string>
+    <string name="settings_main_screen_wallpaper_pick_source">Выбрать</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Обои не копируются в приложение. Нажмите «Выбрать» и укажите один файл картинки в нужной папке — тогда для фона используется вся эта папка (все изображения в ней, по имени файла). Если в системе есть выбор папки, можно выбрать сразу папку. На главном экране листайте фон горизонтально; панели и угловые кнопки перехватывают свои жесты.</string>
+    <string name="settings_main_screen_wallpaper_all_files_hint">Для надёжного доступа к папке по пути на диске включите «Доступ ко всем файлам» для приложения (Android 11+).</string>
+    <string name="settings_main_screen_wallpaper_open_all_files_settings">Открыть настройки доступа к файлам</string>
+    <string name="settings_main_screen_wallpaper_path_mode_hint">Указан полный доступ к хранилищу: можно ввести абсолютный путь к папке с обоями и нажать «Применить путь».</string>
+    <string name="settings_main_screen_wallpaper_path_label">Путь к папке</string>
+    <string name="settings_main_screen_wallpaper_apply_path">Применить путь</string>
+    <string name="settings_main_screen_wallpaper_path_invalid">Папка не найдена или путь неверный</string>
+    <string name="settings_main_screen_wallpaper_current_path">Текущий источник: %1$s</string>
+    <string name="settings_main_screen_wallpaper_no_picker">Нет приложения для выбора изображения на этом устройстве.</string>
+    <string name="settings_main_screen_wallpaper_file_too_large">Файл больше 10 МБ — выберите другое изображение.</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_title">Фон: на весь экран</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_desc">Включено — картинка заполняет весь экран, лишнее по краям обрезается. Выключено — картинка видна целиком внутри экрана, свободные полосы заливаются цветом фона темы.</string>
     <string name="settings_main_screen_canvas_bg_title">Фон главного экрана (под панелями)</string>
     <string name="settings_main_screen_canvas_bg_desc">Цвет области за панелями виджетов и под обоями (если обои не на весь экран). Отдельно для светлой и тёмной темы приложения.</string>
     <string name="settings_main_screen_canvas_bg_light">Цвет фона (светлая тема)</string>
@@ -263,7 +273,7 @@
 
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_backup_title">Резервная копия</string>
-    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Файлы обоев главного экрана и пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
+    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Пути к папкам обоев главного экрана и выбранные файлы сохраняются в JSON; сами изображения не копируются. Пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
     <string name="settings_backup_export">Экспорт JSON</string>
     <string name="settings_backup_export_without_trips">Экспорт JSON без поездок</string>
     <string name="settings_backup_import">Импорт JSON</string>

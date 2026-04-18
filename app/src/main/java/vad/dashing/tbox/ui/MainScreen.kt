@@ -1,5 +1,7 @@
 package vad.dashing.tbox.ui
 
+import android.content.Context
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -7,6 +9,8 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
@@ -28,7 +32,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -41,11 +44,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import android.graphics.BitmapFactory
-import java.io.File
+import android.net.Uri
 import kotlin.math.roundToInt
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.runtime.snapshotFlow
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.ExternalWidgetHostManager
@@ -57,8 +59,10 @@ import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.MainScreenAddButtonPosition
 import vad.dashing.tbox.MainScreenSettingsButtonPosition
 import vad.dashing.tbox.R
-import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.decodeImageBitmapFromUri
+import vad.dashing.tbox.effectiveWallpaperFileName
+import vad.dashing.tbox.listSortedWallpaperImagesInFolder
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.loadWidgetsFromConfig
 
@@ -215,6 +219,7 @@ fun MainScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MainScreenWallpaperBackground(
     theme: Int,
@@ -225,23 +230,38 @@ private fun MainScreenWallpaperBackground(
     val canvasBgLight by settingsViewModel.mainScreenCanvasBackgroundLight.collectAsStateWithLifecycle()
     val canvasBgDark by settingsViewModel.mainScreenCanvasBackgroundDark.collectAsStateWithLifecycle()
     val canvasColor = Color(if (theme == 2) canvasBgDark else canvasBgLight)
-    val hasLight by settingsViewModel.isMainScreenWallpaperLightSet.collectAsStateWithLifecycle()
-    val hasDark by settingsViewModel.isMainScreenWallpaperDarkSet.collectAsStateWithLifecycle()
+    val folderLight by settingsViewModel.mainScreenWallpaperLightFolderUri.collectAsStateWithLifecycle()
+    val folderDark by settingsViewModel.mainScreenWallpaperDarkFolderUri.collectAsStateWithLifecycle()
+    val selectedLight by settingsViewModel.mainScreenWallpaperLightSelectedFile.collectAsStateWithLifecycle()
+    val selectedDark by settingsViewModel.mainScreenWallpaperDarkSelectedFile.collectAsStateWithLifecycle()
     val epoch by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
     val wallpaperCrop by settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
-    val useWallpaper = if (theme == 2) hasDark else hasLight
-    val relPath = if (theme == 2) {
-        SettingsManager.MAIN_SCREEN_WALLPAPER_DARK_FILE
-    } else {
-        SettingsManager.MAIN_SCREEN_WALLPAPER_LIGHT_FILE
+    val folderUriStr = if (theme == 2) folderDark else folderLight
+    val savedSelectedName = if (theme == 2) selectedDark else selectedLight
+    val folderUri = remember(folderUriStr) {
+        if (folderUriStr.isBlank()) null else Uri.parse(folderUriStr)
     }
-    var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(useWallpaper, relPath, epoch) {
-        bitmap = withContext(Dispatchers.IO) {
-            if (!useWallpaper) return@withContext null
-            val file = File(context.filesDir, relPath)
-            if (!file.isFile) return@withContext null
-            BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+    var sortedPairs by remember { mutableStateOf<List<Pair<String, Uri>>>(emptyList()) }
+    LaunchedEffect(folderUriStr, epoch) {
+        sortedPairs = if (folderUri == null) {
+            emptyList()
+        } else {
+            listSortedWallpaperImagesInFolder(context, folderUri)
+        }
+    }
+    val sortedNames = remember(sortedPairs) { sortedPairs.map { it.first } }
+    val uriByFileName = remember(sortedPairs) { sortedPairs.toMap() }
+    val effectiveName = remember(sortedNames, savedSelectedName) {
+        effectiveWallpaperFileName(sortedNames, savedSelectedName)
+    }
+    LaunchedEffect(effectiveName, savedSelectedName, sortedNames, theme) {
+        val want = effectiveName ?: return@LaunchedEffect
+        if (want != savedSelectedName) {
+            if (theme == 2) {
+                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(want)
+            } else {
+                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(want)
+            }
         }
     }
     Box(modifier = modifier.fillMaxSize()) {
@@ -250,9 +270,74 @@ private fun MainScreenWallpaperBackground(
                 .fillMaxSize()
                 .background(canvasColor)
         )
-        if (bitmap != null) {
+        if (sortedNames.isEmpty() || effectiveName == null) {
+            return@Box
+        }
+        val targetIdx = sortedNames.indexOf(effectiveName).coerceIn(0, sortedNames.lastIndex)
+        key(folderUriStr, sortedNames.size) {
+            val pagerState = rememberPagerState(
+                initialPage = targetIdx,
+                pageCount = { sortedNames.size },
+            )
+            LaunchedEffect(targetIdx, folderUriStr, sortedNames) {
+                if (pagerState.currentPage != targetIdx) {
+                    pagerState.scrollToPage(targetIdx)
+                }
+            }
+            LaunchedEffect(pagerState, sortedNames, theme, savedSelectedName) {
+                snapshotFlow { pagerState.settledPage }
+                    .distinctUntilChanged()
+                    .collect { page ->
+                        if (page !in sortedNames.indices) return@collect
+                        val name = sortedNames[page]
+                        if (name != savedSelectedName) {
+                            if (theme == 2) {
+                                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(name)
+                            } else {
+                                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(name)
+                            }
+                        }
+                    }
+            }
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1,
+            ) { page ->
+                MainScreenWallpaperPagerPage(
+                    page = page,
+                    sortedNames = sortedNames,
+                    uriByFileName = uriByFileName,
+                    context = context,
+                    wallpaperCrop = wallpaperCrop,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MainScreenWallpaperPagerPage(
+    page: Int,
+    sortedNames: List<String>,
+    uriByFileName: Map<String, Uri>,
+    context: Context,
+    wallpaperCrop: Boolean,
+) {
+    val nameKey = sortedNames[page]
+    val uriForSlide = uriByFileName[nameKey]
+    var slideBitmap by remember(page, uriForSlide) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(uriForSlide) {
+        slideBitmap = if (uriForSlide == null) {
+            null
+        } else {
+            decodeImageBitmapFromUri(context, uriForSlide)
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        if (slideBitmap != null) {
             Image(
-                bitmap = bitmap!!,
+                bitmap = slideBitmap!!,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = if (wallpaperCrop) ContentScale.Crop else ContentScale.Fit
