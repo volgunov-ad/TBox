@@ -174,12 +174,6 @@ fun MainScreen(
             DisposableEffect(overlayEditHost) {
                 onDispose { ExternalWidgetHostManager.releaseHost() }
             }
-            LaunchedEffect(Unit) {
-                ExternalWidgetHostManager.kickListeningIfNeeded(
-                    context,
-                    "MainScreen.floatingOverlayEdit.compose"
-                )
-            }
             val dashboardViewModel: FloatingDashboardViewModel = viewModel(
                 key = "floating-overlay-edit-$panelId",
                 factory = FloatingDashboardViewModelFactory(panelId)

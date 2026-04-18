@@ -133,12 +133,6 @@ fun FloatingDashboard(
             ExternalWidgetHostManager.releaseHost()
         }
     }
-    LaunchedEffect(Unit) {
-        ExternalWidgetHostManager.kickListeningIfNeeded(
-            context,
-            "FloatingDashboard.compose"
-        )
-    }
 
     val dashboardViewModel: FloatingDashboardViewModel = viewModel(
         key = "floating-$panelId",

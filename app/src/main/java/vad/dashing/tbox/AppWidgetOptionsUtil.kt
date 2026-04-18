@@ -21,19 +21,3 @@ fun mergeAppWidgetSizeOptions(
         putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeightDp)
     }
 }
-
-/** True if [existing] already has the same min/max cell size hints as [merged] for embedded host. */
-fun embeddedWidgetSizeHintsMatch(existing: Bundle, merged: Bundle): Boolean {
-    val keys = arrayOf(
-        AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,
-        AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,
-        AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH,
-        AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT,
-    )
-    for (k in keys) {
-        if (existing.getInt(k, Int.MIN_VALUE) != merged.getInt(k, Int.MIN_VALUE)) {
-            return false
-        }
-    }
-    return true
-}

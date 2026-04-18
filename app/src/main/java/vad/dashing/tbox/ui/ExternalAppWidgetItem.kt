@@ -1,7 +1,6 @@
 package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
-import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.view.ViewGroup
 import androidx.compose.foundation.background
@@ -15,13 +14,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,26 +34,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import android.os.SystemClock
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
-import vad.dashing.tbox.embeddedWidgetSizeHintsMatch
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
-
-private const val EXTERNAL_WIDGET_PERIODIC_REFRESH_MS = 15 * 60 * 1000L
-private const val EXTERNAL_WIDGET_DEFERRED_CREATE_MS = 400L
-private const val EXTERNAL_WIDGET_ID_STAGGER_STEP_MS = 90L
-private const val EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS = 120L
-private val EXTERNAL_WIDGET_INITIAL_RETRY_DELAYS_MS = longArrayOf(5_000L, 15_000L, 45_000L)
-private val EXTERNAL_WIDGET_CREATE_RETRY_DELAYS_MS = longArrayOf(250L, 600L, 1_500L, 3_000L, 6_000L)
 
 private suspend fun awaitAppWidgetInfo(
     appWidgetManager: AppWidgetManager,
@@ -64,28 +48,12 @@ private suspend fun awaitAppWidgetInfo(
 ): android.appwidget.AppWidgetProviderInfo? {
     var info = appWidgetManager.getAppWidgetInfo(appWidgetId)
     if (info != null) return info
-    repeat(50) {
-        delay(200)
+    repeat(20) {
+        delay(150)
         info = appWidgetManager.getAppWidgetInfo(appWidgetId)
         if (info != null) return info
     }
     return null
-}
-
-private suspend fun createExternalHostView(
-    context: android.content.Context,
-    appWidgetHost: AppWidgetHost,
-    appWidgetId: Int,
-    appWidgetInfo: android.appwidget.AppWidgetProviderInfo
-): AppWidgetHostView? = withContext(Dispatchers.Main) {
-    try {
-        appWidgetHost.createView(context, appWidgetId, appWidgetInfo).apply {
-            setAppWidget(appWidgetId, appWidgetInfo)
-            setPadding(0, 0, 0, 0)
-        }
-    } catch (_: Exception) {
-        null
-    }
 }
 
 @Composable
@@ -121,48 +89,37 @@ fun ExternalAppWidgetItem(
         }
         appWidgetInfo = awaitAppWidgetInfo(appWidgetManager, appWidgetId)
     }
-    var optionsApplied by remember(appWidgetId) { mutableStateOf(false) }
-    var hostView by remember(appWidgetId) { mutableStateOf<AppWidgetHostView?>(null) }
-    val applySizeOptionsScope = rememberCoroutineScope()
-    var applySizeOptionsJob by remember(appWidgetId) { mutableStateOf<Job?>(null) }
-    DisposableEffect(appWidgetId) {
-        onDispose {
-            applySizeOptionsJob?.cancel()
-            applySizeOptionsJob = null
+    LaunchedEffect(appWidgetId, appWidgetInfo) {
+        if (
+            appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID &&
+            appWidgetInfo != null
+        ) {
+            ExternalWidgetHostManager.requestProviderRefreshOnce(
+                context = context,
+                appWidgetId = appWidgetId
+            )
         }
     }
-    LaunchedEffect(appWidgetId, appWidgetHost, appWidgetInfo) {
-        hostView = null
+    val density = LocalDensity.current
+    val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
+    val hostView = remember(appWidgetId, appWidgetInfo, appWidgetHost) {
         if (
             appWidgetHost == null ||
             appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
             appWidgetInfo == null
         ) {
-            return@LaunchedEffect
+            null
+        } else {
+            try {
+                appWidgetHost.createView(context, appWidgetId, appWidgetInfo).apply {
+                    setAppWidget(appWidgetId, appWidgetInfo)
+                    setPadding(0, 0, 0, 0)
+                }
+            } catch (_: Exception) {
+                null
+            }
         }
-        val staggerMs = (appWidgetId and 0x7) * EXTERNAL_WIDGET_ID_STAGGER_STEP_MS
-        delay(EXTERNAL_WIDGET_DEFERRED_CREATE_MS + staggerMs)
-        ExternalWidgetHostManager.awaitListeningReadyWithOptionalKick(
-            context = context,
-            primaryTimeoutMs = 12_000L,
-            afterKickWaitMs = 2_500L
-        )
-        val info = appWidgetInfo ?: return@LaunchedEffect
-        var created: AppWidgetHostView? = null
-        for (retryDelayMs in EXTERNAL_WIDGET_CREATE_RETRY_DELAYS_MS) {
-            created = createExternalHostView(
-                context = context,
-                appWidgetHost = appWidgetHost,
-                appWidgetId = appWidgetId,
-                appWidgetInfo = info
-            )
-            if (created != null) break
-            delay(retryDelayMs)
-        }
-        hostView = created
     }
-    val density = LocalDensity.current
-    val widgetDisplayScale = normalizeWidgetScale(widgetConfig.scale)
 
     val clickModifier = if (!isEditMode && handleClick) {
         Modifier.clickable(onClick = onClick)
@@ -227,7 +184,6 @@ fun ExternalAppWidgetItem(
                     }
                 }
             } else {
-                val hostViewNonNull = checkNotNull(hostView)
                 key(appWidgetId) {
                     AndroidView(
                         factory = { viewContext ->
@@ -235,12 +191,11 @@ fun ExternalAppWidgetItem(
                             val intercept = LongPressInterceptLayout(viewContext).apply {
                                 onLongPress = onLongClick
                                 interceptLongPress = !isEditMode
-                                if (hostViewNonNull.parent != null) {
-                                    (hostViewNonNull.parent as? ViewGroup)
-                                        ?.removeView(hostViewNonNull)
+                                if (hostView.parent != null) {
+                                    (hostView.parent as? ViewGroup)?.removeView(hostView)
                                 }
                                 addView(
-                                    hostViewNonNull,
+                                    hostView,
                                     ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -258,14 +213,12 @@ fun ExternalAppWidgetItem(
                             intercept.onLongPress = onLongClick
                             intercept.interceptLongPress = !isEditMode
                             val onlyChildIsCurrent =
-                                intercept.childCount == 1 &&
-                                    intercept.getChildAt(0) === hostViewNonNull
+                                intercept.childCount == 1 && intercept.getChildAt(0) === hostView
                             if (!onlyChildIsCurrent) {
                                 intercept.removeAllViews()
-                                (hostViewNonNull.parent as? ViewGroup)
-                                    ?.removeView(hostViewNonNull)
+                                (hostView.parent as? ViewGroup)?.removeView(hostView)
                                 intercept.addView(
-                                    hostViewNonNull,
+                                    hostView,
                                     ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -279,23 +232,14 @@ fun ExternalAppWidgetItem(
                             .onSizeChanged { size ->
                                 val minWidth = with(density) { size.width.toDp().value }.roundToInt()
                                 val minHeight = with(density) { size.height.toDp().value }.roundToInt()
-                                if (minWidth <= 0 || minHeight <= 0) return@onSizeChanged
-                                applySizeOptionsJob?.cancel()
-                                applySizeOptionsJob = applySizeOptionsScope.launch {
-                                    delay(EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS)
-                                    withContext(Dispatchers.Main) {
-                                        val merged = mergeAppWidgetSizeOptions(
-                                            appWidgetManager,
-                                            appWidgetId,
-                                            minWidth,
-                                            minHeight
-                                        )
-                                        val existing = appWidgetManager.getAppWidgetOptions(appWidgetId)
-                                        if (!embeddedWidgetSizeHintsMatch(existing, merged)) {
-                                            appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
-                                        }
-                                        optionsApplied = true
-                                    }
+                                if (minWidth > 0 && minHeight > 0) {
+                                    val merged = mergeAppWidgetSizeOptions(
+                                        appWidgetManager,
+                                        appWidgetId,
+                                        minWidth,
+                                        minHeight
+                                    )
+                                    appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
                                 }
                             }
                     )
@@ -333,48 +277,6 @@ fun ExternalAppWidgetItem(
                         }
                 )
             }
-        }
-    }
-
-    LaunchedEffect(appWidgetId, appWidgetInfo, optionsApplied) {
-        if (
-            appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
-            appWidgetInfo == null ||
-            !optionsApplied
-        ) {
-            return@LaunchedEffect
-        }
-
-        // First refresh only after view has real size/options; many providers need this.
-        var refreshRequestedAt = SystemClock.elapsedRealtime()
-        ExternalWidgetHostManager.requestProviderRefresh(
-            context = context,
-            appWidgetId = appWidgetId,
-            force = true
-        )
-        for (retryDelayMs in EXTERNAL_WIDGET_INITIAL_RETRY_DELAYS_MS) {
-            delay(retryDelayMs)
-            val hasData = ExternalWidgetHostManager.hasRemoteViewsSince(
-                appWidgetId = appWidgetId,
-                sinceElapsedRealtimeMs = refreshRequestedAt
-            )
-            if (hasData) {
-                break
-            }
-            refreshRequestedAt = SystemClock.elapsedRealtime()
-            ExternalWidgetHostManager.requestProviderRefresh(
-                context = context,
-                appWidgetId = appWidgetId,
-                force = true
-            )
-        }
-        while (true) {
-            delay(EXTERNAL_WIDGET_PERIODIC_REFRESH_MS)
-            // Soft periodic ping so weather/news providers that do not self-refresh still update.
-            ExternalWidgetHostManager.requestProviderRefresh(
-                context = context,
-                appWidgetId = appWidgetId
-            )
         }
     }
 }

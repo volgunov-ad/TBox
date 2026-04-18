@@ -114,12 +114,6 @@ fun MainScreenDashboardPanel(
             ExternalWidgetHostManager.releaseHost()
         }
     }
-    LaunchedEffect(Unit) {
-        ExternalWidgetHostManager.kickListeningIfNeeded(
-            context,
-            "MainScreenDashboardPanel.compose"
-        )
-    }
 
     val vmKey = "main-screen-${panel.id}"
     val dashboardViewModel: FloatingDashboardViewModel = viewModel(

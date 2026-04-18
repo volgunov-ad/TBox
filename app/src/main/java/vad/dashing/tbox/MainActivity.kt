@@ -201,7 +201,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        ExternalWidgetHostManager.kickListeningIfNeeded(this, "MainActivity.onResume")
     }
 
     private fun startBackgroundService() {
