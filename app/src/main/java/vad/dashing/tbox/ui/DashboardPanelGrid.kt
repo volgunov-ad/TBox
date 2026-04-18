@@ -67,8 +67,6 @@ internal fun DashboardPanelGridAndFrames(
     showTboxDisconnectIndicator: Boolean,
     enableMusicInnerInteractions: Boolean,
     externalWidgetHost: AppWidgetHost? = null,
-    /** Main screen: boot-only long defer; floating: session cold window (see [ExternalWidgetColdStartGate]). */
-    externalWidgetColdStartDelayMs: Long = 0L,
     gridSpacingDp: Dp = 4.dp,
     fuelTankLiters: Int = 57,
 ) {
@@ -129,7 +127,6 @@ internal fun DashboardPanelGridAndFrames(
                                 DashboardWidgetRenderer(
                                     widget = widget,
                                     widgetConfig = widgetConfig,
-                                    externalWidgetColdStartDelayMs = externalWidgetColdStartDelayMs,
                                     settingsViewModel = settingsViewModel,
                                     tboxViewModel = tboxViewModel,
                                     canViewModel = canViewModel,

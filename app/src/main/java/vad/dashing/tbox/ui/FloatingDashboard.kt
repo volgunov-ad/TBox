@@ -28,7 +28,6 @@ import vad.dashing.tbox.AppDataViewModelFactory
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
-import vad.dashing.tbox.ExternalWidgetColdStartGate
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -134,15 +133,11 @@ fun FloatingDashboard(
             ExternalWidgetHostManager.releaseHost()
         }
     }
-    LaunchedEffect(panelId) {
+    LaunchedEffect(Unit) {
         ExternalWidgetHostManager.kickListeningIfNeeded(
             context,
             "FloatingDashboard.compose"
         )
-        val waitMs = ExternalWidgetColdStartGate.floatingColdRemainingMs()
-        if (waitMs > 0L) {
-            delay(waitMs)
-        }
     }
 
     val dashboardViewModel: FloatingDashboardViewModel = viewModel(
@@ -311,7 +306,6 @@ fun FloatingDashboard(
                     dashboardCols = dashboardCols,
                     dashboardState = dashboardState,
                     widgetConfigs = widgetConfigs,
-                    externalWidgetColdStartDelayMs = ExternalWidgetColdStartGate.COLD_EXTERNAL_WIDGET_INIT_MS,
                     settingsViewModel = settingsViewModel,
                     tboxViewModel = tboxViewModel,
                     canViewModel = canViewModel,

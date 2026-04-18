@@ -101,7 +101,6 @@ fun MainScreenDashboardPanel(
     canViewModel: CanDataViewModel,
     appDataViewModel: AppDataViewModel,
     settingsViewModel: SettingsViewModel,
-    externalWidgetColdStartDelayMs: Long = 0L,
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
 ) {
@@ -327,7 +326,6 @@ fun MainScreenDashboardPanel(
             dashboardCols = dashboardCols,
             dashboardState = dashboardState,
             widgetConfigs = widgetConfigs,
-            externalWidgetColdStartDelayMs = externalWidgetColdStartDelayMs,
             settingsViewModel = settingsViewModel,
             tboxViewModel = tboxViewModel,
             canViewModel = canViewModel,

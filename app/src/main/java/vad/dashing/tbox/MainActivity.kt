@@ -127,19 +127,6 @@ class MainActivity : ComponentActivity() {
 
         consumeFloatingDashboardTileEditIntent(intent)
 
-        val openedAfterBoot = savedInstanceState == null &&
-            intent.getBooleanExtra(
-                MainActivityIntentHelper.EXTRA_OPENED_AFTER_BOOT_SERVICE,
-                false
-            )
-        intent.removeExtra(MainActivityIntentHelper.EXTRA_OPENED_AFTER_BOOT_SERVICE)
-        val mainScreenExternalWidgetInitDelayMs =
-            if (openedAfterBoot) {
-                ExternalWidgetColdStartGate.COLD_EXTERNAL_WIDGET_INIT_MS
-            } else {
-                0L
-            }
-
         setContent {
             DisposableEffect(Unit) {
                 onDispose { disposeAppLauncherPickerIconCache() }
@@ -150,7 +137,6 @@ class MainActivity : ComponentActivity() {
                 TboxApp(
                     settingsManager = settingsManager,
                     appDataManager = appDataManager,
-                    mainScreenExternalWidgetInitDelayMs = mainScreenExternalWidgetInitDelayMs,
                     onTboxRestart = { rebootTBox() },
                     onSaveToFile = { tag, dataList ->
                         saveDataToFile(tag, dataList)

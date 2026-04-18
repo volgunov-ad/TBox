@@ -36,13 +36,6 @@ object MainActivityIntentHelper {
     const val EXTRA_FLOATING_DASHBOARD_PANEL_ID = "extra_floating_dashboard_panel_id"
     const val EXTRA_FLOATING_DASHBOARD_WIDGET_INDEX = "extra_floating_dashboard_widget_index"
 
-    /**
-     * Set when [BackgroundService] opens [vad.dashing.tbox.MainActivity] after boot
-     * ([BackgroundService.maybeOpenMainScreenAfterBootSuspend]). Consumed by the activity so embedded
-     * third-party widgets can defer init once per that launch.
-     */
-    const val EXTRA_OPENED_AFTER_BOOT_SERVICE = "vad.dashing.tbox.EXTRA_OPENED_AFTER_BOOT_SERVICE"
-
     fun applyBringToFrontFlags(intent: Intent, context: Context) {
         intent.addFlags(
             Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -54,16 +47,8 @@ object MainActivityIntentHelper {
         }
     }
 
-    fun createBringToFrontIntent(
-        context: Context,
-        openedAfterBootService: Boolean = false,
-    ): Intent =
-        Intent(context, MainActivity::class.java).also {
-            applyBringToFrontFlags(it, context)
-            if (openedAfterBootService) {
-                it.putExtra(EXTRA_OPENED_AFTER_BOOT_SERVICE, true)
-            }
-        }
+    fun createBringToFrontIntent(context: Context): Intent =
+        Intent(context, MainActivity::class.java).also { applyBringToFrontFlags(it, context) }
 
     /**
      * Opens [MainActivity] on the home main screen to edit one tile of a floating overlay panel.
