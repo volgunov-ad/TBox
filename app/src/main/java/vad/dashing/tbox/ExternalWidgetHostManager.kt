@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
 import android.content.Context
-import java.util.Collections
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -71,9 +70,6 @@ object ExternalWidgetHostManager {
     private var lastKickListeningElapsedMs = 0L
     private val providerRefreshLastAtMs = mutableMapOf<Int, Long>()
     private val remoteViewsReceivedAtMs = mutableMapOf<Int, Long>()
-    /** Provider packages where [sendBroadcast] for [ACTION_APPWIDGET_UPDATE] threw [SecurityException]. */
-    private val deniedProviderBroadcastPackages =
-        Collections.synchronizedSet(mutableSetOf<String>())
 
     private val listenRetryRunnable = object : Runnable {
         override fun run() {
@@ -284,10 +280,6 @@ object ExternalWidgetHostManager {
         if (provider == null) {
             return false
         }
-        val pkg = provider.packageName
-        if (deniedProviderBroadcastPackages.contains(pkg)) {
-            return false
-        }
 
         try {
             context.applicationContext.sendBroadcast(
@@ -298,14 +290,6 @@ object ExternalWidgetHostManager {
             )
             providerRefreshLastAtMs[appWidgetId] = now
             return true
-        } catch (e: SecurityException) {
-            deniedProviderBroadcastPackages.add(pkg)
-            Log.w(
-                TAG,
-                "Provider refresh broadcast denied for package=$pkg appWidgetId=$appWidgetId; skipping further attempts",
-                e
-            )
-            return false
         } catch (e: Exception) {
             Log.w(TAG, "Could not request provider refresh for appWidgetId=$appWidgetId", e)
             return false

@@ -21,10 +21,8 @@ class ExternalWidgetScaleFrame(context: Context) : FrameLayout(context) {
         }
 
     init {
-        // Do not clip scaled children; embedded widgets (e.g. media) often draw slightly outside
-        // nominal bounds and would look cropped inside rounded tiles.
-        clipChildren = false
-        clipToPadding = false
+        clipChildren = true
+        clipToPadding = true
     }
 
     fun attachIntercept(intercept: LongPressInterceptLayout) {

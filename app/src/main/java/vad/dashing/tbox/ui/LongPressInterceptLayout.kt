@@ -1,40 +1,39 @@
 package vad.dashing.tbox.ui
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
-import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 
-/**
- * Forwards touches to children; detects long-press without posting to [android.os.Handler] on
- * every [ACTION_DOWN] (avoids main-thread churn during rapid taps on heavy embedded widgets).
- */
 class LongPressInterceptLayout(context: Context) : FrameLayout(context) {
+    private val handler = Handler(Looper.getMainLooper())
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
 
+    private var downX = 0f
+    private var downY = 0f
+    private var downTime = 0L
+    private var isDown = false
     private var intercepting = false
 
     var onLongPress: (() -> Unit)? = null
     var interceptLongPress: Boolean = true
-
-    private var downTime = 0L
-    private var downX = 0f
-    private var downY = 0f
-
-    private val gestureDetector = GestureDetector(
-        context,
-        object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean = interceptLongPress
-
-            override fun onLongPress(e: MotionEvent) {
-                if (!interceptLongPress || intercepting) return
-                intercepting = true
-                onLongPress?.invoke()
-                sendCancelEvent()
+        set(value) {
+            field = value
+            if (!value) {
+                cancelLongPressCheck()
             }
         }
-    ).apply {
-        setIsLongpressEnabled(true)
+
+    private val longPressRunnable = Runnable {
+        if (isDown && !intercepting) {
+            intercepting = true
+            onLongPress?.invoke()
+            sendCancelEvent()
+        }
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
@@ -57,23 +56,35 @@ class LongPressInterceptLayout(context: Context) : FrameLayout(context) {
         }
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                isDown = true
                 intercepting = false
-                downTime = ev.downTime
                 downX = ev.x
                 downY = ev.y
+                downTime = ev.downTime
+                handler.postDelayed(longPressRunnable, longPressTimeout)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (isDown && !intercepting) {
+                    val dx = ev.x - downX
+                    val dy = ev.y - downY
+                    if (dx * dx + dy * dy > touchSlop * touchSlop) {
+                        cancelLongPressCheck()
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                cancelLongPressCheck()
             }
         }
-        gestureDetector.onTouchEvent(ev)
-        val blockChild = intercepting
-        if (ev.actionMasked == MotionEvent.ACTION_UP ||
-            ev.actionMasked == MotionEvent.ACTION_CANCEL
-        ) {
-            intercepting = false
-        }
-        if (blockChild) {
+        if (intercepting) {
             return true
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        handler.removeCallbacks(longPressRunnable)
     }
 
     private fun sendCancelEvent() {
@@ -88,5 +99,11 @@ class LongPressInterceptLayout(context: Context) : FrameLayout(context) {
         )
         super.dispatchTouchEvent(cancelEvent)
         cancelEvent.recycle()
+    }
+
+    private fun cancelLongPressCheck() {
+        handler.removeCallbacks(longPressRunnable)
+        isDown = false
+        intercepting = false
     }
 }

@@ -10,9 +10,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -170,16 +170,15 @@ fun ExternalAppWidgetItem(
         Modifier
     }
 
-    // Use Surface instead of Card so embedded AppWidgetHostView is not clipped to rounded shape
-    // (Card enforces clip). Shadow still matches tile elevation.
-    Surface(
+    Card(
         modifier = Modifier
             .fillMaxSize()
             .then(clickModifier),
-        shape = RoundedCornerShape(shape),
-        color = backgroundColor ?: MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        shadowElevation = elevation,
+        elevation = CardDefaults.cardElevation(elevation),
+        colors = CardDefaults.cardColors(
+            containerColor = backgroundColor ?: MaterialTheme.colorScheme.surface
+        ),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(shape)
     ) {
         Box(
             modifier = Modifier
