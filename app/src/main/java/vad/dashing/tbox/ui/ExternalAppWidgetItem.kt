@@ -15,11 +15,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,15 +42,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
+import vad.dashing.tbox.embeddedWidgetSizeHintsMatch
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
 
 private const val EXTERNAL_WIDGET_PERIODIC_REFRESH_MS = 15 * 60 * 1000L
 private const val EXTERNAL_WIDGET_DEFERRED_CREATE_MS = 400L
 private const val EXTERNAL_WIDGET_ID_STAGGER_STEP_MS = 90L
+private const val EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS = 120L
 private val EXTERNAL_WIDGET_INITIAL_RETRY_DELAYS_MS = longArrayOf(5_000L, 15_000L, 45_000L)
 private val EXTERNAL_WIDGET_CREATE_RETRY_DELAYS_MS = longArrayOf(250L, 600L, 1_500L, 3_000L, 6_000L)
 
@@ -117,6 +123,14 @@ fun ExternalAppWidgetItem(
     }
     var optionsApplied by remember(appWidgetId) { mutableStateOf(false) }
     var hostView by remember(appWidgetId) { mutableStateOf<AppWidgetHostView?>(null) }
+    val applySizeOptionsScope = rememberCoroutineScope()
+    var applySizeOptionsJob by remember(appWidgetId) { mutableStateOf<Job?>(null) }
+    DisposableEffect(appWidgetId) {
+        onDispose {
+            applySizeOptionsJob?.cancel()
+            applySizeOptionsJob = null
+        }
+    }
     LaunchedEffect(appWidgetId, appWidgetHost, appWidgetInfo) {
         hostView = null
         if (
@@ -265,15 +279,23 @@ fun ExternalAppWidgetItem(
                             .onSizeChanged { size ->
                                 val minWidth = with(density) { size.width.toDp().value }.roundToInt()
                                 val minHeight = with(density) { size.height.toDp().value }.roundToInt()
-                                if (minWidth > 0 && minHeight > 0) {
-                                    val merged = mergeAppWidgetSizeOptions(
-                                        appWidgetManager,
-                                        appWidgetId,
-                                        minWidth,
-                                        minHeight
-                                    )
-                                    appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
-                                    optionsApplied = true
+                                if (minWidth <= 0 || minHeight <= 0) return@onSizeChanged
+                                applySizeOptionsJob?.cancel()
+                                applySizeOptionsJob = applySizeOptionsScope.launch {
+                                    delay(EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS)
+                                    withContext(Dispatchers.Main) {
+                                        val merged = mergeAppWidgetSizeOptions(
+                                            appWidgetManager,
+                                            appWidgetId,
+                                            minWidth,
+                                            minHeight
+                                        )
+                                        val existing = appWidgetManager.getAppWidgetOptions(appWidgetId)
+                                        if (!embeddedWidgetSizeHintsMatch(existing, merged)) {
+                                            appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
+                                        }
+                                        optionsApplied = true
+                                    }
                                 }
                             }
                     )
