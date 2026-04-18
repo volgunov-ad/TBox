@@ -117,6 +117,11 @@ class WidgetPickerActivity : ComponentActivity() {
         pickWidgetLauncher.launch(pickIntent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        ExternalWidgetHostManager.kickListeningIfNeeded(this, "WidgetPickerActivity.onResume")
+    }
+
     private fun handlePickResult(data: Intent?) {
         val pickedId = data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
             ?: appWidgetId
