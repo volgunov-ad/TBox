@@ -49,7 +49,7 @@ import vad.dashing.tbox.normalizeWidgetScale
 private const val EXTERNAL_WIDGET_PERIODIC_REFRESH_MS = 15 * 60 * 1000L
 private const val EXTERNAL_WIDGET_DEFERRED_CREATE_MS = 400L
 private const val EXTERNAL_WIDGET_ID_STAGGER_STEP_MS = 90L
-private val EXTERNAL_WIDGET_INITIAL_RETRY_DELAYS_MS = longArrayOf(3_000L, 5_000L, 60_000L)
+private val EXTERNAL_WIDGET_INITIAL_RETRY_DELAYS_MS = longArrayOf(5_000L, 15_000L, 45_000L)
 private val EXTERNAL_WIDGET_CREATE_RETRY_DELAYS_MS = longArrayOf(250L, 600L, 1_500L, 3_000L, 6_000L)
 
 private suspend fun awaitAppWidgetInfo(
