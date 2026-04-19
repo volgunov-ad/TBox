@@ -208,3 +208,37 @@ internal fun effectiveWallpaperFileName(sortedNames: List<String>, savedFileName
     }
     return sortedNames.first()
 }
+
+/**
+ * HorizontalPager page count for main-screen wallpapers: plain list for 0–1 images, else `n + 2` with
+ * a duplicate of the last image at page 0 and a duplicate of the first at page `n + 1` for wrap jumps.
+ */
+internal fun mainScreenWallpaperPagerPageCount(sortedNameCount: Int): Int =
+    when (sortedNameCount) {
+        0 -> 0
+        1 -> 1
+        else -> sortedNameCount + 2
+    }
+
+/**
+ * Pager page index for [logicalIndex] (0..n-1) when using [mainScreenWallpaperPagerPageCount]; real slides sit at 1..n.
+ */
+internal fun mainScreenWallpaperPagerPageForLogicalIndex(logicalIndex: Int, sortedNameCount: Int): Int =
+    when {
+        sortedNameCount <= 0 -> 0
+        sortedNameCount == 1 -> 0
+        else -> (logicalIndex + 1).coerceIn(1, sortedNameCount)
+    }
+
+/** Maps a wrap pager page to logical wallpaper index, or null if [pagerPage] is out of range. */
+internal fun logicalIndexFromMainScreenWallpaperPagerPage(pagerPage: Int, sortedNameCount: Int): Int? =
+    when {
+        sortedNameCount <= 0 -> null
+        sortedNameCount == 1 -> if (pagerPage == 0) 0 else null
+        else -> when (pagerPage) {
+            0 -> sortedNameCount - 1
+            sortedNameCount + 1 -> 0
+            in 1..sortedNameCount -> pagerPage - 1
+            else -> null
+        }
+    }

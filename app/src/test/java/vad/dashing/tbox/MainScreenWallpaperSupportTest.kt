@@ -69,6 +69,33 @@ class MainScreenWallpaperSupportTest {
     }
 
     @Test
+    fun mainScreenWallpaperPagerPageCount_wrapsOnlyWhenMultiple() {
+        assertEquals(0, mainScreenWallpaperPagerPageCount(0))
+        assertEquals(1, mainScreenWallpaperPagerPageCount(1))
+        assertEquals(5, mainScreenWallpaperPagerPageCount(3))
+    }
+
+    @Test
+    fun mainScreenWallpaperPagerPageForLogicalIndex_offsetsByOneWhenMultiple() {
+        assertEquals(0, mainScreenWallpaperPagerPageForLogicalIndex(0, 1))
+        assertEquals(1, mainScreenWallpaperPagerPageForLogicalIndex(0, 3))
+        assertEquals(2, mainScreenWallpaperPagerPageForLogicalIndex(1, 3))
+        assertEquals(3, mainScreenWallpaperPagerPageForLogicalIndex(2, 3))
+    }
+
+    @Test
+    fun logicalIndexFromMainScreenWallpaperPagerPage_mapsDupesAndMiddle() {
+        assertEquals(0, logicalIndexFromMainScreenWallpaperPagerPage(0, 1))
+        assertNull(logicalIndexFromMainScreenWallpaperPagerPage(1, 1))
+        assertEquals(2, logicalIndexFromMainScreenWallpaperPagerPage(0, 3))
+        assertEquals(0, logicalIndexFromMainScreenWallpaperPagerPage(1, 3))
+        assertEquals(1, logicalIndexFromMainScreenWallpaperPagerPage(2, 3))
+        assertEquals(2, logicalIndexFromMainScreenWallpaperPagerPage(3, 3))
+        assertEquals(0, logicalIndexFromMainScreenWallpaperPagerPage(4, 3))
+        assertNull(logicalIndexFromMainScreenWallpaperPagerPage(5, 3))
+    }
+
+    @Test
     fun isWallpaperFileOverSizeLimit_fileUri_trueWhenHuge() {
         val ctx = ApplicationProvider.getApplicationContext<Application>()
         val f = File(ctx.cacheDir, "wallpaper_oversize_test.bin")

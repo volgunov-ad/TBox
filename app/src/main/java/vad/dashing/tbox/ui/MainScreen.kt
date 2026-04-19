@@ -63,6 +63,9 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.decodeImageBitmapFromUri
 import vad.dashing.tbox.effectiveWallpaperFileName
 import vad.dashing.tbox.listSortedWallpaperImagesInFolder
+import vad.dashing.tbox.logicalIndexFromMainScreenWallpaperPagerPage
+import vad.dashing.tbox.mainScreenWallpaperPagerPageCount
+import vad.dashing.tbox.mainScreenWallpaperPagerPageForLogicalIndex
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.loadWidgetsFromConfig
 
@@ -274,22 +277,39 @@ private fun MainScreenWallpaperBackground(
             return@Box
         }
         val targetIdx = sortedNames.indexOf(effectiveName).coerceIn(0, sortedNames.lastIndex)
+        val wallpaperCount = sortedNames.size
+        val pagerPageCount = mainScreenWallpaperPagerPageCount(wallpaperCount)
+        val initialPagerPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
         key(folderUriStr, sortedNames.size) {
             val pagerState = rememberPagerState(
-                initialPage = targetIdx,
-                pageCount = { sortedNames.size },
+                initialPage = initialPagerPage,
+                pageCount = { pagerPageCount },
             )
             LaunchedEffect(targetIdx, folderUriStr, sortedNames) {
-                if (pagerState.currentPage != targetIdx) {
-                    pagerState.scrollToPage(targetIdx)
+                val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
+                if (pagerState.currentPage != wantPage) {
+                    pagerState.scrollToPage(wantPage)
                 }
             }
-            LaunchedEffect(pagerState, sortedNames, theme, savedSelectedName) {
+            LaunchedEffect(pagerState, sortedNames, theme, savedSelectedName, wallpaperCount) {
                 snapshotFlow { pagerState.settledPage }
                     .distinctUntilChanged()
                     .collect { page ->
-                        if (page !in sortedNames.indices) return@collect
-                        val name = sortedNames[page]
+                        if (wallpaperCount > 1) {
+                            when (page) {
+                                0 -> {
+                                    pagerState.scrollToPage(wallpaperCount)
+                                    return@collect
+                                }
+                                wallpaperCount + 1 -> {
+                                    pagerState.scrollToPage(1)
+                                    return@collect
+                                }
+                            }
+                        }
+                        val logical = logicalIndexFromMainScreenWallpaperPagerPage(page, wallpaperCount)
+                            ?: return@collect
+                        val name = sortedNames[logical]
                         if (name != savedSelectedName) {
                             if (theme == 2) {
                                 settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(name)
@@ -303,14 +323,17 @@ private fun MainScreenWallpaperBackground(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
                 beyondViewportPageCount = 1,
-            ) { page ->
-                MainScreenWallpaperPagerPage(
-                    page = page,
-                    sortedNames = sortedNames,
-                    uriByFileName = uriByFileName,
-                    context = context,
-                    wallpaperCrop = wallpaperCrop,
-                )
+            ) { pagerPage ->
+                val logicalIndex = logicalIndexFromMainScreenWallpaperPagerPage(pagerPage, wallpaperCount)
+                if (logicalIndex != null) {
+                    MainScreenWallpaperPagerPage(
+                        wallpaperIndex = logicalIndex,
+                        sortedNames = sortedNames,
+                        uriByFileName = uriByFileName,
+                        context = context,
+                        wallpaperCrop = wallpaperCrop,
+                    )
+                }
             }
         }
     }
@@ -318,15 +341,15 @@ private fun MainScreenWallpaperBackground(
 
 @Composable
 private fun MainScreenWallpaperPagerPage(
-    page: Int,
+    wallpaperIndex: Int,
     sortedNames: List<String>,
     uriByFileName: Map<String, Uri>,
     context: Context,
     wallpaperCrop: Boolean,
 ) {
-    val nameKey = sortedNames[page]
+    val nameKey = sortedNames[wallpaperIndex]
     val uriForSlide = uriByFileName[nameKey]
-    var slideBitmap by remember(page, uriForSlide) { mutableStateOf<ImageBitmap?>(null) }
+    var slideBitmap by remember(wallpaperIndex, uriForSlide) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(uriForSlide) {
         slideBitmap = if (uriForSlide == null) {
             null
