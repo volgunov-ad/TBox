@@ -97,20 +97,20 @@ public class MBCanVehicleSpeed {
     }
 
     public String toString() {
-        StringBuffer stringBuffer = new StringBuffer("车辆行驶速度 {");
-        stringBuffer.append("\n车速=");
+        StringBuffer stringBuffer = new StringBuffer("MBCanVehicleSpeed {");
+        stringBuffer.append("\nСкорость=");
         stringBuffer.append(this.fSpeed);
-        stringBuffer.append("\n档位=");
+        stringBuffer.append("\nПередача=");
         stringBuffer.append((int) this.nGear);
-        stringBuffer.append("\n车速有效状态=");
+        stringBuffer.append("\nДостоверность скорости=");
         stringBuffer.append((int) this.nSpeedValidSts);
-        stringBuffer.append("\n档位有效状态=");
+        stringBuffer.append("\nДостоверность передачи=");
         stringBuffer.append((int) this.nGearValidSts);
-        stringBuffer.append("\n动力系统准备就绪=");
+        stringBuffer.append("\nГотовность силовой установки=");
         stringBuffer.append((int) this.nPowerReadySts);
-        stringBuffer.append("\n纵向加速度=");
+        stringBuffer.append("\nПродольное ускорение=");
         stringBuffer.append(this.fYAS_2_LongitudinalAcceleration);
-        stringBuffer.append("\n横向加速度=");
+        stringBuffer.append("\nПоперечное ускорение=");
         stringBuffer.append(this.fLateraAccaleleration);
         stringBuffer.append("\n}");
         return stringBuffer.toString();
