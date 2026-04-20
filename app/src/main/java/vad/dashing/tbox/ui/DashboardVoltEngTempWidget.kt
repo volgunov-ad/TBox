@@ -34,6 +34,7 @@ fun DashboardVoltEngTempWidgetItem(
     shape: Dp = 12.dp,
     units: Boolean = true,
     showTitle: Boolean = false,
+    titleOverride: String = "",
     singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
@@ -45,6 +46,8 @@ fun DashboardVoltEngTempWidgetItem(
     val firstLine = "${valueToString(voltage, 1)}${if (units) "\u2009$voltUnit" else ""}"
     val secondLine =
         "${valueToString(engineTemperature, 0)}${if (units) "\u2009$celsiusUnit" else ""}"
+    val defaultTitle = stringResource(R.string.widget_title_voltage_engine_temp)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -68,7 +71,7 @@ fun DashboardVoltEngTempWidgetItem(
                     textType = TextType.TITLE
                 )
                 Text(
-                    text = stringResource(R.string.widget_title_voltage_engine_temp),
+                    text = titleText,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
@@ -90,7 +93,7 @@ fun DashboardVoltEngTempWidgetItem(
                 availableHeight = availableHeight,
                 resolvedTextColor = resolvedTextColor,
                 modifier = Modifier.weight(
-                    if (showTitle && !singleLineDualMetrics) 2f else 1f
+                    if (showTitle && !singleLineDualMetrics) 2f else 2f
                 )
             )
         }

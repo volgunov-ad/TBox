@@ -14,7 +14,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -32,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +69,21 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 
 private val WidgetSelectionDialogActionButtonFontSize = 22.sp
 
+/** Matches [SettingSwitch] primary row text (24.sp Medium). */
+private val WidgetSelectionDialogFieldInputStyle = TextStyle(
+    fontSize = 24.sp,
+    lineHeight = 24.sp * 1.3f
+)
+/** OutlinedTextField labels in this dialog. */
+private val WidgetSelectionDialogFieldLabelStyle = TextStyle(
+    fontSize = 20.sp
+)
+/** Placeholder / secondary — same as [SettingSwitch] description (20.sp). */
+private val WidgetSelectionDialogFieldPlaceholderStyle = TextStyle(
+    fontSize = 20.sp,
+    lineHeight = 20.sp
+)
+
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
     initialConfig: FloatingDashboardWidgetConfig,
@@ -78,6 +93,7 @@ internal class WidgetSelectionDialogState(
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
     var showUnit by mutableStateOf(initialConfig.showUnit)
+    var customTitle by mutableStateOf(initialConfig.customTitle)
     var singleLineDualMetrics by mutableStateOf(
         initialConfig.singleLineDualMetrics &&
             WidgetsRepository.supportsSingleLineDualMetrics(initialConfig.dataKey)
@@ -225,7 +241,7 @@ internal fun ExternalAppWidgetPickerSection(
 }
 
 @Composable
-private fun WidgetColorThemeSegmentRow(
+internal fun WidgetColorThemeSegmentRow(
     selectedSegment: Int,
     onSegmentSelected: (Int) -> Unit,
     enabled: Boolean,
@@ -320,10 +336,10 @@ private fun MainScreenPanelWholeSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.floating_panel_name_label),
-                    fontSize = 16.sp
+                    style = WidgetSelectionDialogFieldLabelStyle
                 )
             },
-            textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+            textStyle = WidgetSelectionDialogFieldInputStyle
         )
         SettingSwitch(
             state.wholePanelClickAction,
@@ -375,10 +391,10 @@ private fun FloatingDashboardWholeSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.floating_panel_name_label),
-                    fontSize = 16.sp
+                    style = WidgetSelectionDialogFieldLabelStyle
                 )
             },
-            textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+            textStyle = WidgetSelectionDialogFieldInputStyle
         )
         SettingSwitch(
             state.wholePanelClickAction,
@@ -416,6 +432,7 @@ private fun FloatingDashboardWholeSettingsSection(
 @Composable
 internal fun WidgetSelectionDialogForm(
     titleText: String,
+    settingsViewModel: SettingsViewModel,
     state: WidgetSelectionDialogState,
     modifier: Modifier = Modifier,
     dataKeyFilter: (String) -> Boolean = { true },
@@ -477,9 +494,10 @@ internal fun WidgetSelectionDialogForm(
                 ) {
                     if (state.isMusicWidgetSelected) {
                         MediaPlayersInlineSelection(
+                            settingsViewModel = settingsViewModel,
                             selectedPlayers = state.selectedMediaPlayers,
                             onSelectionChange = { state.selectedMediaPlayers = it },
-                            enabled = state.togglesEnabled
+                            enabled = state.togglesEnabled,
                         )
                         if (state.selectedMediaPlayers.isEmpty()) {
                             Text(
@@ -510,6 +528,7 @@ internal fun WidgetSelectionDialogForm(
                     }
                     AppLauncherWidgetSettingsSection(
                         state = state,
+                        settingsViewModel = settingsViewModel,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
                     SettingSwitch(
@@ -518,6 +537,29 @@ internal fun WidgetSelectionDialogForm(
                         stringResource(R.string.widget_show_title),
                         "",
                         state.togglesEnabled
+                    )
+                    OutlinedTextField(
+                        value = state.customTitle,
+                        onValueChange = { state.customTitle = it },
+                        enabled = state.togglesEnabled,
+                        textStyle = WidgetSelectionDialogFieldInputStyle,
+                        label = {
+                            Text(
+                                stringResource(R.string.widget_custom_title_label),
+                                style = WidgetSelectionDialogFieldLabelStyle
+                            )
+                        },
+                        placeholder = {
+                            Text(
+                                stringResource(R.string.widget_custom_title_hint),
+                                style = WidgetSelectionDialogFieldPlaceholderStyle,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        singleLine = false,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 4.dp)
                     )
                     SettingSwitch(
                         state.showUnit,
@@ -598,6 +640,8 @@ internal fun WidgetSelectionDialogForm(
                             colorValue = state.textColorLight,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.textColorLight = it },
+                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
+                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                             presetColors = listOf(
                                 LIGHT_THEME_TEXT_COLOR_PRESET_1_INT,
                                 LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
@@ -608,6 +652,8 @@ internal fun WidgetSelectionDialogForm(
                             colorValue = state.backgroundColorLight,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.backgroundColorLight = it },
+                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
+                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                             presetColors = listOf(
                                 LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT,
                                 LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
@@ -619,6 +665,8 @@ internal fun WidgetSelectionDialogForm(
                             colorValue = state.textColorDark,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.textColorDark = it },
+                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
+                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                             presetColors = listOf(
                                 DARK_THEME_TEXT_COLOR_PRESET_1_INT,
                                 DARK_THEME_TEXT_COLOR_PRESET_2_INT
@@ -629,6 +677,8 @@ internal fun WidgetSelectionDialogForm(
                             colorValue = state.backgroundColorDark,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.backgroundColorDark = it },
+                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
+                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                             presetColors = listOf(
                                 DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT,
                                 DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
@@ -673,10 +723,11 @@ internal fun WidgetSelectionDialogForm(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
+                        textStyle = WidgetSelectionDialogFieldInputStyle,
                         label = {
                             Text(
                                 text = stringResource(R.string.widget_app_launcher_search),
-                                fontSize = 18.sp
+                                style = WidgetSelectionDialogFieldLabelStyle
                             )
                         },
                         singleLine = true,
@@ -898,6 +949,7 @@ internal fun applyWidgetSelectionChanges(
             dataKey = state.selectedDataKey,
             showTitle = state.showTitle,
             showUnit = state.showUnit,
+            customTitle = state.customTitle.trim(),
             singleLineDualMetrics = if (WidgetsRepository.supportsSingleLineDualMetrics(
                     state.selectedDataKey
                 )
@@ -947,7 +999,7 @@ internal fun applyWidgetSelectionChanges(
             }
         )
     } else {
-        FloatingDashboardWidgetConfig(dataKey = "")
+        FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
     }
     val newCfg = normalizedConfigs[widgetIndex]
     if (prevAppWidgetId != null) {

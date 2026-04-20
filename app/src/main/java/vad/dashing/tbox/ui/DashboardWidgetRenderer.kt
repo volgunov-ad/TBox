@@ -2,6 +2,8 @@ package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -11,9 +13,13 @@ import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
+import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.STEERING_WHEEL_HEAT_WIDGET_DATA_KEY
@@ -23,6 +29,7 @@ import vad.dashing.tbox.WidgetsRepository
 fun DashboardWidgetRenderer(
     widget: DashboardWidget,
     widgetConfig: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
     tboxViewModel: TboxViewModel,
     canViewModel: CanDataViewModel,
     appDataViewModel: AppDataViewModel,
@@ -37,6 +44,8 @@ fun DashboardWidgetRenderer(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (String) -> Unit,
+    onHideFloatingPanelsDoubleClick: () -> Unit = {},
+    onToggleFloatingPanelsEnabledDoubleClick: () -> Unit = {},
     onRestartRequested: () -> Unit,
     externalWidgetHost: AppWidgetHost? = null,
     isEditMode: Boolean = false,
@@ -45,6 +54,8 @@ fun DashboardWidgetRenderer(
     enableMusicInnerInteractions: Boolean = true,
     fuelTankLiters: Int = 57
 ) {
+    val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val titleOverride = widgetConfig.customTitle
     when (widget.dataKey) {
         "netWidget" -> {
             DashboardNetWidgetItem(
@@ -110,6 +121,7 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 units = widgetConfig.showUnit,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
@@ -126,6 +138,7 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 units = widgetConfig.showUnit,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
@@ -170,6 +183,7 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 units = widgetConfig.showUnit,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
@@ -187,6 +201,7 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 units = widgetConfig.showUnit,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
@@ -215,6 +230,7 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
@@ -240,7 +256,9 @@ fun DashboardWidgetRenderer(
             DashboardAppLauncherWidgetItem(
                 widget = widget,
                 packageName = widgetConfig.launcherAppPackage,
+                customIconRevision = launcherAppIconRevision,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
@@ -254,8 +272,10 @@ fun DashboardWidgetRenderer(
             DashboardMusicWidgetItem(
                 widget = widget,
                 widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
                 canViewModel = canViewModel,
                 title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onSelectedPlayerChange = onMusicSelectedPlayerChange,
@@ -272,6 +292,7 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 isVertical = false,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 enableInnerInteractions = enableMusicInnerInteractions,
@@ -287,6 +308,7 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 isVertical = true,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 enableInnerInteractions = enableMusicInnerInteractions,
@@ -310,17 +332,19 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 units = widgetConfig.showUnit,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
         }
 
-        ACTIVE_TRIP_WIDGET_DATA_KEY, ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY -> {
+        ACTIVE_TRIP_WIDGET_DATA_KEY, ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY, ACTIVE_TRIP_WIDGET_MINI_DATA_KEY -> {
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
                 showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
@@ -347,6 +371,7 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 units = widgetConfig.showUnit,
                 backgroundColor = widgetBackgroundColor,
                 textColor = if (restartEnabled) {
@@ -358,6 +383,30 @@ fun DashboardWidgetRenderer(
                 } else {
                     Color(0xD97E4C4C)
                 }
+            )
+        }
+
+        HIDE_FLOATING_PANELS_WIDGET_DATA_KEY -> {
+            DashboardHideFloatingPanelsWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = onHideFloatingPanelsDoubleClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY -> {
+            DashboardHideFloatingPanelsWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = onToggleFloatingPanelsEnabledDoubleClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
             )
         }
 
@@ -377,6 +426,7 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 units = widgetConfig.showUnit,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor

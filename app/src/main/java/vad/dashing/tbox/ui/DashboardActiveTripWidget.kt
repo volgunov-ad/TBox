@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.formatTripDurationHuman
@@ -34,6 +35,7 @@ fun DashboardActiveTripWidgetItem(
     widget: DashboardWidget,
     appDataViewModel: AppDataViewModel,
     showTitle: Boolean = false,
+    titleOverride: String = "",
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
@@ -48,6 +50,11 @@ fun DashboardActiveTripWidgetItem(
     val displayTrip = activeTrip ?: TripRepository.latestFinishedTrip(trips)
     val showingLastFinishedTrip = displayTrip != null && !displayTrip.isActive
     val dateFmt = rememberTripDateFormat()
+    val defaultActiveTitle = stringResource(R.string.trips_active_trip)
+    val defaultLastTitle = stringResource(R.string.trips_last_trip_widget_title)
+    val titleText = titleOverride.trim().ifBlank {
+        if (showingLastFinishedTrip) defaultLastTitle else defaultActiveTitle
+    }
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -70,13 +77,7 @@ fun DashboardActiveTripWidgetItem(
         ) {
             if (showTitle) {
                 Text(
-                    text = stringResource(
-                        if (showingLastFinishedTrip) {
-                            R.string.trips_last_trip_widget_title
-                        } else {
-                            R.string.trips_active_trip
-                        }
-                    ),
+                    text = titleText,
                     modifier = Modifier.fillMaxWidth(),
                     fontSize = titleFont,
                     lineHeight = titleFont * 1.3f,
@@ -104,7 +105,42 @@ fun DashboardActiveTripWidgetItem(
                 val t = displayTrip ?: return@DashboardWidgetScaffold
                 val rowFont = titleFont
                 val simplified = widget.dataKey == ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
-                if (simplified) {
+                val mini = widget.dataKey == ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
+                val avgT = TripRepository.averageSpeedTripKmH(t)
+                val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(t)
+                if (mini) {
+                    StatusRow(
+                        label = stringResource(R.string.trips_distance),
+                        value = valueToString(t.distanceKm, 0),
+                        unit = stringResource(R.string.unit_km),
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_total_time),
+                        value = formatTripDurationHuman(
+                            context,
+                            t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs
+                        ),
+                        unit = "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_avg_speed_trip),
+                        value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgT != null) stringResource(R.string.unit_kmh) else "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
+                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                } else if (simplified) {
                     StatusRow(
                         label = stringResource(R.string.trips_start_time),
                         value = dateFmt.format(Date(t.startTimeEpochMs)),
@@ -154,7 +190,7 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_total_time),
                         value = formatTripDurationHuman(
                             context,
-                            t.movingTimeMs + t.idleTimeMs
+                            t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs
                         ),
                         unit = "",
                         fontSize = rowFont,
@@ -168,7 +204,6 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    val avgT = TripRepository.averageSpeedTripKmH(t)
                     StatusRow(
                         label = stringResource(R.string.trips_avg_speed_trip),
                         value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
@@ -180,6 +215,13 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_fuel_used),
                         value = valueToString(t.fuelConsumedLiters, 1),
                         unit = stringResource(R.string.unit_liter),
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
+                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
@@ -237,10 +279,17 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     StatusRow(
+                        label = stringResource(R.string.trips_parking_time),
+                        value = formatTripDurationHuman(context, t.parkingTimeMs),
+                        unit = "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
                         label = stringResource(R.string.trips_total_time),
                         value = formatTripDurationHuman(
                             context,
-                            t.movingTimeMs + t.idleTimeMs
+                            t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs
                         ),
                         unit = "",
                         fontSize = rowFont,
@@ -300,7 +349,6 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
-                    val avgT = TripRepository.averageSpeedTripKmH(t)
                     StatusRow(
                         label = stringResource(R.string.trips_avg_speed_trip),
                         value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
@@ -312,6 +360,13 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_fuel_used),
                         value = valueToString(t.fuelConsumedLiters, 1),
                         unit = stringResource(R.string.unit_liter),
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
+                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
+                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )

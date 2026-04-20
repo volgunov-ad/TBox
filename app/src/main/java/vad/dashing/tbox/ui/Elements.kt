@@ -252,6 +252,7 @@ fun TabMenuItem(
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Left,
                     fontSize = 34.sp,
+                    lineHeight = 34.sp * 1.1f,
                     modifier = Modifier.padding(start = 12.dp)
                 )
             }

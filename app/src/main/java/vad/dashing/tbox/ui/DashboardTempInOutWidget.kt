@@ -34,6 +34,7 @@ fun DashboardTempInOutWidgetItem(
     shape: Dp = 12.dp,
     units: Boolean = true,
     showTitle: Boolean = false,
+    titleOverride: String = "",
     singleLineDualMetrics: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
@@ -45,6 +46,8 @@ fun DashboardTempInOutWidgetItem(
         "${valueToString(outsideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}"
     val secondLine =
         "${valueToString(insideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}"
+    val defaultTitle = stringResource(R.string.widget_title_temp_outside_inside)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -68,7 +71,7 @@ fun DashboardTempInOutWidgetItem(
                     textType = TextType.TITLE
                 )
                 Text(
-                    text = stringResource(R.string.widget_title_temp_outside_inside),
+                    text = titleText,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
@@ -90,7 +93,7 @@ fun DashboardTempInOutWidgetItem(
                 availableHeight = availableHeight,
                 resolvedTextColor = resolvedTextColor,
                 modifier = Modifier.weight(
-                    if (showTitle && !singleLineDualMetrics) 2f else 1f
+                    if (showTitle && !singleLineDualMetrics) 2f else 2f
                 )
             )
         }

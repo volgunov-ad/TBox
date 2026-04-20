@@ -369,10 +369,16 @@ fun TripsTab(
                 }
                 item {
                     StatusRow(
+                        stringResource(R.string.trips_parking_time),
+                        formatTripDurationHuman(context, trip.parkingTimeMs)
+                    )
+                }
+                item {
+                    StatusRow(
                         stringResource(R.string.trips_total_time),
                         formatTripDurationHuman(
                             context,
-                            trip.movingTimeMs + trip.idleTimeMs
+                            trip.movingTimeMs + trip.idleTimeMs + trip.parkingTimeMs
                         )
                     )
                 }
@@ -442,6 +448,13 @@ fun TripsTab(
                     StatusRow(
                         stringResource(R.string.trips_fuel_used),
                         formatWithUnit(valueToString(trip.fuelConsumedLiters, 1), stringResource(R.string.unit_liter))
+                    )
+                }
+                item {
+                    val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(trip)
+                    StatusRow(
+                        stringResource(R.string.trips_fuel_consumption_l_100km),
+                        formatWithUnit(avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data), if (avgFuel != null) stringResource(R.string.unit_l_100km) else "")
                     )
                 }
                 item {
@@ -539,8 +552,15 @@ internal fun buildTripExportLines(
                 formatTripDurationHuman(context, trip.idleTimeMs)
             )
             appendStatusLine(
+                context.getString(R.string.trips_parking_time),
+                formatTripDurationHuman(context, trip.parkingTimeMs)
+            )
+            appendStatusLine(
                 context.getString(R.string.trips_total_time),
-                formatTripDurationHuman(context, trip.movingTimeMs + trip.idleTimeMs)
+                formatTripDurationHuman(
+                    context,
+                    trip.movingTimeMs + trip.idleTimeMs + trip.parkingTimeMs
+                )
             )
             appendStatusLine(
                 context.getString(R.string.trips_engine_start_count),

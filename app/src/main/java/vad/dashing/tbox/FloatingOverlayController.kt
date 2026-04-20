@@ -28,6 +28,8 @@ internal class FloatingOverlayController(
     private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
     private val overlayRetryCounts = mutableMapOf<String, Int>()
     private val overlayOffIds = mutableSetOf<String>()
+    /** Panels temporarily closed by the «hide other floating panels» tile; cleared on restore or global suspend. */
+    private val hiddenFloatingPanelIds = mutableSetOf<String>()
     private var overlaysSuspended = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
@@ -39,11 +41,19 @@ internal class FloatingOverlayController(
 
     fun suspendOverlays() {
         overlaysSuspended = true
+        hiddenFloatingPanelIds.clear()
         closeAllOverlays()
     }
 
     fun resumeOverlays() {
         overlaysSuspended = false
+    }
+
+    /** Clears temporary hide list (e.g. after persisted floating `enabled` toggles). */
+    suspend fun clearHiddenFloatingPanelIds() {
+        withContext(Dispatchers.Main) {
+            hiddenFloatingPanelIds.clear()
+        }
     }
 
     fun closeAllOverlays() {
@@ -52,6 +62,7 @@ internal class FloatingOverlayController(
     }
 
     fun onDestroy() {
+        hiddenFloatingPanelIds.clear()
         closeAllOverlays()
         lifecycleOwner.setCurrentState(Lifecycle.State.DESTROYED)
         lifecycleOwner.clear()
@@ -61,46 +72,59 @@ internal class FloatingOverlayController(
         windowManager = null
     }
 
-    fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
-        if (overlaysSuspended) {
-            if (overlayViews.isNotEmpty()) {
-                closeAllOverlays()
+    /**
+     * WindowManager / ComposeView must run on the main thread; callers may use any dispatcher.
+     */
+    suspend fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
+        withContext(Dispatchers.Main) {
+            if (overlaysSuspended) {
+                if (overlayViews.isNotEmpty()) {
+                    closeAllOverlays()
+                }
+                return@withContext
             }
-            return
-        }
-        val configMap = configs.associateBy { it.id }
-        val enabledConfigs = configs.filter { it.enabled }
+            val configMap = configs.associateBy { it.id }
+            val enabledConfigs = configs.filter { it.enabled }
 
-        val enabledIds = enabledConfigs.map { it.id }.toSet()
-        val existingIds = overlayViews.keys.toSet()
+            val enabledIds = enabledConfigs.map { it.id }.toSet()
+            val existingIds = overlayViews.keys.toSet()
 
-        // Remove counters for configs that no longer exist.
-        val removedIds = overlayRetryCounts.keys - configMap.keys
-        removedIds.forEach { id ->
-            overlayRetryCounts.remove(id)
-            overlayOffIds.remove(id)
-        }
-
-        enabledConfigs.forEach { config ->
-            overlayOffIds.remove(config.id)
-
-            val view = overlayViews[config.id]
-            if (view != null) {
-                updateOverlayLayout(config)
-            } else {
-                openOverlay(config)
+            // Remove counters for configs that no longer exist.
+            val removedIds = overlayRetryCounts.keys - configMap.keys
+            removedIds.forEach { id ->
+                overlayRetryCounts.remove(id)
+                overlayOffIds.remove(id)
+                hiddenFloatingPanelIds.remove(id)
             }
-        }
 
-        val idsToClose = existingIds - enabledIds
-        idsToClose.forEach { id ->
-            closeOverlay(id)
-        }
+            enabledConfigs.forEach { config ->
+                if (hiddenFloatingPanelIds.contains(config.id)) {
+                    if (overlayViews.containsKey(config.id)) {
+                        closeOverlay(config.id)
+                    }
+                    return@forEach
+                }
+                overlayOffIds.remove(config.id)
 
-        val disabledIds = configMap.keys - enabledIds
-        disabledIds.forEach { id ->
-            overlayRetryCounts.remove(id)
-            overlayOffIds.remove(id)
+                val view = overlayViews[config.id]
+                if (view != null) {
+                    updateOverlayLayout(config)
+                } else {
+                    openOverlay(config)
+                }
+            }
+
+            val idsToClose = existingIds - enabledIds
+            idsToClose.forEach { id ->
+                closeOverlay(id)
+            }
+
+            val disabledIds = configMap.keys - enabledIds
+            disabledIds.forEach { id ->
+                overlayRetryCounts.remove(id)
+                overlayOffIds.remove(id)
+                hiddenFloatingPanelIds.remove(id)
+            }
         }
     }
 
@@ -109,6 +133,7 @@ internal class FloatingOverlayController(
             if (overlaysSuspended) return@withContext
             val enabledConfigs = configs.filter { it.enabled }
             enabledConfigs.forEach { config ->
+                if (hiddenFloatingPanelIds.contains(config.id)) return@forEach
                 if (overlayOffIds.contains(config.id)) return@forEach
                 if (overlayViews.containsKey(config.id)) {
                     overlayRetryCounts[config.id] = 0
@@ -278,6 +303,36 @@ internal class FloatingOverlayController(
         params.y = newY
         overlayViews[config.id]?.let { view ->
             windowManager?.updateViewLayout(view, params)
+        }
+    }
+
+    /**
+     * If [hiddenFloatingPanelIds] is empty, hides every floating panel in [currentlyShownIds] except [originPanelId].
+     * If already hiding, clears the hidden set so panels can be shown again (caller should run sync/ensure).
+     */
+    suspend fun toggleHideOtherFloatingPanels(
+        originPanelId: String,
+        currentlyShownIds: Set<String>,
+        /** When false (e.g. tile on main tab / MainScreen), hide every currently shown floating panel. */
+        excludeOriginPanel: Boolean = true
+    ) {
+        withContext(Dispatchers.Main) {
+            if (hiddenFloatingPanelIds.isNotEmpty()) {
+                hiddenFloatingPanelIds.clear()
+                return@withContext
+            }
+            if (excludeOriginPanel && originPanelId.isBlank()) return@withContext
+            val toHide = if (excludeOriginPanel) {
+                currentlyShownIds - originPanelId
+            } else {
+                currentlyShownIds
+            }
+            hiddenFloatingPanelIds.addAll(toHide)
+            toHide.forEach { panelId ->
+                if (overlayViews.containsKey(panelId)) {
+                    closeOverlay(panelId)
+                }
+            }
         }
     }
 }

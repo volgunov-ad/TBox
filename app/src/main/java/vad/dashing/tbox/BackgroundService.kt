@@ -177,6 +177,8 @@ class BackgroundService : Service() {
      * the previous end time and rolls back the resume-only idle delta to avoid double-counting on next boot.
      */
     private var tripColdResumeReopenedEndedTrip: ColdResumeReopenedEndedTrip? = null
+    /** True when cold resume reopened an ended trip, but parked time should be applied only at first RPM>0. */
+    private var tripColdResumeApplyParkedIdleOnEngineStart: Boolean = false
 
     private var isLastSMS: Boolean = false
 
@@ -262,12 +264,30 @@ class BackgroundService : Service() {
         /**
          * Bring [MainActivity] to the foreground (singleTask). Optional delay via [EXTRA_OPEN_MAIN_DELAY_MS].
          * Repeated intents cancel the previous scheduled launch and start a new timer.
+         * After the first launch, waits two seconds and, if [MainActivityForegroundTracker] still
+         * reports [MainActivity] not in the foreground, retries once.
          */
         const val ACTION_OPEN_MAIN_ACTIVITY = "vad.dashing.tbox.OPEN_MAIN_ACTIVITY"
         const val EXTRA_OPEN_MAIN_DELAY_MS = "vad.dashing.tbox.EXTRA_OPEN_MAIN_DELAY_MS"
+        /** Double-tap on «hide floating panels» tile: hide other overlays or restore them. */
+        const val ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS =
+            "vad.dashing.tbox.TOGGLE_HIDE_OTHER_FLOATING_PANELS"
+        const val EXTRA_FLOATING_PANEL_ORIGIN_ID = "vad.dashing.tbox.EXTRA_FLOATING_PANEL_ORIGIN_ID"
+        /**
+         * When true (default), [EXTRA_FLOATING_PANEL_ORIGIN_ID] is kept visible and the rest are hidden.
+         * When false (embedded dashboard / MainScreen), all currently shown floating panels are hidden.
+         */
+        const val EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN =
+            "vad.dashing.tbox.EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN"
+        /** Flip `enabled` on other floating panels (or all when extra is true). */
+        const val ACTION_TOGGLE_FLOATING_PANELS_ENABLED =
+            "vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED"
+        const val EXTRA_TOGGLE_FLOATING_ENABLED_ALL =
+            "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
+        private const val OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS = 2000L
     }
 
 
@@ -487,9 +507,6 @@ class BackgroundService : Service() {
                             splitTripTimeMinutesSetting.value.toLong() * 60_000L
                         resetTripStateForNewServiceSession(splitWindowMs)
                         applyTripResumeIfLastTripContinues(splitWindowMs)
-                        if (startFromBoot) {
-                            maybeOpenMainScreenAfterBootSuspend()
-                        }
                         if (!isRunning) return@launch
                         connectTboxClient()
                         startSettingsListener()
@@ -498,6 +515,9 @@ class BackgroundService : Service() {
                         startCheckConnection()
                         startPeriodicJob()
                         startDataListener()
+                        if (startFromBoot) {
+                            maybeOpenMainScreenAfterBootSuspend()
+                        }
                         TripRepository.setTripsProcessingEnabled(true)
                         servicePhase = ServiceLifecyclePhase.Running
                         startMbVehiclePolling()
@@ -692,6 +712,44 @@ class BackgroundService : Service() {
                                 "SET_STR id=$propId rc=$rc"
                             )
                         }
+                    }
+                }
+            }
+            ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS -> {
+                val excludeOrigin = intent.getBooleanExtra(EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN, true)
+                val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
+                if (!(excludeOrigin && originId.isBlank())) {
+                    scope.launch {
+                        overlayController.toggleHideOtherFloatingPanels(
+                            originPanelId = originId,
+                            currentlyShownIds = TboxRepository.floatingDashboardShownIds.value,
+                            excludeOriginPanel = excludeOrigin
+                        )
+                        overlayController.syncFloatingDashboards(floatingDashboards.value)
+                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                    }
+                }
+            }
+            ACTION_TOGGLE_FLOATING_PANELS_ENABLED -> {
+                val toggleAll = intent.getBooleanExtra(EXTRA_TOGGLE_FLOATING_ENABLED_ALL, false)
+                val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
+                if (toggleAll || originId.isNotBlank()) {
+                    scope.launch {
+                        val updated = withContext(Dispatchers.IO) {
+                            val current = settingsManager.floatingDashboardsFlow.first()
+                            val toggled = if (toggleAll) {
+                                current.map { it.copy(enabled = !it.enabled) }
+                            } else {
+                                current.map { cfg ->
+                                    if (cfg.id != originId) cfg.copy(enabled = !cfg.enabled) else cfg
+                                }
+                            }
+                            settingsManager.saveFloatingDashboards(toggled)
+                            toggled
+                        }
+                        overlayController.clearHiddenFloatingPanelIds()
+                        overlayController.syncFloatingDashboards(updated)
+                        overlayController.ensureFloatingDashboards(updated)
                     }
                 }
             }
@@ -1152,6 +1210,15 @@ class BackgroundService : Service() {
             }
 
             if (rpm > 0f) {
+                if (tripColdResumeApplyParkedIdleOnEngineStart) {
+                    val cold = tripColdResumeReopenedEndedTrip
+                    if (cold != null) {
+                        TripRepository.updateActiveTrip { cur ->
+                            cur.copy(parkingTimeMs = cur.parkingTimeMs + cold.parkedMsAddedToIdle)
+                        }
+                    }
+                    tripColdResumeApplyParkedIdleOnEngineStart = false
+                }
                 tripRpmWasPositiveSinceService = true
                 tripColdResumeReopenedEndedTrip = null
             }
@@ -1202,7 +1269,7 @@ class BackgroundService : Service() {
                 }
             }
 
-            // Engine back on after off: same trip if pause ≤ split window; add off time to idle (cumulative).
+            // Engine back on after off: same trip if pause ≤ split window; add off time to parking (cumulative).
             if (rpm > 0f && tripRpmZeroAtMs != null) {
                 val zeroStart = tripRpmZeroAtMs!!
                 val pauseMs = wallNow - zeroStart
@@ -1213,7 +1280,7 @@ class BackgroundService : Service() {
                         if (trip != null && !trip.isActive) {
                             TripRepository.replaceTrip(trip.copy(endTimeEpochMs = null))
                             TripRepository.updateActiveTrip { cur ->
-                                cur.copy(idleTimeMs = cur.idleTimeMs + pauseMs.coerceAtLeast(0L))
+                                cur.copy(parkingTimeMs = cur.parkingTimeMs + pauseMs.coerceAtLeast(0L))
                             }
                         }
                     }
@@ -1385,6 +1452,7 @@ class BackgroundService : Service() {
     private fun resetTripStateForNewServiceSession(splitWindowMs: Long) {
         synchronized(TripRepository.lock) {
             tripColdResumeReopenedEndedTrip = null
+            tripColdResumeApplyParkedIdleOnEngineStart = false
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
@@ -1410,7 +1478,7 @@ class BackgroundService : Service() {
     /**
      * If the last stored trip should continue (active or ended within split window), resume it
      * and seed odometer/fuel buffers so [onTripRpmSample] extends the same trip. Parked time before
-     * resume is added to [TripRecord.idleTimeMs] inside [TripRepository.tryResumeLastTripAfterServiceStart].
+     * resume is added to [TripRecord.parkingTimeMs] on first RPM>0 sample.
      * If that reopen was from a finished trip and the HU stops the service before RPM>0, [finalizeTripsOnServiceStop]
      * restores the stored end time and rolls back that idle delta so the next boot counts one continuous off segment.
      */
@@ -1419,6 +1487,7 @@ class BackgroundService : Service() {
             val resumeResult = TripRepository.tryResumeLastTripAfterServiceStart(splitWindowMs)
             if (!resumeResult.resumed) return
             tripColdResumeReopenedEndedTrip = resumeResult.reopenedEndedTrip
+            tripColdResumeApplyParkedIdleOnEngineStart = resumeResult.reopenedEndedTrip != null
             tripLastOdometer = CanDataRepository.odometer.value
             tripStartOdometer = tripLastOdometer
             val active = TripRepository.activeTrip.value
@@ -1438,6 +1507,7 @@ class BackgroundService : Service() {
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
             tripColdResumeReopenedEndedTrip = null
+            tripColdResumeApplyParkedIdleOnEngineStart = false
             val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
             val odoStart = CanDataRepository.odometer.value
             val rpmNow = CanDataRepository.engineRPM.value ?: 0f
@@ -1475,12 +1545,13 @@ class BackgroundService : Service() {
             if (active != null && cold != null && active.id == cold.tripId) {
                 val rpmNow = CanDataRepository.engineRPM.value ?: 0f
                 if (rpmNow <= 0f) {
-                    // HU off before engine start after cold resume: keep original trip end and idle
-                    // so the next session can add one parked segment (HU off + sit) without double idle.
+                    // HU off before engine start after cold resume: keep original trip end and times
+                    // so the next session can add one parked segment (HU off + sit) without double count.
                     TripRepository.replaceTrip(
                         active.copy(
                             endTimeEpochMs = cold.previousEndTimeEpochMs,
-                            idleTimeMs = (active.idleTimeMs - cold.parkedMsAddedToIdle).coerceAtLeast(0L),
+                            idleTimeMs = cold.previousIdleTimeMs,
+                            parkingTimeMs = cold.previousParkingTimeMs,
                         )
                     )
                 } else {
@@ -1490,6 +1561,7 @@ class BackgroundService : Service() {
                 TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
             }
             tripColdResumeReopenedEndedTrip = null
+            tripColdResumeApplyParkedIdleOnEngineStart = false
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
@@ -1550,9 +1622,7 @@ class BackgroundService : Service() {
                 floatingDashboards
                     .drop(1) // Пропускаем начальное значение
                     .collect { configs ->
-                        withContext(Dispatchers.Main) {
-                            overlayController.syncFloatingDashboards(configs)
-                        }
+                        overlayController.syncFloatingDashboards(configs)
                     }
             }
         }
@@ -2268,14 +2338,22 @@ class BackgroundService : Service() {
             if (delayMs > 0) {
                 delay(delayMs)
             }
-            withContext(Dispatchers.Main) {
-                try {
-                    val launchIntent = MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
-                    startActivity(launchIntent)
-                } catch (e: Exception) {
-                    Log.e("BackgroundService", "Open MainActivity failed", e)
-                    TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")
+            suspend fun tryBringMainToFront() {
+                withContext(Dispatchers.Main) {
+                    try {
+                        val launchIntent =
+                            MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
+                        startActivity(launchIntent)
+                    } catch (e: Exception) {
+                        Log.e("BackgroundService", "Open MainActivity failed", e)
+                        TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")
+                    }
                 }
+            }
+            tryBringMainToFront()
+            delay(OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS)
+            if (!MainActivityForegroundTracker.isMainActivityInForeground.value) {
+                tryBringMainToFront()
             }
         }
     }
@@ -3450,16 +3528,15 @@ class BackgroundService : Service() {
     }
 
     /**
-     * After boot-time service start: once trips and settings snapshot are ready, optionally bring
-     * [MainActivity] to the foreground on the home main screen (tab 100). Runs before TBox connect
-     * so the UI can appear earlier.
+     * After boot-time service start: once the data listener is running, optionally bring
+     * [MainActivity] to the foreground on the home main screen (tab 100) after a short delay.
      */
     private suspend fun maybeOpenMainScreenAfterBootSuspend() {
         try {
             val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
             if (!enabled) return
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
-            scheduleOpenMainActivity(0L)
+            scheduleOpenMainActivity(2000L)
         } catch (e: Exception) {
             Log.e("BackgroundService", "Open main screen after boot failed", e)
             TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")

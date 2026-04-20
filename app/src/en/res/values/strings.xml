@@ -62,6 +62,8 @@
     <string name="widget_select_data_for_tile">Select data for tile %1$d</string>
     <string name="widget_additional_settings_for_tile">Additional settings for tile %1$d</string>
     <string name="widget_show_title">Show title</string>
+    <string name="widget_custom_title_label">Title</string>
+    <string name="widget_custom_title_hint">Empty — default</string>
     <string name="widget_show_unit">Show unit</string>
     <string name="widget_title_gear_box_mode_temp">Transmission mode and temperature</string>
     <string name="widget_title_motor_hours_total_trip">Engine hours (total and trip)</string>
@@ -217,11 +219,34 @@
     <string name="settings_main_screen_open_on_boot_title">Automatically open main screen on startup</string>
     <string name="settings_main_screen_open_on_boot_desc">After the device boots and the background service starts automatically, opens the app on the home main screen</string>
     <string name="settings_main_screen_wallpaper_title">Main screen background</string>
-    <string name="settings_main_screen_wallpaper_light">Light app theme</string>
-    <string name="settings_main_screen_wallpaper_dark">Dark app theme</string>
-    <string name="settings_main_screen_wallpaper_pick">Choose image</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_title">Background scale: Crop (fill screen)</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_desc">On — fill the screen, excess image cropped (ContentScale.Crop). Off — show full image, theme-colored bars if needed (ContentScale.Fit).</string>
+    <string name="settings_main_screen_wallpaper_light">Wallpaper folder (light theme)</string>
+    <string name="settings_main_screen_wallpaper_dark">Wallpaper folder (dark theme)</string>
+    <string name="settings_main_screen_wallpaper_pick_source">Choose</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Wallpapers are not copied into the app. Tap Choose and pick one image file inside the folder you want—the whole folder is then used for the background (all images in it, sorted by file name). If the system offers a folder picker, you can pick the folder directly. On the main screen, swipe the background horizontally; panels and corner buttons keep their own gestures.</string>
+    <string name="settings_main_screen_wallpaper_all_files_hint">For reliable access to a folder by disk path, enable All files access for this app (Android 11+).</string>
+    <string name="settings_main_screen_wallpaper_open_all_files_settings">Open all files access settings</string>
+    <string name="settings_main_screen_wallpaper_path_mode_hint">All files access is on: enter the absolute path to the wallpaper folder and tap Apply path.</string>
+    <string name="settings_main_screen_wallpaper_path_label">Folder path</string>
+    <string name="settings_main_screen_wallpaper_apply_path">Apply path</string>
+    <string name="settings_main_screen_wallpaper_path_invalid">Folder not found or path is invalid</string>
+    <string name="settings_main_screen_wallpaper_current_path">Current source: %1$s</string>
+    <string name="settings_main_screen_wallpaper_no_picker">No app on this device can pick an image.</string>
+    <string name="settings_main_screen_wallpaper_file_too_large">This file is over 10 MB — pick a smaller image.</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_title">Background: fill the screen</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_desc">On — the image covers the whole screen; what does not fit is cropped at the edges. Off — the whole image stays visible inside the screen; empty bands use the theme background color.</string>
+    <string name="settings_main_screen_canvas_bg_title">Main screen background (under panels)</string>
+    <string name="settings_main_screen_canvas_bg_desc">Color behind widget panels and under wallpaper letterboxing. Separate for light and dark app theme.</string>
+    <string name="settings_main_screen_canvas_bg_light">Background color (light theme)</string>
+    <string name="settings_main_screen_canvas_bg_dark">Background color (dark theme)</string>
+    <string name="settings_main_screen_canvas_bg_reset">Reset main screen background colors</string>
+    <string name="settings_main_screen_corner_buttons_title">Settings and Add widget buttons</string>
+    <string name="settings_main_screen_corner_buttons_size">Button size: %1$d</string>
+    <string name="settings_main_screen_corner_buttons_size_hint">Main-screen button diameter in dp (10…100; default 32).</string>
+    <string name="settings_main_screen_corner_buttons_bg_light">Background color (light theme)</string>
+    <string name="settings_main_screen_corner_buttons_bg_dark">Background color (dark theme)</string>
+    <string name="settings_main_screen_corner_buttons_icon_light">Icon color (light theme)</string>
+    <string name="settings_main_screen_corner_buttons_icon_dark">Icon color (dark theme)</string>
+    <string name="settings_main_screen_corner_buttons_reset">Reset size and colors</string>
     <string name="settings_main_screen_panels_title">Main screen panels</string>
     <string name="settings_main_screen_panel_rows_title">Number of tile rows on main screen panel</string>
     <string name="settings_main_screen_panel_cols_title">Number of tile columns on main screen panel</string>
@@ -248,7 +273,7 @@
 
     <string name="settings_misc_title">Misc</string>
     <string name="settings_backup_title">Backup</string>
-    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper image files on the device are not included—re-pick wallpapers after import if needed.</string>
+    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>
     <string name="settings_backup_export_without_trips">Export JSON without trips</string>
     <string name="settings_backup_import">Import JSON</string>
@@ -343,6 +368,7 @@
     <string name="data_title_param_2">Parameter 2</string>
     <string name="data_title_param_3">Parameter 3</string>
     <string name="data_title_param_4">Parameter 4</string>
+    <string name="data_title_param_5">Parameter 5</string>
     <string name="data_title_wheel_speed_1">Wheel speed 1</string>
     <string name="data_title_wheel_speed_2">Wheel speed 2</string>
     <string name="data_title_wheel_speed_3">Wheel speed 3</string>
@@ -385,7 +411,6 @@
     <string name="mb_vehicle_action_poll">Start polling</string>
     <string name="mb_vehicle_mfs_heat_id_label">Steering heat: id=%1$d (eVEHICLE_SET_MFS_HEAT_SWITCH)</string>
     <string name="data_title_engine_rpm">Engine RPM</string>
-    <string name="data_title_throttle_position">Parameter 5</string>
     <string name="data_title_car_speed">Vehicle speed</string>
     <string name="data_title_car_speed_accurate">Precise vehicle speed</string>
     <string name="data_title_cruise_set_speed">Cruise control set speed</string>
@@ -419,7 +444,8 @@
     <string name="data_title_motor_hours_trip">Trip engine hours</string>
     <string name="data_title_motor_hours_widget">Engine hours widget</string>
     <string name="data_title_active_trip_widget">Current trip</string>
-    <string name="data_title_active_trip_widget_simple">Current trip (compact)</string>
+    <string name="data_title_active_trip_widget_simple">Current trip (simple)</string>
+    <string name="data_title_active_trip_widget_mini">Current trip (mini)</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_split_trip_time_title">Trip split time, min</string>
@@ -438,7 +464,8 @@
     <string name="trips_odometer_start">Odometer at trip start</string>
     <string name="trips_distance">Distance</string>
     <string name="trips_moving_time">Moving time</string>
-    <string name="trips_idle_time">Idle time</string>
+    <string name="trips_idle_time">Idle time (engine on)</string>
+    <string name="trips_parking_time">Parking time</string>
     <string name="trips_total_time">Total time</string>
     <string name="trips_format_hours_minutes_seconds">%1$d h %2$d min %3$d s</string>
     <string name="trips_format_minutes_seconds">%1$d min %2$d s</string>
@@ -451,6 +478,7 @@
     <string name="trips_avg_speed_moving">Average speed without idle</string>
     <string name="trips_avg_speed_trip">Average speed</string>
     <string name="trips_fuel_used">Fuel used</string>
+    <string name="trips_fuel_consumption_l_100km">Fuel consumption</string>
     <string name="trips_fuel_refueled">Fuel refueled</string>
     <string name="trips_refuel_count">Refuelings</string>
     <string name="trips_engine_start_count">Engine starts</string>
@@ -474,12 +502,20 @@
     <string name="data_title_media_volume_widget_vertical">Media volume widget (vertical)</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
     <string name="data_title_external_app_widget">Third-party app widget</string>
+    <string name="data_title_hide_floating_panels_widget">Hide floating panels</string>
+    <string name="data_title_toggle_floating_panels_enabled_widget">Disable floating panels</string>
     <string name="widget_app_launcher_selected">Selected: %1$s</string>
     <string name="widget_app_launcher_none_selected">No app selected</string>
     <string name="widget_app_launcher_required">Choose an app to save the widget</string>
     <string name="widget_app_launcher_pick_title">Choose app</string>
     <string name="widget_app_launcher_search">Search</string>
     <string name="widget_app_launcher_no_icon">?</string>
+    <string name="widget_app_launcher_change_icon">Change icon</string>
+    <string name="widget_app_launcher_remove_icon">Remove icon</string>
+    <string name="widget_app_launcher_icon_saved">Icon saved</string>
+    <string name="widget_app_launcher_icon_too_large">Image is too large for an icon (max 512×512 px)</string>
+    <string name="widget_app_launcher_icon_invalid">Could not read the image</string>
+    <string name="widget_app_launcher_icon_copy_failed">Could not save the image</string>
 
     <string name="cycle_voltage">Cycle voltage, V</string>
     <string name="cycle_speed">Cycle speed, km/h</string>

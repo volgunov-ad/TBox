@@ -2,6 +2,8 @@ package vad.dashing.tbox
 
 import android.appwidget.AppWidgetHost
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 
 /**
@@ -15,6 +17,7 @@ import android.util.Log
 object ExternalWidgetHostManager {
     private const val TAG = "ExternalWidgetHost"
     private const val HOST_ID = 1024
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var host: AppWidgetHost? = null
     private var refCount = 0
     private var listening = false
@@ -26,15 +29,30 @@ object ExternalWidgetHostManager {
         }
     }
 
+    /**
+     * [AppWidgetHost.startListening] should run on the main thread. If already on main, run
+     * immediately; otherwise post to the main looper (callers may get the host before listening
+     * completes — typical callers are on the main thread).
+     */
     @Synchronized
     private fun ensureListening(context: Context) {
-        val resolved = ensureHost(context)
+        val appCtx = context.applicationContext
         if (listening) return
-        try {
-            resolved.startListening()
-            listening = true
-        } catch (e: Exception) {
-            Log.e(TAG, "AppWidgetHost.startListening failed; embedded widgets may not refresh", e)
+        val startRunnable = Runnable {
+            synchronized(this@ExternalWidgetHostManager) {
+                if (listening) return@Runnable
+                try {
+                    ensureHost(appCtx).startListening()
+                    listening = true
+                } catch (e: Exception) {
+                    Log.e(TAG, "AppWidgetHost.startListening failed; embedded widgets may not refresh", e)
+                }
+            }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            startRunnable.run()
+        } else {
+            mainHandler.post(startRunnable)
         }
     }
 

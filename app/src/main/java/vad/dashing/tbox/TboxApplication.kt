@@ -24,6 +24,10 @@ class TboxApplication : Application() {
                 // Non-fatal; settings screen can retry migrations if needed.
             }
             try {
+                settingsManager.migrateMainScreenWallpaperFilesToFolderUrisIfNeeded()
+            } catch (_: Exception) {
+            }
+            try {
                 coroutineScope {
                     val motorDeferred = async(Dispatchers.IO) {
                         appDataManager.motorHoursFlow.first()

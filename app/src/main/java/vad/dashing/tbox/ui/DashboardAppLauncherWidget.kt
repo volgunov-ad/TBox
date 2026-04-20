@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -24,14 +26,18 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import java.io.File
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsManager
 
 @Composable
 internal fun DashboardAppLauncherWidgetItem(
     widget: DashboardWidget,
     packageName: String,
+    customIconRevision: Int,
     showTitle: Boolean,
+    titleOverride: String = "",
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     elevation: Dp,
@@ -40,9 +46,17 @@ internal fun DashboardAppLauncherWidgetItem(
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
-    val imageBitmap = remember(packageName) {
+    val imageBitmap = remember(packageName, customIconRevision) {
         if (packageName.isBlank()) return@remember null
-        runCatching {
+        val custom: ImageBitmap? = runCatching {
+            val f = File(
+                context.filesDir,
+                "${SettingsManager.LAUNCHER_APP_ICONS_DIR}/$packageName"
+            )
+            if (!f.isFile || f.length() <= 0L) return@runCatching null
+            BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
+        }.getOrNull()
+        custom ?: runCatching {
             val pm = context.packageManager
             val info = pm.getApplicationInfo(packageName, 0)
             info.loadIcon(pm).toBitmap().asImageBitmap()
@@ -95,13 +109,14 @@ internal fun DashboardAppLauncherWidgetItem(
                     )
                 }
             }
-            if (showTitle && appLabel.isNotEmpty()) {
+            val titleLine = titleOverride.trim().ifBlank { appLabel }
+            if (showTitle && titleLine.isNotEmpty()) {
                 val titleFontSize = calculateResponsiveFontSize(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
                 )
                 Text(
-                    text = appLabel,
+                    text = titleLine,
                     fontSize = titleFontSize,
                     fontWeight = FontWeight.Medium,
                     color = resolvedTextColor,

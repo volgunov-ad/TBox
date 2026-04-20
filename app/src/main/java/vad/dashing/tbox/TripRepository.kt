@@ -9,11 +9,13 @@ import kotlin.math.max
 
 /**
  * When a trip that had [TripRecord.endTimeEpochMs] is reopened on service start, [BackgroundService]
- * may revert that reopen on HU shutdown if the engine never ran this session — see [parkedMsAddedToIdle].
+ * may revert that reopen on HU shutdown if the engine never ran this session.
  */
 data class ColdResumeReopenedEndedTrip(
     val tripId: String,
     val previousEndTimeEpochMs: Long,
+    val previousIdleTimeMs: Long,
+    val previousParkingTimeMs: Long,
     val parkedMsAddedToIdle: Long,
 )
 
@@ -202,8 +204,9 @@ object TripRepository {
      * If wall clock is before the stored end (e.g. HU time reset), a finished trip is not resumed.
      * Returns true if a trip was resumed (or was already active).
      *
-     * For a trip that had [TripRecord.endTimeEpochMs] set, the gap until `now` is treated as parking
-     * and **added** to existing [TripRecord.idleTimeMs] (not replaced).
+     * For a trip that had [TripRecord.endTimeEpochMs] set, this method only reopens it and keeps the
+     * previous idle unchanged. The parked segment is applied later on first engine start in
+     * [BackgroundService.onTripRpmSample] so HU-on time before RPM>0 is counted once.
      */
     fun tryResumeLastTripAfterServiceStart(splitWindowMs: Long): TripResumeStartResult {
         synchronized(lock) {
@@ -225,12 +228,13 @@ object TripRepository {
                 reopenInfo = ColdResumeReopenedEndedTrip(
                     tripId = candidate.id,
                     previousEndTimeEpochMs = endedAt,
+                    previousIdleTimeMs = candidate.idleTimeMs,
+                    previousParkingTimeMs = candidate.parkingTimeMs,
                     parkedMsAddedToIdle = parkedMs,
                 )
                 candidate.copy(
                     endTimeEpochMs = null,
-                    // Cumulative idle: time already accrued on the trip plus the off-line / parked segment.
-                    idleTimeMs = candidate.idleTimeMs + parkedMs,
+                    parkingTimeMs = candidate.parkingTimeMs,
                 )
             }
             _trips.update { cur ->
@@ -262,12 +266,19 @@ object TripRepository {
         return d / (sec / 3600f)
     }
 
+    /** Average speed for trip active engine time: moving + engine-on idle, without parking time. */
     fun averageSpeedTripKmH(t: TripRecord): Float? {
         val d = t.distanceKm
-        val totalMs = (t.endTimeEpochMs ?: System.currentTimeMillis()) - t.startTimeEpochMs
-        val sec = totalMs / 1000f
+        val sec = (t.movingTimeMs + t.idleTimeMs) / 1000f
         if (sec <= 0f || d <= 0f) return null
         return d / (sec / 3600f)
+    }
+
+    /** Average trip fuel consumption in liters per 100 km. */
+    fun averageFuelConsumptionLitersPer100Km(t: TripRecord): Float? {
+        val d = t.distanceKm
+        if (d <= 0f) return null
+        return t.fuelConsumedLiters * 100f / d
     }
 
     fun tripChangedEnough(a: TripRecord, b: TripRecord): Boolean {
@@ -288,6 +299,7 @@ object TripRepository {
         }
         if (kotlin.math.abs(a.movingTimeMs - b.movingTimeMs) > MS_EPS) return true
         if (kotlin.math.abs(a.idleTimeMs - b.idleTimeMs) > MS_EPS) return true
+        if (kotlin.math.abs(a.parkingTimeMs - b.parkingTimeMs) > MS_EPS) return true
         if (a.maxEngineTemp != b.maxEngineTemp) return true
         if (a.maxGearboxOilTemp != b.maxGearboxOilTemp) return true
         if (a.minOutsideTemp != b.minOutsideTemp) return true

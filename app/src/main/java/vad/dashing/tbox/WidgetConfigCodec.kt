@@ -92,6 +92,9 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.appWidgetId != null) {
             obj.put("appWidgetId", config.appWidgetId)
         }
+        if (config.customTitle.isNotBlank()) {
+            obj.put("customTitle", config.customTitle.trim())
+        }
         array.put(obj)
     }
     return array
@@ -222,7 +225,8 @@ private fun parseWidgetConfigsFromJsonArray(
                             appWidgetId
                         } else {
                             null
-                        }
+                        },
+                        customTitle = item.optString("customTitle", "").trim()
                     )
                 )
             }

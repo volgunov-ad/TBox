@@ -62,6 +62,8 @@
     <string name="widget_select_data_for_tile">Выберите данные для плитки %1$d</string>
     <string name="widget_additional_settings_for_tile">Дополнительные настройки плитки %1$d</string>
     <string name="widget_show_title">Отображать название</string>
+    <string name="widget_custom_title_label">Заголовок</string>
+    <string name="widget_custom_title_hint">Пусто — по умолчанию</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
     <string name="widget_title_gear_box_mode_temp">Режим и температура КПП</string>
     <string name="widget_title_motor_hours_total_trip">Моточасы (общ. и за поездку)</string>
@@ -217,11 +219,34 @@
     <string name="settings_main_screen_open_on_boot_title">Автоматически открывать главный экран при запуске</string>
     <string name="settings_main_screen_open_on_boot_desc">После загрузки устройства, когда фоновая служба стартует автоматически, открывается окно приложения на главном экране (плитки дома)</string>
     <string name="settings_main_screen_wallpaper_title">Фон главного экрана</string>
-    <string name="settings_main_screen_wallpaper_light">Светлая тема приложения</string>
-    <string name="settings_main_screen_wallpaper_dark">Тёмная тема приложения</string>
-    <string name="settings_main_screen_wallpaper_pick">Выбрать изображение</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_title">Масштаб фона: Crop (на весь экран)</string>
-    <string name="settings_main_screen_wallpaper_scale_crop_desc">Вкл — заполнение экрана с обрезкой лишнего (ContentScale.Crop). Выкл — вписать целиком, возможны поля цвета темы (ContentScale.Fit).</string>
+    <string name="settings_main_screen_wallpaper_light">Папка с обоями (светлая тема)</string>
+    <string name="settings_main_screen_wallpaper_dark">Папка с обоями (тёмная тема)</string>
+    <string name="settings_main_screen_wallpaper_pick_source">Выбрать</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Обои не копируются в приложение. Нажмите «Выбрать» и укажите один файл картинки в нужной папке — тогда для фона используется вся эта папка (все изображения в ней, по имени файла). Если в системе есть выбор папки, можно выбрать сразу папку. На главном экране листайте фон горизонтально; панели и угловые кнопки перехватывают свои жесты.</string>
+    <string name="settings_main_screen_wallpaper_all_files_hint">Для надёжного доступа к папке по пути на диске включите «Доступ ко всем файлам» для приложения (Android 11+).</string>
+    <string name="settings_main_screen_wallpaper_open_all_files_settings">Открыть настройки доступа к файлам</string>
+    <string name="settings_main_screen_wallpaper_path_mode_hint">Указан полный доступ к хранилищу: можно ввести абсолютный путь к папке с обоями и нажать «Применить путь».</string>
+    <string name="settings_main_screen_wallpaper_path_label">Путь к папке</string>
+    <string name="settings_main_screen_wallpaper_apply_path">Применить путь</string>
+    <string name="settings_main_screen_wallpaper_path_invalid">Папка не найдена или путь неверный</string>
+    <string name="settings_main_screen_wallpaper_current_path">Текущий источник: %1$s</string>
+    <string name="settings_main_screen_wallpaper_no_picker">Нет приложения для выбора изображения на этом устройстве.</string>
+    <string name="settings_main_screen_wallpaper_file_too_large">Файл больше 10 МБ — выберите другое изображение.</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_title">Фон: на весь экран</string>
+    <string name="settings_main_screen_wallpaper_scale_crop_desc">Включено — картинка заполняет весь экран, лишнее по краям обрезается. Выключено — картинка видна целиком внутри экрана, свободные полосы заливаются цветом фона темы.</string>
+    <string name="settings_main_screen_canvas_bg_title">Фон главного экрана (под панелями)</string>
+    <string name="settings_main_screen_canvas_bg_desc">Цвет области за панелями виджетов и под обоями (если обои не на весь экран). Отдельно для светлой и тёмной темы приложения.</string>
+    <string name="settings_main_screen_canvas_bg_light">Цвет фона (светлая тема)</string>
+    <string name="settings_main_screen_canvas_bg_dark">Цвет фона (тёмная тема)</string>
+    <string name="settings_main_screen_canvas_bg_reset">Сбросить цвета фона экрана</string>
+    <string name="settings_main_screen_corner_buttons_title">Кнопки «Настройки» и «Добавить виджет»</string>
+    <string name="settings_main_screen_corner_buttons_size">Размер кнопок: %1$d</string>
+    <string name="settings_main_screen_corner_buttons_size_hint">Диаметр кнопок на главном экране в dp (10…100; по умолчанию 32).</string>
+    <string name="settings_main_screen_corner_buttons_bg_light">Цвет фона (светлая тема)</string>
+    <string name="settings_main_screen_corner_buttons_bg_dark">Цвет фона (тёмная тема)</string>
+    <string name="settings_main_screen_corner_buttons_icon_light">Цвет значка (светлая тема)</string>
+    <string name="settings_main_screen_corner_buttons_icon_dark">Цвет значка (тёмная тема)</string>
+    <string name="settings_main_screen_corner_buttons_reset">Сбросить размер и цвета</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
     <string name="settings_main_screen_panel_rows_title">Количество строк плиток панели главного экрана</string>
     <string name="settings_main_screen_panel_cols_title">Количество столбцов плиток панели главного экрана</string>
@@ -248,7 +273,7 @@
 
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_backup_title">Резервная копия</string>
-    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Файлы обоев главного экрана в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
+    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Пути к папкам обоев главного экрана и выбранные файлы сохраняются в JSON; сами изображения не копируются. Пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
     <string name="settings_backup_export">Экспорт JSON</string>
     <string name="settings_backup_export_without_trips">Экспорт JSON без поездок</string>
     <string name="settings_backup_import">Импорт JSON</string>
@@ -343,6 +368,7 @@
     <string name="data_title_param_2">Параметр 2</string>
     <string name="data_title_param_3">Параметр 3</string>
     <string name="data_title_param_4">Параметр 4</string>
+    <string name="data_title_param_5">Параметр 5</string>
     <string name="data_title_wheel_speed_1">Скорость колеса 1</string>
     <string name="data_title_wheel_speed_2">Скорость колеса 2</string>
     <string name="data_title_wheel_speed_3">Скорость колеса 3</string>
@@ -399,7 +425,6 @@
     <string name="mb_can_parallel_dte">Запас хода (ГУ)</string>
     <string name="mb_can_parallel_avg_consumption">Средний расход (ГУ)</string>
     <string name="data_title_engine_rpm">Обороты двигателя</string>
-    <string name="data_title_throttle_position">Параметр 5</string>
     <string name="data_title_car_speed">Скорость автомобиля</string>
     <string name="data_title_car_speed_accurate">Точная скорость автомобиля</string>
     <string name="data_title_cruise_set_speed">Скорость круиз-контроля</string>
@@ -434,6 +459,7 @@
     <string name="data_title_motor_hours_widget">Виджет моточасов</string>
     <string name="data_title_active_trip_widget">Текущая поездка</string>
     <string name="data_title_active_trip_widget_simple">Текущая поездка (упрощённый)</string>
+    <string name="data_title_active_trip_widget_mini">Текущая поездка (мини)</string>
 
     <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
     <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
@@ -453,6 +479,7 @@
     <string name="trips_distance">Пробег</string>
     <string name="trips_moving_time">Время в движении</string>
     <string name="trips_idle_time">Время в простое</string>
+    <string name="trips_parking_time">Время парковки</string>
     <string name="trips_total_time">Общее время</string>
     <string name="trips_format_hours_minutes_seconds">%1$d ч %2$d мин %3$d с</string>
     <string name="trips_format_minutes_seconds">%1$d мин %2$d с</string>
@@ -465,6 +492,7 @@
     <string name="trips_avg_speed_moving">Средняя скорость без простоев</string>
     <string name="trips_avg_speed_trip">Средняя скорость</string>
     <string name="trips_fuel_used">Израсходовано топлива</string>
+    <string name="trips_fuel_consumption_l_100km">Расход топлива</string>
     <string name="trips_fuel_refueled">Заправлено топлива</string>
     <string name="trips_refuel_count">Заправки</string>
     <string name="trips_engine_start_count">Запуски двигателя</string>
@@ -488,12 +516,20 @@
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
+    <string name="data_title_hide_floating_panels_widget">Скрытие плавающих панелей</string>
+    <string name="data_title_toggle_floating_panels_enabled_widget">Отключение плавающих панелей</string>
     <string name="widget_app_launcher_selected">Выбрано: %1$s</string>
     <string name="widget_app_launcher_none_selected">Приложение не выбрано</string>
     <string name="widget_app_launcher_required">Выберите приложение, чтобы сохранить виджет</string>
     <string name="widget_app_launcher_pick_title">Выбор приложения</string>
     <string name="widget_app_launcher_search">Поиск</string>
     <string name="widget_app_launcher_no_icon">?</string>
+    <string name="widget_app_launcher_change_icon">Изменить иконку</string>
+    <string name="widget_app_launcher_remove_icon">Удалить иконку</string>
+    <string name="widget_app_launcher_icon_saved">Иконка сохранена</string>
+    <string name="widget_app_launcher_icon_too_large">Изображение слишком большое для иконки (макс. 512×512 px)</string>
+    <string name="widget_app_launcher_icon_invalid">Не удалось прочитать изображение</string>
+    <string name="widget_app_launcher_icon_copy_failed">Не удалось сохранить изображение</string>
 
     <string name="cycle_voltage">Cycle напряжение, В</string>
     <string name="cycle_speed">Cycle скорость, км/ч</string>

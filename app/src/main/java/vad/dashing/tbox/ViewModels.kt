@@ -58,6 +58,13 @@ class TboxViewModel : ViewModel() {
             initialValue = false
         )
 
+    val floatingDashboardShownIds: StateFlow<Set<String>> = TboxRepository.floatingDashboardShownIds
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
+
     val preventRestartSend: StateFlow<Boolean> = TboxRepository.preventRestartSend
         .stateIn(
             scope = viewModelScope,
@@ -308,7 +315,7 @@ object WidgetsRepository {
         "param2" to DataTitle(R.string.data_title_param_2),
         "param3" to DataTitle(R.string.data_title_param_3),
         "param4" to DataTitle(R.string.data_title_param_4),
-        "throttlePosition" to DataTitle(R.string.data_title_throttle_position),
+        "param5" to DataTitle(R.string.data_title_param_5),
         "wheel1Speed" to DataTitle(R.string.data_title_wheel_speed_1, R.string.unit_kmh),
         "wheel2Speed" to DataTitle(R.string.data_title_wheel_speed_2, R.string.unit_kmh),
         "wheel3Speed" to DataTitle(R.string.data_title_wheel_speed_3, R.string.unit_kmh),
@@ -379,6 +386,7 @@ object WidgetsRepository {
         "motorHoursWidget" to DataTitle(R.string.data_title_motor_hours_widget),
         "activeTripWidget" to DataTitle(R.string.data_title_active_trip_widget),
         "activeTripWidgetSimple" to DataTitle(R.string.data_title_active_trip_widget_simple),
+        "activeTripWidgetMini" to DataTitle(R.string.data_title_active_trip_widget_mini),
         "netWidget" to DataTitle(R.string.data_title_net_widget),
         "netWidgetNew" to DataTitle(R.string.data_title_net_widget_new),
         "netWidgetColored" to DataTitle(R.string.data_title_net_widget_colored),
@@ -404,6 +412,10 @@ object WidgetsRepository {
         STEERING_WHEEL_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_steering_wheel_heat_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
+        HIDE_FLOATING_PANELS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hide_floating_panels_widget),
+        TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY to DataTitle(
+            R.string.data_title_toggle_floating_panels_enabled_widget
+        ),
     )
 
     private fun getDataTitle(dataKey: String): DataTitle? {

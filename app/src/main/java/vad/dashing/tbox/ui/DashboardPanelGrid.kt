@@ -24,9 +24,12 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DashboardState
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
+import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -40,6 +43,7 @@ internal fun DashboardPanelGridAndFrames(
     dashboardCols: Int,
     dashboardState: DashboardState,
     widgetConfigs: List<FloatingDashboardWidgetConfig>,
+    settingsViewModel: SettingsViewModel,
     tboxViewModel: TboxViewModel,
     canViewModel: CanDataViewModel,
     appDataViewModel: AppDataViewModel,
@@ -57,6 +61,8 @@ internal fun DashboardPanelGridAndFrames(
     onWidgetClick: (widgetIndex: Int) -> Unit,
     onWidgetLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (widgetIndex: Int, selectedPackage: String) -> Unit,
+    onHideFloatingPanelsDoubleClick: (widgetIndex: Int) -> Unit = {},
+    onToggleFloatingPanelsEnabledDoubleClick: (widgetIndex: Int) -> Unit = {},
     onRestartRequested: () -> Unit,
     showTboxDisconnectIndicator: Boolean,
     enableMusicInnerInteractions: Boolean,
@@ -121,6 +127,7 @@ internal fun DashboardPanelGridAndFrames(
                                 DashboardWidgetRenderer(
                                     widget = widget,
                                     widgetConfig = widgetConfig,
+                                    settingsViewModel = settingsViewModel,
                                     tboxViewModel = tboxViewModel,
                                     canViewModel = canViewModel,
                                     appDataViewModel = appDataViewModel,
@@ -136,6 +143,16 @@ internal fun DashboardPanelGridAndFrames(
                                     onLongClick = onWidgetLongClick,
                                     onMusicSelectedPlayerChange = { selectedPackage ->
                                         onMusicSelectedPlayerChange(index, selectedPackage)
+                                    },
+                                    onHideFloatingPanelsDoubleClick = {
+                                        if (widget.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {
+                                            onHideFloatingPanelsDoubleClick(index)
+                                        }
+                                    },
+                                    onToggleFloatingPanelsEnabledDoubleClick = {
+                                        if (widget.dataKey == TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY) {
+                                            onToggleFloatingPanelsEnabledDoubleClick(index)
+                                        }
                                     },
                                     onRestartRequested = onRestartRequested,
                                     externalWidgetHost = externalWidgetHost,

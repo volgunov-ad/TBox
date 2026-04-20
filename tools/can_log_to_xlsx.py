@@ -71,7 +71,7 @@ RU_COLUMNS: list[tuple[str, str]] = [
     ("param2", "Параметр 2"),
     ("param3", "Параметр 3"),
     ("param4", "Параметр 4"),
-    ("throttle_position", "Параметр 5"),
+    ("param5", "Параметр 5"),
     ("car_speed", "Скорость автомобиля, км/ч"),
     ("car_speed_accurate", "Точная скорость автомобиля, км/ч"),
     ("wheel1_speed", "Скорость колеса 1, км/ч"),
@@ -233,7 +233,7 @@ class CarState:
     param2: Optional[float] = None
     param3: Optional[float] = None
     param4: Optional[float] = None
-    throttle_position: Optional[float] = None
+    param5: Optional[float] = None
     car_speed: Optional[float] = None
     car_speed_accurate: Optional[float] = None
     wheels_speed: WheelsF = field(default_factory=WheelsF)
@@ -297,7 +297,7 @@ class CarState:
             fmt_float(self.param2, 1),
             fmt_float(self.param3, 1),
             fmt_float(self.param4, 1),
-            fmt_float(self.throttle_position, 1),
+            fmt_float(self.param5, 1),
             fmt_float(self.car_speed, 1),
             fmt_float(self.car_speed_accurate, 1),
             fmt_float(self.wheels_speed.w1, 1),
@@ -433,7 +433,7 @@ class CarState:
 
         elif can_id == CAN_ID_ENGINE_TEMP:
             self.engine_temperature = u8(b[2]) * 0.75 - 48.0
-            self.throttle_position = float(u8(b[4]))
+            self.param5 = float(u8(b[4])) / 18.0
 
         elif can_id == CAN_ID_SPEED_ACCURATE:
             if b[2] != 0:
