@@ -813,6 +813,21 @@ class BackgroundService : Service() {
 
     private inline fun mbVehicleRunWithEngine(block: (MBCanEngine) -> Unit) {
         if (mbVehiclePollingPausedByErrors) return
+        if (!MBCanEngine.isAvailable()) {
+            val reason = MBCanEngine.availabilityError() ?: "MB-CAN unavailable on this device"
+            MbVehicleRepository.setClientAvailable(false)
+            MbVehicleRepository.setLastError(reason)
+            if (!mbVehiclePollingPausedByErrors) {
+                mbVehiclePollingPausedByErrors = true
+                mbVehiclePollJob?.cancel()
+                mbVehiclePollJob = null
+                mbCanParallelJob?.cancel()
+                mbCanParallelJob = null
+                MbCanParallelRepository.setEnabled(false)
+                TboxRepository.addLog("WARN", "MB-Vehicle", reason)
+            }
+            return
+        }
         try {
             if (!mbVehicleEngineReady) {
                 MBCanEngine.getInstance()

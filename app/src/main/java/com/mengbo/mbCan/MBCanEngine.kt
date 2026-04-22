@@ -1,5 +1,6 @@
 package com.mengbo.mbCan
 
+import android.os.Build
 import android.util.Log
 import com.mengbo.mbCan.defines.MBCanDataType
 import com.mengbo.mbCan.entity.MBCanSubscribeBase
@@ -94,17 +95,63 @@ class MBCanEngine private constructor() : MBCanClient() {
 
     companion object {
         private const val TAG = "MBCanEngine"
+        private const val MIN_SUPPORTED_SDK = 34
 
-        init {
-            System.loadLibrary("mbcanclient")
-            System.loadLibrary("mbCan")
-        }
+        @Volatile
+        private var nativeLoadTried: Boolean = false
+
+        @Volatile
+        private var nativeReady: Boolean = false
+
+        @Volatile
+        private var nativeLoadError: String? = null
 
         @Volatile
         private var instance: MBCanEngine? = null
 
         @JvmStatic
+        fun isSupportedOnDevice(): Boolean = Build.VERSION.SDK_INT >= MIN_SUPPORTED_SDK
+
+        @JvmStatic
+        fun availabilityError(): String? {
+            ensureNativeLoaded()
+            return nativeLoadError
+        }
+
+        @JvmStatic
+        fun isAvailable(): Boolean {
+            ensureNativeLoaded()
+            return nativeReady
+        }
+
+        private fun ensureNativeLoaded() {
+            if (nativeLoadTried) return
+            synchronized(MBCanEngine::class.java) {
+                if (nativeLoadTried) return
+                nativeLoadTried = true
+                if (!isSupportedOnDevice()) {
+                    nativeLoadError =
+                        "MB-CAN disabled: requires Android API $MIN_SUPPORTED_SDK+, current=${Build.VERSION.SDK_INT}"
+                    Log.w(TAG, nativeLoadError!!)
+                    return
+                }
+                try {
+                    System.loadLibrary("mbcanclient")
+                    System.loadLibrary("mbCan")
+                    nativeReady = true
+                } catch (t: Throwable) {
+                    nativeLoadError = "${t::class.java.simpleName}: ${t.message ?: "unknown native load error"}"
+                    Log.e(TAG, "Failed to load MB-CAN native libraries", t)
+                }
+            }
+        }
+
+        @JvmStatic
         fun getInstance(): MBCanEngine {
+            ensureNativeLoaded()
+            if (!nativeReady) {
+                throw IllegalStateException(nativeLoadError ?: "MB-CAN native libraries are unavailable")
+            }
             instance?.let { return it }
             return synchronized(MBCanEngine::class.java) {
                 instance ?: MBCanEngine().also { instance = it }
