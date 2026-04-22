@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.view.ViewTreeObserver
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -122,13 +123,19 @@ class MainActivity : ComponentActivity() {
     private lateinit var appDataManager: AppDataManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        MainActivityLoadTimings.reset()
+        MainActivityLoadTimings.mark("main_onCreate_start")
         super.onCreate(savedInstanceState)
+        MainActivityLoadTimings.mark("main_after_super")
 
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
+        MainActivityLoadTimings.mark("main_after_managers")
 
         consumeFloatingDashboardTileEditIntent(intent)
+        MainActivityLoadTimings.mark("main_after_intent")
 
+        MainActivityLoadTimings.mark("main_before_setContent")
         setContent {
             DisposableEffect(Unit) {
                 onDispose { disposeAppLauncherPickerIconCache() }
@@ -165,8 +172,23 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-
+        MainActivityLoadTimings.mark("main_after_setContent")
         startBackgroundService()
+        MainActivityLoadTimings.mark("main_after_start_service")
+        scheduleMainActivityFirstLayoutTiming()
+    }
+
+    private fun scheduleMainActivityFirstLayoutTiming() {
+        val decor = window.decorView
+        decor.viewTreeObserver.addOnGlobalLayoutListener(
+            object : ViewTreeObserver.OnGlobalLayoutListener {
+                override fun onGlobalLayout() {
+                    decor.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                    MainActivityLoadTimings.mark("main_first_global_layout")
+                    MainActivityLoadTimings.log("Timings.MainActivity")
+                }
+            }
+        )
     }
 
     override fun onNewIntent(intent: Intent) {
