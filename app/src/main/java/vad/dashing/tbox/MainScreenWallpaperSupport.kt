@@ -60,8 +60,11 @@ internal fun localFileFromEmbeddedStoragePath(uri: Uri): File? {
     }
     if (rawPath.startsWith("/root/") && rawPath.length > 5) {
         val stripped = rawPath.removePrefix("/root")
-        if (stripped.startsWith("/")) {
-            candidates.add(stripped)
+        when {
+            stripped.startsWith("/") -> candidates.add(stripped)
+            // Some file managers embed `C:\...` or `C:/...` after `/root` on Windows.
+            stripped.length >= 3 && stripped[1] == ':' &&
+                (stripped[2] == '/' || stripped[2] == '\\') -> candidates.add(stripped)
         }
     }
     return candidates.map { File(it) }.firstOrNull { it.exists() }

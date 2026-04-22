@@ -33,8 +33,13 @@ class WallpaperFilesystemFolderTest {
 
     @Test
     fun displayWallpaperFolderSummary_fileUri_showsPath() {
-        val path = "/storage/emulated/0/Download/light"
-        val summary = displayWallpaperFolderSummary(Uri.fromFile(File(path)).toString())
-        assertEquals(path, summary)
+        val ctx = ApplicationProvider.getApplicationContext<Application>()
+        val dir = File(ctx.cacheDir, "wallpaper_summary_display").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        // `Uri.fromFile().toString()` can be percent-encoded on some SDKs/Robolectric; Java URI round-trips reliably.
+        val summary = displayWallpaperFolderSummary(dir.toURI().toString())
+        assertEquals(dir.canonicalFile.absolutePath, summary)
     }
 }

@@ -246,6 +246,10 @@ private fun MainScreenWallpaperBackground(
     }
     var sortedPairs by remember { mutableStateOf<List<Pair<String, Uri>>>(emptyList()) }
     LaunchedEffect(folderUriStr, epoch) {
+        // Drop previous folder's listing immediately so we never pair the new theme's
+        // saved file name with the old folder's sorted names (would fall back to first()
+        // and could persist the wrong selection via LaunchedEffect below).
+        sortedPairs = emptyList()
         sortedPairs = if (folderUri == null) {
             emptyList()
         } else {

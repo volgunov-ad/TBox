@@ -26,7 +26,9 @@ class MainScreenWallpaperSupportTest {
             mkdirs()
         }
         val img = File(sub, "a.jpg").apply { writeText("x") }
-        val fakePath = "/root" + img.absolutePath
+        // Match embedded paths like `/root/data/...` or `/root/C:/...` (Windows managers).
+        val abs = img.absolutePath.replace(File.separatorChar, '/')
+        val fakePath = if (abs.startsWith("/")) "/root$abs" else "/root/$abs"
         val uri = Uri.Builder()
             .scheme("content")
             .authority("com.example.fileprovider")
