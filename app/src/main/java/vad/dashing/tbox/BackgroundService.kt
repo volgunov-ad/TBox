@@ -107,6 +107,8 @@ class BackgroundService : Service() {
     private var mbCanParallelJob: Job? = null
     @Volatile
     private var mbVehicleEngineReady: Boolean = false
+    private var mbVehicleConsecutiveErrors: Int = 0
+    private var mbVehiclePollingPausedByErrors: Boolean = false
     /** Cancels in-flight [ACTION_START] bootstrap if [ACTION_STOP] runs mid-startup. */
     private var serviceStartupJob: Job? = null
     private var packetSilenceChecks: Int = 0
@@ -288,6 +290,7 @@ class BackgroundService : Service() {
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS = 2000L
+        private const val MB_VEHICLE_MAX_CONSECUTIVE_ERRORS = 5
     }
 
 
@@ -757,6 +760,14 @@ class BackgroundService : Service() {
     }
 
     private fun startMbVehiclePolling() {
+        if (mbVehiclePollingPausedByErrors) {
+            TboxRepository.addLog(
+                "WARN",
+                "MB-Vehicle",
+                "Polling paused after repeated MB-CAN errors; restart service to retry"
+            )
+            return
+        }
         mbVehiclePollJob?.cancel()
         mbVehiclePollJob = scope.launch(exceptionHandler + Dispatchers.Default) {
             while (isActive && isRunning) {
@@ -770,6 +781,14 @@ class BackgroundService : Service() {
      * Head-unit MB-CAN snapshots into [MbCanParallelRepository] only (does not alter TBox UDP / [CanDataRepository]).
      */
     private fun startMbCanParallelPolling() {
+        if (mbVehiclePollingPausedByErrors) {
+            TboxRepository.addLog(
+                "WARN",
+                "MB-Vehicle",
+                "Parallel MB-CAN polling paused after repeated errors; restart service to retry"
+            )
+            return
+        }
         mbCanParallelJob?.cancel()
         MbCanParallelRepository.setEnabled(true)
         MbCanParallelRepository.attachNativeRelay()
@@ -793,6 +812,7 @@ class BackgroundService : Service() {
     }
 
     private inline fun mbVehicleRunWithEngine(block: (MBCanEngine) -> Unit) {
+        if (mbVehiclePollingPausedByErrors) return
         try {
             if (!mbVehicleEngineReady) {
                 MBCanEngine.getInstance()
@@ -801,10 +821,33 @@ class BackgroundService : Service() {
                 MbVehicleRepository.setLastError(null)
             }
             block(MBCanEngine.getInstance())
+            mbVehicleConsecutiveErrors = 0
         } catch (e: Throwable) {
-            MbVehicleRepository.setLastError(e.message)
+            val errorDetail = "${e::class.java.name}: ${e.message ?: "no message"}"
+            MbVehicleRepository.setLastError(errorDetail)
             Log.w("MBVehicle", "MB-CAN call failed", e)
-            TboxRepository.addLog("WARN", "MB-Vehicle", e.message ?: "error")
+            mbVehicleConsecutiveErrors += 1
+            val limit = MB_VEHICLE_MAX_CONSECUTIVE_ERRORS
+            if (mbVehicleConsecutiveErrors >= limit) {
+                mbVehiclePollingPausedByErrors = true
+                mbVehiclePollJob?.cancel()
+                mbVehiclePollJob = null
+                mbCanParallelJob?.cancel()
+                mbCanParallelJob = null
+                MbCanParallelRepository.setEnabled(false)
+                MbVehicleRepository.setClientAvailable(false)
+                TboxRepository.addLog(
+                    "WARN",
+                    "MB-Vehicle",
+                    "Paused after $mbVehicleConsecutiveErrors consecutive errors. Last: $errorDetail"
+                )
+            } else {
+                TboxRepository.addLog(
+                    "WARN",
+                    "MB-Vehicle",
+                    "MB-CAN error $mbVehicleConsecutiveErrors/$limit: $errorDetail"
+                )
+            }
         }
     }
 
@@ -814,6 +857,8 @@ class BackgroundService : Service() {
         MbCanParallelRepository.setEnabled(false)
         mbVehiclePollJob?.cancel()
         mbVehiclePollJob = null
+        mbVehicleConsecutiveErrors = 0
+        mbVehiclePollingPausedByErrors = false
         if (!mbVehicleEngineReady) return
         try {
             MBCanEngine.getInstance().release()
