@@ -1,6 +1,5 @@
 package com.mengbo.mbCan
 
-import android.os.Build
 import android.util.Log
 import com.mengbo.mbCan.defines.MBCanDataType
 import com.mengbo.mbCan.entity.MBCanSubscribeBase
@@ -95,8 +94,6 @@ class MBCanEngine private constructor() : MBCanClient() {
 
     companion object {
         private const val TAG = "MBCanEngine"
-        private const val MIN_SUPPORTED_SDK = 34
-
         @Volatile
         private var nativeLoadTried: Boolean = false
 
@@ -108,9 +105,6 @@ class MBCanEngine private constructor() : MBCanClient() {
 
         @Volatile
         private var instance: MBCanEngine? = null
-
-        @JvmStatic
-        fun isSupportedOnDevice(): Boolean = Build.VERSION.SDK_INT >= MIN_SUPPORTED_SDK
 
         @JvmStatic
         fun availabilityError(): String? {
@@ -129,12 +123,6 @@ class MBCanEngine private constructor() : MBCanClient() {
             synchronized(MBCanEngine::class.java) {
                 if (nativeLoadTried) return
                 nativeLoadTried = true
-                if (!isSupportedOnDevice()) {
-                    nativeLoadError =
-                        "MB-CAN disabled: requires Android API $MIN_SUPPORTED_SDK+, current=${Build.VERSION.SDK_INT}"
-                    Log.w(TAG, nativeLoadError!!)
-                    return
-                }
                 try {
                     System.loadLibrary("mbcanclient")
                     System.loadLibrary("mbCan")
