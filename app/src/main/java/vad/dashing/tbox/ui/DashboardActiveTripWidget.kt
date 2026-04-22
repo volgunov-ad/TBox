@@ -118,10 +118,9 @@ fun DashboardActiveTripWidgetItem(
                     )
                     StatusRow(
                         label = stringResource(R.string.trips_active_trip_mini_enroute_label),
-                        value = stringResource(
-                            R.string.trips_active_trip_mini_enroute_value,
-                            formatTripDurationHuman(context, t.movingTimeMs),
-                            formatTripDurationHuman(context, t.idleTimeMs),
+                        value = formatTripDurationHuman(
+                            context,
+                            t.movingTimeMs + t.idleTimeMs,
                         ),
                         unit = "",
                         fontSize = rowFont,
