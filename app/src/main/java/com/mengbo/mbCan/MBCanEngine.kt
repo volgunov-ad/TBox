@@ -123,6 +123,17 @@ class MBCanEngine private constructor() : MBCanClient() {
             synchronized(MBCanEngine::class.java) {
                 if (nativeLoadTried) return
                 nativeLoadTried = true
+                // mbCAN native init references Android framework classes that may be absent
+                // on some head-unit firmware builds. Guard before System.loadLibrary, because
+                // a missing class inside JNI_OnLoad causes hard SIGABRT (not recoverable by catch).
+                val requiredClass = "android.text.Layout\$TextInclusionStrategy"
+                try {
+                    Class.forName(requiredClass, false, MBCanEngine::class.java.classLoader)
+                } catch (_: Throwable) {
+                    nativeLoadError = "Missing framework class: $requiredClass"
+                    Log.w(TAG, "Skip MB-CAN native init: $nativeLoadError")
+                    return
+                }
                 try {
                     System.loadLibrary("mbcanclient")
                     System.loadLibrary("mbCan")
