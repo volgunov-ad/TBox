@@ -797,7 +797,7 @@ class BackgroundService : Service() {
                 mbVehicleRunWithEngine { engine ->
                     MbCanParallelRepository.applyPoll(engine)
                 }
-                delay(400L)
+                delay(1500L)
             }
         }
     }
