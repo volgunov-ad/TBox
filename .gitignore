@@ -14,3 +14,6 @@
 .cxx
 local.properties
 .kotlin/
+
+# Local Mengbo CAN demo; not part of TBox Monitor repo
+DashingCanService/

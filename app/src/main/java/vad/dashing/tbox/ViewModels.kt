@@ -409,6 +409,7 @@ object WidgetsRepository {
             R.string.data_title_media_volume_widget_vertical
         ),
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
+        STEERING_WHEEL_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_steering_wheel_heat_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
         HIDE_FLOATING_PANELS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hide_floating_panels_widget),

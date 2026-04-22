@@ -1,6 +1,8 @@
 package vad.dashing.tbox.ui
 
 import android.content.Context
+import android.content.Intent
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mengbo.mbCan.defines.MBVehicleProperty
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
@@ -51,11 +54,279 @@ import vad.dashing.tbox.CycleDataViewModel
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.MbCanParallelRepository
+import vad.dashing.tbox.MbVehicleRepository
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.seatModeToString
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+private const val MB_VEHICLE_CONSOLE_TAG = "MbVehicleConsole"
+
+@Composable
+private fun MbVehicleConsoleCard() {
+    val context = LocalContext.current
+    var propIdText by remember { mutableStateOf("257") }
+    var valueIntText by remember { mutableStateOf("0") }
+    var valueStrText by remember { mutableStateOf("") }
+    val mbOk by MbVehicleRepository.clientAvailable.collectAsStateWithLifecycle()
+    val heatOn by MbVehicleRepository.steeringWheelHeatOn.collectAsStateWithLifecycle()
+    val err by MbVehicleRepository.lastError.collectAsStateWithLifecycle()
+    val mfsId = MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH.nativeValue
+
+    fun startMb(intent: Intent) {
+        try {
+            context.startForegroundService(intent)
+        } catch (e: Exception) {
+            Log.e(MB_VEHICLE_CONSOLE_TAG, "startForegroundService", e)
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.mb_vehicle_mfs_heat_id_label, mfsId),
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(
+                text = listOfNotNull(
+                    if (mbOk) "MB-CAN OK" else stringResource(R.string.mb_vehicle_waiting),
+                    when (heatOn) {
+                        true -> stringResource(R.string.steering_heat_on)
+                        false -> stringResource(R.string.steering_heat_off)
+                        null -> stringResource(R.string.value_no_data)
+                    },
+                    err
+                ).joinToString(" · "),
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            OutlinedTextField(
+                value = propIdText,
+                onValueChange = { new -> propIdText = new.filter { ch -> ch.isDigit() }.take(3) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.mb_vehicle_property_id_hint)) },
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = valueIntText,
+                onValueChange = { new -> valueIntText = new.filter { ch -> ch.isDigit() || ch == '-' }.take(11) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                label = { Text(stringResource(R.string.mb_vehicle_value_int_hint)) },
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = valueStrText,
+                onValueChange = { valueStrText = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                label = { Text(stringResource(R.string.mb_vehicle_value_string_hint)) },
+                singleLine = false,
+                maxLines = 3
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val id = propIdText.toIntOrNull() ?: return@OutlinedButton
+                        startMb(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_MB_VEHICLE_GET_PARAM
+                                putExtra(BackgroundService.EXTRA_MB_PROPERTY_ID, id)
+                            }
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.mb_vehicle_action_get), maxLines = 2, textAlign = TextAlign.Center)
+                }
+                OutlinedButton(
+                    onClick = {
+                        val id = propIdText.toIntOrNull() ?: return@OutlinedButton
+                        val v = valueIntText.toIntOrNull() ?: 0
+                        startMb(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_MB_VEHICLE_SET_PARAM
+                                putExtra(BackgroundService.EXTRA_MB_PROPERTY_ID, id)
+                                putExtra(BackgroundService.EXTRA_MB_VALUE_INT, v)
+                            }
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.mb_vehicle_action_set_int), maxLines = 2, textAlign = TextAlign.Center)
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val id = propIdText.toIntOrNull() ?: return@OutlinedButton
+                        startMb(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_MB_VEHICLE_SET_PARAM_STRING
+                                putExtra(BackgroundService.EXTRA_MB_PROPERTY_ID, id)
+                                putExtra(BackgroundService.EXTRA_MB_VALUE_STRING, valueStrText)
+                            }
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.mb_vehicle_action_set_string), maxLines = 2, textAlign = TextAlign.Center)
+                }
+                OutlinedButton(
+                    onClick = {
+                        startMb(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_MB_VEHICLE_POLL
+                            }
+                        )
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.mb_vehicle_action_poll), maxLines = 2, textAlign = TextAlign.Center)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MbCanParallelRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun MbCanParallelCard() {
+    val noData = stringResource(R.string.value_no_data)
+    val inactive = stringResource(R.string.mb_can_parallel_inactive)
+    val enabled by MbCanParallelRepository.enabled.collectAsStateWithLifecycle()
+    val speed by MbCanParallelRepository.vehicleSpeed.collectAsStateWithLifecycle()
+    val gear by MbCanParallelRepository.gear.collectAsStateWithLifecycle()
+    val steerAngle by MbCanParallelRepository.steerAngleDeg.collectAsStateWithLifecycle()
+    val steerRate by MbCanParallelRepository.steerRateDegS.collectAsStateWithLifecycle()
+    val engineRpm by MbCanParallelRepository.engineRpm.collectAsStateWithLifecycle()
+    val engineTemp by MbCanParallelRepository.engineCoolantC.collectAsStateWithLifecycle()
+    val odo by MbCanParallelRepository.odometerKm.collectAsStateWithLifecycle()
+    val fuelPct by MbCanParallelRepository.fuelLevelPercent.collectAsStateWithLifecycle()
+    val dte by MbCanParallelRepository.distanceToEmptyKm.collectAsStateWithLifecycle()
+    val avgCons by MbCanParallelRepository.avgFuelConsumption.collectAsStateWithLifecycle()
+    val lastType by MbCanParallelRepository.lastNativeType.collectAsStateWithLifecycle()
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.mb_can_parallel_header),
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            Text(
+                text = stringResource(R.string.mb_can_parallel_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 10.dp),
+            )
+            if (!enabled) {
+                Text(
+                    text = inactive,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                val kmh = stringResource(R.string.unit_kmh)
+                val deg = stringResource(R.string.unit_degree)
+                val rpmU = stringResource(R.string.unit_rpm)
+                val c = stringResource(R.string.unit_celsius)
+                val km = stringResource(R.string.unit_km)
+                val pct = stringResource(R.string.unit_percent)
+                val l100 = stringResource(R.string.unit_l_100km)
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_speed),
+                    if (speed == null) noData else "${valueToString(speed, 1)} $kmh",
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_gear),
+                    if (gear == null) noData else valueToString(gear),
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_steer_angle),
+                    if (steerAngle == null) noData else "${valueToString(steerAngle, 1)} $deg",
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_steer_rate),
+                    if (steerRate == null) noData else valueToString(steerRate),
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_engine_rpm),
+                    if (engineRpm == null) noData else "${valueToString(engineRpm, 1)} $rpmU",
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_engine_temp),
+                    if (engineTemp == null) noData else "${valueToString(engineTemp, 1)} $c",
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_odometer),
+                    if (odo == null) noData else "${valueToString(odo, 1)} $km",
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_fuel_percent),
+                    if (fuelPct == null) noData else "${valueToString(fuelPct)} $pct",
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_dte),
+                    if (dte == null) noData else "${valueToString(dte, 1)} $km",
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_avg_consumption),
+                    if (avgCons == null) noData else "${valueToString(avgCons, 2)} $l100",
+                )
+                MbCanParallelRow(
+                    stringResource(R.string.mb_can_parallel_last_native_type),
+                    lastType?.toString() ?: noData,
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun CarDataStatusRow(
@@ -146,6 +417,9 @@ fun CarDataTabContent(
         val blockedLabel = stringResource(R.string.value_blocked)
         val unblockedLabel = stringResource(R.string.value_unblocked)
         LazyColumn(modifier = Modifier.fillMaxSize()) {
+            item { StatusHeader(stringResource(R.string.mb_vehicle_console_header)) }
+            item { MbVehicleConsoleCard() }
+            item { MbCanParallelCard() }
             item { CarDataStatusRow(context, "voltage", valueToString(voltage, 1)) }
             item { CarDataStatusRow(context, "steerAngle", valueToString(steerAngle, 1)) }
             item { CarDataStatusRow(context, "steerSpeed", valueToString(steerSpeed)) }

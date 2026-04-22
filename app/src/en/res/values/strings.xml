@@ -396,6 +396,20 @@
     <string name="data_title_voltage">Voltage</string>
     <string name="data_title_steer_angle">Steering wheel angle</string>
     <string name="data_title_steer_speed">Steering wheel speed</string>
+    <string name="data_title_steering_wheel_heat_widget">Steering wheel heat (MB-CAN)</string>
+    <string name="steering_heat_on">On</string>
+    <string name="steering_heat_off">Off</string>
+    <string name="mb_vehicle_waiting">Waiting for MB-CAN…</string>
+    <string name="mb_vehicle_error_short">MB-CAN error</string>
+    <string name="mb_vehicle_console_header">Head unit bus (Mengbo MB-CAN)</string>
+    <string name="mb_vehicle_property_id_hint">Property id (0–324, see MBVehicleProperty in project)</string>
+    <string name="mb_vehicle_value_int_hint">Integer value</string>
+    <string name="mb_vehicle_value_string_hint">String value</string>
+    <string name="mb_vehicle_action_get">Read</string>
+    <string name="mb_vehicle_action_set_int">Write int</string>
+    <string name="mb_vehicle_action_set_string">Write string</string>
+    <string name="mb_vehicle_action_poll">Start polling</string>
+    <string name="mb_vehicle_mfs_heat_id_label">Steering heat: id=%1$d (eVEHICLE_SET_MFS_HEAT_SWITCH)</string>
     <string name="data_title_engine_rpm">Engine RPM</string>
     <string name="data_title_car_speed">Vehicle speed</string>
     <string name="data_title_car_speed_accurate">Precise vehicle speed</string>
