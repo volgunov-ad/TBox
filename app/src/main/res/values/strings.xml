@@ -91,6 +91,7 @@
     <string name="widget_text_color_dark">Цвет текста (тёмная тема)</string>
     <string name="widget_background_color_light">Цвет фона (светлая тема)</string>
     <string name="widget_background_color_dark">Цвет фона (тёмная тема)</string>
+    <string name="widget_reset_text_background_colors">Сбросить цвет текста и фона</string>
     <string name="widget_color_value_label">Значение цвета</string>
     <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
     <string name="widget_color_alpha">Непрозрачность: %1$d%%</string>

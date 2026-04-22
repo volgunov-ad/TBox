@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
+import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
@@ -87,8 +89,8 @@ private val WidgetSelectionDialogFieldPlaceholderStyle = TextStyle(
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
     initialConfig: FloatingDashboardWidgetConfig,
-    defaultBackgroundLight: Int,
-    defaultBackgroundDark: Int
+    private val panelDefaultBackgroundLight: Int,
+    private val panelDefaultBackgroundDark: Int,
 ) {
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
@@ -103,10 +105,10 @@ internal class WidgetSelectionDialogState(
     var textColorLight by mutableIntStateOf(initialConfig.textColorLight)
     var textColorDark by mutableIntStateOf(initialConfig.textColorDark)
     var backgroundColorLight by mutableIntStateOf(
-        initialConfig.backgroundColorLight ?: defaultBackgroundLight
+        initialConfig.backgroundColorLight ?: panelDefaultBackgroundLight
     )
     var backgroundColorDark by mutableIntStateOf(
-        initialConfig.backgroundColorDark ?: defaultBackgroundDark
+        initialConfig.backgroundColorDark ?: panelDefaultBackgroundDark
     )
     var selectedMediaPlayers by mutableStateOf(
         if (initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY) {
@@ -152,6 +154,14 @@ internal class WidgetSelectionDialogState(
         wholePanelRows = cfg.rows
         wholePanelCols = cfg.cols
         wholePanelClickAction = cfg.clickAction
+    }
+
+    /** Same defaults as a fresh [FloatingDashboardWidgetConfig] for this panel (main / floating). */
+    fun resetTileTextAndBackgroundColors() {
+        textColorLight = DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+        textColorDark = DEFAULT_WIDGET_TEXT_COLOR_DARK
+        backgroundColorLight = panelDefaultBackgroundLight
+        backgroundColorDark = panelDefaultBackgroundDark
     }
     var launcherAppPackage by mutableStateOf(
         if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
@@ -203,8 +213,8 @@ internal fun rememberWidgetSelectionDialogState(
         WidgetSelectionDialogState(
             initialDataKey = initialDataKey,
             initialConfig = initialConfig,
-            defaultBackgroundLight = defaultBackgroundLight,
-            defaultBackgroundDark = defaultBackgroundDark
+            panelDefaultBackgroundLight = defaultBackgroundLight,
+            panelDefaultBackgroundDark = defaultBackgroundDark
         )
     }
 }
@@ -683,6 +693,18 @@ internal fun WidgetSelectionDialogForm(
                                 DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT,
                                 DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
                             )
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { state.resetTileTextAndBackgroundColors() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 8.dp),
+                        enabled = state.togglesEnabled,
+                    ) {
+                        Text(
+                            stringResource(R.string.widget_reset_text_background_colors),
+                            fontSize = 20.sp
                         )
                     }
                 }

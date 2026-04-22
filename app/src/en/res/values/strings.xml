@@ -91,6 +91,7 @@
     <string name="widget_text_color_dark">Text color (dark theme)</string>
     <string name="widget_background_color_light">Background color (light theme)</string>
     <string name="widget_background_color_dark">Background color (dark theme)</string>
+    <string name="widget_reset_text_background_colors">Reset text and background colors</string>
     <string name="widget_color_value_label">Color value</string>
     <string name="widget_color_value_hint">Format: #AARRGGBB, #RRGGBB, 0xAARRGGBB or Int</string>
     <string name="widget_color_alpha">Opacity: %1$d%%</string>
