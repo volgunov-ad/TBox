@@ -117,19 +117,13 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     StatusRow(
-                        label = stringResource(R.string.trips_total_time),
-                        value = formatTripDurationHuman(
-                            context,
-                            t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs
+                        label = stringResource(R.string.trips_active_trip_mini_enroute_label),
+                        value = stringResource(
+                            R.string.trips_active_trip_mini_enroute_value,
+                            formatTripDurationHuman(context, t.movingTimeMs),
+                            formatTripDurationHuman(context, t.idleTimeMs),
                         ),
                         unit = "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
-                        label = stringResource(R.string.trips_avg_speed_trip),
-                        value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
-                        unit = if (avgT != null) stringResource(R.string.unit_kmh) else "",
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
@@ -137,6 +131,13 @@ fun DashboardActiveTripWidgetItem(
                         label = stringResource(R.string.trips_fuel_consumption_l_100km),
                         value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_fuel_used),
+                        value = valueToString(t.fuelConsumedLiters, 1),
+                        unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )

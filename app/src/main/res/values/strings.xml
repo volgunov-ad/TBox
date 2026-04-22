@@ -454,6 +454,8 @@
     <string name="trips_idle_time">Время в простое</string>
     <string name="trips_parking_time">Время парковки</string>
     <string name="trips_total_time">Общее время</string>
+    <string name="trips_active_trip_mini_enroute_label">Время в пути</string>
+    <string name="trips_active_trip_mini_enroute_value">%1$s движ., %2$s простой (без парковки)</string>
     <string name="trips_format_hours_minutes_seconds">%1$d ч %2$d мин %3$d с</string>
     <string name="trips_format_minutes_seconds">%1$d мин %2$d с</string>
     <string name="trips_format_seconds_only">%1$d с</string>
