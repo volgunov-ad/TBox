@@ -80,7 +80,7 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
 class SettingsViewModel(private val settingsManager: SettingsManager) : ViewModel() {
 
     companion object {
-        private const val DEFAULT_LOG_LEVEL = "DEBUG"
+        private const val DEFAULT_LOG_LEVEL = "INFO"
         private const val DEFAULT_FLOATING_DASHBOARD_ID = "floating-1"
         private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_COLS = 1

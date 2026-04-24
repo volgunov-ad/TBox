@@ -31,7 +31,7 @@ private class ElapsedTimingBuffer {
                 sb.append(m.label).append(" +").append(delta).append("ms (Σ ").append(cum).append("ms)")
                 prev = m.elapsedMs
             }
-            TboxRepository.addLog("INFO", tag, sb.toString())
+            TboxRepository.addLog("DEBUG", tag, sb.toString())
             marks.clear()
         }
     }

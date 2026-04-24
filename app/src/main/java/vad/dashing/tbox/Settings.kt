@@ -239,7 +239,7 @@ class SettingsManager(private val context: Context) {
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
         // Значения по умолчанию
-        private const val DEFAULT_LOG_LEVEL = "DEBUG"
+        private const val DEFAULT_LOG_LEVEL = "INFO"
         private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_COLS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_WIDTH = 100

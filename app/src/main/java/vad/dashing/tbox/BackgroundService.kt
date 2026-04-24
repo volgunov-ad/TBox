@@ -72,6 +72,7 @@ class BackgroundService : Service() {
     @Volatile
     private var lastPacketAtMs: Long = 0
     private val sendRawMessageMutex = Mutex()
+    private val tboxClientReconnectMutex = Mutex()
     /** Serializes [onStartCommand] handling so each intent awaits settings snapshot and runs in order. */
     private val commandRouterMutex = Mutex()
     private val tripsPersistMutex = Mutex()
@@ -93,6 +94,7 @@ class BackgroundService : Service() {
     private var sendATJob: Job? = null
     private var modemModeJob: Job? = null
     private var checkConnectionJob: Job? = null
+    private var tboxClientReconnectJob: Job? = null
     private var versionsJob: Job? = null
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
@@ -132,7 +134,7 @@ class BackgroundService : Service() {
             sb.append(m.label).append(" +").append(delta).append("ms (Σ ").append(cum).append("ms)")
             prev = m.elapsedMs
         }
-        TboxRepository.addLog("INFO", tag, sb.toString())
+        TboxRepository.addLog("DEBUG", tag, sb.toString())
         timingMarks.clear()
     }
 
@@ -242,6 +244,8 @@ class BackgroundService : Service() {
         const val ACTION_START = "vad.dashing.tbox.START"
         /** Present when [ACTION_START] was triggered after [android.content.Intent.ACTION_BOOT_COMPLETED]. */
         const val EXTRA_START_FROM_BOOT = "vad.dashing.tbox.START_FROM_BOOT"
+        /** Source broadcast action that initiated boot-time start (BOOT/LOCKED_BOOT/QUICKBOOT). */
+        const val EXTRA_START_SOURCE_ACTION = "vad.dashing.tbox.START_SOURCE_ACTION"
         const val ACTION_STOP = "vad.dashing.tbox.STOP"
         const val ACTION_SEND_AT = "vad.dashing.tbox.SEND_AT"
         const val ACTION_MODEM_CHECK = "vad.dashing.tbox.MODEM_CHECK"
@@ -300,6 +304,10 @@ class BackgroundService : Service() {
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS = 2000L
+        /** No Tbox client reconnect attempts until this long after [serviceStartElapsed] (first init / first reply). */
+        private const val TBOX_RECONNECT_WATCHDOG_GRACE_MS = 10_000L
+        /** Pauses between client teardown/rebuild while [TboxRepository.tboxConnected] stays false (then last value repeats). */
+        private val TBOX_RECONNECT_INTERVALS_MS = longArrayOf(20_000L, 40_000L, 60_000L, 60_000L)
         /** [SharingStarted] for settings collected in [startSettingsListener]; avoids eager DataStore until first subscriber. */
         private val settingsFlowWhileSubscribed = SharingStarted.WhileSubscribed(5_000L)
     }
@@ -528,7 +536,17 @@ class BackgroundService : Service() {
                         createNotification("Start service")
                     }
                     startForeground(NOTIFICATION_ID, notification)
-                    TboxRepository.addLog("INFO", "Service", "Start service")
+                    val startSourceAction = intent?.getStringExtra(EXTRA_START_SOURCE_ACTION)
+                        ?.takeIf { it.isNotBlank() }
+                    if (startSourceAction != null) {
+                        TboxRepository.addLog(
+                            "INFO",
+                            "Service",
+                            "Start service (source: $startSourceAction)"
+                        )
+                    } else {
+                        TboxRepository.addLog("INFO", "Service", "Start service")
+                    }
                 }
                 handleStartCommandIntent(intent, flags, startId, kickoffStart)
             }
@@ -573,6 +591,8 @@ class BackgroundService : Service() {
                         startAPNUpdater()
                         yield()
                         startCheckConnection()
+                        yield()
+                        startTboxClientReconnectWatchdog()
                         yield()
                         startPeriodicJob()
                         yield()
@@ -642,6 +662,7 @@ class BackgroundService : Service() {
                     stopNetUpdater()
                     stopAPNUpdater()
                     stopCheckConnection()
+                    stopTboxClientReconnectWatchdog()
                     stopPeriodicJob()
                     stopSettingsListener()
                     stopDataListener()
@@ -1046,6 +1067,79 @@ class BackgroundService : Service() {
     private fun stopCheckConnection() {
         checkConnectionJob?.cancel()
         checkConnectionJob = null
+    }
+
+    /**
+     * While the service runs: if [TboxRepository.tboxConnected] stays false, periodically
+     * [disconnectTboxClient] + [connectTboxClient] with gaps 20s / 40s / 60s / 60s… from the
+     * offline episode start (cold start counts from service start). No attempts until
+     * [TBOX_RECONNECT_WATCHDOG_GRACE_MS] after service start.
+     */
+    private fun startTboxClientReconnectWatchdog() {
+        if (tboxClientReconnectJob?.isActive == true) return
+        val serviceStartElapsed = SystemClock.elapsedRealtime()
+        tboxClientReconnectJob = scope.launch(exceptionHandler) {
+            var hadSuccessfulTboxConnection = false
+            var disconnectEpisodeStartElapsed = -1L
+            var reconnectsDoneInEpisode = 0
+            var nextAttemptElapsedDeadline = -1L
+            while (isActive) {
+                delay(500)
+                if (!isRunning) break
+
+                val now = SystemClock.elapsedRealtime()
+
+                if (TboxRepository.tboxConnected.value) {
+                    hadSuccessfulTboxConnection = true
+                    disconnectEpisodeStartElapsed = -1L
+                    reconnectsDoneInEpisode = 0
+                    nextAttemptElapsedDeadline = -1L
+                    continue
+                }
+
+                if (disconnectEpisodeStartElapsed < 0L) {
+                    disconnectEpisodeStartElapsed =
+                        if (hadSuccessfulTboxConnection) now else serviceStartElapsed
+                    val firstGapEnd =
+                        disconnectEpisodeStartElapsed + TBOX_RECONNECT_INTERVALS_MS[0]
+                    val earliestWork = serviceStartElapsed + TBOX_RECONNECT_WATCHDOG_GRACE_MS
+                    nextAttemptElapsedDeadline = max(firstGapEnd, earliestWork)
+                }
+
+                if (now < nextAttemptElapsedDeadline) continue
+
+                tboxClientReconnectMutex.withLock {
+                    if (!isRunning) return@withLock
+                    if (TboxRepository.tboxConnected.value) return@withLock
+                    val nextGapIdx = minOf(
+                        reconnectsDoneInEpisode + 1,
+                        TBOX_RECONNECT_INTERVALS_MS.size - 1
+                    )
+                    val nextPauseMs = TBOX_RECONNECT_INTERVALS_MS[nextGapIdx]
+                    TboxRepository.addLog(
+                        "WARN",
+                        "TBox Proxy",
+                        "Tbox offline; reconnecting client (episode attempt ${reconnectsDoneInEpisode + 1}, " +
+                            "next pause ${nextPauseMs}ms)"
+                    )
+                    disconnectTboxClient()
+                    connectTboxClient()
+                    reconnectsDoneInEpisode += 1
+                    nextAttemptElapsedDeadline =
+                        SystemClock.elapsedRealtime() + TBOX_RECONNECT_INTERVALS_MS[
+                            minOf(
+                                reconnectsDoneInEpisode,
+                                TBOX_RECONNECT_INTERVALS_MS.size - 1
+                            )
+                        ]
+                }
+            }
+        }
+    }
+
+    private fun stopTboxClientReconnectWatchdog() {
+        tboxClientReconnectJob?.cancel()
+        tboxClientReconnectJob = null
     }
 
     private fun stopStateBroadcastListener() {
@@ -2265,7 +2359,7 @@ class BackgroundService : Service() {
             serviceStartupJob,
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
-            modemModeJob, checkConnectionJob, versionsJob, generalStateBroadcastJob,
+            modemModeJob, checkConnectionJob, tboxClientReconnectJob, versionsJob, generalStateBroadcastJob,
             settingsListenerJob, dataListenerJob, getSMSJob, openMainActivityJob
         ).forEach { job ->
             job?.cancel()
@@ -2341,13 +2435,6 @@ class BackgroundService : Service() {
                                        msg: ByteArray,
                                        needLog: Boolean = true): Boolean {
         try {
-            if (tBoxClient == null) {
-                delay(1000)
-                if (tBoxClient == null) {
-                    connectTboxClient()
-                    delay(1000)
-                }
-            }
             val client = tBoxClient ?: run {
                 TboxRepository.addLog("ERROR", "TBox Proxy", "Client is not initialized")
                 return false
