@@ -305,9 +305,9 @@ class BackgroundService : Service() {
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS = 2000L
         /** No Tbox client reconnect attempts until this long after [serviceStartElapsed] (first init / first reply). */
-        private const val TBOX_RECONNECT_WATCHDOG_GRACE_MS = 10_000L
+        private const val TBOX_RECONNECT_WATCHDOG_GRACE_MS = 30_000L
         /** Pauses between client teardown/rebuild while [TboxRepository.tboxConnected] stays false (then last value repeats). */
-        private val TBOX_RECONNECT_INTERVALS_MS = longArrayOf(20_000L, 40_000L, 60_000L, 60_000L)
+        private val TBOX_RECONNECT_INTERVALS_MS = longArrayOf(45_000L, 60_000L, 120_000L, 120_000L)
         /** [SharingStarted] for settings collected in [startSettingsListener]; avoids eager DataStore until first subscriber. */
         private val settingsFlowWhileSubscribed = SharingStarted.WhileSubscribed(5_000L)
     }
@@ -1071,7 +1071,7 @@ class BackgroundService : Service() {
 
     /**
      * While the service runs: if [TboxRepository.tboxConnected] stays false, periodically
-     * [disconnectTboxClient] + [connectTboxClient] with gaps 20s / 40s / 60s / 60s… from the
+     * [disconnectTboxClient] + [connectTboxClient] with gaps 30s / 45s / 60s / 120s… from the
      * offline episode start (cold start counts from service start). No attempts until
      * [TBOX_RECONNECT_WATCHDOG_GRACE_MS] after service start.
      */
@@ -1084,7 +1084,7 @@ class BackgroundService : Service() {
             var reconnectsDoneInEpisode = 0
             var nextAttemptElapsedDeadline = -1L
             while (isActive) {
-                delay(500)
+                delay(1000)
                 if (!isRunning) break
 
                 val now = SystemClock.elapsedRealtime()

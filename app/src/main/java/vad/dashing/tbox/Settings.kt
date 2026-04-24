@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -227,6 +228,11 @@ class SettingsManager(private val context: Context) {
         private val MAIN_SCREEN_CANVAS_BG_DARK_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_canvas_bg_dark")
 
+        /** Global user palette for [vad.dashing.tbox.ui.WidgetColorSetting] (six ARGB slots). */
+        private val WIDGET_COLOR_PRESET_KEYS = Array(6) { i ->
+            intPreferencesKey("${KEY_PREFIX}widget_color_preset_$i")
+        }
+
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
@@ -291,6 +297,18 @@ class SettingsManager(private val context: Context) {
         /** Default main-screen canvas behind panels (matches app theme background). */
         private val DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
         private val DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+
+        const val WIDGET_COLOR_PRESET_SLOT_COUNT = 6
+
+        /** Default ARGB for each preset slot when nothing is stored yet in DataStore. */
+        val DEFAULT_WIDGET_COLOR_PRESET_SLOTS: List<Int> = listOf(
+            (0xFF131C2D).toInt(),
+            (0xFF292F3B).toInt(),
+            (0xFF1A1C1E).toInt(),
+            (0xFFE2E2E6).toInt(),
+            (0xFFF8F9FA).toInt(),
+            Color.WHITE
+        )
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
@@ -489,6 +507,15 @@ class SettingsManager(private val context: Context) {
     val mainScreenCanvasBackgroundDarkFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
             preferences[MAIN_SCREEN_CANVAS_BG_DARK_KEY] ?: DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK
+        }
+        .distinctUntilChanged()
+
+    /** Six global ARGB colors for quick pick in color editors; missing keys use [DEFAULT_WIDGET_COLOR_PRESET_SLOTS]. */
+    val widgetColorPresetSlotsFlow: Flow<List<Int>> = context.settingsDataStore.data
+        .map { preferences ->
+            List(WIDGET_COLOR_PRESET_SLOT_COUNT) { i ->
+                preferences[WIDGET_COLOR_PRESET_KEYS[i]] ?: DEFAULT_WIDGET_COLOR_PRESET_SLOTS[i]
+            }
         }
         .distinctUntilChanged()
 
@@ -825,6 +852,13 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMainScreenCanvasBackgroundDark(color: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_CANVAS_BG_DARK_KEY] = color
+        }
+    }
+
+    suspend fun saveWidgetColorPresetSlot(slotIndex: Int, color: Int) {
+        require(slotIndex in 0 until WIDGET_COLOR_PRESET_SLOT_COUNT)
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIDGET_COLOR_PRESET_KEYS[slotIndex]] = color
         }
     }
 

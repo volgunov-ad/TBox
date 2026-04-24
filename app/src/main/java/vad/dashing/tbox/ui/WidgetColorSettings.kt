@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsManager
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -62,17 +65,61 @@ fun DashboardWidget.resolveBackgroundColorForTheme(currentTheme: Int): Color {
     return Color(if (currentTheme == 2) backgroundColorDark else backgroundColorLight)
 }
 
+private fun normalizeWidgetColorPresetSlots(presetSlots: List<Int>): List<Int> {
+    val n = SettingsManager.WIDGET_COLOR_PRESET_SLOT_COUNT
+    val defaults = SettingsManager.DEFAULT_WIDGET_COLOR_PRESET_SLOTS
+    return List(n) { i ->
+        presetSlots.getOrNull(i) ?: defaults[i]
+    }
+}
+
+private val presetSlotSwatchSize = 34.dp
+private val presetSlotSpacing = 5.dp
+
 @Composable
-fun WidgetTextColorSetting(
+private fun WidgetColorPresetSlotBox(
+    colorValue: Int,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(6.dp)
+    Box(
+        modifier = Modifier
+            .size(presetSlotSwatchSize)
+            .clip(shape)
+            .border(
+                width = if (selected) 3.dp else 1.dp,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline
+                },
+                shape = shape,
+            )
+            .background(Color(colorValue))
+            .clickable(enabled = enabled, onClick = onClick)
+    )
+}
+
+/**
+ * Full ARGB color editor (hex field, hue/tone/alpha sliders) plus six global user preset slots
+ * (stored in settings). Used for widget text/background, main screen canvas, corner buttons, etc.
+ */
+@Composable
+fun WidgetColorSetting(
     title: String,
     colorValue: Int,
     enabled: Boolean,
     onColorChange: (Int) -> Unit,
-    presetColors: List<Int> = emptyList(),
+    presetSlots: List<Int>,
+    onPresetSlotColorSave: (slotIndex: Int, color: Int) -> Unit,
     /** Optional override for the hex input (e.g. widget dialog uses larger type). */
     valueTextStyle: TextStyle = TextStyle(fontSize = 20.sp),
     valueLabelStyle: TextStyle = TextStyle(fontSize = 20.sp),
 ) {
+    val slots = remember(presetSlots) { normalizeWidgetColorPresetSlots(presetSlots) }
+    var selectedSlot by remember { mutableStateOf<Int?>(null) }
     var localColorValue by remember { mutableIntStateOf(colorValue) }
     var hueSliderPosition by remember {
         mutableFloatStateOf(hueSliderFromColor(colorValue))
@@ -85,7 +132,16 @@ fun WidgetTextColorSetting(
     }
     var textValue by remember { mutableStateOf(localColorValue.asColorInputText()) }
     var isInputError by remember { mutableStateOf(false) }
-    val normalizedPresetColors = remember(presetColors) { presetColors.take(2) }
+
+    fun applyColorUpdate(newColor: Int) {
+        if (newColor == localColorValue) return
+        localColorValue = newColor
+        hueSliderPosition = hueSliderFromColor(newColor, hueSliderPosition)
+        toneSliderPosition = toneSliderFromColor(newColor)
+        alphaChannel = colorAlpha(newColor)
+        onColorChange(newColor)
+        selectedSlot?.let { onPresetSlotColorSave(it, newColor) }
+    }
 
     LaunchedEffect(colorValue) {
         if (localColorValue != colorValue) {
@@ -135,13 +191,7 @@ fun WidgetTextColorSetting(
                     val parsedColor = parseColorInput(newText)
                     isInputError = parsedColor == null
                     if (parsedColor != null) {
-                        if (parsedColor != localColorValue) {
-                            localColorValue = parsedColor
-                            hueSliderPosition = hueSliderFromColor(parsedColor, hueSliderPosition)
-                            toneSliderPosition = toneSliderFromColor(parsedColor)
-                            alphaChannel = colorAlpha(parsedColor)
-                            onColorChange(parsedColor)
-                        }
+                        applyColorUpdate(parsedColor)
                     }
                 },
                 modifier = Modifier.weight(1f),
@@ -157,30 +207,36 @@ fun WidgetTextColorSetting(
                 }
             )
 
-            if (normalizedPresetColors.isNotEmpty()) {
-                Spacer(modifier = Modifier.size(12.dp))
-                normalizedPresetColors.forEachIndexed { index, presetColor ->
-                    ColorSwatchBox(
-                        colorValue = presetColor,
+            Spacer(modifier = Modifier.size(8.dp))
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                slots.forEachIndexed { index, slotColor ->
+                    if (index > 0) {
+                        Spacer(modifier = Modifier.size(presetSlotSpacing))
+                    }
+                    WidgetColorPresetSlotBox(
+                        colorValue = slotColor,
+                        selected = selectedSlot == index,
                         enabled = enabled,
                         onClick = {
-                            isInputError = false
-                            textValue = presetColor.asColorInputText()
-                            if (presetColor != localColorValue) {
-                                localColorValue = presetColor
-                                hueSliderPosition = hueSliderFromColor(
-                                    presetColor,
-                                    hueSliderPosition
-                                )
-                                toneSliderPosition = toneSliderFromColor(presetColor)
-                                alphaChannel = colorAlpha(presetColor)
-                                onColorChange(presetColor)
+                            if (enabled) {
+                                if (selectedSlot == index) {
+                                    selectedSlot = null
+                                } else {
+                                    selectedSlot = index
+                                    isInputError = false
+                                    textValue = slotColor.asColorInputText()
+                                    localColorValue = slotColor
+                                    hueSliderPosition = hueSliderFromColor(slotColor, hueSliderPosition)
+                                    toneSliderPosition = toneSliderFromColor(slotColor)
+                                    alphaChannel = colorAlpha(slotColor)
+                                    onColorChange(slotColor)
+                                }
                             }
-                        }
+                        },
                     )
-                    if (index < normalizedPresetColors.lastIndex) {
-                        Spacer(modifier = Modifier.size(8.dp))
-                    }
                 }
             }
         }
@@ -217,10 +273,7 @@ fun WidgetTextColorSetting(
                         tonePosition = toneSliderPosition,
                         alpha = alphaChannel
                     )
-                    if (updatedColor != localColorValue) {
-                        localColorValue = updatedColor
-                        onColorChange(updatedColor)
-                    }
+                    applyColorUpdate(updatedColor)
                 },
                 valueRange = 0f..1f,
                 enabled = enabled,
@@ -265,10 +318,7 @@ fun WidgetTextColorSetting(
                         tonePosition = toneSliderPosition,
                         alpha = alphaChannel
                     )
-                    if (updatedColor != localColorValue) {
-                        localColorValue = updatedColor
-                        onColorChange(updatedColor)
-                    }
+                    applyColorUpdate(updatedColor)
                 },
                 valueRange = 0f..1f,
                 enabled = enabled,
@@ -319,10 +369,7 @@ fun WidgetTextColorSetting(
                         tonePosition = toneSliderPosition,
                         alpha = alphaChannel
                     )
-                    if (updatedColor != localColorValue) {
-                        localColorValue = updatedColor
-                        onColorChange(updatedColor)
-                    }
+                    applyColorUpdate(updatedColor)
                 },
                 valueRange = 0f..255f,
                 steps = 254,

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -505,6 +506,26 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_WIDGET_TEXT_COLOR_DARK
         )
+
+    val widgetColorPresetSlots = settingsManager.widgetColorPresetSlotsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SettingsManager.DEFAULT_WIDGET_COLOR_PRESET_SLOTS
+        )
+
+    private val widgetColorPresetSlotSaveJobs =
+        arrayOfNulls<Job>(SettingsManager.WIDGET_COLOR_PRESET_SLOT_COUNT)
+
+    /** Debounced write so dragging color sliders does not flood DataStore. */
+    fun saveWidgetColorPresetSlot(slotIndex: Int, color: Int) {
+        require(slotIndex in 0 until SettingsManager.WIDGET_COLOR_PRESET_SLOT_COUNT)
+        widgetColorPresetSlotSaveJobs[slotIndex]?.cancel()
+        widgetColorPresetSlotSaveJobs[slotIndex] = viewModelScope.launch {
+            delay(220)
+            settingsManager.saveWidgetColorPresetSlot(slotIndex, color)
+        }
+    }
 
     val isMainScreenOpenOnBootEnabled = settingsManager.mainScreenOpenOnBootFlow
         .stateIn(

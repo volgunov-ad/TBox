@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
@@ -60,14 +61,6 @@ import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
-import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
-import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
-import vad.dashing.tbox.ui.theme.DARK_THEME_TEXT_COLOR_PRESET_1_INT
-import vad.dashing.tbox.ui.theme.DARK_THEME_TEXT_COLOR_PRESET_2_INT
-import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT
-import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
-import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_1_INT
-import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 
 private val WidgetSelectionDialogActionButtonFontSize = 22.sp
 
@@ -451,6 +444,7 @@ internal fun WidgetSelectionDialogForm(
     floatingDashboardPanelId: String = "",
 ) {
     val context = LocalContext.current
+    val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
     val notSelectedLabel = stringResource(R.string.widget_option_not_selected)
     val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets()
         .filter { it.isNotEmpty() && dataKeyFilter(it) }
@@ -645,54 +639,46 @@ internal fun WidgetSelectionDialogForm(
                         enabled = state.togglesEnabled
                     )
                     if (state.advancedColorThemeSegment == 0) {
-                        WidgetTextColorSetting(
+                        WidgetColorSetting(
                             title = stringResource(R.string.widget_text_color_light),
                             colorValue = state.textColorLight,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.textColorLight = it },
+                            presetSlots = widgetColorPresetSlots,
+                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
                             valueTextStyle = WidgetSelectionDialogFieldInputStyle,
                             valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
-                            presetColors = listOf(
-                                LIGHT_THEME_TEXT_COLOR_PRESET_1_INT,
-                                LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
-                            )
                         )
-                        WidgetTextColorSetting(
+                        WidgetColorSetting(
                             title = stringResource(R.string.widget_background_color_light),
                             colorValue = state.backgroundColorLight,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.backgroundColorLight = it },
+                            presetSlots = widgetColorPresetSlots,
+                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
                             valueTextStyle = WidgetSelectionDialogFieldInputStyle,
                             valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
-                            presetColors = listOf(
-                                LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT,
-                                LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
-                            )
                         )
                     } else {
-                        WidgetTextColorSetting(
+                        WidgetColorSetting(
                             title = stringResource(R.string.widget_text_color_dark),
                             colorValue = state.textColorDark,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.textColorDark = it },
+                            presetSlots = widgetColorPresetSlots,
+                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
                             valueTextStyle = WidgetSelectionDialogFieldInputStyle,
                             valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
-                            presetColors = listOf(
-                                DARK_THEME_TEXT_COLOR_PRESET_1_INT,
-                                DARK_THEME_TEXT_COLOR_PRESET_2_INT
-                            )
                         )
-                        WidgetTextColorSetting(
+                        WidgetColorSetting(
                             title = stringResource(R.string.widget_background_color_dark),
                             colorValue = state.backgroundColorDark,
                             enabled = state.togglesEnabled,
                             onColorChange = { state.backgroundColorDark = it },
+                            presetSlots = widgetColorPresetSlots,
+                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
                             valueTextStyle = WidgetSelectionDialogFieldInputStyle,
                             valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
-                            presetColors = listOf(
-                                DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT,
-                                DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
-                            )
                         )
                     }
                     OutlinedButton(
