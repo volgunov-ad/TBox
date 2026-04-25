@@ -289,14 +289,14 @@ class SettingsManager(private val context: Context) {
         /** Fully transparent — only the icon is visible over the main-screen canvas. */
         private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_LIGHT = 0x00000000
         private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_DARK = 0x00000000
-        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_LIGHT =
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_LIGHT =
             DEFAULT_WIDGET_TEXT_COLOR_LIGHT
-        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK =
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK =
             DEFAULT_WIDGET_TEXT_COLOR_DARK
 
         /** Default main-screen canvas behind panels (matches app theme background). */
-        private val DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
-        private val DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+        private const val DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+        private const val DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
         const val WIDGET_COLOR_PRESET_SLOT_COUNT = 6
 
@@ -549,7 +549,7 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     /**
-     * Single DataStore read for all keys backing [BackgroundService] setting [StateFlow]s.
+     * Single DataStore read for all keys backing [BackgroundService] setting [kotlinx.coroutines.flow.StateFlow]s.
      */
     suspend fun readBackgroundServiceSettingsSnapshot(): BackgroundServiceSettingsSnapshot =
         context.settingsDataStore.data.first().let { backgroundSnapshotFromPreferences(it) }

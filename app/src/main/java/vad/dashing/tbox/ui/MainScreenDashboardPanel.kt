@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -11,7 +12,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -137,7 +140,9 @@ fun MainScreenDashboardPanel(
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
+    var pendingMusicSelection by remember(panel.id) { mutableStateOf<Pair<Int, String>?>(null) }
     val canManipulatePanel = isEditMode && showDialogForIndex == null
+    val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
 
     var layoutInteraction by remember { mutableStateOf(false) }
     var layoutPx by remember(panel.id) {
@@ -178,6 +183,22 @@ fun MainScreenDashboardPanel(
             }
         }
     }
+    LaunchedEffect(pendingMusicSelection, panel.id) {
+        val pending = pendingMusicSelection ?: return@LaunchedEffect
+        delay(220)
+        if (pendingMusicSelection != pending) return@LaunchedEffect
+        persistDashboardPanelMediaSelectedPlayer(
+            currentWidgetConfigs = latestWidgetConfigs,
+            widgetIndex = pending.first,
+            selectedPackage = pending.second,
+            saveConfigs = { configs ->
+                settingsViewModel.saveMainScreenDashboardWidgets(panel.id, configs)
+            }
+        )
+        if (pendingMusicSelection == pending) {
+            pendingMusicSelection = null
+        }
+    }
 
     val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
 
@@ -213,8 +234,7 @@ fun MainScreenDashboardPanel(
     val widgetInteractionPolicy = remember(isEditMode) {
         if (isEditMode) {
             DashboardWidgetInteractionPolicy(
-                mode = DashboardWidgetInteractionMode.EDIT,
-                exclusions = listOf(ResizeHandleWidgetHitExclusion)
+                mode = DashboardWidgetInteractionMode.EDIT
             )
         } else {
             DashboardWidgetInteractionPolicy()
@@ -230,6 +250,8 @@ fun MainScreenDashboardPanel(
 
     val cw = containerWidthPx.coerceAtLeast(1f)
     val ch = containerHeightPx.coerceAtLeast(1f)
+    val resizeHandleWidthDp = with(density) { resizeHandleOffsetForDimension(layoutPx.width).toDp() }
+    val resizeHandleHeightDp = with(density) { resizeHandleOffsetForDimension(layoutPx.height).toDp() }
 
     Box(
         modifier = Modifier
@@ -358,14 +380,7 @@ fun MainScreenDashboardPanel(
                 isResizingMode = false
             },
             onMusicSelectedPlayerChange = { index, selectedPackage ->
-                persistDashboardPanelMediaSelectedPlayer(
-                    currentWidgetConfigs = widgetConfigs,
-                    widgetIndex = index,
-                    selectedPackage = selectedPackage,
-                    saveConfigs = { configs ->
-                        settingsViewModel.saveMainScreenDashboardWidgets(panel.id, configs)
-                    }
-                )
+                pendingMusicSelection = index to selectedPackage
             },
             onHideFloatingPanelsDoubleClick = {
                 val cfg = widgetConfigs.getOrNull(it)
@@ -398,6 +413,20 @@ fun MainScreenDashboardPanel(
             enableMusicInnerInteractions = !isEditMode,
             externalWidgetHost = appWidgetHost
         )
+        if (isEditMode) {
+            // Reserve the panel-level resize corner so long-press there cannot toggle tile edit mode.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(resizeHandleWidthDp, resizeHandleHeightDp)
+                    .pointerInput(panel.id, isEditMode, resizeHandleWidthDp, resizeHandleHeightDp) {
+                        detectTapGestures(
+                            onTap = {},
+                            onLongPress = {}
+                        )
+                    }
+            )
+        }
     }
 
     showDialogForIndex?.let { index ->
