@@ -23,10 +23,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -47,6 +49,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.snapshotFlow
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
@@ -230,6 +233,7 @@ private fun MainScreenWallpaperBackground(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val canvasBgLight by settingsViewModel.mainScreenCanvasBackgroundLight.collectAsStateWithLifecycle()
     val canvasBgDark by settingsViewModel.mainScreenCanvasBackgroundDark.collectAsStateWithLifecycle()
     val canvasColor = Color(if (theme == 2) canvasBgDark else canvasBgLight)
@@ -270,14 +274,16 @@ private fun MainScreenWallpaperBackground(
             }
         }
     }
-    Box(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val decodeTargetWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
+        val decodeTargetHeightPx = with(density) { maxHeight.roundToPx().coerceAtLeast(1) }
         Box(
             Modifier
                 .fillMaxSize()
                 .background(canvasColor)
         )
         if (sortedNames.isEmpty() || effectiveName == null) {
-            return@Box
+            return@BoxWithConstraints
         }
         val targetIdx = sortedNames.indexOf(effectiveName).coerceIn(0, sortedNames.lastIndex)
         val wallpaperCount = sortedNames.size
@@ -288,31 +294,65 @@ private fun MainScreenWallpaperBackground(
                 initialPage = initialPagerPage,
                 pageCount = { pagerPageCount },
             )
+            val wallpaperBitmapCache = remember(folderUriStr, sortedNames.size) {
+                mutableStateMapOf<String, ImageBitmap>()
+            }
+            val wallpaperLoading = remember(folderUriStr, sortedNames.size) {
+                mutableStateMapOf<String, Boolean>()
+            }
             LaunchedEffect(targetIdx, folderUriStr, sortedNames) {
                 val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
                 if (pagerState.currentPage != wantPage) {
                     pagerState.scrollToPage(wantPage)
                 }
             }
+            LaunchedEffect(
+                targetIdx,
+                sortedNames,
+                uriByFileName,
+                decodeTargetWidthPx,
+                decodeTargetHeightPx,
+            ) {
+                prefetchMainScreenWallpaperWindow(
+                    context = context,
+                    logicalIndex = targetIdx,
+                    sortedNames = sortedNames,
+                    uriByFileName = uriByFileName,
+                    targetWidthPx = decodeTargetWidthPx,
+                    targetHeightPx = decodeTargetHeightPx,
+                    bitmapCache = wallpaperBitmapCache,
+                    loadingState = wallpaperLoading,
+                )
+            }
             LaunchedEffect(pagerState, sortedNames, theme, savedSelectedName, wallpaperCount) {
                 snapshotFlow { pagerState.settledPage }
                     .distinctUntilChanged()
-                    .collect { page ->
+                    .collectLatest { page ->
                         if (wallpaperCount > 1) {
                             when (page) {
                                 0 -> {
                                     pagerState.scrollToPage(wallpaperCount)
-                                    return@collect
+                                    return@collectLatest
                                 }
                                 wallpaperCount + 1 -> {
                                     pagerState.scrollToPage(1)
-                                    return@collect
+                                    return@collectLatest
                                 }
                             }
                         }
                         val logical = logicalIndexFromMainScreenWallpaperPagerPage(page, wallpaperCount)
-                            ?: return@collect
+                            ?: return@collectLatest
                         val name = sortedNames[logical]
+                        prefetchMainScreenWallpaperWindow(
+                            context = context,
+                            logicalIndex = logical,
+                            sortedNames = sortedNames,
+                            uriByFileName = uriByFileName,
+                            targetWidthPx = decodeTargetWidthPx,
+                            targetHeightPx = decodeTargetHeightPx,
+                            bitmapCache = wallpaperBitmapCache,
+                            loadingState = wallpaperLoading,
+                        )
                         if (name != savedSelectedName) {
                             if (theme == 2) {
                                 settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(name)
@@ -332,8 +372,7 @@ private fun MainScreenWallpaperBackground(
                     MainScreenWallpaperPagerPage(
                         wallpaperIndex = logicalIndex,
                         sortedNames = sortedNames,
-                        uriByFileName = uriByFileName,
-                        context = context,
+                        bitmapCache = wallpaperBitmapCache,
                         wallpaperCrop = wallpaperCrop,
                     )
                 }
@@ -346,20 +385,11 @@ private fun MainScreenWallpaperBackground(
 private fun MainScreenWallpaperPagerPage(
     wallpaperIndex: Int,
     sortedNames: List<String>,
-    uriByFileName: Map<String, Uri>,
-    context: Context,
+    bitmapCache: SnapshotStateMap<String, ImageBitmap>,
     wallpaperCrop: Boolean,
 ) {
     val nameKey = sortedNames[wallpaperIndex]
-    val uriForSlide = uriByFileName[nameKey]
-    var slideBitmap by remember(wallpaperIndex, uriForSlide) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(uriForSlide) {
-        slideBitmap = if (uriForSlide == null) {
-            null
-        } else {
-            decodeImageBitmapFromUri(context, uriForSlide)
-        }
-    }
+    val slideBitmap = bitmapCache[nameKey]
     Box(Modifier.fillMaxSize()) {
         if (slideBitmap != null) {
             Image(
@@ -370,6 +400,55 @@ private fun MainScreenWallpaperPagerPage(
             )
         }
     }
+}
+
+private suspend fun prefetchMainScreenWallpaperWindow(
+    context: Context,
+    logicalIndex: Int,
+    sortedNames: List<String>,
+    uriByFileName: Map<String, Uri>,
+    targetWidthPx: Int,
+    targetHeightPx: Int,
+    bitmapCache: SnapshotStateMap<String, ImageBitmap>,
+    loadingState: SnapshotStateMap<String, Boolean>,
+) {
+    if (sortedNames.isEmpty()) {
+        bitmapCache.clear()
+        loadingState.clear()
+        return
+    }
+    val keepNames = logicalWindowNames(logicalIndex, sortedNames)
+    bitmapCache.keys.toList().filter { it !in keepNames }.forEach { bitmapCache.remove(it) }
+    loadingState.keys.toList().filter { it !in keepNames }.forEach { loadingState.remove(it) }
+    for (name in keepNames) {
+        if (bitmapCache.containsKey(name) || loadingState[name] == true) continue
+        val uri = uriByFileName[name] ?: continue
+        loadingState[name] = true
+        try {
+            val decoded = decodeImageBitmapFromUri(
+                context = context,
+                uri = uri,
+                targetWidthPx = targetWidthPx,
+                targetHeightPx = targetHeightPx,
+            )
+            if (decoded != null && name in keepNames) {
+                bitmapCache[name] = decoded
+            }
+        } finally {
+            loadingState.remove(name)
+            bitmapCache.keys.toList().filter { it !in keepNames }.forEach { bitmapCache.remove(it) }
+        }
+    }
+}
+
+private fun logicalWindowNames(logicalIndex: Int, sortedNames: List<String>): Set<String> {
+    val count = sortedNames.size
+    if (count <= 1) return sortedNames.toSet()
+    if (count == 2) return setOf(sortedNames[0], sortedNames[1])
+    val current = logicalIndex.mod(count)
+    val prev = (current - 1 + count) % count
+    val next = (current + 1) % count
+    return setOf(sortedNames[prev], sortedNames[current], sortedNames[next])
 }
 
 @Composable

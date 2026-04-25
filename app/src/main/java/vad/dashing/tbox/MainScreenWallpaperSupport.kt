@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
@@ -12,6 +13,7 @@ import kotlinx.coroutines.withContext
 
 /** Skip wallpaper files larger than this (bytes) when listing and when applying a pick. */
 internal const val MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES = 10L * 1024 * 1024
+private const val MAIN_SCREEN_WALLPAPER_MAX_DECODED_PIXELS = 6_000_000L
 
 private val IMAGE_EXTENSIONS = setOf(
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif"
@@ -190,15 +192,58 @@ internal data class WallpaperPickResolution(
 internal suspend fun decodeImageBitmapFromUri(
     context: Context,
     uri: Uri,
+    targetWidthPx: Int = 1920,
+    targetHeightPx: Int = 1080,
 ): ImageBitmap? = withContext(Dispatchers.IO) {
     if (isWallpaperFileOverSizeLimit(context, uri)) {
         return@withContext null
     }
-    runCatching {
+    val srcBounds = runCatching {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { input ->
-            BitmapFactory.decodeStream(input)?.asImageBitmap()
+            BitmapFactory.decodeStream(input, null, opts)
+        }
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) null else opts
+    }.getOrNull() ?: return@withContext null
+    val safeTargetW = targetWidthPx.coerceAtLeast(1)
+    val safeTargetH = targetHeightPx.coerceAtLeast(1)
+    var sampleSize = computeInSampleSize(
+        srcWidth = srcBounds.outWidth,
+        srcHeight = srcBounds.outHeight,
+        reqWidth = safeTargetW,
+        reqHeight = safeTargetH,
+    )
+    while ((srcBounds.outWidth.toLong() / sampleSize) *
+        (srcBounds.outHeight.toLong() / sampleSize) > MAIN_SCREEN_WALLPAPER_MAX_DECODED_PIXELS
+    ) {
+        sampleSize *= 2
+    }
+    runCatching {
+        val decodeOptions = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize.coerceAtLeast(1)
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, decodeOptions)?.asImageBitmap()
         }
     }.getOrNull()
+}
+
+private fun computeInSampleSize(
+    srcWidth: Int,
+    srcHeight: Int,
+    reqWidth: Int,
+    reqHeight: Int,
+): Int {
+    var inSampleSize = 1
+    if (srcHeight > reqHeight || srcWidth > reqWidth) {
+        var halfHeight = srcHeight / 2
+        var halfWidth = srcWidth / 2
+        while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+            inSampleSize *= 2
+        }
+    }
+    return inSampleSize.coerceAtLeast(1)
 }
 
 /**
