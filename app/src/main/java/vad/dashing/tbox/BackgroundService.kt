@@ -33,6 +33,8 @@ import vad.dashing.tbox.utils.CanFramesProcess.toUInt
 import vad.dashing.tbox.utils.CsnOperatorResolver
 import vad.dashing.tbox.utils.MotorHoursBuffer
 import vad.dashing.tbox.utils.ThemeObserver
+import vad.dashing.tbox.mbcan.MbCanCommand
+import vad.dashing.tbox.mbcan.MbCanRepository
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.nio.ByteBuffer
@@ -300,6 +302,12 @@ class BackgroundService : Service() {
             "vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED"
         const val EXTRA_TOGGLE_FLOATING_ENABLED_ALL =
             "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
+        const val ACTION_MBCAN_COMMAND = "vad.dashing.tbox.ACTION_MBCAN_COMMAND"
+        const val EXTRA_MBCAN_COMMAND_TYPE = "vad.dashing.tbox.EXTRA_MBCAN_COMMAND_TYPE"
+        const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
+        const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
+        const val MBCAN_COMMAND_TOGGLE_PROPERTY = "TOGGLE_PROPERTY"
+        const val MBCAN_COMMAND_SET_PROPERTY = "SET_PROPERTY"
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
@@ -401,6 +409,9 @@ class BackgroundService : Service() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+        scope.launch {
+            MbCanRepository.bind(scope)
+        }
 
         infraBootstrapJob = scope.launch {
             try {
@@ -778,6 +789,33 @@ class BackgroundService : Service() {
                         overlayController.clearHiddenFloatingPanelIds()
                         overlayController.syncFloatingDashboards(updated)
                         overlayController.ensureFloatingDashboards(updated)
+                    }
+                }
+            }
+            ACTION_MBCAN_COMMAND -> {
+                scope.launch {
+                    val commandType = intent.getStringExtra(EXTRA_MBCAN_COMMAND_TYPE).orEmpty()
+                    val propertyId = intent.getIntExtra(EXTRA_MBCAN_PROPERTY_ID, Int.MIN_VALUE)
+                    val propertyValue = intent.getIntExtra(EXTRA_MBCAN_VALUE, 0)
+                    TboxRepository.addLog(
+                        "DEBUG",
+                        "MBCAN_TMP",
+                        "service command type=$commandType propertyId=$propertyId value=$propertyValue"
+                    )
+                    when (commandType) {
+                        MBCAN_COMMAND_TOGGLE_PROPERTY -> {
+                            if (propertyId != Int.MIN_VALUE) {
+                                val result = MbCanRepository.execute(MbCanCommand.ToggleProperty(propertyId))
+                                TboxRepository.addLog("DEBUG", "MBCAN_TMP", "toggle result success=${result.success} msg=${result.message}")
+                            }
+                        }
+                        MBCAN_COMMAND_SET_PROPERTY -> {
+                            if (propertyId != Int.MIN_VALUE) {
+                                val result = MbCanRepository.execute(MbCanCommand.SetProperty(propertyId, propertyValue))
+                                TboxRepository.addLog("DEBUG", "MBCAN_TMP", "set result success=${result.success} msg=${result.message}")
+                            }
+                        }
+                        else -> TboxRepository.addLog("WARN", "MBCAN_TMP", "unknown command type=$commandType")
                     }
                 }
             }
@@ -2398,6 +2436,9 @@ class BackgroundService : Service() {
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
 
+        runBlocking {
+            MbCanRepository.unbind()
+        }
         cancelAllJobs()
         job.cancel()
         disconnectTboxClient()

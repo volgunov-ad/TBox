@@ -321,6 +321,7 @@ fun FloatingDashboard(
                     )
             ) {
                 DashboardPanelGridAndFrames(
+                    mbCanInterestSourceId = "floating-$panelId",
                     dashboardRows = dashboardRows,
                     dashboardCols = dashboardCols,
                     dashboardState = dashboardState,
@@ -353,6 +354,8 @@ fun FloatingDashboard(
                                 )
                             } catch (_: Exception) {
                             }
+                        } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
+                            sendToggleSteeringWheelHeat(context)
                         } else if (
                             cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                             cfg.launcherAppPackage.isNotBlank()

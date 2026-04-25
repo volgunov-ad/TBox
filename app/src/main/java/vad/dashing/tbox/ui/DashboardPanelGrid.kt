@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.runBlocking
+import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
@@ -39,6 +43,7 @@ import vad.dashing.tbox.normalizeWidgetShape
  */
 @Composable
 internal fun DashboardPanelGridAndFrames(
+    mbCanInterestSourceId: String,
     dashboardRows: Int,
     dashboardCols: Int,
     dashboardState: DashboardState,
@@ -71,6 +76,20 @@ internal fun DashboardPanelGridAndFrames(
     fuelTankLiters: Int = 57,
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
+    LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+        val activeKeys = widgetConfigs
+            .map { it.dataKey.trim() }
+            .filter { it.isNotBlank() && it != "null" }
+            .toSet()
+        MbCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
+    }
+    DisposableEffect(mbCanInterestSourceId) {
+        onDispose {
+            runBlocking {
+                MbCanRepository.clearSource(mbCanInterestSourceId)
+            }
+        }
+    }
     val hasConfiguredWidgets = normalizedConfigs.any { config ->
         config.dataKey.isNotBlank() && config.dataKey != "null"
     }

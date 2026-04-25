@@ -484,6 +484,7 @@
     <string name="data_title_temp_in_out_widget">Виджет температуры снаружи и внутри</string>
     <string name="data_title_fuel_level_widget">Виджет уровня топлива</string>
     <string name="data_title_air_quality_widget">Виджет качества воздуха</string>
+    <string name="data_title_steering_wheel_heat_widget">Виджет обогрева рулевого колеса</string>
     <string name="data_title_restart_tbox">Кнопка перезагрузки TBox</string>
     <string name="data_title_music_widget">Виджет управления музыкой</string>
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>

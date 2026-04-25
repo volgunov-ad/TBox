@@ -223,6 +223,17 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "steeringWheelHeatWidget" -> {
+            DashboardSteeringWheelHeatWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
         WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY -> {
             ExternalAppWidgetItem(
                 widgetConfig = widgetConfig,

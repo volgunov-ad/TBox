@@ -338,6 +338,7 @@ fun MainScreenDashboardPanel(
             )
     ) {
         DashboardPanelGridAndFrames(
+            mbCanInterestSourceId = "main-screen-${panel.id}",
             dashboardRows = dashboardRows,
             dashboardCols = dashboardCols,
             dashboardState = dashboardState,
@@ -361,6 +362,8 @@ fun MainScreenDashboardPanel(
                 val cfg = widgetConfigs.getOrNull(index)
                 if (isEditMode && !isDraggingMode && !isResizingMode) {
                     showDialogForIndex = index
+                } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
+                    sendToggleSteeringWheelHeat(context)
                 } else if (
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                     cfg.launcherAppPackage.isNotBlank()
