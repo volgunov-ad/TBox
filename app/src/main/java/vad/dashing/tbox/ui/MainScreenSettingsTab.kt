@@ -47,14 +47,8 @@ import vad.dashing.tbox.hasManageAllFilesAccess
 import vad.dashing.tbox.normalizeFilesystemWallpaperFolderPath
 import java.io.File
 import kotlin.math.roundToInt
-import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
-import vad.dashing.tbox.ui.theme.DARK_THEME_TEXT_COLOR_PRESET_1_INT
-import vad.dashing.tbox.ui.theme.DARK_THEME_TEXT_COLOR_PRESET_2_INT
-import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
-import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_1_INT
-import vad.dashing.tbox.ui.theme.LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
 
 @Composable
 fun MainScreenSettingsTab(
@@ -97,6 +91,7 @@ fun MainScreenSettingsTab(
         settingsViewModel.mainScreenCanvasBackgroundLight.collectAsStateWithLifecycle()
     val mainScreenCanvasBgDark by
         settingsViewModel.mainScreenCanvasBackgroundDark.collectAsStateWithLifecycle()
+    val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
     var cornerColorSegment by remember { mutableIntStateOf(0) }
     var mainScreenBgSegment by remember { mutableIntStateOf(0) }
     var lightFolderPathInput by remember { mutableStateOf("") }
@@ -448,26 +443,22 @@ fun MainScreenSettingsTab(
             enabled = true
         )
         if (mainScreenBgSegment == 0) {
-            WidgetTextColorSetting(
+            WidgetColorSetting(
                 title = stringResource(R.string.settings_main_screen_canvas_bg_light),
                 colorValue = mainScreenCanvasBgLight,
                 enabled = true,
                 onColorChange = { settingsViewModel.saveMainScreenCanvasBackgroundLight(it) },
-                presetColors = listOf(
-                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT,
-                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT
-                )
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
             )
         } else {
-            WidgetTextColorSetting(
+            WidgetColorSetting(
                 title = stringResource(R.string.settings_main_screen_canvas_bg_dark),
                 colorValue = mainScreenCanvasBgDark,
                 enabled = true,
                 onColorChange = { settingsViewModel.saveMainScreenCanvasBackgroundDark(it) },
-                presetColors = listOf(
-                    DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT,
-                    DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
-                )
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
             )
         }
         OutlinedButton(
@@ -509,46 +500,38 @@ fun MainScreenSettingsTab(
             enabled = true
         )
         if (cornerColorSegment == 0) {
-            WidgetTextColorSetting(
+            WidgetColorSetting(
                 title = stringResource(R.string.settings_main_screen_corner_buttons_bg_light),
                 colorValue = mainScreenCornerBtnBgLight,
                 enabled = true,
                 onColorChange = { settingsViewModel.saveMainScreenCornerButtonBackgroundLight(it) },
-                presetColors = listOf(
-                    0x00000000,
-                    LIGHT_THEME_BACKGROUND_COLOR_PRESET_1_INT
-                )
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
             )
-            WidgetTextColorSetting(
+            WidgetColorSetting(
                 title = stringResource(R.string.settings_main_screen_corner_buttons_icon_light),
                 colorValue = mainScreenCornerBtnIconLight,
                 enabled = true,
                 onColorChange = { settingsViewModel.saveMainScreenCornerButtonIconLight(it) },
-                presetColors = listOf(
-                    LIGHT_THEME_TEXT_COLOR_PRESET_1_INT,
-                    LIGHT_THEME_TEXT_COLOR_PRESET_2_INT
-                )
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
             )
         } else {
-            WidgetTextColorSetting(
+            WidgetColorSetting(
                 title = stringResource(R.string.settings_main_screen_corner_buttons_bg_dark),
                 colorValue = mainScreenCornerBtnBgDark,
                 enabled = true,
                 onColorChange = { settingsViewModel.saveMainScreenCornerButtonBackgroundDark(it) },
-                presetColors = listOf(
-                    0x00000000,
-                    DARK_THEME_BACKGROUND_COLOR_PRESET_1_INT
-                )
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
             )
-            WidgetTextColorSetting(
+            WidgetColorSetting(
                 title = stringResource(R.string.settings_main_screen_corner_buttons_icon_dark),
                 colorValue = mainScreenCornerBtnIconDark,
                 enabled = true,
                 onColorChange = { settingsViewModel.saveMainScreenCornerButtonIconDark(it) },
-                presetColors = listOf(
-                    DARK_THEME_TEXT_COLOR_PRESET_1_INT,
-                    DARK_THEME_TEXT_COLOR_PRESET_2_INT
-                )
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
             )
         }
         Row(

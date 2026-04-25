@@ -3,9 +3,11 @@ package vad.dashing.tbox.ui
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -13,11 +15,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -126,6 +131,7 @@ fun FloatingDashboard(
     windowParams: WindowManager.LayoutParams
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
 
     DisposableEffect(appWidgetHost) {
@@ -157,7 +163,9 @@ fun FloatingDashboard(
     var isEditMode by remember { mutableStateOf(false) }
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
+    var pendingMusicSelection by remember(panelId) { mutableStateOf<Pair<Int, String>?>(null) }
     val canManipulatePanel = isEditMode
+    val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
@@ -202,11 +210,12 @@ fun FloatingDashboard(
     }
 
     var restartEnabled by remember { mutableStateOf(true) }
+    val resizeHandleWidthDp = with(density) { resizeHandleOffsetForDimension(windowParams.width.toFloat()).toDp() }
+    val resizeHandleHeightDp = with(density) { resizeHandleOffsetForDimension(windowParams.height.toFloat()).toDp() }
     val widgetInteractionPolicy = remember(isEditMode) {
         if (isEditMode) {
             DashboardWidgetInteractionPolicy(
-                mode = DashboardWidgetInteractionMode.EDIT,
-                exclusions = listOf(ResizeHandleWidgetHitExclusion)
+                mode = DashboardWidgetInteractionMode.EDIT
             )
         } else {
             DashboardWidgetInteractionPolicy()
@@ -217,6 +226,22 @@ fun FloatingDashboard(
         if (!restartEnabled) {
             delay(15000) // Блокировка на 15 секунд
             restartEnabled = true
+        }
+    }
+    LaunchedEffect(pendingMusicSelection, panelId) {
+        val pending = pendingMusicSelection ?: return@LaunchedEffect
+        delay(220)
+        if (pendingMusicSelection != pending) return@LaunchedEffect
+        persistDashboardPanelMediaSelectedPlayer(
+            currentWidgetConfigs = latestWidgetConfigs,
+            widgetIndex = pending.first,
+            selectedPackage = pending.second,
+            saveConfigs = { configs ->
+                settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
+            }
+        )
+        if (pendingMusicSelection == pending) {
+            pendingMusicSelection = null
         }
     }
 
@@ -346,14 +371,7 @@ fun FloatingDashboard(
                         isResizingMode = false
                     },
                     onMusicSelectedPlayerChange = { index, selectedPackage ->
-                        persistDashboardPanelMediaSelectedPlayer(
-                            currentWidgetConfigs = widgetConfigs,
-                            widgetIndex = index,
-                            selectedPackage = selectedPackage,
-                            saveConfigs = { configs ->
-                                settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
-                            }
-                        )
+                        pendingMusicSelection = index to selectedPackage
                     },
                     onHideFloatingPanelsDoubleClick = {
                         val cfg = widgetConfigs.getOrNull(it)
@@ -385,6 +403,20 @@ fun FloatingDashboard(
                     externalWidgetHost = appWidgetHost,
                     fuelTankLiters = fuelTankLiters
                 )
+                if (isEditMode) {
+                    // Reserve panel resize corner to avoid accidental tile long-press there.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(resizeHandleWidthDp, resizeHandleHeightDp)
+                            .pointerInput(panelId, isEditMode, resizeHandleWidthDp, resizeHandleHeightDp) {
+                                detectTapGestures(
+                                    onTap = {},
+                                    onLongPress = {}
+                                )
+                            }
+                    )
+                }
             }
         }
     }

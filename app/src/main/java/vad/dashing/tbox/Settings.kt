@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -227,6 +228,11 @@ class SettingsManager(private val context: Context) {
         private val MAIN_SCREEN_CANVAS_BG_DARK_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_canvas_bg_dark")
 
+        /** Global user palette for [vad.dashing.tbox.ui.WidgetColorSetting] (six ARGB slots). */
+        private val WIDGET_COLOR_PRESET_KEYS = Array(6) { i ->
+            intPreferencesKey("${KEY_PREFIX}widget_color_preset_$i")
+        }
+
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
@@ -239,7 +245,7 @@ class SettingsManager(private val context: Context) {
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
         // Значения по умолчанию
-        private const val DEFAULT_LOG_LEVEL = "DEBUG"
+        private const val DEFAULT_LOG_LEVEL = "INFO"
         private const val DEFAULT_FLOATING_DASHBOARD_ROWS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_COLS = 1
         private const val DEFAULT_FLOATING_DASHBOARD_WIDTH = 100
@@ -283,14 +289,26 @@ class SettingsManager(private val context: Context) {
         /** Fully transparent — only the icon is visible over the main-screen canvas. */
         private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_LIGHT = 0x00000000
         private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_BG_DARK = 0x00000000
-        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_LIGHT =
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_LIGHT =
             DEFAULT_WIDGET_TEXT_COLOR_LIGHT
-        private val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK =
+        private const val DEFAULT_MAIN_SCREEN_CORNER_BTN_ICON_DARK =
             DEFAULT_WIDGET_TEXT_COLOR_DARK
 
         /** Default main-screen canvas behind panels (matches app theme background). */
-        private val DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
-        private val DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+        private const val DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+        private const val DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
+
+        const val WIDGET_COLOR_PRESET_SLOT_COUNT = 6
+
+        /** Default ARGB for each preset slot when nothing is stored yet in DataStore. */
+        val DEFAULT_WIDGET_COLOR_PRESET_SLOTS: List<Int> = listOf(
+            (0xFF131C2D).toInt(),
+            (0xFF292F3B).toInt(),
+            (0xFF1A1C1E).toInt(),
+            (0xFFE2E2E6).toInt(),
+            (0xFFF8F9FA).toInt(),
+            Color.WHITE
+        )
 
         // Кэш ключей для производительности
         private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
@@ -492,6 +510,15 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    /** Six global ARGB colors for quick pick in color editors; missing keys use [DEFAULT_WIDGET_COLOR_PRESET_SLOTS]. */
+    val widgetColorPresetSlotsFlow: Flow<List<Int>> = context.settingsDataStore.data
+        .map { preferences ->
+            List(WIDGET_COLOR_PRESET_SLOT_COUNT) { i ->
+                preferences[WIDGET_COLOR_PRESET_KEYS[i]] ?: DEFAULT_WIDGET_COLOR_PRESET_SLOTS[i]
+            }
+        }
+        .distinctUntilChanged()
+
     // String flows
     val logLevelFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[LOG_LEVEL_KEY] ?: DEFAULT_LOG_LEVEL }
@@ -522,7 +549,7 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     /**
-     * Single DataStore read for all keys backing [BackgroundService] setting [StateFlow]s.
+     * Single DataStore read for all keys backing [BackgroundService] setting [kotlinx.coroutines.flow.StateFlow]s.
      */
     suspend fun readBackgroundServiceSettingsSnapshot(): BackgroundServiceSettingsSnapshot =
         context.settingsDataStore.data.first().let { backgroundSnapshotFromPreferences(it) }
@@ -825,6 +852,13 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMainScreenCanvasBackgroundDark(color: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_CANVAS_BG_DARK_KEY] = color
+        }
+    }
+
+    suspend fun saveWidgetColorPresetSlot(slotIndex: Int, color: Int) {
+        require(slotIndex in 0 until WIDGET_COLOR_PRESET_SLOT_COUNT)
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIDGET_COLOR_PRESET_KEYS[slotIndex]] = color
         }
     }
 

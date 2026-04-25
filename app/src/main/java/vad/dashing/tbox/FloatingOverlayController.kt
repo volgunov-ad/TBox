@@ -77,10 +77,14 @@ internal class FloatingOverlayController(
      */
     suspend fun syncFloatingDashboards(configs: List<FloatingDashboardConfig>) {
         withContext(Dispatchers.Main) {
+            FloatingOverlayLoadTimings.reset()
+            FloatingOverlayLoadTimings.mark("float_sync_enter")
             if (overlaysSuspended) {
                 if (overlayViews.isNotEmpty()) {
                     closeAllOverlays()
                 }
+                FloatingOverlayLoadTimings.mark("float_sync_suspended")
+                FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
                 return@withContext
             }
             val configMap = configs.associateBy { it.id }
@@ -125,12 +129,20 @@ internal class FloatingOverlayController(
                 overlayOffIds.remove(id)
                 hiddenFloatingPanelIds.remove(id)
             }
+            FloatingOverlayLoadTimings.mark("float_sync_done")
+            FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
         }
     }
 
     suspend fun ensureFloatingDashboards(configs: List<FloatingDashboardConfig>) {
         withContext(Dispatchers.Main) {
-            if (overlaysSuspended) return@withContext
+            FloatingOverlayLoadTimings.reset()
+            FloatingOverlayLoadTimings.mark("float_ensure_enter")
+            if (overlaysSuspended) {
+                FloatingOverlayLoadTimings.mark("float_ensure_suspended")
+                FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.ensure")
+                return@withContext
+            }
             val enabledConfigs = configs.filter { it.enabled }
             enabledConfigs.forEach { config ->
                 if (hiddenFloatingPanelIds.contains(config.id)) return@forEach
@@ -149,6 +161,8 @@ internal class FloatingOverlayController(
                 overlayRetryCounts[config.id] = retryCount + 1
                 openOverlay(config)
             }
+            FloatingOverlayLoadTimings.mark("float_ensure_done")
+            FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.ensure")
         }
     }
 
@@ -241,6 +255,7 @@ internal class FloatingOverlayController(
 
             overlayRetryCounts[config.id] = 0
             TboxRepository.addLog("INFO", TAG, "Shown: ${config.id}")
+            FloatingOverlayLoadTimings.mark("float_shown_${config.id.replace(Regex("[^a-zA-Z0-9_-]"), "_")}")
         } catch (e: Exception) {
             Log.e(TAG, "Error adding view", e)
             TboxRepository.addLog("ERROR", TAG, "Failed to show: ${e.message}")

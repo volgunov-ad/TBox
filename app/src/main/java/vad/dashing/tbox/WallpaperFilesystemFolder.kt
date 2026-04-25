@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import java.io.File
+import java.net.URI
 
 /** True when app may read arbitrary paths under primary external storage (API 30+). */
 internal fun hasManageAllFilesAccess(): Boolean =
@@ -15,7 +16,10 @@ internal fun displayWallpaperFolderSummary(uriString: String): String {
     return runCatching {
         val u = Uri.parse(uriString)
         when {
-            u.scheme.equals("file", ignoreCase = true) -> u.path ?: uriString
+            u.scheme.equals("file", ignoreCase = true) -> {
+                // [Uri.getPath] is often null for Robolectric / percent-encoded `file://` URIs; [File(URI)] decodes reliably.
+                File(URI.create(uriString)).canonicalFile.absolutePath
+            }
             else -> uriString
         }
     }.getOrDefault(uriString)

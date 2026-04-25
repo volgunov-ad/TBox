@@ -244,7 +244,10 @@ private fun MainScreenWallpaperBackground(
     val folderUri = remember(folderUriStr) {
         if (folderUriStr.isBlank()) null else Uri.parse(folderUriStr)
     }
-    var sortedPairs by remember { mutableStateOf<List<Pair<String, Uri>>>(emptyList()) }
+    // Keyed by folder so on theme switch we never keep the previous folder's listing for one frame
+    // (that paired the wrong sortedNames with the new theme's savedSelectedName and could persist
+    // a bogus filename into DataStore via LaunchedEffect below).
+    var sortedPairs by remember(folderUriStr) { mutableStateOf<List<Pair<String, Uri>>>(emptyList()) }
     LaunchedEffect(folderUriStr, epoch) {
         sortedPairs = if (folderUri == null) {
             emptyList()
