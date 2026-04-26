@@ -87,7 +87,7 @@ object MbCanCatalog {
 }
 
 object MbCanKnownVehiclePropertyId {
-    // MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH
+    // MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH — see MbCanRepository for value encoding (0/1).
     const val STEERING_WHEEL_HEAT_SWITCH = 188
 }
 

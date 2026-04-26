@@ -76,17 +76,22 @@ internal fun DashboardPanelGridAndFrames(
     fuelTankLiters: Int = 57,
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
-    LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
-        val activeKeys = widgetConfigs
-            .map { it.dataKey.trim() }
-            .filter { it.isNotBlank() && it != "null" }
-            .toSet()
-        MbCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
+    val panelNeedsMbCan = remember(widgetConfigs) {
+        MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
-    DisposableEffect(mbCanInterestSourceId) {
-        onDispose {
-            runBlocking {
-                MbCanRepository.clearSource(mbCanInterestSourceId)
+    if (panelNeedsMbCan) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            val activeKeys = widgetConfigs
+                .map { it.dataKey.trim() }
+                .filter { it.isNotBlank() && it != "null" }
+                .toSet()
+            MbCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                runBlocking {
+                    MbCanRepository.clearSource(mbCanInterestSourceId)
+                }
             }
         }
     }

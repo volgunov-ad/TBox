@@ -1,6 +1,8 @@
 package vad.dashing.tbox.mbcan
 
+import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 import java.util.concurrent.atomic.AtomicReference
 
 sealed class MbCanAvailability {
@@ -23,6 +25,9 @@ object MbCanEngineFacade {
     private var canSetVehicleParamMethod: Method? = null
     private var subscribeMethod: Method? = null
     private var unSubscribeMethod: Method? = null
+    private var registerCarSettingsListenerMethod: Method? = null
+    private var unregisterCarSettingsListenerMethod: Method? = null
+    private var settingsTelemetryProxy: Any? = null
     private var initialized = false
 
     val availability: MbCanAvailability
@@ -60,6 +65,9 @@ object MbCanEngineFacade {
                 engineClass.getMethod("canSetVehicleParam", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
             subscribeMethod = engineClass.getMethod("subscribeCanDataWithList", ArrayList::class.java)
             unSubscribeMethod = engineClass.getMethod("unSubscribeCanDataWithList", ArrayList::class.java)
+            registerCarSettingsListenerMethod =
+                engineClass.getMethod("registIMBCarSettingsListener", Class.forName("com.mengbo.mbCan.interfaces.IMBCanSettingsCallback"))
+            unregisterCarSettingsListenerMethod = engineClass.getMethod("unregistIMBCarSettingsListener")
             initialized = true
             availabilityRef.set(MbCanAvailability.Available)
         } catch (t: Throwable) {
@@ -118,6 +126,96 @@ object MbCanEngineFacade {
             unSubscribeMethod?.invoke(engineInstance, list) as? Int
         } catch (_: Throwable) {
             null
+        }
+    }
+
+    /**
+     * Single [com.mengbo.mbCan.interfaces.IMBCanSettingsCallback] on [MBCanEngine] — forwards speed/engine
+     * pushes into [MbCanRepository]. Safe to call once after [ensureInitialized]; no-op if already registered.
+     */
+    @Synchronized
+    fun registerSettingsTelemetryBridge() {
+        if (settingsTelemetryProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCanSettingsCallback")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            when (method.name) {
+                "onCanVehicleSpeed" -> {
+                    MbCanRepository.onPushVehicleSpeed(args?.getOrNull(0))
+                }
+                "onVehicleEngineStatusChange" -> {
+                    MbCanRepository.onPushVehicleEngine(args?.getOrNull(0))
+                }
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        settingsTelemetryProxy = proxy
+        try {
+            registerCarSettingsListenerMethod?.invoke(inst, proxy)
+        } catch (_: Throwable) {
+            settingsTelemetryProxy = null
+        }
+    }
+
+    @Synchronized
+    fun unregisterSettingsTelemetryBridge() {
+        val inst = engineInstance
+        if (inst != null && settingsTelemetryProxy != null) {
+            try {
+                unregisterCarSettingsListenerMethod?.invoke(inst)
+            } catch (_: Throwable) {
+            }
+        }
+        settingsTelemetryProxy = null
+    }
+
+    /**
+     * Debug snapshot from [com.mengbo.mbCan.MBCanEngine.getMbCanData] (native cache only; no CycleData).
+     * 1 = [com.mengbo.mbCan.defines.MBCanDataType.eMBCAN_VEHICLE_SPEED],
+     * 22 / 29 = [com.mengbo.mbCan.defines.MBCanDataType.eMBCAN_VEHICLE_ENGINE] /
+     * [com.mengbo.mbCan.defines.MBCanDataType.eMBCAN_VEHICLE_ENGINE_GEAR] ([MBCanVehicleEngine]; `fs` is vendor field name, may correlate to RPM on HU).
+     */
+    fun peekMbCanMotionDebugLine(): String {
+        if (availabilityRef.get() !is MbCanAvailability.Available) return "mbCAN_motion=na"
+        val inst = engineInstance ?: return "mbCAN_motion=no_inst"
+        return try {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val spdCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleSpeed")
+            val spdObj = getMbCanData.invoke(inst, 1, spdCls)
+            val speedStr =
+                if (spdObj != null) {
+                    val s = spdCls.getMethod("getSpeed").invoke(spdObj) as Float
+                    val ok = spdCls.getMethod("getSpeedValidSts").invoke(spdObj) as Byte
+                    "mbCAN_dt1_spd=$s ok=$ok"
+                } else {
+                    "mbCAN_dt1_spd=null"
+                }
+            val engCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleEngine")
+            fun fmtEng(prefix: String, dataType: Int): String {
+                val engObj = getMbCanData.invoke(inst, dataType, engCls)
+                return if (engObj != null) {
+                    val fs = engCls.getMethod("getfSpeed").invoke(engObj) as Float
+                    val tmp = engCls.getMethod("getfTemperture").invoke(engObj) as Float
+                    val st = engCls.getMethod("getStatus").invoke(engObj) as Byte
+                    val dsp = engCls.getMethod("getnDisplayVehiceSpeed").invoke(engObj) as Short
+                    "${prefix}fs=$fs tmp=$tmp st=$st dsp=$dsp"
+                } else {
+                    "${prefix}null"
+                }
+            }
+            val eng22 = fmtEng("mbCAN_dt22_eng ", 22)
+            val eng29 = fmtEng("mbCAN_dt29_eg ", 29)
+            listOf(speedStr, eng22, eng29).joinToString(" | ")
+        } catch (t: Throwable) {
+            "mbCAN_motion_err=${t.javaClass.simpleName}:${t.message}"
         }
     }
 }
