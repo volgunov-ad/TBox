@@ -32,6 +32,7 @@
     <string name="unit_percent" formatted="false">%</string>
     <string name="unit_liter">l</string>
     <string name="unit_meter">m</string>
+    <string name="unit_ruble">RUB</string>
     <string name="unit_bar_celsius">bar / °C</string>
     <string name="title_with_unit">%1$s, %2$s</string>
 
@@ -435,6 +436,7 @@
     <string name="data_title_active_trip_widget_mini">Current trip (mini)</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
+    <string name="settings_fuel_price_fuel_type_title">Fuel for price lookup</string>
     <string name="settings_split_trip_time_title">Trip split time, min</string>
 
     <string name="trips_delete">Delete trip</string>
@@ -468,6 +470,7 @@
     <string name="trips_fuel_used">Fuel used</string>
     <string name="trips_fuel_consumption_l_100km">Fuel consumption</string>
     <string name="trips_fuel_refueled">Fuel refueled</string>
+    <string name="trips_fuel_refueled_cost">Refueled fuel cost</string>
     <string name="trips_refuel_count">Refuelings</string>
     <string name="trips_engine_start_count">Engine starts</string>
     <string name="trips_export">Export</string>

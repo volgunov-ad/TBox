@@ -39,6 +39,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Date
 import java.util.concurrent.Executors
+import java.util.Locale
 import kotlin.let
 
 class BackgroundService : Service() {
@@ -64,7 +65,9 @@ class BackgroundService : Service() {
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     private lateinit var canDataSaveCount: StateFlow<Int>
     private lateinit var fuelTankLitersSetting: StateFlow<Int>
+    private lateinit var fuelPriceFuelIdSetting: StateFlow<Int>
     private lateinit var splitTripTimeMinutesSetting: StateFlow<Int>
+    private val fuelPriceClient by lazy { FuelPriceClient() }
 
     private val serverPort = 50047
     private var themeObserver: ThemeObserver? = null
@@ -310,6 +313,8 @@ class BackgroundService : Service() {
         private val TBOX_RECONNECT_INTERVALS_MS = longArrayOf(60_000L, 120_000L, 600_000L, 600_000L)
         /** [SharingStarted] for settings collected in [startSettingsListener]; avoids eager DataStore until first subscriber. */
         private val settingsFlowWhileSubscribed = SharingStarted.WhileSubscribed(5_000L)
+        private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
+        private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -350,6 +355,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.canDataSaveCount)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
                 .stateIn(scope, eager, settingsSnap.fuelTankLiters)
+            fuelPriceFuelIdSetting = settingsManager.fuelPriceFuelIdFlow
+                .stateIn(scope, eager, settingsSnap.fuelPriceFuelId)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, settingsSnap.splitTripTimeMinutes)
         } else {
@@ -387,6 +394,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, 5)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
                 .stateIn(scope, eager, 57)
+            fuelPriceFuelIdSetting = settingsManager.fuelPriceFuelIdFlow
+                .stateIn(scope, eager, FuelTypes.DEFAULT_FUEL_ID)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, 5)
         }
@@ -1209,6 +1218,8 @@ class BackgroundService : Service() {
     /** Updates consumption, refuel count, persisted fuel baseline; uses [tripLastFuelPercent] as prior sample. */
     private fun applyActiveTripFuelStep(tankL: Float) {
         val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
+        var refuelTripId: String? = null
+        var refueledLiters = 0f
         TripRepository.updateActiveTrip { cur ->
             val step = TripFuelAccounting.applyFuelPercentStep(
                 currentConsumedLiters = cur.fuelConsumedLiters,
@@ -1217,6 +1228,10 @@ class BackgroundService : Service() {
                 tankLiters = tankL
             )
             tripLastFuelPercent = step.baselinePercent
+            if (step.refuelDetected && step.refueledLitersThisStep > 0f) {
+                refuelTripId = cur.id
+                refueledLiters = step.refueledLitersThisStep
+            }
             cur.copy(
                 fuelConsumedLiters = step.consumedLiters,
                 refuelCount = cur.refuelCount + if (step.refuelDetected) 1 else 0,
@@ -1224,6 +1239,54 @@ class BackgroundService : Service() {
                 fuelBaselinePercent = step.baselinePercent,
             )
         }
+        val tripId = refuelTripId ?: return
+        scheduleRefuelCostUpdate(tripId, refueledLiters, fuelPriceFuelIdSetting.value)
+    }
+
+    private fun scheduleRefuelCostUpdate(tripId: String, refueledLiters: Float, fuelId: Int) {
+        scope.launch {
+            val coordinates = awaitFuelCoordinates() ?: run {
+                TboxRepository.addLog("WARN", "Fuel price", "No coordinates for refuel price within 5 minutes")
+                return@launch
+            }
+            val price = try {
+                withContext(Dispatchers.IO) {
+                    fuelPriceClient.fetchPrice(coordinates, fuelId)
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("WARN", "Fuel price", "Price request failed: ${e.message}")
+                null
+            } ?: return@launch
+
+            val cost = FuelCostAccounting.refuelCostRub(refueledLiters, price.pricePerLiterRub)
+            val trip = TripRepository.trips.value.firstOrNull { it.id == tripId } ?: return@launch
+            TripRepository.replaceTrip(
+                trip.copy(fuelRefueledCostRub = trip.fuelRefueledCostRub + cost)
+            )
+            TboxRepository.addLog(
+                "INFO",
+                "Fuel price",
+                "Refuel cost +${String.format(Locale.US, "%.2f", cost)} RUB (${FuelTypes.optionFor(fuelId).label})"
+            )
+            maybePersistTrips(force = true)
+        }
+    }
+
+    private suspend fun awaitFuelCoordinates(): FuelCoordinates? =
+        withTimeoutOrNull(5 * 60 * 1000L) {
+            while (true) {
+                currentFuelCoordinatesOrNull()?.let { return@withTimeoutOrNull it }
+                delay(1_000L)
+            }
+            @Suppress("UNREACHABLE_CODE")
+            null
+        }
+
+    private fun currentFuelCoordinatesOrNull(): FuelCoordinates? {
+        val loc = TboxRepository.locValues.value
+        if (!loc.locateStatus) return null
+        if (loc.latitude == 0.0 && loc.longitude == 0.0) return null
+        return FuelCoordinates(latitude = loc.latitude, longitude = loc.longitude)
     }
 
     /**

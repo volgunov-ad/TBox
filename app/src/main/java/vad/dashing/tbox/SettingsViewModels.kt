@@ -715,6 +715,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 57
         )
 
+    val fuelPriceFuelId = settingsManager.fuelPriceFuelIdFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = FuelTypes.DEFAULT_FUEL_ID
+        )
+
     val splitTripTimeMinutes = settingsManager.splitTripTimeMinutesFlow
         .stateIn(
             scope = viewModelScope,
@@ -1538,6 +1545,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveFuelTankLiters(liters: Int) {
         viewModelScope.launch {
             settingsManager.saveFuelTankLiters(liters)
+        }
+    }
+
+    fun saveFuelPriceFuelId(fuelTypeId: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFuelPriceFuelId(fuelTypeId)
         }
     }
 

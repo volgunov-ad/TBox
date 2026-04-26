@@ -292,6 +292,7 @@ object TripRepository {
         if (a.refuelCount != b.refuelCount) return true
         if (a.engineStartCount != b.engineStartCount) return true
         if (abs(a.fuelRefueledLiters - b.fuelRefueledLiters) > PERSIST_EPS) return true
+        if (abs(a.fuelRefueledCostRub - b.fuelRefueledCostRub) > PERSIST_EPS) return true
         when {
             a.fuelBaselinePercent == null && b.fuelBaselinePercent == null -> Unit
             a.fuelBaselinePercent == null || b.fuelBaselinePercent == null -> return true

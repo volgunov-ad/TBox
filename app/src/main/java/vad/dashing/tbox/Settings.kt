@@ -146,6 +146,7 @@ data class BackgroundServiceSettingsSnapshot(
     val floatingDashboards: List<FloatingDashboardConfig>,
     val canDataSaveCount: Int,
     val fuelTankLiters: Int,
+    val fuelPriceFuelId: Int,
     val splitTripTimeMinutes: Int,
 )
 
@@ -240,6 +241,7 @@ class SettingsManager(private val context: Context) {
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
         private val CAN_DATA_SAVE_COUNT_KEY = intPreferencesKey("${KEY_PREFIX}can_data_save_count")
         private val FUEL_TANK_LITERS_KEY = intPreferencesKey("${KEY_PREFIX}fuel_tank_liters")
+        private val FUEL_PRICE_FUEL_ID_KEY = intPreferencesKey("${KEY_PREFIX}fuel_price_fuel_id")
         private val SPLIT_TRIP_TIME_MINUTES_KEY = intPreferencesKey("${KEY_PREFIX}split_trip_time_minutes")
 
         // String настройки
@@ -544,6 +546,10 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS }
         .distinctUntilChanged()
 
+    val fuelPriceFuelIdFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FUEL_PRICE_FUEL_ID_KEY] ?: FuelTypes.DEFAULT_FUEL_ID }
+        .distinctUntilChanged()
+
     val splitTripTimeMinutesFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[SPLIT_TRIP_TIME_MINUTES_KEY] ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES }
         .distinctUntilChanged()
@@ -575,6 +581,7 @@ class SettingsManager(private val context: Context) {
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
             canDataSaveCount = preferences[CAN_DATA_SAVE_COUNT_KEY] ?: DEFAULT_CAN_DATA_SAVE_COUNT,
             fuelTankLiters = preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS,
+            fuelPriceFuelId = preferences[FUEL_PRICE_FUEL_ID_KEY] ?: FuelTypes.DEFAULT_FUEL_ID,
             splitTripTimeMinutes = preferences[SPLIT_TRIP_TIME_MINUTES_KEY]
                 ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES,
         )
@@ -1090,6 +1097,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveFuelTankLiters(liters: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[FUEL_TANK_LITERS_KEY] = liters.coerceIn(1, 500)
+        }
+    }
+
+    suspend fun saveFuelPriceFuelId(fuelId: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_PRICE_FUEL_ID_KEY] = FuelTypes.optionFor(fuelId).id
         }
     }
 
