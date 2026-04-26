@@ -38,6 +38,7 @@ enum class SetLauncherAppCustomIconResult {
 }
 
 data class FloatingDashboardWidgetConfig(
+    val mediaAutoPlayOnlyWhenEngineRunning: Boolean = false, // anymani: новое поле для контроля возврата лаунчера при автозапуске
     val dataKey: String,
     val showTitle: Boolean = false,
     val showUnit: Boolean = true,

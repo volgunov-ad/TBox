@@ -300,7 +300,8 @@ object SharedMediaControlService {
     fun play(
         context: Context,
         selectedPackages: Set<String>,
-        preferredPackage: String = ""
+        preferredPackage: String = "",
+        keepPlayerForeground: Boolean = false // anymani: опция для отключения возврата лаунчера
     ) {
         var controllerHandled = false
         synchronized(this) {
@@ -324,7 +325,11 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
-        launchPlayerApp(context.applicationContext, targetPackage, scheduleColdStartPlayRetry = true)
+        launchPlayerApp(
+            context.applicationContext,
+            targetPackage, scheduleColdStartPlayRetry = true,
+            keepPlayerForeground = keepPlayerForeground // anymani: передаём флаг в launchPlayerApp
+        )
     }
 
     fun skipToNext(selectedPackages: Set<String>, preferredPackage: String = "") {
@@ -681,11 +686,17 @@ private fun sendMediaPlayKeyEvent(context: Context, packageName: String) {
 private fun launchPlayerApp(
     context: Context,
     packageName: String,
-    scheduleColdStartPlayRetry: Boolean = true
+    scheduleColdStartPlayRetry: Boolean = true,
+    keepPlayerForeground: Boolean = false // anymani: флаг для контроля возврата лаунчера
 ) {
     val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
     MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-    DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(context)
+
+    // anymani: условно планируем возврат лаунчера только если не нужно держать плеер
+    if (!keepPlayerForeground) {
+        DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(context)
+    }
+
     runCatching {
         context.startActivity(launchIntent)
     }

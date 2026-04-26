@@ -115,6 +115,12 @@ internal class WidgetSelectionDialogState(
     var mediaAutoPlayOnlyWhenEngineRunning by mutableStateOf(
         initialConfig.mediaAutoPlayOnlyWhenEngineRunning
     )
+
+    // anymani: новое свойство для опции "Оставить плеер на переднем плане"
+    var mediaKeepPlayerForeground by mutableStateOf(
+        initialConfig.mediaKeepPlayerForeground
+    )
+
     var showAdvancedSettings by mutableStateOf(false)
     var showWholePanelSettings by mutableStateOf(false)
     /** 0 = light theme colors, 1 = dark theme colors (advanced settings only). */
@@ -529,6 +535,15 @@ internal fun WidgetSelectionDialogForm(
                             "",
                             state.togglesEnabled && state.mediaAutoPlayOnInit
                         )
+                        // anymani: новая опция для контроля возврата лаунчера
+                        SettingSwitch(
+                            state.mediaKeepPlayerForeground,
+                            state.mediaKeepPlayerForeground,
+                            { state.mediaKeepPlayerForeground = it },
+                            stringResource(R.string.widget_music_keep_player_foreground),
+                            stringResource(R.string.widget_music_keep_player_foreground_desc),
+                            state.togglesEnabled && state.mediaAutoPlayOnInit
+                        )
                     }
                     AppLauncherWidgetSettingsSection(
                         state = state,
@@ -695,6 +710,7 @@ internal fun WidgetSelectionDialogForm(
                     }
                 }
                 }
+
                 else -> {
                     var dataKeyFilterText by rememberSaveable { mutableStateOf("") }
                     val initialListSelectedKey = rememberSaveable {
@@ -995,6 +1011,14 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 false
             },
+
+            // anymani: сохраняем опцию "Оставить плеер на переднем плане"
+            mediaKeepPlayerForeground = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+                state.mediaKeepPlayerForeground && state.mediaAutoPlayOnInit
+            } else {
+                false
+            },
+
             launcherAppPackage = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                 state.launcherAppPackage.trim()
             } else {
