@@ -14,6 +14,11 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
+dependencies {
+    implementation("com.google.code.gson:gson:2.10.1") // Добавь это
+    testImplementation(kotlin("test"))
+}
+
 tasks.test {
     useJUnitPlatform()
 }

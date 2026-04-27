@@ -1,105 +1,112 @@
 class FuelSmartEstimator(
-    val tankCapacity: Double = 50.0,
-    private val sensorMin: Double = 2.0,
-    private val sensorMax: Double = 48.0,
-    private val zoneCount: Int = 5
+    val tankCapacity: Double = 50.0,      // Максимальный паспортный объем бака
+    private val sensorMin: Double = 2.0,  // "Мертвая зона" снизу: уровень, ниже которого поплавок физически не опускается
+    private val sensorMax: Double = 48.0, // "Мертвая зона" сверху: уровень, выше которого поплавок упирается в потолок
+    zoneCount: Int = 5                   // Количество участков, на которые мы дробим бак для калибровки нелинейности
 ) {
-    private val zoneSize = tankCapacity / zoneCount
-    private val maturityThreshold = 80.0
-    private val thermalExpansionCoeff = 0.0011
+    // ОБЪЕКТЫ-ПОМОЩНИКИ (ООП Делегаты)
 
-    private val realLitersPerZone = DoubleArray(zoneCount) { 0.0 }
-    private val sensorLitersPerZone = DoubleArray(zoneCount) { 0.0 }
+    // Отвечает за физические свойства: термокомпенсацию и приведение литров к +15 градусам
+    private val physics = FuelPhysics()
 
-    // Для детектора слива
+    // Отвечает за хранение "опыта": массивы данных по каждой зоне и расчет их коэффициентов
+    private val store = CalibrationStore(zoneCount, tankCapacity, maturityThreshold = 80.0)
+
+    private val storage = FuelStorage()
+
+    // ПЕРЕМЕННЫЕ СОСТОЯНИЯ
+
+    // Хранит уровень топлива с предыдущего замера для работы детектора слива
     private var lastStableLevel: Double = -1.0
-    private val maxIdleConsumptionPerMinute = 0.04 // ~2.4 л/час
+
+    // Константа: сколько литров в минуту двигатель точно не может съесть (для отсечения аномалий)
+    private val maxIdleConsumptionPerMinute = 0.04
 
     /**
-     * ОБУЧЕНИЕ: Накопление данных из чеков
+     * ОБУЧЕНИЕ: Метод распределяет литры из чека по зонам бака,
+     * учитывая температуру окружающей среды.
      */
+
+    init {
+        // Пытаемся загрузить данные при старте
+        storage.load()?.let { savedData ->
+            store.restoreFrom(savedData)
+            println("--- Данные калибровки успешно загружены из JSON ---")
+        }
+    }
+
     fun train(entry: FuelEntry): String {
-        val standardizedLiters = entry.litersByCheck / (1 + thermalExpansionCoeff * (entry.ambientTemp - 15))
+        // Приводим литры из чека к стандарту (+15 градусов) через класс физики
+        val stdLiters = physics.toStandard(entry.litersByCheck, entry.ambientTemp)
+
+        // Считаем, сколько литров "увидел" датчик
         val sensorDelta = entry.sensorAfter - entry.sensorBefore
 
         if (sensorDelta <= 0) return "Ошибка: нет изменения уровня"
 
-        // Собираем информацию о затронутых зонах
         val affectedZones = mutableListOf<Int>()
-        val sensorTotal = entry.sensorAfter - entry.sensorBefore
 
-        for (i in 0 until zoneCount) {
-            val zoneStart = i * zoneSize
-            val zoneEnd = (i + 1) * zoneSize
+        // Распределяем литры по зонам
+        for (i in 0 until store.zoneCount) {
+            val zoneStart = i * store.zoneSize
+            val zoneEnd = (i + 1) * store.zoneSize
+
             val overlapStart = maxOf(entry.sensorBefore, zoneStart)
             val overlapEnd = minOf(entry.sensorAfter, zoneEnd)
 
             if (overlapStart < overlapEnd) {
-                affectedZones.add(i + 1) // Добавляем номер зоны (1-5)
-                val overlapShare = (overlapEnd - overlapStart) / sensorTotal
-                realLitersPerZone[i] += standardizedLiters * overlapShare
-                sensorLitersPerZone[i] += (overlapEnd - overlapStart)
+                affectedZones.add(i + 1)
+                val overlapShare = (overlapEnd - overlapStart) / sensorDelta
+
+                // Сохраняем данные в наше хранилище store
+                store.addData(i, stdLiters * overlapShare, overlapEnd - overlapStart)
             }
         }
 
+        storage.save(store.realLitersPerZone, store.sensorLitersPerZone)
+
+        // ВОЗВРАЩАЕМ ТОТ САМЫЙ ПОДРОБНЫЙ ОТЧЕТ
         return "Заправка: с ${entry.sensorBefore}л до ${entry.sensorAfter}л " +
-                "(Итого: ${"%.1f".format(standardizedLiters)}л станд.). " +
+                "(Итого: ${"%.1f".format(stdLiters)}л станд.). " +
                 "Затронуты зоны: ${affectedZones.joinToString(", ")}"
     }
 
-    private fun updateZones(before: Double, after: Double, realTotal: Double) {
-        val sensorTotal = after - before
-        for (i in 0 until zoneCount) {
-            val zoneStart = i * zoneSize
-            val zoneEnd = (i + 1) * zoneSize
-            val overlapStart = maxOf(before, zoneStart)
-            val overlapEnd = minOf(after, zoneEnd)
-
-            if (overlapStart < overlapEnd) {
-                val overlapShare = (overlapEnd - overlapStart) / sensorTotal
-                realLitersPerZone[i] += realTotal * overlapShare
-                sensorLitersPerZone[i] += (overlapEnd - overlapStart)
-            }
-        }
-    }
-
     /**
-     * ПРЕДСКАЗАНИЕ: Получение реальных литров с уверенностью
+     * ПРЕДСКАЗАНИЕ: Превращает "кривой" литраж датчика в реальный объем.
      */
     fun getCorrectedLiters(currentSensorValue: Double, currentTemp: Double): EstimationResult {
-        val safeSensorValue = currentSensorValue.coerceIn(0.0, tankCapacity)
-        val zoneIdx = (safeSensorValue / zoneSize).toInt().coerceIn(0, zoneCount - 1)
+        // Защита: не даем значению датчика выйти за пределы физического бака
+        val safeSensor = currentSensorValue.coerceIn(0.0, tankCapacity)
 
-        val matureCoefficients = sensorLitersPerZone.indices
-            .filter { sensorLitersPerZone[it] >= 5.0 }
-            .map { realLitersPerZone[it] / sensorLitersPerZone[it] }
+        // Определяем индекс текущей зоны бака
+        val zoneIdx = (safeSensor / store.zoneSize).toInt().coerceIn(0, store.zoneCount - 1)
 
-        val kGlobal = if (matureCoefficients.isNotEmpty()) matureCoefficients.average() else 1.0
-        val sensorInZone = sensorLitersPerZone[zoneIdx]
-        val kLocal = if (sensorInZone > 0) realLitersPerZone[zoneIdx] / sensorInZone else kGlobal
-        val confidence = (sensorInZone / maturityThreshold).coerceAtMost(1.0)
+        // Получаем коэффициенты: локальный (для этой зоны) и глобальный (средний по баку)
+        val kLocal = store.getZoneK(zoneIdx)
+        val kGlobal = store.getGlobalK()
 
+        // Насколько мы доверяем данным именно в этой зоне (от 0.0 до 1.0)
+        val confidence = store.getConfidence(zoneIdx)
+
+        // СМЕШИВАНИЕ: если уверенность низкая, берем больше от глобального коэффициента
         val kFinal = (kLocal * confidence) + (kGlobal * (1.0 - confidence))
-        val baseLiters = safeSensorValue * kFinal
-        val actualVolume = baseLiters * (1 + thermalExpansionCoeff * (currentTemp - 15))
 
-        val finalLiters = actualVolume.coerceAtMost(tankCapacity + 5)
+        // Считаем стандартный объем (+15), а затем расширяем его до реального при текущей температуре
+        val stdVolume = safeSensor * kFinal
+        val realVolume = physics.fromStandard(stdVolume, currentTemp)
+
+        // Флаг: находимся ли мы в "мертвой зоне" датчика (в самом верху или внизу)
         val isAtLimit = currentSensorValue >= sensorMax || currentSensorValue <= sensorMin
 
-        return EstimationResult(finalLiters, if (isAtLimit) confidence * 0.7 else confidence)
+        return EstimationResult(
+            realVolume.coerceAtMost(tankCapacity + 5), // +5л "запас" на горловину
+            if (isAtLimit) confidence * 0.7 else confidence // Снижаем уверенность на краях бака
+        )
     }
 
-    /**
-     * РЕЗЕРВ: Расчет запаса хода
-     */
-    fun calculateRange(currentLiters: Double, avgConsumption: Double): Double {
-        if (avgConsumption <= 0) return 0.0
-        return (currentLiters / avgConsumption) * 100
-    }
-
-    /**
-     * БЕЗОПАСНОСТЬ: Детектор аномалий (слива)
-     */
+    // --- Вспомогательные методы остаются без изменений ---
+    fun calculateRange(liters: Double, avgCons: Double) = if (avgCons > 0) (liters / avgCons) * 100 else 0.0
+    /*
     fun detectFuelAnomaly(currentLiters: Double, isEngineRunning: Boolean): String {
         if (lastStableLevel < 0) {
             lastStableLevel = currentLiters
@@ -110,24 +117,22 @@ class FuelSmartEstimator(
         lastStableLevel = currentLiters
 
         return when {
+            // Если мотор заглушен, а топливо уходит (больше чем на 0.15л)
             !isEngineRunning && delta > 0.15 -> "⚠️ ТРЕВОГА: Возможен слив! (-${"%.2f".format(delta)}л)"
-            isEngineRunning && delta > maxIdleConsumptionPerMinute -> "⚠️ ВНИМАНИЕ: Аномальный расход!"
+
+            // ВОТ ЗДЕСЬ используем нашу переменную:
+            // Если мотор заведен, но топливо уходит быстрее, чем 0.04 л/мин
+            isEngineRunning && delta > maxIdleConsumptionPerMinute -> "⚠️ ВНИМАНИЕ: Аномальный расход! (-${"%.2f".format(delta)}л/мин)"
+
             else -> "✅ Уровень стабилен"
         }
-    }
+    }*/
 
     fun getCalibrationReport(): List<String> {
-        return (0 until zoneCount).map { i ->
-            val sensorInZone = sensorLitersPerZone[i]
-            val k = if (sensorInZone > 0) realLitersPerZone[i] / sensorInZone else 1.0
-
-            // Считаем уверенность конкретно для этой зоны (0..100%)
-            val confidence = (sensorInZone / maturityThreshold).coerceAtMost(1.0) * 100
-
-            val zoneStart = i * zoneSize.toInt()
-            val zoneEnd = (i + 1) * zoneSize.toInt()
-
-            "Зона $zoneStart-${zoneEnd}л: K=${"%.3f".format(k)} | Данных: ${"%.1f".format(sensorInZone)}л | Уверенность: ${confidence.toInt()}%"
+        return (0 until store.zoneCount).map { i ->
+            val zoneStart = (i * store.zoneSize).toInt()
+            val zoneEnd = ((i + 1) * store.zoneSize).toInt()
+            "Зона $zoneStart-$zoneEnd л: K=${"%.3f".format(store.getZoneK(i))} | Уверенность: ${(store.getConfidence(i)*100).toInt()}%"
         }
     }
 }
