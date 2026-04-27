@@ -483,8 +483,8 @@
     <string name="refuels_time">Дата и время</string>
     <string name="refuels_odometer">Одометр</string>
     <string name="refuels_coordinates">Координаты</string>
-    <string name="refuels_fuel_before">Топливо до</string>
-    <string name="refuels_fuel_after">Топливо после</string>
+    <string name="refuels_fuel_before">Топливо до, %</string>
+    <string name="refuels_fuel_after">Топливо после, %</string>
     <string name="refuels_estimated_liters">Расчётные литры</string>
     <string name="refuels_actual_liters">Фактические литры</string>
     <string name="refuels_fuel_type">Топливо</string>

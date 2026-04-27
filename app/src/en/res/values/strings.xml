@@ -483,8 +483,8 @@
     <string name="refuels_time">Date and time</string>
     <string name="refuels_odometer">Odometer</string>
     <string name="refuels_coordinates">Coordinates</string>
-    <string name="refuels_fuel_before">Fuel before</string>
-    <string name="refuels_fuel_after">Fuel after</string>
+    <string name="refuels_fuel_before">Fuel before, %</string>
+    <string name="refuels_fuel_after">Fuel after, %</string>
     <string name="refuels_estimated_liters">Estimated liters</string>
     <string name="refuels_actual_liters">Actual liters</string>
     <string name="refuels_fuel_type">Fuel</string>
