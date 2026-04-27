@@ -1,16 +1,24 @@
 package vad.dashing.tbox.ui
 
 import android.content.Context
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -32,9 +40,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,39 +109,60 @@ fun RefuelsTab(
                 color = MaterialTheme.colorScheme.onSurface,
             )
         } else {
-            val scrollState = rememberScrollState()
-            Column(
+            val horizontalScrollState = rememberScrollState()
+            val listState = rememberLazyListState()
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = 16.dp)
-                    .horizontalScroll(scrollState)
             ) {
-                RefuelHeaderRow()
-                LazyColumn {
-                    items(sortedRefuels.size, key = { sortedRefuels[it].id }) { index ->
-                        val refuel = sortedRefuels[index]
-                        RefuelTableRow(
-                            refuel = refuel,
-                            dateTimeFormat = dateTimeFormat,
-                            actualDraft = actualEdits[refuel.id] ?: valueToString(refuel.actualLiters, 1),
-                            priceDraft = priceEdits[refuel.id] ?: (refuel.pricePerLiterRub?.let { valueToString(it, 2) } ?: ""),
-                            onActualDraftChange = { actualEdits[refuel.id] = it },
-                            onPriceDraftChange = { priceEdits[refuel.id] = it },
-                            onActualCommit = { draft ->
-                                parseLocalizedFloat(draft)?.let {
-                                    appDataViewModel.updateRefuelActualLiters(refuel.id, it)
-                                    actualEdits.remove(refuel.id)
-                                }
-                            },
-                            onPriceCommit = { draft ->
-                                val price = parseLocalizedFloat(draft)
-                                appDataViewModel.updateRefuelPricePerLiter(refuel.id, price)
-                                priceEdits.remove(refuel.id)
-                            },
-                            onDelete = { appDataViewModel.deleteRefuel(refuel.id) },
-                        )
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .horizontalScroll(horizontalScrollState)
+                ) {
+                    RefuelHeaderRow()
+                    LazyColumn(state = listState) {
+                        items(sortedRefuels.size, key = { sortedRefuels[it].id }) { index ->
+                            val refuel = sortedRefuels[index]
+                            RefuelTableRow(
+                                refuel = refuel,
+                                dateTimeFormat = dateTimeFormat,
+                                actualDraft = actualEdits[refuel.id] ?: valueToString(refuel.actualLiters, 1),
+                                priceDraft = priceEdits[refuel.id] ?: (refuel.pricePerLiterRub?.let { valueToString(it, 2) } ?: ""),
+                                onActualDraftChange = { actualEdits[refuel.id] = it },
+                                onPriceDraftChange = { priceEdits[refuel.id] = it },
+                                onActualCommit = { draft ->
+                                    parseLocalizedFloat(draft)?.let {
+                                        appDataViewModel.updateRefuelActualLiters(refuel.id, it)
+                                        actualEdits.remove(refuel.id)
+                                    }
+                                },
+                                onPriceCommit = { draft ->
+                                    val price = parseLocalizedFloat(draft)
+                                    appDataViewModel.updateRefuelPricePerLiter(refuel.id, price)
+                                    priceEdits.remove(refuel.id)
+                                },
+                                onDelete = { appDataViewModel.deleteRefuel(refuel.id) },
+                            )
+                        }
                     }
                 }
+                RefuelVerticalScrollbar(
+                    listState = listState,
+                    totalItems = sortedRefuels.size,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .width(6.dp)
+                )
+                RefuelHorizontalScrollbar(
+                    scrollState = horizontalScrollState,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(6.dp)
+                )
             }
         }
     }
@@ -161,18 +197,18 @@ fun RefuelsTab(
 @Composable
 private fun RefuelHeaderRow() {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        RefuelCell(stringResource(R.string.refuels_time), 190)
-        RefuelCell(stringResource(R.string.refuels_odometer), 120)
-        RefuelCell(stringResource(R.string.refuels_coordinates), 210)
-        RefuelCell(stringResource(R.string.refuels_fuel_before), 110)
-        RefuelCell(stringResource(R.string.refuels_fuel_after), 110)
-        RefuelCell(stringResource(R.string.refuels_estimated_liters), 140)
-        RefuelCell(stringResource(R.string.refuels_actual_liters), 200)
-        RefuelCell(stringResource(R.string.refuels_fuel_type), 110)
-        RefuelCell(stringResource(R.string.refuels_price), 190)
-        RefuelCell(stringResource(R.string.refuels_price_source), 220)
-        RefuelCell(stringResource(R.string.refuels_cost), 140)
-        RefuelCell("", 72)
+        RefuelHeaderCell(stringResource(R.string.refuels_time), 190)
+        RefuelHeaderCell(stringResource(R.string.refuels_odometer), 120)
+        RefuelHeaderCell(stringResource(R.string.refuels_coordinates), 210)
+        RefuelHeaderCell(stringResource(R.string.refuels_fuel_before), 110)
+        RefuelHeaderCell(stringResource(R.string.refuels_fuel_after), 110)
+        RefuelHeaderCell(stringResource(R.string.refuels_estimated_liters), 140)
+        RefuelHeaderCell(stringResource(R.string.refuels_actual_liters), 200)
+        RefuelHeaderCell(stringResource(R.string.refuels_fuel_type), 110)
+        RefuelHeaderCell(stringResource(R.string.refuels_price), 190)
+        RefuelHeaderCell(stringResource(R.string.refuels_price_source), 220)
+        RefuelHeaderCell(stringResource(R.string.refuels_cost), 140)
+        RefuelHeaderCell("", 72)
     }
 }
 
@@ -189,13 +225,18 @@ private fun RefuelTableRow(
     onDelete: () -> Unit,
 ) {
     val noData = stringResource(R.string.value_no_data)
+    val coordinatesText = formatCoordinates(refuel, noData)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(vertical = 4.dp),
     ) {
         RefuelCell(dateTimeFormat.format(Date(refuel.timeEpochMs)), 190)
         RefuelCell(refuel.odometerKm?.let { valueToString(it, 0) } ?: noData, 120)
-        RefuelCell(formatCoordinates(refuel, noData), 210)
+        RefuelCoordinatesCell(
+            text = coordinatesText,
+            widthDp = 210,
+            copyText = coordinatesText.takeIf { refuel.latitude != null && refuel.longitude != null }
+        )
         RefuelCell(refuel.fuelPercentBefore?.let { valueToString(it, 1) } ?: noData, 110)
         RefuelCell(refuel.fuelPercentAfter?.let { valueToString(it, 1) } ?: noData, 110)
         RefuelCell(valueToString(refuel.estimatedLiters, 1), 140)
@@ -261,7 +302,7 @@ private fun RefuelEditableCell(
 }
 
 @Composable
-private fun RefuelCell(text: String, widthDp: Int) {
+private fun RefuelHeaderCell(text: String, widthDp: Int) {
     Text(
         text = text,
         modifier = Modifier
@@ -269,10 +310,90 @@ private fun RefuelCell(text: String, widthDp: Int) {
             .padding(end = 8.dp),
         fontSize = 24.sp,
         lineHeight = 24.sp * 1.3f,
+        fontWeight = FontWeight.SemiBold,
+        textAlign = TextAlign.Center,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         color = MaterialTheme.colorScheme.onSurface,
     )
+}
+
+@Composable
+private fun RefuelCoordinatesCell(text: String, widthDp: Int, copyText: String?) {
+    val clipboardManager = LocalClipboardManager.current
+    RefuelCell(
+        text = text,
+        widthDp = widthDp,
+        modifier = if (copyText != null) {
+            Modifier.clickable {
+                clipboardManager.setText(AnnotatedString(copyText))
+            }
+        } else {
+            Modifier
+        }
+    )
+}
+
+@Composable
+private fun RefuelCell(text: String, widthDp: Int, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        modifier = Modifier
+            .width(widthDp.dp)
+            .padding(end = 8.dp)
+            .then(modifier),
+        fontSize = 24.sp,
+        lineHeight = 24.sp * 1.3f,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+@Composable
+private fun RefuelHorizontalScrollbar(
+    scrollState: ScrollState,
+    modifier: Modifier = Modifier,
+) {
+    if (scrollState.maxValue <= 0) return
+    val color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+    Canvas(modifier = modifier.padding(horizontal = 2.dp)) {
+        val viewport = size.width
+        val total = viewport + scrollState.maxValue
+        val thumbWidth = (viewport * viewport / total).coerceAtLeast(24.dp.toPx())
+        val maxOffset = (viewport - thumbWidth).coerceAtLeast(0f)
+        val thumbOffset = maxOffset * scrollState.value / scrollState.maxValue
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(thumbOffset, 0f),
+            size = Size(thumbWidth, size.height),
+            cornerRadius = CornerRadius(size.height / 2f, size.height / 2f),
+        )
+    }
+}
+
+@Composable
+private fun RefuelVerticalScrollbar(
+    listState: LazyListState,
+    totalItems: Int,
+    modifier: Modifier = Modifier,
+) {
+    val visibleItems = listState.layoutInfo.visibleItemsInfo.size
+    if (totalItems <= 0 || visibleItems >= totalItems) return
+    val color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
+    Canvas(modifier = modifier.padding(vertical = 2.dp)) {
+        val viewport = size.height
+        val thumbHeight = (viewport * visibleItems / totalItems).coerceAtLeast(24.dp.toPx())
+        val maxOffset = (viewport - thumbHeight).coerceAtLeast(0f)
+        val maxFirstIndex = (totalItems - visibleItems).coerceAtLeast(1)
+        val thumbOffset = maxOffset * listState.firstVisibleItemIndex / maxFirstIndex
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(0f, thumbOffset),
+            size = Size(size.width, thumbHeight),
+            cornerRadius = CornerRadius(size.width / 2f, size.width / 2f),
+        )
+    }
 }
 
 private fun parseLocalizedFloat(raw: String): Float? =
