@@ -1,7 +1,6 @@
 package vad.dashing.tbox.mbcan
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,22 +13,8 @@ import vad.dashing.tbox.TboxRepository
 
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
-
-    /**
-     * Service-wide stream pack: push via [IMBCanSettingsCallback] where wired; union is periodically
-     * resubscribed (unsubscribe → subscribe) by [MbCanJobManager]. No per-minute property poll job.
-     */
-    ServiceDebugTelemetry(
-        setOf(
-            "eMBCAN_VEHICLE_SPEED",
-            "eMBCAN_VEHICLE_ENGINE",
-            "eMBCAN_VEHICLE_ENGINE_GEAR",
-            "eMBCAN_VEHICLE_LKA_STATUS",
-            "eMBCAN_VEHICLE_FRM_INFO",
-            "eMBCAN_SEAT_STATUS",
-            "eMBCAN_CFG_VEHICLE"
-        )
-    )
+    FrontLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
+    FrontRightSeatMode(setOf("eMBCAN_CFG_VEHICLE"))
 }
 
 sealed class MbCanBinaryState {
@@ -37,6 +22,14 @@ sealed class MbCanBinaryState {
     data object Off : MbCanBinaryState()
     data object On : MbCanBinaryState()
     data class Unavailable(val reason: String) : MbCanBinaryState()
+}
+
+sealed class MbCanSeatModeState {
+    data object Unknown : MbCanSeatModeState()
+    data object Off : MbCanSeatModeState()
+    data class Heat(val level: Int) : MbCanSeatModeState()
+    data class Vent(val level: Int) : MbCanSeatModeState()
+    data class Unavailable(val reason: String) : MbCanSeatModeState()
 }
 
 data class MbCanCommandResult(
@@ -52,21 +45,29 @@ sealed class MbCanCommand {
 
 object MbCanRepository {
     private const val SIGNAL_STEERING_WIDGET_KEY = "steeringWheelHeatWidget"
+    private const val SIGNAL_FRONT_LEFT_SEAT_WIDGET_KEY = "frontLeftSeatHeatVentWidget"
+    private const val SIGNAL_FRONT_RIGHT_SEAT_WIDGET_KEY = "frontRightSeatHeatVentWidget"
     private const val INTERESTS_DEBOUNCE_MS = 350L
     private const val POST_COMMAND_VERIFY_DELAY_MS = 500L
 
-    private val serviceWideSignals: Set<MbCanSignal> = setOf(MbCanSignal.ServiceDebugTelemetry)
-
-    /**
-     * [MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH] (188): `canGetVehicleParam` uses an
-     * active-low style encoding on Jetour Dashing — 1 while heat is physically OFF, 0 when ON.
-     * (Naive `raw > 0` would invert UI and send the wrong toggle command.)
-     */
     private fun decodeSteeringWheelHeatRaw(raw: Int): MbCanBinaryState {
         return when (raw) {
-            0 -> MbCanBinaryState.On
+            2 -> MbCanBinaryState.On
             1 -> MbCanBinaryState.Off
-            else -> if (raw < 0) MbCanBinaryState.Unknown else MbCanBinaryState.On
+            else -> MbCanBinaryState.Unknown
+        }
+    }
+
+    private fun decodeSeatModeRaw(raw: Int): MbCanSeatModeState {
+        return when (raw) {
+            1 -> MbCanSeatModeState.Off
+            2 -> MbCanSeatModeState.Heat(1)
+            3 -> MbCanSeatModeState.Heat(2)
+            4 -> MbCanSeatModeState.Heat(3)
+            5 -> MbCanSeatModeState.Vent(1)
+            6 -> MbCanSeatModeState.Vent(2)
+            7 -> MbCanSeatModeState.Vent(3)
+            else -> MbCanSeatModeState.Unknown
         }
     }
 
@@ -80,82 +81,25 @@ object MbCanRepository {
 
     private val _steeringWheelHeatState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val steeringWheelHeatState: StateFlow<MbCanBinaryState> = _steeringWheelHeatState.asStateFlow()
-
-    private val _lastVehicleSpeedPush = MutableStateFlow<String?>(null)
-    val lastVehicleSpeedPush: StateFlow<String?> = _lastVehicleSpeedPush.asStateFlow()
-
-    private val _lastVehicleEnginePush = MutableStateFlow<String?>(null)
-    val lastVehicleEnginePush: StateFlow<String?> = _lastVehicleEnginePush.asStateFlow()
+    private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
+    val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
+    private val _frontRightSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
+    val frontRightSeatModeState: StateFlow<MbCanSeatModeState> = _frontRightSeatModeState.asStateFlow()
 
     suspend fun bind(scope: CoroutineScope) {
         boundScope = scope
         _availability.value = MbCanEngineFacade.probeAvailability()
         TboxRepository.addLog("DEBUG", "MBCAN_TMP", "bind() availability=${_availability.value}")
         MbCanJobManager.attach(scope)
-        MbCanEngineFacade.registerSettingsTelemetryBridge()
         scheduleReapplyAllInterests()
     }
 
     suspend fun unbind() {
         TboxRepository.addLog("DEBUG", "MBCAN_TMP", "unbind()")
-        MbCanEngineFacade.unregisterSettingsTelemetryBridge()
         reapplyJob?.cancel()
         reapplyJob = null
         boundScope = null
         MbCanJobManager.detach()
-    }
-
-    /**
-     * Vendor [com.mengbo.mbCan.entity.MBCanVehicleSpeed] instance from callback — formatted via reflection
-     * so this module does not require a direct Kotlin dependency on those Java types.
-     */
-    fun onPushVehicleSpeed(speed: Any?) {
-        val line = formatMbCanVehicleSpeedLine(speed) ?: return
-        val scope = boundScope ?: return
-        scope.launch(Dispatchers.Default) {
-            _lastVehicleSpeedPush.value = line
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "mbCAN cb onCanVehicleSpeed $line")
-        }
-    }
-
-    /** Vendor [com.mengbo.mbCan.entity.MBCanVehicleEngine] instance from callback (reflection). */
-    fun onPushVehicleEngine(engine: Any?) {
-        val line = formatMbCanVehicleEngineLine(engine) ?: return
-        val scope = boundScope ?: return
-        scope.launch(Dispatchers.Default) {
-            _lastVehicleEnginePush.value = line
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "mbCAN cb onVehicleEngineStatusChange $line")
-        }
-    }
-
-    private fun formatMbCanVehicleSpeedLine(obj: Any?): String? {
-        if (obj == null) return null
-        return try {
-            val cls = obj.javaClass
-            val speed = cls.getMethod("getSpeed").invoke(obj) as Float
-            val gear = (cls.getMethod("getGear").invoke(obj) as Byte).toInt() and 0xFF
-            val spdValid = (cls.getMethod("getSpeedValidSts").invoke(obj) as Byte).toInt() and 0xFF
-            val gearValid = (cls.getMethod("getGearValidSts").invoke(obj) as Byte).toInt() and 0xFF
-            val pwrRdy = (cls.getMethod("getPowerReadySts").invoke(obj) as Byte).toInt() and 0xFF
-            "push speed=$speed gear=$gear spdValid=$spdValid gearValid=$gearValid pwrRdy=$pwrRdy"
-        } catch (_: Throwable) {
-            null
-        }
-    }
-
-    private fun formatMbCanVehicleEngineLine(obj: Any?): String? {
-        if (obj == null) return null
-        return try {
-            val cls = obj.javaClass
-            val fSpeed = cls.getMethod("getfSpeed").invoke(obj) as Float
-            val temp = cls.getMethod("getfTemperture").invoke(obj) as Float
-            val st = (cls.getMethod("getStatus").invoke(obj) as Byte).toInt() and 0xFF
-            val gear = (cls.getMethod("getGear").invoke(obj) as Byte).toInt() and 0xFF
-            val dsp = cls.getMethod("getnDisplayVehiceSpeed").invoke(obj) as Short
-            "push engine fSpeed=$fSpeed temp=$temp st=$st gear=$gear dspSpd=$dsp"
-        } catch (_: Throwable) {
-            null
-        }
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
@@ -251,8 +195,8 @@ object MbCanRepository {
         val current = steeringWheelHeatState.value
         val target = when (current) {
             MbCanBinaryState.On -> 1
-            MbCanBinaryState.Off -> 0
-            MbCanBinaryState.Unknown -> 0
+            MbCanBinaryState.Off -> 2
+            MbCanBinaryState.Unknown -> 2
             is MbCanBinaryState.Unavailable -> return MbCanCommandResult(false, "mbCAN unavailable")
         }
         val setResult = MbCanEngineFacade.canSetVehicleParam(
@@ -277,7 +221,8 @@ object MbCanRepository {
     suspend fun refreshSignal(signal: MbCanSignal) {
         when (signal) {
             MbCanSignal.SteeringWheelHeat -> refreshSteeringWheelHeat()
-            MbCanSignal.ServiceDebugTelemetry -> Unit
+            MbCanSignal.FrontLeftSeatMode -> refreshFrontLeftSeatMode()
+            MbCanSignal.FrontRightSeatMode -> refreshFrontRightSeatMode()
         }
     }
 
@@ -310,6 +255,49 @@ object MbCanRepository {
         )
     }
 
+    private suspend fun refreshFrontLeftSeatMode() {
+        refreshSeatMode(
+            propertyId = MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
+            update = { _frontLeftSeatModeState.value = it },
+            tag = "frontLeftSeat"
+        )
+    }
+
+    private suspend fun refreshFrontRightSeatMode() {
+        refreshSeatMode(
+            propertyId = MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
+            update = { _frontRightSeatModeState.value = it },
+            tag = "frontRightSeat"
+        )
+    }
+
+    private suspend fun refreshSeatMode(
+        propertyId: Int,
+        update: (MbCanSeatModeState) -> Unit,
+        tag: String
+    ) {
+        if (!MbCanEngineFacade.isInitialized()) {
+            _availability.value = MbCanEngineFacade.probeAvailability()
+            update(MbCanSeatModeState.Unknown)
+            return
+        }
+
+        val availability = MbCanEngineFacade.availability
+        _availability.value = availability
+        if (availability !is MbCanAvailability.Available) {
+            update(
+                MbCanSeatModeState.Unavailable(
+                    reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                )
+            )
+            return
+        }
+        val raw = MbCanEngineFacade.canGetVehicleParam(propertyId)
+        val state = if (raw == null) MbCanSeatModeState.Unknown else decodeSeatModeRaw(raw)
+        update(state)
+        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "refreshSeatMode tag=$tag raw=$raw state=$state")
+    }
+
     private suspend fun ensureMbCanReadyIfNeeded() {
         if (MbCanEngineFacade.isInitialized()) return
         val availability = MbCanEngineFacade.ensureInitialized()
@@ -317,7 +305,6 @@ object MbCanRepository {
         TboxRepository.addLog("DEBUG", "MBCAN_TMP", "ensureMbCanReadyIfNeeded availability=$availability")
         if (availability is MbCanAvailability.Available) {
             MbCanJobManager.onEngineInitialized()
-            MbCanEngineFacade.registerSettingsTelemetryBridge()
             reapplyAllInterests()
         }
     }
@@ -332,13 +319,15 @@ object MbCanRepository {
     }
 
     private suspend fun reapplyAllInterests() {
-        val mergedSignals = sourceMutex.withLock { sourceSignals.values.flatten().toSet() } + serviceWideSignals
+        val mergedSignals = sourceMutex.withLock { sourceSignals.values.flatten().toSet() }
         MbCanJobManager.replaceSignals(mergedSignals)
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {
         return when (widgetKey) {
             SIGNAL_STEERING_WIDGET_KEY -> MbCanSignal.SteeringWheelHeat
+            SIGNAL_FRONT_LEFT_SEAT_WIDGET_KEY -> MbCanSignal.FrontLeftSeatMode
+            SIGNAL_FRONT_RIGHT_SEAT_WIDGET_KEY -> MbCanSignal.FrontRightSeatMode
             else -> null
         }
     }

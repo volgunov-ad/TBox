@@ -85,3 +85,20 @@ internal fun sendToggleSteeringWheelHeat(context: Context) {
     } catch (_: Exception) {
     }
 }
+
+internal fun sendSetMbCanProperty(context: Context, propertyId: Int, value: Int) {
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_SET_PROPERTY
+                )
+                putExtra(BackgroundService.EXTRA_MBCAN_PROPERTY_ID, propertyId)
+                putExtra(BackgroundService.EXTRA_MBCAN_VALUE, value)
+            }
+        )
+    } catch (_: Exception) {
+    }
+}

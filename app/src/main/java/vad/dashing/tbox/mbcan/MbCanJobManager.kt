@@ -121,7 +121,6 @@ object MbCanJobManager {
 
     private fun ensureSignalJobLocked(signal: MbCanSignal) {
         val currentScope = scope ?: return
-        if (signal == MbCanSignal.ServiceDebugTelemetry) return
         if (signalJobs[signal]?.isActive == true) return
         signalJobs[signal] = currentScope.launch(Dispatchers.IO) {
             while (isActive) {

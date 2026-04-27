@@ -234,6 +234,28 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "frontLeftSeatHeatVentWidget" -> {
+            DashboardFrontLeftSeatHeatVentWidgetItem(
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics
+            )
+        }
+
+        "frontRightSeatHeatVentWidget" -> {
+            DashboardFrontRightSeatHeatVentWidgetItem(
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics
+            )
+        }
+
         WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY -> {
             ExternalAppWidgetItem(
                 widgetConfig = widgetConfig,

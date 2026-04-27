@@ -402,6 +402,8 @@ object WidgetsRepository {
         "fuelLevelWidget" to DataTitle(R.string.data_title_fuel_level_widget),
         "airQualityWidget" to DataTitle(R.string.data_title_air_quality_widget),
         "steeringWheelHeatWidget" to DataTitle(R.string.data_title_steering_wheel_heat_widget),
+        "frontLeftSeatHeatVentWidget" to DataTitle(R.string.data_title_front_left_seat_heat_vent_widget),
+        "frontRightSeatHeatVentWidget" to DataTitle(R.string.data_title_front_right_seat_heat_vent_widget),
         "musicWidget" to DataTitle(R.string.data_title_music_widget),
         MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_media_volume_widget_horizontal
@@ -457,7 +459,9 @@ object WidgetsRepository {
             "tempInOutWidget",
             "voltage+engineTemperatureWidget",
             "fuelLevelWidget",
-            "airQualityWidget"
+            "airQualityWidget",
+            "frontLeftSeatHeatVentWidget",
+            "frontRightSeatHeatVentWidget"
         )
     }
 }

@@ -146,12 +146,8 @@ object MbCanEngineFacade {
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
             when (method.name) {
-                "onCanVehicleSpeed" -> {
-                    MbCanRepository.onPushVehicleSpeed(args?.getOrNull(0))
-                }
-                "onVehicleEngineStatusChange" -> {
-                    MbCanRepository.onPushVehicleEngine(args?.getOrNull(0))
-                }
+                "onCanVehicleSpeed",
+                "onVehicleEngineStatusChange" -> Unit
             }
             null
         }
