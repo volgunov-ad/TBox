@@ -88,11 +88,13 @@ fun RefuelsTab(
     var showExportDialog by remember { mutableStateOf(false) }
     val actualEdits = remember { mutableStateMapOf<String, String>() }
     val priceEdits = remember { mutableStateMapOf<String, String>() }
+    val sourceEdits = remember { mutableStateMapOf<String, String>() }
 
     LaunchedEffect(refuels) {
         val ids = refuels.map { it.id }.toSet()
         actualEdits.keys.retainAll(ids)
         priceEdits.keys.retainAll(ids)
+        sourceEdits.keys.retainAll(ids)
     }
 
     Column(
@@ -142,8 +144,10 @@ fun RefuelsTab(
                                 dateTimeFormat = dateTimeFormat,
                                 actualDraft = actualEdits[refuel.id] ?: valueToString(refuel.actualLiters, 1),
                                 priceDraft = priceEdits[refuel.id] ?: (refuel.pricePerLiterRub?.let { valueToString(it, 2) } ?: ""),
+                                sourceDraft = sourceEdits[refuel.id] ?: refuel.priceSourceName.orEmpty(),
                                 onActualDraftChange = { actualEdits[refuel.id] = it },
                                 onPriceDraftChange = { priceEdits[refuel.id] = it },
+                                onSourceDraftChange = { sourceEdits[refuel.id] = it },
                                 onActualCommit = { draft ->
                                     parseLocalizedFloat(draft)?.let {
                                         appDataViewModel.updateRefuelActualLiters(refuel.id, it)
@@ -154,6 +158,10 @@ fun RefuelsTab(
                                     val price = parseLocalizedFloat(draft)
                                     appDataViewModel.updateRefuelPricePerLiter(refuel.id, price)
                                     priceEdits.remove(refuel.id)
+                                },
+                                onSourceCommit = { draft ->
+                                    appDataViewModel.updateRefuelPriceSourceName(refuel.id, draft)
+                                    sourceEdits.remove(refuel.id)
                                 },
                                 onFuelTypeSelected = { option ->
                                     appDataViewModel.updateRefuelFuelType(refuel.id, option)
@@ -221,7 +229,7 @@ private fun RefuelHeaderRow() {
         RefuelHeaderCell(stringResource(R.string.refuels_actual_liters), 200)
         RefuelHeaderCell(stringResource(R.string.refuels_fuel_type), 150)
         RefuelHeaderCell(stringResource(R.string.refuels_price), 190)
-        RefuelHeaderCell(stringResource(R.string.refuels_price_source), 220)
+        RefuelHeaderCell(stringResource(R.string.refuels_price_source), 330)
         RefuelHeaderCell(stringResource(R.string.refuels_cost), 140)
         RefuelHeaderCell("", 72)
     }
@@ -233,10 +241,13 @@ private fun RefuelTableRow(
     dateTimeFormat: SimpleDateFormat,
     actualDraft: String,
     priceDraft: String,
+    sourceDraft: String,
     onActualDraftChange: (String) -> Unit,
     onPriceDraftChange: (String) -> Unit,
+    onSourceDraftChange: (String) -> Unit,
     onActualCommit: (String) -> Unit,
     onPriceCommit: (String) -> Unit,
+    onSourceCommit: (String) -> Unit,
     onFuelTypeSelected: (FuelTypeOption) -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -273,7 +284,13 @@ private fun RefuelTableRow(
             onValueChange = onPriceDraftChange,
             onCommit = onPriceCommit,
         )
-        RefuelCell(refuel.priceSourceName ?: noData, 220)
+        RefuelEditableCell(
+            value = sourceDraft,
+            widthDp = 330,
+            onValueChange = onSourceDraftChange,
+            onCommit = onSourceCommit,
+            keyboardType = KeyboardType.Text,
+        )
         RefuelCell(refuel.costRub?.let { valueToString(it, 2) } ?: noData, 140)
         Box(
             modifier = Modifier.width(72.dp),
@@ -369,6 +386,7 @@ private fun RefuelEditableCell(
     widthDp: Int,
     onValueChange: (String) -> Unit,
     onCommit: (String) -> Unit,
+    keyboardType: KeyboardType = KeyboardType.Decimal,
 ) {
     OutlinedTextField(
         value = value,
@@ -382,7 +400,7 @@ private fun RefuelEditableCell(
             lineHeight = 24.sp * 1.3f,
             color = MaterialTheme.colorScheme.onSurface,
         ),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         trailingIcon = {
             RefuelCircleIconButton(
                 onClick = { onCommit(value) },

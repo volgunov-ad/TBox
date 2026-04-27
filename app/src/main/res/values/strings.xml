@@ -489,7 +489,7 @@
     <string name="refuels_actual_liters">Фактические литры</string>
     <string name="refuels_fuel_type">Топливо</string>
     <string name="refuels_price">Цена</string>
-    <string name="refuels_price_source">АЗС / источник</string>
+    <string name="refuels_price_source">АЗС</string>
     <string name="refuels_cost">Стоимость</string>
     <string name="refuels_actions">Действия</string>
     <string name="refuels_coordinates_copied">Координаты скопированы</string>

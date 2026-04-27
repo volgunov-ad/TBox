@@ -210,6 +210,12 @@ object RefuelRepository {
         }
     }
 
+    fun updatePriceSourceName(id: String, priceSourceName: String?) {
+        updateRefuelCostInput(id) { refuel ->
+            refuel.copy(priceSourceName = priceSourceName?.trim()?.ifBlank { null })
+        }
+    }
+
     private fun updateRefuelCostInput(id: String, transform: (RefuelRecord) -> RefuelRecord) {
         synchronized(lock) {
             val current = _refuels.value.firstOrNull { it.id == id } ?: return

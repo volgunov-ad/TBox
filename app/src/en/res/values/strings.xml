@@ -489,7 +489,7 @@
     <string name="refuels_actual_liters">Actual liters</string>
     <string name="refuels_fuel_type">Fuel</string>
     <string name="refuels_price">Price</string>
-    <string name="refuels_price_source">Station / source</string>
+    <string name="refuels_price_source">Station</string>
     <string name="refuels_cost">Cost</string>
     <string name="refuels_actions">Actions</string>
     <string name="refuels_coordinates_copied">Coordinates copied</string>
