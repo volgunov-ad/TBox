@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -255,14 +257,19 @@ private fun RefuelTableRow(
         )
         RefuelCell(refuel.priceSourceName ?: noData, 220)
         RefuelCell(refuel.costRub?.let { valueToString(it, 2) } ?: noData, 140)
-        IconButton(
-            onClick = onDelete,
+        Box(
             modifier = Modifier.width(72.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = Icons.Filled.Delete,
+            RefuelCircleIconButton(
+                onClick = onDelete,
                 contentDescription = stringResource(R.string.refuels_delete),
-            )
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = null,
+                )
+            }
         }
     }
 }
@@ -288,17 +295,38 @@ private fun RefuelEditableCell(
         ),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         trailingIcon = {
-            IconButton(
+            RefuelCircleIconButton(
                 onClick = { onCommit(value) },
-                modifier = Modifier.size(40.dp),
+                contentDescription = stringResource(R.string.action_save),
             ) {
                 Icon(
                     imageVector = Icons.Filled.Check,
-                    contentDescription = stringResource(R.string.action_save),
+                    contentDescription = null,
                 )
             }
         },
     )
+}
+
+@Composable
+private fun RefuelCircleIconButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    content: @Composable () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(40.dp)
+            .background(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                shape = CircleShape,
+            ),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            content()
+        }
+    }
 }
 
 @Composable
@@ -345,6 +373,7 @@ private fun RefuelCell(text: String, widthDp: Int, modifier: Modifier = Modifier
         fontSize = 24.sp,
         lineHeight = 24.sp * 1.3f,
         maxLines = 2,
+        textAlign = TextAlign.Center,
         overflow = TextOverflow.Ellipsis,
         color = MaterialTheme.colorScheme.onSurface,
     )
