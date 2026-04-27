@@ -28,10 +28,16 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,10 +66,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.FuelTypeOption
+import vad.dashing.tbox.FuelTypes
 import vad.dashing.tbox.R
 import vad.dashing.tbox.RefuelRecord
 import vad.dashing.tbox.valueToString
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RefuelsTab(
     appDataViewModel: AppDataViewModel,
@@ -145,6 +154,9 @@ fun RefuelsTab(
                                     appDataViewModel.updateRefuelPricePerLiter(refuel.id, price)
                                     priceEdits.remove(refuel.id)
                                 },
+                                onFuelTypeSelected = { option ->
+                                    appDataViewModel.updateRefuelFuelType(refuel.id, option)
+                                },
                                 onDelete = { appDataViewModel.deleteRefuel(refuel.id) },
                             )
                         }
@@ -206,7 +218,7 @@ private fun RefuelHeaderRow() {
         RefuelHeaderCell(stringResource(R.string.refuels_fuel_after), 110)
         RefuelHeaderCell(stringResource(R.string.refuels_estimated_liters), 140)
         RefuelHeaderCell(stringResource(R.string.refuels_actual_liters), 200)
-        RefuelHeaderCell(stringResource(R.string.refuels_fuel_type), 110)
+        RefuelHeaderCell(stringResource(R.string.refuels_fuel_type), 150)
         RefuelHeaderCell(stringResource(R.string.refuels_price), 190)
         RefuelHeaderCell(stringResource(R.string.refuels_price_source), 220)
         RefuelHeaderCell(stringResource(R.string.refuels_cost), 140)
@@ -224,6 +236,7 @@ private fun RefuelTableRow(
     onPriceDraftChange: (String) -> Unit,
     onActualCommit: (String) -> Unit,
     onPriceCommit: (String) -> Unit,
+    onFuelTypeSelected: (FuelTypeOption) -> Unit,
     onDelete: () -> Unit,
 ) {
     val noData = stringResource(R.string.value_no_data)
@@ -248,7 +261,11 @@ private fun RefuelTableRow(
             onValueChange = onActualDraftChange,
             onCommit = onActualCommit,
         )
-        RefuelCell(refuel.fuelName, 110)
+        RefuelFuelTypeCell(
+            selected = FuelTypeOption(refuel.fuelId, refuel.fuelName),
+            widthDp = 150,
+            onSelect = onFuelTypeSelected,
+        )
         RefuelEditableCell(
             value = priceDraft,
             widthDp = 190,
@@ -268,6 +285,77 @@ private fun RefuelTableRow(
                 Icon(
                     imageVector = Icons.Filled.Delete,
                     contentDescription = null,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RefuelFuelTypeCell(
+    selected: FuelTypeOption,
+    widthDp: Int,
+    onSelect: (FuelTypeOption) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = Modifier
+            .width(widthDp.dp)
+            .padding(end = 8.dp),
+    ) {
+        OutlinedTextField(
+            value = selected.label,
+            onValueChange = {},
+            readOnly = true,
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            modifier = Modifier
+                .menuAnchor(
+                    type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                    enabled = true,
+                )
+                .fillMaxWidth(),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 24.sp,
+                lineHeight = 24.sp * 1.3f,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                focusedBorderColor = MaterialTheme.colorScheme.outline,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                cursorColor = MaterialTheme.colorScheme.primary,
+            ),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            FuelTypes.options.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = option.label,
+                            fontSize = 24.sp,
+                            color = if (option.id == selected.id) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                    },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
                 )
             }
         }

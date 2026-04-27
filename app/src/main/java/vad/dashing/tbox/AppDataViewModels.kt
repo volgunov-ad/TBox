@@ -106,6 +106,15 @@ class AppDataViewModel(private val appDataManager: AppDataManager) : ViewModel()
         }
     }
 
+    fun updateRefuelFuelType(id: String, fuelType: FuelTypeOption) {
+        viewModelScope.launch {
+            synchronized(RefuelRepository.lock) {
+                RefuelRepository.updateFuelType(id, fuelType)
+            }
+            persistRefuelsIfNeeded()
+        }
+    }
+
     private suspend fun persistTripsIfNeeded() {
         if (!TripRepository.needsPersistence()) return
         val tripsJson = tripsListToJson(TripRepository.trips.value)

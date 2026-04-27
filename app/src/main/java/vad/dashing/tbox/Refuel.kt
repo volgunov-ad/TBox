@@ -201,6 +201,15 @@ object RefuelRepository {
         }
     }
 
+    fun updateFuelType(id: String, fuel: FuelTypeOption) {
+        updateRefuelCostInput(id) { refuel ->
+            refuel.copy(
+                fuelId = fuel.id,
+                fuelName = fuel.label,
+            )
+        }
+    }
+
     private fun updateRefuelCostInput(id: String, transform: (RefuelRecord) -> RefuelRecord) {
         synchronized(lock) {
             val current = _refuels.value.firstOrNull { it.id == id } ?: return
