@@ -134,7 +134,7 @@ object TabItems {
             TabItem(stringResource(R.string.tab_geoposition), Icons.Filled.Place),
             TabItem(stringResource(R.string.tab_car_data), Icons.Filled.Build),
             TabItem(stringResource(R.string.tab_trips), Icons.AutoMirrored.Filled.List),
-            TabItem(stringResource(R.string.tab_refuels), Icons.Filled.Build),
+            TabItem(stringResource(R.string.tab_refuels), ImageVector.vectorResource(R.drawable.ic_menu_refuels)),
             TabItem(stringResource(R.string.tab_settings), Icons.Filled.Settings),
             TabItem(stringResource(R.string.tab_logs), ImageVector.vectorResource(R.drawable.menu_icon_log)),
             TabItem(stringResource(R.string.tab_info), Icons.Filled.Info),
