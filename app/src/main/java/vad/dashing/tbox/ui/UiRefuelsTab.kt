@@ -340,7 +340,7 @@ private fun RefuelFuelTypeCell(
                     fontSize = 24.sp,
                     lineHeight = 24.sp * 1.3f,
                     color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
+                    textAlign = TextAlign.Left,
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = MaterialTheme.colorScheme.onSurface,
