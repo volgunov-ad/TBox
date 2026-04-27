@@ -267,7 +267,8 @@ object SharedMediaControlService {
     fun playPause(
         context: Context,
         selectedPackages: Set<String>,
-        preferredPackage: String = ""
+        preferredPackage: String = "",
+        keepPlayerForeground: Boolean = false
     ) {
         var controllerHandled = false
         synchronized(this) {
@@ -294,7 +295,12 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
-        launchPlayerApp(context.applicationContext, targetPackage, scheduleColdStartPlayRetry = true)
+        launchPlayerApp(
+            context.applicationContext,
+            targetPackage,
+            scheduleColdStartPlayRetry = true,
+            keepPlayerForeground = keepPlayerForeground
+        )
     }
 
     fun play(
