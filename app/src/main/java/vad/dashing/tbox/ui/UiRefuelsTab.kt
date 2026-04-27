@@ -324,34 +324,40 @@ private fun RefuelFuelTypeCell(
             .width(widthDp.dp)
             .padding(end = 8.dp),
     ) {
-        OutlinedTextField(
-            value = selected.label,
-            onValueChange = {},
-            readOnly = true,
-            trailingIcon = {
+        Box {
+            OutlinedTextField(
+                value = selected.label,
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier
+                    .menuAnchor(
+                        type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                        enabled = true,
+                    )
+                    .fillMaxWidth(),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = 24.sp,
+                    lineHeight = 24.sp * 1.3f,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                ),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedBorderColor = MaterialTheme.colorScheme.outline,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                ),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 4.dp),
+            ) {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-            },
-            modifier = Modifier
-                .menuAnchor(
-                    type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                    enabled = true,
-                )
-                .fillMaxWidth(),
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                fontSize = 24.sp,
-                lineHeight = 24.sp * 1.3f,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-            ),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                focusedBorderColor = MaterialTheme.colorScheme.outline,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                cursorColor = MaterialTheme.colorScheme.primary,
-            ),
-        )
+            }
+        }
         ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
