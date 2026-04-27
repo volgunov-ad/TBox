@@ -1,9 +1,12 @@
 package vad.dashing.tbox
 
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.Locale
+import java.util.concurrent.TimeUnit
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 data class FuelTypeOption(
@@ -61,6 +64,11 @@ object FuelCostAccounting {
 
 class FuelPriceClient(
     private val baseUrl: String = "https://multigo.ru",
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .build(),
 ) {
     fun fetchPrice(
         coordinates: FuelCoordinates,
@@ -96,33 +104,20 @@ class FuelPriceClient(
     }
 
     private fun post(endpoint: String, body: String): String {
-        val connection = (URL(baseUrl + endpoint).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Accept", "application/json")
-            setRequestProperty("Origin", baseUrl)
-            setRequestProperty("Referer", "$baseUrl/")
-            setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36",
-            )
-        }
-        return try {
-            connection.outputStream.use { out ->
-                out.write(body.toByteArray(Charsets.UTF_8))
+        val request = Request.Builder()
+            .url(baseUrl + endpoint)
+            .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .header("Accept", "application/json")
+            .header("Origin", baseUrl)
+            .header("Referer", "$baseUrl/")
+            .header("User-Agent", "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36")
+            .build()
+        client.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string().orEmpty()
+            if (response.code != 200) {
+                throw IOException("Fuel price server returned HTTP ${response.code}")
             }
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val response = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            if (code != HttpURLConnection.HTTP_OK) {
-                throw IOException("Fuel price server returned HTTP $code")
-            }
-            response
-        } finally {
-            connection.disconnect()
+            return responseBody
         }
     }
 }
