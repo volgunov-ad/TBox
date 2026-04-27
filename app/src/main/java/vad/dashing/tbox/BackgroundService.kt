@@ -79,6 +79,7 @@ class BackgroundService : Service() {
     /** Serializes [onStartCommand] handling so each intent awaits settings snapshot and runs in order. */
     private val commandRouterMutex = Mutex()
     private val tripsPersistMutex = Mutex()
+    private val refuelsPersistMutex = Mutex()
     private val packetProcessingDispatcher =
         Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "tbox-packet-processor").apply { isDaemon = true }
@@ -435,11 +436,15 @@ class BackgroundService : Service() {
                         val favoritesJsonDeferred = async(Dispatchers.IO) {
                             appDataManager.tripFavoritesJsonFlow.first()
                         }
+                        val refuelsJsonDeferred = async(Dispatchers.IO) {
+                            appDataManager.refuelsJsonFlow.first()
+                        }
                         tripsFromDiskReady.set(false)
                         TripRepository.setTripsFromStore(
                             tripsListFromJson(tripsJsonDeferred.await()),
                             favoritesSetFromJson(favoritesJsonDeferred.await())
                         )
+                        RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJsonDeferred.await()))
                         tripsFromDiskReady.set(true)
                     }
                 } catch (e: Exception) {
@@ -1220,10 +1225,12 @@ class BackgroundService : Service() {
         val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
         var refuelTripId: String? = null
         var refueledLiters = 0f
+        var percentBefore: Float? = null
         TripRepository.updateActiveTrip { cur ->
+            val before = tripLastFuelPercent
             val step = TripFuelAccounting.applyFuelPercentStep(
                 currentConsumedLiters = cur.fuelConsumedLiters,
-                lastPercent = tripLastFuelPercent,
+                lastPercent = before,
                 percentNow = pctNow,
                 tankLiters = tankL
             )
@@ -1231,6 +1238,7 @@ class BackgroundService : Service() {
             if (step.refuelDetected && step.refueledLitersThisStep > 0f) {
                 refuelTripId = cur.id
                 refueledLiters = step.refueledLitersThisStep
+                percentBefore = before
             }
             cur.copy(
                 fuelConsumedLiters = step.consumedLiters,
@@ -1240,10 +1248,29 @@ class BackgroundService : Service() {
             )
         }
         val tripId = refuelTripId ?: return
-        scheduleRefuelCostUpdate(tripId, refueledLiters, fuelPriceFuelIdSetting.value)
+        val fuelType = FuelTypes.optionFor(fuelPriceFuelIdSetting.value)
+        val refuel = RefuelRecord(
+            tripId = tripId,
+            timeEpochMs = System.currentTimeMillis(),
+            odometerKm = CanDataRepository.odometer.value,
+            fuelPercentBefore = percentBefore,
+            fuelPercentAfter = pctNow,
+            estimatedLiters = refueledLiters,
+            actualLiters = refueledLiters,
+            fuelId = fuelType.id,
+            fuelName = fuelType.label,
+        )
+        RefuelRepository.appendRefuel(refuel)
+        maybePersistRefuels(force = true)
+        scheduleRefuelCostUpdate(tripId, refuel.id, refueledLiters, fuelType.id)
     }
 
-    private fun scheduleRefuelCostUpdate(tripId: String, refueledLiters: Float, fuelId: Int) {
+    private fun scheduleRefuelCostUpdate(
+        tripId: String,
+        refuelId: String,
+        refueledLiters: Float,
+        fuelId: Int,
+    ) {
         scope.launch {
             val coordinates = awaitFuelCoordinates() ?: run {
                 TboxRepository.addLog("WARN", "Fuel price", "No coordinates for refuel price within 5 minutes")
@@ -1256,7 +1283,19 @@ class BackgroundService : Service() {
             } catch (e: Exception) {
                 TboxRepository.addLog("WARN", "Fuel price", "Price request failed: ${e.message}")
                 null
-            } ?: return@launch
+            }
+            val refuel = RefuelRepository.refuels.value.firstOrNull { it.id == refuelId } ?: return@launch
+            RefuelRepository.replaceRefuel(
+                refuel.copy(
+                    latitude = coordinates.latitude,
+                    longitude = coordinates.longitude,
+                    pricePerLiterRub = price?.pricePerLiterRub,
+                    priceSourceName = price?.sourceName,
+                    costRub = price?.pricePerLiterRub?.let { refuel.actualLiters * it },
+                )
+            )
+            maybePersistRefuels(force = true)
+            if (price == null) return@launch
 
             val cost = FuelCostAccounting.refuelCostRub(refueledLiters, price.pricePerLiterRub)
             val trip = TripRepository.trips.value.firstOrNull { it.id == tripId } ?: return@launch
@@ -1500,8 +1539,8 @@ class BackgroundService : Service() {
     }
 
     /**
-     * Loads trips and favorites from disk in parallel. Clears [tripsFromDiskReady] until
-     * [TripRepository] has the new snapshot so [responseWork] does not run trip/CAN side effects mid-load.
+     * Loads trips, favorites and refuels from disk in parallel. Clears [tripsFromDiskReady] until
+     * repositories have the new snapshot so [responseWork] does not run CAN side effects mid-load.
      */
     private suspend fun reloadTripsFromDataStoreSuspend() {
         tripsFromDiskReady.set(false)
@@ -1513,10 +1552,14 @@ class BackgroundService : Service() {
                 val favoritesJsonDeferred = async(Dispatchers.IO) {
                     appDataManager.tripFavoritesJsonFlow.first()
                 }
+                val refuelsJsonDeferred = async(Dispatchers.IO) {
+                    appDataManager.refuelsJsonFlow.first()
+                }
                 TripRepository.setTripsFromStore(
                     tripsListFromJson(tripsJsonDeferred.await()),
                     favoritesSetFromJson(favoritesJsonDeferred.await())
                 )
+                RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJsonDeferred.await()))
             }
             tripsFromDiskReady.set(true)
         } catch (e: CancellationException) {
@@ -1537,6 +1580,17 @@ class BackgroundService : Service() {
                 appDataManager.saveTripsJson(tripsJson)
                 appDataManager.saveTripFavoritesJson(favJson)
                 TripRepository.markPersisted(tripsJson, favJson)
+            }
+        }
+    }
+
+    private fun maybePersistRefuels(force: Boolean) {
+        if (!force && !RefuelRepository.needsPersistence()) return
+        val refuelsJson = refuelsListToJson(RefuelRepository.refuels.value)
+        scope.launch {
+            refuelsPersistMutex.withLock {
+                appDataManager.saveRefuelsJson(refuelsJson)
+                RefuelRepository.markPersisted(refuelsJson)
             }
         }
     }

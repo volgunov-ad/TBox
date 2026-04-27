@@ -26,6 +26,7 @@ data class FuelPriceResult(
     val name: String,
     val pricePerLiterRub: Float,
     val exact: Boolean,
+    val sourceName: String,
 )
 
 object FuelTypes {
@@ -131,28 +132,45 @@ data class FuelPriceData(
 }
 
 object FuelPriceResolver {
+    const val AVERAGE_PRICE_SOURCE_NAME = "средняя цена"
+
     fun resolve(data: FuelPriceData, fuel: FuelTypeOption): FuelPriceResult? {
         val exact = findExactPrice(data, fuel)
-        if (exact > 0f) {
-            return FuelPriceResult(fuel.id, fuel.label, exact, exact = true)
+        if (exact != null) {
+            return FuelPriceResult(fuel.id, fuel.label, exact.price, exact = true, sourceName = exact.sourceName)
         }
         val average = findAveragePrice(data, fuel.id)
         return if (average > 0f) {
-            FuelPriceResult(fuel.id, fuel.label, average, exact = false)
+            FuelPriceResult(fuel.id, fuel.label, average, exact = false, sourceName = AVERAGE_PRICE_SOURCE_NAME)
         } else {
             null
         }
     }
 
-    private fun findExactPrice(data: FuelPriceData, fuel: FuelTypeOption): Float {
-        val fuels = data.azsList?.optJSONObject(0)?.optJSONArray("fuels") ?: return 0f
+    private data class ExactPrice(val price: Float, val sourceName: String)
+
+    private fun findExactPrice(data: FuelPriceData, fuel: FuelTypeOption): ExactPrice? {
+        val azs = data.azsList?.optJSONObject(0) ?: return null
+        val fuels = azs.optJSONArray("fuels") ?: return null
         for (i in 0 until fuels.length()) {
             val item = fuels.optJSONObject(i) ?: continue
             if (item.optInt("fuelIdRaw") == fuel.id || fuelLabelMatches(item.optString("fuelId"), fuel.label)) {
-                return item.optDouble("fuelPrice", 0.0).toFloat()
+                val price = item.optDouble("fuelPrice", 0.0).toFloat()
+                if (price > 0f) return ExactPrice(price, fuelStationName(azs))
             }
         }
-        return 0f
+        return null
+    }
+
+    private fun fuelStationName(azs: JSONObject): String {
+        val brand = azs.optJSONObject("brand")?.optString("name").orEmpty().trim()
+        val address = azs.optString("address").trim()
+        return when {
+            brand.isNotEmpty() && address.isNotEmpty() -> "$brand, $address"
+            brand.isNotEmpty() -> brand
+            address.isNotEmpty() -> address
+            else -> "АЗС"
+        }
     }
 
     private fun findAveragePrice(data: FuelPriceData, fuelId: Int): Float {

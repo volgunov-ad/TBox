@@ -19,7 +19,7 @@ class FuelPriceResolverTest {
         val data = FuelPriceData(
             listJson = JSONObject(
                 """
-                {"data":{"list":[{"fuels":[
+                {"data":{"list":[{"brand":{"name":"Test Fuel"},"address":"Main st. 1","fuels":[
                   {"fuelIdRaw":11,"fuelId":"АИ-95","fuelPrice":55.75}
                 ]}]}}
                 """.trimIndent()
@@ -32,6 +32,7 @@ class FuelPriceResolverTest {
         assertEquals(11, price?.fuelId)
         assertEquals(55.75f, price!!.pricePerLiterRub, 0.001f)
         assertTrue(price.exact)
+        assertEquals("Test Fuel, Main st. 1", price.sourceName)
     }
 
     @Test
@@ -46,6 +47,7 @@ class FuelPriceResolverTest {
         assertEquals(12, price?.fuelId)
         assertEquals(54.10f, price!!.pricePerLiterRub, 0.001f)
         assertFalse(price.exact)
+        assertEquals(FuelPriceResolver.AVERAGE_PRICE_SOURCE_NAME, price.sourceName)
     }
 
     @Test

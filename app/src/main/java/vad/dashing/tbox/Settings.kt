@@ -724,14 +724,14 @@ class SettingsManager(private val context: Context) {
     }
 
     /**
-     * One-time: after adding the Trips tab, shift stored indices 5–9 by +1 so the same
+     * One-time compatibility for tab insertions: shift stored indices after Trips so the same
      * screen stays selected (Main screen index 100 is unchanged).
      */
     suspend fun migrateSelectedTabIndexIfNeeded() {
         val raw = context.settingsDataStore.data.first()[SELECTED_TAB_KEY]?.toIntOrNull()
             ?: return
         if (raw == MAIN_SCREEN_SELECTED_TAB_INDEX) return
-        if (raw in 5..9) {
+        if (raw in 5..10) {
             saveSelectedTab(raw + 1)
         }
     }
@@ -1280,13 +1280,13 @@ class SettingsManager(private val context: Context) {
 
     suspend fun exportFullBackupJson(
         appDataManager: AppDataManager,
-        excludeTripLists: Boolean = false,
+        excludeTripsAndRefuels: Boolean = false,
     ): String =
         SettingsBackupCoordinator.exportFullJson(
             context.packageName,
             context.settingsDataStore,
             appDataManager.preferencesDataStore,
-            excludeTripLists = excludeTripLists,
+            excludeTripAndRefuelLists = excludeTripsAndRefuels,
         )
 
     suspend fun importFullBackupJson(appDataManager: AppDataManager, json: String): Result<Unit> {
