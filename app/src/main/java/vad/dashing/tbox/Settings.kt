@@ -38,7 +38,6 @@ enum class SetLauncherAppCustomIconResult {
 }
 
 data class FloatingDashboardWidgetConfig(
-    val mediaAutoPlayOnlyWhenEngineRunning: Boolean = false, // anymani: новое поле для контроля возврата лаунчера при автозапуске
     val dataKey: String,
     val showTitle: Boolean = false,
     val showUnit: Boolean = true,
@@ -55,6 +54,8 @@ data class FloatingDashboardWidgetConfig(
     val mediaAutoPlayOnInit: Boolean = false,
     /** If true (and [mediaAutoPlayOnInit]), delay auto-play until engine RPM is greater than zero. */
     val mediaAutoPlayOnlyWhenEngineRunning: Boolean = false,
+    /** If true (and [mediaAutoPlayOnInit]), keep player in foreground after auto-play launch. */
+    val mediaKeepPlayerForeground: Boolean = false,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
