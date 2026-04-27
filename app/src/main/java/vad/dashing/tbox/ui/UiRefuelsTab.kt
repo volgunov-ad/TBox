@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -165,9 +167,9 @@ private fun RefuelHeaderRow() {
         RefuelCell(stringResource(R.string.refuels_fuel_before), 110)
         RefuelCell(stringResource(R.string.refuels_fuel_after), 110)
         RefuelCell(stringResource(R.string.refuels_estimated_liters), 140)
-        RefuelCell(stringResource(R.string.refuels_actual_liters), 160)
+        RefuelCell(stringResource(R.string.refuels_actual_liters), 200)
         RefuelCell(stringResource(R.string.refuels_fuel_type), 110)
-        RefuelCell(stringResource(R.string.refuels_price), 150)
+        RefuelCell(stringResource(R.string.refuels_price), 190)
         RefuelCell(stringResource(R.string.refuels_price_source), 220)
         RefuelCell(stringResource(R.string.refuels_cost), 140)
         RefuelCell("", 72)
@@ -199,14 +201,14 @@ private fun RefuelTableRow(
         RefuelCell(valueToString(refuel.estimatedLiters, 1), 140)
         RefuelEditableCell(
             value = actualDraft,
-            widthDp = 160,
+            widthDp = 200,
             onValueChange = onActualDraftChange,
             onCommit = onActualCommit,
         )
         RefuelCell(refuel.fuelName, 110)
         RefuelEditableCell(
             value = priceDraft,
-            widthDp = 150,
+            widthDp = 190,
             onValueChange = onPriceDraftChange,
             onCommit = onPriceCommit,
         )
@@ -238,11 +240,21 @@ private fun RefuelEditableCell(
             .width(widthDp.dp)
             .padding(end = 8.dp),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 18.sp),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = 24.sp,
+            lineHeight = 24.sp * 1.3f,
+            color = MaterialTheme.colorScheme.onSurface,
+        ),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         trailingIcon = {
-            Button(onClick = { onCommit(value) }) {
-                Text(stringResource(R.string.action_save), fontSize = 14.sp)
+            IconButton(
+                onClick = { onCommit(value) },
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = stringResource(R.string.action_save),
+                )
             }
         },
     )
@@ -255,7 +267,8 @@ private fun RefuelCell(text: String, widthDp: Int) {
         modifier = Modifier
             .width(widthDp.dp)
             .padding(end = 8.dp),
-        fontSize = 18.sp,
+        fontSize = 24.sp,
+        lineHeight = 24.sp * 1.3f,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         color = MaterialTheme.colorScheme.onSurface,
