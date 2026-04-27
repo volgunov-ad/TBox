@@ -403,6 +403,7 @@ fun FloatingDashboard(
                     },
                     showTboxDisconnectIndicator = panelConfig.showTboxDisconnectIndicator,
                     enableMusicInnerInteractions = !isEditMode,
+                    enableSeatHeatVentInnerInteractions = !isEditMode,
                     externalWidgetHost = appWidgetHost,
                     fuelTankLiters = fuelTankLiters
                 )

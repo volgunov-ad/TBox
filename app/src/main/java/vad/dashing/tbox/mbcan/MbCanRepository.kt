@@ -1,5 +1,7 @@
 package vad.dashing.tbox.mbcan
 
+import android.os.Handler
+import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -49,6 +51,13 @@ object MbCanRepository {
     private const val SIGNAL_FRONT_RIGHT_SEAT_WIDGET_KEY = "frontRightSeatHeatVentWidget"
     private const val INTERESTS_DEBOUNCE_MS = 350L
     private const val POST_COMMAND_VERIFY_DELAY_MS = 500L
+    private const val VEHICLE_CFG_MODULAR = 2
+    /** Coalesce rapid [eMBCAN_CFG_VEHICLE] pushes before updating [StateFlow]s (50–150 ms band). */
+    private const val CFG_VEHICLE_PUSH_COALESCE_MS = 100L
+
+    private val cfgPushHandler = Handler(Looper.getMainLooper())
+    private val pendingCfgPushes = mutableMapOf<Int, Int>()
+    private val flushCfgPushesRunnable = Runnable { flushPendingCfgPushes() }
 
     private fun decodeSteeringWheelHeatRaw(raw: Int): MbCanBinaryState {
         return when (raw) {
@@ -96,10 +105,49 @@ object MbCanRepository {
 
     suspend fun unbind() {
         TboxRepository.addLog("DEBUG", "MBCAN_TMP", "unbind()")
+        cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
+        synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
+        MbCanEngineFacade.syncVehicleCfgCmdListener(false)
         reapplyJob?.cancel()
         reapplyJob = null
         boundScope = null
         MbCanJobManager.detach()
+    }
+
+    /**
+     * Called from [MbCanEngineFacade] [IMBCmdListener.onCmdChanged] (vendor CAN thread).
+     * Updates are coalesced on the main thread.
+     */
+    fun scheduleVehicleCfgPush(modular: Int, item: Int, value: Int) {
+        if (modular != VEHICLE_CFG_MODULAR) return
+        when (item) {
+            MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
+            MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
+            MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH -> Unit
+            else -> return
+        }
+        synchronized(pendingCfgPushes) {
+            pendingCfgPushes[item] = value
+        }
+        cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
+        cfgPushHandler.postDelayed(flushCfgPushesRunnable, CFG_VEHICLE_PUSH_COALESCE_MS)
+    }
+
+    private fun flushPendingCfgPushes() {
+        val snapshot = synchronized(pendingCfgPushes) {
+            if (pendingCfgPushes.isEmpty()) return
+            pendingCfgPushes.toMap().also { pendingCfgPushes.clear() }
+        }
+        for ((item, raw) in snapshot) {
+            when (item) {
+                MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH ->
+                    _steeringWheelHeatState.value = decodeSteeringWheelHeatRaw(raw)
+                MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH ->
+                    _frontLeftSeatModeState.value = decodeSeatModeRaw(raw)
+                MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH ->
+                    _frontRightSeatModeState.value = decodeSeatModeRaw(raw)
+            }
+        }
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
@@ -321,6 +369,7 @@ object MbCanRepository {
     private suspend fun reapplyAllInterests() {
         val mergedSignals = sourceMutex.withLock { sourceSignals.values.flatten().toSet() }
         MbCanJobManager.replaceSignals(mergedSignals)
+        MbCanEngineFacade.syncVehicleCfgCmdListener(mergedSignals.isNotEmpty())
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {

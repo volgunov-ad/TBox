@@ -28,6 +28,10 @@ object MbCanEngineFacade {
     private var registerCarSettingsListenerMethod: Method? = null
     private var unregisterCarSettingsListenerMethod: Method? = null
     private var settingsTelemetryProxy: Any? = null
+    private var registCmdListenerMethod: Method? = null
+    private var unRegistCmdListenerMethod: Method? = null
+    private var cfgVehicleDataType: Any? = null
+    private var vehicleCfgCmdListenerProxy: Any? = null
     private var initialized = false
 
     val availability: MbCanAvailability
@@ -68,6 +72,14 @@ object MbCanEngineFacade {
             registerCarSettingsListenerMethod =
                 engineClass.getMethod("registIMBCarSettingsListener", Class.forName("com.mengbo.mbCan.interfaces.IMBCanSettingsCallback"))
             unregisterCarSettingsListenerMethod = engineClass.getMethod("unregistIMBCarSettingsListener")
+            registCmdListenerMethod = engineClass.getMethod(
+                "registCMDListener",
+                Class.forName(DATA_TYPE_CLASS),
+                Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
+            )
+            unRegistCmdListenerMethod = engineClass.getMethod("unRegistCMDListener", Class.forName(DATA_TYPE_CLASS))
+            val dataTypeClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
+            cfgVehicleDataType = java.lang.Enum.valueOf(dataTypeClass, "eMBCAN_CFG_VEHICLE")
             initialized = true
             availabilityRef.set(MbCanAvailability.Available)
         } catch (t: Throwable) {
@@ -170,6 +182,57 @@ object MbCanEngineFacade {
             }
         }
         settingsTelemetryProxy = null
+    }
+
+    /**
+     * Registers a single [com.mengbo.mbCan.interfaces.IMBCmdListener] for [eMBCAN_CFG_VEHICLE] when [active],
+     * unregisters when inactive. OEM [unRegistCMDListener] clears all listeners for that data type.
+     */
+    @Synchronized
+    fun syncVehicleCfgCmdListener(active: Boolean) {
+        if (!active) {
+            unregisterVehicleCfgCmdListener()
+            return
+        }
+        if (vehicleCfgCmdListenerProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val dt = cfgVehicleDataType ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            if (method.name == "onCmdChanged" && args != null && args.size >= 4) {
+                val modular = (args[0] as Number).toInt() and 0xFF
+                val item = (args[2] as Number).toInt() and 0xFFFF
+                val value = (args[3] as Number).toInt()
+                MbCanRepository.scheduleVehicleCfgPush(modular, item, value)
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        vehicleCfgCmdListenerProxy = proxy
+        try {
+            registCmdListenerMethod?.invoke(inst, dt, proxy)
+        } catch (_: Throwable) {
+            vehicleCfgCmdListenerProxy = null
+        }
+    }
+
+    @Synchronized
+    private fun unregisterVehicleCfgCmdListener() {
+        val inst = engineInstance
+        val dt = cfgVehicleDataType
+        if (inst != null && vehicleCfgCmdListenerProxy != null && dt != null) {
+            try {
+                unRegistCmdListenerMethod?.invoke(inst, dt)
+            } catch (_: Throwable) {
+            }
+        }
+        vehicleCfgCmdListenerProxy = null
     }
 
     /**

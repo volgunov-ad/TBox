@@ -414,6 +414,7 @@ fun MainScreenDashboardPanel(
             },
             showTboxDisconnectIndicator = panel.showTboxDisconnectIndicator,
             enableMusicInnerInteractions = !isEditMode,
+            enableSeatHeatVentInnerInteractions = !isEditMode,
             externalWidgetHost = appWidgetHost
         )
         if (isEditMode) {

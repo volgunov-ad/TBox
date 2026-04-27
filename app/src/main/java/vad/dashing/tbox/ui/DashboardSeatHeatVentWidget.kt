@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +12,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +35,8 @@ import vad.dashing.tbox.mbcan.MbCanSeatModeState
 private val SeatHeatOnColor = Color(0xFFFF9800)
 private val SeatVentOnColor = Color(0xFF4FC3F7)
 
+private const val SEAT_ACTION_LOCKOUT_MS = 500L
+
 private enum class SeatSide { Left, Right }
 
 @Composable
@@ -40,7 +46,8 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
     shape: Dp,
     textColor: Color,
     backgroundColor: Color,
-    singleLineDualMetrics: Boolean
+    singleLineDualMetrics: Boolean,
+    enableInnerInteractions: Boolean = true,
 ) {
     val mode by MbCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
     SeatHeatVentWidget(
@@ -52,7 +59,8 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
         shape = shape,
         textColor = textColor,
         backgroundColor = backgroundColor,
-        singleLineDualMetrics = singleLineDualMetrics
+        singleLineDualMetrics = singleLineDualMetrics,
+        enableInnerInteractions = enableInnerInteractions
     )
 }
 
@@ -63,7 +71,8 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
     shape: Dp,
     textColor: Color,
     backgroundColor: Color,
-    singleLineDualMetrics: Boolean
+    singleLineDualMetrics: Boolean,
+    enableInnerInteractions: Boolean = true,
 ) {
     val mode by MbCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
     SeatHeatVentWidget(
@@ -75,7 +84,8 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
         shape = shape,
         textColor = textColor,
         backgroundColor = backgroundColor,
-        singleLineDualMetrics = singleLineDualMetrics
+        singleLineDualMetrics = singleLineDualMetrics,
+        enableInnerInteractions = enableInnerInteractions
     )
 }
 
@@ -89,9 +99,17 @@ private fun SeatHeatVentWidget(
     shape: Dp,
     textColor: Color,
     backgroundColor: Color,
-    singleLineDualMetrics: Boolean
+    singleLineDualMetrics: Boolean,
+    enableInnerInteractions: Boolean,
 ) {
     val context = LocalContext.current
+    var seatActionBlockedUntil by remember { mutableLongStateOf(0L) }
+    fun trySendSeatProperty(value: Int) {
+        val now = SystemClock.uptimeMillis()
+        if (now < seatActionBlockedUntil) return
+        seatActionBlockedUntil = now + SEAT_ACTION_LOCKOUT_MS
+        sendSetMbCanProperty(context, propertyId, value)
+    }
     DashboardWidgetScaffold(
         onClick = {},
         onLongClick = onLongClick,
@@ -120,10 +138,11 @@ private fun SeatHeatVentWidget(
                         R.drawable.ic_widget_seat_heat_right
                     },
                     level = (mode as? MbCanSeatModeState.Heat)?.level,
+                    enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
-                    onClick = { sendSetMbCanProperty(context, propertyId, nextHeatRaw(mode)) },
+                    onClick = { trySendSeatProperty(nextHeatRaw(mode)) },
                     onDoubleClick = {
-                        sendSetMbCanProperty(context, propertyId, 1)
+                        trySendSeatProperty(1)
                     }
                 )
                 SeatActionButton(
@@ -139,10 +158,11 @@ private fun SeatHeatVentWidget(
                         R.drawable.ic_widget_seat_vent_right
                     },
                     level = (mode as? MbCanSeatModeState.Vent)?.level,
+                    enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
-                    onClick = { sendSetMbCanProperty(context, propertyId, nextVentRaw(mode)) },
+                    onClick = { trySendSeatProperty(nextVentRaw(mode)) },
                     onDoubleClick = {
-                        sendSetMbCanProperty(context, propertyId, 1)
+                        trySendSeatProperty(1)
                     }
                 )
             }
@@ -166,10 +186,11 @@ private fun SeatHeatVentWidget(
                         R.drawable.ic_widget_seat_heat_right
                     },
                     level = (mode as? MbCanSeatModeState.Heat)?.level,
+                    enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
-                    onClick = { sendSetMbCanProperty(context, propertyId, nextHeatRaw(mode)) },
+                    onClick = { trySendSeatProperty(nextHeatRaw(mode)) },
                     onDoubleClick = {
-                        sendSetMbCanProperty(context, propertyId, 1)
+                        trySendSeatProperty(1)
                     }
                 )
                 SeatActionButton(
@@ -185,10 +206,11 @@ private fun SeatHeatVentWidget(
                         R.drawable.ic_widget_seat_vent_right
                     },
                     level = (mode as? MbCanSeatModeState.Vent)?.level,
+                    enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
-                    onClick = { sendSetMbCanProperty(context, propertyId, nextVentRaw(mode)) },
+                    onClick = { trySendSeatProperty(nextVentRaw(mode)) },
                     onDoubleClick = {
-                        sendSetMbCanProperty(context, propertyId, 1)
+                        trySendSeatProperty(1)
                     }
                 )
             }
@@ -204,19 +226,24 @@ private fun SeatActionButton(
     activeColor: Color,
     iconRes: Int,
     level: Int?,
+    enableInnerInteractions: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
     onDoubleClick: () -> Unit
 ) {
     val iconColor = if (level != null) activeColor else textColor
+    val shapeMod = Modifier.clip(RoundedCornerShape(8.dp))
+    val clickMod = if (enableInnerInteractions) {
+        shapeMod.combinedClickable(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onDoubleClick = onDoubleClick
+        )
+    } else {
+        shapeMod
+    }
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-                onDoubleClick = onDoubleClick
-            ),
+        modifier = modifier.then(clickMod),
         contentAlignment = Alignment.Center
     ) {
         Image(

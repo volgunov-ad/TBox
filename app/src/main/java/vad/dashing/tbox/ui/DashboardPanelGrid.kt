@@ -71,6 +71,7 @@ internal fun DashboardPanelGridAndFrames(
     onRestartRequested: () -> Unit,
     showTboxDisconnectIndicator: Boolean,
     enableMusicInnerInteractions: Boolean,
+    enableSeatHeatVentInnerInteractions: Boolean = true,
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 4.dp,
     fuelTankLiters: Int = 57,
@@ -184,6 +185,7 @@ internal fun DashboardPanelGridAndFrames(
                                     elevation = widgetCardElevation,
                                     shape = normalizeWidgetShape(widgetConfig.shape).dp,
                                     enableMusicInnerInteractions = enableMusicInnerInteractions,
+                                    enableSeatHeatVentInnerInteractions = enableSeatHeatVentInnerInteractions,
                                     fuelTankLiters = fuelTankLiters
                                 )
                             }

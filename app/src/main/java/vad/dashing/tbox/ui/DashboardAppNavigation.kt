@@ -2,9 +2,14 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+
+private val steeringHeatToggleLock = Any()
+private var steeringHeatToggleBlockedUntilMs = 0L
+private const val STEERING_HEAT_TOGGLE_LOCKOUT_MS = 500L
 
 internal fun launchAppFromWidget(context: Context, packageName: String) {
     if (packageName.isBlank()) return
@@ -68,6 +73,11 @@ internal fun sendToggleFloatingPanelsEnabled(
 }
 
 internal fun sendToggleSteeringWheelHeat(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(steeringHeatToggleLock) {
+        if (now < steeringHeatToggleBlockedUntilMs) return
+        steeringHeatToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
     try {
         context.startService(
             Intent(context, BackgroundService::class.java).apply {

@@ -51,6 +51,7 @@ fun DashboardWidgetRenderer(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     enableMusicInnerInteractions: Boolean = true,
+    enableSeatHeatVentInnerInteractions: Boolean = true,
     fuelTankLiters: Int = 57
 ) {
     val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
@@ -241,7 +242,8 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
-                singleLineDualMetrics = widgetConfig.singleLineDualMetrics
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                enableInnerInteractions = enableSeatHeatVentInnerInteractions
             )
         }
 
@@ -252,7 +254,8 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
-                singleLineDualMetrics = widgetConfig.singleLineDualMetrics
+                singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                enableInnerInteractions = enableSeatHeatVentInnerInteractions
             )
         }
 

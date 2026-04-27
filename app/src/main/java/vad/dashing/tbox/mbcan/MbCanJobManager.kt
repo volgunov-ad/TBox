@@ -14,8 +14,6 @@ object MbCanJobManager {
     private const val NORMAL_POLL_MS = 60_000L
     private const val BURST_POLL_MS = 1_500L
     private const val BURST_DURATION_MS = 15_000L
-    /** Full unsubscribe then subscribe for all active stream types (HU keep-alive). */
-    private const val RESUBSCRIBE_INTERVAL_MS = 600_000L
 
     private val mutex = Mutex()
     private var scope: CoroutineScope? = null
@@ -23,7 +21,6 @@ object MbCanJobManager {
     private val subscribedSignals = mutableSetOf<MbCanSignal>()
     private val signalJobs = mutableMapOf<MbCanSignal, Job>()
     private val burstUntil = mutableMapOf<MbCanSignal, Long>()
-    private var resubscribeJob: Job? = null
 
     suspend fun attach(serviceScope: CoroutineScope) {
         mutex.withLock {
@@ -31,18 +28,9 @@ object MbCanJobManager {
             TboxRepository.addLog("DEBUG", "MBCAN_TMP", "jobManager attach activeSignals=${activeSignals.joinToString()}")
             activeSignals.forEach { ensureSignalJobLocked(it) }
         }
-        resubscribeJob?.cancel()
-        resubscribeJob = serviceScope.launch(Dispatchers.IO) {
-            while (isActive) {
-                delay(RESUBSCRIBE_INTERVAL_MS)
-                resubscribeAllActiveStreamTypes()
-            }
-        }
     }
 
     suspend fun detach() {
-        resubscribeJob?.cancel()
-        resubscribeJob = null
         mutex.withLock {
             TboxRepository.addLog("DEBUG", "MBCAN_TMP", "jobManager detach jobs=${signalJobs.keys.joinToString()}")
             signalJobs.values.forEach { it.cancel() }
@@ -52,31 +40,17 @@ object MbCanJobManager {
         }
     }
 
-    /**
-     * Unsubscribe then subscribe the union of all [MbCanSignal.subscribeDataTypes] for currently active signals.
-     * Called on a fixed interval while the service scope is attached.
-     */
-    private suspend fun resubscribeAllActiveStreamTypes() {
-        if (!MbCanEngineFacade.isInitialized()) return
-        val types = mutex.withLock {
-            if (activeSignals.isEmpty()) return
-            activeSignals.flatMap { it.subscribeDataTypes }.toSet()
-        }
-        if (types.isEmpty()) return
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "mbCAN periodic resubscribe (unsub then sub) types=${types.joinToString()}")
-        MbCanEngineFacade.unSubscribe(types)
-        MbCanEngineFacade.subscribe(types)
-    }
-
     suspend fun onEngineInitialized() {
-        mutex.withLock {
+        val hasActive = mutex.withLock {
             val toSubscribe = activeSignals - subscribedSignals
             toSubscribe.forEach { signal ->
                 MbCanEngineFacade.subscribe(signal.subscribeDataTypes)
                 subscribedSignals.add(signal)
                 TboxRepository.addLog("DEBUG", "MBCAN_TMP", "late-subscribed signal=$signal types=${signal.subscribeDataTypes.joinToString()}")
             }
+            activeSignals.isNotEmpty()
         }
+        MbCanEngineFacade.syncVehicleCfgCmdListener(hasActive)
     }
 
     suspend fun replaceSignals(signals: Set<MbCanSignal>) {
