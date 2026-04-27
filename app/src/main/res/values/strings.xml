@@ -492,6 +492,7 @@
     <string name="refuels_price_source">АЗС / источник</string>
     <string name="refuels_cost">Стоимость</string>
     <string name="refuels_actions">Действия</string>
+    <string name="refuels_coordinates_copied">Координаты скопированы</string>
     <string name="dialog_save_refuels_downloads">Сохранить журнал заправок в один файл в папку Загрузки</string>
     <string name="data_title_net_widget">Виджет сигнала сети</string>
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>

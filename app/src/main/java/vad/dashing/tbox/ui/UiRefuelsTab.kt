@@ -1,6 +1,7 @@
 package vad.dashing.tbox.ui
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -437,12 +438,15 @@ private fun RefuelHeaderCell(text: String, widthDp: Int) {
 @Composable
 private fun RefuelCoordinatesCell(text: String, widthDp: Int, copyText: String?) {
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val copiedMessage = stringResource(R.string.refuels_coordinates_copied)
     RefuelCell(
         text = text,
         widthDp = widthDp,
         modifier = if (copyText != null) {
             Modifier.clickable {
                 clipboardManager.setText(AnnotatedString(copyText))
+                Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
             }
         } else {
             Modifier

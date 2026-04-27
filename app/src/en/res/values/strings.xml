@@ -492,6 +492,7 @@
     <string name="refuels_price_source">Station / source</string>
     <string name="refuels_cost">Cost</string>
     <string name="refuels_actions">Actions</string>
+    <string name="refuels_coordinates_copied">Coordinates copied</string>
     <string name="dialog_save_refuels_downloads">Save all refuels to one file in the Downloads folder</string>
     <string name="data_title_net_widget">Network signal widget</string>
     <string name="data_title_net_widget_new">Network signal widget (new)</string>
