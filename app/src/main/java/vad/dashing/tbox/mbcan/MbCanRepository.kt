@@ -52,6 +52,8 @@ object MbCanRepository {
     private const val INTERESTS_DEBOUNCE_MS = 350L
     private const val POST_COMMAND_VERIFY_DELAY_MS = 500L
     private const val VEHICLE_CFG_MODULAR = 2
+    /** Emit Unknown only after first observation + 2 repeats. */
+    private const val UNKNOWN_CONFIRMATION_COUNT = 3
     /** Coalesce rapid [eMBCAN_CFG_VEHICLE] pushes before updating [StateFlow]s (50–150 ms band). */
     private const val CFG_VEHICLE_PUSH_COALESCE_MS = 100L
 
@@ -94,24 +96,38 @@ object MbCanRepository {
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
     private val _frontRightSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontRightSeatModeState: StateFlow<MbCanSeatModeState> = _frontRightSeatModeState.asStateFlow()
+    private var steeringUnknownStreak = 0
+    private var steeringUnavailableStreak = 0
+    private var frontLeftSeatUnknownStreak = 0
+    private var frontLeftSeatUnavailableStreak = 0
+    private var frontRightSeatUnknownStreak = 0
+    private var frontRightSeatUnavailableStreak = 0
 
     suspend fun bind(scope: CoroutineScope) {
-        boundScope = scope
-        _availability.value = MbCanEngineFacade.probeAvailability()
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "bind() availability=${_availability.value}")
-        MbCanJobManager.attach(scope)
-        scheduleReapplyAllInterests()
+        try {
+            boundScope = scope
+            _availability.value = MbCanEngineFacade.probeAvailability()
+            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "bind() availability=${_availability.value}")
+            MbCanJobManager.attach(scope)
+            scheduleReapplyAllInterests()
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "MBCAN_TMP", "bind() failed: ${e.message}")
+        }
     }
 
     suspend fun unbind() {
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "unbind()")
-        cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
-        synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
-        MbCanEngineFacade.syncVehicleCfgCmdListener(false)
-        reapplyJob?.cancel()
-        reapplyJob = null
-        boundScope = null
-        MbCanJobManager.detach()
+        try {
+            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "unbind()")
+            cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
+            synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
+            MbCanEngineFacade.syncVehicleCfgCmdListener(false)
+            reapplyJob?.cancel()
+            reapplyJob = null
+            boundScope = null
+            MbCanJobManager.detach()
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "MBCAN_TMP", "unbind() failed: ${e.message}")
+        }
     }
 
     /**
@@ -141,13 +157,80 @@ object MbCanRepository {
         for ((item, raw) in snapshot) {
             when (item) {
                 MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH ->
-                    _steeringWheelHeatState.value = decodeSteeringWheelHeatRaw(raw)
+                    updateSteeringStateWithUnknownConfirmation(decodeSteeringWheelHeatRaw(raw))
                 MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH ->
-                    _frontLeftSeatModeState.value = decodeSeatModeRaw(raw)
+                    updateSeatStateWithUnknownConfirmation(
+                        state = decodeSeatModeRaw(raw),
+                        currentUnknownStreak = frontLeftSeatUnknownStreak,
+                        currentUnavailableStreak = frontLeftSeatUnavailableStreak,
+                        setUnknownStreak = { frontLeftSeatUnknownStreak = it },
+                        setUnavailableStreak = { frontLeftSeatUnavailableStreak = it },
+                        update = { _frontLeftSeatModeState.value = it }
+                    )
                 MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH ->
-                    _frontRightSeatModeState.value = decodeSeatModeRaw(raw)
+                    updateSeatStateWithUnknownConfirmation(
+                        state = decodeSeatModeRaw(raw),
+                        currentUnknownStreak = frontRightSeatUnknownStreak,
+                        currentUnavailableStreak = frontRightSeatUnavailableStreak,
+                        setUnknownStreak = { frontRightSeatUnknownStreak = it },
+                        setUnavailableStreak = { frontRightSeatUnavailableStreak = it },
+                        update = { _frontRightSeatModeState.value = it }
+                    )
             }
         }
+    }
+
+    private fun updateSteeringStateWithUnknownConfirmation(state: MbCanBinaryState) {
+        if (state is MbCanBinaryState.Unknown) {
+            steeringUnknownStreak += 1
+            steeringUnavailableStreak = 0
+            if (steeringUnknownStreak >= UNKNOWN_CONFIRMATION_COUNT) {
+                _steeringWheelHeatState.value = MbCanBinaryState.Unknown
+            }
+            return
+        }
+        if (state is MbCanBinaryState.Unavailable) {
+            steeringUnavailableStreak += 1
+            steeringUnknownStreak = 0
+            if (steeringUnavailableStreak >= UNKNOWN_CONFIRMATION_COUNT) {
+                _steeringWheelHeatState.value = state
+            }
+            return
+        }
+        steeringUnknownStreak = 0
+        steeringUnavailableStreak = 0
+        _steeringWheelHeatState.value = state
+    }
+
+    private fun updateSeatStateWithUnknownConfirmation(
+        state: MbCanSeatModeState,
+        currentUnknownStreak: Int,
+        currentUnavailableStreak: Int,
+        setUnknownStreak: (Int) -> Unit,
+        setUnavailableStreak: (Int) -> Unit,
+        update: (MbCanSeatModeState) -> Unit
+    ) {
+        if (state is MbCanSeatModeState.Unknown) {
+            val next = currentUnknownStreak + 1
+            setUnknownStreak(next)
+            setUnavailableStreak(0)
+            if (next >= UNKNOWN_CONFIRMATION_COUNT) {
+                update(MbCanSeatModeState.Unknown)
+            }
+            return
+        }
+        if (state is MbCanSeatModeState.Unavailable) {
+            val next = currentUnavailableStreak + 1
+            setUnavailableStreak(next)
+            setUnknownStreak(0)
+            if (next >= UNKNOWN_CONFIRMATION_COUNT) {
+                update(state)
+            }
+            return
+        }
+        setUnknownStreak(0)
+        setUnavailableStreak(0)
+        update(state)
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
@@ -277,7 +360,7 @@ object MbCanRepository {
     private suspend fun refreshSteeringWheelHeat() {
         if (!MbCanEngineFacade.isInitialized()) {
             _availability.value = MbCanEngineFacade.probeAvailability()
-            _steeringWheelHeatState.value = MbCanBinaryState.Unknown
+            updateSteeringStateWithUnknownConfirmation(MbCanBinaryState.Unknown)
             return
         }
 
@@ -285,17 +368,20 @@ object MbCanRepository {
         _availability.value = availability
         if (availability !is MbCanAvailability.Available) {
             TboxRepository.addLog("WARN", "MBCAN_TMP", "refreshSteeringWheelHeat unavailable=$availability")
-            _steeringWheelHeatState.value = MbCanBinaryState.Unavailable(
+            updateSteeringStateWithUnknownConfirmation(
+                MbCanBinaryState.Unavailable(
                 reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+            )
             )
             return
         }
         val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH)
-        _steeringWheelHeatState.value = if (raw == null) {
+        val state = if (raw == null) {
             MbCanBinaryState.Unknown
         } else {
             decodeSteeringWheelHeatRaw(raw)
         }
+        updateSteeringStateWithUnknownConfirmation(state)
         TboxRepository.addLog(
             "DEBUG",
             "MBCAN_TMP",
@@ -326,23 +412,102 @@ object MbCanRepository {
     ) {
         if (!MbCanEngineFacade.isInitialized()) {
             _availability.value = MbCanEngineFacade.probeAvailability()
-            update(MbCanSeatModeState.Unknown)
+            updateSeatStateWithUnknownConfirmation(
+                state = MbCanSeatModeState.Unknown,
+                currentUnknownStreak = if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                    frontLeftSeatUnknownStreak
+                } else {
+                    frontRightSeatUnknownStreak
+                },
+                currentUnavailableStreak = if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                    frontLeftSeatUnavailableStreak
+                } else {
+                    frontRightSeatUnavailableStreak
+                },
+                setUnknownStreak = {
+                    if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                        frontLeftSeatUnknownStreak = it
+                    } else {
+                        frontRightSeatUnknownStreak = it
+                    }
+                },
+                setUnavailableStreak = {
+                    if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                        frontLeftSeatUnavailableStreak = it
+                    } else {
+                        frontRightSeatUnavailableStreak = it
+                    }
+                },
+                update = update
+            )
             return
         }
 
         val availability = MbCanEngineFacade.availability
         _availability.value = availability
         if (availability !is MbCanAvailability.Available) {
-            update(
-                MbCanSeatModeState.Unavailable(
+            updateSeatStateWithUnknownConfirmation(
+                state = MbCanSeatModeState.Unavailable(
                     reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
-                )
+                ),
+                currentUnknownStreak = if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                    frontLeftSeatUnknownStreak
+                } else {
+                    frontRightSeatUnknownStreak
+                },
+                currentUnavailableStreak = if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                    frontLeftSeatUnavailableStreak
+                } else {
+                    frontRightSeatUnavailableStreak
+                },
+                setUnknownStreak = {
+                    if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                        frontLeftSeatUnknownStreak = it
+                    } else {
+                        frontRightSeatUnknownStreak = it
+                    }
+                },
+                setUnavailableStreak = {
+                    if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                        frontLeftSeatUnavailableStreak = it
+                    } else {
+                        frontRightSeatUnavailableStreak = it
+                    }
+                },
+                update = update
             )
             return
         }
         val raw = MbCanEngineFacade.canGetVehicleParam(propertyId)
         val state = if (raw == null) MbCanSeatModeState.Unknown else decodeSeatModeRaw(raw)
-        update(state)
+        updateSeatStateWithUnknownConfirmation(
+            state = state,
+            currentUnknownStreak = if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                frontLeftSeatUnknownStreak
+            } else {
+                frontRightSeatUnknownStreak
+            },
+            currentUnavailableStreak = if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                frontLeftSeatUnavailableStreak
+            } else {
+                frontRightSeatUnavailableStreak
+            },
+            setUnknownStreak = {
+                if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                    frontLeftSeatUnknownStreak = it
+                } else {
+                    frontRightSeatUnknownStreak = it
+                }
+            },
+            setUnavailableStreak = {
+                if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                    frontLeftSeatUnavailableStreak = it
+                } else {
+                    frontRightSeatUnavailableStreak = it
+                }
+            },
+            update = update
+        )
         TboxRepository.addLog("DEBUG", "MBCAN_TMP", "refreshSeatMode tag=$tag raw=$raw state=$state")
     }
 

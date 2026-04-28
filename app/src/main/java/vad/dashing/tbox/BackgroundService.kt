@@ -2505,8 +2505,14 @@ class BackgroundService : Service() {
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
 
-        runBlocking {
-            MbCanRepository.unbind()
+        scope.launch(Dispatchers.IO + NonCancellable) {
+            try {
+                withTimeout(2_000L) {
+                    MbCanRepository.unbind()
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "MBCAN_TMP", "onDestroy mbCAN unbind failed: ${e.message}")
+            }
         }
         cancelAllJobs()
         job.cancel()
