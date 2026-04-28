@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,7 +32,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
@@ -70,6 +71,7 @@ fun MainDashboardTab(
     onTripFinishAndStart: () -> Unit,
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
 
     DisposableEffect(appWidgetHost) {
@@ -128,7 +130,7 @@ fun MainDashboardTab(
         }
         DisposableEffect(Unit) {
             onDispose {
-                runBlocking {
+                coroutineScope.launch {
                     MbCanRepository.clearSource("dashboard-tab-main")
                 }
             }

@@ -15,13 +15,14 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
@@ -75,6 +76,7 @@ internal fun DashboardPanelGridAndFrames(
     gridSpacingDp: Dp = 4.dp,
     fuelTankLiters: Int = 57,
 ) {
+    val coroutineScope = rememberCoroutineScope()
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
         MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
@@ -89,7 +91,7 @@ internal fun DashboardPanelGridAndFrames(
         }
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
-                runBlocking {
+                coroutineScope.launch {
                     MbCanRepository.clearSource(mbCanInterestSourceId)
                 }
             }

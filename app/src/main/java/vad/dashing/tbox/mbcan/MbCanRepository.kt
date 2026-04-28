@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import vad.dashing.tbox.TboxRepository
-
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
     FrontLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
@@ -46,12 +44,23 @@ sealed class MbCanCommand {
 }
 
 object MbCanRepository {
-    private const val SIGNAL_STEERING_WIDGET_KEY = "steeringWheelHeatWidget"
-    private const val SIGNAL_FRONT_LEFT_SEAT_WIDGET_KEY = "frontLeftSeatHeatVentWidget"
-    private const val SIGNAL_FRONT_RIGHT_SEAT_WIDGET_KEY = "frontRightSeatHeatVentWidget"
+    private data class WidgetSignalBinding(
+        val widgetKey: String,
+        val signal: MbCanSignal
+    )
+
+    private val widgetSignalRegistry = listOf(
+        WidgetSignalBinding("steeringWheelHeatWidget", MbCanSignal.SteeringWheelHeat),
+        WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
+        WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode)
+    )
+
+    private val signalByWidgetKey: Map<String, MbCanSignal> = widgetSignalRegistry
+        .associate { it.widgetKey to it.signal }
     private const val INTERESTS_DEBOUNCE_MS = 350L
     private const val POST_COMMAND_VERIFY_DELAY_MS = 500L
     private const val VEHICLE_CFG_MODULAR = 2
+    private const val CFG_VEHICLE_DATA_TYPE = "eMBCAN_CFG_VEHICLE"
     /** Emit Unknown only after first observation + 2 repeats. */
     private const val UNKNOWN_CONFIRMATION_COUNT = 3
     /** Coalesce rapid [eMBCAN_CFG_VEHICLE] pushes before updating [StateFlow]s (50–150 ms band). */
@@ -113,17 +122,17 @@ object MbCanRepository {
         try {
             boundScope = scope
             _availability.value = MbCanEngineFacade.probeAvailability()
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "bind() availability=${_availability.value}")
+            MbCanDiagnostics.log("DEBUG", "bind() availability=${_availability.value}")
             MbCanJobManager.attach(scope)
             scheduleReapplyAllInterests()
         } catch (e: Exception) {
-            TboxRepository.addLog("ERROR", "MBCAN_TMP", "bind() failed: ${e.message}")
+            MbCanDiagnostics.log("ERROR", "bind() failed: ${e.message}")
         }
     }
 
     suspend fun unbind() {
         try {
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "unbind()")
+            MbCanDiagnostics.log("DEBUG", "unbind()")
             cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
@@ -132,7 +141,7 @@ object MbCanRepository {
             boundScope = null
             MbCanJobManager.detach()
         } catch (e: Exception) {
-            TboxRepository.addLog("ERROR", "MBCAN_TMP", "unbind() failed: ${e.message}")
+            MbCanDiagnostics.log("ERROR", "unbind() failed: ${e.message}")
         }
     }
 
@@ -241,9 +250,8 @@ object MbCanRepository {
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
         val signals = widgetKeys.mapNotNull { widgetKeyToSignal(it) }.toSet()
-        TboxRepository.addLog(
+        MbCanDiagnostics.log(
             "DEBUG",
-            "MBCAN_TMP",
             "setSourceWidgetKeys source=$sourceId widgetKeys=${widgetKeys.joinToString()} signals=${signals.joinToString()}"
         )
         sourceMutex.withLock {
@@ -257,13 +265,13 @@ object MbCanRepository {
     }
 
     suspend fun clearSource(sourceId: String) {
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "clearSource source=$sourceId")
+        MbCanDiagnostics.log("DEBUG", "clearSource source=$sourceId")
         sourceMutex.withLock { sourceSignals.remove(sourceId) }
         scheduleReapplyAllInterests()
     }
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "execute command=$command")
+        MbCanDiagnostics.log("DEBUG", "execute command=$command")
         ensureMbCanReadyIfNeeded()
         return when (command) {
             is MbCanCommand.ToggleProperty -> executeToggleProperty(command.propertyId)
@@ -276,7 +284,7 @@ object MbCanRepository {
     }
 
     private suspend fun executeToggleProperty(propertyId: Int): MbCanCommandResult {
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "executeToggleProperty propertyId=$propertyId")
+        MbCanDiagnostics.log("DEBUG", "executeToggleProperty propertyId=$propertyId")
         if (propertyId == MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH) {
             return toggleSteeringWheelHeat()
         }
@@ -286,45 +294,45 @@ object MbCanRepository {
         val current = MbCanEngineFacade.canGetVehicleParam(propertyId)
             ?: return MbCanCommandResult(false, "Pre-read failed")
                 .also {
-                    TboxRepository.addLog("ERROR", "MBCAN_TMP", "toggle pre-read failed propertyId=$propertyId")
+                    MbCanDiagnostics.log("ERROR", "toggle pre-read failed propertyId=$propertyId")
                 }
         val target = if (current > 0) 0 else 1
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "toggle pre-read current=$current target=$target propertyId=$propertyId")
+        MbCanDiagnostics.log("DEBUG", "toggle pre-read current=$current target=$target propertyId=$propertyId")
         val setResult = MbCanEngineFacade.canSetVehicleParam(propertyId, target)
             ?: return MbCanCommandResult(false, "Set command failed")
                 .also {
-                    TboxRepository.addLog("ERROR", "MBCAN_TMP", "toggle set failed propertyId=$propertyId target=$target")
+                    MbCanDiagnostics.log("ERROR", "toggle set failed propertyId=$propertyId target=$target")
                 }
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "toggle set result=$setResult propertyId=$propertyId target=$target")
+        MbCanDiagnostics.log("DEBUG", "toggle set result=$setResult propertyId=$propertyId target=$target")
         if (setResult >= 0) {
             delay(POST_COMMAND_VERIFY_DELAY_MS)
             val after = MbCanEngineFacade.canGetVehicleParam(propertyId)
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "toggle verify propertyId=$propertyId after=$after")
+            MbCanDiagnostics.log("DEBUG", "toggle verify propertyId=$propertyId after=$after")
         }
         return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
 
     private suspend fun executeSetProperty(propertyId: Int, value: Int): MbCanCommandResult {
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "executeSetProperty propertyId=$propertyId value=$value")
+        MbCanDiagnostics.log("DEBUG", "executeSetProperty propertyId=$propertyId value=$value")
         if (availability.value !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, "mbCAN unavailable")
         }
         val setResult = MbCanEngineFacade.canSetVehicleParam(propertyId, value)
             ?: return MbCanCommandResult(false, "Set command failed")
                 .also {
-                    TboxRepository.addLog("ERROR", "MBCAN_TMP", "set failed propertyId=$propertyId value=$value")
+                    MbCanDiagnostics.log("ERROR", "set failed propertyId=$propertyId value=$value")
                 }
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "set result=$setResult propertyId=$propertyId value=$value")
+        MbCanDiagnostics.log("DEBUG", "set result=$setResult propertyId=$propertyId value=$value")
         if (setResult >= 0) {
             delay(POST_COMMAND_VERIFY_DELAY_MS)
             val after = MbCanEngineFacade.canGetVehicleParam(propertyId)
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "set verify propertyId=$propertyId after=$after")
+            MbCanDiagnostics.log("DEBUG", "set verify propertyId=$propertyId after=$after")
         }
         return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
 
     private suspend fun toggleSteeringWheelHeat(): MbCanCommandResult {
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "toggleSteeringWheelHeat() begin")
+        MbCanDiagnostics.log("DEBUG", "toggleSteeringWheelHeat() begin")
         refreshSteeringWheelHeat()
         if (availability.value !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, "mbCAN unavailable")
@@ -341,17 +349,17 @@ object MbCanRepository {
             target
         ) ?: return MbCanCommandResult(false, "Set command failed")
             .also {
-                TboxRepository.addLog("ERROR", "MBCAN_TMP", "steering set failed target=$target")
+                MbCanDiagnostics.log("ERROR", "steering set failed target=$target")
             }
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "steering set result=$setResult target=$target current=$current")
+        MbCanDiagnostics.log("DEBUG", "steering set result=$setResult target=$target current=$current")
         if (setResult >= 0) {
             delay(POST_COMMAND_VERIFY_DELAY_MS)
             refreshSteeringWheelHeat()
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "steering verify after delay state=${steeringWheelHeatState.value}")
+            MbCanDiagnostics.log("DEBUG", "steering verify after delay state=${steeringWheelHeatState.value}")
         }
         MbCanJobManager.requestBurst(MbCanSignal.SteeringWheelHeat)
         refreshSteeringWheelHeat()
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "steering state after burst refresh=${steeringWheelHeatState.value}")
+        MbCanDiagnostics.log("DEBUG", "steering state after burst refresh=${steeringWheelHeatState.value}")
         return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
 
@@ -373,7 +381,7 @@ object MbCanRepository {
         val availability = MbCanEngineFacade.availability
         _availability.value = availability
         if (availability !is MbCanAvailability.Available) {
-            TboxRepository.addLog("WARN", "MBCAN_TMP", "refreshSteeringWheelHeat unavailable=$availability")
+            MbCanDiagnostics.log("WARN", "refreshSteeringWheelHeat unavailable=$availability")
             updateSteeringStateWithUnknownConfirmation(
                 MbCanBinaryState.Unavailable(
                 reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
@@ -391,9 +399,8 @@ object MbCanRepository {
             MbCanJobManager.requestBurst(MbCanSignal.SteeringWheelHeat)
         }
         updateSteeringStateWithUnknownConfirmation(state)
-        TboxRepository.addLog(
+        MbCanDiagnostics.log(
             "DEBUG",
-            "MBCAN_TMP",
             "refreshSteeringWheelHeat raw=$raw state=${_steeringWheelHeatState.value}"
         )
     }
@@ -530,14 +537,14 @@ object MbCanRepository {
             },
             update = update
         )
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "refreshSeatMode tag=$tag raw=$raw state=$state")
+        MbCanDiagnostics.log("DEBUG", "refreshSeatMode tag=$tag raw=$raw state=$state")
     }
 
     private suspend fun ensureMbCanReadyIfNeeded() {
         if (MbCanEngineFacade.isInitialized()) return
         val availability = MbCanEngineFacade.ensureInitialized()
         _availability.value = availability
-        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "ensureMbCanReadyIfNeeded availability=$availability")
+        MbCanDiagnostics.log("DEBUG", "ensureMbCanReadyIfNeeded availability=$availability")
         if (availability is MbCanAvailability.Available) {
             MbCanJobManager.onEngineInitialized()
             reapplyAllInterests()
@@ -556,16 +563,14 @@ object MbCanRepository {
     private suspend fun reapplyAllInterests() {
         val mergedSignals = sourceMutex.withLock { sourceSignals.values.flatten().toSet() }
         MbCanJobManager.replaceSignals(mergedSignals)
-        MbCanEngineFacade.syncVehicleCfgCmdListener(mergedSignals.isNotEmpty())
+        val needsCfgVehicleListener = mergedSignals.any { signal ->
+            signal.subscribeDataTypes.contains(CFG_VEHICLE_DATA_TYPE)
+        }
+        MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {
-        return when (widgetKey) {
-            SIGNAL_STEERING_WIDGET_KEY -> MbCanSignal.SteeringWheelHeat
-            SIGNAL_FRONT_LEFT_SEAT_WIDGET_KEY -> MbCanSignal.FrontLeftSeatMode
-            SIGNAL_FRONT_RIGHT_SEAT_WIDGET_KEY -> MbCanSignal.FrontRightSeatMode
-            else -> null
-        }
+        return signalByWidgetKey[widgetKey]
     }
 
     /**
