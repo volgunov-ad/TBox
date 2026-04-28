@@ -7,22 +7,8 @@ import kotlinx.coroutines.flow.update
 import kotlin.math.abs
 import kotlin.math.max
 
-/**
- * When a trip that had [TripRecord.endTimeEpochMs] is reopened on service start, [BackgroundService]
- * may revert that reopen on HU shutdown if the engine never ran this session.
- */
-data class ColdResumeReopenedEndedTrip(
-    val tripId: String,
-    val previousEndTimeEpochMs: Long,
-    val previousIdleTimeMs: Long,
-    val previousParkingTimeMs: Long,
-    val parkedMsAddedToIdle: Long,
-)
-
 data class TripResumeStartResult(
     val resumed: Boolean,
-    /** Non-null only if a finished trip was reopened (split window); used to revert HU-off without engine start. */
-    val reopenedEndedTrip: ColdResumeReopenedEndedTrip?,
 )
 
 object TripRepository {
@@ -199,52 +185,29 @@ object TripRepository {
     }
 
     /**
-     * When the service starts, continue the last saved trip if it is still active (no end time)
-     * or the end time was less than [splitWindowMs] ago (short stop / restart within split window).
-     * If wall clock is before the stored end (e.g. HU time reset), a finished trip is not resumed.
-     * Returns true if a trip was resumed (or was already active).
-     *
-     * For a trip that had [TripRecord.endTimeEpochMs] set, this method only reopens it and keeps the
-     * previous idle unchanged. The parked segment is applied later on first engine start in
-     * [BackgroundService.onTripRpmSample] so HU-on time before RPM>0 is counted once.
+     * When the service starts, continue a trip only if it is already active in storage.
+     * Ended trips inside the split window stay closed until the first RPM>0 sample confirms continuation.
      */
     fun tryResumeLastTripAfterServiceStart(splitWindowMs: Long): TripResumeStartResult {
         synchronized(lock) {
             val list = _trips.value
-            if (list.isEmpty()) return TripResumeStartResult(false, null)
+            if (list.isEmpty()) return TripResumeStartResult(false)
             val now = System.currentTimeMillis()
             val candidate = TripRules.findResumeCandidate(list, now, splitWindowMs)
-                ?: return TripResumeStartResult(false, null)
-            if (!TripRules.shouldResumeLastTripOnColdStart(candidate, now, splitWindowMs)) {
-                return TripResumeStartResult(false, null)
-            }
-            val reopenInfo: ColdResumeReopenedEndedTrip?
-            val resumed = if (candidate.isActive) {
-                reopenInfo = null
-                candidate
-            } else {
-                val endedAt = candidate.endTimeEpochMs ?: return TripResumeStartResult(false, null)
-                val parkedMs = (now - endedAt).coerceAtLeast(0L)
-                reopenInfo = ColdResumeReopenedEndedTrip(
-                    tripId = candidate.id,
-                    previousEndTimeEpochMs = endedAt,
-                    previousIdleTimeMs = candidate.idleTimeMs,
-                    previousParkingTimeMs = candidate.parkingTimeMs,
-                    parkedMsAddedToIdle = parkedMs,
-                )
-                candidate.copy(
-                    endTimeEpochMs = null,
-                    parkingTimeMs = candidate.parkingTimeMs,
-                )
+                ?: return TripResumeStartResult(false)
+            if (!candidate.isActive ||
+                !TripRules.shouldResumeLastTripOnColdStart(candidate, now, splitWindowMs)
+            ) {
+                return TripResumeStartResult(false)
             }
             _trips.update { cur ->
                 val mapped = cur.map { t ->
-                    if (t.id == resumed.id) resumed else t
+                    if (t.id == candidate.id) candidate else t
                 }
                 normalizeTripsList(mapped)
             }
             _activeTrip.value = _trips.value.lastOrNull { it.isActive }
-            return TripResumeStartResult(true, reopenInfo)
+            return TripResumeStartResult(true)
         }
     }
 
