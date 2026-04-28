@@ -448,13 +448,13 @@ class BackgroundService : Service() {
         scope.launch {
             MbCanRepository.bind(scope)
         }
-        mbCanDebugProbeJob = scope.launch(exceptionHandler) {
+        /*mbCanDebugProbeJob = scope.launch(exceptionHandler) {
             delay(MBCAN_DEBUG_PROBE_INTERVAL_MS)
             while (isActive) {
                 runMbCanDebugParameterProbeRound()
                 delay(MBCAN_DEBUG_PROBE_INTERVAL_MS)
             }
-        }
+        }*/
 
         infraBootstrapJob = scope.launch {
             try {

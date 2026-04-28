@@ -33,7 +33,19 @@ fun DashboardSteeringWheelHeatWidgetItem(
     scale: Float = 1f
 ) {
     val state by MbCanRepository.steeringWheelHeatState.collectAsStateWithLifecycle()
-    val iconColor = if (state is MbCanBinaryState.On) SteeringHeatOnColor else textColor
+    val iconColor = when (state) {
+        is MbCanBinaryState.On -> {
+            SteeringHeatOnColor
+        }
+
+        is MbCanBinaryState.Off -> {
+            textColor
+        }
+
+        else -> {
+            textColor.copy(alpha = 0.25f)
+        }
+    }
     DashboardWidgetScaffold(
         onClick = onClick,
         onLongClick = onLongClick,

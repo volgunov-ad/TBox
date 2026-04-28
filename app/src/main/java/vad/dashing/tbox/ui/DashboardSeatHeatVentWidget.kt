@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
@@ -123,6 +124,19 @@ private fun SeatHeatVentWidget(
         seatActionBlockedUntil = now + SEAT_ACTION_LOCKOUT_MS
         sendSetMbCanProperty(context, propertyId, value)
     }
+    val iconColor = when (mode) {
+        is MbCanSeatModeState.Unavailable -> {
+            textColor.copy(alpha = 0.25f)
+        }
+
+        is MbCanSeatModeState.Unknown -> {
+            textColor.copy(alpha = 0.25f)
+        }
+
+        else -> {
+            textColor
+        }
+    }
     DashboardWidgetScaffold(
         onClick = if (enableInnerInteractions) {
             {}
@@ -145,7 +159,7 @@ private fun SeatHeatVentWidget(
                         .weight(1f)
                         .fillMaxSize(),
                     side = side,
-                    textColor = textColor,
+                    iconColor = iconColor,
                     modeType = "heat",
                     level = (mode as? MbCanSeatModeState.Heat)?.level,
                     onLongClick = onLongClick,
@@ -164,7 +178,7 @@ private fun SeatHeatVentWidget(
                         .weight(1f)
                         .fillMaxSize(),
                     side = side,
-                    textColor = textColor,
+                    iconColor = iconColor,
                     modeType = "vent",
                     level = (mode as? MbCanSeatModeState.Vent)?.level,
                     onLongClick = onLongClick,
@@ -191,7 +205,7 @@ private fun SeatHeatVentWidget(
                         .weight(1f)
                         .fillMaxSize(),
                     side = side,
-                    textColor = textColor,
+                    iconColor = iconColor,
                     modeType = "heat",
                     level = (mode as? MbCanSeatModeState.Heat)?.level,
                     onLongClick = onLongClick,
@@ -210,7 +224,7 @@ private fun SeatHeatVentWidget(
                         .weight(1f)
                         .fillMaxSize(),
                     side = side,
-                    textColor = textColor,
+                    iconColor = iconColor,
                     modeType = "vent",
                     level = (mode as? MbCanSeatModeState.Vent)?.level,
                     onLongClick = onLongClick,
@@ -233,7 +247,7 @@ private fun SeatHeatVentWidget(
 private fun SeatActionButton(
     modifier: Modifier,
     side: SeatSide,
-    textColor: Color,
+    iconColor: Color,
     modeType: String,
     level: Int?,
     onLongClick: () -> Unit,
@@ -257,7 +271,7 @@ private fun SeatActionButton(
             modifier = Modifier
                 .matchParentSize()
                 .scale(scale),
-            colorFilter = ColorFilter.tint(textColor),
+            colorFilter = ColorFilter.tint(iconColor),
             contentScale = ContentScale.Fit,
         )
         if (modeType == "heat") {
@@ -267,7 +281,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .matchParentSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatHeatOnColor else textColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatHeatOnColor else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -276,7 +290,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .matchParentSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) SeatHeatOnColor else textColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) SeatHeatOnColor else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -285,7 +299,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .matchParentSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level == 3) SeatHeatOnColor else textColor),
+                colorFilter = ColorFilter.tint(if (level == 3) SeatHeatOnColor else iconColor),
                 contentScale = ContentScale.Fit,
             )
         } else if (modeType == "vent") {
@@ -295,7 +309,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .matchParentSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else textColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -304,7 +318,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .matchParentSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else textColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -313,7 +327,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .matchParentSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) SeatVentOnColor else textColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) SeatVentOnColor else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -322,7 +336,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .matchParentSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level == 3) SeatVentOnColor else textColor),
+                colorFilter = ColorFilter.tint(if (level == 3) SeatVentOnColor else iconColor),
                 contentScale = ContentScale.Fit,
             )
         }

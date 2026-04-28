@@ -82,6 +82,12 @@ object MbCanRepository {
         }
     }
 
+    private fun MbCanBinaryState.isProblemState(): Boolean =
+        this is MbCanBinaryState.Unknown || this is MbCanBinaryState.Unavailable
+
+    private fun MbCanSeatModeState.isProblemState(): Boolean =
+        this is MbCanSeatModeState.Unknown || this is MbCanSeatModeState.Unavailable
+
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
     private val sourceMutex = Mutex()
     private var boundScope: CoroutineScope? = null
@@ -381,6 +387,9 @@ object MbCanRepository {
         } else {
             decodeSteeringWheelHeatRaw(raw)
         }
+        if (state.isProblemState() && !_steeringWheelHeatState.value.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.SteeringWheelHeat)
+        }
         updateSteeringStateWithUnknownConfirmation(state)
         TboxRepository.addLog(
             "DEBUG",
@@ -480,6 +489,19 @@ object MbCanRepository {
         }
         val raw = MbCanEngineFacade.canGetVehicleParam(propertyId)
         val state = if (raw == null) MbCanSeatModeState.Unknown else decodeSeatModeRaw(raw)
+        val currentState = if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+            _frontLeftSeatModeState.value
+        } else {
+            _frontRightSeatModeState.value
+        }
+        if (state.isProblemState() && !currentState.isProblemState()) {
+            val signal = if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
+                MbCanSignal.FrontLeftSeatMode
+            } else {
+                MbCanSignal.FrontRightSeatMode
+            }
+            MbCanJobManager.requestBurst(signal)
+        }
         updateSeatStateWithUnknownConfirmation(
             state = state,
             currentUnknownStreak = if (propertyId == MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) {
