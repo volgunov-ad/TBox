@@ -41,6 +41,7 @@ private enum class SeatSide { Left, Right }
 
 @Composable
 fun DashboardFrontLeftSeatHeatVentWidgetItem(
+    onClick: () -> Unit,
     onLongClick: () -> Unit,
     elevation: Dp,
     shape: Dp,
@@ -54,6 +55,7 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
         side = SeatSide.Left,
         mode = mode,
         propertyId = MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
+        onClick = onClick,
         onLongClick = onLongClick,
         elevation = elevation,
         shape = shape,
@@ -66,6 +68,7 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
 
 @Composable
 fun DashboardFrontRightSeatHeatVentWidgetItem(
+    onClick: () -> Unit,
     onLongClick: () -> Unit,
     elevation: Dp,
     shape: Dp,
@@ -79,6 +82,7 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
         side = SeatSide.Right,
         mode = mode,
         propertyId = MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
+        onClick = onClick,
         onLongClick = onLongClick,
         elevation = elevation,
         shape = shape,
@@ -94,6 +98,7 @@ private fun SeatHeatVentWidget(
     side: SeatSide,
     mode: MbCanSeatModeState,
     propertyId: Int,
+    onClick: () -> Unit,
     onLongClick: () -> Unit,
     elevation: Dp,
     shape: Dp,
@@ -232,18 +237,19 @@ private fun SeatActionButton(
     onDoubleClick: () -> Unit
 ) {
     val iconColor = if (level != null) activeColor else textColor
-    val shapeMod = Modifier.clip(RoundedCornerShape(8.dp))
-    val clickMod = if (enableInnerInteractions) {
-        shapeMod.combinedClickable(
-            onClick = onClick,
-            onLongClick = onLongClick,
-            onDoubleClick = onDoubleClick
-        )
+    val gestureModifier = if (enableInnerInteractions) {
+        Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = onDoubleClick
+            )
     } else {
-        shapeMod
+        Modifier
     }
     Box(
-        modifier = modifier.then(clickMod),
+        modifier = modifier.then(gestureModifier),
         contentAlignment = Alignment.Center
     ) {
         Image(

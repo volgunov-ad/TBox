@@ -237,6 +237,7 @@ fun DashboardWidgetRenderer(
 
         "frontLeftSeatHeatVentWidget" -> {
             DashboardFrontLeftSeatHeatVentWidgetItem(
+                onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
                 shape = shape,
@@ -249,6 +250,7 @@ fun DashboardWidgetRenderer(
 
         "frontRightSeatHeatVentWidget" -> {
             DashboardFrontRightSeatHeatVentWidgetItem(
+                onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
                 shape = shape,
