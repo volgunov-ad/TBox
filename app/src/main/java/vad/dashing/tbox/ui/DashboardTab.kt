@@ -31,6 +31,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
@@ -57,6 +58,7 @@ import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
+import vad.dashing.tbox.mbcan.MbCanRepository
 
 @Composable
 fun MainDashboardTab(
@@ -92,6 +94,9 @@ fun MainDashboardTab(
     val widgetConfigs = remember(widgetsConfig, totalWidgets) {
         normalizeWidgetConfigs(widgetsConfig, totalWidgets)
     }
+    val panelNeedsMbCan = remember(widgetConfigs) {
+        MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
+    }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
@@ -111,6 +116,22 @@ fun MainDashboardTab(
     DisposableEffect(mediaSourceId) {
         onDispose {
             SharedMediaControlService.clearSourceSelection(mediaSourceId)
+        }
+    }
+    if (panelNeedsMbCan) {
+        LaunchedEffect(widgetConfigs) {
+            val activeKeys = widgetConfigs
+                .map { it.dataKey.trim() }
+                .filter { it.isNotBlank() && it != "null" }
+                .toSet()
+            MbCanRepository.setSourceWidgetKeys("dashboard-tab-main", activeKeys)
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                runBlocking {
+                    MbCanRepository.clearSource("dashboard-tab-main")
+                }
+            }
         }
     }
 
