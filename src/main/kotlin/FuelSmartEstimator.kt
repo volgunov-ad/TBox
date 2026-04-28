@@ -106,6 +106,7 @@ class FuelSmartEstimator(
 
     // --- Вспомогательные методы остаются без изменений ---
     fun calculateRange(liters: Double, avgCons: Double) = if (avgCons > 0) (liters / avgCons) * 100 else 0.0
+
     /*
     fun detectFuelAnomaly(currentLiters: Double, isEngineRunning: Boolean): String {
         if (lastStableLevel < 0) {
