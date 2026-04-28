@@ -1,3 +1,5 @@
+import kotlin.math.abs
+
 class FuelSystemSimulator(
     private val estimator: FuelSmartEstimator,
     private val filter: FuelFilter
@@ -8,15 +10,40 @@ class FuelSystemSimulator(
         // Тестовые данные: добавим побольше моточасов для наглядности
         val history = listOf(
             FuelEntry(1000.0, 100.0, 5.0, 25.0, 22.0, 20.0), // +20 град, 100 мч
-            FuelEntry(1500.0, 110.0, 10.0, 45.0, 38.0, -5.0)  // -5 град, 110 мч (проехали 500км за 10ч)
+            FuelEntry(1500.0, 110.0, 10.0, 45.0, 38.0, -5.0), // -5 град, 110 мч (проехали 500км за 10ч)
+
+            // ТЕСТ ШУМА: В чеке 50л, а датчик поднялся всего на 5л (с 5 до 10)
+            // Разница колоссальная (90%), фильтр должен это "забанить"
+            FuelEntry(2000.0, 100.0, 10.0, 30.0, 21.0, 15.0)
         )
+
+        history.forEachIndexed { index, entry ->
+            val sensorDelta = entry.sensorAfter - entry.sensorBefore // Реальная разница
+            val deviation = filter.calculateDeviation(entry)
+            val threshold = filter.maxDeviationPercent
+
+            if (filter.isValid(entry)) {
+                val report = estimator.train(entry)
+                println("[Запись #${index + 1}] $report (Отклонение: ${"%.1f".format(deviation * 100)}%)")
+            } else {
+                println("[Запись #${index + 1}] ⚠️ ОТКЛОНЕНО ФИЛЬТРОМ!")
+
+                if (sensorDelta <= 0) {
+                    println("   -> Причина: Уровень топлива не поднялся (Дельта: $sensorDelta л). Заправка невозможна.")
+                } else {
+                    println("   -> Отклонение: ${"%.1f".format(deviation * 100)}% (Порог: ${"%.1f".format(threshold * 100)}%)")
+                    println("   -> Датчик увидел: $sensorDelta л, а в чеке: ${entry.litersByCheck} л")
+                }
+            }
+        }
+
 
         // ПЕРЕМЕННЫЕ ДЛЯ СБОРА ИТОГОВ
         var totalLiters = 0.0
         var totalDistance = 0.0
         var totalHours = 0.0
 
-        println("=== 1. Имитация обучения (Заправки) ===")
+        println("\n=== 1. Имитация обучения (Заправки) ===")
 
         // Перебираем историю парами, чтобы посчитать разницу между заправками
         for (i in 0 until history.size) {

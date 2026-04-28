@@ -31,7 +31,7 @@ class FuelSmartEstimator(
         // Пытаемся загрузить данные при старте
         storage.load()?.let { savedData ->
             store.restoreFrom(savedData)
-            println("--- Данные калибровки успешно загружены из JSON ---")
+            println("\n--- Данные калибровки успешно загружены из JSON ---")
         }
     }
 
