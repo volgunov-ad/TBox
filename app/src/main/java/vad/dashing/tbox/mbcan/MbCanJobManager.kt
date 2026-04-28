@@ -8,8 +8,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import vad.dashing.tbox.TboxRepository
-
 object MbCanJobManager {
     private const val NORMAL_POLL_MS = 30_000L
     private const val BURST_POLL_MS = 1_500L
@@ -25,14 +23,14 @@ object MbCanJobManager {
     suspend fun attach(serviceScope: CoroutineScope) {
         mutex.withLock {
             scope = serviceScope
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "jobManager attach activeSignals=${activeSignals.joinToString()}")
+            MbCanDiagnostics.log("DEBUG", "jobManager attach activeSignals=${activeSignals.joinToString()}")
             activeSignals.forEach { ensureSignalJobLocked(it) }
         }
     }
 
     suspend fun detach() {
         mutex.withLock {
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "jobManager detach jobs=${signalJobs.keys.joinToString()}")
+            MbCanDiagnostics.log("DEBUG", "jobManager detach jobs=${signalJobs.keys.joinToString()}")
             signalJobs.values.forEach { it.cancel() }
             signalJobs.clear()
             if (MbCanEngineFacade.isInitialized()) {
@@ -49,7 +47,7 @@ object MbCanJobManager {
         val hasActive = mutex.withLock {
             activeTypeRefCounts.keys.forEach { typeName ->
                 MbCanEngineFacade.subscribe(setOf(typeName))
-                TboxRepository.addLog("DEBUG", "MBCAN_TMP", "late-subscribed type=$typeName")
+                MbCanDiagnostics.log("DEBUG", "late-subscribed type=$typeName")
             }
             activeSignals.isNotEmpty()
         }
@@ -60,9 +58,8 @@ object MbCanJobManager {
         mutex.withLock {
             val toAdd = signals - activeSignals
             val toRemove = activeSignals - signals
-            TboxRepository.addLog(
+            MbCanDiagnostics.log(
                 "DEBUG",
-                "MBCAN_TMP",
                 "replaceSignals active=${activeSignals.joinToString()} incoming=${signals.joinToString()} add=${toAdd.joinToString()} remove=${toRemove.joinToString()}"
             )
             toAdd.forEach { signal ->
@@ -73,12 +70,12 @@ object MbCanJobManager {
                     if (newCount == 1) {
                         if (MbCanEngineFacade.isInitialized()) {
                             MbCanEngineFacade.subscribe(setOf(typeName))
-                            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "subscribed type=$typeName via signal=$signal")
+                            MbCanDiagnostics.log("DEBUG", "subscribed type=$typeName via signal=$signal")
                         } else {
-                            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "defer subscribe type=$typeName via signal=$signal until engine init")
+                            MbCanDiagnostics.log("DEBUG", "defer subscribe type=$typeName via signal=$signal until engine init")
                         }
                     } else {
-                        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "type ref++ type=$typeName count=$newCount via signal=$signal")
+                        MbCanDiagnostics.log("DEBUG", "type ref++ type=$typeName count=$newCount via signal=$signal")
                     }
                 }
                 ensureSignalJobLocked(signal)
@@ -91,14 +88,14 @@ object MbCanJobManager {
                         activeTypeRefCounts.remove(typeName)
                         if (MbCanEngineFacade.isInitialized()) {
                             MbCanEngineFacade.unSubscribe(setOf(typeName))
-                            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "unsubscribed type=$typeName via signal=$signal")
+                            MbCanDiagnostics.log("DEBUG", "unsubscribed type=$typeName via signal=$signal")
                         } else {
-                            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "drop deferred type=$typeName via signal=$signal")
+                            MbCanDiagnostics.log("DEBUG", "drop deferred type=$typeName via signal=$signal")
                         }
                     } else {
                         val nextCount = currentCount - 1
                         activeTypeRefCounts[typeName] = nextCount
-                        TboxRepository.addLog("DEBUG", "MBCAN_TMP", "type ref-- type=$typeName count=$nextCount via signal=$signal")
+                        MbCanDiagnostics.log("DEBUG", "type ref-- type=$typeName count=$nextCount via signal=$signal")
                     }
                 }
                 signalJobs.remove(signal)?.cancel()
@@ -111,7 +108,7 @@ object MbCanJobManager {
         mutex.withLock {
             val until = System.currentTimeMillis() + BURST_DURATION_MS
             burstUntil[signal] = until
-            TboxRepository.addLog("DEBUG", "MBCAN_TMP", "requestBurst signal=$signal until=$until")
+            MbCanDiagnostics.log("DEBUG", "requestBurst signal=$signal until=$until")
         }
     }
 

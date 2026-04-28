@@ -1,6 +1,5 @@
 package vad.dashing.tbox.mbcan
 
-import vad.dashing.tbox.TboxRepository
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -211,9 +210,8 @@ object MbCanEngineFacade {
                 val rev = (args[1] as Number).toInt() and 0xFF
                 val item = (args[2] as Number).toInt() and 0xFFFF
                 val value = (args[3] as Number).toInt()
-                TboxRepository.addLog(
+                MbCanDiagnostics.log(
                     "DEBUG",
-                    "MBCAN_TMP",
                     "cfgVehiclePush modular=$modular rev=$rev item=$item value=$value"
                 )
                 MbCanRepository.scheduleVehicleCfgPush(modular, item, value)

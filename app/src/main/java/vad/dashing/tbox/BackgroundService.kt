@@ -35,6 +35,7 @@ import vad.dashing.tbox.utils.MotorHoursBuffer
 import vad.dashing.tbox.utils.ThemeObserver
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
+import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
 import vad.dashing.tbox.mbcan.MbCanRepository
 import java.net.DatagramPacket
@@ -307,9 +308,11 @@ class BackgroundService : Service() {
         const val EXTRA_TOGGLE_FLOATING_ENABLED_ALL =
             "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
         const val ACTION_MBCAN_COMMAND = "vad.dashing.tbox.ACTION_MBCAN_COMMAND"
+        const val ACTION_SET_MBCAN_DIAGNOSTICS = "vad.dashing.tbox.ACTION_SET_MBCAN_DIAGNOSTICS"
         const val EXTRA_MBCAN_COMMAND_TYPE = "vad.dashing.tbox.EXTRA_MBCAN_COMMAND_TYPE"
         const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
         const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
+        const val EXTRA_MBCAN_DIAGNOSTICS_ENABLED = "vad.dashing.tbox.EXTRA_MBCAN_DIAGNOSTICS_ENABLED"
         const val MBCAN_COMMAND_TOGGLE_PROPERTY = "TOGGLE_PROPERTY"
         const val MBCAN_COMMAND_SET_PROPERTY = "SET_PROPERTY"
 
@@ -445,6 +448,7 @@ class BackgroundService : Service() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+        MbCanDiagnostics.setEnabled(false)
         scope.launch {
             MbCanRepository.bind(scope)
         }
@@ -840,26 +844,32 @@ class BackgroundService : Service() {
                     val commandType = intent.getStringExtra(EXTRA_MBCAN_COMMAND_TYPE).orEmpty()
                     val propertyId = intent.getIntExtra(EXTRA_MBCAN_PROPERTY_ID, Int.MIN_VALUE)
                     val propertyValue = intent.getIntExtra(EXTRA_MBCAN_VALUE, 0)
-                    TboxRepository.addLog(
+                    MbCanDiagnostics.log(
                         "DEBUG",
-                        "MBCAN_TMP",
                         "service command type=$commandType propertyId=$propertyId value=$propertyValue"
                     )
                     when (commandType) {
                         MBCAN_COMMAND_TOGGLE_PROPERTY -> {
                             if (propertyId != Int.MIN_VALUE) {
                                 val result = MbCanRepository.execute(MbCanCommand.ToggleProperty(propertyId))
-                                TboxRepository.addLog("DEBUG", "MBCAN_TMP", "toggle result success=${result.success} msg=${result.message}")
+                                MbCanDiagnostics.log("DEBUG", "toggle result success=${result.success} msg=${result.message}")
                             }
                         }
                         MBCAN_COMMAND_SET_PROPERTY -> {
                             if (propertyId != Int.MIN_VALUE) {
                                 val result = MbCanRepository.execute(MbCanCommand.SetProperty(propertyId, propertyValue))
-                                TboxRepository.addLog("DEBUG", "MBCAN_TMP", "set result success=${result.success} msg=${result.message}")
+                                MbCanDiagnostics.log("DEBUG", "set result success=${result.success} msg=${result.message}")
                             }
                         }
-                        else -> TboxRepository.addLog("WARN", "MBCAN_TMP", "unknown command type=$commandType")
+                        else -> MbCanDiagnostics.log("WARN", "unknown command type=$commandType")
                     }
+                }
+            }
+            ACTION_SET_MBCAN_DIAGNOSTICS -> {
+                scope.launch {
+                    val enabled = intent.getBooleanExtra(EXTRA_MBCAN_DIAGNOSTICS_ENABLED, false)
+                    MbCanDiagnostics.setEnabled(enabled)
+                    MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
                 }
             }
         }
@@ -2460,14 +2470,13 @@ class BackgroundService : Service() {
                         val v = MbCanEngineFacade.canGetVehicleParam(id)
                         "$label(id=$id)=$v"
                     }
-                    TboxRepository.addLog(
+                    MbCanDiagnostics.log(
                         "DEBUG",
-                        "MBCAN_TMP",
                         "$motionPart | probeGet ${parts.joinToString(" | ")}"
                     )
                 }
                 else -> {
-                    TboxRepository.addLog("DEBUG", "MBCAN_TMP", "probeGet skipped availability=$availability")
+                    MbCanDiagnostics.log("DEBUG", "probeGet skipped availability=$availability")
                 }
             }
         }
@@ -2511,9 +2520,10 @@ class BackgroundService : Service() {
                     MbCanRepository.unbind()
                 }
             } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", "MBCAN_TMP", "onDestroy mbCAN unbind failed: ${e.message}")
+                MbCanDiagnostics.log("ERROR", "onDestroy mbCAN unbind failed: ${e.message}")
             }
         }
+        MbCanDiagnostics.setEnabled(false)
         cancelAllJobs()
         job.cancel()
         disconnectTboxClient()
