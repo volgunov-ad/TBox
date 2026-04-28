@@ -230,7 +230,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                scale = widgetConfig.scale
             )
         }
 
@@ -243,7 +244,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
-                enableInnerInteractions = enableInnerInteractions
+                enableInnerInteractions = enableInnerInteractions,
+                scale = widgetConfig.scale
             )
         }
 
@@ -256,7 +258,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
-                enableInnerInteractions = enableInnerInteractions
+                enableInnerInteractions = enableInnerInteractions,
+                scale = widgetConfig.scale
             )
         }
 

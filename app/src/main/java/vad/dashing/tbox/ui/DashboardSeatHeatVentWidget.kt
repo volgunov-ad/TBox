@@ -18,8 +18,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +52,7 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
     backgroundColor: Color,
     singleLineDualMetrics: Boolean,
     enableInnerInteractions: Boolean = true,
+    scale: Float = 1f
 ) {
     val mode by MbCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
     SeatHeatVentWidget(
@@ -62,7 +66,8 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor,
         singleLineDualMetrics = singleLineDualMetrics,
-        enableInnerInteractions = enableInnerInteractions
+        enableInnerInteractions = enableInnerInteractions,
+        scale = scale
     )
 }
 
@@ -76,6 +81,7 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
     backgroundColor: Color,
     singleLineDualMetrics: Boolean,
     enableInnerInteractions: Boolean = true,
+    scale: Float = 1f
 ) {
     val mode by MbCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
     SeatHeatVentWidget(
@@ -89,7 +95,8 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor,
         singleLineDualMetrics = singleLineDualMetrics,
-        enableInnerInteractions = enableInnerInteractions
+        enableInnerInteractions = enableInnerInteractions,
+        scale = scale
     )
 }
 
@@ -106,6 +113,7 @@ private fun SeatHeatVentWidget(
     backgroundColor: Color,
     singleLineDualMetrics: Boolean,
     enableInnerInteractions: Boolean,
+    scale: Float = 1f
 ) {
     val context = LocalContext.current
     var seatActionBlockedUntil by remember { mutableLongStateOf(0L) }
@@ -116,7 +124,9 @@ private fun SeatHeatVentWidget(
         sendSetMbCanProperty(context, propertyId, value)
     }
     DashboardWidgetScaffold(
-        onClick = {},
+        onClick = if (enableInnerInteractions) {
+            {}
+        } else { onClick },
         onLongClick = onLongClick,
         elevation = elevation,
         shape = shape,
@@ -127,8 +137,8 @@ private fun SeatHeatVentWidget(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 SeatActionButton(
                     modifier = Modifier
@@ -136,19 +146,18 @@ private fun SeatHeatVentWidget(
                         .fillMaxSize(),
                     side = side,
                     textColor = textColor,
-                    activeColor = SeatHeatOnColor,
-                    iconRes = if (side == SeatSide.Left) {
-                        R.drawable.ic_widget_seat_heat_left
-                    } else {
-                        R.drawable.ic_widget_seat_heat_right
-                    },
+                    modeType = "heat",
                     level = (mode as? MbCanSeatModeState.Heat)?.level,
-                    enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
-                    onClick = { trySendSeatProperty(nextHeatRaw(mode)) },
-                    onDoubleClick = {
-                        trySendSeatProperty(1)
-                    }
+                    onClick = if (enableInnerInteractions) {
+                        { trySendSeatProperty(nextHeatRaw(mode)) }
+                    } else { onClick },
+                    onDoubleClick = if (enableInnerInteractions) {
+                        { trySendSeatProperty(1) }
+                    } else {
+                        {}
+                    },
+                    scale = scale
                 )
                 SeatActionButton(
                     modifier = Modifier
@@ -156,27 +165,26 @@ private fun SeatHeatVentWidget(
                         .fillMaxSize(),
                     side = side,
                     textColor = textColor,
-                    activeColor = SeatVentOnColor,
-                    iconRes = if (side == SeatSide.Left) {
-                        R.drawable.ic_widget_seat_vent_left
-                    } else {
-                        R.drawable.ic_widget_seat_vent_right
-                    },
+                    modeType = "vent",
                     level = (mode as? MbCanSeatModeState.Vent)?.level,
-                    enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
-                    onClick = { trySendSeatProperty(nextVentRaw(mode)) },
-                    onDoubleClick = {
-                        trySendSeatProperty(1)
-                    }
+                    onClick = if (enableInnerInteractions) {
+                        { trySendSeatProperty(nextVentRaw(mode)) }
+                    } else { onClick },
+                    onDoubleClick = if (enableInnerInteractions) {
+                        { trySendSeatProperty(1) }
+                    } else {
+                        {}
+                    },
+                    scale = scale
                 )
             }
         } else {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 SeatActionButton(
                     modifier = Modifier
@@ -184,19 +192,18 @@ private fun SeatHeatVentWidget(
                         .fillMaxSize(),
                     side = side,
                     textColor = textColor,
-                    activeColor = SeatHeatOnColor,
-                    iconRes = if (side == SeatSide.Left) {
-                        R.drawable.ic_widget_seat_heat_left
-                    } else {
-                        R.drawable.ic_widget_seat_heat_right
-                    },
+                    modeType = "heat",
                     level = (mode as? MbCanSeatModeState.Heat)?.level,
-                    enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
-                    onClick = { trySendSeatProperty(nextHeatRaw(mode)) },
-                    onDoubleClick = {
-                        trySendSeatProperty(1)
-                    }
+                    onClick = if (enableInnerInteractions) {
+                        { trySendSeatProperty(nextHeatRaw(mode)) }
+                    } else { onClick },
+                    onDoubleClick = if (enableInnerInteractions) {
+                        { trySendSeatProperty(1) }
+                    } else {
+                        {}
+                    },
+                    scale = scale
                 )
                 SeatActionButton(
                     modifier = Modifier
@@ -204,19 +211,18 @@ private fun SeatHeatVentWidget(
                         .fillMaxSize(),
                     side = side,
                     textColor = textColor,
-                    activeColor = SeatVentOnColor,
-                    iconRes = if (side == SeatSide.Left) {
-                        R.drawable.ic_widget_seat_vent_left
-                    } else {
-                        R.drawable.ic_widget_seat_vent_right
-                    },
+                    modeType = "vent",
                     level = (mode as? MbCanSeatModeState.Vent)?.level,
-                    enableInnerInteractions = enableInnerInteractions,
                     onLongClick = onLongClick,
-                    onClick = { trySendSeatProperty(nextVentRaw(mode)) },
-                    onDoubleClick = {
-                        trySendSeatProperty(1)
-                    }
+                    onClick = if (enableInnerInteractions) {
+                        { trySendSeatProperty(nextVentRaw(mode)) }
+                    } else { onClick },
+                    onDoubleClick = if (enableInnerInteractions) {
+                        { trySendSeatProperty(1) }
+                    } else {
+                        {}
+                    },
+                    scale = scale
                 )
             }
         }
@@ -228,47 +234,96 @@ private fun SeatActionButton(
     modifier: Modifier,
     side: SeatSide,
     textColor: Color,
-    activeColor: Color,
-    iconRes: Int,
+    modeType: String,
     level: Int?,
-    enableInnerInteractions: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
-    onDoubleClick: () -> Unit
+    onDoubleClick: () -> Unit,
+    scale: Float = 1f
 ) {
-    val iconColor = if (level != null) activeColor else textColor
-    val gestureModifier = if (enableInnerInteractions) {
-        Modifier
-            .clip(RoundedCornerShape(8.dp))
+    Box(
+        modifier = modifier
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = onDoubleClick
             )
-    } else {
-        Modifier
-    }
-    Box(
-        modifier = modifier.then(gestureModifier),
+            .graphicsLayer { scaleX = if (side == SeatSide.Left) { 1f } else { -1f } },
         contentAlignment = Alignment.Center
     ) {
         Image(
-            painter = painterResource(id = iconRes),
+            painter = painterResource(id = R.drawable.ic_widget_seat),
             contentDescription = null,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(4.dp),
-            colorFilter = ColorFilter.tint(iconColor)
+                .matchParentSize()
+                .scale(scale),
+            colorFilter = ColorFilter.tint(textColor),
+            contentScale = ContentScale.Fit,
         )
-        if (level != null) {
-            androidx.compose.material3.Text(
-                text = level.toString(),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = iconColor,
-                modifier = Modifier.align(
-                    if (side == SeatSide.Left) Alignment.BottomEnd else Alignment.BottomStart
-                )
+        if (modeType == "heat") {
+            Image(
+                painter = painterResource(id = R.drawable.ic_widget_seat_heat_1),
+                contentDescription = null,
+                modifier = Modifier
+                    .matchParentSize()
+                    .scale(scale),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatHeatOnColor else textColor),
+                contentScale = ContentScale.Fit,
+            )
+            Image(
+                painter = painterResource(id = R.drawable.ic_widget_seat_heat_2),
+                contentDescription = null,
+                modifier = Modifier
+                    .matchParentSize()
+                    .scale(scale),
+                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) SeatHeatOnColor else textColor),
+                contentScale = ContentScale.Fit,
+            )
+            Image(
+                painter = painterResource(id = R.drawable.ic_widget_seat_heat_3),
+                contentDescription = null,
+                modifier = Modifier
+                    .matchParentSize()
+                    .scale(scale),
+                colorFilter = ColorFilter.tint(if (level == 3) SeatHeatOnColor else textColor),
+                contentScale = ContentScale.Fit,
+            )
+        } else if (modeType == "vent") {
+            Image(
+                painter = painterResource(id = R.drawable.ic_widget_seat_vent_0),
+                contentDescription = null,
+                modifier = Modifier
+                    .matchParentSize()
+                    .scale(scale),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else textColor),
+                contentScale = ContentScale.Fit,
+            )
+            Image(
+                painter = painterResource(id = R.drawable.ic_widget_seat_vent_1),
+                contentDescription = null,
+                modifier = Modifier
+                    .matchParentSize()
+                    .scale(scale),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else textColor),
+                contentScale = ContentScale.Fit,
+            )
+            Image(
+                painter = painterResource(id = R.drawable.ic_widget_seat_vent_2),
+                contentDescription = null,
+                modifier = Modifier
+                    .matchParentSize()
+                    .scale(scale),
+                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) SeatVentOnColor else textColor),
+                contentScale = ContentScale.Fit,
+            )
+            Image(
+                painter = painterResource(id = R.drawable.ic_widget_seat_vent_3),
+                contentDescription = null,
+                modifier = Modifier
+                    .matchParentSize()
+                    .scale(scale),
+                colorFilter = ColorFilter.tint(if (level == 3) SeatVentOnColor else textColor),
+                contentScale = ContentScale.Fit,
             )
         }
     }

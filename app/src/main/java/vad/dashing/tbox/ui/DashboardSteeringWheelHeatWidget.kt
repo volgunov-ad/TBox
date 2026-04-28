@@ -8,8 +8,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -28,6 +30,7 @@ fun DashboardSteeringWheelHeatWidgetItem(
     shape: Dp,
     textColor: Color,
     backgroundColor: Color,
+    scale: Float = 1f
 ) {
     val state by MbCanRepository.steeringWheelHeatState.collectAsStateWithLifecycle()
     val iconColor = if (state is MbCanBinaryState.On) SteeringHeatOnColor else textColor
@@ -40,15 +43,16 @@ fun DashboardSteeringWheelHeatWidgetItem(
         backgroundColor = backgroundColor
     ) { _, _ ->
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp),
             contentAlignment = Alignment.Center
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_widget_steering_wheel_heat),
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(6.dp),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.matchParentSize().scale(scale),
                 colorFilter = ColorFilter.tint(iconColor)
             )
         }
