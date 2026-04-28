@@ -70,8 +70,7 @@ internal fun DashboardPanelGridAndFrames(
     onToggleFloatingPanelsEnabledDoubleClick: (widgetIndex: Int) -> Unit = {},
     onRestartRequested: () -> Unit,
     showTboxDisconnectIndicator: Boolean,
-    enableMusicInnerInteractions: Boolean,
-    enableSeatHeatVentInnerInteractions: Boolean = true,
+    enableInnerInteractions: Boolean,
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 4.dp,
     fuelTankLiters: Int = 57,
@@ -184,8 +183,7 @@ internal fun DashboardPanelGridAndFrames(
                                     isEditMode = isEditMode,
                                     elevation = widgetCardElevation,
                                     shape = normalizeWidgetShape(widgetConfig.shape).dp,
-                                    enableMusicInnerInteractions = enableMusicInnerInteractions,
-                                    enableSeatHeatVentInnerInteractions = enableSeatHeatVentInnerInteractions,
+                                    enableInnerInteractions = enableInnerInteractions,
                                     fuelTankLiters = fuelTankLiters
                                 )
                             }

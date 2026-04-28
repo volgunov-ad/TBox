@@ -50,8 +50,7 @@ fun DashboardWidgetRenderer(
     isEditMode: Boolean = false,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    enableMusicInnerInteractions: Boolean = true,
-    enableSeatHeatVentInnerInteractions: Boolean = true,
+    enableInnerInteractions: Boolean = true,
     fuelTankLiters: Int = 57
 ) {
     val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
@@ -244,7 +243,7 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
-                enableInnerInteractions = enableSeatHeatVentInnerInteractions
+                enableInnerInteractions = enableInnerInteractions
             )
         }
 
@@ -257,7 +256,7 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
-                enableInnerInteractions = enableSeatHeatVentInnerInteractions
+                enableInnerInteractions = enableInnerInteractions
             )
         }
 
@@ -305,7 +304,7 @@ fun DashboardWidgetRenderer(
                 onSelectedPlayerChange = onMusicSelectedPlayerChange,
                 elevation = elevation,
                 shape = shape,
-                enableInnerInteractions = enableMusicInnerInteractions,
+                enableInnerInteractions = enableInnerInteractions,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -319,7 +318,7 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
-                enableInnerInteractions = enableMusicInnerInteractions,
+                enableInnerInteractions = enableInnerInteractions,
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
@@ -335,7 +334,7 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
-                enableInnerInteractions = enableMusicInnerInteractions,
+                enableInnerInteractions = enableInnerInteractions,
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
