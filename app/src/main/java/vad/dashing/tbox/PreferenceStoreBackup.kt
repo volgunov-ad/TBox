@@ -130,7 +130,7 @@ object SettingsBackupCoordinator {
         packageName: String,
         settingsStore: DataStore<Preferences>,
         appDataStore: DataStore<Preferences>,
-        excludeTripLists: Boolean = false,
+        excludeTripAndRefuelLists: Boolean = false,
     ): String {
         val exportedAt = System.currentTimeMillis()
         val root = JSONObject()
@@ -139,8 +139,8 @@ object SettingsBackupCoordinator {
         root.put(KEY_EXPORTED_AT, exportedAt)
         root.put(KEY_SETTINGS, PreferenceStoreBackup.exportEntries(settingsStore))
         var appDataArr = PreferenceStoreBackup.exportEntries(appDataStore)
-        if (excludeTripLists) {
-            appDataArr = filterOutTripListPreferences(appDataArr)
+        if (excludeTripAndRefuelLists) {
+            appDataArr = filterOutTripAndRefuelListPreferences(appDataArr)
         } else {
             patchTripsJsonInExportedAppData(appDataArr, exportedAt)
         }
@@ -148,13 +148,14 @@ object SettingsBackupCoordinator {
         return root.toString(2)
     }
 
-    private fun filterOutTripListPreferences(entries: JSONArray): JSONArray {
+    internal fun filterOutTripAndRefuelListPreferences(entries: JSONArray): JSONArray {
         val out = JSONArray()
         for (i in 0 until entries.length()) {
             val o = entries.optJSONObject(i) ?: continue
             val name = o.optString(PreferenceStoreBackup.K_NAME)
             if (name == AppDataManager.TRIPS_JSON_PREFERENCE_NAME ||
-                name == AppDataManager.TRIP_FAVORITES_JSON_PREFERENCE_NAME
+                name == AppDataManager.TRIP_FAVORITES_JSON_PREFERENCE_NAME ||
+                name == AppDataManager.REFUELS_JSON_PREFERENCE_NAME
             ) {
                 continue
             }
@@ -217,9 +218,11 @@ object SettingsBackupCoordinator {
         CarDataRepository.markPersisted(motor)
         val tripsJson = appDataManager.tripsJsonFlow.first()
         val favJson = appDataManager.tripFavoritesJsonFlow.first()
+        val refuelsJson = appDataManager.refuelsJsonFlow.first()
         TripRepository.setTripsFromStore(
             tripsListFromJson(tripsJson),
             favoritesSetFromJson(favJson)
         )
+        RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJson))
     }
 }

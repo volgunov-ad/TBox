@@ -38,6 +38,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.FuelTypes
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -271,6 +272,7 @@ fun SettingsTabContent(
 
     val canDataSaveCount by settingsViewModel.canDataSaveCount.collectAsStateWithLifecycle()
     val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
+    val fuelPriceFuelId by settingsViewModel.fuelPriceFuelId.collectAsStateWithLifecycle()
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
@@ -584,6 +586,14 @@ fun SettingsTabContent(
             "",
             1,
             500
+        )
+        SettingDropdownGeneric(
+            FuelTypes.optionFor(fuelPriceFuelId),
+            { option -> settingsViewModel.saveFuelPriceFuelId(option.id) },
+            stringResource(R.string.settings_fuel_price_fuel_type_title),
+            "",
+            true,
+            FuelTypes.options
         )
         SettingInt(
             splitTripTimeMinutes,

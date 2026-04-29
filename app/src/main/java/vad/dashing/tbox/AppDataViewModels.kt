@@ -36,6 +36,13 @@ class AppDataViewModel(private val appDataManager: AppDataManager) : ViewModel()
             initialValue = TripRepository.activeTrip.value
         )
 
+    val refuels = RefuelRepository.refuels
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = RefuelRepository.refuels.value
+        )
+
     fun setMotorHours(value: Float) {
         viewModelScope.launch {
             CarDataRepository.setMotorHours(value)
@@ -72,6 +79,51 @@ class AppDataViewModel(private val appDataManager: AppDataManager) : ViewModel()
         }
     }
 
+    fun deleteRefuel(id: String) {
+        viewModelScope.launch {
+            synchronized(RefuelRepository.lock) {
+                RefuelRepository.removeRefuel(id)
+            }
+            persistRefuelsIfNeeded()
+        }
+    }
+
+    fun updateRefuelActualLiters(id: String, liters: Float) {
+        viewModelScope.launch {
+            synchronized(RefuelRepository.lock) {
+                RefuelRepository.updateActualLiters(id, liters)
+            }
+            persistRefuelsIfNeeded()
+        }
+    }
+
+    fun updateRefuelPricePerLiter(id: String, pricePerLiterRub: Float?) {
+        viewModelScope.launch {
+            synchronized(RefuelRepository.lock) {
+                RefuelRepository.updatePricePerLiter(id, pricePerLiterRub)
+            }
+            persistRefuelsIfNeeded()
+        }
+    }
+
+    fun updateRefuelFuelType(id: String, fuelType: FuelTypeOption) {
+        viewModelScope.launch {
+            synchronized(RefuelRepository.lock) {
+                RefuelRepository.updateFuelType(id, fuelType)
+            }
+            persistRefuelsIfNeeded()
+        }
+    }
+
+    fun updateRefuelPriceSourceName(id: String, sourceName: String?) {
+        viewModelScope.launch {
+            synchronized(RefuelRepository.lock) {
+                RefuelRepository.updatePriceSourceName(id, sourceName)
+            }
+            persistRefuelsIfNeeded()
+        }
+    }
+
     private suspend fun persistTripsIfNeeded() {
         if (!TripRepository.needsPersistence()) return
         val tripsJson = tripsListToJson(TripRepository.trips.value)
@@ -79,6 +131,13 @@ class AppDataViewModel(private val appDataManager: AppDataManager) : ViewModel()
         appDataManager.saveTripsJson(tripsJson)
         appDataManager.saveTripFavoritesJson(favJson)
         TripRepository.markPersisted(tripsJson, favJson)
+    }
+
+    private suspend fun persistRefuelsIfNeeded() {
+        if (!RefuelRepository.needsPersistence()) return
+        val refuelsJson = refuelsListToJson(RefuelRepository.refuels.value)
+        appDataManager.saveRefuelsJson(refuelsJson)
+        RefuelRepository.markPersisted(refuelsJson)
     }
 }
 

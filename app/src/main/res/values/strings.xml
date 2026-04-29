@@ -32,6 +32,7 @@
     <string name="unit_percent" formatted="false">%</string>
     <string name="unit_liter">л</string>
     <string name="unit_meter">м</string>
+    <string name="unit_ruble">руб.</string>
     <string name="unit_bar_celsius">бар / °C</string>
     <string name="title_with_unit">%1$s, %2$s</string>
 
@@ -40,6 +41,7 @@
     <string name="tab_geoposition">Геопозиция</string>
     <string name="tab_car_data">Данные авто</string>
     <string name="tab_trips">Поездки</string>
+    <string name="tab_refuels">Заправки</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_main_screen_settings">Настройки главного экрана</string>
     <string name="tab_logs">Журнал</string>
@@ -279,13 +281,13 @@
 
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_backup_title">Резервная копия</string>
-    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Пути к папкам обоев главного экрана и выбранные файлы сохраняются в JSON; сами изображения не копируются. Пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
+    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения, поездок и заправок (моторные часы, список поездок, избранное, журнал заправок) в один JSON-файл. Пути к папкам обоев главного экрана и выбранные файлы сохраняются в JSON; сами изображения не копируются. Пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
     <string name="settings_backup_export">Экспорт JSON</string>
-    <string name="settings_backup_export_without_trips">Экспорт JSON без поездок</string>
+    <string name="settings_backup_export_without_trips">Экспорт JSON без поездок и заправок</string>
     <string name="settings_backup_import">Импорт JSON</string>
     <string name="settings_backup_import_choose_file">Выбрать файл</string>
     <string name="dialog_save_backup_downloads">Сохранить полную резервную копию (настройки и данные) в папку Загрузки</string>
-    <string name="dialog_save_backup_downloads_no_trips">Сохранить резервную копию (настройки и прочие данные приложения без списка поездок и избранного поездок) в папку Загрузки</string>
+    <string name="dialog_save_backup_downloads_no_trips">Сохранить резервную копию (настройки и прочие данные приложения без списка поездок, избранного поездок и журнала заправок) в папку Загрузки</string>
     <string name="dialog_backup_import_title">Импорт резервной копии</string>
     <string name="dialog_backup_import_message">Текущие настройки и данные приложения будут полностью заменены содержимым файла. Активная поездка в памяти и в файле станет такой, как в резервной копии (если в копии нет незавершённой поездки — текущая будет завершена в данных). Плитки с виджетами сторонних приложений после импорта сбрасываются (нужно выбрать виджет заново). Продолжить и выбрать JSON-файл?</string>
     <string name="settings_expert_mode_title">Экспертный режим</string>
@@ -440,6 +442,7 @@
     <string name="data_title_active_trip_widget_mini">Текущая поездка (мини)</string>
 
     <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
+    <string name="settings_fuel_price_fuel_type_title">Тип топлива для расчёта цены</string>
     <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
 
     <string name="trips_delete">Удалить поездку</string>
@@ -473,11 +476,29 @@
     <string name="trips_fuel_used">Израсходовано топлива</string>
     <string name="trips_fuel_consumption_l_100km">Расход топлива</string>
     <string name="trips_fuel_refueled">Заправлено топлива</string>
+    <string name="trips_fuel_refueled_cost">Стоимость заправленного топлива</string>
     <string name="trips_refuel_count">Заправки</string>
     <string name="trips_engine_start_count">Запуски двигателя</string>
     <string name="trips_export">Экспорт</string>
     <string name="dialog_save_trips_downloads">Сохранить все поездки в один файл в папку Загрузки</string>
     <string name="trips_export_separator">----------------------------------------</string>
+    <string name="refuels_empty">Нет заправок</string>
+    <string name="refuels_export">Экспорт</string>
+    <string name="refuels_delete">Удалить заправку</string>
+    <string name="refuels_time">Дата и время</string>
+    <string name="refuels_odometer">Одометр</string>
+    <string name="refuels_coordinates">Координаты</string>
+    <string name="refuels_fuel_before">Топливо до, %</string>
+    <string name="refuels_fuel_after">Топливо после, %</string>
+    <string name="refuels_estimated_liters">Расчётные литры</string>
+    <string name="refuels_actual_liters">Фактические литры</string>
+    <string name="refuels_fuel_type">Топливо</string>
+    <string name="refuels_price">Цена</string>
+    <string name="refuels_price_source">АЗС</string>
+    <string name="refuels_cost">Стоимость</string>
+    <string name="refuels_actions">Действия</string>
+    <string name="refuels_coordinates_copied">Координаты скопированы</string>
+    <string name="dialog_save_refuels_downloads">Сохранить журнал заправок в один файл в папку Загрузки</string>
     <string name="data_title_net_widget">Виджет сигнала сети</string>
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>
     <string name="data_title_net_widget_colored">Виджет сигнала сети (цветной)</string>

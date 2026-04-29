@@ -465,6 +465,12 @@ fun TripsTab(
                 }
                 item {
                     StatusRow(
+                        stringResource(R.string.trips_fuel_refueled_cost),
+                        formatWithUnit(valueToString(trip.fuelRefueledCostRub, 2), stringResource(R.string.unit_ruble))
+                    )
+                }
+                item {
+                    StatusRow(
                         stringResource(R.string.trips_refuel_count),
                         valueToString(trip.refuelCount)
                     )
@@ -611,6 +617,10 @@ internal fun buildTripExportLines(
             appendStatusLine(
                 context.getString(R.string.trips_fuel_refueled),
                 formatWithUnit(valueToString(trip.fuelRefueledLiters, 1), liter)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_fuel_refueled_cost),
+                formatWithUnit(valueToString(trip.fuelRefueledCostRub, 2), context.getString(R.string.unit_ruble))
             )
             appendStatusLine(
                 context.getString(R.string.trips_refuel_count),
