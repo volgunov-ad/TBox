@@ -66,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.FuelTypeOption
 import vad.dashing.tbox.FuelTypes
@@ -270,6 +271,7 @@ private fun RefuelTableRow(
         RefuelEditableCell(
             value = actualDraft,
             widthDp = 200,
+            showCommitButton = !refuelActualDraftMatchesSaved(actualDraft, refuel.actualLiters),
             onValueChange = onActualDraftChange,
             onCommit = onActualCommit,
         )
@@ -281,12 +283,14 @@ private fun RefuelTableRow(
         RefuelEditableCell(
             value = priceDraft,
             widthDp = 190,
+            showCommitButton = !refuelPriceDraftMatchesSaved(priceDraft, refuel.pricePerLiterRub),
             onValueChange = onPriceDraftChange,
             onCommit = onPriceCommit,
         )
         RefuelEditableCell(
             value = sourceDraft,
             widthDp = 330,
+            showCommitButton = !refuelSourceDraftMatchesSaved(sourceDraft, refuel.priceSourceName),
             onValueChange = onSourceDraftChange,
             onCommit = onSourceCommit,
             keyboardType = KeyboardType.Text,
@@ -390,6 +394,7 @@ private fun RefuelFuelTypeCell(
 private fun RefuelEditableCell(
     value: String,
     widthDp: Int,
+    showCommitButton: Boolean,
     onValueChange: (String) -> Unit,
     onCommit: (String) -> Unit,
     keyboardType: KeyboardType = KeyboardType.Decimal,
@@ -407,16 +412,20 @@ private fun RefuelEditableCell(
             color = MaterialTheme.colorScheme.onSurface,
         ),
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        trailingIcon = {
-            RefuelCircleIconButton(
-                onClick = { onCommit(value) },
-                contentDescription = stringResource(R.string.action_save),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = null,
-                )
+        trailingIcon = if (showCommitButton) {
+            {
+                RefuelCircleIconButton(
+                    onClick = { onCommit(value) },
+                    contentDescription = stringResource(R.string.action_save),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = null,
+                    )
+                }
             }
+        } else {
+            null
         },
     )
 }
@@ -546,6 +555,28 @@ private fun parseLocalizedFloat(raw: String): Float? =
         .replace(',', '.')
         .takeIf { it.isNotBlank() }
         ?.toFloatOrNull()
+
+private fun floatDraftMatchesSaved(draft: String, saved: Float, decimals: Int): Boolean {
+    val parsed = parseLocalizedFloat(draft)
+    if (parsed != null && abs(parsed - saved) < 1e-4f) return true
+    val normalizedDraft = draft.trim().replace(',', '.')
+    val normalizedSaved = valueToString(saved, decimals).trim().replace(',', '.')
+    return normalizedDraft == normalizedSaved
+}
+
+private fun refuelActualDraftMatchesSaved(draft: String, savedLiters: Float): Boolean =
+    floatDraftMatchesSaved(draft, savedLiters, decimals = 1)
+
+private fun refuelPriceDraftMatchesSaved(draft: String, savedPrice: Float?): Boolean {
+    val trimmed = draft.trim()
+    if (savedPrice == null) return trimmed.isEmpty()
+    return floatDraftMatchesSaved(draft, savedPrice, decimals = 2)
+}
+
+private fun refuelSourceDraftMatchesSaved(draft: String, savedSource: String?): Boolean {
+    val saved = savedSource?.trim().orEmpty()
+    return draft.trim() == saved
+}
 
 private fun formatCoordinates(refuel: RefuelRecord, noData: String): String =
     if (refuel.latitude != null && refuel.longitude != null) {
