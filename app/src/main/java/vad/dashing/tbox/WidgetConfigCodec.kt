@@ -86,6 +86,7 @@ fun serializeWidgetConfigsToJsonArray(
         }
         obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
         obj.put("mediaAutoPlayOnlyWhenEngineRunning", config.mediaAutoPlayOnlyWhenEngineRunning)
+        obj.put("mediaKeepPlayerForeground", config.mediaKeepPlayerForeground)
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
@@ -214,6 +215,10 @@ private fun parseWidgetConfigsFromJsonArray(
                         mediaAutoPlayOnInit = item.optBoolean("mediaAutoPlayOnInit", false),
                         mediaAutoPlayOnlyWhenEngineRunning = item.optBoolean(
                             "mediaAutoPlayOnlyWhenEngineRunning",
+                            false
+                        ),
+                        mediaKeepPlayerForeground = item.optBoolean(
+                            "mediaKeepPlayerForeground",
                             false
                         ),
                         launcherAppPackage = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {

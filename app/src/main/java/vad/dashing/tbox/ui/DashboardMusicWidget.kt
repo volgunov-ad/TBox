@@ -181,7 +181,8 @@ fun DashboardMusicWidgetItem(
         widget.id,
         selectedPackage,
         widgetConfig.mediaAutoPlayOnInit,
-        widgetConfig.mediaAutoPlayOnlyWhenEngineRunning
+        widgetConfig.mediaAutoPlayOnlyWhenEngineRunning,
+        widgetConfig.mediaKeepPlayerForeground // anymani: учитываем опцию в зависимостях
     ) {
         if (!widgetConfig.mediaAutoPlayOnInit) return@LaunchedEffect
         if (autoPlayTriggered) return@LaunchedEffect
@@ -207,7 +208,8 @@ fun DashboardMusicWidgetItem(
         SharedMediaControlService.play(
             context = context,
             selectedPackages = selectedPlayers,
-            preferredPackage = autoPlayPackage
+            preferredPackage = autoPlayPackage,
+            keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground // anymani: передаём флаг
         )
         delay(AUTO_PLAY_VERIFY_DELAY_MS)
         val isPlaying = SharedMediaControlService.playerStates.value[autoPlayPackage]?.isPlaying == true
@@ -215,7 +217,8 @@ fun DashboardMusicWidgetItem(
             SharedMediaControlService.play(
                 context = context,
                 selectedPackages = selectedPlayers,
-                preferredPackage = autoPlayPackage
+                preferredPackage = autoPlayPackage,
+                keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground // anymani: передаём флаг
             )
         }
     }
@@ -438,7 +441,8 @@ fun DashboardMusicWidgetItem(
                             SharedMediaControlService.playPause(
                                 context = context,
                                 selectedPackages = selectedPlayers,
-                                preferredPackage = selectedPackage
+                                preferredPackage = selectedPackage,
+                                keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground // anymani: передаём флаг
                             )
                         }
                     )
