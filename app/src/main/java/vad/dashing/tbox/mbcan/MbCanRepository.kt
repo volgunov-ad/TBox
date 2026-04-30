@@ -201,8 +201,8 @@ object MbCanRepository {
         MbCanDiagnostics.log("DEBUG", "execute command=$command")
         ensureMbCanReadyIfNeeded()
         return when (command) {
-            is MbCanCommand.ToggleProperty -> executeToggleProperty(command.propertyId)
-            is MbCanCommand.SetProperty -> executeSetProperty(command.propertyId, command.value)
+            is MbCanCommand.ToggleProperty -> executeToggleViaRegistry(command.propertyId)
+            is MbCanCommand.SetProperty -> executeSetViaRegistry(command.propertyId, command.value)
             is MbCanCommand.RefreshSignal -> {
                 refreshSignal(command.signal)
                 MbCanCommandResult(true, "Refresh requested")
@@ -210,11 +210,12 @@ object MbCanRepository {
         }
     }
 
-    private suspend fun executeToggleProperty(propertyId: Int): MbCanCommandResult {
+    private suspend fun executeToggleViaRegistry(propertyId: Int): MbCanCommandResult {
         MbCanDiagnostics.log("DEBUG", "executeToggleProperty propertyId=$propertyId")
-        if (propertyId == MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH) {
-            return toggleSteeringWheelHeat()
-        }
+        val spec = MbCanCommandRegistry.get(propertyId)
+            ?: return MbCanCommandResult(false, "No command policy for propertyId=$propertyId")
+        val policy = spec.policy as? MbCanCommandPolicy.ToggleBinary
+            ?: return MbCanCommandResult(false, "Toggle unsupported by policy for propertyId=$propertyId")
         if (availability.value !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, "mbCAN unavailable")
         }
@@ -223,70 +224,45 @@ object MbCanRepository {
                 .also {
                     MbCanDiagnostics.log("ERROR", "toggle pre-read failed propertyId=$propertyId")
                 }
-        val target = if (current > 0) 0 else 1
-        MbCanDiagnostics.log("DEBUG", "toggle pre-read current=$current target=$target propertyId=$propertyId")
-        val setResult = MbCanEngineFacade.canSetVehicleParam(propertyId, target)
-            ?: return MbCanCommandResult(false, "Set command failed")
-                .also {
-                    MbCanDiagnostics.log("ERROR", "toggle set failed propertyId=$propertyId target=$target")
-                }
-        MbCanDiagnostics.log("DEBUG", "toggle set result=$setResult propertyId=$propertyId target=$target")
-        if (setResult >= 0) {
-            delay(POST_COMMAND_VERIFY_DELAY_MS)
-            val after = MbCanEngineFacade.canGetVehicleParam(propertyId)
-            MbCanDiagnostics.log("DEBUG", "toggle verify propertyId=$propertyId after=$after")
+        val target = when (current) {
+            policy.onValue -> policy.offValue
+            policy.offValue -> policy.onValue
+            else -> policy.unknownFallbackValue
         }
-        return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
+        MbCanDiagnostics.log("DEBUG", "toggle pre-read current=$current target=$target propertyId=$propertyId")
+        return applySetAndVerify(spec, target)
     }
 
-    private suspend fun executeSetProperty(propertyId: Int, value: Int): MbCanCommandResult {
+    private suspend fun executeSetViaRegistry(propertyId: Int, value: Int): MbCanCommandResult {
         MbCanDiagnostics.log("DEBUG", "executeSetProperty propertyId=$propertyId value=$value")
+        val spec = MbCanCommandRegistry.get(propertyId)
+            ?: return MbCanCommandResult(false, "No command policy for propertyId=$propertyId")
+        val policy = spec.policy as? MbCanCommandPolicy.SetExact
+            ?: return MbCanCommandResult(false, "Set unsupported by policy for propertyId=$propertyId")
+        if (!policy.allowedValues.contains(value)) {
+            return MbCanCommandResult(false, "Value $value is not allowed for propertyId=$propertyId")
+        }
         if (availability.value !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, "mbCAN unavailable")
         }
-        val setResult = MbCanEngineFacade.canSetVehicleParam(propertyId, value)
+        return applySetAndVerify(spec, value)
+    }
+
+    private suspend fun applySetAndVerify(spec: MbCanCommandSpec, targetValue: Int): MbCanCommandResult {
+        val propertyId = spec.propertyId
+        val setResult = MbCanEngineFacade.canSetVehicleParam(propertyId, targetValue)
             ?: return MbCanCommandResult(false, "Set command failed")
                 .also {
-                    MbCanDiagnostics.log("ERROR", "set failed propertyId=$propertyId value=$value")
+                    MbCanDiagnostics.log("ERROR", "set failed propertyId=$propertyId value=$targetValue")
                 }
-        MbCanDiagnostics.log("DEBUG", "set result=$setResult propertyId=$propertyId value=$value")
+        MbCanDiagnostics.log("DEBUG", "set result=$setResult propertyId=$propertyId value=$targetValue")
         if (setResult >= 0) {
+            spec.refreshSignal?.let { MbCanJobManager.requestBurst(it) }
             delay(POST_COMMAND_VERIFY_DELAY_MS)
             val after = MbCanEngineFacade.canGetVehicleParam(propertyId)
             MbCanDiagnostics.log("DEBUG", "set verify propertyId=$propertyId after=$after")
+            spec.refreshSignal?.let { refreshSignal(it) }
         }
-        return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
-    }
-
-    private suspend fun toggleSteeringWheelHeat(): MbCanCommandResult {
-        MbCanDiagnostics.log("DEBUG", "toggleSteeringWheelHeat() begin")
-        refreshSteeringWheelHeat()
-        if (availability.value !is MbCanAvailability.Available) {
-            return MbCanCommandResult(false, "mbCAN unavailable")
-        }
-        val current = steeringWheelHeatState.value
-        val target = when (current) {
-            MbCanBinaryState.On -> 1
-            MbCanBinaryState.Off -> 2
-            MbCanBinaryState.Unknown -> 2
-            is MbCanBinaryState.Unavailable -> return MbCanCommandResult(false, "mbCAN unavailable")
-        }
-        val setResult = MbCanEngineFacade.canSetVehicleParam(
-            MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
-            target
-        ) ?: return MbCanCommandResult(false, "Set command failed")
-            .also {
-                MbCanDiagnostics.log("ERROR", "steering set failed target=$target")
-            }
-        MbCanDiagnostics.log("DEBUG", "steering set result=$setResult target=$target current=$current")
-        if (setResult >= 0) {
-            delay(POST_COMMAND_VERIFY_DELAY_MS)
-            refreshSteeringWheelHeat()
-            MbCanDiagnostics.log("DEBUG", "steering verify after delay state=${steeringWheelHeatState.value}")
-        }
-        MbCanJobManager.requestBurst(MbCanSignal.SteeringWheelHeat)
-        refreshSteeringWheelHeat()
-        MbCanDiagnostics.log("DEBUG", "steering state after burst refresh=${steeringWheelHeatState.value}")
         return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
 

@@ -23,6 +23,24 @@ data class MbCanControlParam(
     val confidence: MbCanConfidence
 )
 
+sealed class MbCanCommandPolicy {
+    data class ToggleBinary(
+        val offValue: Int,
+        val onValue: Int,
+        val unknownFallbackValue: Int = onValue
+    ) : MbCanCommandPolicy()
+
+    data class SetExact(
+        val allowedValues: Set<Int>
+    ) : MbCanCommandPolicy()
+}
+
+data class MbCanCommandSpec(
+    val propertyId: Int,
+    val policy: MbCanCommandPolicy,
+    val refreshSignal: MbCanSignal? = null
+)
+
 object MbCanCatalog {
     val telemetry: List<MbCanTelemetryParam> = listOf(
         MbCanTelemetryParam("Powertrain", "Vehicle speed", "eMBCAN_VEHICLE_SPEED", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -91,5 +109,31 @@ object MbCanKnownVehiclePropertyId {
     const val STEERING_WHEEL_HEAT_SWITCH = 188
     const val FRONT_LEFT_SEAT_HEAT_VENT_SWITCH = 138
     const val FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH = 139
+}
+
+object MbCanCommandRegistry {
+    private val specsByPropertyId: Map<Int, MbCanCommandSpec> = listOf(
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.SteeringWheelHeat
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..7).toSet()),
+            refreshSignal = MbCanSignal.FrontLeftSeatMode
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..7).toSet()),
+            refreshSignal = MbCanSignal.FrontRightSeatMode
+        )
+    ).associateBy { it.propertyId }
+
+    fun get(propertyId: Int): MbCanCommandSpec? = specsByPropertyId[propertyId]
 }
 
