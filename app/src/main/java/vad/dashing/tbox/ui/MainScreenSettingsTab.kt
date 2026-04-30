@@ -639,10 +639,45 @@ fun MainScreenSettingsTab(
             hasMainScreenPanels,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
+        val pagingEnabled by settingsViewModel.mainScreenPagingEnabled.collectAsStateWithLifecycle()
+        if (pagingEnabled) {
+            val pageIndex by settingsViewModel.mainScreenPanelPageIndex.collectAsStateWithLifecycle()
+            val pageOptions: List<String> = listOf("Все") + (1..5).map { it.toString() }
+            val selectedPageLabel = if (pageIndex < 0) "Все" else (pageIndex + 1).toString()
+            SettingDropdownGeneric(
+                selectedValue = selectedPageLabel,
+                onValueChange = { label ->
+                    val newIndex = if (label == "Все") -1 else (label.toIntOrNull()?.minus(1) ?: 0)
+                    settingsViewModel.saveMainScreenPanelPageIndex(newIndex)
+                },
+                text = stringResource(R.string.settings_main_screen_panel_page_title),
+                description = stringResource(R.string.settings_main_screen_panel_page_desc),
+                enabled = hasMainScreenPanels,
+                options = pageOptions
+            )
+        }
         MainScreenPanelRelativeLayoutSettings(
             settingsViewModel = settingsViewModel,
             modifier = Modifier.padding(top = 8.dp),
             enabled = hasMainScreenPanels
         )
+
+        SettingSwitch(
+            isChecked = pagingEnabled,
+            onCheckedChange = { settingsViewModel.saveMainScreenPagingEnabled(it) },
+            text = stringResource(R.string.settings_paging_enabled),
+            description = stringResource(R.string.settings_paging_enabled_desc),
+            enabled = true
+        )
+        if (pagingEnabled) {
+            Button(
+                onClick = { settingsViewModel.distributeMainScreenPanelsAcrossPages(2) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            ) {
+                Text(stringResource(R.string.settings_paging_auto_distribute), fontSize = 20.sp)
+            }
+        }
     }
 }

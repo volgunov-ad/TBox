@@ -64,7 +64,15 @@ data class FloatingDashboardWidgetConfig(
      * Optional tile title override. When blank, widgets use their default title strings.
      * When non-blank, shown instead of the default title where a title row is displayed.
      */
-    val customTitle: String = ""
+    val customTitle: String = "",
+    /** Number of grid columns this widget spans (1 = normal, >1 = wide). */
+    val colSpan: Int = 1,
+    /** Number of grid rows this widget spans (1 = normal, >1 = tall). */
+    val rowSpan: Int = 1,
+    /** Visual display style for data widgets: "numeric" (default), "gauge", "bar", "minimal". */
+    val displayStyle: String = "",
+    /** Optional base64-encoded background image for the tile (JPEG/PNG, typically small). */
+    val backgroundImage: String = ""
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -89,6 +97,23 @@ data class MainScreenAddButtonPosition(
     }
 }
 
+data class LauncherBundleMeta(
+    val id: String,
+    val name: String,
+    val fileName: String,
+    val createdAtMillis: Long
+)
+
+/** Значения режима движения КПП из CAN ([vad.dashing.tbox.utils.CanFramesProcess]). */
+object GearBoxDriveModeCodes {
+    const val ECO = "ECO"
+    const val NOR = "NOR"
+    const val SPT = "SPT"
+    const val NA = "N/A"
+
+    fun allForUi(): List<String> = listOf(ECO, NOR, SPT, NA)
+}
+
 /**
  * Dashboard panel on the in-app MainScreen (not a system overlay).
  * Position uses the same convention as [MainScreenSettingsButtonPosition]: normalized against
@@ -104,6 +129,8 @@ data class MainScreenPanelConfig(
     val relX: Float,
     val relY: Float,
     val relWidth: Float,
+    /** Page index for horizontal paging mode. -1 means pinned (visible on all pages). 0+ = page number. */
+    val pageIndex: Int = -1,
     val relHeight: Float,
     val background: Boolean,
     val clickAction: Boolean,
@@ -152,6 +179,8 @@ data class BackgroundServiceSettingsSnapshot(
 )
 
 class SettingsManager(private val context: Context) {
+
+    val applicationContext: Context get() = context.applicationContext
 
     companion object {
         /** Tab index that shows the home [vad.dashing.tbox.ui.MainScreen] instead of [vad.dashing.tbox.ui.TboxScreen]. */
@@ -273,6 +302,12 @@ class SettingsManager(private val context: Context) {
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
         private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
+        private const val MAIN_SCREEN_PAGING_ENABLED_KEY = "main_screen_paging_enabled"
+        private const val LAUNCHER_BUNDLES_LIST_KEY = "launcher_bundles_list"
+        private const val MAIN_SCREEN_LAUNCHER_DRIVE_MODE_PRESETS_ENABLED_KEY =
+            "main_screen_launcher_drive_mode_presets_enabled"
+        private const val MAIN_SCREEN_LAUNCHER_DRIVE_MODE_PRESETS_JSON_KEY =
+            "main_screen_launcher_drive_mode_presets_json"
 
         /** Legacy single-file copies (may be migrated to folder URIs on startup). */
         const val MAIN_SCREEN_WALLPAPER_LIGHT_FILE = "main_screen_wallpaper/light"
@@ -281,6 +316,8 @@ class SettingsManager(private val context: Context) {
         private const val MAIN_SCREEN_WALLPAPER_MIGRATED_DIR = "main_screen_wallpaper_migrated"
         /** Per-package custom icons for the app-launcher widget (files only; not in JSON backup). */
         const val LAUNCHER_APP_ICONS_DIR = "launcher_app_icons"
+        /** Saved launcher design bundles (zip). */
+        const val LAUNCHER_BUNDLES_DIR = "launcher_bundles"
         private const val MAX_LAUNCHER_APP_ICON_EDGE_PX = 512
         private const val MAX_LAUNCHER_APP_ICON_BYTES = 512 * 1024L
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
@@ -431,6 +468,35 @@ class SettingsManager(private val context: Context) {
                 parseMainScreenAddButtonJson(
                     preferences[getStringKey(MAIN_SCREEN_ADD_BUTTON_KEY)] ?: ""
                 )
+            }
+            .distinctUntilChanged()
+
+    val mainScreenPagingEnabledFlow: Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[getStringKey(MAIN_SCREEN_PAGING_ENABLED_KEY)]?.toBooleanStrictOrNull() ?: false }
+            .distinctUntilChanged()
+
+    val launcherBundlesFlow: Flow<List<LauncherBundleMeta>> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                val raw = preferences[getStringKey(LAUNCHER_BUNDLES_LIST_KEY)] ?: ""
+                parseLauncherBundlesJson(raw)
+            }
+            .distinctUntilChanged()
+
+    val launcherDriveModePresetsEnabledFlow: Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                preferences[getStringKey(MAIN_SCREEN_LAUNCHER_DRIVE_MODE_PRESETS_ENABLED_KEY)]
+                    ?.toBooleanStrictOrNull() ?: false
+            }
+            .distinctUntilChanged()
+
+    val launcherDriveModePresetsMapFlow: Flow<Map<String, String>> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                val raw = preferences[getStringKey(MAIN_SCREEN_LAUNCHER_DRIVE_MODE_PRESETS_JSON_KEY)] ?: ""
+                parseLauncherDriveModePresetsJson(raw)
             }
             .distinctUntilChanged()
 
@@ -814,6 +880,63 @@ class SettingsManager(private val context: Context) {
         saveCustomString(MAIN_SCREEN_ADD_BUTTON_KEY, obj.toString())
     }
 
+    suspend fun saveMainScreenPagingEnabled(enabled: Boolean) {
+        saveCustomString(MAIN_SCREEN_PAGING_ENABLED_KEY, enabled.toString())
+    }
+
+    suspend fun saveLauncherDriveModePresetsEnabled(enabled: Boolean) {
+        saveCustomString(MAIN_SCREEN_LAUNCHER_DRIVE_MODE_PRESETS_ENABLED_KEY, enabled.toString())
+    }
+
+    suspend fun saveLauncherDriveModePresetsMap(map: Map<String, String>) {
+        saveCustomString(
+            MAIN_SCREEN_LAUNCHER_DRIVE_MODE_PRESETS_JSON_KEY,
+            serializeLauncherDriveModePresetsJson(map)
+        )
+    }
+
+    suspend fun saveLauncherBundleToLibrary(name: String, bytes: ByteArray): LauncherBundleMeta {
+        val id = "bundle_" + System.currentTimeMillis().toString()
+        val fileName = "$id.${LauncherBundleExport.BUNDLE_FILE_EXTENSION}"
+        val dir = File(context.filesDir, LAUNCHER_BUNDLES_DIR)
+        withContext(Dispatchers.IO) {
+            dir.mkdirs()
+            File(dir, fileName).writeBytes(bytes)
+        }
+        val meta = LauncherBundleMeta(
+            id = id,
+            name = name.ifBlank { "Bundle" },
+            fileName = fileName,
+            createdAtMillis = System.currentTimeMillis()
+        )
+        val existing = launcherBundlesFlow.first()
+        val updated = (listOf(meta) + existing).distinctBy { it.id }
+        saveCustomString(LAUNCHER_BUNDLES_LIST_KEY, serializeLauncherBundles(updated))
+        return meta
+    }
+
+    suspend fun deleteLauncherBundleFromLibrary(id: String) {
+        val existing = launcherBundlesFlow.first()
+        val keep = existing.filterNot { it.id == id }
+        saveCustomString(LAUNCHER_BUNDLES_LIST_KEY, serializeLauncherBundles(keep))
+        withContext(Dispatchers.IO) {
+            launcherBundleFileById(id, existing)?.delete()
+        }
+    }
+
+    suspend fun readLauncherBundleBytes(id: String): ByteArray? {
+        val existing = launcherBundlesFlow.first()
+        val file = launcherBundleFileById(id, existing) ?: return null
+        return withContext(Dispatchers.IO) { file.takeIf { it.exists() }?.readBytes() }
+    }
+
+    fun launcherBundleFile(id: String): File? {
+        val dir = File(context.filesDir, LAUNCHER_BUNDLES_DIR)
+        if (!dir.exists()) return null
+        // Best-effort: most ids map to "$id.tboxbundle"
+        return File(dir, "$id.${LauncherBundleExport.BUNDLE_FILE_EXTENSION}").takeIf { it.exists() }
+    }
+
     suspend fun saveMainScreenCornerButtonSizeDp(sizeDp: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY] =
@@ -1177,7 +1300,8 @@ class SettingsManager(private val context: Context) {
             showTboxDisconnectIndicator = obj.optBoolean(
                 "showTboxDisconnectIndicator",
                 DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
-            )
+            ),
+            pageIndex = obj.optInt("pageIndex", -1)
         )
     }
 
@@ -1198,9 +1322,80 @@ class SettingsManager(private val context: Context) {
             o.put("background", config.background)
             o.put("clickAction", config.clickAction)
             o.put("showTboxDisconnectIndicator", config.showTboxDisconnectIndicator)
+            o.put("pageIndex", config.pageIndex)
             array.put(o)
         }
         return array.toString()
+    }
+
+    private fun parseLauncherBundlesJson(json: String): List<LauncherBundleMeta> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            val array = JSONArray(json)
+            val out = mutableListOf<LauncherBundleMeta>()
+            for (i in 0 until array.length()) {
+                val o = array.optJSONObject(i) ?: continue
+                val id = o.optString("id").trim()
+                val name = o.optString("name").trim()
+                val fileName = o.optString("fileName").trim()
+                val createdAt = o.optLong("createdAtMillis", 0L)
+                if (id.isBlank() || fileName.isBlank()) continue
+                out.add(
+                    LauncherBundleMeta(
+                        id = id,
+                        name = if (name.isBlank()) id else name,
+                        fileName = fileName,
+                        createdAtMillis = createdAt
+                    )
+                )
+            }
+            out
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun serializeLauncherBundles(items: List<LauncherBundleMeta>): String {
+        val array = JSONArray()
+        items.forEach { meta ->
+            val o = JSONObject()
+            o.put("id", meta.id)
+            o.put("name", meta.name)
+            o.put("fileName", meta.fileName)
+            o.put("createdAtMillis", meta.createdAtMillis)
+            array.put(o)
+        }
+        return array.toString()
+    }
+
+    private fun parseLauncherDriveModePresetsJson(json: String): Map<String, String> {
+        if (json.isBlank()) return emptyMap()
+        return try {
+            val obj = JSONObject(json)
+            buildMap {
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    put(k, obj.optString(k, ""))
+                }
+            }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun serializeLauncherDriveModePresetsJson(map: Map<String, String>): String {
+        val obj = JSONObject()
+        map.forEach { (k, v) ->
+            if (v.isNotBlank()) obj.put(k, v)
+        }
+        return obj.toString()
+    }
+
+    private fun launcherBundleFileById(id: String, metas: List<LauncherBundleMeta>): File? {
+        val meta = metas.firstOrNull { it.id == id } ?: return null
+        val dir = File(context.filesDir, LAUNCHER_BUNDLES_DIR)
+        return File(dir, meta.fileName)
     }
 
     private fun parseFloatingDashboardsJson(json: String): List<FloatingDashboardConfig> {

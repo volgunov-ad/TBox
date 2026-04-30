@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tbox_launcher_layout_v1",
+  "title": "TBox Launcher Layout",
+  "description": "Schema for TBox Monitor launcher design export/import. Used by humans and generative AI models to create and edit launcher layouts.",
+  "type": "object",
+  "required": ["formatVersion", "type"],
+  "properties": {
+    "formatVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "type": {
+      "type": "string",
+      "const": "tbox_launcher_layout"
+    },
+    "exportedAtMillis": {
+      "type": "integer",
+      "description": "Unix epoch milliseconds when this layout was exported"
+    },
+    "screen": {
+      "$ref": "#/$defs/screenContext"
+    },
+    "theme": {
+      "$ref": "#/$defs/theme"
+    },
+    "settingsButton": {
+      "$ref": "#/$defs/normalizedPosition",
+      "description": "Position of the settings gear button on the main screen"
+    },
+    "addButton": {
+      "$ref": "#/$defs/normalizedPosition",
+      "description": "Position of the '+' add-panel button on the main screen"
+    },
+    "mainScreenPanels": {
+      "type": "array",
+      "description": "Panels on the main home screen (embedded, not floating overlays)",
+      "items": {
+        "$ref": "#/$defs/mainScreenPanel"
+      }
+    },
+    "floatingPanels": {
+      "type": "array",
+      "description": "Floating overlay panels (system window overlays)",
+      "items": {
+        "$ref": "#/$defs/floatingPanel"
+      }
+    },
+    "dashboardTab": {
+      "$ref": "#/$defs/dashboardTab",
+      "description": "In-app 'Tiles' tab grid configuration"
+    },
+    "availableWidgets": {
+      "type": "array",
+      "description": "Catalog of all widget types that can be placed in tiles",
+      "items": {
+        "$ref": "#/$defs/widgetCatalogEntry"
+      }
+    }
+  },
+  "$defs": {
+    "hexColor": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6,8}$",
+      "description": "Color as hex string: #RRGGBB or #AARRGGBB"
+    },
+    "normalizedPosition": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Horizontal position normalized to [0, 1]"
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Vertical position normalized to [0, 1]"
+        }
+      },
+      "required": ["x", "y"]
+    },
+    "screenContext": {
+      "type": "object",
+      "properties": {
+        "orientation": {
+          "type": "string",
+          "enum": ["landscape", "portrait"],
+          "description": "Screen orientation of the vehicle head unit"
+        },
+        "aspectRatio": {
+          "type": "string",
+          "description": "Display aspect ratio, e.g. '16:9'"
+        },
+        "referenceDpi": {
+          "type": "integer",
+          "description": "Reference density (dp baseline)"
+        }
+      }
+    },
+    "themedColor": {
+      "type": "object",
+      "properties": {
+        "light": { "$ref": "#/$defs/hexColor" },
+        "dark": { "$ref": "#/$defs/hexColor" }
+      },
+      "description": "A color with light and dark theme variants"
+    },
+    "theme": {
+      "type": "object",
+      "properties": {
+        "canvasBackground": {
+          "$ref": "#/$defs/themedColor",
+          "description": "Background color of the main screen canvas behind panels"
+        },
+        "cornerButtons": {
+          "type": "object",
+          "properties": {
+            "sizeDp": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 100,
+              "description": "Corner button size in dp"
+            },
+            "background": { "$ref": "#/$defs/themedColor" },
+            "icon": { "$ref": "#/$defs/themedColor" }
+          }
+        },
+        "wallpaperCrop": {
+          "type": "boolean",
+          "description": "true=crop to fill, false=fit whole image"
+        },
+        "colorPresets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/hexColor" },
+          "maxItems": 6,
+          "description": "Six global ARGB color preset slots for quick color picking"
+        }
+      }
+    },
+    "widgetConfig": {
+      "type": "object",
+      "description": "Configuration for one tile/widget in a panel grid",
+      "properties": {
+        "dataKey": {
+          "type": "string",
+          "description": "Widget type identifier (see availableWidgets catalog). Empty string = empty slot."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable widget name (informational, resolved from dataKey)"
+        },
+        "unit": {
+          "type": "string",
+          "description": "Measurement unit if applicable (e.g. 'km/h', '°C')"
+        },
+        "showTitle": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show title label on the tile"
+        },
+        "showUnit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show measurement unit on the tile"
+        },
+        "singleLineDualMetrics": {
+          "type": "boolean",
+          "default": false,
+          "description": "For dual-value widgets: show both values on one line"
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 2.0,
+          "default": 1.0,
+          "description": "Text scale factor for the tile content"
+        },
+        "shape": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50,
+          "default": 0,
+          "description": "Corner radius in dp (0=square, higher=more rounded)"
+        },
+        "textColorLight": {
+          "$ref": "#/$defs/hexColor",
+          "description": "Text color for light theme"
+        },
+        "textColorDark": {
+          "$ref": "#/$defs/hexColor",
+          "description": "Text color for dark theme"
+        },
+        "backgroundColorLight": {
+          "$ref": "#/$defs/hexColor",
+          "description": "Tile background color for light theme (optional)"
+        },
+        "backgroundColorDark": {
+          "$ref": "#/$defs/hexColor",
+          "description": "Tile background color for dark theme (optional)"
+        },
+        "customTitle": {
+          "type": "string",
+          "description": "Override the default title with custom text"
+        },
+        "launcherAppPackage": {
+          "type": "string",
+          "description": "Android package name to launch (only for appLauncherWidget)"
+        },
+        "mediaPlayers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of media player package names (only for musicWidget)"
+        },
+        "mediaSelectedPlayer": {
+          "type": "string",
+          "description": "Currently selected media player package"
+        },
+        "mediaAutoPlayOnInit": { "type": "boolean" },
+        "mediaAutoPlayOnlyWhenEngineRunning": { "type": "boolean" },
+        "mediaKeepPlayerForeground": { "type": "boolean" },
+        "colSpan": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 1,
+          "description": "Number of grid columns this widget spans (1=normal)"
+        },
+        "rowSpan": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 1,
+          "description": "Number of grid rows this widget spans (1=normal)"
+        },
+        "displayStyle": {
+          "type": "string",
+          "enum": ["", "gauge", "bar", "minimal"],
+          "default": "",
+          "description": "Visual style for data widgets: empty/default=standard card with chart, 'gauge'=arc gauge, 'bar'=horizontal progress bar, 'minimal'=large centered value only"
+        },
+        "backgroundImage": {
+          "type": "string",
+          "description": "Optional base64-encoded background image (JPEG/PNG) rendered behind the widget content"
+        }
+      },
+      "required": ["dataKey"]
+    },
+    "mainScreenPanel": {
+      "type": "object",
+      "description": "A panel embedded on the main home screen",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique panel identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable panel name"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "grid": {
+          "type": "object",
+          "properties": {
+            "rows": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "description": "Number of rows in the widget grid"
+            },
+            "cols": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "description": "Number of columns in the widget grid"
+            }
+          },
+          "required": ["rows", "cols"]
+        },
+        "position": {
+          "$ref": "#/$defs/normalizedPosition",
+          "description": "Panel top-left position normalized to [0,1]"
+        },
+        "size": {
+          "type": "object",
+          "properties": {
+            "width": {
+              "type": "number",
+              "minimum": 0.08,
+              "maximum": 1.0,
+              "description": "Panel width as fraction of screen"
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0.08,
+              "maximum": 1.0,
+              "description": "Panel height as fraction of screen"
+            }
+          },
+          "required": ["width", "height"]
+        },
+        "background": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show semi-transparent background behind the panel"
+        },
+        "clickAction": {
+          "type": "boolean",
+          "default": false
+        },
+        "showTboxDisconnectIndicator": {
+          "type": "boolean",
+          "default": false
+        },
+        "widgets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/widgetConfig" },
+          "description": "Widgets filling the grid left-to-right, top-to-bottom (rows*cols items)"
+        }
+      },
+      "required": ["id", "grid", "widgets"]
+    },
+    "floatingPanel": {
+      "type": "object",
+      "description": "A floating overlay panel (system window)",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "enabled": { "type": "boolean", "default": false },
+        "grid": {
+          "type": "object",
+          "properties": {
+            "rows": { "type": "integer", "minimum": 1, "maximum": 10 },
+            "cols": { "type": "integer", "minimum": 1, "maximum": 10 }
+          },
+          "required": ["rows", "cols"]
+        },
+        "width": {
+          "type": "integer",
+          "description": "Panel width in pixels"
+        },
+        "height": {
+          "type": "integer",
+          "description": "Panel height in pixels"
+        },
+        "startX": {
+          "type": "integer",
+          "description": "Initial X position in pixels"
+        },
+        "startY": {
+          "type": "integer",
+          "description": "Initial Y position in pixels"
+        },
+        "background": { "type": "boolean", "default": false },
+        "clickAction": { "type": "boolean", "default": true },
+        "showTboxDisconnectIndicator": { "type": "boolean", "default": true },
+        "widgets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/widgetConfig" }
+        }
+      },
+      "required": ["id", "grid", "widgets"]
+    },
+    "dashboardTab": {
+      "type": "object",
+      "description": "In-app dashboard 'Tiles' tab configuration",
+      "properties": {
+        "rows": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "cols": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "widgets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/widgetConfig" }
+        }
+      }
+    },
+    "widgetCatalogEntry": {
+      "type": "object",
+      "properties": {
+        "dataKey": { "type": "string" },
+        "title": { "type": "string" },
+        "unit": { "type": "string" },
+        "supportsSingleLine": { "type": "boolean" }
+      },
+      "required": ["dataKey"]
+    }
+  }
+}

@@ -59,21 +59,28 @@ fun serializeWidgetConfigs(configs: List<FloatingDashboardWidgetConfig>): String
 }
 
 fun serializeWidgetConfigsToJsonArray(
-    configs: List<FloatingDashboardWidgetConfig>
+    configs: List<FloatingDashboardWidgetConfig>,
+    context: Context? = null
 ): JSONArray {
     val array = JSONArray()
     configs.forEach { config ->
         val obj = JSONObject()
         obj.put("dataKey", config.dataKey)
+        if (context != null && config.dataKey.isNotBlank()) {
+            val resolvedTitle = WidgetsRepository.getTitleForDataKey(context, config.dataKey)
+            if (resolvedTitle.isNotBlank()) obj.put("title", resolvedTitle)
+            val resolvedUnit = WidgetsRepository.getUnitForDataKey(context, config.dataKey)
+            if (resolvedUnit.isNotBlank()) obj.put("unit", resolvedUnit)
+        }
         obj.put("showTitle", config.showTitle)
         obj.put("showUnit", config.showUnit)
         obj.put("singleLineDualMetrics", config.singleLineDualMetrics)
         obj.put("scale", normalizeWidgetScale(config.scale))
         obj.put("shape", normalizeWidgetShape(config.shape))
-        obj.put("textColorLight", config.textColorLight)
-        obj.put("textColorDark", config.textColorDark)
-        config.backgroundColorLight?.let { obj.put("backgroundColorLight", it) }
-        config.backgroundColorDark?.let { obj.put("backgroundColorDark", it) }
+        obj.put("textColorLight", colorIntToHex(config.textColorLight))
+        obj.put("textColorDark", colorIntToHex(config.textColorDark))
+        config.backgroundColorLight?.let { obj.put("backgroundColorLight", colorIntToHex(it)) }
+        config.backgroundColorDark?.let { obj.put("backgroundColorDark", colorIntToHex(it)) }
         val mediaPlayers = orderedMediaPlayerPackages(config.mediaPlayers)
         if (mediaPlayers.isNotEmpty()) {
             obj.put("mediaPlayers", JSONArray(mediaPlayers))
@@ -96,6 +103,10 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.customTitle.isNotBlank()) {
             obj.put("customTitle", config.customTitle.trim())
         }
+        if (config.colSpan > 1) obj.put("colSpan", config.colSpan)
+        if (config.rowSpan > 1) obj.put("rowSpan", config.rowSpan)
+        if (config.displayStyle.isNotBlank()) obj.put("displayStyle", config.displayStyle)
+        if (config.backgroundImage.isNotBlank()) obj.put("backgroundImage", config.backgroundImage)
         array.put(obj)
     }
     return array
@@ -200,16 +211,14 @@ private fun parseWidgetConfigsFromJsonArray(
                         shape = normalizeWidgetShape(
                             item.optInt("shape", DEFAULT_WIDGET_SHAPE)
                         ),
-                        textColorLight = item.optInt(
-                            "textColorLight",
-                            DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+                        textColorLight = parseColorFromJson(
+                            item, "textColorLight", DEFAULT_WIDGET_TEXT_COLOR_LIGHT
                         ),
-                        textColorDark = item.optInt(
-                            "textColorDark",
-                            DEFAULT_WIDGET_TEXT_COLOR_DARK
+                        textColorDark = parseColorFromJson(
+                            item, "textColorDark", DEFAULT_WIDGET_TEXT_COLOR_DARK
                         ),
-                        backgroundColorLight = parseBackgroundColor(item, "backgroundColorLight"),
-                        backgroundColorDark = parseBackgroundColor(item, "backgroundColorDark"),
+                        backgroundColorLight = parseOptionalColorFromJson(item, "backgroundColorLight"),
+                        backgroundColorDark = parseOptionalColorFromJson(item, "backgroundColorDark"),
                         mediaPlayers = mediaPlayers,
                         mediaSelectedPlayer = parseSelectedMediaPlayer(item, mediaPlayers),
                         mediaAutoPlayOnInit = item.optBoolean("mediaAutoPlayOnInit", false),
@@ -231,7 +240,11 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             null
                         },
-                        customTitle = item.optString("customTitle", "").trim()
+                        customTitle = item.optString("customTitle", "").trim(),
+                        colSpan = item.optInt("colSpan", 1).coerceIn(1, 10),
+                        rowSpan = item.optInt("rowSpan", 1).coerceIn(1, 10),
+                        displayStyle = item.optString("displayStyle", "").trim(),
+                        backgroundImage = item.optString("backgroundImage", "")
                     )
                 )
             }
@@ -279,6 +292,3 @@ private fun parseSelectedMediaPlayer(
     return if (selected in mediaPlayers) selected else ""
 }
 
-private fun parseBackgroundColor(item: JSONObject, key: String): Int? {
-    return if (item.has(key)) item.optInt(key) else null
-}

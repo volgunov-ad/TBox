@@ -35,6 +35,7 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val cols: Int,
     val showTboxDisconnectIndicator: Boolean,
     val clickAction: Boolean,
+    val pageIndex: Int,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -58,7 +59,8 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         rows = w.rows.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         cols = w.cols.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
-        clickAction = w.clickAction
+        clickAction = w.clickAction,
+        pageIndex = w.pageIndex.coerceIn(-1, 10),
     )
 }
 
@@ -458,6 +460,34 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = MainScreenAddButtonPosition.Default
         )
 
+    val mainScreenPagingEnabled = settingsManager.mainScreenPagingEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val launcherBundles = settingsManager.launcherBundlesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val launcherDriveModePresetsEnabled = settingsManager.launcherDriveModePresetsEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val launcherDriveModePresetBundleIds = settingsManager.launcherDriveModePresetsMapFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+
     val mainScreenCornerButtonSizeDp = settingsManager.mainScreenCornerButtonSizeDpFlow
         .stateIn(
             scope = viewModelScope,
@@ -639,6 +669,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_MAIN_SCREEN_PANEL_COLS
+        )
+
+    val mainScreenPanelPageIndex = activeMainScreenPanelConfig
+        .map { it.pageIndex }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = -1
         )
 
     val mainScreenPanelRelXPercent = activeMainScreenPanelConfig
@@ -1037,6 +1075,63 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun swapMainScreenButtonPositions() {
+        viewModelScope.launch {
+            val settings = settingsManager.mainScreenSettingsButtonFlow.first()
+            val add = settingsManager.mainScreenAddButtonFlow.first()
+            settingsManager.saveMainScreenSettingsButton(MainScreenSettingsButtonPosition(x = add.x, y = add.y))
+            settingsManager.saveMainScreenAddButton(MainScreenAddButtonPosition(x = settings.x, y = settings.y))
+        }
+    }
+
+    fun saveMainScreenPagingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenPagingEnabled(enabled)
+        }
+    }
+
+    fun saveLauncherDriveModePresetsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveLauncherDriveModePresetsEnabled(enabled)
+        }
+    }
+
+    fun saveLauncherDriveModePresetForMode(driveModeCode: String, bundleId: String) {
+        viewModelScope.launch {
+            val current = settingsManager.launcherDriveModePresetsMapFlow.first().toMutableMap()
+            if (bundleId.isBlank()) {
+                current.remove(driveModeCode)
+            } else {
+                current[driveModeCode] = bundleId
+            }
+            settingsManager.saveLauncherDriveModePresetsMap(current)
+        }
+    }
+
+    suspend fun applyLauncherBundleById(bundleId: String): Result<Int> {
+        val bytes = settingsManager.readLauncherBundleBytes(bundleId)
+            ?: return Result.failure(IllegalArgumentException("bundle_not_found"))
+        return LauncherBundleApply.applyBytes(
+            settingsManager.applicationContext,
+            settingsManager,
+            this,
+            bytes
+        )
+    }
+
+    fun distributeMainScreenPanelsAcrossPages(pages: Int = 2) {
+        viewModelScope.launch {
+            val list = mainScreenDashboards.value.toMutableList()
+            if (list.isEmpty()) return@launch
+            val effectivePages = pages.coerceIn(1, 5)
+            var idx = 0
+            val updated = list.map { panel ->
+                if (!panel.enabled) panel else panel.copy(pageIndex = (idx++ % effectivePages))
+            }
+            settingsManager.saveMainScreenDashboards(updated)
+        }
+    }
+
     fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMainScreenOpenOnBoot(enabled)
@@ -1313,6 +1408,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         if (cols !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
         val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
             { it.copy(cols = cols) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
+        }
+    }
+
+    fun saveMainScreenPanelPageIndex(pageIndex: Int, panelId: String? = null) {
+        val normalized = pageIndex.coerceIn(-1, 10)
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(pageIndex = normalized) }
         if (panelId != null) {
             updateMainScreenPanel(panelId, update)
         } else {

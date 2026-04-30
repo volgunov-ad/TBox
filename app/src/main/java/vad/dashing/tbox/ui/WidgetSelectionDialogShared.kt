@@ -130,6 +130,8 @@ internal class WidgetSelectionDialogState(
     var wholePanelShowTboxDisconnect by mutableStateOf(false)
     var wholePanelRows by mutableIntStateOf(2)
     var wholePanelCols by mutableIntStateOf(3)
+    /** Main-screen only: page index for HorizontalPager (-1 = all pages). */
+    var wholePanelPageIndex by mutableIntStateOf(-1)
     /** Main-screen and floating whole-panel draft for clickAction. */
     var wholePanelClickAction by mutableStateOf(false)
     /**
@@ -144,6 +146,7 @@ internal class WidgetSelectionDialogState(
         wholePanelShowTboxDisconnect = cfg.showTboxDisconnectIndicator
         wholePanelRows = cfg.rows
         wholePanelCols = cfg.cols
+        wholePanelPageIndex = cfg.pageIndex
         wholePanelClickAction = cfg.clickAction
     }
 
@@ -332,6 +335,7 @@ internal fun WidgetColorThemeSegmentRow(
 private fun MainScreenPanelWholeSettingsSection(
     state: WidgetSelectionDialogState,
     enabled: Boolean,
+    pagingEnabled: Boolean,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -380,6 +384,28 @@ private fun MainScreenPanelWholeSettingsSection(
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
+        if (pagingEnabled) {
+            val options = listOf(-1, 0, 1, 2, 3, 4)
+            val labels = mapOf(
+                -1 to stringResource(R.string.settings_panel_page_all),
+                0 to "1",
+                1 to "2",
+                2 to "3",
+                3 to "4",
+                4 to "5",
+            )
+            SettingDropdownGeneric(
+                selectedValue = labels[state.wholePanelPageIndex] ?: stringResource(R.string.settings_panel_page_all),
+                onValueChange = { label ->
+                    val idx = labels.entries.firstOrNull { it.value == label }?.key ?: -1
+                    state.wholePanelPageIndex = idx
+                },
+                text = stringResource(R.string.settings_main_screen_panel_page_title),
+                description = stringResource(R.string.settings_main_screen_panel_page_desc),
+                enabled = enabled,
+                options = options.map { labels[it] ?: it.toString() }
+            )
+        }
     }
 }
 
@@ -470,6 +496,7 @@ internal fun WidgetSelectionDialogForm(
         ) {
             when {
                 state.showWholePanelSettings && mainScreenPanelId.isNotBlank() -> {
+                    val pagingEnabled by settingsViewModel.mainScreenPagingEnabled.collectAsStateWithLifecycle()
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -479,6 +506,7 @@ internal fun WidgetSelectionDialogForm(
                         MainScreenPanelWholeSettingsSection(
                             state = state,
                             enabled = true
+                            ,pagingEnabled = pagingEnabled
                         )
                     }
                 }
@@ -1053,7 +1081,8 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         rows = state.wholePanelRows,
         cols = state.wholePanelCols,
         showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
-        clickAction = state.wholePanelClickAction
+        clickAction = state.wholePanelClickAction,
+        pageIndex = state.wholePanelPageIndex
     )
 }
 

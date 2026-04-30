@@ -8,6 +8,8 @@
     <string name="action_clear">Очистить</string>
     <string name="action_close">Закрыть</string>
     <string name="action_configure">Настроить</string>
+    <string name="action_apply">Применить</string>
+    <string name="action_share">Поделиться</string>
     <string name="action_send">Отправить</string>
     <string name="action_get_all_sms">Получить все SMS</string>
 
@@ -51,6 +53,8 @@
     <string name="menu_navigate_home">Главная</string>
     <string name="main_open_console_cd">Открыть разделы приложения</string>
     <string name="main_screen_add_panel_cd">Добавить панель на главный экран</string>
+    <string name="main_screen_wallpaper_prev_cd">Предыдущий фон</string>
+    <string name="main_screen_wallpaper_next_cd">Следующий фон</string>
     <string name="tbox_connected_at">TBox подключен в %1$s</string>
     <string name="tbox_disconnected_at">TBox отключен в %1$s</string>
     <string name="service_started_at">Служба запущена в %1$s</string>
@@ -497,6 +501,9 @@
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
     <string name="data_title_hide_floating_panels_widget">Скрытие плавающих панелей</string>
     <string name="data_title_toggle_floating_panels_enabled_widget">Отключение плавающих панелей</string>
+    <string name="data_title_decorative_clock">Часы</string>
+    <string name="data_title_decorative_text">Текст</string>
+    <string name="data_title_decorative_divider">Разделитель</string>
     <string name="widget_app_launcher_selected">Выбрано: %1$s</string>
     <string name="widget_app_launcher_none_selected">Приложение не выбрано</string>
     <string name="widget_app_launcher_required">Выберите приложение, чтобы сохранить виджет</string>
@@ -536,4 +543,38 @@
     <string name="reg_roaming">роуминг</string>
 
     <string name="net_no">нет сети</string>
+
+    <string name="settings_launcher_layout_section">Дизайн лаунчера</string>
+    <string name="settings_launcher_export">Экспорт дизайна</string>
+    <string name="settings_launcher_import">Импорт дизайна</string>
+    <string name="settings_launcher_share">Поделиться дизайном лаунчера</string>
+    <string name="settings_swap_corner_buttons">Поменять местами +/⚙</string>
+    <string name="settings_launcher_export_bundle">Экспорт бандла</string>
+    <string name="settings_launcher_import_bundle">Импорт бандла</string>
+    <string name="settings_launcher_bundles_saved">Сохранённые бандлы</string>
+    <string name="settings_launcher_bundles_more">Ещё: %1$d</string>
+    <string name="settings_launcher_drive_mode_presets_section">Пресет по режиму движения КПП</string>
+    <string name="settings_launcher_drive_mode_presets_hint">Значения ECO / NOR / SPT / N/A приходят с CAN (как в виджете «Режим движения КПП»). Для каждого можно выбрать бандл из библиотеки — при смене режима на главном экране он подставится автоматически, если включена опция ниже.</string>
+    <string name="settings_launcher_drive_mode_presets_enable_title">Автоматически менять дизайн на главном экране</string>
+    <string name="settings_launcher_drive_mode_presets_enable_desc">Только на главном экране: при смене режима движения применяется выбранный бандл.</string>
+    <string name="settings_launcher_drive_mode_bundle_none">Не назначен</string>
+    <string name="settings_launcher_drive_mode_label_eco">ECO</string>
+    <string name="settings_launcher_drive_mode_label_nor">NOR (Normal)</string>
+    <string name="settings_launcher_drive_mode_label_spt">SPT (Sport)</string>
+    <string name="settings_launcher_drive_mode_label_na">N/A</string>
+    <string name="settings_paging_enabled">Горизонтальное пролистывание страниц</string>
+    <string name="settings_paging_enabled_desc">Панели с разными pageIndex располагаются на отдельных страницах. Без pageIndex — все на странице 0.</string>
+    <string name="settings_paging_auto_distribute">Разнести панели по 2 страницам</string>
+    <string name="settings_main_screen_panel_page_title">Страница панели</string>
+    <string name="settings_main_screen_panel_page_desc">«Все» — видна на каждой странице. Иначе — только на выбранной.</string>
+    <string name="settings_panel_page_all">Все</string>
+    <string name="toast_launcher_bundle_import_ok">Бандл импортирован (иконок: %1$d)</string>
+    <string name="toast_launcher_bundle_applied_ok">Бандл применён</string>
+    <string name="toast_launcher_bundle_deleted_ok">Бандл удалён</string>
+    <string name="share_launcher_bundle_title">Поделиться бандлом лаунчера</string>
+    <string name="dialog_save_launcher_layout_downloads">Сохранить дизайн лаунчера (панели, плитки, тему, цвета) в папку Загрузки. Обои и пользовательские иконки не включаются.</string>
+    <string name="dialog_import_launcher_layout_message">Текущий дизайн лаунчера (панели, плитки, тема, цвета) будет заменён содержимым файла. Остальные настройки приложения не изменятся. Продолжить и выбрать JSON-файл?</string>
+    <string name="share_launcher_layout_title">Поделиться дизайном лаунчера</string>
+    <string name="toast_launcher_layout_import_ok">Дизайн лаунчера импортирован</string>
+    <string name="toast_launcher_layout_import_error">Ошибка импорта дизайна лаунчера: %1$s</string>
 </resources>

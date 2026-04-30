@@ -116,11 +116,84 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val importLauncherLayoutLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch(Dispatchers.IO) {
+            val text = runCatching {
+                contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() }.orEmpty()
+            }.getOrElse { "" }
+            if (text.isBlank()) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_backup_import_read_error), Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            val result = LauncherLayoutExport.importJson(this@MainActivity, settingsManager, text)
+            withContext(Dispatchers.Main) {
+                if (result.isSuccess) {
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_launcher_layout_import_ok), Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_launcher_layout_import_error, result.exceptionOrNull()?.message ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private val importLauncherBundleLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch(Dispatchers.IO) {
+            val bytes = runCatching {
+                contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            }.getOrNull()
+            if (bytes == null || bytes.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_backup_import_read_error), Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            val savedName: String = runCatching {
+                contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { c ->
+                        val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
+                    }
+            }.getOrNull().orEmpty()
+            val displayName: String = savedName.ifBlank { "Bundle" }
+            runCatching { settingsManager.saveLauncherBundleToLibrary(displayName, bytes) }
+
+            val result = applyLauncherBundleBytes(bytes)
+            withContext(Dispatchers.Main) {
+                if (result.isSuccess) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_launcher_bundle_import_ok, result.getOrNull() ?: 0),
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_launcher_layout_import_error, result.exceptionOrNull()?.message ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
+
     // Флаг для отслеживания состояния переключателя mock-локации
     private var isMockLocationSettingPending = false
 
     private lateinit var settingsManager: SettingsManager
     private lateinit var appDataManager: AppDataManager
+    private var settingsViewModel: SettingsViewModel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         MainActivityLoadTimings.reset()
@@ -130,6 +203,10 @@ class MainActivity : ComponentActivity() {
 
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
+        settingsViewModel = androidx.lifecycle.ViewModelProvider(
+            this,
+            SettingsViewModelFactory(settingsManager)
+        )[SettingsViewModel::class.java]
         MainActivityLoadTimings.mark("main_after_managers")
 
         consumeFloatingDashboardTileEditIntent(intent)
@@ -157,6 +234,18 @@ class MainActivity : ComponentActivity() {
                     onImportSettingsBackup = {
                         importBackupLauncher.launch(arrayOf("application/json", "application/*", "*/*"))
                     },
+                    onExportLauncherLayout = { exportLauncherLayout() },
+                    onImportLauncherLayout = {
+                        importLauncherLayoutLauncher.launch(arrayOf("application/json", "application/*", "*/*"))
+                    },
+                    onShareLauncherLayout = { shareLauncherLayout() },
+                    onExportLauncherBundle = { exportLauncherBundle() },
+                    onImportLauncherBundle = {
+                        importLauncherBundleLauncher.launch(arrayOf("application/octet-stream", "application/zip", "*/*"))
+                    },
+                    onApplyLauncherBundle = { id -> applySavedLauncherBundle(id) },
+                    onDeleteLauncherBundle = { id -> deleteSavedLauncherBundle(id) },
+                    onShareLauncherBundle = { id -> shareSavedLauncherBundle(id) },
                     onServiceCommand = { sendAction, extraName, extraValue ->
                         serviceCommand(sendAction, extraName, extraValue)
                     },
@@ -384,6 +473,197 @@ class MainActivity : ComponentActivity() {
             withContext(Dispatchers.Main) {
                 saveJsonBackupToDownloads(json, excludeTripLists)
             }
+        }
+    }
+
+    private fun exportLauncherLayout() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val json = runCatching {
+                LauncherLayoutExport.exportJson(this@MainActivity, settingsManager)
+            }.getOrElse { e ->
+                Log.e(TAG, "Launcher layout export error", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_backup_export_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                saveLauncherLayoutToDownloads(json)
+            }
+        }
+    }
+
+    private fun exportLauncherBundle() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val bytes = runCatching {
+                LauncherBundleExport.exportBundle(this@MainActivity, settingsManager)
+            }.getOrElse { e ->
+                Log.e(TAG, "Launcher bundle export error", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_backup_export_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                performLauncherBundleSave(bytes)
+            }
+        }
+    }
+
+    private fun performLauncherBundleSave(bytes: ByteArray) {
+        try {
+            val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+            } else {
+                Environment.getExternalStorageDirectory().absolutePath + "/Download"
+            }
+            val saveDir = File(savePath)
+            if (!saveDir.exists()) saveDir.mkdirs()
+            val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
+            val dataFile = File(savePath, "tbox_launcher_bundle_$timestamp.${LauncherBundleExport.BUNDLE_FILE_EXTENSION}")
+            dataFile.writeBytes(bytes)
+            Toast.makeText(this, getString(R.string.toast_saved_to, dataFile.absolutePath), Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Launcher bundle save error", e)
+            Toast.makeText(this, getString(R.string.toast_save_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun applySavedLauncherBundle(id: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val bytes = settingsManager.readLauncherBundleBytes(id)
+            if (bytes == null || bytes.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_backup_import_read_error), Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            val result = applyLauncherBundleBytes(bytes)
+            withContext(Dispatchers.Main) {
+                if (result.isSuccess) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_launcher_bundle_applied_ok),
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_launcher_layout_import_error, result.exceptionOrNull()?.message ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun deleteSavedLauncherBundle(id: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { settingsManager.deleteLauncherBundleFromLibrary(id) }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@MainActivity, getString(R.string.toast_launcher_bundle_deleted_ok), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun shareSavedLauncherBundle(id: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val bytes = settingsManager.readLauncherBundleBytes(id)
+            if (bytes == null || bytes.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_backup_import_read_error), Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                try {
+                    val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
+                    val cacheFile = File(cacheDir, "tbox_launcher_bundle_$timestamp.${LauncherBundleExport.BUNDLE_FILE_EXTENSION}")
+                    cacheFile.writeBytes(bytes)
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        this@MainActivity, "${packageName}.fileprovider", cacheFile
+                    )
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/zip"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(shareIntent, getString(R.string.share_launcher_bundle_title)))
+                } catch (e: Exception) {
+                    Log.e(TAG, "Launcher bundle share error", e)
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_save_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private suspend fun applyLauncherBundleBytes(bytes: ByteArray): Result<Int> =
+        LauncherBundleApply.applyBytes(
+            this@MainActivity,
+            settingsManager,
+            settingsViewModel,
+            bytes
+        )
+
+    private fun shareLauncherLayout() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val json = runCatching {
+                LauncherLayoutExport.exportJson(this@MainActivity, settingsManager)
+            }.getOrElse { e ->
+                Log.e(TAG, "Launcher layout export error", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_backup_export_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                try {
+                    val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
+                    val cacheFile = File(cacheDir, "tbox_launcher_$timestamp.json")
+                    cacheFile.writeText(json)
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        this@MainActivity, "${packageName}.fileprovider", cacheFile
+                    )
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(shareIntent, getString(R.string.share_launcher_layout_title)))
+                } catch (e: Exception) {
+                    Log.e(TAG, "Launcher layout share error", e)
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_save_error, e.message ?: ""), Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun saveLauncherLayoutToDownloads(json: String) {
+        if (hasStoragePermissions()) {
+            performLauncherLayoutSave(json)
+        } else {
+            pendingJsonBackup = json
+            pendingJsonBackupExcludeTripLists = false
+            requestStoragePermissions()
+        }
+    }
+
+    private fun performLauncherLayoutSave(json: String) {
+        try {
+            val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+            } else {
+                Environment.getExternalStorageDirectory().absolutePath + "/Download"
+            }
+            val saveDir = File(savePath)
+            if (!saveDir.exists()) saveDir.mkdirs()
+            val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
+            val dataFile = File(savePath, "tbox_launcher_$timestamp.json")
+            FileWriter(dataFile).use { it.write(json) }
+            Toast.makeText(this, getString(R.string.toast_saved_to, dataFile.absolutePath), Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Launcher layout save error", e)
+            Toast.makeText(this, getString(R.string.toast_save_error, e.message ?: ""), Toast.LENGTH_LONG).show()
         }
     }
 

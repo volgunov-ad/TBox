@@ -4,11 +4,14 @@ import android.appwidget.AppWidgetHost
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -16,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -75,95 +79,105 @@ internal fun DashboardPanelGridAndFrames(
         config.dataKey.isNotBlank() && config.dataKey != "null"
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(0.dp),
-        verticalArrangement = Arrangement.spacedBy(gridSpacingDp)
-    ) {
-        if (dashboardState.widgets.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(stringResource(R.string.loading))
-            }
-        } else {
-            for (row in 0 until dashboardRows) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(gridSpacingDp)
-                ) {
-                    for (col in 0 until dashboardCols) {
-                        val index = row * dashboardCols + col
-                        val widget = dashboardState.widgets.getOrNull(index) ?: continue
-                        val widgetConfig = normalizedConfigs.getOrNull(index)
-                            ?: FloatingDashboardWidgetConfig(dataKey = "")
-                        val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
-                        val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
-                        val widgetBackgroundColor =
-                            widget.resolveBackgroundColorForTheme(currentTheme)
+    val gridPlacements = remember(normalizedConfigs, dashboardRows, dashboardCols) {
+        buildGridPlacements(normalizedConfigs, dashboardRows, dashboardCols)
+    }
 
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (isEditMode) {
-                                Canvas(
-                                    modifier = Modifier.matchParentSize()
-                                ) {
-                                    drawRect(
-                                        color = Color(0x7E00BCD4),
-                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-                                    )
-                                }
-                            }
-                            CompositionLocalProvider(
-                                LocalWidgetTextScale provides widgetTextScale,
-                                LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy
-                            ) {
-                                DashboardWidgetRenderer(
-                                    widget = widget,
-                                    widgetConfig = widgetConfig,
-                                    settingsViewModel = settingsViewModel,
-                                    tboxViewModel = tboxViewModel,
-                                    canViewModel = canViewModel,
-                                    appDataViewModel = appDataViewModel,
-                                    dataProvider = dataProvider,
-                                    dashboardManager = dashboardManager,
-                                    dashboardChart = dashboardChart,
-                                    tboxConnected = tboxConnected,
-                                    restartEnabled = restartEnabled,
-                                    onTripFinishAndStart = onTripFinishAndStart,
-                                    widgetTextColor = widgetTextColor,
-                                    widgetBackgroundColor = widgetBackgroundColor,
-                                    onClick = { onWidgetClick(index) },
-                                    onLongClick = onWidgetLongClick,
-                                    onMusicSelectedPlayerChange = { selectedPackage ->
-                                        onMusicSelectedPlayerChange(index, selectedPackage)
-                                    },
-                                    onHideFloatingPanelsDoubleClick = {
-                                        if (widget.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {
-                                            onHideFloatingPanelsDoubleClick(index)
-                                        }
-                                    },
-                                    onToggleFloatingPanelsEnabledDoubleClick = {
-                                        if (widget.dataKey == TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY) {
-                                            onToggleFloatingPanelsEnabledDoubleClick(index)
-                                        }
-                                    },
-                                    onRestartRequested = onRestartRequested,
-                                    externalWidgetHost = externalWidgetHost,
-                                    isEditMode = isEditMode,
-                                    elevation = widgetCardElevation,
-                                    shape = normalizeWidgetShape(widgetConfig.shape).dp,
-                                    enableMusicInnerInteractions = enableMusicInnerInteractions,
-                                    fuelTankLiters = fuelTankLiters
-                                )
-                            }
+    Box(modifier = Modifier.fillMaxSize()) {
+    if (dashboardState.widgets.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(stringResource(R.string.loading))
+        }
+    } else {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val density = LocalDensity.current
+            val spacingPx = with(density) { gridSpacingDp.toPx() }
+            val totalW = constraints.maxWidth.toFloat()
+            val totalH = constraints.maxHeight.toFloat()
+            val cellW = (totalW - spacingPx * (dashboardCols - 1)) / dashboardCols
+            val cellH = (totalH - spacingPx * (dashboardRows - 1)) / dashboardRows
+
+            for (placement in gridPlacements) {
+                val index = placement.index
+                val widget = dashboardState.widgets.getOrNull(index) ?: continue
+                val widgetConfig = normalizedConfigs.getOrNull(index)
+                    ?: FloatingDashboardWidgetConfig(dataKey = "")
+                val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
+                val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
+                val widgetBackgroundColor = widget.resolveBackgroundColorForTheme(currentTheme)
+
+                val xPx = placement.col * (cellW + spacingPx)
+                val yPx = placement.row * (cellH + spacingPx)
+                val wPx = placement.colSpan * cellW + (placement.colSpan - 1) * spacingPx
+                val hPx = placement.rowSpan * cellH + (placement.rowSpan - 1) * spacingPx
+
+                Box(
+                    modifier = Modifier
+                        .absoluteOffset(
+                            x = with(density) { xPx.toDp() },
+                            y = with(density) { yPx.toDp() }
+                        )
+                        .size(
+                            width = with(density) { wPx.toDp() },
+                            height = with(density) { hPx.toDp() }
+                        )
+                ) {
+                    if (isEditMode) {
+                        Canvas(modifier = Modifier.matchParentSize()) {
+                            drawRect(
+                                color = Color(0x7E00BCD4),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                            )
                         }
+                    }
+                    CompositionLocalProvider(
+                        LocalWidgetTextScale provides widgetTextScale,
+                        LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy,
+                        LocalWidgetBackgroundImage provides widgetConfig.backgroundImage
+                    ) {
+                        DashboardWidgetRenderer(
+                            widget = widget,
+                            widgetConfig = widgetConfig,
+                            settingsViewModel = settingsViewModel,
+                            tboxViewModel = tboxViewModel,
+                            canViewModel = canViewModel,
+                            appDataViewModel = appDataViewModel,
+                            dataProvider = dataProvider,
+                            dashboardManager = dashboardManager,
+                            dashboardChart = dashboardChart,
+                            tboxConnected = tboxConnected,
+                            restartEnabled = restartEnabled,
+                            onTripFinishAndStart = onTripFinishAndStart,
+                            widgetTextColor = widgetTextColor,
+                            widgetBackgroundColor = widgetBackgroundColor,
+                            onClick = { onWidgetClick(index) },
+                            onLongClick = onWidgetLongClick,
+                            onMusicSelectedPlayerChange = { selectedPackage ->
+                                onMusicSelectedPlayerChange(index, selectedPackage)
+                            },
+                            onHideFloatingPanelsDoubleClick = {
+                                if (widget.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {
+                                    onHideFloatingPanelsDoubleClick(index)
+                                }
+                            },
+                            onToggleFloatingPanelsEnabledDoubleClick = {
+                                if (widget.dataKey == TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY) {
+                                    onToggleFloatingPanelsEnabledDoubleClick(index)
+                                }
+                            },
+                            onRestartRequested = onRestartRequested,
+                            externalWidgetHost = externalWidgetHost,
+                            isEditMode = isEditMode,
+                            elevation = widgetCardElevation,
+                            shape = normalizeWidgetShape(widgetConfig.shape).dp,
+                            enableMusicInnerInteractions = enableMusicInnerInteractions,
+                            fuelTankLiters = fuelTankLiters
+                        )
                     }
                 }
             }
@@ -224,6 +238,46 @@ internal fun DashboardPanelGridAndFrames(
         }
     }
     }
+}
+
+internal data class GridPlacement(
+    val index: Int,
+    val row: Int,
+    val col: Int,
+    val rowSpan: Int,
+    val colSpan: Int
+)
+
+/**
+ * Builds a list of widget placements respecting colSpan/rowSpan.
+ * Cells occupied by a spanning widget are marked and skipped.
+ * Widgets with span=1 behave exactly as before.
+ */
+internal fun buildGridPlacements(
+    configs: List<FloatingDashboardWidgetConfig>,
+    rows: Int,
+    cols: Int
+): List<GridPlacement> {
+    val occupied = Array(rows) { BooleanArray(cols) }
+    val placements = mutableListOf<GridPlacement>()
+
+    for (r in 0 until rows) {
+        for (c in 0 until cols) {
+            if (occupied[r][c]) continue
+            val cellIndex = r * cols + c
+            if (cellIndex !in configs.indices) continue
+            val cfg = configs[cellIndex]
+            val cs = cfg.colSpan.coerceIn(1, cols - c)
+            val rs = cfg.rowSpan.coerceIn(1, rows - r)
+            for (dr in 0 until rs) {
+                for (dc in 0 until cs) {
+                    occupied[r + dr][c + dc] = true
+                }
+            }
+            placements.add(GridPlacement(cellIndex, r, c, rs, cs))
+        }
+    }
+    return placements
 }
 
 @Composable

@@ -6,20 +6,31 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +51,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerId
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -52,9 +66,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
 import kotlin.math.roundToInt
+import kotlin.math.abs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import androidx.compose.runtime.snapshotFlow
@@ -91,6 +109,7 @@ fun MainScreen(
     modifier: Modifier = Modifier,
 ) {
     val mainPanels by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
+    val pagingEnabled by settingsViewModel.mainScreenPagingEnabled.collectAsStateWithLifecycle()
     val settingsBtnPos by settingsViewModel.mainScreenSettingsButtonPosition.collectAsStateWithLifecycle()
     val addBtnPos by settingsViewModel.mainScreenAddButtonPosition.collectAsStateWithLifecycle()
     val cornerBtnSizeDp by settingsViewModel.mainScreenCornerButtonSizeDp.collectAsStateWithLifecycle()
@@ -107,6 +126,24 @@ fun MainScreen(
         if (currentTheme == 2) cornerBtnIconDark else cornerBtnIconLight
     )
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
+    val driveModeLauncherPresetsEnabled by settingsViewModel.launcherDriveModePresetsEnabled.collectAsStateWithLifecycle()
+
+    LaunchedEffect(driveModeLauncherPresetsEnabled) {
+        if (!driveModeLauncherPresetsEnabled) return@LaunchedEffect
+        combine(
+            canViewModel.gearBoxDriveMode,
+            settingsViewModel.launcherDriveModePresetBundleIds
+        ) { mode, map -> mode.trim() to map }
+            .distinctUntilChanged()
+            .collectLatest { (mode, map) ->
+                if (mode.isEmpty()) return@collectLatest
+                val bundleId = map[mode]?.trim().orEmpty()
+                if (bundleId.isEmpty()) return@collectLatest
+                withContext(Dispatchers.IO) {
+                    settingsViewModel.applyLauncherBundleById(bundleId)
+                }
+            }
+    }
 
     var floatingOverlayEditRequest by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val pendingFloatingTileEdit by FloatingDashboardTileEditRequestBus.pending
@@ -121,27 +158,102 @@ fun MainScreen(
     BoxWithConstraints(
         modifier = modifier.fillMaxSize()
     ) {
-        MainScreenWallpaperBackground(
-            theme = currentTheme,
-            settingsViewModel = settingsViewModel,
-            modifier = Modifier.fillMaxSize()
-        )
         val maxWpx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val maxHpx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
 
-        mainPanels.filter { it.enabled }.forEach { panel ->
-            key(panel.id) {
-                MainScreenDashboardPanel(
-                    panel = panel,
-                    containerWidthPx = maxWpx,
-                    containerHeightPx = maxHpx,
-                    tboxViewModel = tboxViewModel,
-                    canViewModel = canViewModel,
-                    appDataViewModel = appDataViewModel,
-                    settingsViewModel = settingsViewModel,
-                    onRebootTbox = onTboxRestart,
-                    onTripFinishAndStart = onTripFinishAndStart,
-                )
+        val enabledPanels = mainPanels.filter { it.enabled }
+
+        if (pagingEnabled) {
+            val pinnedPanels = enabledPanels.filter { it.pageIndex < 0 }
+            val pagedPanels = enabledPanels.filter { it.pageIndex >= 0 }
+            // Always keep at least one page (page 0) so swipe is available once any panel is assigned.
+            val pageCount = (pagedPanels.maxOfOrNull { it.pageIndex } ?: 0) + 1
+            val pagerState = rememberPagerState(pageCount = { pageCount })
+            MainScreenWallpaperBackground(
+                theme = currentTheme,
+                settingsViewModel = settingsViewModel,
+                syncedPanelPage = pagerState.currentPage,
+                modifier = Modifier.fillMaxSize()
+            )
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    pinnedPanels.forEach { panel ->
+                        key(panel.id) {
+                            MainScreenDashboardPanel(
+                                panel = panel,
+                                containerWidthPx = maxWpx,
+                                containerHeightPx = maxHpx,
+                                tboxViewModel = tboxViewModel,
+                                canViewModel = canViewModel,
+                                appDataViewModel = appDataViewModel,
+                                settingsViewModel = settingsViewModel,
+                                onRebootTbox = onTboxRestart,
+                                onTripFinishAndStart = onTripFinishAndStart,
+                            )
+                        }
+                    }
+                    pagedPanels.filter { it.pageIndex == page }.forEach { panel ->
+                        key(panel.id) {
+                            MainScreenDashboardPanel(
+                                panel = panel,
+                                containerWidthPx = maxWpx,
+                                containerHeightPx = maxHpx,
+                                tboxViewModel = tboxViewModel,
+                                canViewModel = canViewModel,
+                                appDataViewModel = appDataViewModel,
+                                settingsViewModel = settingsViewModel,
+                                onRebootTbox = onTboxRestart,
+                                onTripFinishAndStart = onTripFinishAndStart,
+                            )
+                        }
+                    }
+                }
+            }
+            if (pageCount > 1) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    repeat(pageCount) { i ->
+                        val selected = pagerState.currentPage == i
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 3.dp)
+                                .size(if (selected) 8.dp else 6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    cornerBackgroundColor.copy(alpha = if (selected) 0.85f else 0.4f)
+                                )
+                        )
+                    }
+                }
+            }
+        } else {
+            MainScreenWallpaperBackground(
+                theme = currentTheme,
+                settingsViewModel = settingsViewModel,
+                modifier = Modifier.fillMaxSize()
+            )
+            enabledPanels.forEach { panel ->
+                key(panel.id) {
+                    MainScreenDashboardPanel(
+                        panel = panel,
+                        containerWidthPx = maxWpx,
+                        containerHeightPx = maxHpx,
+                        tboxViewModel = tboxViewModel,
+                        canViewModel = canViewModel,
+                        appDataViewModel = appDataViewModel,
+                        settingsViewModel = settingsViewModel,
+                        onRebootTbox = onTboxRestart,
+                        onTripFinishAndStart = onTripFinishAndStart,
+                    )
+                }
             }
         }
 
@@ -237,6 +349,7 @@ fun MainScreen(
 private fun MainScreenWallpaperBackground(
     theme: Int,
     settingsViewModel: SettingsViewModel,
+    syncedPanelPage: Int? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -312,7 +425,17 @@ private fun MainScreenWallpaperBackground(
             LaunchedEffect(targetIdx, folderUriStr, sortedNames) {
                 val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
                 if (pagerState.currentPage != wantPage) {
-                    pagerState.scrollToPage(wantPage)
+                    pagerState.animateScrollToPage(wantPage)
+                }
+            }
+            // When panel paging is enabled, the foreground pager consumes gestures; sync wallpaper to panel page.
+            LaunchedEffect(syncedPanelPage, wallpaperCount) {
+                val page = syncedPanelPage ?: return@LaunchedEffect
+                if (wallpaperCount <= 1) return@LaunchedEffect
+                val logical = (page % wallpaperCount).coerceAtLeast(0)
+                val want = mainScreenWallpaperPagerPageForLogicalIndex(logical, wallpaperCount)
+                if (pagerState.currentPage != want) {
+                    pagerState.animateScrollToPage(want)
                 }
             }
             LaunchedEffect(targetIdx, sortedNames, uriByFileName, decodeTargetWidthPx, decodeTargetHeightPx) {
@@ -401,8 +524,31 @@ private fun MainScreenWallpaperBackground(
             }
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .twoFingerWallpaperSwipe(
+                        enabled = syncedPanelPage == null && wallpaperCount > 1,
+                        onPrev = {
+                            val nextIdx = if (targetIdx - 1 < 0) wallpaperCount - 1 else targetIdx - 1
+                            val name = sortedNames[nextIdx]
+                            if (theme == 2) {
+                                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(name)
+                            } else {
+                                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(name)
+                            }
+                        },
+                        onNext = {
+                            val nextIdx = (targetIdx + 1) % wallpaperCount
+                            val name = sortedNames[nextIdx]
+                            if (theme == 2) {
+                                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(name)
+                            } else {
+                                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(name)
+                            }
+                        },
+                    ),
                 beyondViewportPageCount = 1,
+                userScrollEnabled = syncedPanelPage == null,
             ) { pagerPage ->
                 val logicalIndex = logicalIndexFromMainScreenWallpaperPagerPage(pagerPage, wallpaperCount)
                 if (logicalIndex != null) {
@@ -414,6 +560,146 @@ private fun MainScreenWallpaperBackground(
                     )
                 }
             }
+            if (syncedPanelPage == null && wallpaperCount > 1) {
+                MainScreenWallpaperSwitcherOverlay(
+                    theme = theme,
+                    currentIndex = targetIdx,
+                    totalCount = wallpaperCount,
+                    onPrev = {
+                        val nextIdx = if (targetIdx - 1 < 0) wallpaperCount - 1 else targetIdx - 1
+                        val name = sortedNames[nextIdx]
+                        if (theme == 2) {
+                            settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(name)
+                        } else {
+                            settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(name)
+                        }
+                    },
+                    onNext = {
+                        val nextIdx = (targetIdx + 1) % wallpaperCount
+                        val name = sortedNames[nextIdx]
+                        if (theme == 2) {
+                            settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(name)
+                        } else {
+                            settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(name)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(10.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun Modifier.twoFingerWallpaperSwipe(
+    enabled: Boolean,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+): Modifier {
+    if (!enabled) return this
+    return pointerInput(Unit) {
+        detectTwoFingerHorizontalSwipe(
+            swipeThresholdPx = 140f,
+            onSwipeLeft = onNext,
+            onSwipeRight = onPrev,
+        )
+    }
+}
+
+private suspend fun PointerInputScope.detectTwoFingerHorizontalSwipe(
+    swipeThresholdPx: Float,
+    onSwipeLeft: () -> Unit,
+    onSwipeRight: () -> Unit,
+) {
+    // Simple recognizer: when 2 pointers are down, track average X delta; trigger once per gesture.
+    awaitPointerEventScope {
+        while (true) {
+            var active = false
+            var pointerA: PointerId? = null
+            var pointerB: PointerId? = null
+            var lastAvgX = 0f
+            var accumDx = 0f
+
+            // Wait for first down
+            val first = awaitFirstDown(requireUnconsumed = false)
+            pointerA = first.id
+
+            // Wait until second pointer joins or gesture ends
+            while (true) {
+                val event = awaitPointerEvent()
+                val pressed = event.changes.filter { it.pressed }
+                if (pressed.size >= 2) {
+                    pointerA = pressed[0].id
+                    pointerB = pressed[1].id
+                    lastAvgX = (pressed[0].position.x + pressed[1].position.x) / 2f
+                    active = true
+                    break
+                }
+                if (event.changes.none { it.pressed }) break
+            }
+            if (!active || pointerA == null || pointerB == null) continue
+
+            // Track movement while both pointers are down
+            while (true) {
+                val event = awaitPointerEvent()
+                val a = event.changes.firstOrNull { it.id == pointerA }
+                val b = event.changes.firstOrNull { it.id == pointerB }
+                if (a == null || b == null || !a.pressed || !b.pressed) break
+
+                val avgX = (a.position.x + b.position.x) / 2f
+                val dx = avgX - lastAvgX
+                lastAvgX = avgX
+                accumDx += dx
+
+                if (abs(accumDx) >= swipeThresholdPx) {
+                    // Consume so it doesn't leak into other handlers.
+                    event.changes.forEach { it.consume() }
+                    if (accumDx < 0) onSwipeLeft() else onSwipeRight()
+                    break
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MainScreenWallpaperSwitcherOverlay(
+    theme: Int,
+    currentIndex: Int,
+    totalCount: Int,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val bg = if (theme == 2) {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)
+    }
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(bg)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onPrev) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                contentDescription = stringResource(R.string.main_screen_wallpaper_prev_cd),
+            )
+        }
+        Text(
+            text = "${currentIndex + 1}/$totalCount",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+        IconButton(onClick = onNext) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = stringResource(R.string.main_screen_wallpaper_next_cd),
+            )
         }
     }
 }

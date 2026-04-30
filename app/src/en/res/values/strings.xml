@@ -8,6 +8,8 @@
     <string name="action_clear">Clear</string>
     <string name="action_close">Close</string>
     <string name="action_configure">Configure</string>
+    <string name="action_apply">Apply</string>
+    <string name="action_share">Share</string>
     <string name="action_send">Send</string>
     <string name="action_get_all_sms">Get all SMS</string>
 
@@ -51,6 +53,8 @@
     <string name="menu_navigate_home">Home</string>
     <string name="main_open_console_cd">Open app sections</string>
     <string name="main_screen_add_panel_cd">Add main screen panel</string>
+    <string name="main_screen_wallpaper_prev_cd">Previous wallpaper</string>
+    <string name="main_screen_wallpaper_next_cd">Next wallpaper</string>
     <string name="tbox_connected_at">TBox connected at %1$s</string>
     <string name="tbox_disconnected_at">TBox disconnected at %1$s</string>
     <string name="service_started_at">Service started at %1$s</string>
@@ -494,6 +498,9 @@
     <string name="data_title_external_app_widget">Third-party app widget</string>
     <string name="data_title_hide_floating_panels_widget">Hide floating panels</string>
     <string name="data_title_toggle_floating_panels_enabled_widget">Disable floating panels</string>
+    <string name="data_title_decorative_clock">Clock</string>
+    <string name="data_title_decorative_text">Text</string>
+    <string name="data_title_decorative_divider">Divider</string>
     <string name="widget_app_launcher_selected">Selected: %1$s</string>
     <string name="widget_app_launcher_none_selected">No app selected</string>
     <string name="widget_app_launcher_required">Choose an app to save the widget</string>
@@ -533,4 +540,38 @@
     <string name="reg_roaming">roaming</string>
 
     <string name="net_no">no network</string>
+
+    <string name="settings_launcher_layout_section">Launcher Design</string>
+    <string name="settings_launcher_export">Export Design</string>
+    <string name="settings_launcher_import">Import Design</string>
+    <string name="settings_launcher_share">Share Launcher Design</string>
+    <string name="settings_swap_corner_buttons">Swap +/⚙ buttons</string>
+    <string name="settings_launcher_export_bundle">Export Bundle</string>
+    <string name="settings_launcher_import_bundle">Import Bundle</string>
+    <string name="settings_launcher_bundles_saved">Saved bundles</string>
+    <string name="settings_launcher_bundles_more">More: %1$d</string>
+    <string name="settings_launcher_drive_mode_presets_section">Preset per gearbox drive mode</string>
+    <string name="settings_launcher_drive_mode_presets_hint">ECO / NOR / SPT / N/A values come from CAN (same as the «Gearbox drive mode» widget). Pick a bundle from the library for each mode; when the mode changes on the main screen, that bundle is applied if the option below is on.</string>
+    <string name="settings_launcher_drive_mode_presets_enable_title">Auto-switch main screen design</string>
+    <string name="settings_launcher_drive_mode_presets_enable_desc">On the main screen only: when drive mode changes, the selected bundle is applied.</string>
+    <string name="settings_launcher_drive_mode_bundle_none">None</string>
+    <string name="settings_launcher_drive_mode_label_eco">ECO</string>
+    <string name="settings_launcher_drive_mode_label_nor">NOR (Normal)</string>
+    <string name="settings_launcher_drive_mode_label_spt">SPT (Sport)</string>
+    <string name="settings_launcher_drive_mode_label_na">N/A</string>
+    <string name="settings_paging_enabled">Horizontal page scrolling</string>
+    <string name="settings_paging_enabled_desc">Panels with different pageIndex are placed on separate pages. Without pageIndex — all on page 0.</string>
+    <string name="settings_paging_auto_distribute">Distribute panels across 2 pages</string>
+    <string name="settings_main_screen_panel_page_title">Panel page</string>
+    <string name="settings_main_screen_panel_page_desc">“All” — visible on every page. Otherwise — only on the selected one.</string>
+    <string name="settings_panel_page_all">All</string>
+    <string name="toast_launcher_bundle_import_ok">Bundle imported (icons: %1$d)</string>
+    <string name="toast_launcher_bundle_applied_ok">Bundle applied</string>
+    <string name="toast_launcher_bundle_deleted_ok">Bundle deleted</string>
+    <string name="share_launcher_bundle_title">Share launcher bundle</string>
+    <string name="dialog_save_launcher_layout_downloads">Save launcher design (panels, tiles, theme, colors) to Downloads. Wallpapers and custom icons are not included.</string>
+    <string name="dialog_import_launcher_layout_message">Current launcher design (panels, tiles, theme, colors) will be replaced with the file contents. Other app settings will not change. Continue and choose a JSON file?</string>
+    <string name="share_launcher_layout_title">Share Launcher Design</string>
+    <string name="toast_launcher_layout_import_ok">Launcher design imported</string>
+    <string name="toast_launcher_layout_import_error">Launcher design import error: %1$s</string>
 </resources>

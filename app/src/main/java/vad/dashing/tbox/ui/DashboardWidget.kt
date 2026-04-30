@@ -40,6 +40,7 @@ import vad.dashing.tbox.DashboardManager
 import kotlin.math.abs
 
 val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
+val LocalWidgetBackgroundImage = staticCompositionLocalOf { "" }
 
 @Composable
 fun DashboardWidgetItem(

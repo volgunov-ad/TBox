@@ -1,5 +1,8 @@
 package vad.dashing.tbox.ui
 
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -12,9 +15,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -28,10 +35,12 @@ fun DashboardWidgetScaffold(
     shape: Dp = 12.dp,
     textColor: Color? = null,
     backgroundColor: Color? = null,
+    backgroundImageBase64: String = "",
     content: @Composable BoxWithConstraintsScope.(availableHeight: Dp, resolvedTextColor: Color) -> Unit
 ) {
     val resolvedInteractionPolicy = LocalDashboardWidgetInteractionPolicy.current
     val useCardClickable = resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD
+    val resolvedBgImage = backgroundImageBase64.ifBlank { LocalWidgetBackgroundImage.current }
     Card(
         modifier = modifier
             .fillMaxSize()
@@ -58,6 +67,24 @@ fun DashboardWidgetScaffold(
             val availableHeight = maxHeight
             val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
             Box(modifier = Modifier.fillMaxSize()) {
+                if (resolvedBgImage.isNotBlank()) {
+                    val bitmap = remember(resolvedBgImage) {
+                        runCatching {
+                            val bytes = Base64.decode(resolvedBgImage, Base64.DEFAULT)
+                            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                        }.getOrNull()
+                    }
+                    bitmap?.let {
+                        Image(
+                            bitmap = it.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer(alpha = 0.45f)
+                        )
+                    }
+                }
                 this@BoxWithConstraints.content(availableHeight, resolvedTextColor)
                 if (!useCardClickable) {
                     Box(

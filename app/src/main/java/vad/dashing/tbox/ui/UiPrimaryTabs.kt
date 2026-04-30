@@ -5,6 +5,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -38,6 +41,8 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.GearBoxDriveModeCodes
+import vad.dashing.tbox.LauncherBundleMeta
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -237,6 +242,14 @@ fun SettingsTabContent(
     onExportSettingsBackup: () -> Unit,
     onExportSettingsBackupWithoutTrips: () -> Unit,
     onImportSettingsBackup: () -> Unit,
+    onExportLauncherLayout: () -> Unit = {},
+    onImportLauncherLayout: () -> Unit = {},
+    onShareLauncherLayout: () -> Unit = {},
+    onExportLauncherBundle: () -> Unit = {},
+    onImportLauncherBundle: () -> Unit = {},
+    onApplyLauncherBundle: (bundleId: String) -> Unit = {},
+    onDeleteLauncherBundle: (bundleId: String) -> Unit = {},
+    onShareLauncherBundle: (bundleId: String) -> Unit = {},
 ) {
     val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
     val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
@@ -767,6 +780,209 @@ fun SettingsTabContent(
             )
         }
 
+        var showExportLauncherDialog by remember { mutableStateOf(false) }
+        var showImportLauncherDialog by remember { mutableStateOf(false) }
+
+        Text(
+            text = stringResource(R.string.settings_launcher_layout_section),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = { showExportLauncherDialog = true },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_launcher_export),
+                    fontSize = 22.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Button(
+                onClick = { showImportLauncherDialog = true },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_launcher_import),
+                    fontSize = 22.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        Button(
+            onClick = { onShareLauncherLayout() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.settings_launcher_share),
+                fontSize = 22.sp,
+                maxLines = 2,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = { onExportLauncherBundle() },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_launcher_export_bundle),
+                    fontSize = 22.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            OutlinedButton(
+                onClick = { onImportLauncherBundle() },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_launcher_import_bundle),
+                    fontSize = 22.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        val bundles by settingsViewModel.launcherBundles.collectAsStateWithLifecycle()
+        if (bundles.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.settings_launcher_bundles_saved),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
+            )
+            bundles.take(6).forEach { meta ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = meta.name,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1
+                    )
+                    OutlinedButton(onClick = { onApplyLauncherBundle(meta.id) }) {
+                        Text(stringResource(R.string.action_apply))
+                    }
+                    OutlinedButton(onClick = { onShareLauncherBundle(meta.id) }) {
+                        Text(stringResource(R.string.action_share))
+                    }
+                    OutlinedButton(onClick = { onDeleteLauncherBundle(meta.id) }) {
+                        Text(stringResource(R.string.action_delete))
+                    }
+                }
+            }
+            if (bundles.size > 6) {
+                Text(
+                    text = stringResource(R.string.settings_launcher_bundles_more, bundles.size - 6),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+
+        Text(
+            text = stringResource(R.string.settings_launcher_drive_mode_presets_section),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 20.dp, bottom = 4.dp)
+        )
+        Text(
+            text = stringResource(R.string.settings_launcher_drive_mode_presets_hint),
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        val launcherDriveModePresetsEnabled by settingsViewModel.launcherDriveModePresetsEnabled.collectAsStateWithLifecycle()
+        SettingSwitch(
+            isChecked = launcherDriveModePresetsEnabled,
+            onCheckedChange = { settingsViewModel.saveLauncherDriveModePresetsEnabled(it) },
+            text = stringResource(R.string.settings_launcher_drive_mode_presets_enable_title),
+            description = stringResource(R.string.settings_launcher_drive_mode_presets_enable_desc),
+            enabled = true
+        )
+        val launcherDriveModePresetMap by settingsViewModel.launcherDriveModePresetBundleIds.collectAsStateWithLifecycle()
+        GearBoxDriveModeCodes.allForUi().forEach { code ->
+            val modeTitle = stringResource(
+                when (code) {
+                    GearBoxDriveModeCodes.ECO -> R.string.settings_launcher_drive_mode_label_eco
+                    GearBoxDriveModeCodes.NOR -> R.string.settings_launcher_drive_mode_label_nor
+                    GearBoxDriveModeCodes.SPT -> R.string.settings_launcher_drive_mode_label_spt
+                    else -> R.string.settings_launcher_drive_mode_label_na
+                }
+            )
+            LauncherDriveModePresetRow(
+                modeTitle = modeTitle,
+                selectedBundleId = launcherDriveModePresetMap[code].orEmpty(),
+                bundles = bundles,
+                onSelect = { id -> settingsViewModel.saveLauncherDriveModePresetForMode(code, id) }
+            )
+        }
+
+        if (showExportLauncherDialog) {
+            AlertDialog(
+                onDismissRequest = { showExportLauncherDialog = false },
+                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
+                text = { Text(stringResource(R.string.dialog_save_launcher_layout_downloads)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onExportLauncherLayout()
+                            showExportLauncherDialog = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.action_save))
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showExportLauncherDialog = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
+        }
+
+        if (showImportLauncherDialog) {
+            AlertDialog(
+                onDismissRequest = { showImportLauncherDialog = false },
+                title = { Text(stringResource(R.string.dialog_backup_import_title)) },
+                text = { Text(stringResource(R.string.dialog_import_launcher_layout_message)) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onImportLauncherLayout()
+                            showImportLauncherDialog = false
+                        }
+                    ) {
+                        Text(stringResource(R.string.settings_backup_import_choose_file))
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showImportLauncherDialog = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -789,6 +1005,61 @@ fun SettingsTabContent(
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LauncherDriveModePresetRow(
+    modeTitle: String,
+    selectedBundleId: String,
+    bundles: List<LauncherBundleMeta>,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val noneLabel = stringResource(R.string.settings_launcher_drive_mode_bundle_none)
+    val selectedName = bundles.firstOrNull { it.id == selectedBundleId }?.name ?: noneLabel
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = modeTitle,
+            modifier = Modifier.weight(0.34f),
+            maxLines = 2,
+            fontSize = 18.sp,
+        )
+        Box(modifier = Modifier.weight(0.66f)) {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(selectedName, maxLines = 1, fontSize = 18.sp)
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text(noneLabel) },
+                    onClick = {
+                        expanded = false
+                        onSelect("")
+                    }
+                )
+                bundles.forEach { meta ->
+                    DropdownMenuItem(
+                        text = { Text(meta.name, maxLines = 1) },
+                        onClick = {
+                            expanded = false
+                            onSelect(meta.id)
+                        }
+                    )
+                }
             }
         }
     }

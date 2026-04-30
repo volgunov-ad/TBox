@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Date
 import java.util.Locale
+import vad.dashing.tbox.ui.DECORATIVE_CLOCK_WIDGET_DATA_KEY
+import vad.dashing.tbox.ui.DECORATIVE_DIVIDER_WIDGET_DATA_KEY
+import vad.dashing.tbox.ui.DECORATIVE_TEXT_WIDGET_DATA_KEY
 import vad.dashing.tbox.ui.theme.DARK_THEME_ON_SURFACE_COLOR_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_ON_SURFACE_COLOR_INT
 import kotlin.Boolean
@@ -415,6 +418,9 @@ object WidgetsRepository {
         TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY to DataTitle(
             R.string.data_title_toggle_floating_panels_enabled_widget
         ),
+        DECORATIVE_CLOCK_WIDGET_DATA_KEY to DataTitle(R.string.data_title_decorative_clock),
+        DECORATIVE_TEXT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_decorative_text),
+        DECORATIVE_DIVIDER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_decorative_divider),
     )
 
     private fun getDataTitle(dataKey: String): DataTitle? {

@@ -396,27 +396,107 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        else -> {
-            DashboardWidgetItem(
-                widget = widget,
-                dataProvider = dataProvider,
+        DECORATIVE_CLOCK_WIDGET_DATA_KEY -> {
+            DashboardClockWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
-                onDoubleClick = {
-                    if (widget.dataKey == "motorHours") {
-                        appDataViewModel.setMotorHours(0f)
-                    }
-                },
-                dashboardManager = dashboardManager,
-                dashboardChart = dashboardChart,
-                elevation = elevation,
-                shape = shape,
-                title = widgetConfig.showTitle,
-                titleOverride = titleOverride,
-                units = widgetConfig.showUnit,
+                textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
-                textColor = widgetTextColor
+                elevation = elevation,
+                shape = shape
             )
+        }
+
+        DECORATIVE_TEXT_WIDGET_DATA_KEY -> {
+            DashboardTextWidgetItem(
+                displayText = widgetConfig.customTitle.replace("\\n", "\n").ifBlank { "" },
+                onClick = onClick,
+                onLongClick = onLongClick,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                elevation = elevation,
+                shape = shape
+            )
+        }
+
+        DECORATIVE_DIVIDER_WIDGET_DATA_KEY -> {
+            DashboardDividerWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                backgroundColor = widgetBackgroundColor,
+                elevation = elevation,
+                shape = shape
+            )
+        }
+
+        else -> {
+            when (widgetConfig.displayStyle) {
+                DISPLAY_STYLE_GAUGE -> {
+                    DashboardGaugeWidgetItem(
+                        widget = widget,
+                        dataProvider = dataProvider,
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                        textColor = widgetTextColor,
+                        backgroundColor = widgetBackgroundColor,
+                        elevation = elevation,
+                        shape = shape,
+                        showTitle = widgetConfig.showTitle,
+                        titleOverride = titleOverride,
+                        showUnit = widgetConfig.showUnit
+                    )
+                }
+                DISPLAY_STYLE_BAR -> {
+                    DashboardBarWidgetItem(
+                        widget = widget,
+                        dataProvider = dataProvider,
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                        textColor = widgetTextColor,
+                        backgroundColor = widgetBackgroundColor,
+                        elevation = elevation,
+                        shape = shape,
+                        showTitle = widgetConfig.showTitle,
+                        titleOverride = titleOverride,
+                        showUnit = widgetConfig.showUnit
+                    )
+                }
+                DISPLAY_STYLE_MINIMAL -> {
+                    DashboardMinimalWidgetItem(
+                        widget = widget,
+                        dataProvider = dataProvider,
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                        textColor = widgetTextColor,
+                        backgroundColor = widgetBackgroundColor,
+                        elevation = elevation,
+                        shape = shape,
+                        showUnit = widgetConfig.showUnit
+                    )
+                }
+                else -> {
+                    DashboardWidgetItem(
+                        widget = widget,
+                        dataProvider = dataProvider,
+                        onClick = onClick,
+                        onLongClick = onLongClick,
+                        onDoubleClick = {
+                            if (widget.dataKey == "motorHours") {
+                                appDataViewModel.setMotorHours(0f)
+                            }
+                        },
+                        dashboardManager = dashboardManager,
+                        dashboardChart = dashboardChart,
+                        elevation = elevation,
+                        shape = shape,
+                        title = widgetConfig.showTitle,
+                        titleOverride = titleOverride,
+                        units = widgetConfig.showUnit,
+                        backgroundColor = widgetBackgroundColor,
+                        textColor = widgetTextColor
+                    )
+                }
+            }
         }
     }
 }
