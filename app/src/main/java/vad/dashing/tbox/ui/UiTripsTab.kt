@@ -516,6 +516,7 @@ internal fun buildTripExportLines(
     val kmh = context.getString(R.string.unit_kmh)
     val celsius = context.getString(R.string.unit_celsius)
     val liter = context.getString(R.string.unit_liter)
+    val l100km = context.getString(R.string.unit_l_100km)
 
     return buildList {
         sorted.forEachIndexed { index, trip ->
@@ -613,6 +614,14 @@ internal fun buildTripExportLines(
             appendStatusLine(
                 context.getString(R.string.trips_fuel_used),
                 formatWithUnit(valueToString(trip.fuelConsumedLiters, 1), liter)
+            )
+            val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(trip)
+            appendStatusLine(
+                context.getString(R.string.trips_fuel_consumption_l_100km),
+                formatWithUnit(
+                    avgFuel?.let { valueToString(it, 1) } ?: noData,
+                    if (avgFuel != null) l100km else ""
+                )
             )
             appendStatusLine(
                 context.getString(R.string.trips_fuel_refueled),
