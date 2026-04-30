@@ -269,9 +269,9 @@ fun LogsTabContent(
 ) {
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val logLevel by settingsViewModel.logLevel.collectAsStateWithLifecycle()
+    val searchText by LogsSessionState.messageFilter.collectAsStateWithLifecycle()
 
     val logLevels = listOf("DEBUG", "INFO", "WARN", "ERROR")
-    var searchText by remember { mutableStateOf("") }
 
     var showSaveDialog by remember { mutableStateOf(false) }
 
@@ -293,7 +293,7 @@ fun LogsTabContent(
                 value = searchText,
                 textStyle = TextStyle(fontSize = 20.sp),
                 onValueChange = { newText ->
-                    searchText = newText
+                    LogsSessionState.setMessageFilter(newText)
                 },
                 modifier = Modifier
                     .weight(1f)
@@ -314,7 +314,7 @@ fun LogsTabContent(
                 trailingIcon = {
                     if (searchText.isNotEmpty()) {
                         IconButton(
-                            onClick = { searchText = "" }
+                            onClick = { LogsSessionState.setMessageFilter("") }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
