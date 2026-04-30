@@ -57,7 +57,8 @@ class WholePanelWidgetDialogSaveMergeTest {
             rows = 99,
             cols = 0,
             showTboxDisconnectIndicator = true,
-            clickAction = true
+            clickAction = true,
+            pageIndex = 2,
         )
         val merged = mergeMainScreenPanelForWidgetDialogSave(baseMain, newWidgets, draft)
         assertEquals(newWidgets, merged.widgetsConfig)
@@ -66,6 +67,7 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(1, merged.cols)
         assertEquals(true, merged.showTboxDisconnectIndicator)
         assertEquals(true, merged.clickAction)
+        assertEquals(2, merged.pageIndex)
         assertEquals(baseMain.relWidth, merged.relWidth, 0f)
     }
 
