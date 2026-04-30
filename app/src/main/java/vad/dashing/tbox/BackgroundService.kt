@@ -8,9 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
@@ -1264,16 +1267,14 @@ class BackgroundService : Service() {
     ) {
         scope.launch {
             val coordinates = awaitFuelCoordinates() ?: run {
-                TboxRepository.addLog("WARN", "Fuel price", "No coordinates for refuel price within 5 minutes")
+                TboxRepository.addLog("WARN", "Fuel price", "No coordinates for refuel price within 1 minute")
+                showRefuelToast(getString(R.string.toast_refuel_coordinates_not_found))
                 return@launch
             }
-            val price = try {
-                withContext(Dispatchers.IO) {
-                    fuelPriceClient.fetchPrice(coordinates, fuelId)
-                }
-            } catch (e: Exception) {
-                TboxRepository.addLog("WARN", "Fuel price", "Price request failed: ${e.message}")
-                null
+            val price = awaitFuelPrice(coordinates, fuelId)
+            if (price == null) {
+                TboxRepository.addLog("WARN", "Fuel price", "No fuel price for refuel within 2 minutes")
+                showRefuelToast(getString(R.string.toast_refuel_fuel_price_not_found))
             }
             val refuel = RefuelRepository.refuels.value.firstOrNull { it.id == refuelId } ?: return@launch
             RefuelRepository.replaceRefuel(
@@ -1299,14 +1300,51 @@ class BackgroundService : Service() {
                 "Refuel cost +${String.format(Locale.US, "%.2f", cost)} RUB (${FuelTypes.optionFor(fuelId).label})"
             )
             maybePersistTrips(force = true)
+            showRefuelToast(getString(R.string.toast_refuel_fuel_cost_saved))
+        }
+    }
+
+    private fun showRefuelToast(message: CharSequence) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
         }
     }
 
     private suspend fun awaitFuelCoordinates(): FuelCoordinates? =
-        withTimeoutOrNull(5 * 60 * 1000L) {
+        withTimeoutOrNull(1 * 60 * 1000L) {
+            var showedWaitingToast = false
             while (true) {
                 currentFuelCoordinatesOrNull()?.let { return@withTimeoutOrNull it }
-                delay(1_000L)
+                if (!showedWaitingToast) {
+                    showedWaitingToast = true
+                    showRefuelToast(getString(R.string.toast_refuel_waiting_coordinates))
+                }
+                delay(5000L)
+            }
+            @Suppress("UNREACHABLE_CODE")
+            null
+        }
+
+    /** Polls [FuelPriceClient.fetchPrice] every 10 s until a price is found or 2 minutes elapse. */
+    private suspend fun awaitFuelPrice(coordinates: FuelCoordinates, fuelId: Int): FuelPriceResult? =
+        withTimeoutOrNull(2 * 60 * 1000L) {
+            var showedSearchingToast = false
+            while (true) {
+                val price = try {
+                    withContext(Dispatchers.IO) {
+                        fuelPriceClient.fetchPrice(coordinates, fuelId)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (price != null) return@withTimeoutOrNull price
+                if (!showedSearchingToast) {
+                    showedSearchingToast = true
+                    showRefuelToast(getString(R.string.toast_refuel_searching_fuel_price))
+                }
+                delay(10_000L)
             }
             @Suppress("UNREACHABLE_CODE")
             null

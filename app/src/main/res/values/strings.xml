@@ -498,6 +498,11 @@
     <string name="refuels_cost">Стоимость</string>
     <string name="refuels_actions">Действия</string>
     <string name="refuels_coordinates_copied">Координаты скопированы</string>
+    <string name="toast_refuel_waiting_coordinates">Выполнена заправка. Ожидание координат</string>
+    <string name="toast_refuel_coordinates_not_found">Координаты для заправки не найдены</string>
+    <string name="toast_refuel_searching_fuel_price">Поиск цены топлива</string>
+    <string name="toast_refuel_fuel_price_not_found">Цена топлива не найдена</string>
+    <string name="toast_refuel_fuel_cost_saved">Стоимость топлива записана в журнал заправок</string>
     <string name="dialog_save_refuels_downloads">Сохранить журнал заправок в один файл в папку Загрузки</string>
     <string name="data_title_net_widget">Виджет сигнала сети</string>
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>
