@@ -1011,9 +1011,9 @@ internal fun applyWidgetSelectionChanges(
                 false
             },
 
-            // anymani: сохраняем опцию "Оставить плеер на переднем плане"
+            // anymani: сохраняем опцию "Оставить плеер на переднем плане" и запускаем уже независимо от автозапуска плеера
             mediaKeepPlayerForeground = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
-                state.mediaKeepPlayerForeground && state.mediaAutoPlayOnInit
+                state.mediaKeepPlayerForeground
             } else {
                 false
             },
