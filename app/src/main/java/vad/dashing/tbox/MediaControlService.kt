@@ -268,7 +268,7 @@ object SharedMediaControlService {
         context: Context,
         selectedPackages: Set<String>,
         preferredPackage: String = "",
-        keepPlayerForeground: Boolean = false
+        keepPlayerForeground: Boolean = false // anymani: опция независима от автозапуска
     ) {
         var controllerHandled = false
         synchronized(this) {
@@ -299,7 +299,7 @@ object SharedMediaControlService {
             context.applicationContext,
             targetPackage,
             scheduleColdStartPlayRetry = true,
-            keepPlayerForeground = keepPlayerForeground
+            keepPlayerForeground = keepPlayerForeground // anymani: передаём флаг при ручном запуске
         )
     }
 

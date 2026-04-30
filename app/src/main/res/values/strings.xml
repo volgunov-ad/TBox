@@ -102,8 +102,8 @@
     <string name="widget_music_auto_play_only_engine">Запускать только при включении двигателя</string>
 
     <!-- Опция для проблемных проигрывателей: anymani -->
-    <string name="widget_music_keep_player_foreground">Оставить плеер на переднем плане</string>
-    <string name="widget_music_keep_player_foreground_desc">При включении не возвращает лаунчер после автозапуска. Решает проблему с VKX и другими чувствительными плеерами</string>
+    <string name="widget_music_keep_player_foreground">Оставить плеер на переднем плане после его запуска</string>
+    <string name="widget_music_keep_player_foreground_desc">При запуске плеера не возвращает лаунчер на передний план. Решает проблему с VKX и другими чувствительными плеерами</string>
 
     <string name="widget_music_no_artist">Исполнитель не определён</string>
     <string name="widget_music_no_track">Трек не определён</string>
