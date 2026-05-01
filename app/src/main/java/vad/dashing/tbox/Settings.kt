@@ -54,6 +54,8 @@ data class FloatingDashboardWidgetConfig(
     val mediaAutoPlayOnInit: Boolean = false,
     /** If true (and [mediaAutoPlayOnInit]), delay auto-play until engine RPM is greater than zero. */
     val mediaAutoPlayOnlyWhenEngineRunning: Boolean = false,
+    /** If true (and [mediaAutoPlayOnInit]), keep player in foreground after auto-play launch. */
+    val mediaKeepPlayerForeground: Boolean = false,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
@@ -62,7 +64,12 @@ data class FloatingDashboardWidgetConfig(
      * Optional tile title override. When blank, widgets use their default title strings.
      * When non-blank, shown instead of the default title where a title row is displayed.
      */
-    val customTitle: String = ""
+    val customTitle: String = "",
+    /**
+     * Decimal places for numeric values from the tile data provider on this tile.
+     * `null` — built-in default per data key; `0`..`2` — fixed fraction digits where applicable.
+     */
+    val valueAccuracy: Int? = null
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */

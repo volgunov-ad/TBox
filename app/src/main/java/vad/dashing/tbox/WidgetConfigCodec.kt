@@ -86,6 +86,7 @@ fun serializeWidgetConfigsToJsonArray(
         }
         obj.put("mediaAutoPlayOnInit", config.mediaAutoPlayOnInit)
         obj.put("mediaAutoPlayOnlyWhenEngineRunning", config.mediaAutoPlayOnlyWhenEngineRunning)
+        obj.put("mediaKeepPlayerForeground", config.mediaKeepPlayerForeground)
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
@@ -94,6 +95,10 @@ fun serializeWidgetConfigsToJsonArray(
         }
         if (config.customTitle.isNotBlank()) {
             obj.put("customTitle", config.customTitle.trim())
+        }
+        val acc = config.valueAccuracy
+        if (acc != null && acc in 0..2) {
+            obj.put("valueAccuracy", acc)
         }
         array.put(obj)
     }
@@ -149,7 +154,8 @@ fun loadWidgetsFromConfig(
                 textColorLight = widgetConfig.textColorLight,
                 textColorDark = widgetConfig.textColorDark,
                 backgroundColorLight = widgetConfig.backgroundColorLight ?: defaultBackgroundLight,
-                backgroundColorDark = widgetConfig.backgroundColorDark ?: defaultBackgroundDark
+                backgroundColorDark = widgetConfig.backgroundColorDark ?: defaultBackgroundDark,
+                valueAccuracy = widgetConfig.valueAccuracy
             )
         } else {
             DashboardWidget(
@@ -159,7 +165,8 @@ fun loadWidgetsFromConfig(
                 textColorLight = widgetConfig.textColorLight,
                 textColorDark = widgetConfig.textColorDark,
                 backgroundColorLight = widgetConfig.backgroundColorLight ?: defaultBackgroundLight,
-                backgroundColorDark = widgetConfig.backgroundColorDark ?: defaultBackgroundDark
+                backgroundColorDark = widgetConfig.backgroundColorDark ?: defaultBackgroundDark,
+                valueAccuracy = widgetConfig.valueAccuracy
             )
         }
     }
@@ -183,6 +190,11 @@ private fun parseWidgetConfigsFromJsonArray(
                 }
                 val appWidgetId = item.optInt("appWidgetId", -1)
                     .takeIf { it != -1 }
+                val valueAccuracy = if (item.has("valueAccuracy")) {
+                    item.optInt("valueAccuracy").takeIf { it in 0..2 }
+                } else {
+                    null
+                }
                 val mediaPlayers = parseMediaPlayers(item)
                 val launcherAppPackage = item.optString("launcherAppPackage", "").trim().ifBlank {
                     item.optString("appPackageName", "").trim()
@@ -216,6 +228,10 @@ private fun parseWidgetConfigsFromJsonArray(
                             "mediaAutoPlayOnlyWhenEngineRunning",
                             false
                         ),
+                        mediaKeepPlayerForeground = item.optBoolean(
+                            "mediaKeepPlayerForeground",
+                            false
+                        ),
                         launcherAppPackage = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
                             launcherAppPackage
                         } else {
@@ -226,7 +242,8 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             null
                         },
-                        customTitle = item.optString("customTitle", "").trim()
+                        customTitle = item.optString("customTitle", "").trim(),
+                        valueAccuracy = valueAccuracy
                     )
                 )
             }

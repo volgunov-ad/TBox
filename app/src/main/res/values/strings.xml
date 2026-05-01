@@ -65,6 +65,12 @@
     <string name="widget_custom_title_label">Заголовок</string>
     <string name="widget_custom_title_hint">Пусто — по умолчанию</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
+    <string name="widget_value_accuracy_title">Знаков после запятой</string>
+    <string name="widget_value_accuracy_desc">По умолчанию — как задано для каждого параметра в приложении.</string>
+    <string name="widget_value_accuracy_default">По умолчанию</string>
+    <string name="widget_value_accuracy_0">0</string>
+    <string name="widget_value_accuracy_1">1</string>
+    <string name="widget_value_accuracy_2">2</string>
     <string name="widget_title_gear_box_mode_temp">Режим и температура КПП</string>
     <string name="widget_title_motor_hours_total_trip">Моточасы (общ. и за поездку)</string>
     <string name="widget_title_temp_outside_inside">Темп. снаружи и внутри</string>
@@ -100,6 +106,11 @@
     <string name="widget_music_players_required">Выберите минимум одно приложение</string>
     <string name="widget_music_auto_play_on_init">Автоматически запускать воспроизведение</string>
     <string name="widget_music_auto_play_only_engine">Запускать только при включении двигателя</string>
+
+    <!-- Опция для проблемных проигрывателей: anymani -->
+    <string name="widget_music_keep_player_foreground">Оставить плеер на переднем плане после его запуска</string>
+    <string name="widget_music_keep_player_foreground_desc">При запуске плеера не возвращает лаунчер на передний план. Решает проблему с VKX и другими чувствительными плеерами</string>
+
     <string name="widget_music_no_artist">Исполнитель не определён</string>
     <string name="widget_music_no_track">Трек не определён</string>
     <string name="widget_music_player_none">Плеер не найден</string>

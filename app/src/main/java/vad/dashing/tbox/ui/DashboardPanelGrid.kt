@@ -74,7 +74,6 @@ internal fun DashboardPanelGridAndFrames(
     enableInnerInteractions: Boolean,
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 4.dp,
-    fuelTankLiters: Int = 57,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
@@ -185,8 +184,7 @@ internal fun DashboardPanelGridAndFrames(
                                     isEditMode = isEditMode,
                                     elevation = widgetCardElevation,
                                     shape = normalizeWidgetShape(widgetConfig.shape).dp,
-                                    enableInnerInteractions = enableInnerInteractions,
-                                    fuelTankLiters = fuelTankLiters
+                                    enableInnerInteractions = enableInnerInteractions
                                 )
                             }
                         }
