@@ -62,8 +62,8 @@ fun DashboardWidgetItem(
 
     val widgetHistory by dashboardManager.getWidgetHistoryFlow(widget.id).collectAsState()
 
-    val valueFlow = remember(widget.dataKey) {
-        dataProvider.getValueFlow(widget.dataKey)
+    val valueFlow = remember(widget.dataKey, widget.valueAccuracy) {
+        dataProvider.getValueFlow(widget.dataKey, widget.valueAccuracy)
     }
     val valueString by valueFlow.collectAsStateWithLifecycle()
 

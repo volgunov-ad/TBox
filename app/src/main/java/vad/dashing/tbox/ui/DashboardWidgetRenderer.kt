@@ -320,6 +320,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                valueAccuracy = widgetConfig.valueAccuracy,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )

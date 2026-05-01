@@ -459,6 +459,37 @@ object WidgetsRepository {
             "airQualityWidget"
         )
     }
+
+    /**
+     * Tile types whose primary values come from [vad.dashing.tbox.ui.TboxDataProvider.getValueFlow]
+     * and can use per-tile [FloatingDashboardWidgetConfig.valueAccuracy].
+     */
+    fun supportsValueAccuracy(dataKey: String): Boolean {
+        if (dataKey.isBlank()) return false
+        return when (dataKey) {
+            EXTERNAL_WIDGET_DATA_KEY,
+            MUSIC_WIDGET_DATA_KEY,
+            APP_LAUNCHER_WIDGET_DATA_KEY,
+            MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
+            MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
+            HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
+            TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
+            "restartTbox",
+            "netWidget",
+            "netWidgetNew",
+            "netWidgetColored",
+            "locWidget",
+            "voltage+engineTemperatureWidget",
+            "gearBoxWidget",
+            "wheelsPressureWidget",
+            "wheelsPressureTemperatureWidget",
+            "tempInOutWidget",
+            "fuelLevelWidget",
+            "airQualityWidget",
+            -> false
+            else -> !isActiveTripWidgetDataKey(dataKey)
+        }
+    }
 }
 
 const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = LIGHT_THEME_ON_SURFACE_COLOR_INT
@@ -479,7 +510,9 @@ data class DashboardWidget(
     val textColorLight: Int = DEFAULT_WIDGET_TEXT_COLOR_LIGHT,
     val textColorDark: Int = DEFAULT_WIDGET_TEXT_COLOR_DARK,
     val backgroundColorLight: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN,
-    val backgroundColorDark: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+    val backgroundColorDark: Int = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN,
+    /** Overrides numeric formatting for this tile when non-null; see [FloatingDashboardWidgetConfig.valueAccuracy]. */
+    val valueAccuracy: Int? = null
 )
 
 // Состояние панели виджетов

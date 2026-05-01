@@ -65,6 +65,12 @@
     <string name="widget_custom_title_label">Title</string>
     <string name="widget_custom_title_hint">Empty — default</string>
     <string name="widget_show_unit">Show unit</string>
+    <string name="widget_value_accuracy_title">Decimal places</string>
+    <string name="widget_value_accuracy_desc">Default follows each parameter’s built-in formatting in the app.</string>
+    <string name="widget_value_accuracy_default">Default</string>
+    <string name="widget_value_accuracy_0">0</string>
+    <string name="widget_value_accuracy_1">1</string>
+    <string name="widget_value_accuracy_2">2</string>
     <string name="widget_title_gear_box_mode_temp">Transmission mode and temperature</string>
     <string name="widget_title_motor_hours_total_trip">Engine hours (total and trip)</string>
     <string name="widget_title_temp_outside_inside">Outside and inside temperature</string>
