@@ -109,6 +109,20 @@ class CanDataViewModel : ViewModel() {
             initialValue = null
         )
 
+    val fuelLevelCalibratedLiters: StateFlow<Float?> = CanDataRepository.fuelLevelCalibratedLiters
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    val fuelCalibrationConfidence: StateFlow<Float?> = CanDataRepository.fuelCalibrationConfidence
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     val currentFuelConsumption: StateFlow<Float?> = CanDataRepository.currentFuelConsumption
         .stateIn(
             scope = viewModelScope,

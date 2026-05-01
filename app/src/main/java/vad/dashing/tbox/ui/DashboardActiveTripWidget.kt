@@ -378,6 +378,13 @@ fun DashboardActiveTripWidgetItem(
                         color = resolvedTextColor
                     )
                     StatusRow(
+                        label = stringResource(R.string.trips_fuel_refueled_cost),
+                        value = valueToString(t.fuelRefueledCostRub, 2),
+                        unit = stringResource(R.string.unit_ruble),
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
                         label = stringResource(R.string.trips_refuel_count),
                         value = valueToString(t.refuelCount),
                         unit = "",

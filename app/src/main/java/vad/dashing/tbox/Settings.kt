@@ -155,6 +155,11 @@ data class BackgroundServiceSettingsSnapshot(
     val floatingDashboards: List<FloatingDashboardConfig>,
     val canDataSaveCount: Int,
     val fuelTankLiters: Int,
+    /** JSON калибровки топлива (пустая строка — нет данных). */
+    val fuelCalibrationJson: String,
+    /** Число зон бака для калибровки. */
+    val fuelCalibrationZoneCount: Int,
+    val fuelPriceFuelId: Int,
     val splitTripTimeMinutes: Int,
 )
 
@@ -249,6 +254,10 @@ class SettingsManager(private val context: Context) {
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
         private val CAN_DATA_SAVE_COUNT_KEY = intPreferencesKey("${KEY_PREFIX}can_data_save_count")
         private val FUEL_TANK_LITERS_KEY = intPreferencesKey("${KEY_PREFIX}fuel_tank_liters")
+        private val FUEL_CALIBRATION_JSON_KEY = stringPreferencesKey("${KEY_PREFIX}fuel_calibration_json")
+        private val FUEL_CALIBRATION_ZONE_COUNT_KEY =
+            intPreferencesKey("${KEY_PREFIX}fuel_calibration_zone_count")
+        private val FUEL_PRICE_FUEL_ID_KEY = intPreferencesKey("${KEY_PREFIX}fuel_price_fuel_id")
         private val SPLIT_TRIP_TIME_MINUTES_KEY = intPreferencesKey("${KEY_PREFIX}split_trip_time_minutes")
 
         // String настройки
@@ -292,6 +301,9 @@ class SettingsManager(private val context: Context) {
         private const val MAX_LAUNCHER_APP_ICON_BYTES = 512 * 1024L
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
         private const val DEFAULT_FUEL_TANK_LITERS = 57
+        private const val DEFAULT_FUEL_CALIBRATION_ZONE_COUNT = 5
+        private const val FUEL_CALIBRATION_ZONE_COUNT_MIN = 3
+        private const val FUEL_CALIBRATION_ZONE_COUNT_MAX = 20
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
         private const val MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 10
         private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 50
@@ -553,6 +565,20 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS }
         .distinctUntilChanged()
 
+    val fuelCalibrationJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[FUEL_CALIBRATION_JSON_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val fuelCalibrationZoneCountFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[FUEL_CALIBRATION_ZONE_COUNT_KEY] ?: DEFAULT_FUEL_CALIBRATION_ZONE_COUNT
+        }
+        .distinctUntilChanged()
+
+    val fuelPriceFuelIdFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FUEL_PRICE_FUEL_ID_KEY] ?: FuelTypes.DEFAULT_FUEL_ID }
+        .distinctUntilChanged()
+
     val splitTripTimeMinutesFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[SPLIT_TRIP_TIME_MINUTES_KEY] ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES }
         .distinctUntilChanged()
@@ -584,6 +610,10 @@ class SettingsManager(private val context: Context) {
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
             canDataSaveCount = preferences[CAN_DATA_SAVE_COUNT_KEY] ?: DEFAULT_CAN_DATA_SAVE_COUNT,
             fuelTankLiters = preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS,
+            fuelCalibrationJson = preferences[FUEL_CALIBRATION_JSON_KEY].orEmpty(),
+            fuelCalibrationZoneCount = preferences[FUEL_CALIBRATION_ZONE_COUNT_KEY]
+                ?: DEFAULT_FUEL_CALIBRATION_ZONE_COUNT,
+            fuelPriceFuelId = preferences[FUEL_PRICE_FUEL_ID_KEY] ?: FuelTypes.DEFAULT_FUEL_ID,
             splitTripTimeMinutes = preferences[SPLIT_TRIP_TIME_MINUTES_KEY]
                 ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES,
         )
@@ -726,14 +756,14 @@ class SettingsManager(private val context: Context) {
     }
 
     /**
-     * One-time: after adding the Trips tab, shift stored indices 5–9 by +1 so the same
+     * One-time compatibility for tab insertions: shift stored indices after Trips so the same
      * screen stays selected (Main screen index 100 is unchanged).
      */
     suspend fun migrateSelectedTabIndexIfNeeded() {
         val raw = context.settingsDataStore.data.first()[SELECTED_TAB_KEY]?.toIntOrNull()
             ?: return
         if (raw == MAIN_SCREEN_SELECTED_TAB_INDEX) return
-        if (raw in 5..9) {
+        if (raw in 5..10) {
             saveSelectedTab(raw + 1)
         }
     }
@@ -1102,6 +1132,48 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    /** Объём бака и сброс JSON калибровки в одной транзакции DataStore. */
+    suspend fun saveFuelTankLitersAndClearFuelCalibration(liters: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_TANK_LITERS_KEY] = liters.coerceIn(1, 500)
+            preferences[FUEL_CALIBRATION_JSON_KEY] = ""
+        }
+    }
+
+    /** Число зон и сброс JSON калибровки. */
+    suspend fun saveFuelCalibrationZoneCountAndClearCalibration(zoneCount: Int) {
+        val z = zoneCount.coerceIn(FUEL_CALIBRATION_ZONE_COUNT_MIN, FUEL_CALIBRATION_ZONE_COUNT_MAX)
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_CALIBRATION_ZONE_COUNT_KEY] = z
+            preferences[FUEL_CALIBRATION_JSON_KEY] = ""
+        }
+    }
+
+    suspend fun saveFuelCalibrationJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_CALIBRATION_JSON_KEY] = json
+        }
+    }
+
+    suspend fun saveFuelCalibrationZoneCount(zoneCount: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_CALIBRATION_ZONE_COUNT_KEY] =
+                zoneCount.coerceIn(FUEL_CALIBRATION_ZONE_COUNT_MIN, FUEL_CALIBRATION_ZONE_COUNT_MAX)
+        }
+    }
+
+    suspend fun clearFuelCalibrationJson() {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_CALIBRATION_JSON_KEY] = ""
+        }
+    }
+
+    suspend fun saveFuelPriceFuelId(fuelId: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_PRICE_FUEL_ID_KEY] = FuelTypes.optionFor(fuelId).id
+        }
+    }
+
     suspend fun saveSplitTripTimeMinutes(minutes: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[SPLIT_TRIP_TIME_MINUTES_KEY] = minutes.coerceIn(1, 100000)
@@ -1276,13 +1348,13 @@ class SettingsManager(private val context: Context) {
 
     suspend fun exportFullBackupJson(
         appDataManager: AppDataManager,
-        excludeTripLists: Boolean = false,
+        excludeTripsAndRefuels: Boolean = false,
     ): String =
         SettingsBackupCoordinator.exportFullJson(
             context.packageName,
             context.settingsDataStore,
             appDataManager.preferencesDataStore,
-            excludeTripLists = excludeTripLists,
+            excludeTripAndRefuelLists = excludeTripsAndRefuels,
         )
 
     suspend fun importFullBackupJson(appDataManager: AppDataManager, json: String): Result<Unit> {

@@ -276,6 +276,43 @@ fun SettingsTitle(
     )
 }
 
+/** Заголовок Material3-диалогов: как крупные подписи вкладок настроек. */
+@Composable
+fun AppAlertDialogTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge.copy(
+            fontSize = 26.sp,
+            lineHeight = 26.sp * 1.3f,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        ),
+    )
+}
+
+/** Основной текст диалога: как поля поездок/заправок (24 sp). */
+@Composable
+fun AppAlertDialogText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = 24.sp,
+            lineHeight = 24.sp * 1.3f,
+            color = MaterialTheme.colorScheme.onSurface,
+        ),
+    )
+}
+
+/** Подписи кнопок в диалогах; цвет берётся из кнопки (Filled / Outlined). */
+@Composable
+fun AppAlertDialogButtonLabel(text: String) {
+    Text(
+        text = text,
+        fontSize = 22.sp,
+        lineHeight = 22.sp * 1.3f,
+    )
+}
+
 @Composable
 fun SettingSwitch(
     isChecked: Boolean,
@@ -542,7 +579,7 @@ fun SettingInt(
             },
             modifier = Modifier
                 .align(Alignment.CenterVertically)
-                .width(140.dp)
+                .width(150.dp)
         )
         Column(
             modifier = Modifier

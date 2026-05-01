@@ -27,11 +27,13 @@ class AppDataManager(private val context: Context) {
         internal const val TRIPS_JSON_PREFERENCE_NAME = "${KEY_PREFIX}trips_json"
 
         internal const val TRIP_FAVORITES_JSON_PREFERENCE_NAME = "${KEY_PREFIX}trip_favorites_json"
+        internal const val REFUELS_JSON_PREFERENCE_NAME = "${KEY_PREFIX}refuels_json"
 
         private val MOTOR_HOURS_KEY = floatPreferencesKey("${KEY_PREFIX}motor_hours")
         private val TRIPS_JSON_KEY = stringPreferencesKey(TRIPS_JSON_PREFERENCE_NAME)
         private val TRIP_FAVORITES_JSON_KEY =
             stringPreferencesKey(TRIP_FAVORITES_JSON_PREFERENCE_NAME)
+        private val REFUELS_JSON_KEY = stringPreferencesKey(REFUELS_JSON_PREFERENCE_NAME)
     }
 
     // Flow для моторных часов
@@ -45,6 +47,10 @@ class AppDataManager(private val context: Context) {
 
     val tripFavoritesJsonFlow: Flow<String> = context.appDataStore.data
         .map { preferences -> preferences[TRIP_FAVORITES_JSON_KEY] ?: "" }
+        .distinctUntilChanged()
+
+    val refuelsJsonFlow: Flow<String> = context.appDataStore.data
+        .map { preferences -> preferences[REFUELS_JSON_KEY] ?: "" }
         .distinctUntilChanged()
 
     // Suspend функции для сохранения данных
@@ -63,6 +69,12 @@ class AppDataManager(private val context: Context) {
     suspend fun saveTripFavoritesJson(json: String) {
         context.appDataStore.edit { preferences ->
             preferences[TRIP_FAVORITES_JSON_KEY] = json
+        }
+    }
+
+    suspend fun saveRefuelsJson(json: String) {
+        context.appDataStore.edit { preferences ->
+            preferences[REFUELS_JSON_KEY] = json
         }
     }
 }

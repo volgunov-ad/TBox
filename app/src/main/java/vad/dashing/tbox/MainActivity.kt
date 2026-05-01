@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
     private var pendingSaveTag: String? = null
     private var pendingDataToSave: List<String>? = null
     private var pendingJsonBackup: String? = null
-    private var pendingJsonBackupExcludeTripLists: Boolean = false
+    private var pendingJsonBackupExcludeTripsAndRefuels: Boolean = false
     /** After MANAGE_EXTERNAL_STORAGE / legacy storage is granted, run this (e.g. open image picker for wallpapers). */
     private var pendingWallpaperPickerAction: (() -> Unit)? = null
 
@@ -150,9 +150,9 @@ class MainActivity : ComponentActivity() {
                     onSaveToFile = { tag, dataList ->
                         saveDataToFile(tag, dataList)
                     },
-                    onExportSettingsBackup = { exportSettingsAndAppDataBackup(excludeTripLists = false) },
+                    onExportSettingsBackup = { exportSettingsAndAppDataBackup(excludeTripsAndRefuels = false) },
                     onExportSettingsBackupWithoutTrips = {
-                        exportSettingsAndAppDataBackup(excludeTripLists = true)
+                        exportSettingsAndAppDataBackup(excludeTripsAndRefuels = true)
                     },
                     onImportSettingsBackup = {
                         importBackupLauncher.launch(arrayOf("application/json", "application/*", "*/*"))
@@ -363,12 +363,12 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }*/
 
-    private fun exportSettingsAndAppDataBackup(excludeTripLists: Boolean) {
+    private fun exportSettingsAndAppDataBackup(excludeTripsAndRefuels: Boolean) {
         lifecycleScope.launch(Dispatchers.IO) {
             val json = runCatching {
                 settingsManager.exportFullBackupJson(
                     appDataManager,
-                    excludeTripLists = excludeTripLists
+                    excludeTripsAndRefuels = excludeTripsAndRefuels
                 )
             }.getOrElse { e ->
                 Log.e(TAG, "Ошибка формирования резервной копии", e)
@@ -382,22 +382,22 @@ class MainActivity : ComponentActivity() {
                 return@launch
             }
             withContext(Dispatchers.Main) {
-                saveJsonBackupToDownloads(json, excludeTripLists)
+                saveJsonBackupToDownloads(json, excludeTripsAndRefuels)
             }
         }
     }
 
-    private fun saveJsonBackupToDownloads(json: String, excludeTripLists: Boolean) {
+    private fun saveJsonBackupToDownloads(json: String, excludeTripsAndRefuels: Boolean) {
         if (hasStoragePermissions()) {
-            performJsonBackupSave(json, excludeTripLists)
+            performJsonBackupSave(json, excludeTripsAndRefuels)
         } else {
             pendingJsonBackup = json
-            pendingJsonBackupExcludeTripLists = excludeTripLists
+            pendingJsonBackupExcludeTripsAndRefuels = excludeTripsAndRefuels
             requestStoragePermissions()
         }
     }
 
-    private fun performJsonBackupSave(json: String, excludeTripLists: Boolean) {
+    private fun performJsonBackupSave(json: String, excludeTripsAndRefuels: Boolean) {
         try {
             val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
@@ -412,8 +412,8 @@ class MainActivity : ComponentActivity() {
                 "yyyy-MM-dd_HH-mm-ss",
                 Locale.getDefault()
             ).format(Date())
-            val fileName = if (excludeTripLists) {
-                "tbox_backup_no_trips_$timestamp.json"
+            val fileName = if (excludeTripsAndRefuels) {
+                "tbox_backup_no_trips_refuels_$timestamp.json"
             } else {
                 "tbox_backup_$timestamp.json"
             }
@@ -560,9 +560,9 @@ class MainActivity : ComponentActivity() {
             pendingDataToSave = null
         }
         pendingJsonBackup?.let { json ->
-            performJsonBackupSave(json, pendingJsonBackupExcludeTripLists)
+            performJsonBackupSave(json, pendingJsonBackupExcludeTripsAndRefuels)
             pendingJsonBackup = null
-            pendingJsonBackupExcludeTripLists = false
+            pendingJsonBackupExcludeTripsAndRefuels = false
         }
         pendingWallpaperPickerAction?.let { action ->
             pendingWallpaperPickerAction = null
@@ -576,7 +576,7 @@ class MainActivity : ComponentActivity() {
         pendingSaveTag = null
         pendingDataToSave = null
         pendingJsonBackup = null
-        pendingJsonBackupExcludeTripLists = false
+        pendingJsonBackupExcludeTripsAndRefuels = false
         pendingWallpaperPickerAction = null
     }
 

@@ -32,6 +32,7 @@
     <string name="unit_percent" formatted="false">%</string>
     <string name="unit_liter">l</string>
     <string name="unit_meter">m</string>
+    <string name="unit_ruble">RUB</string>
     <string name="unit_bar_celsius">bar / °C</string>
     <string name="title_with_unit">%1$s, %2$s</string>
 
@@ -40,6 +41,7 @@
     <string name="tab_geoposition">Location</string>
     <string name="tab_car_data">Car data</string>
     <string name="tab_trips">Trips</string>
+    <string name="tab_refuels">Refuels</string>
     <string name="tab_settings">Settings</string>
     <string name="tab_main_screen_settings">Main screen settings</string>
     <string name="tab_logs">Logs</string>
@@ -282,13 +284,13 @@
 
     <string name="settings_misc_title">Misc</string>
     <string name="settings_backup_title">Backup</string>
-    <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
+    <string name="settings_backup_desc">Export and import all app settings and trip/refuel app data (motor hours, trips, refuels, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>
-    <string name="settings_backup_export_without_trips">Export JSON without trips</string>
+    <string name="settings_backup_export_without_trips">Export JSON without trips and refuels</string>
     <string name="settings_backup_import">Import JSON</string>
     <string name="settings_backup_import_choose_file">Choose file</string>
     <string name="dialog_save_backup_downloads">Save full backup (settings and data) to the Downloads folder</string>
-    <string name="dialog_save_backup_downloads_no_trips">Save backup (settings and other app data, without trip list or trip favorites) to the Downloads folder</string>
+    <string name="dialog_save_backup_downloads_no_trips">Save backup (settings and other app data, without trips, refuels, or trip favorites) to the Downloads folder</string>
     <string name="dialog_backup_import_title">Import backup</string>
     <string name="dialog_backup_import_message">Current settings and app data will be fully replaced by the backup. The active trip in memory and storage will match the backup (if the backup has no open trip, any current open trip is replaced by the imported list). Tiles that host third-party app widgets are cleared after import (pick the widget again). Continue and choose a JSON file?</string>
     <string name="settings_expert_mode_title">Expert mode</string>
@@ -449,9 +451,12 @@
     <string name="data_title_active_trip_widget_mini">Current trip (mini)</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
+    <string name="settings_fuel_price_fuel_type_title">Fuel for price lookup</string>
     <string name="settings_split_trip_time_title">Trip split time, min</string>
 
     <string name="trips_delete">Delete trip</string>
+    <string name="trips_delete_confirm_title">Delete trip?</string>
+    <string name="trips_delete_confirm_message">This trip and related data in the log will be removed permanently.</string>
     <string name="trips_finish">Finish</string>
     <string name="trips_name_label">Trip name</string>
     <string name="trips_add_favorite">Add to favorites</string>
@@ -482,11 +487,51 @@
     <string name="trips_fuel_used">Fuel used</string>
     <string name="trips_fuel_consumption_l_100km">Fuel consumption</string>
     <string name="trips_fuel_refueled">Fuel refueled</string>
+    <string name="trips_fuel_refueled_cost">Refueled fuel cost</string>
     <string name="trips_refuel_count">Refuelings</string>
     <string name="trips_engine_start_count">Engine starts</string>
     <string name="trips_export">Export</string>
     <string name="dialog_save_trips_downloads">Save all trips to one file in the Downloads folder</string>
     <string name="trips_export_separator">----------------------------------------</string>
+    <string name="refuels_empty">No refuels</string>
+    <string name="refuels_export">Export</string>
+    <string name="refuels_delete">Delete refuel</string>
+    <string name="refuels_time">Date and time</string>
+    <string name="refuels_odometer">Odometer</string>
+    <string name="refuels_coordinates">Coordinates</string>
+    <string name="refuels_fuel_before">Fuel before, %</string>
+    <string name="refuels_fuel_after">Fuel after, %</string>
+    <string name="refuels_ambient_temp">Ambient, °C</string>
+    <string name="refuels_estimated_liters">Estimated liters</string>
+    <string name="refuels_actual_liters">Actual liters</string>
+    <string name="refuels_fuel_type">Fuel</string>
+    <string name="refuels_price">Price</string>
+    <string name="refuels_price_source">Station</string>
+    <string name="refuels_cost">Cost</string>
+    <string name="refuels_calibration_train">Train</string>
+    <string name="refuels_calibration_section_title">Fuel level calibration</string>
+    <string name="refuels_calibration_tank_hint">Changing tank volume clears calibration</string>
+    <string name="refuels_calibration_zones_title">Calibration zones</string>
+    <string name="refuels_calibration_zones_hint">Changing calibration zones clears calibration</string>
+    <string name="refuels_calibration_report_title">Zone status</string>
+    <string name="refuels_calibration_reset">Reset calibration</string>
+    <string name="refuels_calibration_trained">Used</string>
+    <string name="refuels_delete_confirm_title">Delete refuel?</string>
+    <string name="refuels_delete_confirm_message">This entry will be removed from the log permanently.</string>
+    <string name="refuels_actions">Actions</string>
+    <string name="refuels_coordinates_copied">Coordinates copied</string>
+    <string name="toast_refuel_waiting_coordinates">Refueling recorded. Waiting for coordinates</string>
+    <string name="toast_refuel_coordinates_not_found">Coordinates for this refueling were not found</string>
+    <string name="toast_refuel_searching_fuel_price">Searching for fuel price</string>
+    <string name="toast_refuel_fuel_price_not_found">Fuel price not found</string>
+    <string name="toast_refuel_fuel_cost_saved">Fuel cost saved to the refuel log</string>
+    <string name="toast_fuel_calibration_ok">Calibration updated from this refuel</string>
+    <string name="toast_fuel_calibration_refuel_not_found">Refuel entry not found</string>
+    <string name="toast_fuel_calibration_already_used">This refuel was already used for training</string>
+    <string name="toast_fuel_calibration_no_percent">Missing fuel level before/after percentages</string>
+    <string name="toast_fuel_calibration_no_liters">Enter actual liters (receipt)</string>
+    <string name="toast_fuel_calibration_filter_reject">Check failed: sensor delta vs receipt liters mismatch</string>
+    <string name="dialog_save_refuels_downloads">Save all refuels to one file in the Downloads folder</string>
     <string name="data_title_net_widget">Network signal widget</string>
     <string name="data_title_net_widget_new">Network signal widget (new)</string>
     <string name="data_title_net_widget_colored">Network signal widget (colored)</string>
