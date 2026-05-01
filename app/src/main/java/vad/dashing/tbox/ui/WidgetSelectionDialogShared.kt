@@ -48,6 +48,7 @@ import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
@@ -180,6 +181,13 @@ internal class WidgetSelectionDialogState(
 
     /** `null` = default decimals per data key in provider; otherwise 0..2 fractional digits. */
     var valueAccuracy by mutableStateOf(initialConfig.valueAccuracy?.takeIf { it in 0..2 })
+
+    fun applySelectedDataKey(key: String) {
+        selectedDataKey = key
+        if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
+            singleLineDualMetrics = false
+        }
+    }
 
     val isMusicWidgetSelected: Boolean
         get() = selectedDataKey == MUSIC_WIDGET_DATA_KEY
@@ -802,10 +810,7 @@ internal fun WidgetSelectionDialogForm(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    state.selectedDataKey = key
-                                    if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
-                                        state.singleLineDualMetrics = false
-                                    }
+                                    state.applySelectedDataKey(key)
                                 }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -813,10 +818,7 @@ internal fun WidgetSelectionDialogForm(
                             RadioButton(
                                 selected = state.selectedDataKey == key,
                                 onClick = {
-                                    state.selectedDataKey = key
-                                    if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
-                                        state.singleLineDualMetrics = false
-                                    }
+                                    state.applySelectedDataKey(key)
                                 }
                             )
                             Text(
@@ -1077,7 +1079,18 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 null
             },
-            valueAccuracy = storedValueAccuracy
+            valueAccuracy = storedValueAccuracy,
+            selectedVariant = when {
+                !isSeatHeatVentSingleWidgetDataKey(state.selectedDataKey) -> 0
+                else -> {
+                    val prevCfg = normalizedConfigs.getOrNull(widgetIndex)
+                    if (prevCfg?.dataKey == state.selectedDataKey) {
+                        prevCfg.selectedVariant.coerceIn(0, 1)
+                    } else {
+                        0
+                    }
+                }
+            }
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")

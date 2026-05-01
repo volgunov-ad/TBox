@@ -14,6 +14,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
+import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
@@ -56,7 +58,9 @@ object MbCanRepository {
     private val widgetSignalRegistry = listOf(
         WidgetSignalBinding("steeringWheelHeatWidget", MbCanSignal.SteeringWheelHeat),
         WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
-        WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode)
+        WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode),
+        WidgetSignalBinding(FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontLeftSeatMode),
+        WidgetSignalBinding(FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontRightSeatMode)
     )
 
     private val signalByWidgetKey: Map<String, MbCanSignal> = widgetSignalRegistry

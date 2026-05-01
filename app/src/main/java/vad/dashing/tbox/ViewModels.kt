@@ -404,6 +404,12 @@ object WidgetsRepository {
         "steeringWheelHeatWidget" to DataTitle(R.string.data_title_steering_wheel_heat_widget),
         "frontLeftSeatHeatVentWidget" to DataTitle(R.string.data_title_front_left_seat_heat_vent_widget),
         "frontRightSeatHeatVentWidget" to DataTitle(R.string.data_title_front_right_seat_heat_vent_widget),
+        FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to DataTitle(
+            R.string.data_title_front_left_seat_heat_vent_single_widget
+        ),
+        FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to DataTitle(
+            R.string.data_title_front_right_seat_heat_vent_single_widget
+        ),
         "musicWidget" to DataTitle(R.string.data_title_music_widget),
         MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_media_volume_widget_horizontal
@@ -453,6 +459,7 @@ object WidgetsRepository {
 
     /** Widget types that support optional single-line layout for two metrics. */
     fun supportsSingleLineDualMetrics(dataKey: String): Boolean {
+        if (isSeatHeatVentSingleWidgetDataKey(dataKey)) return false
         return dataKey in setOf(
             "gearBoxWidget",
             "motorHoursWidget",
@@ -484,6 +491,11 @@ object WidgetsRepository {
             "netWidgetNew",
             "netWidgetColored",
             "locWidget",
+            "frontLeftSeatHeatVentWidget",
+            "frontRightSeatHeatVentWidget",
+            FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
+            FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
+            "steeringWheelHeatWidget",
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }

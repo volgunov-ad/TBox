@@ -1507,6 +1507,26 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         saveDashboardWidgets(normalizedConfigs)
     }
 
+    fun saveDashboardSeatHeatVentSelectedVariant(
+        widgetIndex: Int,
+        widgetCount: Int,
+        selectedVariant: Int
+    ) {
+        val normalizedConfigs = normalizeWidgetConfigs(
+            configs = latestDashboardWidgetsConfig,
+            widgetCount = widgetCount
+        ).toMutableList()
+        val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
+        if (!isSeatHeatVentSingleWidgetDataKey(currentConfig.dataKey)) return
+        val coerced = selectedVariant.coerceIn(0, 1)
+        if (currentConfig.selectedVariant == coerced) return
+
+        normalizedConfigs[widgetIndex] = currentConfig.copy(
+            selectedVariant = coerced
+        )
+        saveDashboardWidgets(normalizedConfigs)
+    }
+
     fun saveDashboardRows(config: Int) {
         if (config in 1..SettingsManager.MAIN_TAB_DASHBOARD_MAX_GRID_DIMENSION) {
             viewModelScope.launch {

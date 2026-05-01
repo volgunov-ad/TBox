@@ -20,6 +20,8 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
+import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
@@ -43,6 +45,7 @@ fun DashboardWidgetRenderer(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (String) -> Unit,
+    onSeatHeatVentSelectedVariantChange: (Int) -> Unit = {},
     onHideFloatingPanelsDoubleClick: () -> Unit = {},
     onToggleFloatingPanelsEnabledDoubleClick: () -> Unit = {},
     onRestartRequested: () -> Unit,
@@ -257,6 +260,21 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY -> {
+            DashboardFrontLeftSeatHeatVentSingleWidgetItem(
+                selectedVariant = widgetConfig.selectedVariant,
+                onSelectedVariantChange = onSeatHeatVentSelectedVariantChange,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                enableInnerInteractions = enableInnerInteractions,
+                scale = widgetConfig.scale
+            )
+        }
+
         "frontRightSeatHeatVentWidget" -> {
             DashboardFrontRightSeatHeatVentWidgetItem(
                 onClick = onClick,
@@ -266,6 +284,21 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                enableInnerInteractions = enableInnerInteractions,
+                scale = widgetConfig.scale
+            )
+        }
+
+        FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY -> {
+            DashboardFrontRightSeatHeatVentSingleWidgetItem(
+                selectedVariant = widgetConfig.selectedVariant,
+                onSelectedVariantChange = onSeatHeatVentSelectedVariantChange,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
                 enableInnerInteractions = enableInnerInteractions,
                 scale = widgetConfig.scale
             )

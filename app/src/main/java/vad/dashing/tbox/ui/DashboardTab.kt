@@ -95,6 +95,7 @@ fun MainDashboardTab(
     val widgetConfigs = remember(widgetsConfig, totalWidgets) {
         normalizeWidgetConfigs(widgetsConfig, totalWidgets)
     }
+    var pendingSeatHeatVentVariant by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val panelNeedsMbCan = remember(widgetConfigs) {
         MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
@@ -142,6 +143,20 @@ fun MainDashboardTab(
         if (!restartEnabled) {
             delay(15000) // Блокировка на 15 секунд
             restartEnabled = true
+        }
+    }
+
+    LaunchedEffect(pendingSeatHeatVentVariant, totalWidgets) {
+        val pending = pendingSeatHeatVentVariant ?: return@LaunchedEffect
+        delay(2000)
+        if (pendingSeatHeatVentVariant != pending) return@LaunchedEffect
+        settingsViewModel.saveDashboardSeatHeatVentSelectedVariant(
+            widgetIndex = pending.first,
+            widgetCount = totalWidgets,
+            selectedVariant = pending.second
+        )
+        if (pendingSeatHeatVentVariant == pending) {
+            pendingSeatHeatVentVariant = null
         }
     }
 
@@ -221,6 +236,9 @@ fun MainDashboardTab(
                                                 widgetCount = totalWidgets,
                                                 selectedPackage = selectedPackage
                                             )
+                                        },
+                                        onSeatHeatVentSelectedVariantChange = { variant ->
+                                            pendingSeatHeatVentVariant = index to variant
                                         },
                                         onHideFloatingPanelsDoubleClick = {
                                             val cfg = widgetConfigs.getOrNull(index)

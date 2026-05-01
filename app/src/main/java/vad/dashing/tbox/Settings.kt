@@ -69,7 +69,9 @@ data class FloatingDashboardWidgetConfig(
      * Decimal places for numeric values from the tile data provider on this tile.
      * `null` — built-in default per data key; `0`..`2` — fixed fraction digits where applicable.
      */
-    val valueAccuracy: Int? = null
+    val valueAccuracy: Int? = null,
+    /** Per-tile UI variant for widgets that support multiple modes (e.g. single seat heat vs vent). */
+    val selectedVariant: Int = 0
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */

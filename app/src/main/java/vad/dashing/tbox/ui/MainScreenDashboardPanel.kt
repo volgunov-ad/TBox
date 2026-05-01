@@ -141,6 +141,7 @@ fun MainScreenDashboardPanel(
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
     var pendingMusicSelection by remember(panel.id) { mutableStateOf<Pair<Int, String>?>(null) }
+    var pendingSeatHeatVentVariant by remember(panel.id) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode && showDialogForIndex == null
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
 
@@ -197,6 +198,22 @@ fun MainScreenDashboardPanel(
         )
         if (pendingMusicSelection == pending) {
             pendingMusicSelection = null
+        }
+    }
+    LaunchedEffect(pendingSeatHeatVentVariant, panel.id) {
+        val pending = pendingSeatHeatVentVariant ?: return@LaunchedEffect
+        delay(2000)
+        if (pendingSeatHeatVentVariant != pending) return@LaunchedEffect
+        persistDashboardPanelSeatHeatVentSelectedVariant(
+            currentWidgetConfigs = latestWidgetConfigs,
+            widgetIndex = pending.first,
+            selectedVariant = pending.second,
+            saveConfigs = { configs ->
+                settingsViewModel.saveMainScreenDashboardWidgets(panel.id, configs)
+            }
+        )
+        if (pendingSeatHeatVentVariant == pending) {
+            pendingSeatHeatVentVariant = null
         }
     }
 
@@ -382,6 +399,9 @@ fun MainScreenDashboardPanel(
             },
             onMusicSelectedPlayerChange = { index, selectedPackage ->
                 pendingMusicSelection = index to selectedPackage
+            },
+            onSeatHeatVentSelectedVariantChange = { index, variant ->
+                pendingSeatHeatVentVariant = index to variant
             },
             onHideFloatingPanelsDoubleClick = {
                 val cfg = widgetConfigs.getOrNull(it)
