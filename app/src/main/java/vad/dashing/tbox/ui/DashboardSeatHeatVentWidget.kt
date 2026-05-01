@@ -48,7 +48,7 @@ private const val SEAT_ACTION_LOCKOUT_MS = 500L
 
 private enum class SeatSide { FrontLeft, FrontRight, BackLeft, BackRight }
 
-private enum class SeatHeatVentLayoutMode { Dual, Single }
+private enum class SeatHeatVentLayoutMode { Dual, Single, RearHeatOnly }
 
 @Composable
 fun DashboardFrontLeftSeatHeatVentWidgetItem(
@@ -181,6 +181,68 @@ fun DashboardFrontRightSeatHeatVentSingleWidgetItem(
 }
 
 @Composable
+fun DashboardRearLeftSeatHeatWidgetItem(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    enableInnerInteractions: Boolean = true,
+    scale: Float = 1f
+) {
+    val mode by MbCanRepository.rearLeftSeatModeState.collectAsStateWithLifecycle()
+    SeatHeatVentWidget(
+        side = SeatSide.BackLeft,
+        layoutMode = SeatHeatVentLayoutMode.RearHeatOnly,
+        selectedVariant = SEAT_HEAT_VENT_VARIANT_HEAT,
+        onSelectedVariantChange = {},
+        mode = mode,
+        propertyId = MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+        singleLineDualMetrics = false,
+        enableInnerInteractions = enableInnerInteractions,
+        scale = scale
+    )
+}
+
+@Composable
+fun DashboardRearRightSeatHeatWidgetItem(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    enableInnerInteractions: Boolean = true,
+    scale: Float = 1f
+) {
+    val mode by MbCanRepository.rearRightSeatModeState.collectAsStateWithLifecycle()
+    SeatHeatVentWidget(
+        side = SeatSide.BackRight,
+        layoutMode = SeatHeatVentLayoutMode.RearHeatOnly,
+        selectedVariant = SEAT_HEAT_VENT_VARIANT_HEAT,
+        onSelectedVariantChange = {},
+        mode = mode,
+        propertyId = MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+        singleLineDualMetrics = false,
+        enableInnerInteractions = enableInnerInteractions,
+        scale = scale
+    )
+}
+
+@Composable
 private fun SeatHeatVentWidget(
     side: SeatSide,
     layoutMode: SeatHeatVentLayoutMode,
@@ -238,6 +300,38 @@ private fun SeatHeatVentWidget(
         backgroundColor = backgroundColor
     ) { _, _ ->
         when (layoutMode) {
+            SeatHeatVentLayoutMode.RearHeatOnly -> {
+                val heatLevel = (mode as? MbCanSeatModeState.Heat)?.level
+                val onHeatClick = if (enableInnerInteractions) {
+                    { trySendSeatProperty(nextHeatRaw(mode)) }
+                } else {
+                    onClick
+                }
+                val onDouble = if (enableInnerInteractions) {
+                    { trySendSeatProperty(1) }
+                } else {
+                    {}
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SeatActionButton(
+                        modifier = Modifier.fillMaxSize(),
+                        side = side,
+                        iconColor = iconColor,
+                        modeType = "heat",
+                        level = heatLevel,
+                        onLongClick = onLongClick,
+                        onClick = onHeatClick,
+                        onDoubleClick = onDouble,
+                        scale = scale
+                    )
+                }
+            }
+
             SeatHeatVentLayoutMode.Single -> {
                 val showHeat = optimisticVariant == SEAT_HEAT_VENT_VARIANT_HEAT
                 val heatLevel = (mode as? MbCanSeatModeState.Heat)?.level

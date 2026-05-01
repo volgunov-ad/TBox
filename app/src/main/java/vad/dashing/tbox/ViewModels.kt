@@ -410,6 +410,8 @@ object WidgetsRepository {
         FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to DataTitle(
             R.string.data_title_front_right_seat_heat_vent_single_widget
         ),
+        REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_rear_left_seat_heat_widget),
+        REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_rear_right_seat_heat_widget),
         "musicWidget" to DataTitle(R.string.data_title_music_widget),
         MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_media_volume_widget_horizontal
@@ -495,6 +497,8 @@ object WidgetsRepository {
             "frontRightSeatHeatVentWidget",
             FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
             FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
+            REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY,
+            REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
             "steeringWheelHeatWidget",
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)

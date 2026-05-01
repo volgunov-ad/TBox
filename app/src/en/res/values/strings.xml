@@ -396,6 +396,8 @@
     <string name="data_title_front_right_seat_heat_vent_widget">Front-right seat heat and ventilation (dual button)</string>
     <string name="data_title_front_left_seat_heat_vent_single_widget">Front-left seat heat and ventilation (single button)</string>
     <string name="data_title_front_right_seat_heat_vent_single_widget">Front-right seat heat and ventilation (single button)</string>
+    <string name="data_title_rear_left_seat_heat_widget">Rear-left seat heating</string>
+    <string name="data_title_rear_right_seat_heat_widget">Rear-right seat heating</string>
     <string name="data_title_locate_status">Location fix status</string>
     <string name="data_title_loc_values_true">Location validity</string>
     <string name="data_title_location_update_time">GNSS change time</string>

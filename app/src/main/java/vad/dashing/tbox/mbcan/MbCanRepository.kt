@@ -16,11 +16,15 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
+import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
     FrontLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
-    FrontRightSeatMode(setOf("eMBCAN_CFG_VEHICLE"))
+    FrontRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
+    RearLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
+    RearRightSeatMode(setOf("eMBCAN_CFG_VEHICLE"))
 }
 
 sealed class MbCanBinaryState {
@@ -60,7 +64,9 @@ object MbCanRepository {
         WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
         WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode),
         WidgetSignalBinding(FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontLeftSeatMode),
-        WidgetSignalBinding(FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontRightSeatMode)
+        WidgetSignalBinding(FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontRightSeatMode),
+        WidgetSignalBinding(REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY, MbCanSignal.RearLeftSeatMode),
+        WidgetSignalBinding(REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY, MbCanSignal.RearRightSeatMode)
     )
 
     private val signalByWidgetKey: Map<String, MbCanSignal> = widgetSignalRegistry
@@ -98,11 +104,17 @@ object MbCanRepository {
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
     private val _frontRightSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontRightSeatModeState: StateFlow<MbCanSeatModeState> = _frontRightSeatModeState.asStateFlow()
+    private val _rearLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
+    val rearLeftSeatModeState: StateFlow<MbCanSeatModeState> = _rearLeftSeatModeState.asStateFlow()
+    private val _rearRightSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
+    val rearRightSeatModeState: StateFlow<MbCanSeatModeState> = _rearRightSeatModeState.asStateFlow()
 
     private val stateEngine = MbCanSignalStateEngine(
         steeringFlow = _steeringWheelHeatState,
-        leftSeatFlow = _frontLeftSeatModeState,
-        rightSeatFlow = _frontRightSeatModeState
+        frontLeftSeatFlow = _frontLeftSeatModeState,
+        frontRightSeatFlow = _frontRightSeatModeState,
+        rearLeftSeatFlow = _rearLeftSeatModeState,
+        rearRightSeatFlow = _rearRightSeatModeState
     )
 
     suspend fun bind(scope: CoroutineScope) {
@@ -141,7 +153,9 @@ object MbCanRepository {
         when (item) {
             MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
-            MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH -> Unit
+            MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
+            MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH,
+            MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH -> Unit
             else -> return
         }
         synchronized(pendingCfgPushes) {
@@ -166,13 +180,23 @@ object MbCanRepository {
                         )
                     MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH ->
                         stateEngine.applySeatCandidate(
-                            MbCanSeatSlot.Left,
+                            MbCanSeatSlot.FrontLeft,
                             MbCanSignalStateEngine.decodeSeatModeRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH ->
                         stateEngine.applySeatCandidate(
-                            MbCanSeatSlot.Right,
+                            MbCanSeatSlot.FrontRight,
                             MbCanSignalStateEngine.decodeSeatModeRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH ->
+                        stateEngine.applySeatCandidate(
+                            MbCanSeatSlot.RearLeft,
+                            MbCanSignalStateEngine.decodeRearSeatHeatRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH ->
+                        stateEngine.applySeatCandidate(
+                            MbCanSeatSlot.RearRight,
+                            MbCanSignalStateEngine.decodeRearSeatHeatRaw(raw)
                         )
                 }
             }
@@ -273,8 +297,10 @@ object MbCanRepository {
     suspend fun refreshSignal(signal: MbCanSignal) {
         when (signal) {
             MbCanSignal.SteeringWheelHeat -> refreshSteeringWheelHeat()
-            MbCanSignal.FrontLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.Left)
-            MbCanSignal.FrontRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.Right)
+            MbCanSignal.FrontLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontLeft)
+            MbCanSignal.FrontRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontRight)
+            MbCanSignal.RearLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.RearLeft)
+            MbCanSignal.RearRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.RearRight)
         }
     }
 
@@ -332,7 +358,16 @@ object MbCanRepository {
                 return@withContext
             }
             val raw = MbCanEngineFacade.canGetVehicleParam(propertyId)
-            val decoded = if (raw == null) MbCanSeatModeState.Unknown else MbCanSignalStateEngine.decodeSeatModeRaw(raw)
+            val decoded = if (raw == null) {
+                MbCanSeatModeState.Unknown
+            } else {
+                when (slot) {
+                    MbCanSeatSlot.FrontLeft, MbCanSeatSlot.FrontRight ->
+                        MbCanSignalStateEngine.decodeSeatModeRaw(raw)
+                    MbCanSeatSlot.RearLeft, MbCanSeatSlot.RearRight ->
+                        MbCanSignalStateEngine.decodeRearSeatHeatRaw(raw)
+                }
+            }
             stateEngine.applySeatCandidate(slot, decoded)
             MbCanDiagnostics.log("DEBUG", "refreshSeatMode tag=${slot.name} raw=$raw state=$decoded")
         }

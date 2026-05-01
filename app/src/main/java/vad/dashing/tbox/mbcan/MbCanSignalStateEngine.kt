@@ -3,30 +3,40 @@ package vad.dashing.tbox.mbcan
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * Left / right front seat for shared poll + confirmation + burst logic.
+ * Front and rear seat slots for shared poll + confirmation + burst logic.
  */
 enum class MbCanSeatSlot {
-    Left,
-    Right;
+    FrontLeft,
+    FrontRight,
+    RearLeft,
+    RearRight;
 
     val propertyId: Int
         get() = when (this) {
-            Left -> MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH
-            Right -> MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH
+            FrontLeft -> MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH
+            FrontRight -> MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH
+            RearLeft -> MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH
+            RearRight -> MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH
         }
 
     val signal: MbCanSignal
         get() = when (this) {
-            Left -> MbCanSignal.FrontLeftSeatMode
-            Right -> MbCanSignal.FrontRightSeatMode
+            FrontLeft -> MbCanSignal.FrontLeftSeatMode
+            FrontRight -> MbCanSignal.FrontRightSeatMode
+            RearLeft -> MbCanSignal.RearLeftSeatMode
+            RearRight -> MbCanSignal.RearRightSeatMode
         }
 
     fun stateFlow(
-        left: MutableStateFlow<MbCanSeatModeState>,
-        right: MutableStateFlow<MbCanSeatModeState>,
+        frontLeft: MutableStateFlow<MbCanSeatModeState>,
+        frontRight: MutableStateFlow<MbCanSeatModeState>,
+        rearLeft: MutableStateFlow<MbCanSeatModeState>,
+        rearRight: MutableStateFlow<MbCanSeatModeState>,
     ): MutableStateFlow<MbCanSeatModeState> = when (this) {
-        Left -> left
-        Right -> right
+        FrontLeft -> frontLeft
+        FrontRight -> frontRight
+        RearLeft -> rearLeft
+        RearRight -> rearRight
     }
 }
 
@@ -36,16 +46,22 @@ enum class MbCanSeatSlot {
  */
 internal class MbCanSignalStateEngine(
     private val steeringFlow: MutableStateFlow<MbCanBinaryState>,
-    private val leftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
-    private val rightSeatFlow: MutableStateFlow<MbCanSeatModeState>,
+    private val frontLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
+    private val frontRightSeatFlow: MutableStateFlow<MbCanSeatModeState>,
+    private val rearLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
+    private val rearRightSeatFlow: MutableStateFlow<MbCanSeatModeState>,
     private val requiredConsecutiveProblems: Int = 3,
 ) {
     private var steeringUnknownStreak = 0
     private var steeringUnavailableStreak = 0
-    private var leftUnknownStreak = 0
-    private var leftUnavailableStreak = 0
-    private var rightUnknownStreak = 0
-    private var rightUnavailableStreak = 0
+    private var frontLeftUnknownStreak = 0
+    private var frontLeftUnavailableStreak = 0
+    private var frontRightUnknownStreak = 0
+    private var frontRightUnavailableStreak = 0
+    private var rearLeftUnknownStreak = 0
+    private var rearLeftUnavailableStreak = 0
+    private var rearRightUnknownStreak = 0
+    private var rearRightUnavailableStreak = 0
 
     private fun MbCanBinaryState.isProblemState(): Boolean =
         this is MbCanBinaryState.Unknown || this is MbCanBinaryState.Unavailable
@@ -82,18 +98,27 @@ internal class MbCanSignalStateEngine(
     }
 
     suspend fun applySeatCandidate(slot: MbCanSeatSlot, decoded: MbCanSeatModeState) {
-        val flow = slot.stateFlow(leftSeatFlow, rightSeatFlow)
+        val flow = slot.stateFlow(
+            frontLeftSeatFlow,
+            frontRightSeatFlow,
+            rearLeftSeatFlow,
+            rearRightSeatFlow
+        )
         val published = flow.value
         if (decoded.isProblemState() && !published.isProblemState()) {
             MbCanJobManager.requestBurst(slot.signal)
         }
         var unknown = when (slot) {
-            MbCanSeatSlot.Left -> leftUnknownStreak
-            MbCanSeatSlot.Right -> rightUnknownStreak
+            MbCanSeatSlot.FrontLeft -> frontLeftUnknownStreak
+            MbCanSeatSlot.FrontRight -> frontRightUnknownStreak
+            MbCanSeatSlot.RearLeft -> rearLeftUnknownStreak
+            MbCanSeatSlot.RearRight -> rearRightUnknownStreak
         }
         var unavailable = when (slot) {
-            MbCanSeatSlot.Left -> leftUnavailableStreak
-            MbCanSeatSlot.Right -> rightUnavailableStreak
+            MbCanSeatSlot.FrontLeft -> frontLeftUnavailableStreak
+            MbCanSeatSlot.FrontRight -> frontRightUnavailableStreak
+            MbCanSeatSlot.RearLeft -> rearLeftUnavailableStreak
+            MbCanSeatSlot.RearRight -> rearRightUnavailableStreak
         }
         when (decoded) {
             is MbCanSeatModeState.Unknown -> {
@@ -117,13 +142,21 @@ internal class MbCanSignalStateEngine(
             }
         }
         when (slot) {
-            MbCanSeatSlot.Left -> {
-                leftUnknownStreak = unknown
-                leftUnavailableStreak = unavailable
+            MbCanSeatSlot.FrontLeft -> {
+                frontLeftUnknownStreak = unknown
+                frontLeftUnavailableStreak = unavailable
             }
-            MbCanSeatSlot.Right -> {
-                rightUnknownStreak = unknown
-                rightUnavailableStreak = unavailable
+            MbCanSeatSlot.FrontRight -> {
+                frontRightUnknownStreak = unknown
+                frontRightUnavailableStreak = unavailable
+            }
+            MbCanSeatSlot.RearLeft -> {
+                rearLeftUnknownStreak = unknown
+                rearLeftUnavailableStreak = unavailable
+            }
+            MbCanSeatSlot.RearRight -> {
+                rearRightUnknownStreak = unknown
+                rearRightUnavailableStreak = unavailable
             }
         }
     }
@@ -135,6 +168,7 @@ internal class MbCanSignalStateEngine(
             else -> MbCanBinaryState.Unknown
         }
 
+        /** Front seat heat + ventilation raw values (1 off, 2–4 heat, 5–7 vent). */
         fun decodeSeatModeRaw(raw: Int): MbCanSeatModeState = when (raw) {
             1 -> MbCanSeatModeState.Off
             2 -> MbCanSeatModeState.Heat(1)
@@ -143,6 +177,15 @@ internal class MbCanSignalStateEngine(
             5 -> MbCanSeatModeState.Vent(1)
             6 -> MbCanSeatModeState.Vent(2)
             7 -> MbCanSeatModeState.Vent(3)
+            else -> MbCanSeatModeState.Unknown
+        }
+
+        /** Rear seat heating only ([MBVehicleProperty] 318 / 319): 1 off, 2–4 heat levels. */
+        fun decodeRearSeatHeatRaw(raw: Int): MbCanSeatModeState = when (raw) {
+            1 -> MbCanSeatModeState.Off
+            2 -> MbCanSeatModeState.Heat(1)
+            3 -> MbCanSeatModeState.Heat(2)
+            4 -> MbCanSeatModeState.Heat(3)
             else -> MbCanSeatModeState.Unknown
         }
     }

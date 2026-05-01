@@ -109,6 +109,10 @@ object MbCanKnownVehiclePropertyId {
     const val STEERING_WHEEL_HEAT_SWITCH = 188
     const val FRONT_LEFT_SEAT_HEAT_VENT_SWITCH = 138
     const val FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH = 139
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_LR_HEATVENTSW] — rear heat only (values 1–4). */
+    const val REAR_LEFT_SEAT_HEAT_SWITCH = 318
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_RR_HEATVENTSW] — rear heat only (values 1–4). */
+    const val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
 }
 
 object MbCanCommandRegistry {
@@ -131,6 +135,16 @@ object MbCanCommandRegistry {
             propertyId = MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
             policy = MbCanCommandPolicy.SetExact(allowedValues = (1..7).toSet()),
             refreshSignal = MbCanSignal.FrontRightSeatMode
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..4).toSet()),
+            refreshSignal = MbCanSignal.RearLeftSeatMode
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..4).toSet()),
+            refreshSignal = MbCanSignal.RearRightSeatMode
         )
     ).associateBy { it.propertyId }
 
