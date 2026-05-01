@@ -64,7 +64,12 @@ data class FloatingDashboardWidgetConfig(
      * Optional tile title override. When blank, widgets use their default title strings.
      * When non-blank, shown instead of the default title where a title row is displayed.
      */
-    val customTitle: String = ""
+    val customTitle: String = "",
+    /**
+     * Decimal places for numeric values from the tile data provider on this tile.
+     * `null` — built-in default per data key; `0`..`2` — fixed fraction digits where applicable.
+     */
+    val valueAccuracy: Int? = null
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */

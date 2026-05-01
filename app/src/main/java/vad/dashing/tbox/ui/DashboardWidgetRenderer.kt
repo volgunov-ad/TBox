@@ -51,10 +51,10 @@ fun DashboardWidgetRenderer(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     enableMusicInnerInteractions: Boolean = true,
-    fuelTankLiters: Int = 57
 ) {
     val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
+    val valueAccuracy = widgetConfig.valueAccuracy
     when (widget.dataKey) {
         "netWidget" -> {
             DashboardNetWidgetItem(
@@ -115,7 +115,8 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 onClick = onClick,
                 onLongClick = onLongClick,
-                canViewModel = canViewModel,
+                dataProvider = dataProvider,
+                valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
@@ -132,7 +133,8 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 onClick = onClick,
                 onLongClick = onLongClick,
-                canViewModel = canViewModel,
+                dataProvider = dataProvider,
+                valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
@@ -150,6 +152,8 @@ fun DashboardWidgetRenderer(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 canViewModel = canViewModel,
+                dataProvider = dataProvider,
+                valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
@@ -164,6 +168,8 @@ fun DashboardWidgetRenderer(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 canViewModel = canViewModel,
+                dataProvider = dataProvider,
+                valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
@@ -177,7 +183,8 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 onClick = onClick,
                 onLongClick = onLongClick,
-                canViewModel = canViewModel,
+                dataProvider = dataProvider,
+                valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
@@ -194,8 +201,8 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 onClick = onClick,
                 onLongClick = onLongClick,
-                canViewModel = canViewModel,
-                fuelTankLiters = fuelTankLiters,
+                dataProvider = dataProvider,
+                valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
@@ -212,7 +219,8 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 onClick = onClick,
                 onLongClick = onLongClick,
-                canViewModel = canViewModel,
+                dataProvider = dataProvider,
+                valueAccuracy = valueAccuracy,
                 elevation = elevation,
                 shape = shape,
                 showTitle = widgetConfig.showTitle,
@@ -320,6 +328,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                valueAccuracy = widgetConfig.valueAccuracy,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
