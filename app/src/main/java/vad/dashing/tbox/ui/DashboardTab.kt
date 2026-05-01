@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,6 +96,8 @@ fun MainDashboardTab(
     val widgetConfigs = remember(widgetsConfig, totalWidgets) {
         normalizeWidgetConfigs(widgetsConfig, totalWidgets)
     }
+    val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
+    var pendingMusicSelection by remember { mutableStateOf<Pair<Int, String>?>(null) }
     var pendingSeatHeatVentVariant by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val panelNeedsMbCan = remember(widgetConfigs) {
         MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
@@ -143,6 +146,23 @@ fun MainDashboardTab(
         if (!restartEnabled) {
             delay(15000) // Блокировка на 15 секунд
             restartEnabled = true
+        }
+    }
+
+    LaunchedEffect(pendingMusicSelection, totalWidgets) {
+        val pending = pendingMusicSelection ?: return@LaunchedEffect
+        delay(2000)
+        if (pendingMusicSelection != pending) return@LaunchedEffect
+        persistDashboardPanelMediaSelectedPlayer(
+            currentWidgetConfigs = latestWidgetConfigs,
+            widgetIndex = pending.first,
+            selectedPackage = pending.second,
+            saveConfigs = { configs ->
+                settingsViewModel.saveDashboardWidgets(configs)
+            }
+        )
+        if (pendingMusicSelection == pending) {
+            pendingMusicSelection = null
         }
     }
 
@@ -231,11 +251,7 @@ fun MainDashboardTab(
                                         },
                                         onLongClick = { showDialogForIndex = index },
                                         onMusicSelectedPlayerChange = { selectedPackage ->
-                                            settingsViewModel.saveDashboardMediaSelectedPlayer(
-                                                widgetIndex = index,
-                                                widgetCount = totalWidgets,
-                                                selectedPackage = selectedPackage
-                                            )
+                                            pendingMusicSelection = index to selectedPackage
                                         },
                                         onSeatHeatVentSelectedVariantChange = { variant ->
                                             pendingSeatHeatVentVariant = index to variant

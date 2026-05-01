@@ -186,7 +186,7 @@ fun MainScreenDashboardPanel(
     }
     LaunchedEffect(pendingMusicSelection, panel.id) {
         val pending = pendingMusicSelection ?: return@LaunchedEffect
-        delay(220)
+        delay(2000)
         if (pendingMusicSelection != pending) return@LaunchedEffect
         persistDashboardPanelMediaSelectedPlayer(
             currentWidgetConfigs = latestWidgetConfigs,
