@@ -200,8 +200,6 @@ fun MainScreenDashboardPanel(
         }
     }
 
-    val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
-
     val dataProvider = remember(context) {
         TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, settingsViewModel, context)
     }
@@ -402,7 +400,6 @@ fun MainScreenDashboardPanel(
                     )
                 }
             },
-            fuelTankLiters = fuelTankLiters,
             onRestartRequested = {
                 if (restartEnabled) {
                     restartEnabled = false

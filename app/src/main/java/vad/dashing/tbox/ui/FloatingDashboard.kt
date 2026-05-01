@@ -157,8 +157,6 @@ fun FloatingDashboard(
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
-    val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
-
     // Состояния
     var isEditMode by remember { mutableStateOf(false) }
     var isDraggingMode by remember { mutableStateOf(false) }
@@ -401,7 +399,6 @@ fun FloatingDashboard(
                     showTboxDisconnectIndicator = panelConfig.showTboxDisconnectIndicator,
                     enableMusicInnerInteractions = !isEditMode,
                     externalWidgetHost = appWidgetHost,
-                    fuelTankLiters = fuelTankLiters
                 )
                 if (isEditMode) {
                     // Reserve panel resize corner to avoid accidental tile long-press there.

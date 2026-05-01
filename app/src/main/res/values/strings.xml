@@ -65,6 +65,12 @@
     <string name="widget_custom_title_label">Заголовок</string>
     <string name="widget_custom_title_hint">Пусто — по умолчанию</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
+    <string name="widget_value_accuracy_title">Знаков после запятой</string>
+    <string name="widget_value_accuracy_desc">По умолчанию — как задано для каждого параметра в приложении.</string>
+    <string name="widget_value_accuracy_default">По умолчанию</string>
+    <string name="widget_value_accuracy_0">0</string>
+    <string name="widget_value_accuracy_1">1</string>
+    <string name="widget_value_accuracy_2">2</string>
     <string name="widget_title_gear_box_mode_temp">Режим и температура КПП</string>
     <string name="widget_title_motor_hours_total_trip">Моточасы (общ. и за поездку)</string>
     <string name="widget_title_temp_outside_inside">Темп. снаружи и внутри</string>
