@@ -25,6 +25,16 @@ interface DataProvider {
     fun getValueFlow(key: String, accuracy: Int? = null): StateFlow<String>
 }
 
+/** Keys for composite tiles only — same CAN data as public keys, different default decimal places. */
+object DashboardCompositeTileFlowKeys {
+    const val ENGINE_TEMP_VOLTAGE_ENGINE = "engineTemperature_voltageEngineTile"
+    const val GEARBOX_OIL_TEMP_GEAR_TILE = "gearBoxOilTemperature_gearBoxTile"
+    const val WHEEL1_PRESSURE_WHEELS_TILE = "wheel1Pressure_wheelsTile"
+    const val WHEEL2_PRESSURE_WHEELS_TILE = "wheel2Pressure_wheelsTile"
+    const val WHEEL3_PRESSURE_WHEELS_TILE = "wheel3Pressure_wheelsTile"
+    const val WHEEL4_PRESSURE_WHEELS_TILE = "wheel4Pressure_wheelsTile"
+}
+
 private data class ValueFlowCacheKey(val key: String, val accuracy: Int?)
 
 class TboxDataProvider(
@@ -76,6 +86,19 @@ class TboxDataProvider(
             "wheel2Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel2, eff(2)) }
             "wheel3Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel3, eff(2)) }
             "wheel4Pressure" -> canViewModel.wheelsPressure.mapState { valueToString(it.wheel4, eff(2)) }
+            // Composite wheels tiles historically formatted pressure with 1 decimal (not 2 like solo keys).
+            DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE -> canViewModel.wheelsPressure.mapState {
+                valueToString(it.wheel1, eff(1))
+            }
+            DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE -> canViewModel.wheelsPressure.mapState {
+                valueToString(it.wheel2, eff(1))
+            }
+            DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE -> canViewModel.wheelsPressure.mapState {
+                valueToString(it.wheel3, eff(1))
+            }
+            DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE -> canViewModel.wheelsPressure.mapState {
+                valueToString(it.wheel4, eff(1))
+            }
             "wheel1Temperature" -> canViewModel.wheelsTemperature.mapState {
                 valueToString(it.wheel1, eff(0))
             }
@@ -115,8 +138,16 @@ class TboxDataProvider(
                 valueToString(it, eff(1))
             }
             "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, eff(1)) }
+            // Voltage+engine composite used integer °C for engine line when accuracy is default.
+            DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE -> canViewModel.engineTemperature.mapState {
+                valueToString(it, eff(0))
+            }
             "gearBoxOilTemperature" -> canViewModel.gearBoxOilTemperature.mapState {
                 valueToString(it, eff(1))
+            }
+            // Gearbox composite used integer °C for oil temperature when accuracy is default.
+            DashboardCompositeTileFlowKeys.GEARBOX_OIL_TEMP_GEAR_TILE -> canViewModel.gearBoxOilTemperature.mapState {
+                valueToString(it, eff(0))
             }
             "gearBoxCurrentGear" -> canViewModel.gearBoxCurrentGear.mapState { valueToString(it, eff(1)) }
             "gearBoxPreparedGear" -> canViewModel.gearBoxPreparedGear.mapState { valueToString(it, eff(1)) }

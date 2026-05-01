@@ -41,10 +41,18 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
     val wheelsTemperature by canViewModel.wheelsTemperature.collectAsStateWithLifecycle()
-    val p1 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel1Pressure", valueAccuracy) }
-    val p2 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel2Pressure", valueAccuracy) }
-    val p3 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel3Pressure", valueAccuracy) }
-    val p4 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel4Pressure", valueAccuracy) }
+    val p1 = remember(valueAccuracy) {
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE, valueAccuracy)
+    }
+    val p2 = remember(valueAccuracy) {
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE, valueAccuracy)
+    }
+    val p3 = remember(valueAccuracy) {
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE, valueAccuracy)
+    }
+    val p4 = remember(valueAccuracy) {
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE, valueAccuracy)
+    }
     val t1 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel1Temperature", valueAccuracy) }
     val t2 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel2Temperature", valueAccuracy) }
     val t3 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel3Temperature", valueAccuracy) }

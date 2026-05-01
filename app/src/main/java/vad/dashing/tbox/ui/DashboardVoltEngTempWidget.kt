@@ -43,7 +43,7 @@ fun DashboardVoltEngTempWidgetItem(
         dataProvider.getValueFlow("voltage", valueAccuracy)
     }
     val engineTempFlow = remember(valueAccuracy) {
-        dataProvider.getValueFlow("engineTemperature", valueAccuracy)
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE, valueAccuracy)
     }
     val voltageStr by voltageFlow.collectAsStateWithLifecycle()
     val engineTempStr by engineTempFlow.collectAsStateWithLifecycle()

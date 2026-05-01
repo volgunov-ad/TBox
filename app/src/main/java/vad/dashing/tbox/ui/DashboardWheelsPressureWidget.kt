@@ -39,10 +39,18 @@ fun DashboardWheelsPressureWidgetItem(
     backgroundColor: Color? = null
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
-    val w1Flow = remember(valueAccuracy) { dataProvider.getValueFlow("wheel1Pressure", valueAccuracy) }
-    val w2Flow = remember(valueAccuracy) { dataProvider.getValueFlow("wheel2Pressure", valueAccuracy) }
-    val w3Flow = remember(valueAccuracy) { dataProvider.getValueFlow("wheel3Pressure", valueAccuracy) }
-    val w4Flow = remember(valueAccuracy) { dataProvider.getValueFlow("wheel4Pressure", valueAccuracy) }
+    val w1Flow = remember(valueAccuracy) {
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL1_PRESSURE_WHEELS_TILE, valueAccuracy)
+    }
+    val w2Flow = remember(valueAccuracy) {
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL2_PRESSURE_WHEELS_TILE, valueAccuracy)
+    }
+    val w3Flow = remember(valueAccuracy) {
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL3_PRESSURE_WHEELS_TILE, valueAccuracy)
+    }
+    val w4Flow = remember(valueAccuracy) {
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE, valueAccuracy)
+    }
     val w1Str by w1Flow.collectAsStateWithLifecycle()
     val w2Str by w2Flow.collectAsStateWithLifecycle()
     val w3Str by w3Flow.collectAsStateWithLifecycle()

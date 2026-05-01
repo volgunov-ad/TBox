@@ -46,7 +46,7 @@ fun DashboardGearBoxWidgetItem(
         dataProvider.getValueFlow("gearBoxCurrentGear", valueAccuracy)
     }
     val oilFlow = remember(valueAccuracy) {
-        dataProvider.getValueFlow("gearBoxOilTemperature", valueAccuracy)
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.GEARBOX_OIL_TEMP_GEAR_TILE, valueAccuracy)
     }
     val gearBoxMode by modeFlow.collectAsStateWithLifecycle()
     val gearStr by gearFlow.collectAsStateWithLifecycle()
