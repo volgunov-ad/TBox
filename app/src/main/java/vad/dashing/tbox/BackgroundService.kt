@@ -23,11 +23,15 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
+import kotlin.math.min
+import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationJson
+import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.utils.CanFramesProcess
@@ -68,6 +72,8 @@ class BackgroundService : Service() {
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     private lateinit var canDataSaveCount: StateFlow<Int>
     private lateinit var fuelTankLitersSetting: StateFlow<Int>
+    private lateinit var fuelCalibrationJsonSetting: StateFlow<String>
+    private lateinit var fuelCalibrationZoneCountSetting: StateFlow<Int>
     private lateinit var fuelPriceFuelIdSetting: StateFlow<Int>
     private lateinit var splitTripTimeMinutesSetting: StateFlow<Int>
     private val fuelPriceClient by lazy { FuelPriceClient() }
@@ -106,6 +112,8 @@ class BackgroundService : Service() {
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
+    /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
+    private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
     /** Serializes delayed / repeated "open MainActivity" commands: each new request replaces the previous. */
     private var openMainActivityJob: Job? = null
@@ -350,6 +358,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.canDataSaveCount)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
                 .stateIn(scope, eager, settingsSnap.fuelTankLiters)
+            fuelCalibrationJsonSetting = settingsManager.fuelCalibrationJsonFlow
+                .stateIn(scope, eager, settingsSnap.fuelCalibrationJson)
+            fuelCalibrationZoneCountSetting = settingsManager.fuelCalibrationZoneCountFlow
+                .stateIn(scope, eager, settingsSnap.fuelCalibrationZoneCount)
             fuelPriceFuelIdSetting = settingsManager.fuelPriceFuelIdFlow
                 .stateIn(scope, eager, settingsSnap.fuelPriceFuelId)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
@@ -389,6 +401,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, 5)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
                 .stateIn(scope, eager, 57)
+            fuelCalibrationJsonSetting = settingsManager.fuelCalibrationJsonFlow
+                .stateIn(scope, eager, "")
+            fuelCalibrationZoneCountSetting = settingsManager.fuelCalibrationZoneCountFlow
+                .stateIn(scope, eager, 5)
             fuelPriceFuelIdSetting = settingsManager.fuelPriceFuelIdFlow
                 .stateIn(scope, eager, FuelTypes.DEFAULT_FUEL_ID)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
@@ -605,6 +621,7 @@ class BackgroundService : Service() {
                         startPeriodicJob()
                         yield()
                         startDataListener()
+                        startFuelCalibratedLitersWatcher()
                         timingMark("startup_listeners")
                         if (startFromBoot) {
                             maybeOpenMainScreenAfterBootSuspend()
@@ -674,6 +691,7 @@ class BackgroundService : Service() {
                     stopPeriodicJob()
                     stopSettingsListener()
                     stopDataListener()
+                    stopFuelCalibratedLitersWatcher()
                     scope.launch { finalizeTripsOnServiceStop() }
                     stopStateBroadcastListener()
                     stopReadAllSMS()
@@ -1765,6 +1783,77 @@ class BackgroundService : Service() {
     private fun stopDataListener() {
         dataListenerJob?.cancel()
         dataListenerJob = null
+    }
+
+    /**
+     * Создаёт оценщик топлива; сохранение калибровки — в DataStore через [SettingsManager.saveFuelCalibrationJson].
+     */
+    private fun buildFuelEstimator(
+        tankLiters: Int,
+        zoneCount: Int,
+        calibrationJson: String,
+    ): FuelSmartEstimator {
+        val cap = tankLiters.coerceAtLeast(1).toDouble()
+        val zones = zoneCount.coerceIn(3, 20)
+        val decoded = FuelCalibrationJson.decode(calibrationJson)
+            ?.takeIf { it.realLiters.size == zones }
+        val sensorMin = cap * 2.0 / 50.0
+        val sensorMax = min(cap * 48.0 / 50.0, cap - 1e-3)
+        return FuelSmartEstimator(
+            tankCapacity = cap,
+            sensorMin = sensorMin,
+            sensorMax = sensorMax,
+            zoneCount = zones,
+            initialCalibration = decoded,
+            onCalibrationPersist = { data ->
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        settingsManager.saveFuelCalibrationJson(FuelCalibrationJson.encode(data))
+                    } catch (e: Exception) {
+                        Log.e("Fuel calibration", "Ошибка сохранения калибровки", e)
+                    }
+                }
+            },
+        )
+    }
+
+    private fun startFuelCalibratedLitersWatcher() {
+        if (fuelCalibratedLitersJob?.isActive == true) return
+        fuelCalibratedLitersJob = scope.launch {
+            var lastEstimatorKey: Triple<Int, Int, String>? = null
+            var estimator: FuelSmartEstimator? = null
+            combine(
+                fuelTankLitersSetting,
+                fuelCalibrationZoneCountSetting,
+                fuelCalibrationJsonSetting,
+                CanDataRepository.fuelLevelPercentageFiltered,
+                CanDataRepository.outsideTemperature,
+            ) { tank: Int, zones: Int, json: String, pct: UInt?, outT: Float? ->
+                val key = Triple(tank, zones, json)
+                if (lastEstimatorKey != key) {
+                    lastEstimatorKey = key
+                    estimator = buildFuelEstimator(tank, zones, json)
+                }
+                val est = estimator
+                if (est == null || pct == null) {
+                    CanDataRepository.updateFuelLevelCalibratedLiters(null)
+                    CanDataRepository.updateFuelCalibrationConfidence(null)
+                } else {
+                    val tankL = tank.coerceAtLeast(1).toFloat()
+                    val sensorLiters = pct.toFloat() / 100f * tankL
+                    val temp = (outT ?: 15f).toDouble()
+                    val result = est.getCorrectedLiters(sensorLiters.toDouble(), temp)
+                    CanDataRepository.updateFuelLevelCalibratedLiters(result.liters.toFloat())
+                    CanDataRepository.updateFuelCalibrationConfidence(result.confidence.toFloat())
+                }
+                Unit
+            }.collect { }
+        }
+    }
+
+    private fun stopFuelCalibratedLitersWatcher() {
+        fuelCalibratedLitersJob?.cancel()
+        fuelCalibratedLitersJob = null
     }
 
     private fun startSettingsListener() {

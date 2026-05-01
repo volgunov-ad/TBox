@@ -26,6 +26,8 @@ class BackgroundServiceSettingsSnapshotTest {
         assertTrue(snap.getLocData)
         assertEquals(5, snap.canDataSaveCount)
         assertEquals(57, snap.fuelTankLiters)
+        assertEquals("", snap.fuelCalibrationJson)
+        assertEquals(5, snap.fuelCalibrationZoneCount)
         assertEquals(FuelTypes.DEFAULT_FUEL_ID, snap.fuelPriceFuelId)
         assertEquals(5, snap.splitTripTimeMinutes)
         assertTrue(snap.floatingDashboards.isEmpty())
