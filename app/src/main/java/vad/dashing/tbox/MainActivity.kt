@@ -24,6 +24,7 @@ import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
 import vad.dashing.tbox.ui.TboxApp
+import vad.dashing.tbox.ui.applyHeadUnitFullscreenLayout
 import vad.dashing.tbox.ui.disposeAppLauncherPickerIconCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -128,6 +129,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         MainActivityLoadTimings.mark("main_after_super")
 
+        applyHeadUnitFullscreenLayout()
+
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         MainActivityLoadTimings.mark("main_after_managers")
@@ -223,6 +226,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyHeadUnitFullscreenLayout()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyHeadUnitFullscreenLayout()
     }
 
     private fun startBackgroundService() {

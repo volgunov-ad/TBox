@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.TBox" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.TBox" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Edge-to-edge under cutout notch / curved glass (minSdk 28). -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
 </resources>
