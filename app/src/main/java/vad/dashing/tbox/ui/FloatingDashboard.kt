@@ -77,7 +77,8 @@ fun FloatingDashboardUI(
     )
     )
     val appDataViewModel: AppDataViewModel = viewModel(factory = AppDataViewModelFactory(
-        appDataManager
+        appDataManager,
+        settingsManager,
     )
     )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()

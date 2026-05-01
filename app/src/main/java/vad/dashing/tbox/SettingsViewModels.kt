@@ -715,6 +715,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 57
         )
 
+    val fuelCalibrationJson = settingsManager.fuelCalibrationJsonFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val fuelCalibrationZoneCount = settingsManager.fuelCalibrationZoneCountFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 5
+        )
+
     val fuelPriceFuelId = settingsManager.fuelPriceFuelIdFlow
         .stateIn(
             scope = viewModelScope,

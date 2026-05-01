@@ -452,6 +452,8 @@
     <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
 
     <string name="trips_delete">Удалить поездку</string>
+    <string name="trips_delete_confirm_title">Удалить поездку?</string>
+    <string name="trips_delete_confirm_message">Запись поездки и связанные с ней данные в журнале будут удалены без восстановления.</string>
     <string name="trips_finish">Завершить</string>
     <string name="trips_name_label">Название поездки</string>
     <string name="trips_add_favorite">В избранное</string>
@@ -496,12 +498,23 @@
     <string name="refuels_coordinates">Координаты</string>
     <string name="refuels_fuel_before">Топливо до, %</string>
     <string name="refuels_fuel_after">Топливо после, %</string>
+    <string name="refuels_ambient_temp">Т снаружи, °C</string>
     <string name="refuels_estimated_liters">Расчётные литры</string>
     <string name="refuels_actual_liters">Фактические литры</string>
     <string name="refuels_fuel_type">Топливо</string>
     <string name="refuels_price">Цена</string>
     <string name="refuels_price_source">АЗС</string>
     <string name="refuels_cost">Стоимость</string>
+    <string name="refuels_calibration_train">Обучение</string>
+    <string name="refuels_calibration_section_title">Калибровка уровня топлива</string>
+    <string name="refuels_calibration_tank_hint">Смена объёма сбрасывает калибровку</string>
+    <string name="refuels_calibration_zones_title">Число зон калибровки</string>
+    <string name="refuels_calibration_zones_hint">Смена числа зон сбрасывает калибровку</string>
+    <string name="refuels_calibration_report_title">Состояние зон</string>
+    <string name="refuels_calibration_reset">Сбросить калибровку</string>
+    <string name="refuels_calibration_trained">Учтена</string>
+    <string name="refuels_delete_confirm_title">Удалить заправку?</string>
+    <string name="refuels_delete_confirm_message">Запись будет удалена из журнала без восстановления.</string>
     <string name="refuels_actions">Действия</string>
     <string name="refuels_coordinates_copied">Координаты скопированы</string>
     <string name="toast_refuel_waiting_coordinates">Выполнена заправка. Ожидание координат</string>
@@ -509,6 +522,12 @@
     <string name="toast_refuel_searching_fuel_price">Поиск цены топлива</string>
     <string name="toast_refuel_fuel_price_not_found">Цена топлива не найдена</string>
     <string name="toast_refuel_fuel_cost_saved">Стоимость топлива записана в журнал заправок</string>
+    <string name="toast_fuel_calibration_ok">Калибровка обновлена по этой заправке</string>
+    <string name="toast_fuel_calibration_refuel_not_found">Заправка не найдена</string>
+    <string name="toast_fuel_calibration_already_used">Эта заправка уже использовалась для обучения</string>
+    <string name="toast_fuel_calibration_no_percent">Нет данных по процентам до/после</string>
+    <string name="toast_fuel_calibration_no_liters">Укажите фактические литры (по чеку)</string>
+    <string name="toast_fuel_calibration_filter_reject">Заправка не прошла проверку: слишком большой разрыв датчика и литров по чеку</string>
     <string name="dialog_save_refuels_downloads">Сохранить журнал заправок в один файл в папку Загрузки</string>
     <string name="data_title_net_widget">Виджет сигнала сети</string>
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>

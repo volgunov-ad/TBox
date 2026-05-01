@@ -1130,6 +1130,23 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    /** Объём бака и сброс JSON калибровки в одной транзакции DataStore. */
+    suspend fun saveFuelTankLitersAndClearFuelCalibration(liters: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_TANK_LITERS_KEY] = liters.coerceIn(1, 500)
+            preferences[FUEL_CALIBRATION_JSON_KEY] = ""
+        }
+    }
+
+    /** Число зон и сброс JSON калибровки. */
+    suspend fun saveFuelCalibrationZoneCountAndClearCalibration(zoneCount: Int) {
+        val z = zoneCount.coerceIn(FUEL_CALIBRATION_ZONE_COUNT_MIN, FUEL_CALIBRATION_ZONE_COUNT_MAX)
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_CALIBRATION_ZONE_COUNT_KEY] = z
+            preferences[FUEL_CALIBRATION_JSON_KEY] = ""
+        }
+    }
+
     suspend fun saveFuelCalibrationJson(json: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[FUEL_CALIBRATION_JSON_KEY] = json

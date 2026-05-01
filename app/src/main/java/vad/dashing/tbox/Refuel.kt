@@ -23,6 +23,15 @@ private const val JSON_REFUEL_FUEL_NAME = "fuelName"
 private const val JSON_REFUEL_PRICE_PER_LITER_RUB = "pricePerLiterRub"
 private const val JSON_REFUEL_PRICE_SOURCE_NAME = "priceSourceName"
 private const val JSON_REFUEL_COST_RUB = "costRub"
+private const val JSON_REFUEL_USED_FOR_CALIBRATION = "usedForFuelCalibration"
+private const val JSON_REFUEL_AMBIENT_TEMP = "ambientTempAtRefuel"
+
+/** Если температура снаружи в момент заправки неизвестна — для калибровки и отображения подставляется это значение, °C. */
+internal const val REFUEL_AMBIENT_TEMP_DEFAULT_C = 15f
+
+/** Температура для термокомпенсации при обучении калибровки. */
+internal fun RefuelRecord.ambientTempForCalibrationC(): Double =
+    (ambientTempAtRefuel ?: REFUEL_AMBIENT_TEMP_DEFAULT_C).toDouble()
 
 data class RefuelRecord(
     val id: String = UUID.randomUUID().toString(),
@@ -40,6 +49,10 @@ data class RefuelRecord(
     val pricePerLiterRub: Float? = null,
     val priceSourceName: String? = null,
     val costRub: Float? = pricePerLiterRub?.let { actualLiters * it },
+    /** Уже использована для обучения калибровки уровня топлива. */
+    val usedForFuelCalibration: Boolean = false,
+    /** Температура снаружи в момент записи заправки (для термокомпенсации при train). */
+    val ambientTempAtRefuel: Float? = null,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put(JSON_REFUEL_ID, id)
@@ -57,6 +70,8 @@ data class RefuelRecord(
         if (pricePerLiterRub != null) put(JSON_REFUEL_PRICE_PER_LITER_RUB, pricePerLiterRub.toDouble())
         if (!priceSourceName.isNullOrBlank()) put(JSON_REFUEL_PRICE_SOURCE_NAME, priceSourceName)
         if (costRub != null) put(JSON_REFUEL_COST_RUB, costRub.toDouble())
+        put(JSON_REFUEL_USED_FOR_CALIBRATION, usedForFuelCalibration)
+        if (ambientTempAtRefuel != null) put(JSON_REFUEL_AMBIENT_TEMP, ambientTempAtRefuel.toDouble())
     }
 
     companion object {
@@ -102,6 +117,10 @@ data class RefuelRecord(
                 pricePerLiterRub = pricePerLiter,
                 priceSourceName = o.optString(JSON_REFUEL_PRICE_SOURCE_NAME).ifBlank { null },
                 costRub = cost,
+                usedForFuelCalibration = o.optBoolean(JSON_REFUEL_USED_FOR_CALIBRATION, false),
+                ambientTempAtRefuel = if (o.has(JSON_REFUEL_AMBIENT_TEMP) && !o.isNull(JSON_REFUEL_AMBIENT_TEMP)) {
+                    o.optDouble(JSON_REFUEL_AMBIENT_TEMP).toFloat()
+                } else null,
             )
         }
     }
@@ -181,6 +200,34 @@ object RefuelRepository {
         }
     }
 
+    /**
+     * Пересчёт [RefuelRecord.estimatedLiters] из разницы процентов и номинального объёма бака (поездки не трогаем).
+     */
+    fun recalculateEstimatedLitersForNominalTank(tankLiters: Int) {
+        val tank = tankLiters.coerceAtLeast(1).toFloat()
+        synchronized(lock) {
+            _refuels.update { list ->
+                list.map { r ->
+                    val before = r.fuelPercentBefore
+                    val after = r.fuelPercentAfter
+                    if (before != null && after != null) {
+                        val delta = (after - before).coerceAtLeast(0f)
+                        r.copy(estimatedLiters = delta / 100f * tank)
+                    } else {
+                        r
+                    }
+                }
+            }
+        }
+    }
+
+    /** Сброс флагов «участвовала в калибровке» (после сброса калибровки в настройках). */
+    fun clearFuelCalibrationUsageFlags() {
+        synchronized(lock) {
+            _refuels.update { list -> list.map { it.copy(usedForFuelCalibration = false) } }
+        }
+    }
+
     fun updateActualLiters(id: String, liters: Float) {
         updateRefuelCostInput(id) { refuel ->
             val actual = liters.coerceAtLeast(0f)
@@ -213,6 +260,12 @@ object RefuelRepository {
     fun updatePriceSourceName(id: String, priceSourceName: String?) {
         updateRefuelCostInput(id) { refuel ->
             refuel.copy(priceSourceName = priceSourceName?.trim()?.ifBlank { null })
+        }
+    }
+
+    fun updateAmbientTempAtRefuel(id: String, degreesC: Float) {
+        updateRefuelCostInput(id) { refuel ->
+            refuel.copy(ambientTempAtRefuel = degreesC)
         }
     }
 

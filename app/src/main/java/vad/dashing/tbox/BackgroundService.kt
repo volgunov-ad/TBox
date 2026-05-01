@@ -31,6 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationJson
+import vad.dashing.tbox.fuellevelcalibration.FuelEntry
+import vad.dashing.tbox.fuellevelcalibration.FuelFilter
 import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -283,6 +285,9 @@ class BackgroundService : Service() {
          * persist snapshot). Used after settings backup import while the service is running.
          */
         const val ACTION_RELOAD_TRIPS_FROM_STORE = "vad.dashing.tbox.RELOAD_TRIPS_FROM_STORE"
+        /** Обучение калибровки уровня топлива по одной записи заправки ([EXTRA_REFUEL_ID]). */
+        const val ACTION_FUEL_CALIBRATION_TRAIN = "vad.dashing.tbox.FUEL_CALIBRATION_TRAIN"
+        const val EXTRA_REFUEL_ID = "vad.dashing.tbox.EXTRA_REFUEL_ID"
         /**
          * Bring [MainActivity] to the foreground (singleTask). Optional delay via [EXTRA_OPEN_MAIN_DELAY_MS].
          * Repeated intents cancel the previous scheduled launch and start a new timer.
@@ -671,6 +676,14 @@ class BackgroundService : Service() {
                             TripRepository.setTripsProcessingEnabled(true)
                         }
                     }
+                }
+            }
+            ACTION_FUEL_CALIBRATION_TRAIN -> {
+                val refuelId = intent.getStringExtra(EXTRA_REFUEL_ID)?.trim().orEmpty()
+                if (refuelId.isNotEmpty()) {
+                    runFuelCalibrationTrain(refuelId)
+                } else {
+                    TboxRepository.addLog("WARN", "Fuel calibration", "train: пустой refuel id")
                 }
             }
             ACTION_STOP -> {
@@ -1271,6 +1284,8 @@ class BackgroundService : Service() {
             actualLiters = refueledLiters,
             fuelId = fuelType.id,
             fuelName = fuelType.label,
+            ambientTempAtRefuel = CanDataRepository.outsideTemperature.value
+                ?: REFUEL_AMBIENT_TEMP_DEFAULT_C,
         )
         RefuelRepository.appendRefuel(refuel)
         maybePersistRefuels(force = true)
@@ -1786,8 +1801,68 @@ class BackgroundService : Service() {
     }
 
     /**
-     * Создаёт оценщик топлива; сохранение калибровки — в DataStore через [SettingsManager.saveFuelCalibrationJson].
+     * Одна итерация обучения по сохранённой заправке: проверка фильтра, [FuelSmartEstimator.train], флаг в репозитории.
      */
+    private suspend fun runFuelCalibrationTrain(refuelId: String) {
+        val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+        val refuel = synchronized(RefuelRepository.lock) {
+            RefuelRepository.refuels.value.firstOrNull { it.id == refuelId }
+        }
+        if (refuel == null) {
+            showRefuelToast(getString(R.string.toast_fuel_calibration_refuel_not_found))
+            return
+        }
+        if (refuel.usedForFuelCalibration) {
+            showRefuelToast(getString(R.string.toast_fuel_calibration_already_used))
+            return
+        }
+        val beforePct = refuel.fuelPercentBefore
+        val afterPct = refuel.fuelPercentAfter
+        if (beforePct == null || afterPct == null) {
+            showRefuelToast(getString(R.string.toast_fuel_calibration_no_percent))
+            return
+        }
+        val checkLiters = refuel.actualLiters.toDouble()
+        if (checkLiters <= 0.0) {
+            showRefuelToast(getString(R.string.toast_fuel_calibration_no_liters))
+            return
+        }
+        val ambient = refuel.ambientTempForCalibrationC()
+        val sensorBefore = beforePct / 100.0 * tankL.toDouble()
+        val sensorAfter = afterPct / 100.0 * tankL.toDouble()
+        val entry = FuelEntry(
+            odometerKm = refuel.odometerKm?.toDouble() ?: 0.0,
+            sensorBefore = sensorBefore,
+            sensorAfter = sensorAfter,
+            litersByCheck = checkLiters,
+            ambientTemp = ambient,
+        )
+        val filter = FuelFilter()
+        if (!filter.isValid(entry)) {
+            TboxRepository.addLog(
+                "WARN",
+                "Fuel calibration",
+                "Отклонено фильтром: отклонение ${"%.0f".format(filter.calculateDeviation(entry) * 100)}%",
+            )
+            showRefuelToast(getString(R.string.toast_fuel_calibration_filter_reject))
+            return
+        }
+        val reportText = withContext(Dispatchers.Default) {
+            val json = fuelCalibrationJsonSetting.value
+            val zones = fuelCalibrationZoneCountSetting.value
+            val estimator = buildFuelEstimator(tankL.toInt(), zones, json)
+            estimator.train(entry)
+        }
+        synchronized(RefuelRepository.lock) {
+            val cur = RefuelRepository.refuels.value.firstOrNull { it.id == refuelId } ?: return@synchronized
+            RefuelRepository.replaceRefuel(cur.copy(usedForFuelCalibration = true))
+        }
+        maybePersistRefuels(force = true)
+        showRefuelToast(getString(R.string.toast_fuel_calibration_ok))
+        TboxRepository.addLog("INFO", "Fuel calibration", reportText)
+    }
+
+    /** Создаёт оценщик топлива; сохранение калибровки — в DataStore через [SettingsManager.saveFuelCalibrationJson]. */
     private fun buildFuelEstimator(
         tankLiters: Int,
         zoneCount: Int,

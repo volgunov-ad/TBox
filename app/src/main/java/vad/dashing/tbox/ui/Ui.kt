@@ -84,7 +84,8 @@ fun TboxApp(
     )
     )
     val appDataViewModel: AppDataViewModel = viewModel(factory = AppDataViewModelFactory(
-        appDataManager
+        appDataManager,
+        settingsManager,
     )
     )
 
@@ -372,7 +373,9 @@ fun TboxScreen(
                     )
                     5 -> RefuelsTab(
                         appDataViewModel = appDataViewModel,
+                        settingsViewModel = settingsViewModel,
                         onSaveToFile = onSaveToFile,
+                        onServiceCommand = onServiceCommand,
                     )
                     6 -> SettingsTab(
                         viewModel,

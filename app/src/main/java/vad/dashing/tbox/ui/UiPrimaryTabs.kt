@@ -271,7 +271,6 @@ fun SettingsTabContent(
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
 
     val canDataSaveCount by settingsViewModel.canDataSaveCount.collectAsStateWithLifecycle()
-    val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
     val fuelPriceFuelId by settingsViewModel.fuelPriceFuelId.collectAsStateWithLifecycle()
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
 
@@ -579,14 +578,6 @@ fun SettingsTabContent(
         )
 
         SettingsTitle(stringResource(R.string.settings_misc_title))
-        SettingInt(
-            fuelTankLiters,
-            { value -> settingsViewModel.saveFuelTankLiters(value) },
-            stringResource(R.string.settings_fuel_tank_liters_title),
-            "",
-            1,
-            500
-        )
         SettingDropdownGeneric(
             FuelTypes.optionFor(fuelPriceFuelId),
             { option -> settingsViewModel.saveFuelPriceFuelId(option.id) },
@@ -711,8 +702,8 @@ fun SettingsTabContent(
         if (showExportBackupDialog) {
             AlertDialog(
                 onDismissRequest = { showExportBackupDialog = false },
-                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
-                text = { Text(stringResource(R.string.dialog_save_backup_downloads)) },
+                title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
+                text = { AppAlertDialogText(stringResource(R.string.dialog_save_backup_downloads)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -720,12 +711,12 @@ fun SettingsTabContent(
                             showExportBackupDialog = false
                         }
                     ) {
-                        Text(stringResource(R.string.action_save))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                     }
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showExportBackupDialog = false }) {
-                        Text(stringResource(R.string.action_cancel))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
             )
@@ -734,8 +725,8 @@ fun SettingsTabContent(
         if (showExportBackupNoTripsDialog) {
             AlertDialog(
                 onDismissRequest = { showExportBackupNoTripsDialog = false },
-                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
-                text = { Text(stringResource(R.string.dialog_save_backup_downloads_no_trips)) },
+                title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
+                text = { AppAlertDialogText(stringResource(R.string.dialog_save_backup_downloads_no_trips)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -743,12 +734,12 @@ fun SettingsTabContent(
                             showExportBackupNoTripsDialog = false
                         }
                     ) {
-                        Text(stringResource(R.string.action_save))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                     }
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showExportBackupNoTripsDialog = false }) {
-                        Text(stringResource(R.string.action_cancel))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
             )
@@ -757,8 +748,8 @@ fun SettingsTabContent(
         if (showImportBackupDialog) {
             AlertDialog(
                 onDismissRequest = { showImportBackupDialog = false },
-                title = { Text(stringResource(R.string.dialog_backup_import_title)) },
-                text = { Text(stringResource(R.string.dialog_backup_import_message)) },
+                title = { AppAlertDialogTitle(stringResource(R.string.dialog_backup_import_title)) },
+                text = { AppAlertDialogText(stringResource(R.string.dialog_backup_import_message)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -766,12 +757,12 @@ fun SettingsTabContent(
                             showImportBackupDialog = false
                         }
                     ) {
-                        Text(stringResource(R.string.settings_backup_import_choose_file))
+                        AppAlertDialogButtonLabel(stringResource(R.string.settings_backup_import_choose_file))
                     }
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showImportBackupDialog = false }) {
-                        Text(stringResource(R.string.action_cancel))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
             )

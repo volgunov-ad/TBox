@@ -113,12 +113,36 @@ fun TripsTab(
     )
 
     var showExportDialog by remember { mutableStateOf(false) }
+    /** Id поездки, удаление которой подтверждается (не привязан к текущему выбору в списке). */
+    var pendingDeleteTripId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(trips, pendingDeleteTripId) {
+        val id = pendingDeleteTripId ?: return@LaunchedEffect
+        val t = trips.firstOrNull { it.id == id }
+        if (t == null || t.isActive) {
+            pendingDeleteTripId = null
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(18.dp)
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Button(
+                onClick = { if (trips.isNotEmpty()) showExportDialog = true },
+                enabled = trips.isNotEmpty()
+            ) {
+                Text(stringResource(R.string.trips_export), fontSize = 24.sp)
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -192,8 +216,8 @@ fun TripsTab(
             }
             Button(
                 onClick = {
-                    if (selectedId.isNotEmpty()) {
-                        appDataViewModel.deleteTrip(selectedId)
+                    if (selectedId.isNotEmpty() && selectedTrip != null && !selectedTrip.isActive) {
+                        pendingDeleteTripId = selectedId
                     }
                 },
                 enabled = selectedTrip != null && !selectedTrip.isActive
@@ -207,25 +231,37 @@ fun TripsTab(
             color = MaterialTheme.colorScheme.outlineVariant
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.End
-        ) {
-            Button(
-                onClick = { if (trips.isNotEmpty()) showExportDialog = true },
-                enabled = trips.isNotEmpty()
-            ) {
-                Text(stringResource(R.string.trips_export), fontSize = 24.sp)
+        pendingDeleteTripId?.let { tripId ->
+            val tripPendingDelete = trips.firstOrNull { it.id == tripId }
+            if (tripPendingDelete != null && !tripPendingDelete.isActive) {
+                AlertDialog(
+                    onDismissRequest = { pendingDeleteTripId = null },
+                    title = { AppAlertDialogTitle(stringResource(R.string.trips_delete_confirm_title)) },
+                    text = { AppAlertDialogText(stringResource(R.string.trips_delete_confirm_message)) },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                appDataViewModel.deleteTrip(tripId)
+                                pendingDeleteTripId = null
+                            },
+                        ) {
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_delete))
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(onClick = { pendingDeleteTripId = null }) {
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                        }
+                    },
+                )
             }
         }
 
         if (showExportDialog) {
             AlertDialog(
                 onDismissRequest = { showExportDialog = false },
-                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
-                text = { Text(stringResource(R.string.dialog_save_trips_downloads)) },
+                title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
+                text = { AppAlertDialogText(stringResource(R.string.dialog_save_trips_downloads)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -239,12 +275,12 @@ fun TripsTab(
                             showExportDialog = false
                         }
                     ) {
-                        Text(stringResource(R.string.action_save))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                     }
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showExportDialog = false }) {
-                        Text(stringResource(R.string.action_cancel))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
             )

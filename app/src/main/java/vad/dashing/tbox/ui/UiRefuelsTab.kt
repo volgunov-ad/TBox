@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.content.ClipData
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
@@ -8,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,12 +24,14 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -36,11 +40,13 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,151 +57,309 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.FuelTypeOption
 import vad.dashing.tbox.FuelTypes
 import vad.dashing.tbox.R
 import vad.dashing.tbox.RefuelRecord
+import vad.dashing.tbox.REFUEL_AMBIENT_TEMP_DEFAULT_C
+import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationReportFormatter
 import vad.dashing.tbox.valueToString
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RefuelsTab(
     appDataViewModel: AppDataViewModel,
+    settingsViewModel: SettingsViewModel,
     onSaveToFile: (String, List<String>) -> Unit,
+    onServiceCommand: (String, String, String) -> Unit,
 ) {
     val refuels by appDataViewModel.refuels.collectAsStateWithLifecycle()
+    val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
+    val fuelCalibrationJson by settingsViewModel.fuelCalibrationJson.collectAsStateWithLifecycle()
+    val fuelCalibrationZoneCount by settingsViewModel.fuelCalibrationZoneCount.collectAsStateWithLifecycle()
+    val reportLines = remember(fuelCalibrationJson, fuelTankLiters, fuelCalibrationZoneCount) {
+        FuelCalibrationReportFormatter.linesOrNull(fuelCalibrationJson, fuelTankLiters, fuelCalibrationZoneCount)
+    }
     val sortedRefuels = remember(refuels) { refuels.sortedByDescending { it.timeEpochMs } }
     val context = LocalContext.current
     val dateTimeFormat = remember {
         SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
     }
     var showExportDialog by remember { mutableStateOf(false) }
+    var pendingDeleteRefuelId by remember { mutableStateOf<String?>(null) }
     val actualEdits = remember { mutableStateMapOf<String, String>() }
     val priceEdits = remember { mutableStateMapOf<String, String>() }
     val sourceEdits = remember { mutableStateMapOf<String, String>() }
+    val tempEdits = remember { mutableStateMapOf<String, String>() }
 
     LaunchedEffect(refuels) {
         val ids = refuels.map { it.id }.toSet()
         actualEdits.keys.retainAll(ids)
         priceEdits.keys.retainAll(ids)
         sourceEdits.keys.retainAll(ids)
+        tempEdits.keys.retainAll(ids)
     }
 
-    Column(
+    var tankLitersDraft by remember { mutableStateOf(fuelTankLiters.toString()) }
+    LaunchedEffect(fuelTankLiters) {
+        tankLitersDraft = fuelTankLiters.toString()
+    }
+    var zoneCountDraft by remember { mutableStateOf(fuelCalibrationZoneCount.toString()) }
+    LaunchedEffect(fuelCalibrationZoneCount) {
+        zoneCountDraft = fuelCalibrationZoneCount.toString()
+    }
+
+    val calibrationScrollState = rememberScrollState()
+    val horizontalScrollState = rememberScrollState()
+    val listState = rememberLazyListState()
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .padding(18.dp)
+            .padding(18.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(
-                enabled = refuels.isNotEmpty(),
-                onClick = { showExportDialog = true },
-            ) {
-                Text(stringResource(R.string.refuels_export), fontSize = 22.sp)
-            }
-        }
+        val refuelAreaHeight = maxHeight / 2
 
-        if (refuels.isEmpty()) {
-            Text(
-                text = stringResource(R.string.refuels_empty),
-                modifier = Modifier.padding(top = 24.dp),
-                fontSize = 24.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        } else {
-            val horizontalScrollState = rememberScrollState()
-            val listState = rememberLazyListState()
+        Column(Modifier.fillMaxSize()) {
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    enabled = refuels.isNotEmpty(),
+                    onClick = { showExportDialog = true },
+                ) {
+                    Text(stringResource(R.string.refuels_export), fontSize = 22.sp)
+                }
+            }
+
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 16.dp)
+                    .fillMaxWidth()
+                    .height(refuelAreaHeight),
+            ) {
+                if (sortedRefuels.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.refuels_empty),
+                        modifier = Modifier.align(Alignment.Center),
+                        fontSize = 24.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                } else {
+                    Box(Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(end = 14.dp, bottom = 10.dp)
+                                .horizontalScroll(horizontalScrollState),
+                        ) {
+                            RefuelHeaderRow()
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                items(sortedRefuels.size, key = { sortedRefuels[it].id }) { index ->
+                                    val refuel = sortedRefuels[index]
+                                    RefuelTableRow(
+                                        refuel = refuel,
+                                        dateTimeFormat = dateTimeFormat,
+                                        tempDraft = tempEdits[refuel.id] ?: valueToString(
+                                            refuel.ambientTempAtRefuel ?: REFUEL_AMBIENT_TEMP_DEFAULT_C,
+                                            1,
+                                        ),
+                                        actualDraft = actualEdits[refuel.id] ?: valueToString(refuel.actualLiters, 1),
+                                        priceDraft = priceEdits[refuel.id] ?: (refuel.pricePerLiterRub?.let { valueToString(it, 2) } ?: ""),
+                                        sourceDraft = sourceEdits[refuel.id] ?: refuel.priceSourceName.orEmpty(),
+                                        onTempDraftChange = { tempEdits[refuel.id] = it },
+                                        onActualDraftChange = { actualEdits[refuel.id] = it },
+                                        onPriceDraftChange = { priceEdits[refuel.id] = it },
+                                        onSourceDraftChange = { sourceEdits[refuel.id] = it },
+                                        onTempCommit = { draft ->
+                                            parseLocalizedFloat(draft)?.let {
+                                                appDataViewModel.updateRefuelAmbientTemp(refuel.id, it)
+                                                tempEdits.remove(refuel.id)
+                                            }
+                                        },
+                                        onActualCommit = { draft ->
+                                            parseLocalizedFloat(draft)?.let {
+                                                appDataViewModel.updateRefuelActualLiters(refuel.id, it)
+                                                actualEdits.remove(refuel.id)
+                                            }
+                                        },
+                                        onPriceCommit = { draft ->
+                                            val price = parseLocalizedFloat(draft)
+                                            appDataViewModel.updateRefuelPricePerLiter(refuel.id, price)
+                                            priceEdits.remove(refuel.id)
+                                        },
+                                        onSourceCommit = { draft ->
+                                            appDataViewModel.updateRefuelPriceSourceName(refuel.id, draft)
+                                            sourceEdits.remove(refuel.id)
+                                        },
+                                        onFuelTypeSelected = { option ->
+                                            appDataViewModel.updateRefuelFuelType(refuel.id, option)
+                                        },
+                                        onRequestDelete = { pendingDeleteRefuelId = refuel.id },
+                                        onRequestTrainCalibration = {
+                                            onServiceCommand(
+                                                BackgroundService.ACTION_FUEL_CALIBRATION_TRAIN,
+                                                BackgroundService.EXTRA_REFUEL_ID,
+                                                refuel.id,
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        RefuelVerticalScrollbar(
+                            listState = listState,
+                            totalItems = sortedRefuels.size,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .width(12.dp),
+                        )
+                        RefuelHorizontalScrollbar(
+                            scrollState = horizontalScrollState,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth()
+                                .height(10.dp),
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            Box(
+                modifier = Modifier
+                    .weight(0.8f)
+                    .fillMaxWidth(),
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .horizontalScroll(horizontalScrollState)
+                        .padding(end = 14.dp)
+                        .verticalScroll(calibrationScrollState),
                 ) {
-                    RefuelHeaderRow()
-                    LazyColumn(state = listState) {
-                        items(sortedRefuels.size, key = { sortedRefuels[it].id }) { index ->
-                            val refuel = sortedRefuels[index]
-                            RefuelTableRow(
-                                refuel = refuel,
-                                dateTimeFormat = dateTimeFormat,
-                                actualDraft = actualEdits[refuel.id] ?: valueToString(refuel.actualLiters, 1),
-                                priceDraft = priceEdits[refuel.id] ?: (refuel.pricePerLiterRub?.let { valueToString(it, 2) } ?: ""),
-                                sourceDraft = sourceEdits[refuel.id] ?: refuel.priceSourceName.orEmpty(),
-                                onActualDraftChange = { actualEdits[refuel.id] = it },
-                                onPriceDraftChange = { priceEdits[refuel.id] = it },
-                                onSourceDraftChange = { sourceEdits[refuel.id] = it },
-                                onActualCommit = { draft ->
-                                    parseLocalizedFloat(draft)?.let {
-                                        appDataViewModel.updateRefuelActualLiters(refuel.id, it)
-                                        actualEdits.remove(refuel.id)
-                                    }
-                                },
-                                onPriceCommit = { draft ->
-                                    val price = parseLocalizedFloat(draft)
-                                    appDataViewModel.updateRefuelPricePerLiter(refuel.id, price)
-                                    priceEdits.remove(refuel.id)
-                                },
-                                onSourceCommit = { draft ->
-                                    appDataViewModel.updateRefuelPriceSourceName(refuel.id, draft)
-                                    sourceEdits.remove(refuel.id)
-                                },
-                                onFuelTypeSelected = { option ->
-                                    appDataViewModel.updateRefuelFuelType(refuel.id, option)
-                                },
-                                onDelete = { appDataViewModel.deleteRefuel(refuel.id) },
-                            )
-                        }
+                SettingsTitle(stringResource(R.string.refuels_calibration_section_title))
+                CalibrationIntCommitField(
+                    title = stringResource(R.string.settings_fuel_tank_liters_title),
+                    description = stringResource(R.string.refuels_calibration_tank_hint),
+                    draft = tankLitersDraft,
+                    onDraftChange = { tankLitersDraft = it },
+                    savedValue = fuelTankLiters,
+                    minValue = 1,
+                    maxValue = 500,
+                    onCommit = { value ->
+                        appDataViewModel.applyFuelTankChangeWithCalibrationReset(value)
+                    },
+                )
+                CalibrationIntCommitField(
+                    title = stringResource(R.string.refuels_calibration_zones_title),
+                    description = stringResource(R.string.refuels_calibration_zones_hint),
+                    draft = zoneCountDraft,
+                    onDraftChange = { zoneCountDraft = it },
+                    savedValue = fuelCalibrationZoneCount,
+                    minValue = 3,
+                    maxValue = 20,
+                    onCommit = { value ->
+                        appDataViewModel.applyFuelCalibrationZoneCountWithReset(value)
+                    },
+                )
+                OutlinedButton(
+                    onClick = { appDataViewModel.clearFuelCalibrationOnly() },
+                    modifier = Modifier.padding(top = 8.dp),
+                ) {
+                    Text(stringResource(R.string.refuels_calibration_reset), fontSize = 20.sp)
+                }
+                Text(
+                    text = stringResource(R.string.refuels_calibration_report_title),
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (reportLines == null) {
+                    Text(
+                        text = stringResource(R.string.value_no_data),
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    reportLines.forEach { line ->
+                        Text(
+                            text = line,
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(vertical = 2.dp),
+                        )
                     }
                 }
-                RefuelVerticalScrollbar(
-                    listState = listState,
-                    totalItems = sortedRefuels.size,
+                }
+                ScrollStateVerticalScrollbar(
+                    scrollState = calibrationScrollState,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .fillMaxHeight()
-                        .width(6.dp)
-                )
-                RefuelHorizontalScrollbar(
-                    scrollState = horizontalScrollState,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(6.dp)
+                        .width(12.dp),
                 )
             }
         }
+    }
+
+    pendingDeleteRefuelId?.let { id ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteRefuelId = null },
+            title = { AppAlertDialogTitle(stringResource(R.string.refuels_delete_confirm_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.refuels_delete_confirm_message)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        appDataViewModel.deleteRefuel(id)
+                        pendingDeleteRefuelId = null
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_delete))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { pendingDeleteRefuelId = null }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 
     if (showExportDialog) {
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
-            title = { Text(stringResource(R.string.dialog_file_saving_title)) },
-            text = { Text(stringResource(R.string.dialog_save_refuels_downloads)) },
+            title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.dialog_save_refuels_downloads)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -206,12 +370,12 @@ fun RefuelsTab(
                         showExportDialog = false
                     }
                 ) {
-                    Text(stringResource(R.string.action_save))
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                 }
             },
             dismissButton = {
-                Button(onClick = { showExportDialog = false }) {
-                    Text(stringResource(R.string.action_cancel))
+                OutlinedButton(onClick = { showExportDialog = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -226,13 +390,15 @@ private fun RefuelHeaderRow() {
         RefuelHeaderCell(stringResource(R.string.refuels_coordinates), 210)
         RefuelHeaderCell(stringResource(R.string.refuels_fuel_before), 110)
         RefuelHeaderCell(stringResource(R.string.refuels_fuel_after), 110)
+        RefuelHeaderCell(stringResource(R.string.refuels_ambient_temp), 180)
         RefuelHeaderCell(stringResource(R.string.refuels_estimated_liters), 140)
-        RefuelHeaderCell(stringResource(R.string.refuels_actual_liters), 200)
+        RefuelHeaderCell(stringResource(R.string.refuels_actual_liters), 180)
         RefuelHeaderCell(stringResource(R.string.refuels_fuel_type), 150)
-        RefuelHeaderCell(stringResource(R.string.refuels_price), 190)
+        RefuelHeaderCell(stringResource(R.string.refuels_price), 180)
         RefuelHeaderCell(stringResource(R.string.refuels_price_source), 330)
-        RefuelHeaderCell(stringResource(R.string.refuels_cost), 140)
-        RefuelHeaderCell("", 72)
+        RefuelHeaderCell(stringResource(R.string.refuels_cost), 150)
+        RefuelHeaderCell(stringResource(R.string.refuels_calibration_train), 180)
+        RefuelHeaderCell("", 80)
     }
 }
 
@@ -240,17 +406,21 @@ private fun RefuelHeaderRow() {
 private fun RefuelTableRow(
     refuel: RefuelRecord,
     dateTimeFormat: SimpleDateFormat,
+    tempDraft: String,
     actualDraft: String,
     priceDraft: String,
     sourceDraft: String,
+    onTempDraftChange: (String) -> Unit,
     onActualDraftChange: (String) -> Unit,
     onPriceDraftChange: (String) -> Unit,
     onSourceDraftChange: (String) -> Unit,
+    onTempCommit: (String) -> Unit,
     onActualCommit: (String) -> Unit,
     onPriceCommit: (String) -> Unit,
     onSourceCommit: (String) -> Unit,
     onFuelTypeSelected: (FuelTypeOption) -> Unit,
-    onDelete: () -> Unit,
+    onRequestDelete: () -> Unit,
+    onRequestTrainCalibration: () -> Unit,
 ) {
     val noData = stringResource(R.string.value_no_data)
     val coordinatesText = formatCoordinates(refuel, noData)
@@ -267,10 +437,17 @@ private fun RefuelTableRow(
         )
         RefuelCell(refuel.fuelPercentBefore?.let { valueToString(it, 1) } ?: noData, 110)
         RefuelCell(refuel.fuelPercentAfter?.let { valueToString(it, 1) } ?: noData, 110)
+        RefuelEditableCell(
+            value = tempDraft,
+            widthDp = 180,
+            showCommitButton = !refuelAmbientDraftMatchesSaved(tempDraft, refuel.ambientTempAtRefuel),
+            onValueChange = onTempDraftChange,
+            onCommit = onTempCommit,
+        )
         RefuelCell(valueToString(refuel.estimatedLiters, 1), 140)
         RefuelEditableCell(
             value = actualDraft,
-            widthDp = 200,
+            widthDp = 180,
             showCommitButton = !refuelActualDraftMatchesSaved(actualDraft, refuel.actualLiters),
             onValueChange = onActualDraftChange,
             onCommit = onActualCommit,
@@ -282,7 +459,7 @@ private fun RefuelTableRow(
         )
         RefuelEditableCell(
             value = priceDraft,
-            widthDp = 190,
+            widthDp = 180,
             showCommitButton = !refuelPriceDraftMatchesSaved(priceDraft, refuel.pricePerLiterRub),
             onValueChange = onPriceDraftChange,
             onCommit = onPriceCommit,
@@ -295,13 +472,45 @@ private fun RefuelTableRow(
             onCommit = onSourceCommit,
             keyboardType = KeyboardType.Text,
         )
-        RefuelCell(refuel.costRub?.let { valueToString(it, 2) } ?: noData, 140)
+        RefuelCell(refuel.costRub?.let { valueToString(it, 2) } ?: noData, 150)
         Box(
-            modifier = Modifier.width(72.dp),
+            modifier = Modifier
+                .width(180.dp)
+                .padding(end = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                refuel.usedForFuelCalibration -> {
+                    Text(
+                        text = stringResource(R.string.refuels_calibration_trained),
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                refuel.fuelPercentBefore != null &&
+                    refuel.fuelPercentAfter != null &&
+                    refuel.actualLiters > 0f -> {
+                    OutlinedButton(onClick = onRequestTrainCalibration) {
+                        Text(
+                            stringResource(R.string.refuels_calibration_train),
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                else -> {
+                    Text(text = noData, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        Box(
+            modifier = Modifier.width(80.dp),
             contentAlignment = Alignment.Center,
         ) {
             RefuelCircleIconButton(
-                onClick = onDelete,
+                onClick = onRequestDelete,
                 contentDescription = stringResource(R.string.refuels_delete),
             ) {
                 Icon(
@@ -390,6 +599,100 @@ private fun RefuelFuelTypeCell(
     }
 }
 
+/** Целое для настроек бака / зон: до первой точки или запятой. */
+private fun parseSettingsInt(raw: String): Int? {
+    val normalized = raw.trim().replace(',', '.')
+    val intPart = normalized.substringBefore('.').trim()
+    if (intPart.isEmpty()) return null
+    return intPart.toIntOrNull()
+}
+
+@Composable
+private fun CalibrationIntCommitField(
+    title: String,
+    description: String,
+    draft: String,
+    onDraftChange: (String) -> Unit,
+    savedValue: Int,
+    minValue: Int,
+    maxValue: Int,
+    onCommit: (Int) -> Unit,
+) {
+    val parsed = parseSettingsInt(draft)
+    val canCommit = parsed != null && parsed in minValue..maxValue && parsed != savedValue
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        OutlinedTextField(
+            value = draft,
+            onValueChange = onDraftChange,
+            modifier = Modifier
+                .align(Alignment.CenterVertically)
+                .width(150.dp),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 24.sp,
+                lineHeight = 24.sp * 1.3f,
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                focusedBorderColor = MaterialTheme.colorScheme.outline,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                cursorColor = MaterialTheme.colorScheme.primary,
+            ),
+            trailingIcon = if (canCommit) {
+                {
+                    RefuelCircleIconButton(
+                        onClick = {
+                            parseSettingsInt(draft)?.let { v ->
+                                if (v in minValue..maxValue) onCommit(v)
+                            }
+                        },
+                        contentDescription = stringResource(R.string.action_save),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_refuel_save),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            } else {
+                null
+            },
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 16.dp)
+                .align(Alignment.CenterVertically),
+        ) {
+            Text(
+                text = title,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 0.dp),
+            )
+            if (description.isNotEmpty()) {
+                Text(
+                    text = description,
+                    fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun RefuelEditableCell(
     value: String,
@@ -472,7 +775,8 @@ private fun RefuelHeaderCell(text: String, widthDp: Int) {
 
 @Composable
 private fun RefuelCoordinatesCell(text: String, widthDp: Int, copyText: String?) {
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val copiedMessage = stringResource(R.string.refuels_coordinates_copied)
     RefuelCell(
@@ -480,7 +784,9 @@ private fun RefuelCoordinatesCell(text: String, widthDp: Int, copyText: String?)
         widthDp = widthDp,
         modifier = if (copyText != null) {
             Modifier.clickable {
-                clipboardManager.setText(AnnotatedString(copyText))
+                scope.launch {
+                    clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("coordinates", copyText)))
+                }
                 Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
             }
         } else {
@@ -507,23 +813,83 @@ private fun RefuelCell(text: String, widthDp: Int, modifier: Modifier = Modifier
 }
 
 @Composable
+private fun ScrollStateVerticalScrollbar(
+    scrollState: ScrollState,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val track = scheme.surfaceVariant.copy(alpha = 0.88f)
+    val thumb = scheme.primary
+    Canvas(modifier = modifier.padding(horizontal = 2.dp, vertical = 2.dp)) {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+        drawRoundRect(
+            color = track,
+            topLeft = Offset.Zero,
+            size = Size(w, h),
+            cornerRadius = CornerRadius(w / 2f, w / 2f),
+        )
+        val maxScroll = scrollState.maxValue
+        if (maxScroll <= 0) {
+            drawRoundRect(
+                color = thumb.copy(alpha = 0.35f),
+                topLeft = Offset.Zero,
+                size = Size(w, h),
+                cornerRadius = CornerRadius(w / 2f, w / 2f),
+            )
+            return@Canvas
+        }
+        val total = h + maxScroll
+        val thumbH = (h * h / total).coerceAtLeast(32.dp.toPx())
+        val maxOff = (h - thumbH).coerceAtLeast(0f)
+        val thumbOff = maxOff * scrollState.value / maxScroll
+        drawRoundRect(
+            color = thumb,
+            topLeft = Offset(0f, thumbOff),
+            size = Size(w, thumbH),
+            cornerRadius = CornerRadius(w / 2f, w / 2f),
+        )
+    }
+}
+
+@Composable
 private fun RefuelHorizontalScrollbar(
     scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
-    if (scrollState.maxValue <= 0) return
-    val color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
-    Canvas(modifier = modifier.padding(horizontal = 2.dp)) {
-        val viewport = size.width
-        val total = viewport + scrollState.maxValue
-        val thumbWidth = (viewport * viewport / total).coerceAtLeast(24.dp.toPx())
-        val maxOffset = (viewport - thumbWidth).coerceAtLeast(0f)
-        val thumbOffset = maxOffset * scrollState.value / scrollState.maxValue
+    val scheme = MaterialTheme.colorScheme
+    val track = scheme.surfaceVariant.copy(alpha = 0.88f)
+    val thumb = scheme.primary
+    Canvas(modifier = modifier.padding(horizontal = 2.dp, vertical = 2.dp)) {
+        val vp = size.width
+        val barH = size.height
+        if (vp <= 0f || barH <= 0f) return@Canvas
         drawRoundRect(
-            color = color,
-            topLeft = Offset(thumbOffset, 0f),
-            size = Size(thumbWidth, size.height),
-            cornerRadius = CornerRadius(size.height / 2f, size.height / 2f),
+            color = track,
+            topLeft = Offset.Zero,
+            size = Size(vp, barH),
+            cornerRadius = CornerRadius(barH / 2f, barH / 2f),
+        )
+        val maxScroll = scrollState.maxValue
+        if (maxScroll <= 0) {
+            drawRoundRect(
+                color = thumb.copy(alpha = 0.35f),
+                topLeft = Offset.Zero,
+                size = Size(vp, barH),
+                cornerRadius = CornerRadius(barH / 2f, barH / 2f),
+            )
+            return@Canvas
+        }
+        val total = vp + maxScroll
+        val thumbW = (vp * vp / total).coerceAtLeast(32.dp.toPx())
+        val maxOff = (vp - thumbW).coerceAtLeast(0f)
+        val thumbOff = maxOff * scrollState.value / maxScroll
+        drawRoundRect(
+            color = thumb,
+            topLeft = Offset(thumbOff, 0f),
+            size = Size(thumbW, barH),
+            cornerRadius = CornerRadius(barH / 2f, barH / 2f),
         )
     }
 }
@@ -534,20 +900,48 @@ private fun RefuelVerticalScrollbar(
     totalItems: Int,
     modifier: Modifier = Modifier,
 ) {
-    val visibleItems = listState.layoutInfo.visibleItemsInfo.size
-    if (totalItems <= 0 || visibleItems >= totalItems) return
-    val color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
-    Canvas(modifier = modifier.padding(vertical = 2.dp)) {
-        val viewport = size.height
-        val thumbHeight = (viewport * visibleItems / totalItems).coerceAtLeast(24.dp.toPx())
-        val maxOffset = (viewport - thumbHeight).coerceAtLeast(0f)
-        val maxFirstIndex = (totalItems - visibleItems).coerceAtLeast(1)
-        val thumbOffset = maxOffset * listState.firstVisibleItemIndex / maxFirstIndex
+    if (totalItems <= 0) return
+    val scheme = MaterialTheme.colorScheme
+    val trackColor = scheme.surfaceVariant.copy(alpha = 0.88f)
+    val thumbColor = scheme.primary
+    Canvas(modifier = modifier.padding(horizontal = 2.dp, vertical = 2.dp)) {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
         drawRoundRect(
-            color = color,
-            topLeft = Offset(0f, thumbOffset),
-            size = Size(size.width, thumbHeight),
-            cornerRadius = CornerRadius(size.width / 2f, size.width / 2f),
+            color = trackColor,
+            topLeft = Offset.Zero,
+            size = Size(w, h),
+            cornerRadius = CornerRadius(w / 2f, w / 2f),
+        )
+        val layoutInfo = listState.layoutInfo
+        val items = layoutInfo.visibleItemsInfo
+        val viewport = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).toFloat().coerceAtLeast(1f)
+        val avgItem = if (items.isEmpty()) {
+            (viewport / totalItems.coerceAtLeast(1)).coerceAtLeast(24f)
+        } else {
+            (items.sumOf { it.size }.toFloat() / items.size.coerceAtLeast(1)).coerceAtLeast(1f)
+        }
+        val content = totalItems * avgItem
+        val scrollPx = listState.firstVisibleItemIndex * avgItem + listState.firstVisibleItemScrollOffset
+        val maxScroll = (content - viewport).coerceAtLeast(0f)
+        if (maxScroll <= 0f) {
+            drawRoundRect(
+                color = thumbColor.copy(alpha = 0.35f),
+                topLeft = Offset.Zero,
+                size = Size(w, h),
+                cornerRadius = CornerRadius(w / 2f, w / 2f),
+            )
+            return@Canvas
+        }
+        val progress = (scrollPx / maxScroll).coerceIn(0f, 1f)
+        val thumbH = (h * h / content.coerceAtLeast(h)).coerceIn(32.dp.toPx().coerceAtMost(h), h)
+        val thumbOff = (h - thumbH) * progress
+        drawRoundRect(
+            color = thumbColor,
+            topLeft = Offset(0f, thumbOff),
+            size = Size(w, thumbH),
+            cornerRadius = CornerRadius(w / 2f, w / 2f),
         )
     }
 }
@@ -568,6 +962,11 @@ private fun floatDraftMatchesSaved(draft: String, saved: Float, decimals: Int): 
 
 private fun refuelActualDraftMatchesSaved(draft: String, savedLiters: Float): Boolean =
     floatDraftMatchesSaved(draft, savedLiters, decimals = 1)
+
+private fun refuelAmbientDraftMatchesSaved(draft: String, saved: Float?): Boolean {
+    val effective = saved ?: REFUEL_AMBIENT_TEMP_DEFAULT_C
+    return floatDraftMatchesSaved(draft, effective, decimals = 1)
+}
 
 private fun refuelPriceDraftMatchesSaved(draft: String, savedPrice: Float?): Boolean {
     val trimmed = draft.trim()
@@ -601,6 +1000,7 @@ internal fun buildRefuelExportLines(
             context.getString(R.string.refuels_coordinates),
             context.getString(R.string.refuels_fuel_before),
             context.getString(R.string.refuels_fuel_after),
+            context.getString(R.string.refuels_ambient_temp),
             context.getString(R.string.refuels_estimated_liters),
             context.getString(R.string.refuels_actual_liters),
             context.getString(R.string.refuels_fuel_type),
@@ -617,6 +1017,7 @@ internal fun buildRefuelExportLines(
                 formatCoordinates(refuel, noData),
                 refuel.fuelPercentBefore?.let { valueToString(it, 1) } ?: noData,
                 refuel.fuelPercentAfter?.let { valueToString(it, 1) } ?: noData,
+                valueToString(refuel.ambientTempAtRefuel ?: REFUEL_AMBIENT_TEMP_DEFAULT_C, 1),
                 valueToString(refuel.estimatedLiters, 1),
                 valueToString(refuel.actualLiters, 1),
                 refuel.fuelName,

@@ -365,9 +365,9 @@ fun LogsTabContent(
             if (showSaveDialog) {
                 AlertDialog(
                     onDismissRequest = { showSaveDialog = false },
-                    title = { Text(stringResource(R.string.dialog_file_saving_title)) },
+                    title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
                     text = {
-                        Text(stringResource(R.string.dialog_save_logs_downloads))
+                        AppAlertDialogText(stringResource(R.string.dialog_save_logs_downloads))
                     },
                     confirmButton = {
                         Button(
@@ -380,14 +380,14 @@ fun LogsTabContent(
                                 showSaveDialog = false
                             }
                         ) {
-                            Text(stringResource(R.string.action_save))
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                         }
                     },
                     dismissButton = {
                         OutlinedButton(
                             onClick = { showSaveDialog = false }
                         ) {
-                            Text(stringResource(R.string.action_cancel))
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                         }
                     }
                 )
@@ -460,9 +460,9 @@ fun CanTabContent(
             if (showSaveDialog) {
                 AlertDialog(
                     onDismissRequest = { showSaveDialog = false },
-                    title = { Text(stringResource(R.string.dialog_file_saving_title)) },
+                    title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
                     text = {
-                        Text(stringResource(R.string.dialog_save_can_downloads, sortedCanEntries.size))
+                        AppAlertDialogText(stringResource(R.string.dialog_save_can_downloads, sortedCanEntries.size))
                     },
                     confirmButton = {
                         Button(
@@ -484,14 +484,14 @@ fun CanTabContent(
                                 showSaveDialog = false
                             }
                         ) {
-                            Text(stringResource(R.string.action_save))
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                         }
                     },
                     dismissButton = {
                         OutlinedButton(
                             onClick = { showSaveDialog = false }
                         ) {
-                            Text(stringResource(R.string.action_cancel))
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                         }
                     }
                 )
