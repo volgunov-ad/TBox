@@ -53,10 +53,10 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
     val p4 = remember(valueAccuracy) {
         dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.WHEEL4_PRESSURE_WHEELS_TILE, valueAccuracy)
     }
-    val t1 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel1Temperature", valueAccuracy) }
-    val t2 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel2Temperature", valueAccuracy) }
-    val t3 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel3Temperature", valueAccuracy) }
-    val t4 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel4Temperature", valueAccuracy) }
+    val t1 = dataProvider.getValueFlow("wheel1Temperature")
+    val t2 = dataProvider.getValueFlow("wheel2Temperature")
+    val t3 = dataProvider.getValueFlow("wheel3Temperature")
+    val t4 = dataProvider.getValueFlow("wheel4Temperature")
     val p1s by p1.collectAsStateWithLifecycle()
     val p2s by p2.collectAsStateWithLifecycle()
     val p3s by p3.collectAsStateWithLifecycle()
