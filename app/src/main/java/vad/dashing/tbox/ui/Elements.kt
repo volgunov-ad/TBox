@@ -401,6 +401,7 @@ fun <T> SettingDropdownGeneric(
     enabled: Boolean = true,
     options: List<T>,
     popupFocusable: Boolean = true,
+    selectorWidth: Dp = 140.dp
 ) {
     Row(
         modifier = Modifier
@@ -417,7 +418,7 @@ fun <T> SettingDropdownGeneric(
                 selectedValue = selectedValue,
                 options = options,
                 onValueChange = onValueChange,
-                width = 140.dp,
+                width = selectorWidth,
                 enabled = enabled,
                 valueFontSize = 24.sp,
                 itemFontSize = 24.sp,
