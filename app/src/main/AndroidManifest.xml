@@ -55,6 +55,7 @@
             android:name="vad.dashing.tbox.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:screenOrientation="landscape"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode">
             <meta-data
                 android:name="flagActivityFullScreen"
