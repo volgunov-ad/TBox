@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,6 +30,8 @@ fun DashboardWheelsPressureWidgetItem(
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     canViewModel: CanDataViewModel,
+    dataProvider: DataProvider,
+    valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
@@ -36,6 +39,14 @@ fun DashboardWheelsPressureWidgetItem(
     backgroundColor: Color? = null
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
+    val w1Flow = remember(valueAccuracy) { dataProvider.getValueFlow("wheel1Pressure", valueAccuracy) }
+    val w2Flow = remember(valueAccuracy) { dataProvider.getValueFlow("wheel2Pressure", valueAccuracy) }
+    val w3Flow = remember(valueAccuracy) { dataProvider.getValueFlow("wheel3Pressure", valueAccuracy) }
+    val w4Flow = remember(valueAccuracy) { dataProvider.getValueFlow("wheel4Pressure", valueAccuracy) }
+    val w1Str by w1Flow.collectAsStateWithLifecycle()
+    val w2Str by w2Flow.collectAsStateWithLifecycle()
+    val w3Str by w3Flow.collectAsStateWithLifecycle()
+    val w4Str by w4Flow.collectAsStateWithLifecycle()
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -62,19 +73,21 @@ fun DashboardWheelsPressureWidgetItem(
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     PressureText(
-                        wheelsPressure.wheel1,
-                        availableHeight,
-                        TextAlign.Left,
-                        TextType.VALUE,
+                        value = wheelsPressure.wheel1,
+                        displayText = w1Str,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Left,
+                        textType = TextType.VALUE,
                         textColor = resolvedTextColor
                     )
                 }
                 Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                     PressureText(
-                        wheelsPressure.wheel2,
-                        availableHeight,
-                        TextAlign.Right,
-                        TextType.VALUE,
+                        value = wheelsPressure.wheel2,
+                        displayText = w2Str,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Right,
+                        textType = TextType.VALUE,
                         textColor = resolvedTextColor
                     )
                 }
@@ -109,19 +122,21 @@ fun DashboardWheelsPressureWidgetItem(
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     PressureText(
-                        wheelsPressure.wheel3,
-                        availableHeight,
-                        TextAlign.Left,
-                        TextType.VALUE,
+                        value = wheelsPressure.wheel3,
+                        displayText = w3Str,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Left,
+                        textType = TextType.VALUE,
                         textColor = resolvedTextColor
                     )
                 }
                 Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                     PressureText(
-                        wheelsPressure.wheel4,
-                        availableHeight,
-                        TextAlign.Right,
-                        TextType.VALUE,
+                        value = wheelsPressure.wheel4,
+                        displayText = w4Str,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Right,
+                        textType = TextType.VALUE,
                         textColor = resolvedTextColor
                     )
                 }

@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,14 +25,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
-import vad.dashing.tbox.valueToString
-
 @Composable
 fun DashboardWheelsPressureTemperatureWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     canViewModel: CanDataViewModel,
+    dataProvider: DataProvider,
+    valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
@@ -40,6 +41,22 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
 ) {
     val wheelsPressure by canViewModel.wheelsPressure.collectAsStateWithLifecycle()
     val wheelsTemperature by canViewModel.wheelsTemperature.collectAsStateWithLifecycle()
+    val p1 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel1Pressure", valueAccuracy) }
+    val p2 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel2Pressure", valueAccuracy) }
+    val p3 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel3Pressure", valueAccuracy) }
+    val p4 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel4Pressure", valueAccuracy) }
+    val t1 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel1Temperature", valueAccuracy) }
+    val t2 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel2Temperature", valueAccuracy) }
+    val t3 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel3Temperature", valueAccuracy) }
+    val t4 = remember(valueAccuracy) { dataProvider.getValueFlow("wheel4Temperature", valueAccuracy) }
+    val p1s by p1.collectAsStateWithLifecycle()
+    val p2s by p2.collectAsStateWithLifecycle()
+    val p3s by p3.collectAsStateWithLifecycle()
+    val p4s by p4.collectAsStateWithLifecycle()
+    val t1s by t1.collectAsStateWithLifecycle()
+    val t2s by t2.collectAsStateWithLifecycle()
+    val t3s by t3.collectAsStateWithLifecycle()
+    val t4s by t4.collectAsStateWithLifecycle()
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -66,19 +83,21 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     PressureText(
-                        wheelsPressure.wheel1,
-                        availableHeight,
-                        TextAlign.Left,
-                        TextType.TITLE,
+                        value = wheelsPressure.wheel1,
+                        displayText = p1s,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Left,
+                        textType = TextType.TITLE,
                         textColor = resolvedTextColor
                     )
                 }
                 Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                     PressureText(
-                        wheelsPressure.wheel2,
-                        availableHeight,
-                        TextAlign.Right,
-                        TextType.TITLE,
+                        value = wheelsPressure.wheel2,
+                        displayText = p2s,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Right,
+                        textType = TextType.TITLE,
                         textColor = resolvedTextColor
                     )
                 }
@@ -92,17 +111,19 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     TemperatureText(
-                        wheelsTemperature.wheel1,
-                        availableHeight,
-                        TextAlign.Left,
+                        value = wheelsTemperature.wheel1,
+                        displayText = t1s,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Left,
                         textColor = resolvedTextColor
                     )
                 }
                 Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                     TemperatureText(
-                        wheelsTemperature.wheel2,
-                        availableHeight,
-                        TextAlign.Right,
+                        value = wheelsTemperature.wheel2,
+                        displayText = t2s,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Right,
                         textColor = resolvedTextColor
                     )
                 }
@@ -143,19 +164,21 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     PressureText(
-                        wheelsPressure.wheel3,
-                        availableHeight,
-                        TextAlign.Left,
-                        TextType.TITLE,
+                        value = wheelsPressure.wheel3,
+                        displayText = p3s,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Left,
+                        textType = TextType.TITLE,
                         textColor = resolvedTextColor
                     )
                 }
                 Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                     PressureText(
-                        wheelsPressure.wheel4,
-                        availableHeight,
-                        TextAlign.Right,
-                        TextType.TITLE,
+                        value = wheelsPressure.wheel4,
+                        displayText = p4s,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Right,
+                        textType = TextType.TITLE,
                         textColor = resolvedTextColor
                     )
                 }
@@ -169,17 +192,19 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     TemperatureText(
-                        wheelsTemperature.wheel3,
-                        availableHeight,
-                        TextAlign.Left,
+                        value = wheelsTemperature.wheel3,
+                        displayText = t3s,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Left,
                         textColor = resolvedTextColor
                     )
                 }
                 Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
                     TemperatureText(
-                        wheelsTemperature.wheel4,
-                        availableHeight,
-                        TextAlign.Right,
+                        value = wheelsTemperature.wheel4,
+                        displayText = t4s,
+                        availableHeight = availableHeight,
+                        align = TextAlign.Right,
                         textColor = resolvedTextColor
                     )
                 }
@@ -192,6 +217,7 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
 @Composable
 fun PressureText(
     value: Float?,
+    displayText: String,
     availableHeight: Dp,
     align: TextAlign,
     textType: TextType,
@@ -199,7 +225,7 @@ fun PressureText(
 ) {
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     Text(
-        text = valueToString(value, 1, default = "-"),
+        text = displayText.ifBlank { "-" },
         fontSize = calculateResponsiveFontSize(
             containerHeight = availableHeight,
             textType = textType
@@ -215,13 +241,14 @@ fun PressureText(
 @Composable
 private fun TemperatureText(
     value: Float?,
+    displayText: String,
     availableHeight: Dp,
     align: TextAlign,
     textColor: Color? = null
 ) {
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     Text(
-        text = valueToString(value, 0, default = "-"),
+        text = displayText.ifBlank { "-" },
         fontSize = calculateResponsiveFontSize(
             containerHeight = availableHeight,
             textType = TextType.TITLE

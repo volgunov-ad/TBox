@@ -82,7 +82,6 @@ fun MainDashboardTab(
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
-    val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -230,7 +229,6 @@ fun MainDashboardTab(
                                         isEditMode = false,
                                         elevation = MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
                                         shape = MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE.dp,
-                                        fuelTankLiters = fuelTankLiters
                                     )
                                 }
                             }

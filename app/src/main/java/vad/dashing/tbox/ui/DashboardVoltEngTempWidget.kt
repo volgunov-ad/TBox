@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,17 +20,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
-import vad.dashing.tbox.valueToString
 
 @Composable
 fun DashboardVoltEngTempWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    canViewModel: CanDataViewModel,
+    dataProvider: DataProvider,
+    valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
@@ -39,13 +39,18 @@ fun DashboardVoltEngTempWidgetItem(
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
-    val voltage by canViewModel.voltage.collectAsStateWithLifecycle()
-    val engineTemperature by canViewModel.engineTemperature.collectAsStateWithLifecycle()
+    val voltageFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("voltage", valueAccuracy)
+    }
+    val engineTempFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("engineTemperature", valueAccuracy)
+    }
+    val voltageStr by voltageFlow.collectAsStateWithLifecycle()
+    val engineTempStr by engineTempFlow.collectAsStateWithLifecycle()
     val voltUnit = stringResource(R.string.unit_volt)
     val celsiusUnit = stringResource(R.string.unit_celsius)
-    val firstLine = "${valueToString(voltage, 1)}${if (units) "\u2009$voltUnit" else ""}"
-    val secondLine =
-        "${valueToString(engineTemperature, 0)}${if (units) "\u2009$celsiusUnit" else ""}"
+    val firstLine = "$voltageStr${if (units) "\u2009$voltUnit" else ""}"
+    val secondLine = "$engineTempStr${if (units) "\u2009$celsiusUnit" else ""}"
     val defaultTitle = stringResource(R.string.widget_title_voltage_engine_temp)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 

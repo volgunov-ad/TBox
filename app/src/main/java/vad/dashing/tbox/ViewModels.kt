@@ -479,13 +479,6 @@ object WidgetsRepository {
             "netWidgetNew",
             "netWidgetColored",
             "locWidget",
-            "voltage+engineTemperatureWidget",
-            "gearBoxWidget",
-            "wheelsPressureWidget",
-            "wheelsPressureTemperatureWidget",
-            "tempInOutWidget",
-            "fuelLevelWidget",
-            "airQualityWidget",
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }
