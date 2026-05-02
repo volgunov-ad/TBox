@@ -252,6 +252,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val immersivePolicyPackagesCsv = settingsManager.immersivePolicyPackagesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
     val isLeftMenuVisible = settingsManager.leftMenuVisibleFlow
         .stateIn(
             scope = viewModelScope,
@@ -988,6 +995,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveExpertModeSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveExpertModeSetting(enabled)
+        }
+    }
+
+    fun applyImmersiveFullPolicyControl(csvInput: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val ok = settingsManager.saveAndApplyImmersiveFullPolicyControl(csvInput)
+            onResult(ok)
         }
     }
 

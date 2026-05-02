@@ -284,6 +284,12 @@
     <string name="settings_get_geo_data_title">Получать данные о геопозиции от TBox</string>
 
     <string name="settings_misc_title">Прочее</string>
+    <string name="settings_immersive_policy_title">Политика immersive (шторка статус-бара)</string>
+    <string name="settings_immersive_policy_desc">Запись в Settings.Global policy_control (immersive.full). Нужно один раз выдать приложению разрешение через ADB: adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS\nБез этого кнопка не сможет изменить настройку. Пакеты через запятую, без пробелов; текущее приложение добавляется автоматически.</string>
+    <string name="settings_immersive_policy_packages_hint">ru.app.one,vad.dashing.tbox,ru.app.two</string>
+    <string name="settings_immersive_policy_apply">Применить policy_control</string>
+    <string name="settings_immersive_policy_applied">policy_control обновлён</string>
+    <string name="settings_immersive_policy_denied">Нет прав WRITE_SECURE_SETTINGS (выполните pm grant через ADB)</string>
     <string name="settings_backup_title">Резервная копия</string>
     <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Пути к папкам обоев главного экрана и выбранные файлы сохраняются в JSON; сами изображения не копируются. Пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
     <string name="settings_backup_export">Экспорт JSON</string>

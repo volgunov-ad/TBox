@@ -3,6 +3,7 @@ package vad.dashing.tbox.ui
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -253,6 +255,7 @@ fun SettingsTabContent(
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
+    val immersivePolicyPackagesStored by settingsViewModel.immersivePolicyPackagesCsv.collectAsStateWithLifecycle()
 
     val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
     val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
@@ -289,6 +292,10 @@ fun SettingsTabContent(
     var showExportBackupDialog by remember { mutableStateOf(false) }
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
+
+    var immersivePolicyPackagesDraft by remember(immersivePolicyPackagesStored) {
+        mutableStateOf(immersivePolicyPackagesStored)
+    }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -645,6 +652,43 @@ fun SettingsTabContent(
                     modifier = Modifier
                         .clickable { showLocationRequirementsDialog(context) }
                         .padding(top = 4.dp)
+                )
+            }
+
+            SettingsTitle(stringResource(R.string.settings_immersive_policy_title))
+            Text(
+                text = stringResource(R.string.settings_immersive_policy_desc),
+                fontSize = 20.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            OutlinedTextField(
+                value = immersivePolicyPackagesDraft,
+                onValueChange = { immersivePolicyPackagesDraft = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                label = { Text(stringResource(R.string.settings_immersive_policy_packages_hint)) },
+                singleLine = false,
+                minLines = 2
+            )
+            Button(
+                onClick = {
+                    settingsViewModel.applyImmersiveFullPolicyControl(immersivePolicyPackagesDraft) { ok ->
+                        val msgRes = if (ok) {
+                            R.string.settings_immersive_policy_applied
+                        } else {
+                            R.string.settings_immersive_policy_denied
+                        }
+                        Toast.makeText(context, context.getString(msgRes), Toast.LENGTH_LONG).show()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_immersive_policy_apply),
+                    fontSize = 22.sp,
+                    textAlign = TextAlign.Center
                 )
             }
         }
