@@ -43,9 +43,10 @@ object TripRepository {
     }
 
     private const val PERSIST_EPS = 1e-4f
-    private const val MS_EPS = 500L
+    private const val MS_EPS = 5000L
     /** Avoid persisting on every tiny % tick from the fuel sender. */
-    private const val FUEL_BASELINE_PERCENT_EPS = 0.05f
+    private const val FUEL_BASELINE_PERCENT_EPS = 1.5f
+    private const val FUEL_BASELINE_LITERS_EPS = 0.75f
 
     private val _trips = MutableStateFlow<List<TripRecord>>(emptyList())
     val trips: StateFlow<List<TripRecord>> = _trips.asStateFlow()
@@ -260,6 +261,11 @@ object TripRepository {
             a.fuelBaselinePercent == null && b.fuelBaselinePercent == null -> Unit
             a.fuelBaselinePercent == null || b.fuelBaselinePercent == null -> return true
             abs(a.fuelBaselinePercent - b.fuelBaselinePercent) > FUEL_BASELINE_PERCENT_EPS -> return true
+        }
+        when {
+            a.fuelBaselineLiters == null && b.fuelBaselineLiters == null -> Unit
+            a.fuelBaselineLiters == null || b.fuelBaselineLiters == null -> return true
+            abs(a.fuelBaselineLiters - b.fuelBaselineLiters) > FUEL_BASELINE_LITERS_EPS -> return true
         }
         if (kotlin.math.abs(a.movingTimeMs - b.movingTimeMs) > MS_EPS) return true
         if (kotlin.math.abs(a.idleTimeMs - b.idleTimeMs) > MS_EPS) return true

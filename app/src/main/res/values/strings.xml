@@ -421,6 +421,7 @@
     <string name="data_title_distance_to_fuel_empty">Пробег на остатке топлива</string>
     <string name="data_title_fuel_level_percentage">Уровень топлива</string>
     <string name="data_title_fuel_level_liters">Уровень топлива в литрах</string>
+    <string name="data_title_fuel_level_liters_actual">Уровень топлива в литрах (с поправкой на температуру)</string>
     <string name="data_title_fuel_level_percentage_filtered">Уровень топлива (сглажено)</string>
     <string name="currentFuelConsumption">Мгновенный расход топлива</string>
     <string name="data_title_breaking_force">Усилие торможения</string>
