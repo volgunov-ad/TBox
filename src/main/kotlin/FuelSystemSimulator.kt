@@ -105,7 +105,7 @@ class FuelSystemSimulator(
 
         println("\n=== Тест температурного дрейфа (Сравнение) ===")
         val sensorValue = 49.6
-        val temp = -25.0 // мороз
+        val temp = 0.0 // мороз
 
         val result = estimator.getCorrectedLiters(sensorValue, temp)
 
@@ -115,7 +115,7 @@ class FuelSystemSimulator(
         println("Сжатие из-за холода: ${"%.2f".format(result.litersStandard - result.litersActual)} л")
 
         val sensorValue2 = 47.07
-        val hotTemp = 40.0    // Жара
+        val hotTemp = 16.0    // Жара
 
         val res = estimator.getCorrectedLiters(sensorValue2, hotTemp)
 
