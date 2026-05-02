@@ -54,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -119,6 +120,7 @@ fun RefuelsTab(
     }
     var showExportDialog by remember { mutableStateOf(false) }
     var pendingDeleteRefuelId by remember { mutableStateOf<String?>(null) }
+    var pendingCalibrationReset by remember { mutableStateOf(false) }
     val actualEdits = remember { mutableStateMapOf<String, String>() }
     val priceEdits = remember { mutableStateMapOf<String, String>() }
     val sourceEdits = remember { mutableStateMapOf<String, String>() }
@@ -320,7 +322,7 @@ fun RefuelsTab(
                     },
                 )
                 OutlinedButton(
-                    onClick = { appDataViewModel.clearFuelCalibrationOnly() },
+                    onClick = { pendingCalibrationReset = true },
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
                     Text(stringResource(R.string.refuels_calibration_reset), fontSize = 20.sp)
@@ -383,6 +385,29 @@ fun RefuelsTab(
         )
     }
 
+    if (pendingCalibrationReset) {
+        AlertDialog(
+            onDismissRequest = { pendingCalibrationReset = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.refuels_calibration_reset_confirm_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.refuels_calibration_reset_confirm_message)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        appDataViewModel.clearFuelCalibrationOnly()
+                        pendingCalibrationReset = false
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.refuels_calibration_reset))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { pendingCalibrationReset = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
     if (showExportDialog) {
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
@@ -413,6 +438,7 @@ fun RefuelsTab(
 @Composable
 private fun RefuelHeaderRow() {
     Row(verticalAlignment = Alignment.CenterVertically) {
+        RefuelHeaderCell("", 40)
         RefuelHeaderCell(stringResource(R.string.refuels_time), 190)
         RefuelHeaderCell(stringResource(R.string.refuels_odometer), 120)
         RefuelHeaderCell(stringResource(R.string.refuels_coordinates), 210)
@@ -456,6 +482,21 @@ private fun RefuelTableRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(vertical = 4.dp),
     ) {
+        Box(
+            modifier = Modifier
+                .width(40.dp)
+                .padding(end = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (refuel.pricePerLiterRub == null) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_refuel_price_warning),
+                    contentDescription = stringResource(R.string.refuels_price_missing_cd),
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFFFF9800),
+                )
+            }
+        }
         RefuelCell(dateTimeFormat.format(Date(refuel.timeEpochMs)), 190)
         RefuelCell(refuel.odometerKm?.let { valueToString(it, 0) } ?: noData, 120)
         RefuelCoordinatesCell(

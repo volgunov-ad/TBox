@@ -503,6 +503,7 @@
     <string name="refuels_actual_liters">Фактические литры</string>
     <string name="refuels_fuel_type">Топливо</string>
     <string name="refuels_price">Цена</string>
+    <string name="refuels_price_missing_cd">Нет цены топлива</string>
     <string name="refuels_price_source">АЗС</string>
     <string name="refuels_cost">Стоимость</string>
     <string name="refuels_calibration_train">Обучение</string>
@@ -514,6 +515,8 @@
     <string name="refuels_calibration_maturity_hint">Литры датчика, накопленные в зоне, для полного доверия локальному K. Накопленные данные калибровки не сбрасываются при изменении этого параметра</string>
     <string name="refuels_calibration_report_title">Состояние зон</string>
     <string name="refuels_calibration_reset">Сбросить калибровку</string>
+    <string name="refuels_calibration_reset_confirm_title">Сбросить калибровку?</string>
+    <string name="refuels_calibration_reset_confirm_message">Накопленные данные калибровки будут удалены. Флаги «учтена» у заправок сбросятся; сами записи останутся.</string>
     <string name="refuels_calibration_trained">Учтена</string>
     <string name="refuels_delete_confirm_title">Удалить заправку?</string>
     <string name="refuels_delete_confirm_message">Запись будет удалена из журнала без восстановления.</string>
