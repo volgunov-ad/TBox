@@ -16,17 +16,24 @@ class FuelSystemSimulator(
             // Разница колоссальная (90%), фильтр должен это "забанить"
             //FuelEntry(2000.0, 100.0, 10.0, 30.0, 21.0, 15.0),
 
-            FuelEntry(1000.0, 100.0, 10.0, 48.0, 40.0, 25.0),
+            //FuelEntry(1000.0, 100.0, 10.0, 48.0, 40.0, 25.0),
 
-            FuelEntry(1000.0, 100.0, 48.0, 48.0, 0.0, 10.0)
+            //FuelEntry(1000.0, 100.0, 48.0, 48.0, 0.0, 10.0),
+
+            // Заправка 4 литра — должна ПРОЙТИ (больше 3.0)
+            FuelEntry(1000.0, 100.0, 10.0, 14.1, 4.0, 15.0),
+
+            // Заправка 2.9 литра — должна БЫТЬ ОТКЛОНЕНА (меньше 3.0)
+            FuelEntry(1100.0, 105.0, 14.1, 17.0, 2.9, 15.0)
 
 
         )
 
         history.forEachIndexed { index, entry ->
-            val sensorDelta = entry.sensorAfter - entry.sensorBefore // Реальная разница
+            val sensorDelta = entry.sensorAfter - entry.sensorBefore
             val deviation = filter.calculateDeviation(entry)
             val threshold = filter.maxDeviationPercent
+            val minLimit = filter.minRefillLimit // Берем наш порог из фильтра
 
             if (filter.isValid(entry)) {
                 val report = estimator.train(entry)
@@ -34,14 +41,28 @@ class FuelSystemSimulator(
             } else {
                 println("[Запись #${index + 1}] ⚠️ ОТКЛОНЕНО ФИЛЬТРОМ!")
 
-                if (sensorDelta <= 0) {
-                    println("   -> Причина: Уровень топлива не поднялся (Дельта: $sensorDelta л). Заправка невозможна.")
-                } else {
-                    println("   -> Отклонение: ${"%.1f".format(deviation * 100)}% (Порог: ${"%.1f".format(threshold * 100)}%)")
-                    println("   -> Датчик увидел: $sensorDelta л, а в чеке: ${entry.litersByCheck} л")
+                when {
+                    // Причина 1: Слишком малый объем
+                    entry.litersByCheck < minLimit -> {
+                        println("   -> Причина: Объем заправки (${entry.litersByCheck} л) меньше порога обучения ($minLimit л).")
+                        println("      (Данные отобразятся на экране, но не изменят калибровку бака)")
+                    }
+
+                    // Причина 2: Уровень не поднялся
+                    sensorDelta <= 0 -> {
+                        println("   -> Причина: Датчик не зафиксировал рост уровня (Дельта: ${"%.1f".format(sensorDelta)} л).")
+                    }
+
+                    // Причина 3: Аномальный шум (то, что мы уже делали)
+                    else -> {
+                        println("   -> Причина: Аномальное расхождение данных.")
+                        println("   -> Отклонение: ${"%.1f".format(deviation * 100)}% (Порог: ${"%.1f".format(threshold * 100)}%)")
+                        println("   -> Датчик увидел: ${"%.1f".format(sensorDelta)} л, а в чеке: ${entry.litersByCheck} л")
+                    }
                 }
             }
         }
+
 
 
         // ПЕРЕМЕННЫЕ ДЛЯ СБОРА ИТОГОВ
