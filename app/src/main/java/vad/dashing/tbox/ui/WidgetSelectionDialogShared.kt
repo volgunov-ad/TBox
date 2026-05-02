@@ -64,6 +64,14 @@ import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
 private val WidgetSelectionDialogActionButtonFontSize = 22.sp
 
+/** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
+internal data class ValueAccuracyDropdownEntry(
+    private val display: String,
+    val stored: Int?
+) {
+    override fun toString(): String = display
+}
+
 /** Matches [SettingSwitch] primary row text (24.sp Medium). */
 private val WidgetSelectionDialogFieldInputStyle = TextStyle(
     fontSize = 24.sp,
@@ -169,6 +177,9 @@ internal class WidgetSelectionDialogState(
             ""
         }
     )
+
+    /** `null` = default decimals per data key in provider; otherwise 0..2 fractional digits. */
+    var valueAccuracy by mutableStateOf(initialConfig.valueAccuracy?.takeIf { it in 0..2 })
 
     val isMusicWidgetSelected: Boolean
         get() = selectedDataKey == MUSIC_WIDGET_DATA_KEY
@@ -538,11 +549,10 @@ internal fun WidgetSelectionDialogForm(
                         // anymani: новая опция для контроля возврата лаунчера
                         SettingSwitch(
                             state.mediaKeepPlayerForeground,
-                            state.mediaKeepPlayerForeground,
                             { state.mediaKeepPlayerForeground = it },
                             stringResource(R.string.widget_music_keep_player_foreground),
                             stringResource(R.string.widget_music_keep_player_foreground_desc),
-                            state.togglesEnabled && state.mediaAutoPlayOnInit
+                            state.togglesEnabled
                         )
                     }
                     AppLauncherWidgetSettingsSection(
@@ -594,6 +604,37 @@ internal fun WidgetSelectionDialogForm(
                             stringResource(R.string.widget_single_line_dual_metrics),
                             "",
                             state.togglesEnabled
+                        )
+                    }
+                    if (WidgetsRepository.supportsValueAccuracy(state.selectedDataKey)) {
+                        val accuracyEntries = listOf(
+                            ValueAccuracyDropdownEntry(
+                                stringResource(R.string.widget_value_accuracy_default),
+                                null
+                            ),
+                            ValueAccuracyDropdownEntry(
+                                stringResource(R.string.widget_value_accuracy_0),
+                                0
+                            ),
+                            ValueAccuracyDropdownEntry(
+                                stringResource(R.string.widget_value_accuracy_1),
+                                1
+                            ),
+                            ValueAccuracyDropdownEntry(
+                                stringResource(R.string.widget_value_accuracy_2),
+                                2
+                            ),
+                        )
+                        val selectedAccuracyEntry = accuracyEntries.find { it.stored == state.valueAccuracy }
+                            ?: accuracyEntries.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedAccuracyEntry,
+                            onValueChange = { state.valueAccuracy = it.stored },
+                            text = stringResource(R.string.widget_value_accuracy_title),
+                            description = stringResource(R.string.widget_value_accuracy_desc),
+                            enabled = state.togglesEnabled,
+                            options = accuracyEntries,
+                            selectorWidth = 200.dp
                         )
                     }
                     Column(
@@ -938,6 +979,11 @@ internal fun applyWidgetSelectionChanges(
     state.shape = normalizedShape
     val currentWidget = currentWidgets[widgetIndex]
     val updatedWidgets = currentWidgets.toMutableList()
+    val storedValueAccuracy = if (WidgetsRepository.supportsValueAccuracy(state.selectedDataKey)) {
+        state.valueAccuracy?.takeIf { it in 0..2 }
+    } else {
+        null
+    }
     val newWidget = if (state.selectedDataKey.isNotEmpty()) {
         DashboardWidget(
             id = currentWidget.id,
@@ -947,7 +993,8 @@ internal fun applyWidgetSelectionChanges(
             textColorLight = state.textColorLight,
             textColorDark = state.textColorDark,
             backgroundColorLight = state.backgroundColorLight,
-            backgroundColorDark = state.backgroundColorDark
+            backgroundColorDark = state.backgroundColorDark,
+            valueAccuracy = storedValueAccuracy
         )
     } else {
         DashboardWidget(
@@ -957,7 +1004,8 @@ internal fun applyWidgetSelectionChanges(
             textColorLight = state.textColorLight,
             textColorDark = state.textColorDark,
             backgroundColorLight = state.backgroundColorLight,
-            backgroundColorDark = state.backgroundColorDark
+            backgroundColorDark = state.backgroundColorDark,
+            valueAccuracy = null
         )
     }
     updatedWidgets[widgetIndex] = newWidget
@@ -1012,9 +1060,9 @@ internal fun applyWidgetSelectionChanges(
                 false
             },
 
-            // anymani: сохраняем опцию "Оставить плеер на переднем плане"
+            // anymani: сохраняем опцию "Оставить плеер на переднем плане" и запускаем уже независимо от автозапуска плеера
             mediaKeepPlayerForeground = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
-                state.mediaKeepPlayerForeground && state.mediaAutoPlayOnInit
+                state.mediaKeepPlayerForeground
             } else {
                 false
             },
@@ -1028,7 +1076,8 @@ internal fun applyWidgetSelectionChanges(
                 externalAppWidgetId
             } else {
                 null
-            }
+            },
+            valueAccuracy = storedValueAccuracy
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")

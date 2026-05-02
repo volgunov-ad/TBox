@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,17 +20,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
-import vad.dashing.tbox.valueToString
 
 @Composable
 fun DashboardTempInOutWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    canViewModel: CanDataViewModel,
+    dataProvider: DataProvider,
+    valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
@@ -39,13 +39,17 @@ fun DashboardTempInOutWidgetItem(
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
-    val insideTemperature by canViewModel.insideTemperature.collectAsStateWithLifecycle()
-    val outsideTemperature by canViewModel.outsideTemperature.collectAsStateWithLifecycle()
+    val outsideFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("outsideTemperature", valueAccuracy)
+    }
+    val insideFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("insideTemperature", valueAccuracy)
+    }
+    val outsideStr by outsideFlow.collectAsStateWithLifecycle()
+    val insideStr by insideFlow.collectAsStateWithLifecycle()
     val celsiusUnit = stringResource(R.string.unit_celsius)
-    val firstLine =
-        "${valueToString(outsideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}"
-    val secondLine =
-        "${valueToString(insideTemperature, 1)}${if (units) "\u2009$celsiusUnit" else ""}"
+    val firstLine = "$outsideStr${if (units) "\u2009$celsiusUnit" else ""}"
+    val secondLine = "$insideStr${if (units) "\u2009$celsiusUnit" else ""}"
     val defaultTitle = stringResource(R.string.widget_title_temp_outside_inside)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 

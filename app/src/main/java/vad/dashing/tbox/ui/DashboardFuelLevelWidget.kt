@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,18 +20,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
-import vad.dashing.tbox.valueToString
 
 @Composable
 fun DashboardFuelLevelWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    canViewModel: CanDataViewModel,
-    fuelTankLiters: Int,
+    dataProvider: DataProvider,
+    valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
@@ -40,15 +39,18 @@ fun DashboardFuelLevelWidgetItem(
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
-    val pctFiltered by canViewModel.fuelLevelPercentageFiltered.collectAsStateWithLifecycle()
+    val pctFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("fuelLevelPercentageFiltered", valueAccuracy)
+    }
+    val litersFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("fuelLevelLiters", valueAccuracy)
+    }
+    val pctStr by pctFlow.collectAsStateWithLifecycle()
+    val litersStr by litersFlow.collectAsStateWithLifecycle()
     val percentUnit = stringResource(R.string.unit_percent)
     val literUnit = stringResource(R.string.unit_liter)
-    val tank = fuelTankLiters.coerceAtLeast(1).toFloat()
-    val litersValue = pctFiltered?.toFloat()?.times(tank)?.div(100f)
-    val firstLine =
-        "${valueToString(pctFiltered)}${if (units) "\u2009$percentUnit" else ""}"
-    val secondLine =
-        "${valueToString(litersValue, 1)}${if (units) "\u2009$literUnit" else ""}"
+    val firstLine = "$pctStr${if (units) "\u2009$percentUnit" else ""}"
+    val secondLine = "$litersStr${if (units) "\u2009$literUnit" else ""}"
     val defaultTitle = stringResource(R.string.widget_title_fuel_level)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 

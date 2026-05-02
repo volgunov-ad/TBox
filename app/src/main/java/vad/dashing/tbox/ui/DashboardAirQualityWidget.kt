@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,17 +20,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
-import vad.dashing.tbox.valueToString
 
 @Composable
 fun DashboardAirQualityWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    canViewModel: CanDataViewModel,
+    dataProvider: DataProvider,
+    valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     showTitle: Boolean = false,
@@ -38,10 +38,14 @@ fun DashboardAirQualityWidgetItem(
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
-    val outside by canViewModel.outsideAirQuality.collectAsStateWithLifecycle()
-    val inside by canViewModel.insideAirQuality.collectAsStateWithLifecycle()
-    val firstLine = valueToString(outside)
-    val secondLine = valueToString(inside)
+    val outsideFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("outsideAirQuality", valueAccuracy)
+    }
+    val insideFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("insideAirQuality", valueAccuracy)
+    }
+    val firstLine by outsideFlow.collectAsStateWithLifecycle()
+    val secondLine by insideFlow.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.widget_title_air_quality_outside_inside)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 

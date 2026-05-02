@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,17 +20,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
-import vad.dashing.tbox.valueToString
 
 @Composable
 fun DashboardGearBoxWidgetItem(
     widget: DashboardWidget,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
-    canViewModel: CanDataViewModel,
+    dataProvider: DataProvider,
+    valueAccuracy: Int? = null,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
@@ -39,13 +39,21 @@ fun DashboardGearBoxWidgetItem(
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
-    val gearBoxMode by canViewModel.gearBoxMode.collectAsStateWithLifecycle()
-    val gearBoxCurrentGear by canViewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
-    val gearBoxOilTemperature by canViewModel.gearBoxOilTemperature.collectAsStateWithLifecycle()
+    val modeFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("gearBoxMode", valueAccuracy)
+    }
+    val gearFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("gearBoxCurrentGear", valueAccuracy)
+    }
+    val oilFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.GEARBOX_OIL_TEMP_GEAR_TILE, valueAccuracy)
+    }
+    val gearBoxMode by modeFlow.collectAsStateWithLifecycle()
+    val gearStr by gearFlow.collectAsStateWithLifecycle()
+    val oilStr by oilFlow.collectAsStateWithLifecycle()
     val celsiusUnit = stringResource(R.string.unit_celsius)
-    val firstLine = "$gearBoxMode${valueToString(gearBoxCurrentGear)}"
-    val secondLine =
-        "${valueToString(gearBoxOilTemperature, 0)}${if (units) "\u2009$celsiusUnit" else ""}"
+    val firstLine = "$gearBoxMode$gearStr"
+    val secondLine = "$oilStr${if (units) "\u2009$celsiusUnit" else ""}"
     val defaultTitle = stringResource(R.string.widget_title_gear_box_mode_temp)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 

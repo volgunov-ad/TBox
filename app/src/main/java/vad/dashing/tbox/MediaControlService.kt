@@ -267,7 +267,8 @@ object SharedMediaControlService {
     fun playPause(
         context: Context,
         selectedPackages: Set<String>,
-        preferredPackage: String = ""
+        preferredPackage: String = "",
+        keepPlayerForeground: Boolean = false // anymani: опция независима от автозапуска
     ) {
         var controllerHandled = false
         synchronized(this) {
@@ -294,7 +295,12 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
-        launchPlayerApp(context.applicationContext, targetPackage, scheduleColdStartPlayRetry = true)
+        launchPlayerApp(
+            context.applicationContext,
+            targetPackage,
+            scheduleColdStartPlayRetry = true,
+            keepPlayerForeground = keepPlayerForeground // anymani: передаём флаг при ручном запуске
+        )
     }
 
     fun play(

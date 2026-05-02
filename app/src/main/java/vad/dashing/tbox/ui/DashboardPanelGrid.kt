@@ -68,7 +68,6 @@ internal fun DashboardPanelGridAndFrames(
     enableMusicInnerInteractions: Boolean,
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 4.dp,
-    fuelTankLiters: Int = 57,
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val hasConfiguredWidgets = normalizedConfigs.any { config ->
@@ -160,7 +159,6 @@ internal fun DashboardPanelGridAndFrames(
                                     elevation = widgetCardElevation,
                                     shape = normalizeWidgetShape(widgetConfig.shape).dp,
                                     enableMusicInnerInteractions = enableMusicInnerInteractions,
-                                    fuelTankLiters = fuelTankLiters
                                 )
                             }
                         }

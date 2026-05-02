@@ -65,6 +65,12 @@
     <string name="widget_custom_title_label">Title</string>
     <string name="widget_custom_title_hint">Empty — default</string>
     <string name="widget_show_unit">Show unit</string>
+    <string name="widget_value_accuracy_title">Decimal places</string>
+    <string name="widget_value_accuracy_desc">Default follows each parameter’s built-in formatting in the app.</string>
+    <string name="widget_value_accuracy_default">Default</string>
+    <string name="widget_value_accuracy_0">0</string>
+    <string name="widget_value_accuracy_1">1</string>
+    <string name="widget_value_accuracy_2">2</string>
     <string name="widget_title_gear_box_mode_temp">Transmission mode and temperature</string>
     <string name="widget_title_motor_hours_total_trip">Engine hours (total and trip)</string>
     <string name="widget_title_temp_outside_inside">Outside and inside temperature</string>
@@ -100,6 +106,8 @@
     <string name="widget_music_players_required">Select at least one player</string>
     <string name="widget_music_auto_play_on_init">Auto start playback</string>
     <string name="widget_music_auto_play_only_engine">Start only when engine is running</string>
+    <string name="widget_music_keep_player_foreground">Keep player in foreground</string>
+    <string name="widget_music_keep_player_foreground_desc">When enabled, does not return to launcher after auto-start. Helps with VKX and other sensitive players</string>
     <string name="widget_music_no_artist">Artist is unknown</string>
     <string name="widget_music_no_track">Track is unknown</string>
     <string name="widget_music_player_none">Player not found</string>

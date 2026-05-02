@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,13 +36,18 @@ fun DashboardMotorHoursWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
     singleLineDualMetrics: Boolean = false,
+    valueAccuracy: Int? = null,
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
-    val motorHoursFlow = dataProvider.getValueFlow("motorHours")
+    val motorHoursFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("motorHours", valueAccuracy)
+    }
     val motorHoursString by motorHoursFlow.collectAsStateWithLifecycle()
 
-    val motorHoursTripFlow = dataProvider.getValueFlow("motorHoursTrip")
+    val motorHoursTripFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow("motorHoursTrip", valueAccuracy)
+    }
     val motorHoursTripString by motorHoursTripFlow.collectAsStateWithLifecycle()
     val hourUnit = stringResource(R.string.unit_hours)
     val firstLine = "$motorHoursString${if (units) "\u2009$hourUnit" else ""}"
