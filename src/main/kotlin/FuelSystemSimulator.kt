@@ -9,12 +9,18 @@ class FuelSystemSimulator(
     fun runTestScenario() {
         // Тестовые данные: добавим побольше моточасов для наглядности
         val history = listOf(
-            FuelEntry(1000.0, 100.0, 5.0, 25.0, 22.0, 20.0), // +20 град, 100 мч
-            FuelEntry(1500.0, 110.0, 10.0, 45.0, 38.0, -5.0), // -5 град, 110 мч (проехали 500км за 10ч)
+            //FuelEntry(1000.0, 100.0, 5.0, 25.0, 22.0, 20.0), // +20 град, 100 мч
+            //FuelEntry(1500.0, 110.0, 10.0, 45.0, 38.0, -5.0), // -5 град, 110 мч (проехали 500км за 10ч)
 
             // ТЕСТ ШУМА: В чеке 50л, а датчик поднялся всего на 5л (с 5 до 10)
             // Разница колоссальная (90%), фильтр должен это "забанить"
-            FuelEntry(2000.0, 100.0, 10.0, 30.0, 21.0, 15.0)
+            //FuelEntry(2000.0, 100.0, 10.0, 30.0, 21.0, 15.0),
+
+            FuelEntry(1000.0, 100.0, 10.0, 48.0, 40.0, 25.0),
+
+            FuelEntry(1000.0, 100.0, 48.0, 48.0, 0.0, 10.0)
+
+
         )
 
         history.forEachIndexed { index, entry ->
@@ -78,9 +84,9 @@ class FuelSystemSimulator(
 
         // Берем для прогноза средний расход из нашего калькулятора (общий)
         val avgCons = efficiencyCalculator.calculateSmartConsumption(totalLiters, totalDistance, totalHours)
-        val range = estimator.calculateRange(corrected.liters, if(avgCons > 0) avgCons else 8.5) // 8.5 как заглушка
+        val range = estimator.calculateRange(corrected.litersStandard, if(avgCons > 0) avgCons else 8.5) // 8.5 как заглушка
 
-        println("Датчик видит: $testSensorValue л | Реально в баке: ${"%.2f".format(corrected.liters)} л (Уверенность: ${(corrected.confidence * 100).toInt()}%)")
+        println("Датчик видит: $testSensorValue л | Реально в баке: ${"%.2f".format(corrected.litersStandard)} л (Уверенность: ${(corrected.confidence * 100).toInt()}%)")
         println("Прогноз запаса хода при текущем расходе: ${"%.0f".format(range)} км")
 
 
@@ -96,6 +102,27 @@ class FuelSystemSimulator(
         } else {
             println("Для расчета эффективности нужно минимум две заправки в истории.")
         }
+
+        println("\n=== Тест температурного дрейфа (Сравнение) ===")
+        val sensorValue = 49.6
+        val temp = -25.0 // мороз
+
+        val result = estimator.getCorrectedLiters(sensorValue, temp)
+
+        println("Датчик показывает: $sensorValue л")
+        println("Стабильный остаток (базовый): ${"%.2f".format(result.litersStandard)} л")
+        println("Фактический объем (при ${temp}:) ${"%.2f".format(result.litersActual)} л")
+        println("Сжатие из-за холода: ${"%.2f".format(result.litersStandard - result.litersActual)} л")
+
+        val sensorValue2 = 47.07
+        val hotTemp = 40.0    // Жара
+
+        val res = estimator.getCorrectedLiters(sensorValue2, hotTemp)
+
+        println("\nДатчик показывает: $sensorValue2 л")
+        println("Стабильный остаток (базовый): ${"%.2f".format(res.litersStandard)} л")
+        println("Фактический объем (при +${hotTemp}:) ${"%.2f".format(res.litersActual)} л")
+        println("Расширение из-за жары: ${"%.2f".format(res.litersActual - res.litersStandard)} л")
     }
 
 

@@ -91,16 +91,24 @@ class FuelSmartEstimator(
         // СМЕШИВАНИЕ: если уверенность низкая, берем больше от глобального коэффициента
         val kFinal = (kLocal * confidence) + (kGlobal * (1.0 - confidence))
 
-        // Считаем стандартный объем (+15), а затем расширяем его до реального при текущей температуре
+        // 1. Стабильный объем (при +15°C) — то, что не зависит от текущей жары/холода
         val stdVolume = safeSensor * kFinal
-        val realVolume = physics.fromStandard(stdVolume, currentTemp)
 
-        // Флаг: находимся ли мы в "мертвой зоне" датчика (в самом верху или внизу)
+        // 2. Фактический объем (при текущей T) — сколько места бензин занимает сейчас
+        val actualVolume = physics.fromStandard(stdVolume, currentTemp)
+
+        // 1. Стабильный объем (при +15°C) — оставляем сглаживание для красоты UI
+        val finalStd = if (stdVolume >= tankCapacity * 0.98) tankCapacity else stdVolume
+        // 2. Фактический объем (при текущей T) — УБИРАЕМ сглаживание,
+        // чтобы видеть реальное сжатие/расширение даже при полном баке
+        val finalActual = actualVolume
+
         val isAtLimit = currentSensorValue >= sensorMax || currentSensorValue <= sensorMin
 
         return EstimationResult(
-            realVolume.coerceAtMost(tankCapacity + 5), // +5л "запас" на горловину
-            if (isAtLimit) confidence * 0.7 else confidence // Снижаем уверенность на краях бака
+            litersActual = finalActual.coerceAtMost(tankCapacity + 5), // Оставляем +5 на случай перелива в горловину
+            litersStandard = finalStd.coerceAtMost(tankCapacity + 5),
+            confidence = if (isAtLimit) confidence * 0.7 else confidence
         )
     }
 
