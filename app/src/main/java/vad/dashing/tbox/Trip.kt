@@ -48,7 +48,7 @@ data class TripRecord(
     val refuelCount: Int = 0,
     /** Engine starts: transition from 0 or unknown RPM to positive; includes service start with RPM already positive. */
     val engineStartCount: Int = 0,
-    /** Estimated liters added from detected refuels (% rise × tank size per event). */
+    /** Estimated liters added from detected refuels (дельта калиброванных литров за событие). */
     val fuelRefueledLiters: Float = 0f,
     /** Estimated cost of detected refuels, in rubles. */
     val fuelRefueledCostRub: Float = 0f,
@@ -57,6 +57,9 @@ data class TripRecord(
      * resume after the HU/service was off (e.g. refuel while engine stopped).
      */
     val fuelBaselinePercent: Float? = null,
+    /**
+     * Последний уровень в калиброванных литрах (стандарт +15 °C, как [CanDataRepository.fuelLevelCalibratedLiters]).
+     */
     val fuelBaselineLiters: Float? = null,
 ) {
     val isActive: Boolean get() = endTimeEpochMs == null
