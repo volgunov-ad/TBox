@@ -136,6 +136,7 @@ fun CarDataTabContent(
     val motorHours by appDataViewModel.motorHours.collectAsStateWithLifecycle()
     val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
     val fuelLevelCalibratedLiters by canViewModel.fuelLevelCalibratedLiters.collectAsStateWithLifecycle()
+    val fuelLevelCalibratedLitersActual by canViewModel.fuelLevelCalibratedLitersActual.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -188,7 +189,16 @@ fun CarDataTabContent(
                 CarDataStatusRow(
                     context,
                     "fuelLevelLiters",
-                    valueToString(litersDisplay, 1)
+                    valueToString(litersDisplay, 2)
+                )
+            }
+            item {
+                val litersDisplay = fuelLevelCalibratedLitersActual
+                    ?: fuelLevelPercentageFiltered?.toFloat()?.times(fuelTankLiters.toFloat())?.div(100f)
+                CarDataStatusRow(
+                    context,
+                    "fuelLevelLitersActual",
+                    valueToString(litersDisplay, 2)
                 )
             }
             item { CarDataStatusRow(context, "currentFuelConsumption", valueToString(currentFuelConsumption, 1)) }

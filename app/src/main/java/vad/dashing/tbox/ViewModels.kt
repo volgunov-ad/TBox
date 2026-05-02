@@ -361,6 +361,7 @@ object WidgetsRepository {
             R.string.unit_percent
         ),
         "fuelLevelLiters" to DataTitle(R.string.data_title_fuel_level_liters, R.string.unit_liter),
+        "fuelLevelLitersActual" to DataTitle(R.string.data_title_fuel_level_liters_actual, R.string.unit_liter),
         "currentFuelConsumption" to DataTitle(R.string.currentFuelConsumption, R.string.unit_l_100km),
         "breakingForce" to DataTitle(R.string.data_title_breaking_force),
         "engineTemperature" to DataTitle(R.string.data_title_engine_temperature, R.string.unit_celsius),

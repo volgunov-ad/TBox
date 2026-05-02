@@ -4,8 +4,7 @@ package vad.dashing.tbox.fuellevelcalibration
  * Результат оценки остатка топлива после коррекции по калибровке.
  */
 data class EstimationResult(
-    /** Скорректированный объём в баке, л. */
-    val liters: Double,
-    /** Уверенность в данных зоны, 0.0…1.0 (в UI пока не выводится). */
-    val confidence: Double,
+    val litersActual: Double,    // Реальный объем при текущей температуре (плавает)
+    val litersStandard: Double,  // Объем, приведенный к +15°C (стабильный для UI)
+    val confidence: Double // Уровень уверенности (0.0 - 1.0)
 )

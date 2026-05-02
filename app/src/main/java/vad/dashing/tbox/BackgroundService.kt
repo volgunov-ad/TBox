@@ -1940,13 +1940,10 @@ class BackgroundService : Service() {
                 } else {
                     val tankL = tank.coerceAtLeast(1).toFloat()
                     val sensorLiters = pct.toFloat() / 100f * tankL
-                    //val temp = (outT ?: 15f).toDouble()
-                    /* Пока не будем учитывать текущую температуру.
-                     Оставим стандартное значение 15 градусов, чтобы алгоритм учитывал это
-                     как коэффициент 1.0*/
-                    val temp = 15.0
+                    val temp = (outT ?: 15f).toDouble()
                     val result = est.getCorrectedLiters(sensorLiters.toDouble(), temp)
-                    CanDataRepository.updateFuelLevelCalibratedLiters(result.liters.toFloat())
+                    CanDataRepository.updateFuelLevelCalibratedLiters(result.litersStandard.toFloat())
+                    CanDataRepository.updateFuelLevelCalibratedLitersActual(result.litersStandard.toFloat())
                     CanDataRepository.updateFuelCalibrationConfidence(result.confidence.toFloat())
                 }
                 Unit

@@ -22,6 +22,7 @@ private const val JSON_REFUEL_COUNT = "refuelCount"
 private const val JSON_FUEL_REFUELED_LITERS = "fuelRefueledLiters"
 private const val JSON_FUEL_REFUELED_COST_RUB = "fuelRefueledCostRub"
 private const val JSON_FUEL_BASELINE_PERCENT = "fuelBaselinePercent"
+private const val JSON_FUEL_BASELINE_LITERS = "fuelBaselineLiters"
 private const val JSON_ODOMETER_START_KM = "odometerStartKm"
 private const val JSON_ENGINE_START_COUNT = "engineStartCount"
 
@@ -56,6 +57,7 @@ data class TripRecord(
      * resume after the HU/service was off (e.g. refuel while engine stopped).
      */
     val fuelBaselinePercent: Float? = null,
+    val fuelBaselineLiters: Float? = null,
 ) {
     val isActive: Boolean get() = endTimeEpochMs == null
 
@@ -80,6 +82,7 @@ data class TripRecord(
         put(JSON_FUEL_REFUELED_LITERS, fuelRefueledLiters.toDouble())
         put(JSON_FUEL_REFUELED_COST_RUB, fuelRefueledCostRub.toDouble())
         if (fuelBaselinePercent != null) put(JSON_FUEL_BASELINE_PERCENT, fuelBaselinePercent.toDouble())
+        if (fuelBaselineLiters != null) put(JSON_FUEL_BASELINE_LITERS, fuelBaselineLiters.toDouble())
     }
 
     companion object {
@@ -115,6 +118,9 @@ data class TripRecord(
             fuelRefueledCostRub = o.optDouble(JSON_FUEL_REFUELED_COST_RUB, 0.0).toFloat(),
             fuelBaselinePercent = if (o.has(JSON_FUEL_BASELINE_PERCENT) && !o.isNull(JSON_FUEL_BASELINE_PERCENT)) {
                 o.optDouble(JSON_FUEL_BASELINE_PERCENT).toFloat()
+            } else null,
+            fuelBaselineLiters = if (o.has(JSON_FUEL_BASELINE_LITERS) && !o.isNull(JSON_FUEL_BASELINE_LITERS)) {
+                o.optDouble(JSON_FUEL_BASELINE_LITERS).toFloat()
             } else null,
         )
     }

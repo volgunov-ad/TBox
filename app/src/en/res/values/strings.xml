@@ -416,6 +416,7 @@
     <string name="data_title_distance_to_fuel_empty">Distance to empty</string>
     <string name="data_title_fuel_level_percentage">Fuel level</string>
     <string name="data_title_fuel_level_liters">Fuel level in liters</string>
+    <string name="data_title_fuel_level_liters_actual">Fuel level in liters (with temperature correction)</string>
     <string name="data_title_fuel_level_percentage_filtered">Fuel level (filtered)</string>
     <string name="currentFuelConsumption">Instantaneous fuel consumption</string>
     <string name="data_title_breaking_force">Braking force</string>
