@@ -191,7 +191,7 @@ fun RefuelsTab(
                                             refuel.ambientTempAtRefuel ?: REFUEL_AMBIENT_TEMP_DEFAULT_C,
                                             1,
                                         ),
-                                        actualDraft = actualEdits[refuel.id] ?: valueToString(refuel.actualLiters, 1),
+                                        actualDraft = actualEdits[refuel.id] ?: valueToString(refuel.actualLiters, 2),
                                         priceDraft = priceEdits[refuel.id] ?: (refuel.pricePerLiterRub?.let { valueToString(it, 2) } ?: ""),
                                         sourceDraft = sourceEdits[refuel.id] ?: refuel.priceSourceName.orEmpty(),
                                         onTempDraftChange = { tempEdits[refuel.id] = it },
@@ -444,7 +444,7 @@ private fun RefuelTableRow(
             onValueChange = onTempDraftChange,
             onCommit = onTempCommit,
         )
-        RefuelCell(valueToString(refuel.estimatedLiters, 1), 140)
+        RefuelCell(valueToString(refuel.estimatedLiters, 2), 140)
         RefuelEditableCell(
             value = actualDraft,
             widthDp = 180,
@@ -700,7 +700,7 @@ private fun RefuelEditableCell(
     showCommitButton: Boolean,
     onValueChange: (String) -> Unit,
     onCommit: (String) -> Unit,
-    keyboardType: KeyboardType = KeyboardType.Decimal,
+    keyboardType: KeyboardType = KeyboardType.Text,
 ) {
     OutlinedTextField(
         value = value,
