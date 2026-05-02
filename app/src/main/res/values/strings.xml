@@ -510,6 +510,8 @@
     <string name="refuels_calibration_tank_hint">Смена объёма сбрасывает калибровку</string>
     <string name="refuels_calibration_zones_title">Число зон калибровки</string>
     <string name="refuels_calibration_zones_hint">Смена числа зон сбрасывает калибровку</string>
+    <string name="refuels_calibration_maturity_title">Порог зрелости зоны</string>
+    <string name="refuels_calibration_maturity_hint">Литры датчика, накопленные в зоне, для полного доверия локальному K. Накопленные данные калибровки не сбрасываются при изменении этого параметра</string>
     <string name="refuels_calibration_report_title">Состояние зон</string>
     <string name="refuels_calibration_reset">Сбросить калибровку</string>
     <string name="refuels_calibration_trained">Учтена</string>

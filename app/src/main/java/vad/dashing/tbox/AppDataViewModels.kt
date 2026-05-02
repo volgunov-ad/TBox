@@ -168,6 +168,16 @@ class AppDataViewModel(
         }
     }
 
+    /**
+     * Порог зрелости зон (л датчика на зону для полной уверенности в локальном K).
+     * JSON калибровки и флаги заправок не сбрасываются.
+     */
+    fun applyFuelCalibrationMaturityThreshold(thresholdLiters: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFuelCalibrationMaturityThreshold(thresholdLiters)
+        }
+    }
+
     /** Смена числа зон: сброс калибровки и пересчёт заправок при текущем объёме бака. */
     fun applyFuelCalibrationZoneCountWithReset(zoneCount: Int) {
         viewModelScope.launch {

@@ -157,6 +157,10 @@ data class BackgroundServiceSettingsSnapshot(
     val fuelCalibrationJson: String,
     /** Число зон бака для калибровки. */
     val fuelCalibrationZoneCount: Int,
+    /**
+     * Порог зрелости зоны (литры датчика, накопленные в зоне): при достижении полная уверенность в локальном K.
+     */
+    val fuelCalibrationMaturityThreshold: Int,
     val fuelPriceFuelId: Int,
     val splitTripTimeMinutes: Int,
 )
@@ -255,6 +259,8 @@ class SettingsManager(private val context: Context) {
         private val FUEL_CALIBRATION_JSON_KEY = stringPreferencesKey("${KEY_PREFIX}fuel_calibration_json")
         private val FUEL_CALIBRATION_ZONE_COUNT_KEY =
             intPreferencesKey("${KEY_PREFIX}fuel_calibration_zone_count")
+        private val FUEL_CALIBRATION_MATURITY_THRESHOLD_KEY =
+            intPreferencesKey("${KEY_PREFIX}fuel_calibration_maturity_threshold_l")
         private val FUEL_PRICE_FUEL_ID_KEY = intPreferencesKey("${KEY_PREFIX}fuel_price_fuel_id")
         private val SPLIT_TRIP_TIME_MINUTES_KEY = intPreferencesKey("${KEY_PREFIX}split_trip_time_minutes")
 
@@ -302,6 +308,10 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_FUEL_CALIBRATION_ZONE_COUNT = 5
         private const val FUEL_CALIBRATION_ZONE_COUNT_MIN = 3
         private const val FUEL_CALIBRATION_ZONE_COUNT_MAX = 20
+        /** Накопленные «литры датчика» по зоне для полной уверенности в локальном K (см. CalibrationStore). */
+        private const val DEFAULT_FUEL_CALIBRATION_MATURITY_THRESHOLD = 80
+        const val FUEL_CALIBRATION_MATURITY_THRESHOLD_MIN = 5
+        const val FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX = 500
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
         private const val MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 10
         private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 50
@@ -573,6 +583,13 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    val fuelCalibrationMaturityThresholdFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[FUEL_CALIBRATION_MATURITY_THRESHOLD_KEY]
+                ?: DEFAULT_FUEL_CALIBRATION_MATURITY_THRESHOLD
+        }
+        .distinctUntilChanged()
+
     val fuelPriceFuelIdFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[FUEL_PRICE_FUEL_ID_KEY] ?: FuelTypes.DEFAULT_FUEL_ID }
         .distinctUntilChanged()
@@ -611,6 +628,8 @@ class SettingsManager(private val context: Context) {
             fuelCalibrationJson = preferences[FUEL_CALIBRATION_JSON_KEY].orEmpty(),
             fuelCalibrationZoneCount = preferences[FUEL_CALIBRATION_ZONE_COUNT_KEY]
                 ?: DEFAULT_FUEL_CALIBRATION_ZONE_COUNT,
+            fuelCalibrationMaturityThreshold = preferences[FUEL_CALIBRATION_MATURITY_THRESHOLD_KEY]
+                ?: DEFAULT_FUEL_CALIBRATION_MATURITY_THRESHOLD,
             fuelPriceFuelId = preferences[FUEL_PRICE_FUEL_ID_KEY] ?: FuelTypes.DEFAULT_FUEL_ID,
             splitTripTimeMinutes = preferences[SPLIT_TRIP_TIME_MINUTES_KEY]
                 ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES,
@@ -1157,6 +1176,17 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[FUEL_CALIBRATION_ZONE_COUNT_KEY] =
                 zoneCount.coerceIn(FUEL_CALIBRATION_ZONE_COUNT_MIN, FUEL_CALIBRATION_ZONE_COUNT_MAX)
+        }
+    }
+
+    /** Порог зрелости зон (л датчика); JSON калибровки не сбрасывается. */
+    suspend fun saveFuelCalibrationMaturityThreshold(thresholdLiters: Int) {
+        val t = thresholdLiters.coerceIn(
+            FUEL_CALIBRATION_MATURITY_THRESHOLD_MIN,
+            FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX,
+        )
+        context.settingsDataStore.edit { preferences ->
+            preferences[FUEL_CALIBRATION_MATURITY_THRESHOLD_KEY] = t
         }
     }
 

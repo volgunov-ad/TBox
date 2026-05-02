@@ -729,6 +729,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 5
         )
 
+    val fuelCalibrationMaturityThreshold = settingsManager.fuelCalibrationMaturityThresholdFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 80
+        )
+
     val fuelPriceFuelId = settingsManager.fuelPriceFuelIdFlow
         .stateIn(
             scope = viewModelScope,

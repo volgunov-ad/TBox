@@ -76,6 +76,7 @@ class BackgroundService : Service() {
     private lateinit var fuelTankLitersSetting: StateFlow<Int>
     private lateinit var fuelCalibrationJsonSetting: StateFlow<String>
     private lateinit var fuelCalibrationZoneCountSetting: StateFlow<Int>
+    private lateinit var fuelCalibrationMaturityThresholdSetting: StateFlow<Int>
     private lateinit var fuelPriceFuelIdSetting: StateFlow<Int>
     private lateinit var splitTripTimeMinutesSetting: StateFlow<Int>
     private val fuelPriceClient by lazy { FuelPriceClient() }
@@ -367,6 +368,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.fuelCalibrationJson)
             fuelCalibrationZoneCountSetting = settingsManager.fuelCalibrationZoneCountFlow
                 .stateIn(scope, eager, settingsSnap.fuelCalibrationZoneCount)
+            fuelCalibrationMaturityThresholdSetting = settingsManager.fuelCalibrationMaturityThresholdFlow
+                .stateIn(scope, eager, settingsSnap.fuelCalibrationMaturityThreshold)
             fuelPriceFuelIdSetting = settingsManager.fuelPriceFuelIdFlow
                 .stateIn(scope, eager, settingsSnap.fuelPriceFuelId)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
@@ -410,6 +413,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, "")
             fuelCalibrationZoneCountSetting = settingsManager.fuelCalibrationZoneCountFlow
                 .stateIn(scope, eager, 5)
+            fuelCalibrationMaturityThresholdSetting = settingsManager.fuelCalibrationMaturityThresholdFlow
+                .stateIn(scope, eager, 80)
             fuelPriceFuelIdSetting = settingsManager.fuelPriceFuelIdFlow
                 .stateIn(scope, eager, FuelTypes.DEFAULT_FUEL_ID)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
@@ -1850,7 +1855,8 @@ class BackgroundService : Service() {
         val reportText = withContext(Dispatchers.Default) {
             val json = fuelCalibrationJsonSetting.value
             val zones = fuelCalibrationZoneCountSetting.value
-            val estimator = buildFuelEstimator(tankL.toInt(), zones, json)
+            val maturity = fuelCalibrationMaturityThresholdSetting.value
+            val estimator = buildFuelEstimator(tankL.toInt(), zones, json, maturity)
             estimator.train(entry)
         }
         synchronized(RefuelRepository.lock) {
@@ -1867,9 +1873,14 @@ class BackgroundService : Service() {
         tankLiters: Int,
         zoneCount: Int,
         calibrationJson: String,
+        maturityThresholdLiters: Int,
     ): FuelSmartEstimator {
         val cap = tankLiters.coerceAtLeast(1).toDouble()
         val zones = zoneCount.coerceIn(3, 20)
+        val maturity = maturityThresholdLiters.coerceIn(
+            SettingsManager.FUEL_CALIBRATION_MATURITY_THRESHOLD_MIN,
+            SettingsManager.FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX,
+        ).toDouble()
         val decoded = FuelCalibrationJson.decode(calibrationJson)
             ?.takeIf { it.realLiters.size == zones }
         val sensorMin = cap * 2.0 / 50.0
@@ -1879,6 +1890,7 @@ class BackgroundService : Service() {
             sensorMin = sensorMin,
             sensorMax = sensorMax,
             zoneCount = zones,
+            maturityThreshold = maturity,
             initialCalibration = decoded,
             onCalibrationPersist = { data ->
                 scope.launch(Dispatchers.IO) {
@@ -1895,19 +1907,31 @@ class BackgroundService : Service() {
     private fun startFuelCalibratedLitersWatcher() {
         if (fuelCalibratedLitersJob?.isActive == true) return
         fuelCalibratedLitersJob = scope.launch {
-            var lastEstimatorKey: Triple<Int, Int, String>? = null
+            data class FuelEstimatorCacheKey(
+                val tank: Int,
+                val zones: Int,
+                val json: String,
+                val maturity: Int,
+            )
+            var lastEstimatorKey: FuelEstimatorCacheKey? = null
             var estimator: FuelSmartEstimator? = null
             combine(
-                fuelTankLitersSetting,
-                fuelCalibrationZoneCountSetting,
-                fuelCalibrationJsonSetting,
+                combine(
+                    fuelTankLitersSetting,
+                    fuelCalibrationZoneCountSetting,
+                    fuelCalibrationJsonSetting,
+                ) { tank: Int, zones: Int, json: String ->
+                    Triple(tank, zones, json)
+                },
+                fuelCalibrationMaturityThresholdSetting,
                 CanDataRepository.fuelLevelPercentageFiltered,
                 CanDataRepository.outsideTemperature,
-            ) { tank: Int, zones: Int, json: String, pct: UInt?, outT: Float? ->
-                val key = Triple(tank, zones, json)
+            ) { tankZonesJson: Triple<Int, Int, String>, maturity: Int, pct: UInt?, outT: Float? ->
+                val (tank, zones, json) = tankZonesJson
+                val key = FuelEstimatorCacheKey(tank, zones, json, maturity)
                 if (lastEstimatorKey != key) {
                     lastEstimatorKey = key
-                    estimator = buildFuelEstimator(tank, zones, json)
+                    estimator = buildFuelEstimator(tank, zones, json, maturity)
                 }
                 val est = estimator
                 if (est == null || pct == null) {
@@ -1916,7 +1940,11 @@ class BackgroundService : Service() {
                 } else {
                     val tankL = tank.coerceAtLeast(1).toFloat()
                     val sensorLiters = pct.toFloat() / 100f * tankL
-                    val temp = (outT ?: 15f).toDouble()
+                    //val temp = (outT ?: 15f).toDouble()
+                    /* Пока не будем учитывать текущую температуру.
+                     Оставим стандартное значение 15 градусов, чтобы алгоритм учитывал это
+                     как коэффициент 1.0*/
+                    val temp = 15.0
                     val result = est.getCorrectedLiters(sensorLiters.toDouble(), temp)
                     CanDataRepository.updateFuelLevelCalibratedLiters(result.liters.toFloat())
                     CanDataRepository.updateFuelCalibrationConfidence(result.confidence.toFloat())

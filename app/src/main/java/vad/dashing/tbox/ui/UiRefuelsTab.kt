@@ -82,6 +82,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.RefuelRecord
 import vad.dashing.tbox.REFUEL_AMBIENT_TEMP_DEFAULT_C
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationReportFormatter
 import vad.dashing.tbox.valueToString
 
@@ -97,8 +98,19 @@ fun RefuelsTab(
     val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
     val fuelCalibrationJson by settingsViewModel.fuelCalibrationJson.collectAsStateWithLifecycle()
     val fuelCalibrationZoneCount by settingsViewModel.fuelCalibrationZoneCount.collectAsStateWithLifecycle()
-    val reportLines = remember(fuelCalibrationJson, fuelTankLiters, fuelCalibrationZoneCount) {
-        FuelCalibrationReportFormatter.linesOrNull(fuelCalibrationJson, fuelTankLiters, fuelCalibrationZoneCount)
+    val fuelCalibrationMaturityThreshold by settingsViewModel.fuelCalibrationMaturityThreshold.collectAsStateWithLifecycle()
+    val reportLines = remember(
+        fuelCalibrationJson,
+        fuelTankLiters,
+        fuelCalibrationZoneCount,
+        fuelCalibrationMaturityThreshold,
+    ) {
+        FuelCalibrationReportFormatter.linesOrNull(
+            fuelCalibrationJson,
+            fuelTankLiters,
+            fuelCalibrationZoneCount,
+            fuelCalibrationMaturityThreshold,
+        )
     }
     val sortedRefuels = remember(refuels) { refuels.sortedByDescending { it.timeEpochMs } }
     val context = LocalContext.current
@@ -127,6 +139,10 @@ fun RefuelsTab(
     var zoneCountDraft by remember { mutableStateOf(fuelCalibrationZoneCount.toString()) }
     LaunchedEffect(fuelCalibrationZoneCount) {
         zoneCountDraft = fuelCalibrationZoneCount.toString()
+    }
+    var maturityDraft by remember { mutableStateOf(fuelCalibrationMaturityThreshold.toString()) }
+    LaunchedEffect(fuelCalibrationMaturityThreshold) {
+        maturityDraft = fuelCalibrationMaturityThreshold.toString()
     }
 
     val calibrationScrollState = rememberScrollState()
@@ -289,6 +305,18 @@ fun RefuelsTab(
                     maxValue = 20,
                     onCommit = { value ->
                         appDataViewModel.applyFuelCalibrationZoneCountWithReset(value)
+                    },
+                )
+                CalibrationIntCommitField(
+                    title = stringResource(R.string.refuels_calibration_maturity_title),
+                    description = stringResource(R.string.refuels_calibration_maturity_hint),
+                    draft = maturityDraft,
+                    onDraftChange = { maturityDraft = it },
+                    savedValue = fuelCalibrationMaturityThreshold,
+                    minValue = SettingsManager.FUEL_CALIBRATION_MATURITY_THRESHOLD_MIN,
+                    maxValue = SettingsManager.FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX,
+                    onCommit = { value ->
+                        appDataViewModel.applyFuelCalibrationMaturityThreshold(value)
                     },
                 )
                 OutlinedButton(

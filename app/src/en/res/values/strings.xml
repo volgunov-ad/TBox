@@ -507,6 +507,8 @@
     <string name="refuels_calibration_tank_hint">Changing tank volume clears calibration</string>
     <string name="refuels_calibration_zones_title">Calibration zones</string>
     <string name="refuels_calibration_zones_hint">Changing calibration zones clears calibration</string>
+    <string name="refuels_calibration_maturity_title">Zone maturity threshold</string>
+    <string name="refuels_calibration_maturity_hint">Sensor liters accumulated per zone before full weight on local K. Stored calibration data is not cleared when this parameter changed</string>
     <string name="refuels_calibration_report_title">Zone status</string>
     <string name="refuels_calibration_reset">Reset calibration</string>
     <string name="refuels_calibration_trained">Used</string>

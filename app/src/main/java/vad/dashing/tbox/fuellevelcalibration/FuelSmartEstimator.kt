@@ -10,13 +10,15 @@ class FuelSmartEstimator(
     private val sensorMin: Double = 2.0,
     private val sensorMax: Double = 48.0,
     zoneCount: Int = 5,
+    /** Литры датчика по зоне для полной уверенности в локальном K (см. [CalibrationStore.getConfidence]). */
+    maturityThreshold: Double = 80.0,
     initialCalibration: CalibrationData? = null,
     /** Вызывается после каждого успешного [train], чтобы записать калибровку в настройки. */
     private val onCalibrationPersist: (CalibrationData) -> Unit,
 ) {
 
     private val physics = FuelPhysics()
-    private val store = CalibrationStore(zoneCount, tankCapacity, maturityThreshold = 80.0)
+    private val store = CalibrationStore(zoneCount, tankCapacity, maturityThreshold = maturityThreshold)
 
     init {
         initialCalibration?.let { store.restoreFrom(it) }
