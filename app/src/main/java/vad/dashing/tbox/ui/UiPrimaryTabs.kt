@@ -691,6 +691,40 @@ fun SettingsTabContent(
                     textAlign = TextAlign.Center
                 )
             }
+
+            SettingsTitle(stringResource(R.string.settings_home_launcher_title))
+            Text(
+                text = stringResource(R.string.settings_home_launcher_desc),
+                fontSize = 20.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Button(
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Settings.ACTION_HOME_SETTINGS).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                        )
+                    }.onFailure {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.settings_home_launcher_settings_failed),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_home_launcher_open_settings),
+                    fontSize = 22.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
 
         SettingsTitle(stringResource(R.string.settings_backup_title))

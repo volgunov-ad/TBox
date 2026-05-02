@@ -287,6 +287,10 @@
     <string name="settings_immersive_policy_apply">Apply policy_control</string>
     <string name="settings_immersive_policy_applied">policy_control updated</string>
     <string name="settings_immersive_policy_denied">WRITE_SECURE_SETTINGS not granted (run pm grant via ADB)</string>
+    <string name="settings_home_launcher_title">Home app (launcher replacement)</string>
+    <string name="settings_home_launcher_desc">This app is registered as a home (launcher) candidate. In system settings, set it as the default home app if your firmware allows. Many OEM head units lock the factory launcher only. After selection, the Home key opens TBox Monitor instead of the stock shell; use the app shortcut widget or the system app list to open other apps.</string>
+    <string name="settings_home_launcher_open_settings">Open home app settings</string>
+    <string name="settings_home_launcher_settings_failed">Could not open settings (not available on this device)</string>
     <string name="settings_backup_title">Backup</string>
     <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>

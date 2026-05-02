@@ -290,6 +290,10 @@
     <string name="settings_immersive_policy_apply">Применить policy_control</string>
     <string name="settings_immersive_policy_applied">policy_control обновлён</string>
     <string name="settings_immersive_policy_denied">Нет прав WRITE_SECURE_SETTINGS (выполните pm grant через ADB)</string>
+    <string name="settings_home_launcher_title">Приложение как главный экран (лаунчер)</string>
+    <string name="settings_home_launcher_desc">Это приложение зарегистрировано как кандидат на роль лаунчера. В настройках системы выберите его приложением «Домой» (главный экран), если прошивка позволяет. На части ГУ смена лаунчера недоступна — остаётся только заводской com.wt.launcher3. После выбора кнопка «Домой» будет открывать TBox Monitor вместо штатной оболочки; доступ к другим приложениям обеспечивайте через виджет «Ярлык приложения» или системный список приложений.</string>
+    <string name="settings_home_launcher_open_settings">Открыть настройки главного экрана</string>
+    <string name="settings_home_launcher_settings_failed">Не удалось открыть настройки (нет экрана на этой прошивке)</string>
     <string name="settings_backup_title">Резервная копия</string>
     <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения и данных поездок (моторные часы, список поездок, избранное) в один JSON-файл. Пути к папкам обоев главного экрана и выбранные файлы сохраняются в JSON; сами изображения не копируются. Пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
     <string name="settings_backup_export">Экспорт JSON</string>
