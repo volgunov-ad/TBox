@@ -547,8 +547,8 @@
     <string name="data_title_front_right_seat_heat_vent_widget">Виджет обогрева и вентиляции правого переднего сиденья (двойная кнопка)</string>
     <string name="data_title_front_left_seat_heat_vent_single_widget">Виджет обогрева и вентиляции левого переднего сиденья (одна кнопка)</string>
     <string name="data_title_front_right_seat_heat_vent_single_widget">Виджет обогрева и вентиляции правого переднего сиденья (одна кнопка)</string>
-    <string name="data_title_rear_left_seat_heat_widget">Обогрев левого заднего сиденья</string>
-    <string name="data_title_rear_right_seat_heat_widget">Обогрев правого заднего сиденья</string>
+    <string name="data_title_rear_left_seat_heat_widget">Виджет обогрева левого заднего сиденья</string>
+    <string name="data_title_rear_right_seat_heat_widget">Виджет обогрева правого заднего сиденья</string>
     <string name="data_title_restart_tbox">Кнопка перезагрузки TBox</string>
     <string name="data_title_music_widget">Виджет управления музыкой</string>
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
