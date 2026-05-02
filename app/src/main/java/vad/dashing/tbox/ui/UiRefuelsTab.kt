@@ -54,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -82,6 +83,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.RefuelRecord
 import vad.dashing.tbox.REFUEL_AMBIENT_TEMP_DEFAULT_C
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationReportFormatter
 import vad.dashing.tbox.valueToString
 
@@ -97,8 +99,19 @@ fun RefuelsTab(
     val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
     val fuelCalibrationJson by settingsViewModel.fuelCalibrationJson.collectAsStateWithLifecycle()
     val fuelCalibrationZoneCount by settingsViewModel.fuelCalibrationZoneCount.collectAsStateWithLifecycle()
-    val reportLines = remember(fuelCalibrationJson, fuelTankLiters, fuelCalibrationZoneCount) {
-        FuelCalibrationReportFormatter.linesOrNull(fuelCalibrationJson, fuelTankLiters, fuelCalibrationZoneCount)
+    val fuelCalibrationMaturityThreshold by settingsViewModel.fuelCalibrationMaturityThreshold.collectAsStateWithLifecycle()
+    val reportLines = remember(
+        fuelCalibrationJson,
+        fuelTankLiters,
+        fuelCalibrationZoneCount,
+        fuelCalibrationMaturityThreshold,
+    ) {
+        FuelCalibrationReportFormatter.linesOrNull(
+            fuelCalibrationJson,
+            fuelTankLiters,
+            fuelCalibrationZoneCount,
+            fuelCalibrationMaturityThreshold,
+        )
     }
     val sortedRefuels = remember(refuels) { refuels.sortedByDescending { it.timeEpochMs } }
     val context = LocalContext.current
@@ -107,6 +120,7 @@ fun RefuelsTab(
     }
     var showExportDialog by remember { mutableStateOf(false) }
     var pendingDeleteRefuelId by remember { mutableStateOf<String?>(null) }
+    var pendingCalibrationReset by remember { mutableStateOf(false) }
     val actualEdits = remember { mutableStateMapOf<String, String>() }
     val priceEdits = remember { mutableStateMapOf<String, String>() }
     val sourceEdits = remember { mutableStateMapOf<String, String>() }
@@ -127,6 +141,10 @@ fun RefuelsTab(
     var zoneCountDraft by remember { mutableStateOf(fuelCalibrationZoneCount.toString()) }
     LaunchedEffect(fuelCalibrationZoneCount) {
         zoneCountDraft = fuelCalibrationZoneCount.toString()
+    }
+    var maturityDraft by remember { mutableStateOf(fuelCalibrationMaturityThreshold.toString()) }
+    LaunchedEffect(fuelCalibrationMaturityThreshold) {
+        maturityDraft = fuelCalibrationMaturityThreshold.toString()
     }
 
     val calibrationScrollState = rememberScrollState()
@@ -291,8 +309,20 @@ fun RefuelsTab(
                         appDataViewModel.applyFuelCalibrationZoneCountWithReset(value)
                     },
                 )
+                CalibrationIntCommitField(
+                    title = stringResource(R.string.refuels_calibration_maturity_title),
+                    description = stringResource(R.string.refuels_calibration_maturity_hint),
+                    draft = maturityDraft,
+                    onDraftChange = { maturityDraft = it },
+                    savedValue = fuelCalibrationMaturityThreshold,
+                    minValue = SettingsManager.FUEL_CALIBRATION_MATURITY_THRESHOLD_MIN,
+                    maxValue = SettingsManager.FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX,
+                    onCommit = { value ->
+                        appDataViewModel.applyFuelCalibrationMaturityThreshold(value)
+                    },
+                )
                 OutlinedButton(
-                    onClick = { appDataViewModel.clearFuelCalibrationOnly() },
+                    onClick = { pendingCalibrationReset = true },
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
                     Text(stringResource(R.string.refuels_calibration_reset), fontSize = 20.sp)
@@ -355,6 +385,29 @@ fun RefuelsTab(
         )
     }
 
+    if (pendingCalibrationReset) {
+        AlertDialog(
+            onDismissRequest = { pendingCalibrationReset = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.refuels_calibration_reset_confirm_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.refuels_calibration_reset_confirm_message)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        appDataViewModel.clearFuelCalibrationOnly()
+                        pendingCalibrationReset = false
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.refuels_calibration_reset))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { pendingCalibrationReset = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
     if (showExportDialog) {
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
@@ -385,6 +438,7 @@ fun RefuelsTab(
 @Composable
 private fun RefuelHeaderRow() {
     Row(verticalAlignment = Alignment.CenterVertically) {
+        RefuelHeaderCell("", 40)
         RefuelHeaderCell(stringResource(R.string.refuels_time), 190)
         RefuelHeaderCell(stringResource(R.string.refuels_odometer), 120)
         RefuelHeaderCell(stringResource(R.string.refuels_coordinates), 210)
@@ -428,6 +482,21 @@ private fun RefuelTableRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(vertical = 4.dp),
     ) {
+        Box(
+            modifier = Modifier
+                .width(40.dp)
+                .padding(end = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (refuel.pricePerLiterRub == null) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_refuel_price_warning),
+                    contentDescription = stringResource(R.string.refuels_price_missing_cd),
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFFFF9800),
+                )
+            }
+        }
         RefuelCell(dateTimeFormat.format(Date(refuel.timeEpochMs)), 190)
         RefuelCell(refuel.odometerKm?.let { valueToString(it, 0) } ?: noData, 120)
         RefuelCoordinatesCell(
