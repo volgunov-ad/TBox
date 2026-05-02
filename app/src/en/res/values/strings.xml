@@ -281,6 +281,16 @@
     <string name="settings_get_geo_data_title">Receive location data from TBox</string>
 
     <string name="settings_misc_title">Misc</string>
+    <string name="settings_immersive_policy_title">Immersive policy (status bar)</string>
+    <string name="settings_immersive_policy_desc">Writes Settings.Global policy_control (immersive.full). One-time ADB grant required: adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS\nWithout it the button cannot change the setting. Comma-separated package names, no spaces; this app is added automatically.</string>
+    <string name="settings_immersive_policy_packages_hint">com.example.app,vad.dashing.tbox,com.other.app</string>
+    <string name="settings_immersive_policy_apply">Apply policy_control</string>
+    <string name="settings_immersive_policy_applied">policy_control updated</string>
+    <string name="settings_immersive_policy_denied">WRITE_SECURE_SETTINGS not granted (run pm grant via ADB)</string>
+    <string name="settings_home_launcher_title">Home app (launcher replacement)</string>
+    <string name="settings_home_launcher_desc">This app is registered as a home (launcher) candidate. In system settings, set it as the default home app if your firmware allows. Many OEM head units lock the factory launcher only. After selection, the Home key opens TBox Monitor instead of the stock shell; use the app shortcut widget or the system app list to open other apps.</string>
+    <string name="settings_home_launcher_open_settings">Open home app settings</string>
+    <string name="settings_home_launcher_settings_failed">Could not open settings (not available on this device)</string>
     <string name="settings_backup_title">Backup</string>
     <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>

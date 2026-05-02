@@ -197,6 +197,9 @@ class SettingsManager(private val context: Context) {
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
+        /** Comma-separated package ids for Settings.Global policy_control immersive.full (head units). */
+        private val IMMERSIVE_POLICY_PACKAGES_KEY =
+            stringPreferencesKey("${KEY_PREFIX}immersive_policy_packages")
         private val LEFT_MENU_VISIBLE = booleanPreferencesKey("${KEY_PREFIX}left_menu_visible")
         private val MAIN_SCREEN_OPEN_ON_BOOT_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_open_on_boot")
@@ -408,6 +411,10 @@ class SettingsManager(private val context: Context) {
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[EXPERT_MODE] ?: false }
+        .distinctUntilChanged()
+
+    val immersivePolicyPackagesFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[IMMERSIVE_POLICY_PACKAGES_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val leftMenuVisibleFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -696,6 +703,31 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[EXPERT_MODE] = enabled
         }
+    }
+
+    suspend fun saveImmersivePolicyPackagesCsv(csv: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[IMMERSIVE_POLICY_PACKAGES_KEY] = csv.trim()
+        }
+    }
+
+    /**
+     * Writes [Settings.Global.POLICY_CONTROL] with merged `immersive.full=` for the given packages
+     * (always includes this app). Returns false without [android.Manifest.permission.WRITE_SECURE_SETTINGS].
+     */
+    suspend fun saveAndApplyImmersiveFullPolicyControl(csvInput: String): Boolean {
+        val parsed = csvInput.split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .toMutableList()
+        val selfPkg = context.packageName
+        if (selfPkg.isNotBlank() && selfPkg !in parsed) {
+            parsed.add(selfPkg)
+        }
+        saveImmersivePolicyPackagesCsv(parsed.joinToString(","))
+        val merged = mergeImmersiveFullPolicy(readGlobalPolicyControl(context), parsed)
+        return putGlobalPolicyControl(context, merged)
     }
 
     suspend fun saveLeftMenuVisibleSetting(visible: Boolean) {
