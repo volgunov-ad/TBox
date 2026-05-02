@@ -46,6 +46,7 @@ enum class MbCanSeatSlot {
  */
 internal class MbCanSignalStateEngine(
     private val steeringFlow: MutableStateFlow<MbCanBinaryState>,
+    private val windshieldHeatFlow: MutableStateFlow<MbCanBinaryState>,
     private val frontLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
     private val frontRightSeatFlow: MutableStateFlow<MbCanSeatModeState>,
     private val rearLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
@@ -54,6 +55,8 @@ internal class MbCanSignalStateEngine(
 ) {
     private var steeringUnknownStreak = 0
     private var steeringUnavailableStreak = 0
+    private var windshieldUnknownStreak = 0
+    private var windshieldUnavailableStreak = 0
     private var frontLeftUnknownStreak = 0
     private var frontLeftUnavailableStreak = 0
     private var frontRightUnknownStreak = 0
@@ -93,6 +96,34 @@ internal class MbCanSignalStateEngine(
                 steeringUnknownStreak = 0
                 steeringUnavailableStreak = 0
                 steeringFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyWindshieldHeatCandidate(decoded: MbCanBinaryState) {
+        val published = windshieldHeatFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.FrontWindscreenHeat)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                windshieldUnknownStreak += 1
+                windshieldUnavailableStreak = 0
+                if (windshieldUnknownStreak >= requiredConsecutiveProblems) {
+                    windshieldHeatFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                windshieldUnavailableStreak += 1
+                windshieldUnknownStreak = 0
+                if (windshieldUnavailableStreak >= requiredConsecutiveProblems) {
+                    windshieldHeatFlow.value = decoded
+                }
+            }
+            else -> {
+                windshieldUnknownStreak = 0
+                windshieldUnavailableStreak = 0
+                windshieldHeatFlow.value = decoded
             }
         }
     }
@@ -167,6 +198,9 @@ internal class MbCanSignalStateEngine(
             1 -> MbCanBinaryState.Off
             else -> MbCanBinaryState.Unknown
         }
+
+        /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT] — same on/off encoding as steering heat. */
+        fun decodeFrontWindscreenHeatRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
 
         /** Front seat heat + ventilation raw values (1 off, 2–4 heat, 5–7 vent). */
         fun decodeSeatModeRaw(raw: Int): MbCanSeatModeState = when (raw) {

@@ -403,6 +403,7 @@ object WidgetsRepository {
         "fuelLevelWidget" to DataTitle(R.string.data_title_fuel_level_widget),
         "airQualityWidget" to DataTitle(R.string.data_title_air_quality_widget),
         "steeringWheelHeatWidget" to DataTitle(R.string.data_title_steering_wheel_heat_widget),
+        "frontWindscreenHeatWidget" to DataTitle(R.string.data_title_front_windscreen_heat_widget),
         "frontLeftSeatHeatVentWidget" to DataTitle(R.string.data_title_front_left_seat_heat_vent_widget),
         "frontRightSeatHeatVentWidget" to DataTitle(R.string.data_title_front_right_seat_heat_vent_widget),
         FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to DataTitle(
@@ -501,6 +502,7 @@ object WidgetsRepository {
             REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY,
             REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
             "steeringWheelHeatWidget",
+            "frontWindscreenHeatWidget",
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }

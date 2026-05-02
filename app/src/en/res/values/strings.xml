@@ -550,6 +550,7 @@
     <string name="data_title_fuel_level_widget">Fuel level widget</string>
     <string name="data_title_air_quality_widget">Air quality widget</string>
     <string name="data_title_steering_wheel_heat_widget">Steering wheel heating widget</string>
+    <string name="data_title_front_windscreen_heat_widget">Front windscreen heating widget</string>
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>

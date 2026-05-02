@@ -549,6 +549,7 @@
     <string name="data_title_fuel_level_widget">Виджет уровня топлива</string>
     <string name="data_title_air_quality_widget">Виджет качества воздуха</string>
     <string name="data_title_steering_wheel_heat_widget">Виджет обогрева рулевого колеса</string>
+    <string name="data_title_front_windscreen_heat_widget">Виджет обогрева лобового стекла</string>
     <string name="data_title_front_left_seat_heat_vent_widget">Виджет обогрева и вентиляции левого переднего сиденья (двойная кнопка)</string>
     <string name="data_title_front_right_seat_heat_vent_widget">Виджет обогрева и вентиляции правого переднего сиденья (двойная кнопка)</string>
     <string name="data_title_front_left_seat_heat_vent_single_widget">Виджет обогрева и вентиляции левого переднего сиденья (одна кнопка)</string>
