@@ -642,7 +642,7 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_value_accuracy_desc),
                             enabled = state.togglesEnabled,
                             options = accuracyEntries,
-                            selectorWidth = 200.dp
+                            selectorWidth = 300.dp
                         )
                     }
                     Column(
