@@ -1,4 +1,4 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.fuel
 
 import org.json.JSONArray
 import org.json.JSONObject

@@ -12,6 +12,12 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.fuel.RefuelRepository
+import vad.dashing.tbox.fuel.refuelsListFromJson
+import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.trip.favoritesSetFromJson
+import vad.dashing.tbox.trip.tripsJsonForBackupExport
+import vad.dashing.tbox.trip.tripsListFromJson
 
 /**
  * Serializes one [DataStore] [Preferences] snapshot to/from JSON arrays of entries
@@ -166,7 +172,7 @@ object SettingsBackupCoordinator {
 
     /**
      * For backup file only: close the active trip in serialized [trips_json] so importers see a
-     * completed trip; runtime DataStore and [TripRepository] are unchanged.
+     * completed trip; runtime DataStore and [vad.dashing.tbox.trip.TripRepository] are unchanged.
      */
     private fun patchTripsJsonInExportedAppData(entries: JSONArray, endTimeEpochMs: Long) {
         for (i in 0 until entries.length()) {
@@ -183,7 +189,7 @@ object SettingsBackupCoordinator {
     }
 
     /**
-     * Replaces both preference stores and reapplies app_data into in-memory [TripRepository] / [CarDataRepository].
+     * Replaces both preference stores and reapplies app_data into in-memory [vad.dashing.tbox.trip.TripRepository] / [CarDataRepository].
      */
     suspend fun importFullJson(
         appDataManager: AppDataManager,

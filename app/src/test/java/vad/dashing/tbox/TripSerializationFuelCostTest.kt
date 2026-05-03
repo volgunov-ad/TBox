@@ -8,6 +8,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import vad.dashing.tbox.trip.TripRecord
+import vad.dashing.tbox.trip.tripsListFromJson
+import vad.dashing.tbox.trip.tripsListToJson
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])

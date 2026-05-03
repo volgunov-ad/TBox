@@ -46,11 +46,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AppDataViewModel
-import vad.dashing.tbox.formatTripDurationHuman
+import vad.dashing.tbox.trip.formatTripDurationHuman
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.TripRecord
-import vad.dashing.tbox.TripRepository
+import vad.dashing.tbox.trip.TripRecord
+import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Date

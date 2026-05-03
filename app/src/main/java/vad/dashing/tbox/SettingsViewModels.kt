@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +22,7 @@ import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import android.content.Context
 import android.widget.Toast
-import vad.dashing.tbox.R
+import vad.dashing.tbox.fuel.FuelTypes
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]

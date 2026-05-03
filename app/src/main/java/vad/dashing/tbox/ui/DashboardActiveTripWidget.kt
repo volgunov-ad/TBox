@@ -22,9 +22,9 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.DashboardWidget
-import vad.dashing.tbox.formatTripDurationHuman
+import vad.dashing.tbox.trip.formatTripDurationHuman
 import vad.dashing.tbox.R
-import vad.dashing.tbox.TripRepository
+import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Date

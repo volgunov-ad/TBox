@@ -60,12 +60,20 @@ class FuelSmartEstimator(
      * Преобразование «кривого» показания датчика (л) в скорректированный объём при текущей температуре.
      */
     fun getCorrectedLiters(currentSensorValue: Double, currentTemp: Double): EstimationResult {
+        // Защита: не даем значению датчика выйти за пределы физического бака
         val safeSensor = currentSensorValue.coerceIn(0.0, tankCapacity)
+
+        // Определяем индекс текущей зоны бака
         val zoneIdx = (safeSensor / store.zoneSize).toInt().coerceIn(0, store.zoneCount - 1)
 
+        // Получаем коэффициенты: локальный (для этой зоны) и глобальный (средний по баку)
         val kLocal = store.getZoneK(zoneIdx)
         val kGlobal = store.getGlobalK()
+
+        // Насколько мы доверяем данным именно в этой зоне (от 0.0 до 1.0)
         val confidence = store.getConfidence(zoneIdx)
+
+        // СМЕШИВАНИЕ: если уверенность низкая, берем больше от глобального коэффициента
         val kFinal = (kLocal * confidence) + (kGlobal * (1.0 - confidence))
 
         // 1. Стабильный объем (при +15°C) — то, что не зависит от текущей жары/холода
@@ -74,16 +82,28 @@ class FuelSmartEstimator(
         // 2. Фактический объем (при текущей T) — сколько места бензин занимает сейчас
         val actualVolume = physics.fromStandard(stdVolume, currentTemp)
 
-        // 1. Стабильный объем (при +15°C) — оставляем сглаживание для красоты UI
-        val finalStd = if (stdVolume >= tankCapacity * 0.98) tankCapacity else stdVolume
-        // 2. Фактический объем (при текущей T) — УБИРАЕМ сглаживание,
-        // чтобы видеть реальное сжатие/расширение даже при полном баке
-        val finalActual = actualVolume
+        // Порог сглаживания (например, 49.0 л)
+        val smoothThreshold = tankCapacity * 0.98
+
+        // 1. Сглаживаем Standard: если выше 49, рисуем 50
+        val finalStd = if (stdVolume >= smoothThreshold) tankCapacity else stdVolume
+
+        // 2. Сглаживаем Actual ПЛАВНО:
+        // Если фактический объем (с учетом T) выше порога, мы тоже его подтягиваем,
+        // НО оставляем ему возможность "дышать" от температуры.
+        val finalActual = if (actualVolume >= smoothThreshold) {
+            // Если база (stdVolume) уже полная, то и Actual должен
+            // вращаться вокруг 50 литров, а не вокруг 52.6
+            val ratio = actualVolume / stdVolume
+            tankCapacity * ratio
+        } else {
+            actualVolume
+        }
 
         val isAtLimit = currentSensorValue >= sensorMax || currentSensorValue <= sensorMin
 
         return EstimationResult(
-            litersActual = finalActual.coerceAtMost(tankCapacity + 5), // Оставляем +5 на случай перелива в горловину
+            litersActual = finalActual.coerceAtMost(tankCapacity + 5),
             litersStandard = finalStd.coerceAtMost(tankCapacity + 5),
             confidence = if (isAtLimit) confidence * 0.7 else confidence
         )

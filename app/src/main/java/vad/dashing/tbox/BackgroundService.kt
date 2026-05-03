@@ -48,6 +48,25 @@ import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
 import vad.dashing.tbox.mbcan.MbCanRepository
 import com.mengbo.mbCan.defines.MBAudioProperty
+import vad.dashing.tbox.fuel.FuelCoordinates
+import vad.dashing.tbox.fuel.FuelCostAccounting
+import vad.dashing.tbox.fuel.FuelPriceClient
+import vad.dashing.tbox.fuel.FuelPriceResult
+import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.fuel.REFUEL_AMBIENT_TEMP_DEFAULT_C
+import vad.dashing.tbox.fuel.RefuelRecord
+import vad.dashing.tbox.fuel.RefuelRepository
+import vad.dashing.tbox.fuel.ambientTempForCalibrationC
+import vad.dashing.tbox.fuel.refuelsListFromJson
+import vad.dashing.tbox.fuel.refuelsListToJson
+import vad.dashing.tbox.trip.TripFuelAccounting
+import vad.dashing.tbox.trip.TripRecord
+import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.trip.TripRules
+import vad.dashing.tbox.trip.favoritesSetFromJson
+import vad.dashing.tbox.trip.favoritesSetToJson
+import vad.dashing.tbox.trip.tripsListFromJson
+import vad.dashing.tbox.trip.tripsListToJson
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.nio.ByteBuffer
@@ -168,7 +187,7 @@ class BackgroundService : Service() {
     var servicePhase: ServiceLifecyclePhase = ServiceLifecyclePhase.Idle
         internal set
 
-    /** True after [reloadTripsFromDataStoreSuspend] has applied disk trips to [TripRepository]. */
+    /** True after [reloadTripsFromDataStoreSuspend] has applied disk trips to [vad.dashing.tbox.trip.TripRepository]. */
     private val tripsFromDiskReady = AtomicBoolean(false)
 
     private var netUpdateTime: Long = 5000
@@ -204,7 +223,7 @@ class BackgroundService : Service() {
 
     /**
      * In-RAM state for automatic trips: each CAN RPM sample drives [onTripRpmSample]. Split-window
-     * length comes from [splitTripTimeMinutesSetting] (same semantics as [TripRules]).
+     * length comes from [splitTripTimeMinutesSetting] (same semantics as [vad.dashing.tbox.trip.TripRules]).
      */
     private var tripPrevRpmForStart = 0f
     /** True once we have seen RPM > 0 this service session; blocks spurious "new trip" on first samples. */
@@ -218,9 +237,9 @@ class BackgroundService : Service() {
     private var tripLastSampleElapsedMs: Long = 0L
     private var tripLastOdometer: UInt? = null
     private var tripStartOdometer: UInt? = null
-    /** Last fuel % used for step consumption between samples; aligned with [TripRecord.fuelBaselinePercent]. */
+    /** Last fuel % used for step consumption between samples; aligned with [vad.dashing.tbox.trip.TripRecord.fuelBaselinePercent]. */
     private var tripLastFuelPercent: Float? = null
-    /** Last fuel level in calibrated standard liters; aligned with [TripRecord.fuelBaselineLiters]. */
+    /** Last fuel level in calibrated standard liters; aligned with [vad.dashing.tbox.trip.TripRecord.fuelBaselineLiters]. */
     private var tripLastFuelLitersCalibrated: Float? = null
     private var tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
     private var tripLastPersistedSnapshot: TripRecord? = null

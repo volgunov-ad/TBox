@@ -9,6 +9,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import vad.dashing.tbox.fuel.FuelCostAccounting
+import vad.dashing.tbox.fuel.FuelPriceData
+import vad.dashing.tbox.fuel.FuelPriceResolver
+import vad.dashing.tbox.fuel.FuelTypes
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])

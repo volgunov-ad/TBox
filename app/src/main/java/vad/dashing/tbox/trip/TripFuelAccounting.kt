@@ -1,4 +1,4 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.trip
 
 /**
  * Учёт топлива по поездке по **калиброванным литрам** (в репозитории — `litersStandard` с CAN, стабильно к +15 °C).

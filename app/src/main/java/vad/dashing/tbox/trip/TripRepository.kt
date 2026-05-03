@@ -1,4 +1,4 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.trip
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 
 data class TripResumeStartResult(
     val resumed: Boolean,
@@ -18,7 +19,7 @@ object TripRepository {
     val lock = Any()
 
     /**
-     * When false, RPM-driven trip accounting ([BackgroundService.onTripRpmSample]) is skipped.
+     * When false, RPM-driven trip accounting ([vad.dashing.tbox.BackgroundService.onTripRpmSample]) is skipped.
      * Disk load and [responseWork] gating use separate flags in the service.
      */
     @Volatile
@@ -160,7 +161,7 @@ object TripRepository {
 
     /**
      * Appends a new active trip and closes any other active trip with a wall-clock end time.
-     * Caller (e.g. [BackgroundService]) sets [TripRecord.startTimeEpochMs] and odometer/fuel baseline.
+     * Caller (e.g. [vad.dashing.tbox.BackgroundService]) sets [TripRecord.startTimeEpochMs] and odometer/fuel baseline.
      */
     fun startTrip(record: TripRecord) {
         synchronized(lock) {
@@ -267,9 +268,9 @@ object TripRepository {
             a.fuelBaselineLiters == null || b.fuelBaselineLiters == null -> return true
             abs(a.fuelBaselineLiters - b.fuelBaselineLiters) > FUEL_BASELINE_LITERS_EPS -> return true
         }
-        if (kotlin.math.abs(a.movingTimeMs - b.movingTimeMs) > MS_EPS) return true
-        if (kotlin.math.abs(a.idleTimeMs - b.idleTimeMs) > MS_EPS) return true
-        if (kotlin.math.abs(a.parkingTimeMs - b.parkingTimeMs) > MS_EPS) return true
+        if (abs(a.movingTimeMs - b.movingTimeMs) > MS_EPS) return true
+        if (abs(a.idleTimeMs - b.idleTimeMs) > MS_EPS) return true
+        if (abs(a.parkingTimeMs - b.parkingTimeMs) > MS_EPS) return true
         if (a.maxEngineTemp != b.maxEngineTemp) return true
         if (a.maxGearboxOilTemp != b.maxGearboxOilTemp) return true
         if (a.minOutsideTemp != b.minOutsideTemp) return true
@@ -279,8 +280,8 @@ object TripRepository {
 
     fun mergeOutsideTemp(minCur: Float?, maxCur: Float?, sample: Float?): Pair<Float?, Float?> {
         if (sample == null) return Pair(minCur, maxCur)
-        val min = minCur?.let { kotlin.math.min(it, sample) } ?: sample
-        val max = maxCur?.let { kotlin.math.max(it, sample) } ?: sample
+        val min = minCur?.let { min(it, sample) } ?: sample
+        val max = maxCur?.let { max(it, sample) } ?: sample
         return Pair(min, max)
     }
 
@@ -291,7 +292,7 @@ object TripRepository {
 
     fun updateMaxGearboxTemp(current: Int?, sample: Int?): Int? {
         if (sample == null) return current
-        return current?.let { kotlin.math.max(it, sample) } ?: sample
+        return current?.let { max(it, sample) } ?: sample
     }
 
     /**

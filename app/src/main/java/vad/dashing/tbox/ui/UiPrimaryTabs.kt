@@ -38,7 +38,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
-import vad.dashing.tbox.FuelTypes
+import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel

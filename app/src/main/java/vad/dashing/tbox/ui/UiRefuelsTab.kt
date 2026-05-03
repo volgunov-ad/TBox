@@ -77,11 +77,11 @@ import java.util.Locale
 import kotlin.math.abs
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
-import vad.dashing.tbox.FuelTypeOption
-import vad.dashing.tbox.FuelTypes
+import vad.dashing.tbox.fuel.FuelTypeOption
+import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.R
-import vad.dashing.tbox.RefuelRecord
-import vad.dashing.tbox.REFUEL_AMBIENT_TEMP_DEFAULT_C
+import vad.dashing.tbox.fuel.RefuelRecord
+import vad.dashing.tbox.fuel.REFUEL_AMBIENT_TEMP_DEFAULT_C
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationReportFormatter

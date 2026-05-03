@@ -1,4 +1,4 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.fuel
 
 import java.io.IOException
 import java.util.Locale

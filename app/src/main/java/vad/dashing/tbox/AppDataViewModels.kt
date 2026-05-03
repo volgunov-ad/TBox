@@ -7,6 +7,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.fuel.FuelTypeOption
+import vad.dashing.tbox.fuel.RefuelRepository
+import vad.dashing.tbox.fuel.refuelsListToJson
+import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.trip.favoritesSetToJson
+import vad.dashing.tbox.trip.tripsListToJson
 
 class AppDataViewModel(
     private val appDataManager: AppDataManager,

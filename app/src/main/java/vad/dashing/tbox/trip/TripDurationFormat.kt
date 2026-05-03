@@ -1,4 +1,4 @@
-package vad.dashing.tbox
+package vad.dashing.tbox.trip
 
 import android.content.Context
 import vad.dashing.tbox.R

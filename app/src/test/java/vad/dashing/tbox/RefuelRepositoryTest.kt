@@ -2,6 +2,8 @@ package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import vad.dashing.tbox.fuel.RefuelRecord
+import vad.dashing.tbox.fuel.RefuelRepository
 
 class RefuelRepositoryTest {
 
@@ -10,7 +12,12 @@ class RefuelRepositoryTest {
         RefuelRepository.resetForUnitTests()
 
         repeat(35) { index ->
-            RefuelRepository.appendRefuel(RefuelRecord(id = "r$index", timeEpochMs = index.toLong()))
+            RefuelRepository.appendRefuel(
+                RefuelRecord(
+                    id = "r$index",
+                    timeEpochMs = index.toLong()
+                )
+            )
         }
 
         val refuels = RefuelRepository.refuels.value
