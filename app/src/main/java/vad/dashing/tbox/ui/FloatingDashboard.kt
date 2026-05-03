@@ -374,6 +374,8 @@ fun FloatingDashboard(
                             sendToggleSteeringWheelHeat(context)
                         } else if (cfg?.dataKey == "frontWindscreenHeatWidget") {
                             sendToggleFrontWindscreenHeat(context)
+                        } else if (cfg?.dataKey == "rearWindowMirrorsDefrostWidget") {
+                            sendToggleRearWindowMirrorsDefrost(context)
                         } else if (
                             cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                             cfg.launcherAppPackage.isNotBlank()

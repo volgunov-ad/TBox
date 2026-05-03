@@ -14,6 +14,9 @@ private const val STEERING_HEAT_TOGGLE_LOCKOUT_MS = 500L
 private val windscreenHeatToggleLock = Any()
 private var windscreenHeatToggleBlockedUntilMs = 0L
 
+private val hvacDefrosterToggleLock = Any()
+private var hvacDefrosterToggleBlockedUntilMs = 0L
+
 internal fun launchAppFromWidget(context: Context, packageName: String) {
     if (packageName.isBlank()) return
     try {
@@ -116,6 +119,30 @@ internal fun sendToggleFrontWindscreenHeat(context: Context) {
                 putExtra(
                     BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
                     MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleRearWindowMirrorsDefrost(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacDefrosterToggleLock) {
+        if (now < hvacDefrosterToggleBlockedUntilMs) return
+        hvacDefrosterToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH
                 )
             }
         )

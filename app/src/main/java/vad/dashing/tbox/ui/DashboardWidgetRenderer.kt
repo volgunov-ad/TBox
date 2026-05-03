@@ -260,6 +260,18 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "rearWindowMirrorsDefrostWidget" -> {
+            DashboardRearWindowMirrorsDefrostWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                scale = widgetConfig.scale
+            )
+        }
+
         "frontLeftSeatHeatVentWidget" -> {
             DashboardFrontLeftSeatHeatVentWidgetItem(
                 onClick = onClick,

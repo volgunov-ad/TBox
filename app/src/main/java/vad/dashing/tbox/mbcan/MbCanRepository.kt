@@ -22,6 +22,7 @@ import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
     FrontWindscreenHeat(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacDefroster(setOf("eMBCAN_CFG_VEHICLE")),
     FrontLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     FrontRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     RearLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
@@ -63,6 +64,7 @@ object MbCanRepository {
     private val widgetSignalRegistry = listOf(
         WidgetSignalBinding("steeringWheelHeatWidget", MbCanSignal.SteeringWheelHeat),
         WidgetSignalBinding("frontWindscreenHeatWidget", MbCanSignal.FrontWindscreenHeat),
+        WidgetSignalBinding("rearWindowMirrorsDefrostWidget", MbCanSignal.HvacDefroster),
         WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
         WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode),
         WidgetSignalBinding(FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontLeftSeatMode),
@@ -104,6 +106,8 @@ object MbCanRepository {
     val steeringWheelHeatState: StateFlow<MbCanBinaryState> = _steeringWheelHeatState.asStateFlow()
     private val _frontWindscreenHeatState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val frontWindscreenHeatState: StateFlow<MbCanBinaryState> = _frontWindscreenHeatState.asStateFlow()
+    private val _hvacDefrosterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacDefrosterState: StateFlow<MbCanBinaryState> = _hvacDefrosterState.asStateFlow()
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
     private val _frontRightSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
@@ -116,6 +120,7 @@ object MbCanRepository {
     private val stateEngine = MbCanSignalStateEngine(
         steeringFlow = _steeringWheelHeatState,
         windshieldHeatFlow = _frontWindscreenHeatState,
+        hvacDefrosterFlow = _hvacDefrosterState,
         frontLeftSeatFlow = _frontLeftSeatModeState,
         frontRightSeatFlow = _frontRightSeatModeState,
         rearLeftSeatFlow = _rearLeftSeatModeState,
@@ -158,6 +163,7 @@ object MbCanRepository {
         when (item) {
             MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
+            MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
             MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH,
@@ -187,6 +193,10 @@ object MbCanRepository {
                     MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH ->
                         stateEngine.applyWindshieldHeatCandidate(
                             MbCanSignalStateEngine.decodeFrontWindscreenHeatRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH ->
+                        stateEngine.applyHvacDefrosterCandidate(
+                            MbCanSignalStateEngine.decodeHvacDefrosterRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH ->
                         stateEngine.applySeatCandidate(
@@ -308,6 +318,7 @@ object MbCanRepository {
         when (signal) {
             MbCanSignal.SteeringWheelHeat -> refreshSteeringWheelHeat()
             MbCanSignal.FrontWindscreenHeat -> refreshFrontWindscreenHeat()
+            MbCanSignal.HvacDefroster -> refreshHvacDefroster()
             MbCanSignal.FrontLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontLeft)
             MbCanSignal.FrontRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontRight)
             MbCanSignal.RearLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.RearLeft)
@@ -377,6 +388,39 @@ object MbCanRepository {
             MbCanDiagnostics.log(
                 "DEBUG",
                 "refreshFrontWindscreenHeat raw=$raw state=${_frontWindscreenHeatState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshHvacDefroster() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshHvacDefroster unavailable=$availability")
+                stateEngine.applyHvacDefrosterCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeHvacDefrosterRaw(raw)
+            }
+            stateEngine.applyHvacDefrosterCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshHvacDefroster raw=$raw state=${_hvacDefrosterState.value}"
             )
         }
     }

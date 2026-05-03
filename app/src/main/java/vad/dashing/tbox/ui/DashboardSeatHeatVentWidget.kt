@@ -543,6 +543,29 @@ private fun SeatActionButton(
             colorFilter = ColorFilter.tint(iconColor),
             contentScale = ContentScale.Fit,
         )
+        if (side == SeatSide.BackLeft) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_widget_seat_back_left),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scale(scale),
+                colorFilter = ColorFilter.tint(iconColor),
+                contentScale = ContentScale.Fit,
+            )
+        }
+        else if (side == SeatSide.BackRight) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_widget_seat_back_right),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .scale(scale),
+                colorFilter = ColorFilter.tint(iconColor),
+                contentScale = ContentScale.Fit,
+            )
+        }
+
         if (modeType == "heat") {
             Image(
                 painter = painterResource(id = R.drawable.ic_widget_seat_heat_1),

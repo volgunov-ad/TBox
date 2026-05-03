@@ -47,6 +47,7 @@ import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
 import vad.dashing.tbox.mbcan.MbCanRepository
+import com.mengbo.mbCan.defines.MBAudioProperty
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.nio.ByteBuffer
@@ -123,7 +124,7 @@ class BackgroundService : Service() {
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
-    /** Periodic mbCAN `canGetVehicleParam` samples for in-app log (MBCAN_TMP); remove when debugging is done. */
+    /** Periodic mbCAN `canGetVehicleParam` / `canGetAudioParam` samples for in-app log (MBCAN_TMP); remove when debugging is done. */
     private var mbCanDebugProbeJob: Job? = null
     /** Serializes delayed / repeated "open MainActivity" commands: each new request replaces the previous. */
     private var openMainActivityJob: Job? = null
@@ -330,36 +331,24 @@ class BackgroundService : Service() {
         const val MBCAN_COMMAND_TOGGLE_PROPERTY = "TOGGLE_PROPERTY"
         const val MBCAN_COMMAND_SET_PROPERTY = "SET_PROPERTY"
 
-        /** First and subsequent intervals for [mbCanDebugProbeJob] (`canGetVehicleParam` batch log). */
+        /** First and subsequent intervals for [mbCanDebugProbeJob] (vehicle + audio param batch log). */
         private const val MBCAN_DEBUG_PROBE_INTERVAL_MS = 15_000L
 
         /**
          * [com.mengbo.mbCan.defines.MBVehicleProperty] ids — mixed body/HVAC/MFS for log correlation on the HU.
          */
         private val MB_CAN_DEBUG_GET_PROPERTY_IDS: List<Pair<String, Int>> = listOf(
-            "DOOR_AUTO_LOCK" to 1,
-            "HVAC_POWER" to 36,
-            "HVAC_TEMP" to 37,
-            "HVAC_FAN" to 38,
-            "HVAC_RECIRC" to 39,
-            "HVAC_AUTO" to 110,
-            "HVAC_FR_TEMP" to 111,
-            "HVAC_CIRC_SW" to 260,
-            "STEERING_MODE" to 24,
             "DRIVEMODE" to 145,
             "POWERMODE" to 147,
-            "ISS_SWITCH" to 148,
-            "SEAT_FL_HEATVENTSW" to 138,
-            "SEAT_FR_HEATVENTSW" to 139,
-            "SEAT_LR_HEATVENTSW" to 318,
-            "SEAT_RR_HEATVENTSW" to 319,
-            "MFS_HEAT" to 188,
-            "MFS_SHAKE" to 189,
-            "MFS_CRUISE" to 210,
-            "MFS_TIME_GAP" to 217,
-            "ADAS_DISPLAY" to 225,
-            "TJA_ICA" to 23,
-            "FRONTWINDSCREEN_HEAT" to 316
+        )
+
+        /**
+         * [com.mengbo.mbCan.defines.MBAudioProperty] ids — periodic [MbCanEngineFacade.canGetAudioParam] probe
+         * (same interval as [MB_CAN_DEBUG_GET_PROPERTY_IDS]).
+         */
+        private val MB_CAN_DEBUG_GET_AUDIO_PROPERTY_IDS: List<Pair<String, Int>> = listOf(
+            "eAUDIO_PROPERTY_VOLUME_SPEED" to MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED.value,
+            "eAUDIO_PROPERTY_VOLUME_KEY" to MBAudioProperty.eAUDIO_PROPERTY_VOLUME_KEY.value,
         )
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
@@ -2864,7 +2853,8 @@ class BackgroundService : Service() {
 
     /**
      * Temporary: logs one line per interval with [MbCanEngineFacade.canGetVehicleParam] for several
-     * [MBVehicleProperty] ids (see [MB_CAN_DEBUG_GET_PROPERTY_IDS]).
+     * [MBVehicleProperty] ids (see [MB_CAN_DEBUG_GET_PROPERTY_IDS]) and [MbCanEngineFacade.canGetAudioParam]
+     * for [MB_CAN_DEBUG_GET_AUDIO_PROPERTY_IDS].
      */
     private suspend fun runMbCanDebugParameterProbeRound() {
         withContext(Dispatchers.IO) {
@@ -2875,9 +2865,13 @@ class BackgroundService : Service() {
                         val v = MbCanEngineFacade.canGetVehicleParam(id)
                         "$label(id=$id)=$v"
                     }
+                    val audioParts = MB_CAN_DEBUG_GET_AUDIO_PROPERTY_IDS.map { (label, id) ->
+                        val v = MbCanEngineFacade.canGetAudioParam(id)
+                        "$label(id=$id)=$v"
+                    }
                     MbCanDiagnostics.log(
                         "DEBUG",
-                        "$motionPart | probeGet ${parts.joinToString(" | ")}"
+                        "$motionPart | probeGet ${parts.joinToString(" | ")} | probeAudioGet ${audioParts.joinToString(" | ")}"
                     )
                 }
                 else -> {

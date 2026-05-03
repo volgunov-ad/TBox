@@ -47,6 +47,7 @@ enum class MbCanSeatSlot {
 internal class MbCanSignalStateEngine(
     private val steeringFlow: MutableStateFlow<MbCanBinaryState>,
     private val windshieldHeatFlow: MutableStateFlow<MbCanBinaryState>,
+    private val hvacDefrosterFlow: MutableStateFlow<MbCanBinaryState>,
     private val frontLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
     private val frontRightSeatFlow: MutableStateFlow<MbCanSeatModeState>,
     private val rearLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
@@ -57,6 +58,8 @@ internal class MbCanSignalStateEngine(
     private var steeringUnavailableStreak = 0
     private var windshieldUnknownStreak = 0
     private var windshieldUnavailableStreak = 0
+    private var hvacDefrosterUnknownStreak = 0
+    private var hvacDefrosterUnavailableStreak = 0
     private var frontLeftUnknownStreak = 0
     private var frontLeftUnavailableStreak = 0
     private var frontRightUnknownStreak = 0
@@ -124,6 +127,34 @@ internal class MbCanSignalStateEngine(
                 windshieldUnknownStreak = 0
                 windshieldUnavailableStreak = 0
                 windshieldHeatFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyHvacDefrosterCandidate(decoded: MbCanBinaryState) {
+        val published = hvacDefrosterFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.HvacDefroster)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                hvacDefrosterUnknownStreak += 1
+                hvacDefrosterUnavailableStreak = 0
+                if (hvacDefrosterUnknownStreak >= requiredConsecutiveProblems) {
+                    hvacDefrosterFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                hvacDefrosterUnavailableStreak += 1
+                hvacDefrosterUnknownStreak = 0
+                if (hvacDefrosterUnavailableStreak >= requiredConsecutiveProblems) {
+                    hvacDefrosterFlow.value = decoded
+                }
+            }
+            else -> {
+                hvacDefrosterUnknownStreak = 0
+                hvacDefrosterUnavailableStreak = 0
+                hvacDefrosterFlow.value = decoded
             }
         }
     }
@@ -201,6 +232,9 @@ internal class MbCanSignalStateEngine(
 
         /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT] — same on/off encoding as steering heat. */
         fun decodeFrontWindscreenHeatRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+
+        /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER] — rear window + mirrors; same 1/2 as steering if used as binary. */
+        fun decodeHvacDefrosterRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
 
         /** Front seat heat + ventilation raw values (1 off, 2–4 heat, 5–7 vent). */
         fun decodeSeatModeRaw(raw: Int): MbCanSeatModeState = when (raw) {

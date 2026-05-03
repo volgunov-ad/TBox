@@ -23,6 +23,7 @@ object MbCanEngineFacade {
     private var engineInstance: Any? = null
     private var canGetVehicleParamMethod: Method? = null
     private var canSetVehicleParamMethod: Method? = null
+    private var canGetAudioParamMethod: Method? = null
     private var subscribeMethod: Method? = null
     private var unSubscribeMethod: Method? = null
     private var registerCarSettingsListenerMethod: Method? = null
@@ -67,6 +68,8 @@ object MbCanEngineFacade {
             canGetVehicleParamMethod = engineClass.getMethod("canGetVehicleParam", Int::class.javaPrimitiveType)
             canSetVehicleParamMethod =
                 engineClass.getMethod("canSetVehicleParam", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            canGetAudioParamMethod =
+                engineClass.getMethod("canGetAudioParam", Int::class.javaPrimitiveType)
             subscribeMethod = engineClass.getMethod("subscribeCanDataWithList", ArrayList::class.java)
             unSubscribeMethod = engineClass.getMethod("unSubscribeCanDataWithList", ArrayList::class.java)
             registerCarSettingsListenerMethod =
@@ -93,6 +96,16 @@ object MbCanEngineFacade {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
         return try {
             (canGetVehicleParamMethod?.invoke(engineInstance, propertyId) as? Int)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /** [com.mengbo.mbCan.MBCanEngine.canGetAudioParam] — [com.mengbo.mbCan.defines.MBAudioProperty] ordinal ids. */
+    fun canGetAudioParam(propertyId: Int): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        return try {
+            (canGetAudioParamMethod?.invoke(engineInstance, propertyId) as? Int)
         } catch (_: Throwable) {
             null
         }
