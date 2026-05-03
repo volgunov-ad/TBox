@@ -38,10 +38,12 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -253,6 +255,7 @@ fun SettingsTabContent(
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
+    val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
 
     val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
     val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
@@ -270,7 +273,7 @@ fun SettingsTabContent(
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
 
     val canDataSaveCount by settingsViewModel.canDataSaveCount.collectAsStateWithLifecycle()
-    val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
+    val fuelPriceFuelId by settingsViewModel.fuelPriceFuelId.collectAsStateWithLifecycle()
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
@@ -577,13 +580,13 @@ fun SettingsTabContent(
         )
 
         SettingsTitle(stringResource(R.string.settings_misc_title))
-        SettingInt(
-            fuelTankLiters,
-            { value -> settingsViewModel.saveFuelTankLiters(value) },
-            stringResource(R.string.settings_fuel_tank_liters_title),
+        SettingDropdownGeneric(
+            FuelTypes.optionFor(fuelPriceFuelId),
+            { option -> settingsViewModel.saveFuelPriceFuelId(option.id) },
+            stringResource(R.string.settings_fuel_price_fuel_type_title),
             "",
-            1,
-            500
+            true,
+            FuelTypes.options
         )
         SettingInt(
             splitTripTimeMinutes,
@@ -613,6 +616,15 @@ fun SettingsTabContent(
         )
 
         if (isExpertModeEnabled) {
+            SettingSwitch(
+                isMbCanDiagnosticsEnabled,
+                { enabled ->
+                    setMbCanDiagnostics(context, enabled)
+                },
+                stringResource(R.string.settings_mbcan_diagnostics_title),
+                stringResource(R.string.settings_mbcan_diagnostics_desc),
+                true
+            )
             SettingInt(
                 canDataSaveCount,
                 { value ->
@@ -701,8 +713,8 @@ fun SettingsTabContent(
         if (showExportBackupDialog) {
             AlertDialog(
                 onDismissRequest = { showExportBackupDialog = false },
-                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
-                text = { Text(stringResource(R.string.dialog_save_backup_downloads)) },
+                title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
+                text = { AppAlertDialogText(stringResource(R.string.dialog_save_backup_downloads)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -710,12 +722,12 @@ fun SettingsTabContent(
                             showExportBackupDialog = false
                         }
                     ) {
-                        Text(stringResource(R.string.action_save))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                     }
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showExportBackupDialog = false }) {
-                        Text(stringResource(R.string.action_cancel))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
             )
@@ -724,8 +736,8 @@ fun SettingsTabContent(
         if (showExportBackupNoTripsDialog) {
             AlertDialog(
                 onDismissRequest = { showExportBackupNoTripsDialog = false },
-                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
-                text = { Text(stringResource(R.string.dialog_save_backup_downloads_no_trips)) },
+                title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
+                text = { AppAlertDialogText(stringResource(R.string.dialog_save_backup_downloads_no_trips)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -733,12 +745,12 @@ fun SettingsTabContent(
                             showExportBackupNoTripsDialog = false
                         }
                     ) {
-                        Text(stringResource(R.string.action_save))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                     }
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showExportBackupNoTripsDialog = false }) {
-                        Text(stringResource(R.string.action_cancel))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
             )
@@ -747,8 +759,8 @@ fun SettingsTabContent(
         if (showImportBackupDialog) {
             AlertDialog(
                 onDismissRequest = { showImportBackupDialog = false },
-                title = { Text(stringResource(R.string.dialog_backup_import_title)) },
-                text = { Text(stringResource(R.string.dialog_backup_import_message)) },
+                title = { AppAlertDialogTitle(stringResource(R.string.dialog_backup_import_title)) },
+                text = { AppAlertDialogText(stringResource(R.string.dialog_backup_import_message)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -756,12 +768,12 @@ fun SettingsTabContent(
                             showImportBackupDialog = false
                         }
                     ) {
-                        Text(stringResource(R.string.settings_backup_import_choose_file))
+                        AppAlertDialogButtonLabel(stringResource(R.string.settings_backup_import_choose_file))
                     }
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showImportBackupDialog = false }) {
-                        Text(stringResource(R.string.action_cancel))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
             )
@@ -792,6 +804,14 @@ fun SettingsTabContent(
             }
         }
     }
+}
+
+private fun setMbCanDiagnostics(context: Context, enabled: Boolean) {
+    val intent = Intent(context, BackgroundService::class.java).apply {
+        action = BackgroundService.ACTION_SET_MBCAN_DIAGNOSTICS
+        putExtra(BackgroundService.EXTRA_MBCAN_DIAGNOSTICS_ENABLED, enabled)
+    }
+    context.startService(intent)
 }
 
 private fun showAlertDialog(title: String, message: String, context: Context) {

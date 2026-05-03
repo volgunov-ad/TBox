@@ -8,6 +8,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.trip.favoritesSetFromJson
+import vad.dashing.tbox.trip.tripsListFromJson
 
 class TboxApplication : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

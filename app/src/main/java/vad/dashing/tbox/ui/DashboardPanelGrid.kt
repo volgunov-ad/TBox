@@ -12,13 +12,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
@@ -28,6 +33,7 @@ import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
+import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.normalizeWidgetConfigs
@@ -39,6 +45,7 @@ import vad.dashing.tbox.normalizeWidgetShape
  */
 @Composable
 internal fun DashboardPanelGridAndFrames(
+    mbCanInterestSourceId: String,
     dashboardRows: Int,
     dashboardCols: Int,
     dashboardState: DashboardState,
@@ -61,15 +68,36 @@ internal fun DashboardPanelGridAndFrames(
     onWidgetClick: (widgetIndex: Int) -> Unit,
     onWidgetLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (widgetIndex: Int, selectedPackage: String) -> Unit,
+    onSeatHeatVentSelectedVariantChange: (widgetIndex: Int, variant: Int) -> Unit,
     onHideFloatingPanelsDoubleClick: (widgetIndex: Int) -> Unit = {},
     onToggleFloatingPanelsEnabledDoubleClick: (widgetIndex: Int) -> Unit = {},
     onRestartRequested: () -> Unit,
     showTboxDisconnectIndicator: Boolean,
-    enableMusicInnerInteractions: Boolean,
+    enableInnerInteractions: Boolean,
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 4.dp,
 ) {
+    val coroutineScope = rememberCoroutineScope()
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
+    val panelNeedsMbCan = remember(widgetConfigs) {
+        MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
+    }
+    if (panelNeedsMbCan) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            val activeKeys = widgetConfigs
+                .map { it.dataKey.trim() }
+                .filter { it.isNotBlank() && it != "null" }
+                .toSet()
+            MbCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                coroutineScope.launch {
+                    MbCanRepository.clearSource(mbCanInterestSourceId)
+                }
+            }
+        }
+    }
     val hasConfiguredWidgets = normalizedConfigs.any { config ->
         config.dataKey.isNotBlank() && config.dataKey != "null"
     }
@@ -143,6 +171,9 @@ internal fun DashboardPanelGridAndFrames(
                                     onMusicSelectedPlayerChange = { selectedPackage ->
                                         onMusicSelectedPlayerChange(index, selectedPackage)
                                     },
+                                    onSeatHeatVentSelectedVariantChange = { variant ->
+                                        onSeatHeatVentSelectedVariantChange(index, variant)
+                                    },
                                     onHideFloatingPanelsDoubleClick = {
                                         if (widget.dataKey == HIDE_FLOATING_PANELS_WIDGET_DATA_KEY) {
                                             onHideFloatingPanelsDoubleClick(index)
@@ -158,7 +189,7 @@ internal fun DashboardPanelGridAndFrames(
                                     isEditMode = isEditMode,
                                     elevation = widgetCardElevation,
                                     shape = normalizeWidgetShape(widgetConfig.shape).dp,
-                                    enableMusicInnerInteractions = enableMusicInnerInteractions,
+                                    enableInnerInteractions = enableInnerInteractions
                                 )
                             }
                         }
@@ -250,6 +281,27 @@ fun persistDashboardPanelMediaSelectedPlayer(
 
     normalizedConfigs[widgetIndex] = currentConfig.copy(
         mediaSelectedPlayer = selectedPackage
+    )
+    saveConfigs(normalizedConfigs)
+}
+
+fun persistDashboardPanelSeatHeatVentSelectedVariant(
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    widgetIndex: Int,
+    selectedVariant: Int,
+    saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit
+) {
+    val normalizedConfigs = normalizeWidgetConfigs(
+        configs = currentWidgetConfigs,
+        widgetCount = currentWidgetConfigs.size
+    ).toMutableList()
+    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
+    if (!isSeatHeatVentSingleWidgetDataKey(currentConfig.dataKey)) return
+    val coerced = selectedVariant.coerceIn(0, 1)
+    if (currentConfig.selectedVariant == coerced) return
+
+    normalizedConfigs[widgetIndex] = currentConfig.copy(
+        selectedVariant = coerced
     )
     saveConfigs(normalizedConfigs)
 }

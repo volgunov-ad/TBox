@@ -4,10 +4,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.trip.TripRecord
+import vad.dashing.tbox.trip.TripRepository
 
 class TripRepositoryResumeTest {
 
@@ -33,7 +36,7 @@ class TripRepositoryResumeTest {
     }
 
     @Test
-    fun tryResume_prefersCandidateNotJustListLast() = runBlocking {
+    fun tryResume_endedCandidateDoesNotBecomeActiveAtServiceStart() = runBlocking {
         // TripRepository uses System.currentTimeMillis() for the split window; timestamps must be
         // near "now" or resume will not match unit-test expectations.
         val nowWall = System.currentTimeMillis()
@@ -46,15 +49,13 @@ class TripRepositoryResumeTest {
             TripRecord(id = "newer", startTimeEpochMs = endOld + 1L, endTimeEpochMs = endNew)
         )
         val splitMs = 5 * 60_000L
-        assertTrue(TripRepository.tryResumeLastTripAfterServiceStart(splitMs).resumed)
-        val active = TripRepository.activeTrip.first()
-        assertNotNull(active)
-        assertEquals("newer", active!!.id)
-        assertNull(active.endTimeEpochMs)
+        assertFalse(TripRepository.tryResumeLastTripAfterServiceStart(splitMs).resumed)
+        assertNull(TripRepository.activeTrip.first())
+        assertEquals(endNew, TripRepository.trips.first().first { it.id == "newer" }.endTimeEpochMs)
     }
 
     @Test
-    fun tryResume_endedWithinSplit_reopensWithoutChangingIdleYet() = runBlocking {
+    fun tryResume_endedWithinSplit_remainsClosedUntilEngineStarts() = runBlocking {
         val nowWall = System.currentTimeMillis()
         val endMs = nowWall - 120_000L
         val priorIdle = 30_000L
@@ -68,27 +69,16 @@ class TripRepositoryResumeTest {
         )
         val splitMs = 5 * 60_000L
         val resumeResult = TripRepository.tryResumeLastTripAfterServiceStart(splitMs)
-        assertTrue(resumeResult.resumed)
-        assertNotNull(resumeResult.reopenedEndedTrip)
-        assertEquals("parked", resumeResult.reopenedEndedTrip!!.tripId)
-        assertEquals(endMs, resumeResult.reopenedEndedTrip!!.previousEndTimeEpochMs)
-        assertEquals(priorIdle, resumeResult.reopenedEndedTrip!!.previousIdleTimeMs)
-        assertTrue(
-            resumeResult.reopenedEndedTrip!!.parkedMsAddedToIdle in 115_000L..125_000L
-        )
-        val active = TripRepository.activeTrip.first()
-        assertNotNull(active)
-        assertEquals("parked", active!!.id)
-        assertNull(active.endTimeEpochMs)
-        assertEquals(
-            "cold resume should only reopen trip; parked idle is applied at first RPM>0 sample",
-            priorIdle,
-            active.idleTimeMs
-        )
+        assertFalse(resumeResult.resumed)
+        assertNull(TripRepository.activeTrip.first())
+        val stored = TripRepository.trips.first().single()
+        assertEquals("parked", stored.id)
+        assertEquals(endMs, stored.endTimeEpochMs)
+        assertEquals(priorIdle, stored.idleTimeMs)
     }
 
     @Test
-    fun tryResume_alreadyActive_reopenedEndedTripIsNull() = runBlocking {
+    fun tryResume_alreadyActive_resumesImmediately() = runBlocking {
         val nowWall = System.currentTimeMillis()
         TripRepository.appendTrip(
             TripRecord(
@@ -100,7 +90,6 @@ class TripRepositoryResumeTest {
         val splitMs = 5 * 60_000L
         val r = TripRepository.tryResumeLastTripAfterServiceStart(splitMs)
         assertTrue(r.resumed)
-        assertNull(r.reopenedEndedTrip)
         assertEquals("running", TripRepository.activeTrip.first()?.id)
     }
 }

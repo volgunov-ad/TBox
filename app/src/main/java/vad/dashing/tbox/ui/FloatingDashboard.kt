@@ -77,7 +77,8 @@ fun FloatingDashboardUI(
     )
     )
     val appDataViewModel: AppDataViewModel = viewModel(factory = AppDataViewModelFactory(
-        appDataManager
+        appDataManager,
+        settingsManager,
     )
     )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -162,6 +163,7 @@ fun FloatingDashboard(
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
     var pendingMusicSelection by remember(panelId) { mutableStateOf<Pair<Int, String>?>(null) }
+    var pendingSeatHeatVentVariant by remember(panelId) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
 
@@ -228,7 +230,7 @@ fun FloatingDashboard(
     }
     LaunchedEffect(pendingMusicSelection, panelId) {
         val pending = pendingMusicSelection ?: return@LaunchedEffect
-        delay(220)
+        delay(2000)
         if (pendingMusicSelection != pending) return@LaunchedEffect
         persistDashboardPanelMediaSelectedPlayer(
             currentWidgetConfigs = latestWidgetConfigs,
@@ -240,6 +242,22 @@ fun FloatingDashboard(
         )
         if (pendingMusicSelection == pending) {
             pendingMusicSelection = null
+        }
+    }
+    LaunchedEffect(pendingSeatHeatVentVariant, panelId) {
+        val pending = pendingSeatHeatVentVariant ?: return@LaunchedEffect
+        delay(2000)
+        if (pendingSeatHeatVentVariant != pending) return@LaunchedEffect
+        persistDashboardPanelSeatHeatVentSelectedVariant(
+            currentWidgetConfigs = latestWidgetConfigs,
+            widgetIndex = pending.first,
+            selectedVariant = pending.second,
+            saveConfigs = { configs ->
+                settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
+            }
+        )
+        if (pendingSeatHeatVentVariant == pending) {
+            pendingSeatHeatVentVariant = null
         }
     }
 
@@ -319,6 +337,7 @@ fun FloatingDashboard(
                     )
             ) {
                 DashboardPanelGridAndFrames(
+                    mbCanInterestSourceId = "floating-$panelId",
                     dashboardRows = dashboardRows,
                     dashboardCols = dashboardCols,
                     dashboardState = dashboardState,
@@ -351,6 +370,12 @@ fun FloatingDashboard(
                                 )
                             } catch (_: Exception) {
                             }
+                        } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
+                            sendToggleSteeringWheelHeat(context)
+                        } else if (cfg?.dataKey == "frontWindscreenHeatWidget") {
+                            sendToggleFrontWindscreenHeat(context)
+                        } else if (cfg?.dataKey == "rearWindowMirrorsDefrostWidget") {
+                            sendToggleRearWindowMirrorsDefrost(context)
                         } else if (
                             cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                             cfg.launcherAppPackage.isNotBlank()
@@ -370,6 +395,9 @@ fun FloatingDashboard(
                     },
                     onMusicSelectedPlayerChange = { index, selectedPackage ->
                         pendingMusicSelection = index to selectedPackage
+                    },
+                    onSeatHeatVentSelectedVariantChange = { index, variant ->
+                        pendingSeatHeatVentVariant = index to variant
                     },
                     onHideFloatingPanelsDoubleClick = {
                         val cfg = widgetConfigs.getOrNull(it)
@@ -397,7 +425,7 @@ fun FloatingDashboard(
                         }
                     },
                     showTboxDisconnectIndicator = panelConfig.showTboxDisconnectIndicator,
-                    enableMusicInnerInteractions = !isEditMode,
+                    enableInnerInteractions = !isEditMode,
                     externalWidgetHost = appWidgetHost,
                 )
                 if (isEditMode) {

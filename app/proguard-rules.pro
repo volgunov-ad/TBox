@@ -19,3 +19,19 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# mbCAN JNI glue resolves Java symbols by exact names/signatures.
+# Keep the full vendor package unobfuscated in release builds.
+-keep class com.mengbo.** { *; }
+-keepnames class com.mengbo.**
+
+# Keep enum constants used via reflection/valueOf in vendor code.
+-keepclassmembers enum com.mengbo.** {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+# Keep native method declarations and classes that expose them.
+-keepclasseswithmembernames class * {
+    native <methods>;
+}

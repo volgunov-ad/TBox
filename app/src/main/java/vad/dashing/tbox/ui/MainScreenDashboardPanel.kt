@@ -141,6 +141,7 @@ fun MainScreenDashboardPanel(
     var isDraggingMode by remember { mutableStateOf(false) }
     var isResizingMode by remember { mutableStateOf(false) }
     var pendingMusicSelection by remember(panel.id) { mutableStateOf<Pair<Int, String>?>(null) }
+    var pendingSeatHeatVentVariant by remember(panel.id) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode && showDialogForIndex == null
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
 
@@ -185,7 +186,7 @@ fun MainScreenDashboardPanel(
     }
     LaunchedEffect(pendingMusicSelection, panel.id) {
         val pending = pendingMusicSelection ?: return@LaunchedEffect
-        delay(220)
+        delay(2000)
         if (pendingMusicSelection != pending) return@LaunchedEffect
         persistDashboardPanelMediaSelectedPlayer(
             currentWidgetConfigs = latestWidgetConfigs,
@@ -197,6 +198,22 @@ fun MainScreenDashboardPanel(
         )
         if (pendingMusicSelection == pending) {
             pendingMusicSelection = null
+        }
+    }
+    LaunchedEffect(pendingSeatHeatVentVariant, panel.id) {
+        val pending = pendingSeatHeatVentVariant ?: return@LaunchedEffect
+        delay(2000)
+        if (pendingSeatHeatVentVariant != pending) return@LaunchedEffect
+        persistDashboardPanelSeatHeatVentSelectedVariant(
+            currentWidgetConfigs = latestWidgetConfigs,
+            widgetIndex = pending.first,
+            selectedVariant = pending.second,
+            saveConfigs = { configs ->
+                settingsViewModel.saveMainScreenDashboardWidgets(panel.id, configs)
+            }
+        )
+        if (pendingSeatHeatVentVariant == pending) {
+            pendingSeatHeatVentVariant = null
         }
     }
 
@@ -336,6 +353,7 @@ fun MainScreenDashboardPanel(
             )
     ) {
         DashboardPanelGridAndFrames(
+            mbCanInterestSourceId = "main-screen-${panel.id}",
             dashboardRows = dashboardRows,
             dashboardCols = dashboardCols,
             dashboardState = dashboardState,
@@ -359,6 +377,12 @@ fun MainScreenDashboardPanel(
                 val cfg = widgetConfigs.getOrNull(index)
                 if (isEditMode && !isDraggingMode && !isResizingMode) {
                     showDialogForIndex = index
+                } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
+                    sendToggleSteeringWheelHeat(context)
+                } else if (cfg?.dataKey == "frontWindscreenHeatWidget") {
+                    sendToggleFrontWindscreenHeat(context)
+                } else if (cfg?.dataKey == "rearWindowMirrorsDefrostWidget") {
+                    sendToggleRearWindowMirrorsDefrost(context)
                 } else if (
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                     cfg.launcherAppPackage.isNotBlank()
@@ -379,6 +403,9 @@ fun MainScreenDashboardPanel(
             },
             onMusicSelectedPlayerChange = { index, selectedPackage ->
                 pendingMusicSelection = index to selectedPackage
+            },
+            onSeatHeatVentSelectedVariantChange = { index, variant ->
+                pendingSeatHeatVentVariant = index to variant
             },
             onHideFloatingPanelsDoubleClick = {
                 val cfg = widgetConfigs.getOrNull(it)
@@ -407,7 +434,7 @@ fun MainScreenDashboardPanel(
                 }
             },
             showTboxDisconnectIndicator = panel.showTboxDisconnectIndicator,
-            enableMusicInnerInteractions = !isEditMode,
+            enableInnerInteractions = !isEditMode,
             externalWidgetHost = appWidgetHost
         )
         if (isEditMode) {
