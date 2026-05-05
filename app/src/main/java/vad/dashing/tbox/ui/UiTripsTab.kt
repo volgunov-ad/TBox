@@ -46,11 +46,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AppDataViewModel
-import vad.dashing.tbox.formatTripDurationHuman
+import vad.dashing.tbox.trip.formatTripDurationHuman
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.TripRecord
-import vad.dashing.tbox.TripRepository
+import vad.dashing.tbox.trip.TripRecord
+import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -113,12 +113,36 @@ fun TripsTab(
     )
 
     var showExportDialog by remember { mutableStateOf(false) }
+    /** Id поездки, удаление которой подтверждается (не привязан к текущему выбору в списке). */
+    var pendingDeleteTripId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(trips, pendingDeleteTripId) {
+        val id = pendingDeleteTripId ?: return@LaunchedEffect
+        val t = trips.firstOrNull { it.id == id }
+        if (t == null || t.isActive) {
+            pendingDeleteTripId = null
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(18.dp)
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Button(
+                onClick = { if (trips.isNotEmpty()) showExportDialog = true },
+                enabled = trips.isNotEmpty()
+            ) {
+                Text(stringResource(R.string.trips_export), fontSize = 24.sp)
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -192,8 +216,8 @@ fun TripsTab(
             }
             Button(
                 onClick = {
-                    if (selectedId.isNotEmpty()) {
-                        appDataViewModel.deleteTrip(selectedId)
+                    if (selectedId.isNotEmpty() && selectedTrip != null && !selectedTrip.isActive) {
+                        pendingDeleteTripId = selectedId
                     }
                 },
                 enabled = selectedTrip != null && !selectedTrip.isActive
@@ -207,25 +231,37 @@ fun TripsTab(
             color = MaterialTheme.colorScheme.outlineVariant
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.End
-        ) {
-            Button(
-                onClick = { if (trips.isNotEmpty()) showExportDialog = true },
-                enabled = trips.isNotEmpty()
-            ) {
-                Text(stringResource(R.string.trips_export), fontSize = 24.sp)
+        pendingDeleteTripId?.let { tripId ->
+            val tripPendingDelete = trips.firstOrNull { it.id == tripId }
+            if (tripPendingDelete != null && !tripPendingDelete.isActive) {
+                AlertDialog(
+                    onDismissRequest = { pendingDeleteTripId = null },
+                    title = { AppAlertDialogTitle(stringResource(R.string.trips_delete_confirm_title)) },
+                    text = { AppAlertDialogText(stringResource(R.string.trips_delete_confirm_message)) },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                appDataViewModel.deleteTrip(tripId)
+                                pendingDeleteTripId = null
+                            },
+                        ) {
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_delete))
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(onClick = { pendingDeleteTripId = null }) {
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                        }
+                    },
+                )
             }
         }
 
         if (showExportDialog) {
             AlertDialog(
                 onDismissRequest = { showExportDialog = false },
-                title = { Text(stringResource(R.string.dialog_file_saving_title)) },
-                text = { Text(stringResource(R.string.dialog_save_trips_downloads)) },
+                title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
+                text = { AppAlertDialogText(stringResource(R.string.dialog_save_trips_downloads)) },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -239,12 +275,12 @@ fun TripsTab(
                             showExportDialog = false
                         }
                     ) {
-                        Text(stringResource(R.string.action_save))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                     }
                 },
                 dismissButton = {
                     OutlinedButton(onClick = { showExportDialog = false }) {
-                        Text(stringResource(R.string.action_cancel))
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
             )
@@ -465,6 +501,12 @@ fun TripsTab(
                 }
                 item {
                     StatusRow(
+                        stringResource(R.string.trips_fuel_refueled_cost),
+                        formatWithUnit(valueToString(trip.fuelRefueledCostRub, 2), stringResource(R.string.unit_ruble))
+                    )
+                }
+                item {
+                    StatusRow(
                         stringResource(R.string.trips_refuel_count),
                         valueToString(trip.refuelCount)
                     )
@@ -510,6 +552,7 @@ internal fun buildTripExportLines(
     val kmh = context.getString(R.string.unit_kmh)
     val celsius = context.getString(R.string.unit_celsius)
     val liter = context.getString(R.string.unit_liter)
+    val l100km = context.getString(R.string.unit_l_100km)
 
     return buildList {
         sorted.forEachIndexed { index, trip ->
@@ -608,9 +651,21 @@ internal fun buildTripExportLines(
                 context.getString(R.string.trips_fuel_used),
                 formatWithUnit(valueToString(trip.fuelConsumedLiters, 1), liter)
             )
+            val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(trip)
+            appendStatusLine(
+                context.getString(R.string.trips_fuel_consumption_l_100km),
+                formatWithUnit(
+                    avgFuel?.let { valueToString(it, 1) } ?: noData,
+                    if (avgFuel != null) l100km else ""
+                )
+            )
             appendStatusLine(
                 context.getString(R.string.trips_fuel_refueled),
                 formatWithUnit(valueToString(trip.fuelRefueledLiters, 1), liter)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_fuel_refueled_cost),
+                formatWithUnit(valueToString(trip.fuelRefueledCostRub, 2), context.getString(R.string.unit_ruble))
             )
             appendStatusLine(
                 context.getString(R.string.trips_refuel_count),

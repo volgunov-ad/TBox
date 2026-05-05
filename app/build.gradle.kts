@@ -12,8 +12,8 @@ android {
         applicationId = "vad.dashing.tbox"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1405
-        versionName = "0.14.5"
+        versionCode = 1500
+        versionName = "0.15.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField(
@@ -89,6 +89,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.androidx.profileinstaller.profileinstaller)
+    implementation(libs.okhttp)
     implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

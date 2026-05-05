@@ -109,6 +109,18 @@ object CanDataRepository {
     private val _fuelLevelPercentageFiltered = MutableStateFlow<UInt?>(null)
     val fuelLevelPercentageFiltered: StateFlow<UInt?> = _fuelLevelPercentageFiltered.asStateFlow()
 
+    /** Литры в баке после калибровки (см. BackgroundService и пакет fuellevelcalibration). */
+    private val _fuelLevelCalibratedLiters = MutableStateFlow<Float?>(null)
+    val fuelLevelCalibratedLiters: StateFlow<Float?> = _fuelLevelCalibratedLiters.asStateFlow()
+
+    /** Литры в баке после калибровки с корректировкой по температуре (см. BackgroundService и пакет fuellevelcalibration). */
+    private val _fuelLevelCalibratedLitersActual = MutableStateFlow<Float?>(null)
+    val fuelLevelCalibratedLitersActual: StateFlow<Float?> = _fuelLevelCalibratedLitersActual.asStateFlow()
+
+    /** Уверенность калибровки, 0…1 (в UI пока не показывается). */
+    private val _fuelCalibrationConfidence = MutableStateFlow<Float?>(null)
+    val fuelCalibrationConfidence: StateFlow<Float?> = _fuelCalibrationConfidence.asStateFlow()
+
     private val _currentFuelConsumption = MutableStateFlow<Float?>(null)
     val currentFuelConsumption: StateFlow<Float?> = _currentFuelConsumption.asStateFlow()
 
@@ -218,6 +230,18 @@ object CanDataRepository {
 
     fun updateFuelLevelPercentageFiltered(newValue: UInt) {
         _fuelLevelPercentageFiltered.setIfChanged(newValue)
+    }
+
+    fun updateFuelLevelCalibratedLiters(newValue: Float?) {
+        _fuelLevelCalibratedLiters.setIfChanged(newValue)
+    }
+
+    fun updateFuelLevelCalibratedLitersActual(newValue: Float?) {
+        _fuelLevelCalibratedLitersActual.setIfChanged(newValue)
+    }
+
+    fun updateFuelCalibrationConfidence(newValue: Float?) {
+        _fuelCalibrationConfidence.setIfChanged(newValue)
     }
 
     fun updateCurrentFuelConsumption(newValue: Float?) {

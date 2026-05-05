@@ -84,7 +84,8 @@ fun TboxApp(
     )
     )
     val appDataViewModel: AppDataViewModel = viewModel(factory = AppDataViewModelFactory(
-        appDataManager
+        appDataManager,
+        settingsManager,
     )
     )
 
@@ -123,8 +124,8 @@ fun TboxApp(
 }
 
 object TabItems {
-    /** Left menu order; tab index 10 is shown immediately after Settings (5). */
-    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 5, 10, 6, 7, 8, 9)
+    /** Left menu order; tab index 11 is shown immediately after Settings (6). */
+    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 5, 6, 11, 7, 8, 9, 10)
 
     @Composable
     fun getItems(): List<TabItem> {
@@ -134,6 +135,7 @@ object TabItems {
             TabItem(stringResource(R.string.tab_geoposition), Icons.Filled.Place),
             TabItem(stringResource(R.string.tab_car_data), Icons.Filled.Build),
             TabItem(stringResource(R.string.tab_trips), Icons.AutoMirrored.Filled.List),
+            TabItem(stringResource(R.string.tab_refuels), ImageVector.vectorResource(R.drawable.ic_menu_refuels)),
             TabItem(stringResource(R.string.tab_settings), Icons.Filled.Settings),
             TabItem(stringResource(R.string.tab_logs), ImageVector.vectorResource(R.drawable.menu_icon_log)),
             TabItem(stringResource(R.string.tab_info), Icons.Filled.Info),
@@ -198,10 +200,10 @@ fun TboxScreen(
                 ""
             )
         }
-        if (selectedTab == 5) {
+        if (selectedTab == 6) {
             settingsViewModel.onSettingsTabSelected()
         }
-        if (selectedTab == 10) {
+        if (selectedTab == 11) {
             settingsViewModel.onMainScreenSettingsTabSelected()
         }
     }
@@ -264,7 +266,7 @@ fun TboxScreen(
                         TabItems.tabMenuDisplayOrder.forEach { index ->
                             if (index !in tabs.indices) return@forEach
                             val tab = tabs[index]
-                            if (isExpertModeEnabled || index !in setOf(1, 6, 8)) {
+                            if (isExpertModeEnabled || index !in setOf(1, 7, 9)) {
                                 TabMenuItem(
                                     title = tab.title,
                                     icon = tab.icon,
@@ -369,7 +371,13 @@ fun TboxScreen(
                         onTripFinishAndStart = onTripFinishAndStart,
                         onSaveToFile = onSaveToFile,
                     )
-                    5 -> SettingsTab(
+                    5 -> RefuelsTab(
+                        appDataViewModel = appDataViewModel,
+                        settingsViewModel = settingsViewModel,
+                        onSaveToFile = onSaveToFile,
+                        onServiceCommand = onServiceCommand,
+                    )
+                    6 -> SettingsTab(
                         viewModel,
                         settingsViewModel,
                         onTboxRestart,
@@ -379,18 +387,18 @@ fun TboxScreen(
                         onExportSettingsBackupWithoutTrips = onExportSettingsBackupWithoutTrips,
                         onImportSettingsBackup = onImportSettingsBackup,
                     )
-                    6 -> if (isExpertModeEnabled) {
+                    7 -> if (isExpertModeEnabled) {
                         LogsTab(viewModel, settingsViewModel, onSaveToFile)
                     } else {
                         ModemTab(viewModel, onServiceCommand)
                     }
-                    7 -> InfoTab(viewModel, settingsViewModel, onServiceCommand)
-                    8 -> if (isExpertModeEnabled) {
+                    8 -> InfoTab(viewModel, settingsViewModel, onServiceCommand)
+                    9 -> if (isExpertModeEnabled) {
                         CanTab(viewModel, canViewModel, onSaveToFile)
                     } else {
                         ModemTab(viewModel, onServiceCommand)
                     }
-                    9 -> MainDashboardTab(
+                    10 -> MainDashboardTab(
                         viewModel,
                         canViewModel,
                         settingsViewModel,
@@ -398,7 +406,7 @@ fun TboxScreen(
                         onTboxRestart,
                         onTripFinishAndStart = onTripFinishAndStart,
                     )
-                    10 -> MainScreenSettingsTab(
+                    11 -> MainScreenSettingsTab(
                         settingsViewModel = settingsViewModel,
                         onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
                     )

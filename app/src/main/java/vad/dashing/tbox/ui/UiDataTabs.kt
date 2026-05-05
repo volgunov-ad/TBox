@@ -135,6 +135,8 @@ fun CarDataTabContent(
 
     val motorHours by appDataViewModel.motorHours.collectAsStateWithLifecycle()
     val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
+    val fuelLevelCalibratedLiters by canViewModel.fuelLevelCalibratedLiters.collectAsStateWithLifecycle()
+    val fuelLevelCalibratedLitersActual by canViewModel.fuelLevelCalibratedLitersActual.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -182,13 +184,21 @@ fun CarDataTabContent(
             item { CarDataStatusRow(context, "fuelLevelPercentage", valueToString(fuelLevelPercentage)) }
             item { CarDataStatusRow(context, "fuelLevelPercentageFiltered", valueToString(fuelLevelPercentageFiltered)) }
             item {
+                val litersDisplay = fuelLevelCalibratedLiters
+                    ?: fuelLevelPercentageFiltered?.toFloat()?.times(fuelTankLiters.toFloat())?.div(100f)
                 CarDataStatusRow(
                     context,
                     "fuelLevelLiters",
-                    valueToString(
-                        fuelLevelPercentageFiltered?.toFloat()?.times(fuelTankLiters.toFloat())?.div(100f),
-                        1
-                    )
+                    valueToString(litersDisplay, 2)
+                )
+            }
+            item {
+                val litersDisplay = fuelLevelCalibratedLitersActual
+                    ?: fuelLevelPercentageFiltered?.toFloat()?.times(fuelTankLiters.toFloat())?.div(100f)
+                CarDataStatusRow(
+                    context,
+                    "fuelLevelLitersActual",
+                    valueToString(litersDisplay, 2)
                 )
             }
             item { CarDataStatusRow(context, "currentFuelConsumption", valueToString(currentFuelConsumption, 1)) }
@@ -269,9 +279,9 @@ fun LogsTabContent(
 ) {
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val logLevel by settingsViewModel.logLevel.collectAsStateWithLifecycle()
+    val searchText by LogsSessionState.messageFilter.collectAsStateWithLifecycle()
 
     val logLevels = listOf("DEBUG", "INFO", "WARN", "ERROR")
-    var searchText by remember { mutableStateOf("") }
 
     var showSaveDialog by remember { mutableStateOf(false) }
 
@@ -293,7 +303,7 @@ fun LogsTabContent(
                 value = searchText,
                 textStyle = TextStyle(fontSize = 20.sp),
                 onValueChange = { newText ->
-                    searchText = newText
+                    LogsSessionState.setMessageFilter(newText)
                 },
                 modifier = Modifier
                     .weight(1f)
@@ -314,7 +324,7 @@ fun LogsTabContent(
                 trailingIcon = {
                     if (searchText.isNotEmpty()) {
                         IconButton(
-                            onClick = { searchText = "" }
+                            onClick = { LogsSessionState.setMessageFilter("") }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
@@ -365,9 +375,9 @@ fun LogsTabContent(
             if (showSaveDialog) {
                 AlertDialog(
                     onDismissRequest = { showSaveDialog = false },
-                    title = { Text(stringResource(R.string.dialog_file_saving_title)) },
+                    title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
                     text = {
-                        Text(stringResource(R.string.dialog_save_logs_downloads))
+                        AppAlertDialogText(stringResource(R.string.dialog_save_logs_downloads))
                     },
                     confirmButton = {
                         Button(
@@ -380,14 +390,14 @@ fun LogsTabContent(
                                 showSaveDialog = false
                             }
                         ) {
-                            Text(stringResource(R.string.action_save))
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                         }
                     },
                     dismissButton = {
                         OutlinedButton(
                             onClick = { showSaveDialog = false }
                         ) {
-                            Text(stringResource(R.string.action_cancel))
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                         }
                     }
                 )
@@ -460,9 +470,9 @@ fun CanTabContent(
             if (showSaveDialog) {
                 AlertDialog(
                     onDismissRequest = { showSaveDialog = false },
-                    title = { Text(stringResource(R.string.dialog_file_saving_title)) },
+                    title = { AppAlertDialogTitle(stringResource(R.string.dialog_file_saving_title)) },
                     text = {
-                        Text(stringResource(R.string.dialog_save_can_downloads, sortedCanEntries.size))
+                        AppAlertDialogText(stringResource(R.string.dialog_save_can_downloads, sortedCanEntries.size))
                     },
                     confirmButton = {
                         Button(
@@ -484,14 +494,14 @@ fun CanTabContent(
                                 showSaveDialog = false
                             }
                         ) {
-                            Text(stringResource(R.string.action_save))
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_save))
                         }
                     },
                     dismissButton = {
                         OutlinedButton(
                             onClick = { showSaveDialog = false }
                         ) {
-                            Text(stringResource(R.string.action_cancel))
+                            AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                         }
                     }
                 )

@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import vad.dashing.tbox.trip.tripDurationHms
 
 class TripDurationFormatTest {
 

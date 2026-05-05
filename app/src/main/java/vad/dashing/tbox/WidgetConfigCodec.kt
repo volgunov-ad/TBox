@@ -100,6 +100,9 @@ fun serializeWidgetConfigsToJsonArray(
         if (acc != null && acc in 0..2) {
             obj.put("valueAccuracy", acc)
         }
+        if (config.selectedVariant != 0) {
+            obj.put("selectedVariant", config.selectedVariant)
+        }
         array.put(obj)
     }
     return array
@@ -243,7 +246,8 @@ private fun parseWidgetConfigsFromJsonArray(
                             null
                         },
                         customTitle = item.optString("customTitle", "").trim(),
-                        valueAccuracy = valueAccuracy
+                        valueAccuracy = valueAccuracy,
+                        selectedVariant = item.optInt("selectedVariant", 0)
                     )
                 )
             }

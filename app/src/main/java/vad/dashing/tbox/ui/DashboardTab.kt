@@ -20,6 +20,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +33,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
@@ -57,6 +60,7 @@ import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
+import vad.dashing.tbox.mbcan.MbCanRepository
 
 @Composable
 fun MainDashboardTab(
@@ -68,6 +72,7 @@ fun MainDashboardTab(
     onTripFinishAndStart: () -> Unit,
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
 
     DisposableEffect(appWidgetHost) {
@@ -91,6 +96,12 @@ fun MainDashboardTab(
     val widgetConfigs = remember(widgetsConfig, totalWidgets) {
         normalizeWidgetConfigs(widgetsConfig, totalWidgets)
     }
+    val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
+    var pendingMusicSelection by remember { mutableStateOf<Pair<Int, String>?>(null) }
+    var pendingSeatHeatVentVariant by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val panelNeedsMbCan = remember(widgetConfigs) {
+        MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
+    }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
@@ -112,6 +123,22 @@ fun MainDashboardTab(
             SharedMediaControlService.clearSourceSelection(mediaSourceId)
         }
     }
+    if (panelNeedsMbCan) {
+        LaunchedEffect(widgetConfigs) {
+            val activeKeys = widgetConfigs
+                .map { it.dataKey.trim() }
+                .filter { it.isNotBlank() && it != "null" }
+                .toSet()
+            MbCanRepository.setSourceWidgetKeys("dashboard-tab-main", activeKeys)
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                coroutineScope.launch {
+                    MbCanRepository.clearSource("dashboard-tab-main")
+                }
+            }
+        }
+    }
 
     var restartEnabled by remember { mutableStateOf(true) }
 
@@ -119,6 +146,37 @@ fun MainDashboardTab(
         if (!restartEnabled) {
             delay(15000) // Блокировка на 15 секунд
             restartEnabled = true
+        }
+    }
+
+    LaunchedEffect(pendingMusicSelection, totalWidgets) {
+        val pending = pendingMusicSelection ?: return@LaunchedEffect
+        delay(2000)
+        if (pendingMusicSelection != pending) return@LaunchedEffect
+        persistDashboardPanelMediaSelectedPlayer(
+            currentWidgetConfigs = latestWidgetConfigs,
+            widgetIndex = pending.first,
+            selectedPackage = pending.second,
+            saveConfigs = { configs ->
+                settingsViewModel.saveDashboardWidgets(configs)
+            }
+        )
+        if (pendingMusicSelection == pending) {
+            pendingMusicSelection = null
+        }
+    }
+
+    LaunchedEffect(pendingSeatHeatVentVariant, totalWidgets) {
+        val pending = pendingSeatHeatVentVariant ?: return@LaunchedEffect
+        delay(2000)
+        if (pendingSeatHeatVentVariant != pending) return@LaunchedEffect
+        settingsViewModel.saveDashboardSeatHeatVentSelectedVariant(
+            widgetIndex = pending.first,
+            widgetCount = totalWidgets,
+            selectedVariant = pending.second
+        )
+        if (pendingSeatHeatVentVariant == pending) {
+            pendingSeatHeatVentVariant = null
         }
     }
 
@@ -193,11 +251,10 @@ fun MainDashboardTab(
                                         },
                                         onLongClick = { showDialogForIndex = index },
                                         onMusicSelectedPlayerChange = { selectedPackage ->
-                                            settingsViewModel.saveDashboardMediaSelectedPlayer(
-                                                widgetIndex = index,
-                                                widgetCount = totalWidgets,
-                                                selectedPackage = selectedPackage
-                                            )
+                                            pendingMusicSelection = index to selectedPackage
+                                        },
+                                        onSeatHeatVentSelectedVariantChange = { variant ->
+                                            pendingSeatHeatVentVariant = index to variant
                                         },
                                         onHideFloatingPanelsDoubleClick = {
                                             val cfg = widgetConfigs.getOrNull(index)

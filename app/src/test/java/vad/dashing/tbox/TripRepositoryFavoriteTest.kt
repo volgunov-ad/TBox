@@ -5,6 +5,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.trip.TripRecord
+import vad.dashing.tbox.trip.TripRepository
 
 class TripRepositoryFavoriteTest {
 

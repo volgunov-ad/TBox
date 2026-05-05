@@ -12,6 +12,12 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.fuel.RefuelRepository
+import vad.dashing.tbox.fuel.refuelsListFromJson
+import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.trip.favoritesSetFromJson
+import vad.dashing.tbox.trip.tripsJsonForBackupExport
+import vad.dashing.tbox.trip.tripsListFromJson
 
 /**
  * Serializes one [DataStore] [Preferences] snapshot to/from JSON arrays of entries
@@ -130,7 +136,7 @@ object SettingsBackupCoordinator {
         packageName: String,
         settingsStore: DataStore<Preferences>,
         appDataStore: DataStore<Preferences>,
-        excludeTripLists: Boolean = false,
+        excludeTripAndRefuelLists: Boolean = false,
     ): String {
         val exportedAt = System.currentTimeMillis()
         val root = JSONObject()
@@ -139,8 +145,8 @@ object SettingsBackupCoordinator {
         root.put(KEY_EXPORTED_AT, exportedAt)
         root.put(KEY_SETTINGS, PreferenceStoreBackup.exportEntries(settingsStore))
         var appDataArr = PreferenceStoreBackup.exportEntries(appDataStore)
-        if (excludeTripLists) {
-            appDataArr = filterOutTripListPreferences(appDataArr)
+        if (excludeTripAndRefuelLists) {
+            appDataArr = filterOutTripAndRefuelListPreferences(appDataArr)
         } else {
             patchTripsJsonInExportedAppData(appDataArr, exportedAt)
         }
@@ -148,13 +154,14 @@ object SettingsBackupCoordinator {
         return root.toString(2)
     }
 
-    private fun filterOutTripListPreferences(entries: JSONArray): JSONArray {
+    internal fun filterOutTripAndRefuelListPreferences(entries: JSONArray): JSONArray {
         val out = JSONArray()
         for (i in 0 until entries.length()) {
             val o = entries.optJSONObject(i) ?: continue
             val name = o.optString(PreferenceStoreBackup.K_NAME)
             if (name == AppDataManager.TRIPS_JSON_PREFERENCE_NAME ||
-                name == AppDataManager.TRIP_FAVORITES_JSON_PREFERENCE_NAME
+                name == AppDataManager.TRIP_FAVORITES_JSON_PREFERENCE_NAME ||
+                name == AppDataManager.REFUELS_JSON_PREFERENCE_NAME
             ) {
                 continue
             }
@@ -165,7 +172,7 @@ object SettingsBackupCoordinator {
 
     /**
      * For backup file only: close the active trip in serialized [trips_json] so importers see a
-     * completed trip; runtime DataStore and [TripRepository] are unchanged.
+     * completed trip; runtime DataStore and [vad.dashing.tbox.trip.TripRepository] are unchanged.
      */
     private fun patchTripsJsonInExportedAppData(entries: JSONArray, endTimeEpochMs: Long) {
         for (i in 0 until entries.length()) {
@@ -182,7 +189,7 @@ object SettingsBackupCoordinator {
     }
 
     /**
-     * Replaces both preference stores and reapplies app_data into in-memory [TripRepository] / [CarDataRepository].
+     * Replaces both preference stores and reapplies app_data into in-memory [vad.dashing.tbox.trip.TripRepository] / [CarDataRepository].
      */
     suspend fun importFullJson(
         appDataManager: AppDataManager,
@@ -217,9 +224,11 @@ object SettingsBackupCoordinator {
         CarDataRepository.markPersisted(motor)
         val tripsJson = appDataManager.tripsJsonFlow.first()
         val favJson = appDataManager.tripFavoritesJsonFlow.first()
+        val refuelsJson = appDataManager.refuelsJsonFlow.first()
         TripRepository.setTripsFromStore(
             tripsListFromJson(tripsJson),
             favoritesSetFromJson(favJson)
         )
+        RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJson))
     }
 }

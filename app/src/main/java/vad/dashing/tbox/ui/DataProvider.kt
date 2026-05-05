@@ -123,10 +123,12 @@ class TboxDataProvider(
                 valueToString(it, eff(1))
             }
             "fuelLevelLiters" -> combine(
+                canViewModel.fuelLevelCalibratedLiters,
                 canViewModel.fuelLevelPercentageFiltered,
                 settingsViewModel.fuelTankLiters
-            ) { pct, tank ->
-                valueToString(pct?.toFloat()?.times(tank.toFloat())?.div(100f), eff(1))
+            ) { calibrated, pct, tank ->
+                val liters = calibrated ?: pct?.toFloat()?.times(tank.toFloat())?.div(100f)
+                valueToString(liters, eff(1))
             }
                 .distinctUntilChanged()
                 .stateIn(

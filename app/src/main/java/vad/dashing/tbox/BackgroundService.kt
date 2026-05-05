@@ -8,9 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
@@ -20,11 +23,17 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
+import kotlin.math.min
+import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationJson
+import vad.dashing.tbox.fuellevelcalibration.FuelEntry
+import vad.dashing.tbox.fuellevelcalibration.FuelFilter
+import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.utils.CanFramesProcess
@@ -33,12 +42,38 @@ import vad.dashing.tbox.utils.CanFramesProcess.toUInt
 import vad.dashing.tbox.utils.CsnOperatorResolver
 import vad.dashing.tbox.utils.MotorHoursBuffer
 import vad.dashing.tbox.utils.ThemeObserver
+import vad.dashing.tbox.mbcan.MbCanAvailability
+import vad.dashing.tbox.mbcan.MbCanCommand
+import vad.dashing.tbox.mbcan.MbCanDiagnostics
+import vad.dashing.tbox.mbcan.MbCanEngineFacade
+import vad.dashing.tbox.mbcan.MbCanRepository
+import com.mengbo.mbCan.defines.MBAudioProperty
+import vad.dashing.tbox.fuel.FuelCoordinates
+import vad.dashing.tbox.fuel.FuelCostAccounting
+import vad.dashing.tbox.fuel.FuelPriceClient
+import vad.dashing.tbox.fuel.FuelPriceResult
+import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.fuel.REFUEL_AMBIENT_TEMP_DEFAULT_C
+import vad.dashing.tbox.fuel.RefuelRecord
+import vad.dashing.tbox.fuel.RefuelRepository
+import vad.dashing.tbox.fuel.ambientTempForCalibrationC
+import vad.dashing.tbox.fuel.refuelsListFromJson
+import vad.dashing.tbox.fuel.refuelsListToJson
+import vad.dashing.tbox.trip.TripFuelAccounting
+import vad.dashing.tbox.trip.TripRecord
+import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.trip.TripRules
+import vad.dashing.tbox.trip.favoritesSetFromJson
+import vad.dashing.tbox.trip.favoritesSetToJson
+import vad.dashing.tbox.trip.tripsListFromJson
+import vad.dashing.tbox.trip.tripsListToJson
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Date
 import java.util.concurrent.Executors
+import java.util.Locale
 import kotlin.let
 
 class BackgroundService : Service() {
@@ -64,7 +99,12 @@ class BackgroundService : Service() {
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     private lateinit var canDataSaveCount: StateFlow<Int>
     private lateinit var fuelTankLitersSetting: StateFlow<Int>
+    private lateinit var fuelCalibrationJsonSetting: StateFlow<String>
+    private lateinit var fuelCalibrationZoneCountSetting: StateFlow<Int>
+    private lateinit var fuelCalibrationMaturityThresholdSetting: StateFlow<Int>
+    private lateinit var fuelPriceFuelIdSetting: StateFlow<Int>
     private lateinit var splitTripTimeMinutesSetting: StateFlow<Int>
+    private val fuelPriceClient by lazy { FuelPriceClient() }
 
     private val serverPort = 50047
     private var themeObserver: ThemeObserver? = null
@@ -76,6 +116,7 @@ class BackgroundService : Service() {
     /** Serializes [onStartCommand] handling so each intent awaits settings snapshot and runs in order. */
     private val commandRouterMutex = Mutex()
     private val tripsPersistMutex = Mutex()
+    private val refuelsPersistMutex = Mutex()
     private val packetProcessingDispatcher =
         Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "tbox-packet-processor").apply { isDaemon = true }
@@ -99,7 +140,11 @@ class BackgroundService : Service() {
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
+    /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
+    private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
+    /** Periodic mbCAN `canGetVehicleParam` / `canGetAudioParam` samples for in-app log (MBCAN_TMP); remove when debugging is done. */
+    private var mbCanDebugProbeJob: Job? = null
     /** Serializes delayed / repeated "open MainActivity" commands: each new request replaces the previous. */
     private var openMainActivityJob: Job? = null
     /** Cancels in-flight [ACTION_START] bootstrap if [ACTION_STOP] runs mid-startup. */
@@ -142,7 +187,7 @@ class BackgroundService : Service() {
     var servicePhase: ServiceLifecyclePhase = ServiceLifecyclePhase.Idle
         internal set
 
-    /** True after [reloadTripsFromDataStoreSuspend] has applied disk trips to [TripRepository]. */
+    /** True after [reloadTripsFromDataStoreSuspend] has applied disk trips to [vad.dashing.tbox.trip.TripRepository]. */
     private val tripsFromDiskReady = AtomicBoolean(false)
 
     private var netUpdateTime: Long = 5000
@@ -178,7 +223,7 @@ class BackgroundService : Service() {
 
     /**
      * In-RAM state for automatic trips: each CAN RPM sample drives [onTripRpmSample]. Split-window
-     * length comes from [splitTripTimeMinutesSetting] (same semantics as [TripRules]).
+     * length comes from [splitTripTimeMinutesSetting] (same semantics as [vad.dashing.tbox.trip.TripRules]).
      */
     private var tripPrevRpmForStart = 0f
     /** True once we have seen RPM > 0 this service session; blocks spurious "new trip" on first samples. */
@@ -192,21 +237,14 @@ class BackgroundService : Service() {
     private var tripLastSampleElapsedMs: Long = 0L
     private var tripLastOdometer: UInt? = null
     private var tripStartOdometer: UInt? = null
-    /** Last fuel % used for step consumption between samples; aligned with [TripRecord.fuelBaselinePercent]. */
+    /** Last fuel % used for step consumption between samples; aligned with [vad.dashing.tbox.trip.TripRecord.fuelBaselinePercent]. */
     private var tripLastFuelPercent: Float? = null
+    /** Last fuel level in calibrated standard liters; aligned with [vad.dashing.tbox.trip.TripRecord.fuelBaselineLiters]. */
+    private var tripLastFuelLitersCalibrated: Float? = null
     private var tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
     private var tripLastPersistedSnapshot: TripRecord? = null
     /** First RPM sample after service start or reload: special-case resume vs new trip without double-counting. */
     private var tripFirstSampleAfterSessionStart = true
-    /**
-     * Set when cold-start resume reopened a trip that had [TripRecord.endTimeEpochMs]. Cleared on first RPM>0
-     * this session. If the HU stops the service before the engine runs, [finalizeTripsOnServiceStop] restores
-     * the previous end time and rolls back the resume-only idle delta to avoid double-counting on next boot.
-     */
-    private var tripColdResumeReopenedEndedTrip: ColdResumeReopenedEndedTrip? = null
-    /** True when cold resume reopened an ended trip, but parked time should be applied only at first RPM>0. */
-    private var tripColdResumeApplyParkedIdleOnEngineStart: Boolean = false
-
     private var isLastSMS: Boolean = false
 
     companion object {
@@ -277,6 +315,9 @@ class BackgroundService : Service() {
          * persist snapshot). Used after settings backup import while the service is running.
          */
         const val ACTION_RELOAD_TRIPS_FROM_STORE = "vad.dashing.tbox.RELOAD_TRIPS_FROM_STORE"
+        /** Обучение калибровки уровня топлива по одной записи заправки ([EXTRA_REFUEL_ID]). */
+        const val ACTION_FUEL_CALIBRATION_TRAIN = "vad.dashing.tbox.FUEL_CALIBRATION_TRAIN"
+        const val EXTRA_REFUEL_ID = "vad.dashing.tbox.EXTRA_REFUEL_ID"
         /**
          * Bring [MainActivity] to the foreground (singleTask). Optional delay via [EXTRA_OPEN_MAIN_DELAY_MS].
          * Repeated intents cancel the previous scheduled launch and start a new timer.
@@ -300,6 +341,34 @@ class BackgroundService : Service() {
             "vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED"
         const val EXTRA_TOGGLE_FLOATING_ENABLED_ALL =
             "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
+        const val ACTION_MBCAN_COMMAND = "vad.dashing.tbox.ACTION_MBCAN_COMMAND"
+        const val ACTION_SET_MBCAN_DIAGNOSTICS = "vad.dashing.tbox.ACTION_SET_MBCAN_DIAGNOSTICS"
+        const val EXTRA_MBCAN_COMMAND_TYPE = "vad.dashing.tbox.EXTRA_MBCAN_COMMAND_TYPE"
+        const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
+        const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
+        const val EXTRA_MBCAN_DIAGNOSTICS_ENABLED = "vad.dashing.tbox.EXTRA_MBCAN_DIAGNOSTICS_ENABLED"
+        const val MBCAN_COMMAND_TOGGLE_PROPERTY = "TOGGLE_PROPERTY"
+        const val MBCAN_COMMAND_SET_PROPERTY = "SET_PROPERTY"
+
+        /** First and subsequent intervals for [mbCanDebugProbeJob] (vehicle + audio param batch log). */
+        private const val MBCAN_DEBUG_PROBE_INTERVAL_MS = 15_000L
+
+        /**
+         * [com.mengbo.mbCan.defines.MBVehicleProperty] ids — mixed body/HVAC/MFS for log correlation on the HU.
+         */
+        private val MB_CAN_DEBUG_GET_PROPERTY_IDS: List<Pair<String, Int>> = listOf(
+            "DRIVEMODE" to 145,
+            "POWERMODE" to 147,
+        )
+
+        /**
+         * [com.mengbo.mbCan.defines.MBAudioProperty] ids — periodic [MbCanEngineFacade.canGetAudioParam] probe
+         * (same interval as [MB_CAN_DEBUG_GET_PROPERTY_IDS]).
+         */
+        private val MB_CAN_DEBUG_GET_AUDIO_PROPERTY_IDS: List<Pair<String, Int>> = listOf(
+            "eAUDIO_PROPERTY_VOLUME_SPEED" to MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED.value,
+            "eAUDIO_PROPERTY_VOLUME_KEY" to MBAudioProperty.eAUDIO_PROPERTY_VOLUME_KEY.value,
+        )
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
@@ -310,6 +379,8 @@ class BackgroundService : Service() {
         private val TBOX_RECONNECT_INTERVALS_MS = longArrayOf(60_000L, 120_000L, 600_000L, 600_000L)
         /** [SharingStarted] for settings collected in [startSettingsListener]; avoids eager DataStore until first subscriber. */
         private val settingsFlowWhileSubscribed = SharingStarted.WhileSubscribed(5_000L)
+        private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
+        private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -350,6 +421,14 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.canDataSaveCount)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
                 .stateIn(scope, eager, settingsSnap.fuelTankLiters)
+            fuelCalibrationJsonSetting = settingsManager.fuelCalibrationJsonFlow
+                .stateIn(scope, eager, settingsSnap.fuelCalibrationJson)
+            fuelCalibrationZoneCountSetting = settingsManager.fuelCalibrationZoneCountFlow
+                .stateIn(scope, eager, settingsSnap.fuelCalibrationZoneCount)
+            fuelCalibrationMaturityThresholdSetting = settingsManager.fuelCalibrationMaturityThresholdFlow
+                .stateIn(scope, eager, settingsSnap.fuelCalibrationMaturityThreshold)
+            fuelPriceFuelIdSetting = settingsManager.fuelPriceFuelIdFlow
+                .stateIn(scope, eager, settingsSnap.fuelPriceFuelId)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, settingsSnap.splitTripTimeMinutes)
         } else {
@@ -387,6 +466,14 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, 5)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
                 .stateIn(scope, eager, 57)
+            fuelCalibrationJsonSetting = settingsManager.fuelCalibrationJsonFlow
+                .stateIn(scope, eager, "")
+            fuelCalibrationZoneCountSetting = settingsManager.fuelCalibrationZoneCountFlow
+                .stateIn(scope, eager, 5)
+            fuelCalibrationMaturityThresholdSetting = settingsManager.fuelCalibrationMaturityThresholdFlow
+                .stateIn(scope, eager, 80)
+            fuelPriceFuelIdSetting = settingsManager.fuelPriceFuelIdFlow
+                .stateIn(scope, eager, FuelTypes.DEFAULT_FUEL_ID)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, 5)
         }
@@ -401,6 +488,17 @@ class BackgroundService : Service() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+        MbCanDiagnostics.setEnabled(false)
+        scope.launch {
+            MbCanRepository.bind(scope)
+        }
+        /*mbCanDebugProbeJob = scope.launch(exceptionHandler) {
+            delay(MBCAN_DEBUG_PROBE_INTERVAL_MS)
+            while (isActive) {
+                runMbCanDebugParameterProbeRound()
+                delay(MBCAN_DEBUG_PROBE_INTERVAL_MS)
+            }
+        }*/
 
         infraBootstrapJob = scope.launch {
             try {
@@ -426,11 +524,15 @@ class BackgroundService : Service() {
                         val favoritesJsonDeferred = async(Dispatchers.IO) {
                             appDataManager.tripFavoritesJsonFlow.first()
                         }
+                        val refuelsJsonDeferred = async(Dispatchers.IO) {
+                            appDataManager.refuelsJsonFlow.first()
+                        }
                         tripsFromDiskReady.set(false)
                         TripRepository.setTripsFromStore(
                             tripsListFromJson(tripsJsonDeferred.await()),
                             favoritesSetFromJson(favoritesJsonDeferred.await())
                         )
+                        RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJsonDeferred.await()))
                         tripsFromDiskReady.set(true)
                     }
                 } catch (e: Exception) {
@@ -597,6 +699,7 @@ class BackgroundService : Service() {
                         startPeriodicJob()
                         yield()
                         startDataListener()
+                        startFuelCalibratedLitersWatcher()
                         timingMark("startup_listeners")
                         if (startFromBoot) {
                             maybeOpenMainScreenAfterBootSuspend()
@@ -648,6 +751,14 @@ class BackgroundService : Service() {
                     }
                 }
             }
+            ACTION_FUEL_CALIBRATION_TRAIN -> {
+                val refuelId = intent.getStringExtra(EXTRA_REFUEL_ID)?.trim().orEmpty()
+                if (refuelId.isNotEmpty()) {
+                    runFuelCalibrationTrain(refuelId)
+                } else {
+                    TboxRepository.addLog("WARN", "Fuel calibration", "train: пустой refuel id")
+                }
+            }
             ACTION_STOP -> {
                 if (isRunning) {
                     servicePhase = ServiceLifecyclePhase.Stopping
@@ -666,6 +777,7 @@ class BackgroundService : Service() {
                     stopPeriodicJob()
                     stopSettingsListener()
                     stopDataListener()
+                    stopFuelCalibratedLitersWatcher()
                     scope.launch { finalizeTripsOnServiceStop() }
                     stopStateBroadcastListener()
                     stopReadAllSMS()
@@ -779,6 +891,39 @@ class BackgroundService : Service() {
                         overlayController.syncFloatingDashboards(updated)
                         overlayController.ensureFloatingDashboards(updated)
                     }
+                }
+            }
+            ACTION_MBCAN_COMMAND -> {
+                scope.launch {
+                    val commandType = intent.getStringExtra(EXTRA_MBCAN_COMMAND_TYPE).orEmpty()
+                    val propertyId = intent.getIntExtra(EXTRA_MBCAN_PROPERTY_ID, Int.MIN_VALUE)
+                    val propertyValue = intent.getIntExtra(EXTRA_MBCAN_VALUE, 0)
+                    MbCanDiagnostics.log(
+                        "DEBUG",
+                        "service command type=$commandType propertyId=$propertyId value=$propertyValue"
+                    )
+                    when (commandType) {
+                        MBCAN_COMMAND_TOGGLE_PROPERTY -> {
+                            if (propertyId != Int.MIN_VALUE) {
+                                val result = MbCanRepository.execute(MbCanCommand.ToggleProperty(propertyId))
+                                MbCanDiagnostics.log("DEBUG", "toggle result success=${result.success} msg=${result.message}")
+                            }
+                        }
+                        MBCAN_COMMAND_SET_PROPERTY -> {
+                            if (propertyId != Int.MIN_VALUE) {
+                                val result = MbCanRepository.execute(MbCanCommand.SetProperty(propertyId, propertyValue))
+                                MbCanDiagnostics.log("DEBUG", "set result success=${result.success} msg=${result.message}")
+                            }
+                        }
+                        else -> MbCanDiagnostics.log("WARN", "unknown command type=$commandType")
+                    }
+                }
+            }
+            ACTION_SET_MBCAN_DIAGNOSTICS -> {
+                scope.launch {
+                    val enabled = intent.getBooleanExtra(EXTRA_MBCAN_DIAGNOSTICS_ENABLED, false)
+                    MbCanDiagnostics.setEnabled(enabled)
+                    MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
                 }
             }
         }
@@ -1206,24 +1351,224 @@ class BackgroundService : Service() {
         }
     }
 
-    /** Updates consumption, refuel count, persisted fuel baseline; uses [tripLastFuelPercent] as prior sample. */
+    /** Текущий уровень для учёта поездки: калиброванные стандартные л с CAN, иначе линейно из %. */
+    private fun currentFuelAccountingLiters(tankL: Float): Float? =
+        CanDataRepository.fuelLevelCalibratedLiters.value
+            ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()?.let { it / 100f * tankL }
+
+    private fun baselineCalibratedStandardLitersFromPercent(percent: Float, tankL: Float): Float {
+        val tankI = fuelTankLitersSetting.value.coerceAtLeast(1)
+        val est = buildFuelEstimator(
+            tankI,
+            fuelCalibrationZoneCountSetting.value,
+            fuelCalibrationJsonSetting.value,
+            fuelCalibrationMaturityThresholdSetting.value,
+        )
+        val sensorLiters = percent / 100f * tankL
+        val temp = (CanDataRepository.outsideTemperature.value ?: 15f).toDouble()
+        return est.getCorrectedLiters(sensorLiters.toDouble(), temp).litersStandard.toFloat()
+    }
+
+    /**
+     * Если в записи активной поездки есть [TripRecord.fuelBaselinePercent], но нет
+     * [TripRecord.fuelBaselineLiters] — заполняет литры через [FuelSmartEstimator.getCorrectedLiters].
+     * Вызывать под [TripRepository.lock].
+     */
+    private fun maybeBackfillActiveTripFuelBaselineLiters() {
+        val active = TripRepository.activeTrip.value ?: return
+        if (active.fuelBaselineLiters != null || active.fuelBaselinePercent == null) return
+        val pct = active.fuelBaselinePercent!!
+        val tankI = fuelTankLitersSetting.value.coerceAtLeast(1)
+        val tankL = tankI.toFloat()
+        val liters = baselineCalibratedStandardLitersFromPercent(pct, tankL)
+        TripRepository.updateActiveTrip { cur ->
+            if (cur.id != active.id) return@updateActiveTrip cur
+            if (cur.fuelBaselineLiters != null) return@updateActiveTrip cur
+            cur.copy(fuelBaselineLiters = liters)
+        }
+    }
+
+    /** Updates consumption, refuel count, persisted fuel baseline; uses calibrated liters + % for refuel rows. */
     private fun applyActiveTripFuelStep(tankL: Float) {
         val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
+        val litersNow = currentFuelAccountingLiters(tankL) ?: return
+        var refuelTripId: String? = null
+        var refueledLiters = 0f
+        var percentBefore: Float? = null
         TripRepository.updateActiveTrip { cur ->
-            val step = TripFuelAccounting.applyFuelPercentStep(
+            val beforePct = tripLastFuelPercent
+            val step = TripFuelAccounting.applyFuelCalibratedLitersStep(
                 currentConsumedLiters = cur.fuelConsumedLiters,
-                lastPercent = tripLastFuelPercent,
-                percentNow = pctNow,
-                tankLiters = tankL
+                lastCalibratedLiters = tripLastFuelLitersCalibrated,
+                litersNow = litersNow,
+                baselinePercentNow = pctNow,
+                tankLiters = tankL,
             )
+            tripLastFuelLitersCalibrated = step.baselineCalibratedLiters
             tripLastFuelPercent = step.baselinePercent
+            if (step.refuelDetected && step.refueledLitersThisStep > 0f) {
+                refuelTripId = cur.id
+                refueledLiters = step.refueledLitersThisStep
+                percentBefore = beforePct
+            }
             cur.copy(
                 fuelConsumedLiters = step.consumedLiters,
                 refuelCount = cur.refuelCount + if (step.refuelDetected) 1 else 0,
                 fuelRefueledLiters = cur.fuelRefueledLiters + step.refueledLitersThisStep,
                 fuelBaselinePercent = step.baselinePercent,
+                fuelBaselineLiters = step.baselineCalibratedLiters,
             )
         }
+        val tripId = refuelTripId ?: return
+        val fuelType = FuelTypes.optionFor(fuelPriceFuelIdSetting.value)
+        val refuel = RefuelRecord(
+            tripId = tripId,
+            timeEpochMs = System.currentTimeMillis(),
+            odometerKm = CanDataRepository.odometer.value,
+            fuelPercentBefore = percentBefore,
+            fuelPercentAfter = pctNow,
+            estimatedLiters = refueledLiters,
+            actualLiters = refueledLiters,
+            fuelId = fuelType.id,
+            fuelName = fuelType.label,
+            ambientTempAtRefuel = CanDataRepository.outsideTemperature.value
+                ?: REFUEL_AMBIENT_TEMP_DEFAULT_C,
+        )
+        RefuelRepository.appendRefuel(refuel)
+        maybePersistRefuels(force = true)
+        scheduleRefuelCostUpdate(tripId, refuel.id, refueledLiters, fuelType.id)
+    }
+
+    private fun scheduleRefuelCostUpdate(
+        tripId: String,
+        refuelId: String,
+        refueledLiters: Float,
+        fuelId: Int,
+    ) {
+        scope.launch {
+            val coordinates = awaitFuelCoordinates() ?: run {
+                TboxRepository.addLog("WARN", "Fuel price", "No coordinates for refuel price within 1 minute")
+                showRefuelToast(getString(R.string.toast_refuel_coordinates_not_found))
+                return@launch
+            }
+            val price = awaitFuelPrice(coordinates, fuelId)
+            if (price == null) {
+                TboxRepository.addLog("WARN", "Fuel price", "No fuel price for refuel within 2 minutes")
+                showRefuelToast(getString(R.string.toast_refuel_fuel_price_not_found))
+            }
+            val refuel = RefuelRepository.refuels.value.firstOrNull { it.id == refuelId } ?: return@launch
+            RefuelRepository.replaceRefuel(
+                refuel.copy(
+                    latitude = coordinates.latitude,
+                    longitude = coordinates.longitude,
+                    pricePerLiterRub = price?.pricePerLiterRub,
+                    priceSourceName = price?.sourceName,
+                    costRub = price?.pricePerLiterRub?.let { refuel.actualLiters * it },
+                )
+            )
+            maybePersistRefuels(force = true)
+            if (price == null) return@launch
+
+            val cost = FuelCostAccounting.refuelCostRub(refueledLiters, price.pricePerLiterRub)
+            val trip = TripRepository.trips.value.firstOrNull { it.id == tripId } ?: return@launch
+            TripRepository.replaceTrip(
+                trip.copy(fuelRefueledCostRub = trip.fuelRefueledCostRub + cost)
+            )
+            TboxRepository.addLog(
+                "INFO",
+                "Fuel price",
+                "Refuel cost +${String.format(Locale.US, "%.2f", cost)} RUB (${FuelTypes.optionFor(fuelId).label})"
+            )
+            maybePersistTrips(force = true)
+            showRefuelToast(getString(R.string.toast_refuel_fuel_cost_saved))
+        }
+    }
+
+    private fun showRefuelToast(message: CharSequence) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private suspend fun awaitFuelCoordinates(): FuelCoordinates? =
+        withTimeoutOrNull(1 * 60 * 1000L) {
+            var showedWaitingToast = false
+            while (true) {
+                currentFuelCoordinatesOrNull()?.let { return@withTimeoutOrNull it }
+                if (!showedWaitingToast) {
+                    showedWaitingToast = true
+                    showRefuelToast(getString(R.string.toast_refuel_waiting_coordinates))
+                }
+                delay(5000L)
+            }
+            @Suppress("UNREACHABLE_CODE")
+            null
+        }
+
+    /** Polls [FuelPriceClient.fetchPrice] every 10 s until a price is found or 2 minutes elapse. */
+    private suspend fun awaitFuelPrice(coordinates: FuelCoordinates, fuelId: Int): FuelPriceResult? =
+        withTimeoutOrNull(2 * 60 * 1000L) {
+            var showedSearchingToast = false
+            while (true) {
+                val price = try {
+                    withContext(Dispatchers.IO) {
+                        fuelPriceClient.fetchPrice(coordinates, fuelId)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (price != null) return@withTimeoutOrNull price
+                if (!showedSearchingToast) {
+                    showedSearchingToast = true
+                    showRefuelToast(getString(R.string.toast_refuel_searching_fuel_price))
+                }
+                delay(10_000L)
+            }
+            @Suppress("UNREACHABLE_CODE")
+            null
+        }
+
+    private fun currentFuelCoordinatesOrNull(): FuelCoordinates? {
+        val loc = TboxRepository.locValues.value
+        if (!loc.locateStatus) return null
+        if (loc.latitude == 0.0 && loc.longitude == 0.0) return null
+        return FuelCoordinates(latitude = loc.latitude, longitude = loc.longitude)
+    }
+
+    private fun tryOpenPendingSplitTripOnEngineStart(wallNow: Long, splitWindowMs: Long): Boolean {
+        val pendingId = tripPendingSplitTripId ?: return false
+        val trip = TripRepository.trips.value.firstOrNull { it.id == pendingId && !it.isActive }
+            ?: run {
+                tripPendingSplitTripId = null
+                return false
+            }
+        val endedAt = trip.endTimeEpochMs
+            ?: run {
+                tripPendingSplitTripId = null
+                return false
+            }
+        val pauseMs = wallNow - endedAt
+        if (pauseMs < 0L || pauseMs > splitWindowMs) {
+            tripPendingSplitTripId = null
+            return false
+        }
+        TripRepository.replaceTrip(trip.copy(endTimeEpochMs = null))
+        TripRepository.updateActiveTrip { cur ->
+            cur.copy(parkingTimeMs = cur.parkingTimeMs + pauseMs)
+        }
+        tripStartOdometer = CanDataRepository.odometer.value
+        tripLastOdometer = tripStartOdometer
+        maybeBackfillActiveTripFuelBaselineLiters()
+        val tankLReopen = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+        tripLastFuelPercent = TripRepository.activeTrip.value?.fuelBaselinePercent
+            ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+        tripLastFuelLitersCalibrated = TripRepository.activeTrip.value?.fuelBaselineLiters
+            ?: tripLastFuelPercent?.let { baselineCalibratedStandardLitersFromPercent(it, tankLReopen) }
+            ?: currentFuelAccountingLiters(tankLReopen)
+        tripPendingSplitTripId = null
+        return true
     }
 
     /**
@@ -1244,17 +1589,7 @@ class BackgroundService : Service() {
             }
 
             if (rpm > 0f) {
-                if (tripColdResumeApplyParkedIdleOnEngineStart) {
-                    val cold = tripColdResumeReopenedEndedTrip
-                    if (cold != null) {
-                        TripRepository.updateActiveTrip { cur ->
-                            cur.copy(parkingTimeMs = cur.parkingTimeMs + cold.parkedMsAddedToIdle)
-                        }
-                    }
-                    tripColdResumeApplyParkedIdleOnEngineStart = false
-                }
                 tripRpmWasPositiveSinceService = true
-                tripColdResumeReopenedEndedTrip = null
             }
 
             // Branch: first sample after ACTION_START / reload — align buffers with store or create trip.
@@ -1264,10 +1599,17 @@ class BackgroundService : Service() {
                     // Resumed or still-active trip from store: do not advance moving/idle until next sample.
                     tripLastSampleElapsedMs = nowElapsedMs
                     tripPrevRpmForStart = rpm
+                    maybeBackfillActiveTripFuelBaselineLiters()
                     if (tripLastFuelPercent == null) {
                         val resumed = TripRepository.activeTrip.value
                         tripLastFuelPercent = resumed?.fuelBaselinePercent
                             ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+                    }
+                    if (tripLastFuelLitersCalibrated == null) {
+                        val resumed = TripRepository.activeTrip.value
+                        tripLastFuelLitersCalibrated = resumed?.fuelBaselineLiters
+                            ?: currentFuelAccountingLiters(tankL)
+                            ?: tripLastFuelPercent?.let { baselineCalibratedStandardLitersFromPercent(it, tankL) }
                     }
                     if (rpm == 0f) {
                         applyActiveTripFuelStep(tankL)
@@ -1278,22 +1620,43 @@ class BackgroundService : Service() {
                     }
                     return@synchronized
                 }
-                // No active trip in store: start one only if engine already running at first sample.
+                // No active trip in store: first try to continue an ended trip that is still within split time.
                 if (rpm > 0f) {
+                    val reopened = tryOpenPendingSplitTripOnEngineStart(wallNow, splitWindowMs)
+                    if (reopened) {
+                        tripLastOdometer = CanDataRepository.odometer.value ?: tripLastOdometer
+                        if (tripStartOdometer == null) tripStartOdometer = tripLastOdometer
+                        maybeBackfillActiveTripFuelBaselineLiters()
+                        tripLastFuelPercent = TripRepository.activeTrip.value?.fuelBaselinePercent
+                            ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+                        tripLastFuelLitersCalibrated = TripRepository.activeTrip.value?.fuelBaselineLiters
+                            ?: tripLastFuelPercent?.let { baselineCalibratedStandardLitersFromPercent(it, tankL) }
+                            ?: currentFuelAccountingLiters(tankL)
+                        tripLastSampleElapsedMs = nowElapsedMs
+                        maybePersistTrips(force = true)
+                        tripPrevRpmForStart = rpm
+                        return@synchronized
+                    }
+                }
+                // Still no active trip: start a new trip only if engine already running at first sample.
+                if (rpm > 0f && TripRepository.activeTrip.value == null) {
                     val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
                     val odoStart = CanDataRepository.odometer.value
+                    val baselineL = p?.let { baselineCalibratedStandardLitersFromPercent(it, tankL) }
                     TripRepository.startTrip(
                         TripRecord(
                             startTimeEpochMs = TboxRepository.serviceStartTime.value.time,
                             endTimeEpochMs = null,
                             odometerStartKm = odoStart,
                             fuelBaselinePercent = p,
+                            fuelBaselineLiters = baselineL,
                             engineStartCount = 1,
                         )
                     )
                     tripStartOdometer = odoStart
                     tripLastOdometer = tripStartOdometer
                     tripLastFuelPercent = p
+                    tripLastFuelLitersCalibrated = baselineL ?: currentFuelAccountingLiters(tankL)
                     tripPendingSplitTripId = null
                     tripRpmZeroAtMs = null
                     tripLastSampleElapsedMs = nowElapsedMs
@@ -1304,23 +1667,8 @@ class BackgroundService : Service() {
             }
 
             // Engine back on after off: same trip if pause ≤ split window; add off time to parking (cumulative).
-            if (rpm > 0f && tripRpmZeroAtMs != null) {
-                val zeroStart = tripRpmZeroAtMs!!
-                val pauseMs = wallNow - zeroStart
-                if (pauseMs <= splitWindowMs) {
-                    val pendingId = tripPendingSplitTripId
-                    if (pendingId != null) {
-                        val trip = TripRepository.trips.value.firstOrNull { it.id == pendingId }
-                        if (trip != null && !trip.isActive) {
-                            TripRepository.replaceTrip(trip.copy(endTimeEpochMs = null))
-                            TripRepository.updateActiveTrip { cur ->
-                                cur.copy(parkingTimeMs = cur.parkingTimeMs + pauseMs.coerceAtLeast(0L))
-                            }
-                        }
-                    }
-                } else {
-                    tripPendingSplitTripId = null
-                }
+            if (rpm > 0f) {
+                tryOpenPendingSplitTripOnEngineStart(wallNow, splitWindowMs)
                 tripRpmZeroAtMs = null
             }
 
@@ -1391,6 +1739,9 @@ class BackgroundService : Service() {
             if (rpm > 0f && TripRepository.activeTrip.value == null) {
                 val canStart = prevRpm <= 0f && tripPrevRpmForStart <= 0f && tripRpmWasPositiveSinceService
                 if (canStart) {
+                    tryOpenPendingSplitTripOnEngineStart(wallNow, splitWindowMs)
+                }
+                if (TripRepository.activeTrip.value == null && canStart) {
                     val startMs = if (!tripRpmWasPositiveSinceService) {
                         TboxRepository.serviceStartTime.value.time
                     } else {
@@ -1398,17 +1749,20 @@ class BackgroundService : Service() {
                     }
                     val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
                     val odoStart = CanDataRepository.odometer.value
+                    val baselineL = p?.let { baselineCalibratedStandardLitersFromPercent(it, tankL) }
                     TripRepository.startTrip(
                         TripRecord(
                             startTimeEpochMs = startMs,
                             endTimeEpochMs = null,
                             odometerStartKm = odoStart,
                             fuelBaselinePercent = p,
+                            fuelBaselineLiters = baselineL,
                         )
                     )
                     tripStartOdometer = odoStart
                     tripLastOdometer = tripStartOdometer
                     tripLastFuelPercent = p
+                    tripLastFuelLitersCalibrated = baselineL ?: currentFuelAccountingLiters(tankL)
                     tripPendingSplitTripId = null
                     tripRpmZeroAtMs = null
                     tripLastSampleElapsedMs = nowElapsedMs
@@ -1437,8 +1791,8 @@ class BackgroundService : Service() {
     }
 
     /**
-     * Loads trips and favorites from disk in parallel. Clears [tripsFromDiskReady] until
-     * [TripRepository] has the new snapshot so [responseWork] does not run trip/CAN side effects mid-load.
+     * Loads trips, favorites and refuels from disk in parallel. Clears [tripsFromDiskReady] until
+     * repositories have the new snapshot so [responseWork] does not run CAN side effects mid-load.
      */
     private suspend fun reloadTripsFromDataStoreSuspend() {
         tripsFromDiskReady.set(false)
@@ -1450,10 +1804,14 @@ class BackgroundService : Service() {
                 val favoritesJsonDeferred = async(Dispatchers.IO) {
                     appDataManager.tripFavoritesJsonFlow.first()
                 }
+                val refuelsJsonDeferred = async(Dispatchers.IO) {
+                    appDataManager.refuelsJsonFlow.first()
+                }
                 TripRepository.setTripsFromStore(
                     tripsListFromJson(tripsJsonDeferred.await()),
                     favoritesSetFromJson(favoritesJsonDeferred.await())
                 )
+                RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJsonDeferred.await()))
             }
             tripsFromDiskReady.set(true)
         } catch (e: CancellationException) {
@@ -1478,60 +1836,69 @@ class BackgroundService : Service() {
         }
     }
 
+    private fun maybePersistRefuels(force: Boolean) {
+        if (!force && !RefuelRepository.needsPersistence()) return
+        val refuelsJson = refuelsListToJson(RefuelRepository.refuels.value)
+        scope.launch {
+            refuelsPersistMutex.withLock {
+                appDataManager.saveRefuelsJson(refuelsJson)
+                RefuelRepository.markPersisted(refuelsJson)
+            }
+        }
+    }
+
     /**
-     * Clears sample buffers for a new service session. If the last persisted trip ended recently
-     * (within split window) but [applyTripResumeIfLastTripContinues] has not run yet, seed
-     * [tripPendingSplitTripId] so the first RPM>0 sample can merge engine-off idle like in-session logic.
+     * Clears sample buffers for a new service session. If a persisted trip ended recently (within
+     * split window), seed [tripPendingSplitTripId] so the first RPM>0 sample can decide whether to
+     * merge it. The ended trip is not reopened at startup; this keeps persisted state crash-safe.
      */
     private fun resetTripStateForNewServiceSession(splitWindowMs: Long) {
         synchronized(TripRepository.lock) {
-            tripColdResumeReopenedEndedTrip = null
-            tripColdResumeApplyParkedIdleOnEngineStart = false
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
             val nowWall = System.currentTimeMillis()
-            val lastStored = TripRepository.trips.value.lastOrNull()
-            if (lastStored != null && !lastStored.isActive) {
-                val end = lastStored.endTimeEpochMs
-                if (end != null && nowWall >= end && nowWall - end <= splitWindowMs) {
-                    tripPendingSplitTripId = lastStored.id
-                }
+            val candidate = TripRules.findResumeCandidate(TripRepository.trips.value, nowWall, splitWindowMs)
+            if (candidate != null && !candidate.isActive) {
+                tripPendingSplitTripId = candidate.id
             }
             tripRpmZeroAtMs = null
             tripLastSampleElapsedMs = 0L
             tripLastOdometer = null
             tripStartOdometer = null
             tripLastFuelPercent = null
+            tripLastFuelLitersCalibrated = null
             tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
             tripLastPersistedSnapshot = TripRepository.activeTrip.value
             tripFirstSampleAfterSessionStart = true
         }
     }
 
-    /**
-     * If the last stored trip should continue (active or ended within split window), resume it
-     * and seed odometer/fuel buffers so [onTripRpmSample] extends the same trip. Parked time before
-     * resume is added to [TripRecord.parkingTimeMs] on first RPM>0 sample.
-     * If that reopen was from a finished trip and the HU stops the service before RPM>0, [finalizeTripsOnServiceStop]
-     * restores the stored end time and rolls back that idle delta so the next boot counts one continuous off segment.
-     */
+    /** Resume only already-active stored trips. Ended trips remain pending until first RPM>0 sample. */
     private fun applyTripResumeIfLastTripContinues(splitWindowMs: Long) {
+        var resumedActiveTrip = false
         synchronized(TripRepository.lock) {
             val resumeResult = TripRepository.tryResumeLastTripAfterServiceStart(splitWindowMs)
             if (!resumeResult.resumed) return
-            tripColdResumeReopenedEndedTrip = resumeResult.reopenedEndedTrip
-            tripColdResumeApplyParkedIdleOnEngineStart = resumeResult.reopenedEndedTrip != null
+            resumedActiveTrip = true
             tripLastOdometer = CanDataRepository.odometer.value
             tripStartOdometer = tripLastOdometer
+            maybeBackfillActiveTripFuelBaselineLiters()
             val active = TripRepository.activeTrip.value
             val storedBaseline = active?.fuelBaselinePercent
             val live = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
             tripLastFuelPercent = storedBaseline ?: live
+            val tankLResume = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+            tripLastFuelLitersCalibrated = active?.fuelBaselineLiters
+                ?: currentFuelAccountingLiters(tankLResume)
+                ?: storedBaseline?.let { baselineCalibratedStandardLitersFromPercent(it, tankLResume) }
+                ?: live?.let { baselineCalibratedStandardLitersFromPercent(it, tankLResume) }
             tripRpmZeroAtMs = null
             tripPendingSplitTripId = null
         }
-        maybePersistTrips(force = true)
+        if (resumedActiveTrip) {
+            maybePersistTrips(force = true)
+        }
     }
 
     private suspend fun finishActiveTripAndStartNew() {
@@ -1540,23 +1907,25 @@ class BackgroundService : Service() {
             TripRepository.activeTrip.value?.let { cur ->
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
-            tripColdResumeReopenedEndedTrip = null
-            tripColdResumeApplyParkedIdleOnEngineStart = false
             val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
             val odoStart = CanDataRepository.odometer.value
             val rpmNow = CanDataRepository.engineRPM.value ?: 0f
+            val tankLNew = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+            val baselineL = p?.let { baselineCalibratedStandardLitersFromPercent(it, tankLNew) }
             TripRepository.startTrip(
                 TripRecord(
                     startTimeEpochMs = wallNow,
                     endTimeEpochMs = null,
                     odometerStartKm = odoStart,
                     fuelBaselinePercent = p,
+                    fuelBaselineLiters = baselineL,
                     engineStartCount = if (rpmNow > 0f) 1 else 0,
                 )
             )
             tripStartOdometer = odoStart
             tripLastOdometer = tripStartOdometer
             tripLastFuelPercent = p
+            tripLastFuelLitersCalibrated = baselineL ?: currentFuelAccountingLiters(tankLNew)
             tripRpmZeroAtMs = null
             tripPendingSplitTripId = null
             tripPrevRpmForStart = rpmNow
@@ -1574,28 +1943,10 @@ class BackgroundService : Service() {
     private suspend fun finalizeTripsOnServiceStop() {
         val wallNow = System.currentTimeMillis()
         synchronized(TripRepository.lock) {
-            val cold = tripColdResumeReopenedEndedTrip
             val active = TripRepository.activeTrip.value
-            if (active != null && cold != null && active.id == cold.tripId) {
-                val rpmNow = CanDataRepository.engineRPM.value ?: 0f
-                if (rpmNow <= 0f) {
-                    // HU off before engine start after cold resume: keep original trip end and times
-                    // so the next session can add one parked segment (HU off + sit) without double count.
-                    TripRepository.replaceTrip(
-                        active.copy(
-                            endTimeEpochMs = cold.previousEndTimeEpochMs,
-                            idleTimeMs = cold.previousIdleTimeMs,
-                            parkingTimeMs = cold.previousParkingTimeMs,
-                        )
-                    )
-                } else {
-                    TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
-                }
-            } else if (active != null) {
+            if (active != null) {
                 TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
             }
-            tripColdResumeReopenedEndedTrip = null
-            tripColdResumeApplyParkedIdleOnEngineStart = false
             tripPrevRpmForStart = 0f
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
@@ -1604,6 +1955,7 @@ class BackgroundService : Service() {
             tripLastOdometer = null
             tripStartOdometer = null
             tripLastFuelPercent = null
+            tripLastFuelLitersCalibrated = null
             tripLastPersistedSnapshot = null
             tripFirstSampleAfterSessionStart = true
         }
@@ -1627,6 +1979,158 @@ class BackgroundService : Service() {
     private fun stopDataListener() {
         dataListenerJob?.cancel()
         dataListenerJob = null
+    }
+
+    /**
+     * Одна итерация обучения по сохранённой заправке: проверка фильтра, [FuelSmartEstimator.train], флаг в репозитории.
+     */
+    private suspend fun runFuelCalibrationTrain(refuelId: String) {
+        val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+        val refuel = synchronized(RefuelRepository.lock) {
+            RefuelRepository.refuels.value.firstOrNull { it.id == refuelId }
+        }
+        if (refuel == null) {
+            showRefuelToast(getString(R.string.toast_fuel_calibration_refuel_not_found))
+            return
+        }
+        if (refuel.usedForFuelCalibration) {
+            showRefuelToast(getString(R.string.toast_fuel_calibration_already_used))
+            return
+        }
+        val beforePct = refuel.fuelPercentBefore
+        val afterPct = refuel.fuelPercentAfter
+        if (beforePct == null || afterPct == null) {
+            showRefuelToast(getString(R.string.toast_fuel_calibration_no_percent))
+            return
+        }
+        val checkLiters = refuel.actualLiters.toDouble()
+        if (checkLiters <= 0.0) {
+            showRefuelToast(getString(R.string.toast_fuel_calibration_no_liters))
+            return
+        }
+        val ambient = refuel.ambientTempForCalibrationC()
+        val sensorBefore = beforePct / 100.0 * tankL.toDouble()
+        val sensorAfter = afterPct / 100.0 * tankL.toDouble()
+        val entry = FuelEntry(
+            odometerKm = refuel.odometerKm?.toDouble() ?: 0.0,
+            sensorBefore = sensorBefore,
+            sensorAfter = sensorAfter,
+            litersByCheck = checkLiters,
+            ambientTemp = ambient,
+        )
+        val filter = FuelFilter()
+        if (!filter.isValid(entry)) {
+            TboxRepository.addLog(
+                "WARN",
+                "Fuel calibration",
+                "Отклонено фильтром: отклонение ${"%.0f".format(filter.calculateDeviation(entry) * 100)}%",
+            )
+            showRefuelToast(getString(R.string.toast_fuel_calibration_filter_reject))
+            return
+        }
+        val reportText = withContext(Dispatchers.Default) {
+            val json = fuelCalibrationJsonSetting.value
+            val zones = fuelCalibrationZoneCountSetting.value
+            val maturity = fuelCalibrationMaturityThresholdSetting.value
+            val estimator = buildFuelEstimator(tankL.toInt(), zones, json, maturity)
+            estimator.train(entry)
+        }
+        synchronized(RefuelRepository.lock) {
+            val cur = RefuelRepository.refuels.value.firstOrNull { it.id == refuelId } ?: return@synchronized
+            RefuelRepository.replaceRefuel(cur.copy(usedForFuelCalibration = true))
+        }
+        maybePersistRefuels(force = true)
+        showRefuelToast(getString(R.string.toast_fuel_calibration_ok))
+        TboxRepository.addLog("INFO", "Fuel calibration", reportText)
+    }
+
+    /** Создаёт оценщик топлива; сохранение калибровки — в DataStore через [SettingsManager.saveFuelCalibrationJson]. */
+    private fun buildFuelEstimator(
+        tankLiters: Int,
+        zoneCount: Int,
+        calibrationJson: String,
+        maturityThresholdLiters: Int,
+    ): FuelSmartEstimator {
+        val cap = tankLiters.coerceAtLeast(1).toDouble()
+        val zones = zoneCount.coerceIn(3, 20)
+        val maturity = maturityThresholdLiters.coerceIn(
+            SettingsManager.FUEL_CALIBRATION_MATURITY_THRESHOLD_MIN,
+            SettingsManager.FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX,
+        ).toDouble()
+        val decoded = FuelCalibrationJson.decode(calibrationJson)
+            ?.takeIf { it.realLiters.size == zones }
+        val sensorMin = cap * 2.0 / 50.0
+        val sensorMax = min(cap * 48.0 / 50.0, cap - 1e-3)
+        return FuelSmartEstimator(
+            tankCapacity = cap,
+            sensorMin = sensorMin,
+            sensorMax = sensorMax,
+            zoneCount = zones,
+            maturityThreshold = maturity,
+            initialCalibration = decoded,
+            onCalibrationPersist = { data ->
+                scope.launch(Dispatchers.IO) {
+                    try {
+                        settingsManager.saveFuelCalibrationJson(FuelCalibrationJson.encode(data))
+                    } catch (e: Exception) {
+                        Log.e("Fuel calibration", "Ошибка сохранения калибровки", e)
+                    }
+                }
+            },
+        )
+    }
+
+    private fun startFuelCalibratedLitersWatcher() {
+        if (fuelCalibratedLitersJob?.isActive == true) return
+        fuelCalibratedLitersJob = scope.launch {
+            data class FuelEstimatorCacheKey(
+                val tank: Int,
+                val zones: Int,
+                val json: String,
+                val maturity: Int,
+            )
+            var lastEstimatorKey: FuelEstimatorCacheKey? = null
+            var estimator: FuelSmartEstimator? = null
+            combine(
+                combine(
+                    fuelTankLitersSetting,
+                    fuelCalibrationZoneCountSetting,
+                    fuelCalibrationJsonSetting,
+                ) { tank: Int, zones: Int, json: String ->
+                    Triple(tank, zones, json)
+                },
+                fuelCalibrationMaturityThresholdSetting,
+                CanDataRepository.fuelLevelPercentageFiltered,
+                CanDataRepository.outsideTemperature,
+            ) { tankZonesJson: Triple<Int, Int, String>, maturity: Int, pct: UInt?, outT: Float? ->
+                val (tank, zones, json) = tankZonesJson
+                val key = FuelEstimatorCacheKey(tank, zones, json, maturity)
+                if (lastEstimatorKey != key) {
+                    lastEstimatorKey = key
+                    estimator = buildFuelEstimator(tank, zones, json, maturity)
+                }
+                val est = estimator
+                if (est == null || pct == null) {
+                    CanDataRepository.updateFuelLevelCalibratedLiters(null)
+                    CanDataRepository.updateFuelLevelCalibratedLitersActual(null)
+                    CanDataRepository.updateFuelCalibrationConfidence(null)
+                } else {
+                    val tankL = tank.coerceAtLeast(1).toFloat()
+                    val sensorLiters = pct.toFloat() / 100f * tankL
+                    val temp = (outT ?: 15f).toDouble()
+                    val result = est.getCorrectedLiters(sensorLiters.toDouble(), temp)
+                    CanDataRepository.updateFuelLevelCalibratedLiters(result.litersStandard.toFloat())
+                    CanDataRepository.updateFuelLevelCalibratedLitersActual(result.litersActual.toFloat())
+                    CanDataRepository.updateFuelCalibrationConfidence(result.confidence.toFloat())
+                }
+                Unit
+            }.collect { }
+        }
+    }
+
+    private fun stopFuelCalibratedLitersWatcher() {
+        fuelCalibratedLitersJob?.cancel()
+        fuelCalibratedLitersJob = null
     }
 
     private fun startSettingsListener() {
@@ -2360,9 +2864,39 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, tboxClientReconnectJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob, getSMSJob, openMainActivityJob
+            settingsListenerJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob, openMainActivityJob
         ).forEach { job ->
             job?.cancel()
+        }
+    }
+
+    /**
+     * Temporary: logs one line per interval with [MbCanEngineFacade.canGetVehicleParam] for several
+     * [MBVehicleProperty] ids (see [MB_CAN_DEBUG_GET_PROPERTY_IDS]) and [MbCanEngineFacade.canGetAudioParam]
+     * for [MB_CAN_DEBUG_GET_AUDIO_PROPERTY_IDS].
+     */
+    private suspend fun runMbCanDebugParameterProbeRound() {
+        withContext(Dispatchers.IO) {
+            when (val availability = MbCanEngineFacade.ensureInitialized()) {
+                MbCanAvailability.Available -> {
+                    val motionPart = MbCanEngineFacade.peekMbCanMotionDebugLine()
+                    val parts = MB_CAN_DEBUG_GET_PROPERTY_IDS.map { (label, id) ->
+                        val v = MbCanEngineFacade.canGetVehicleParam(id)
+                        "$label(id=$id)=$v"
+                    }
+                    val audioParts = MB_CAN_DEBUG_GET_AUDIO_PROPERTY_IDS.map { (label, id) ->
+                        val v = MbCanEngineFacade.canGetAudioParam(id)
+                        "$label(id=$id)=$v"
+                    }
+                    MbCanDiagnostics.log(
+                        "DEBUG",
+                        "$motionPart | probeGet ${parts.joinToString(" | ")} | probeAudioGet ${audioParts.joinToString(" | ")}"
+                    )
+                }
+                else -> {
+                    MbCanDiagnostics.log("DEBUG", "probeGet skipped availability=$availability")
+                }
+            }
         }
     }
 
@@ -2398,6 +2932,16 @@ class BackgroundService : Service() {
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
 
+        scope.launch(Dispatchers.IO + NonCancellable) {
+            try {
+                withTimeout(2_000L) {
+                    MbCanRepository.unbind()
+                }
+            } catch (e: Exception) {
+                MbCanDiagnostics.log("ERROR", "onDestroy mbCAN unbind failed: ${e.message}")
+            }
+        }
+        MbCanDiagnostics.setEnabled(false)
         cancelAllJobs()
         job.cancel()
         disconnectTboxClient()
