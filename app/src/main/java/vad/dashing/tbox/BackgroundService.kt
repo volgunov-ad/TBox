@@ -1294,6 +1294,12 @@ class BackgroundService : Service() {
 
     private fun startDataListener() {
         dataListenerJob = scope.launch {
+            try {
+                restoreWheelPressuresFromAppDataIfNeeded()
+            } catch (e: Exception) {
+                TboxRepository.addLog("WARN", "Data Listener", "Wheel pressure restore: ${e.message}")
+                Log.w("Data Listener", "Wheel pressure restore failed", e)
+            }
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
                 var prevRpm = 0f
@@ -1320,6 +1326,7 @@ class BackgroundService : Service() {
                         }
                         if (prevRpm > 0f && r == 0f) {
                             persistMotorHoursToStore()
+                            persistLastKnownWheelPressuresOnEngineStop()
                         }
                         onTripRpmSample(r, prevRpm, now)
                         prevRpm = r
@@ -1974,6 +1981,26 @@ class BackgroundService : Service() {
         val v = CarDataRepository.motorHours.value
         appDataManager.saveMotorHours(v)
         CarDataRepository.markPersisted(v)
+    }
+
+    private suspend fun persistLastKnownWheelPressuresOnEngineStop() {
+        appDataManager.saveLastKnownNonZeroWheelPressuresPartial(CanDataRepository.wheelsPressure.value)
+    }
+
+    private suspend fun restoreWheelPressuresFromAppDataIfNeeded() {
+        val saved = withContext(Dispatchers.IO) {
+            appDataManager.loadLastKnownWheelPressures()
+        }
+        val cur = CanDataRepository.wheelsPressure.value
+        val merged = Wheels(
+            wheel1 = cur.wheel1 ?: saved.wheel1,
+            wheel2 = cur.wheel2 ?: saved.wheel2,
+            wheel3 = cur.wheel3 ?: saved.wheel3,
+            wheel4 = cur.wheel4 ?: saved.wheel4,
+        )
+        if (merged != cur) {
+            CanDataRepository.updateWheelsPressure(merged)
+        }
     }
 
     private fun stopDataListener() {
