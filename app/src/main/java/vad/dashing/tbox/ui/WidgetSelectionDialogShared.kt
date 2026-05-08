@@ -612,13 +612,15 @@ internal fun WidgetSelectionDialogForm(
                             .fillMaxWidth()
                             .padding(top = 8.dp, bottom = 4.dp)
                     )
-                    SettingSwitch(
-                        state.showUnit,
-                        { state.showUnit = it },
-                        stringResource(R.string.widget_show_unit),
-                        "",
-                        state.togglesEnabled
-                    )
+                    if (WidgetsRepository.supportsShowUnit(state.selectedDataKey)) {
+                        SettingSwitch(
+                            state.showUnit,
+                            { state.showUnit = it },
+                            stringResource(R.string.widget_show_unit),
+                            "",
+                            state.togglesEnabled
+                        )
+                    }
                     if (WidgetsRepository.supportsSingleLineDualMetrics(state.selectedDataKey)) {
                         SettingSwitch(
                             state.singleLineDualMetrics,

@@ -423,6 +423,7 @@ object WidgetsRepository {
             R.string.data_title_media_volume_widget_vertical
         ),
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
+        EMPTY_TILE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_empty_tile_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
         HIDE_FLOATING_PANELS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_hide_floating_panels_widget),
@@ -462,6 +463,40 @@ object WidgetsRepository {
         return dataKeyTitlesWidgets.keys.toList()
     }
 
+    /**
+     * Tile types where [FloatingDashboardWidgetConfig.showUnit] affects the UI
+     * ([DashboardWidgetItem] or composite widgets that pass `units`).
+     */
+    fun supportsShowUnit(dataKey: String): Boolean {
+        if (dataKey.isBlank()) return false
+        return when (dataKey) {
+            "netWidget",
+            "netWidgetNew",
+            "netWidgetColored",
+            "locWidget",
+            "airQualityWidget",
+            "steeringWheelHeatWidget",
+            "frontWindscreenHeatWidget",
+            "rearWindowMirrorsDefrostWidget",
+            "frontLeftSeatHeatVentWidget",
+            "frontRightSeatHeatVentWidget",
+            FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
+            FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
+            REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY,
+            REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
+            EXTERNAL_WIDGET_DATA_KEY,
+            APP_LAUNCHER_WIDGET_DATA_KEY,
+            EMPTY_TILE_WIDGET_DATA_KEY,
+            MUSIC_WIDGET_DATA_KEY,
+            MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
+            MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
+            HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
+            TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
+            -> false
+            else -> !isActiveTripWidgetDataKey(dataKey)
+        }
+    }
+
     /** Widget types that support optional single-line layout for two metrics. */
     fun supportsSingleLineDualMetrics(dataKey: String): Boolean {
         if (isSeatHeatVentSingleWidgetDataKey(dataKey)) return false
@@ -487,6 +522,7 @@ object WidgetsRepository {
             EXTERNAL_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,
+            EMPTY_TILE_WIDGET_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,

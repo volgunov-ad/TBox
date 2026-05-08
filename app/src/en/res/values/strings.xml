@@ -557,6 +557,7 @@
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
     <string name="data_title_media_volume_widget_vertical">Media volume widget (vertical)</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
+    <string name="data_title_empty_tile_widget">Empty</string>
     <string name="data_title_external_app_widget">Third-party app widget</string>
     <string name="data_title_hide_floating_panels_widget">Hide floating panels</string>
     <string name="data_title_toggle_floating_panels_enabled_widget">Disable floating panels</string>

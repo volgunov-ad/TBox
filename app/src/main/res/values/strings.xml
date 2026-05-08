@@ -562,6 +562,7 @@
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
+    <string name="data_title_empty_tile_widget">Пустая</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
     <string name="data_title_hide_floating_panels_widget">Скрытие плавающих панелей</string>
     <string name="data_title_toggle_floating_panels_enabled_widget">Отключение плавающих панелей</string>
