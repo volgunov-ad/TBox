@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import vad.dashing.tbox.TileBackgroundImageStorage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -75,7 +76,7 @@ internal fun DashboardPanelGridAndFrames(
     showTboxDisconnectIndicator: Boolean,
     enableInnerInteractions: Boolean,
     externalWidgetHost: AppWidgetHost? = null,
-    gridSpacingDp: Dp = 4.dp,
+    gridSpacingDp: Dp = 0.dp,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
@@ -135,11 +136,29 @@ internal fun DashboardPanelGridAndFrames(
                         val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
                         val widgetBackgroundColor =
                             widget.resolveBackgroundColorForTheme(currentTheme)
+                        val tileBgRelPath = (
+                            if (currentTheme == 2) {
+                                widgetConfig.tileBackgroundImageRelPathDark
+                            } else {
+                                widgetConfig.tileBackgroundImageRelPathLight
+                            }
+                            )?.takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
+                        val useTileBackgroundUnderlay = tileBgRelPath != null
+                        val shapeDp = normalizeWidgetShape(widgetConfig.shape).dp
 
                         Box(modifier = Modifier.weight(1f)) {
+                            if (useTileBackgroundUnderlay) {
+                                DashboardTileBackgroundImageUnderlay(
+                                    relPath = tileBgRelPath,
+                                    backgroundColor = widgetBackgroundColor,
+                                    shapeDp = shapeDp,
+                                    settingsViewModel = settingsViewModel,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                             if (isEditMode) {
                                 Canvas(
-                                    modifier = Modifier.matchParentSize()
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
                                     drawRect(
                                         color = Color(0x7E00BCD4),
@@ -165,7 +184,11 @@ internal fun DashboardPanelGridAndFrames(
                                     restartEnabled = restartEnabled,
                                     onTripFinishAndStart = onTripFinishAndStart,
                                     widgetTextColor = widgetTextColor,
-                                    widgetBackgroundColor = widgetBackgroundColor,
+                                    widgetBackgroundColor = if (useTileBackgroundUnderlay) {
+                                        Color.Transparent
+                                    } else {
+                                        widgetBackgroundColor
+                                    },
                                     onClick = { onWidgetClick(index) },
                                     onLongClick = onWidgetLongClick,
                                     onMusicSelectedPlayerChange = { selectedPackage ->
@@ -188,7 +211,7 @@ internal fun DashboardPanelGridAndFrames(
                                     externalWidgetHost = externalWidgetHost,
                                     isEditMode = isEditMode,
                                     elevation = widgetCardElevation,
-                                    shape = normalizeWidgetShape(widgetConfig.shape).dp,
+                                    shape = shapeDp,
                                     enableInnerInteractions = enableInnerInteractions
                                 )
                             }
@@ -203,7 +226,7 @@ internal fun DashboardPanelGridAndFrames(
     val showTboxDisconnectFrame = showTboxDisconnectIndicator && !tboxConnected
     if (!hasConfiguredWidgets || showTboxDisconnectFrame || showEditIndicators) {
         Canvas(
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier.fillMaxSize()
         ) {
             val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
             if (!hasConfiguredWidgets) {

@@ -3,6 +3,7 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -183,6 +184,36 @@ fun DashboardWidgetItem(
             }*/
         }
     }
+}
+
+/** Title row aligned with dual-metric widgets (e.g. [DashboardFuelLevelWidgetItem]) when [showTitle] is true. */
+@Composable
+fun ColumnScope.DashboardWidgetTitleRowIfVisible(
+    showTitle: Boolean,
+    titleText: String,
+    availableHeight: Dp,
+    resolvedTextColor: Color,
+) {
+    if (!showTitle) return
+    val titleFont = calculateResponsiveFontSize(
+        containerHeight = availableHeight,
+        textType = TextType.TITLE
+    )
+    Text(
+        text = titleText,
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .wrapContentHeight(Alignment.CenterVertically),
+        fontSize = titleFont,
+        lineHeight = titleFont * 1.3f,
+        fontWeight = FontWeight.Medium,
+        color = resolvedTextColor,
+        textAlign = TextAlign.Center,
+        maxLines = 2,
+        softWrap = true,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable

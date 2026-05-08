@@ -39,6 +39,8 @@ fun DashboardLocWidgetItem(
     shape: Dp = 12.dp,
     textColor: Color? = null,
     backgroundColor: Color? = null,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
     scale: Float = 1f
 ) {
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
@@ -52,6 +54,9 @@ fun DashboardLocWidgetItem(
             else -> R.drawable.loc_0_ok
         }
     }
+
+    val defaultTitle = stringResource(R.string.data_title_loc_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -69,6 +74,12 @@ fun DashboardLocWidgetItem(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            DashboardWidgetTitleRowIfVisible(
+                showTitle = showTitle,
+                titleText = titleText,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor
+            )
             Text(
                 text = "${locValues.visibleSatellites}",
                 fontSize = calculateResponsiveFontSize(
