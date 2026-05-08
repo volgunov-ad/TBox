@@ -184,21 +184,17 @@ fun CarDataTabContent(
             item { CarDataStatusRow(context, "fuelLevelPercentage", valueToString(fuelLevelPercentage)) }
             item { CarDataStatusRow(context, "fuelLevelPercentageFiltered", valueToString(fuelLevelPercentageFiltered)) }
             item {
-                val litersDisplay = fuelLevelCalibratedLiters
-                    ?: fuelLevelPercentageFiltered?.toFloat()?.times(fuelTankLiters.toFloat())?.div(100f)
                 CarDataStatusRow(
                     context,
                     "fuelLevelLiters",
-                    valueToString(litersDisplay, 2)
+                    valueToString(fuelLevelCalibratedLiters, 2)
                 )
             }
             item {
-                val litersDisplay = fuelLevelCalibratedLitersActual
-                    ?: fuelLevelPercentageFiltered?.toFloat()?.times(fuelTankLiters.toFloat())?.div(100f)
                 CarDataStatusRow(
                     context,
                     "fuelLevelLitersActual",
-                    valueToString(litersDisplay, 2)
+                    valueToString(fuelLevelCalibratedLitersActual, 2)
                 )
             }
             item { CarDataStatusRow(context, "currentFuelConsumption", valueToString(currentFuelConsumption, 1)) }

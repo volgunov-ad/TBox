@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationJson
+import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
 import vad.dashing.tbox.fuellevelcalibration.FuelEntry
 import vad.dashing.tbox.fuellevelcalibration.FuelFilter
 import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
@@ -698,6 +699,8 @@ class BackgroundService : Service() {
                         yield()
                         startPeriodicJob()
                         yield()
+                        ensureFuelEstimatorForReads()
+                        yield()
                         startDataListener()
                         startFuelCalibratedLitersWatcher()
                         timingMark("startup_listeners")
@@ -1357,16 +1360,32 @@ class BackgroundService : Service() {
             ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()?.let { it / 100f * tankL }
 
     private fun baselineCalibratedStandardLitersFromPercent(percent: Float, tankL: Float): Float {
-        val tankI = fuelTankLitersSetting.value.coerceAtLeast(1)
-        val est = buildFuelEstimator(
-            tankI,
-            fuelCalibrationZoneCountSetting.value,
-            fuelCalibrationJsonSetting.value,
-            fuelCalibrationMaturityThresholdSetting.value,
-        )
+        val est = ensureFuelEstimatorForReads() ?: return percent / 100f * tankL
         val sensorLiters = percent / 100f * tankL
         val temp = (CanDataRepository.outsideTemperature.value ?: 15f).toDouble()
         return est.getCorrectedLiters(sensorLiters.toDouble(), temp).litersStandard.toFloat()
+    }
+
+    private fun ensureFuelEstimatorForReads(): FuelSmartEstimator? {
+        val key = FuelCalibrationLive.EstimatorSettingsKey(
+            tankLiters = fuelTankLitersSetting.value.coerceAtLeast(1),
+            zoneCount = fuelCalibrationZoneCountSetting.value,
+            calibrationJson = fuelCalibrationJsonSetting.value,
+            maturityThresholdLiters = fuelCalibrationMaturityThresholdSetting.value,
+        )
+        return FuelCalibrationLive.bindEstimatorIfChanged(key) {
+            buildFuelEstimator(
+                key.tankLiters,
+                key.zoneCount,
+                key.calibrationJson,
+                key.maturityThresholdLiters,
+            )
+        }
+    }
+
+    private fun refreshFuelCalibrationRepositoryOutputs() {
+        ensureFuelEstimatorForReads()
+        FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
     }
 
     /**
@@ -2083,54 +2102,28 @@ class BackgroundService : Service() {
     private fun startFuelCalibratedLitersWatcher() {
         if (fuelCalibratedLitersJob?.isActive == true) return
         fuelCalibratedLitersJob = scope.launch {
-            data class FuelEstimatorCacheKey(
-                val tank: Int,
-                val zones: Int,
-                val json: String,
-                val maturity: Int,
-            )
-            var lastEstimatorKey: FuelEstimatorCacheKey? = null
-            var estimator: FuelSmartEstimator? = null
-            combine(
+            launch {
                 combine(
                     fuelTankLitersSetting,
                     fuelCalibrationZoneCountSetting,
                     fuelCalibrationJsonSetting,
-                ) { tank: Int, zones: Int, json: String ->
-                    Triple(tank, zones, json)
-                },
-                fuelCalibrationMaturityThresholdSetting,
-                CanDataRepository.fuelLevelPercentageFiltered,
-                CanDataRepository.outsideTemperature,
-            ) { tankZonesJson: Triple<Int, Int, String>, maturity: Int, pct: UInt?, outT: Float? ->
-                val (tank, zones, json) = tankZonesJson
-                val key = FuelEstimatorCacheKey(tank, zones, json, maturity)
-                if (lastEstimatorKey != key) {
-                    lastEstimatorKey = key
-                    estimator = buildFuelEstimator(tank, zones, json, maturity)
+                    fuelCalibrationMaturityThresholdSetting,
+                ) { _: Int, _: Int, _: String, _: Int ->
+                    refreshFuelCalibrationRepositoryOutputs()
+                }.collect { }
+            }
+            launch {
+                CanDataRepository.outsideTemperature.collect {
+                    FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
                 }
-                val est = estimator
-                if (est == null || pct == null) {
-                    CanDataRepository.updateFuelLevelCalibratedLiters(null)
-                    CanDataRepository.updateFuelLevelCalibratedLitersActual(null)
-                    CanDataRepository.updateFuelCalibrationConfidence(null)
-                } else {
-                    val tankL = tank.coerceAtLeast(1).toFloat()
-                    val sensorLiters = pct.toFloat() / 100f * tankL
-                    val temp = (outT ?: 15f).toDouble()
-                    val result = est.getCorrectedLiters(sensorLiters.toDouble(), temp)
-                    CanDataRepository.updateFuelLevelCalibratedLiters(result.litersStandard.toFloat())
-                    CanDataRepository.updateFuelLevelCalibratedLitersActual(result.litersActual.toFloat())
-                    CanDataRepository.updateFuelCalibrationConfidence(result.confidence.toFloat())
-                }
-                Unit
-            }.collect { }
+            }
         }
     }
 
     private fun stopFuelCalibratedLitersWatcher() {
         fuelCalibratedLitersJob?.cancel()
         fuelCalibratedLitersJob = null
+        FuelCalibrationLive.reset()
     }
 
     private fun startSettingsListener() {

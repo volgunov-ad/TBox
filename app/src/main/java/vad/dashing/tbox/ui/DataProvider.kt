@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -122,20 +121,7 @@ class TboxDataProvider(
             "fuelLevelPercentageFiltered" -> canViewModel.fuelLevelPercentageFiltered.mapState {
                 valueToString(it, eff(1))
             }
-            "fuelLevelLiters" -> combine(
-                canViewModel.fuelLevelCalibratedLiters,
-                canViewModel.fuelLevelPercentageFiltered,
-                settingsViewModel.fuelTankLiters
-            ) { calibrated, pct, tank ->
-                val liters = calibrated ?: pct?.toFloat()?.times(tank.toFloat())?.div(100f)
-                valueToString(liters, eff(1))
-            }
-                .distinctUntilChanged()
-                .stateIn(
-                    scope = viewModel.viewModelScope,
-                    started = SharingStarted.WhileSubscribed(5000),
-                    initialValue = ""
-                )
+            "fuelLevelLiters" -> canViewModel.fuelLevelCalibratedLiters.mapState { valueToString(it, eff(1)) }
             "currentFuelConsumption" -> canViewModel.currentFuelConsumption.mapState {
                 valueToString(it, eff(1))
             }
