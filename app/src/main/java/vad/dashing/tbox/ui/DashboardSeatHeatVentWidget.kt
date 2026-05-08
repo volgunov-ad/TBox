@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,9 +63,12 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
     backgroundColor: Color,
     singleLineDualMetrics: Boolean,
     enableInnerInteractions: Boolean = true,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
     scale: Float = 1f
 ) {
     val mode by MbCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
+    val defaultTitle = stringResource(R.string.data_title_front_left_seat_heat_vent_widget)
     SeatHeatVentWidget(
         side = SeatSide.FrontLeft,
         layoutMode = SeatHeatVentLayoutMode.Dual,
@@ -78,6 +84,9 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
         backgroundColor = backgroundColor,
         singleLineDualMetrics = singleLineDualMetrics,
         enableInnerInteractions = enableInnerInteractions,
+        showTitle = showTitle,
+        titleOverride = titleOverride,
+        defaultTitle = defaultTitle,
         scale = scale
     )
 }
@@ -92,9 +101,12 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
     backgroundColor: Color,
     singleLineDualMetrics: Boolean,
     enableInnerInteractions: Boolean = true,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
     scale: Float = 1f
 ) {
     val mode by MbCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
+    val defaultTitle = stringResource(R.string.data_title_front_right_seat_heat_vent_widget)
     SeatHeatVentWidget(
         side = SeatSide.FrontRight,
         layoutMode = SeatHeatVentLayoutMode.Dual,
@@ -110,6 +122,9 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
         backgroundColor = backgroundColor,
         singleLineDualMetrics = singleLineDualMetrics,
         enableInnerInteractions = enableInnerInteractions,
+        showTitle = showTitle,
+        titleOverride = titleOverride,
+        defaultTitle = defaultTitle,
         scale = scale
     )
 }
@@ -125,9 +140,12 @@ fun DashboardFrontLeftSeatHeatVentSingleWidgetItem(
     textColor: Color,
     backgroundColor: Color,
     enableInnerInteractions: Boolean = true,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
     scale: Float = 1f
 ) {
     val mode by MbCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
+    val defaultTitle = stringResource(R.string.data_title_front_left_seat_heat_vent_single_widget)
     SeatHeatVentWidget(
         side = SeatSide.FrontLeft,
         layoutMode = SeatHeatVentLayoutMode.Single,
@@ -143,6 +161,9 @@ fun DashboardFrontLeftSeatHeatVentSingleWidgetItem(
         backgroundColor = backgroundColor,
         singleLineDualMetrics = false,
         enableInnerInteractions = enableInnerInteractions,
+        showTitle = showTitle,
+        titleOverride = titleOverride,
+        defaultTitle = defaultTitle,
         scale = scale
     )
 }
@@ -158,9 +179,12 @@ fun DashboardFrontRightSeatHeatVentSingleWidgetItem(
     textColor: Color,
     backgroundColor: Color,
     enableInnerInteractions: Boolean = true,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
     scale: Float = 1f
 ) {
     val mode by MbCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
+    val defaultTitle = stringResource(R.string.data_title_front_right_seat_heat_vent_single_widget)
     SeatHeatVentWidget(
         side = SeatSide.FrontRight,
         layoutMode = SeatHeatVentLayoutMode.Single,
@@ -176,6 +200,9 @@ fun DashboardFrontRightSeatHeatVentSingleWidgetItem(
         backgroundColor = backgroundColor,
         singleLineDualMetrics = false,
         enableInnerInteractions = enableInnerInteractions,
+        showTitle = showTitle,
+        titleOverride = titleOverride,
+        defaultTitle = defaultTitle,
         scale = scale
     )
 }
@@ -189,9 +216,12 @@ fun DashboardRearLeftSeatHeatWidgetItem(
     textColor: Color,
     backgroundColor: Color,
     enableInnerInteractions: Boolean = true,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
     scale: Float = 1f
 ) {
     val mode by MbCanRepository.rearLeftSeatModeState.collectAsStateWithLifecycle()
+    val defaultTitle = stringResource(R.string.data_title_rear_left_seat_heat_widget)
     SeatHeatVentWidget(
         side = SeatSide.BackLeft,
         layoutMode = SeatHeatVentLayoutMode.RearHeatOnly,
@@ -207,6 +237,9 @@ fun DashboardRearLeftSeatHeatWidgetItem(
         backgroundColor = backgroundColor,
         singleLineDualMetrics = false,
         enableInnerInteractions = enableInnerInteractions,
+        showTitle = showTitle,
+        titleOverride = titleOverride,
+        defaultTitle = defaultTitle,
         scale = scale
     )
 }
@@ -220,9 +253,12 @@ fun DashboardRearRightSeatHeatWidgetItem(
     textColor: Color,
     backgroundColor: Color,
     enableInnerInteractions: Boolean = true,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
     scale: Float = 1f
 ) {
     val mode by MbCanRepository.rearRightSeatModeState.collectAsStateWithLifecycle()
+    val defaultTitle = stringResource(R.string.data_title_rear_right_seat_heat_widget)
     SeatHeatVentWidget(
         side = SeatSide.BackRight,
         layoutMode = SeatHeatVentLayoutMode.RearHeatOnly,
@@ -238,6 +274,9 @@ fun DashboardRearRightSeatHeatWidgetItem(
         backgroundColor = backgroundColor,
         singleLineDualMetrics = false,
         enableInnerInteractions = enableInnerInteractions,
+        showTitle = showTitle,
+        titleOverride = titleOverride,
+        defaultTitle = defaultTitle,
         scale = scale
     )
 }
@@ -258,6 +297,9 @@ private fun SeatHeatVentWidget(
     backgroundColor: Color,
     singleLineDualMetrics: Boolean,
     enableInnerInteractions: Boolean,
+    showTitle: Boolean,
+    titleOverride: String,
+    defaultTitle: String,
     scale: Float = 1f
 ) {
     val context = LocalContext.current
@@ -288,6 +330,7 @@ private fun SeatHeatVentWidget(
     }
 
     val swipeThresholdPx = with(LocalDensity.current) { 40.dp.toPx() }
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
     DashboardWidgetScaffold(
         onClick = if (enableInnerInteractions) {
@@ -298,41 +341,58 @@ private fun SeatHeatVentWidget(
         shape = shape,
         textColor = textColor,
         backgroundColor = backgroundColor
-    ) { _, _ ->
-        when (layoutMode) {
-            SeatHeatVentLayoutMode.RearHeatOnly -> {
-                val heatLevel = (mode as? MbCanSeatModeState.Heat)?.level
-                val onHeatClick = if (enableInnerInteractions) {
-                    { trySendSeatProperty(nextHeatRaw(mode)) }
-                } else {
-                    onClick
-                }
-                val onDouble = if (enableInnerInteractions) {
-                    { trySendSeatProperty(1) }
-                } else {
-                    {}
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    SeatActionButton(
-                        modifier = Modifier.fillMaxSize(),
-                        side = side,
-                        iconColor = iconColor,
-                        modeType = "heat",
-                        level = heatLevel,
-                        onLongClick = onLongClick,
-                        onClick = onHeatClick,
-                        onDoubleClick = onDouble,
-                        scale = scale
-                    )
-                }
-            }
+    ) { availableHeight, resolvedTextColor ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            DashboardWidgetTitleRowIfVisible(
+                showTitle = showTitle,
+                titleText = titleText,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(if (showTitle) 2f else 1f)
+            ) {
+                when (layoutMode) {
+                    SeatHeatVentLayoutMode.RearHeatOnly -> {
+                        val heatLevel = (mode as? MbCanSeatModeState.Heat)?.level
+                        val onHeatClick = if (enableInnerInteractions) {
+                            { trySendSeatProperty(nextHeatRaw(mode)) }
+                        } else {
+                            onClick
+                        }
+                        val onDouble = if (enableInnerInteractions) {
+                            { trySendSeatProperty(1) }
+                        } else {
+                            {}
+                        }
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            SeatActionButton(
+                                modifier = Modifier.fillMaxSize(),
+                                side = side,
+                                iconColor = iconColor,
+                                modeType = "heat",
+                                level = heatLevel,
+                                onLongClick = onLongClick,
+                                onClick = onHeatClick,
+                                onDoubleClick = onDouble,
+                                scale = scale
+                            )
+                        }
+                    }
 
-            SeatHeatVentLayoutMode.Single -> {
+                    SeatHeatVentLayoutMode.Single -> {
                 val showHeat = optimisticVariant == SEAT_HEAT_VENT_VARIANT_HEAT
                 val heatLevel = (mode as? MbCanSeatModeState.Heat)?.level
                 val ventLevel = (mode as? MbCanSeatModeState.Vent)?.level
@@ -354,49 +414,45 @@ private fun SeatHeatVentWidget(
                 } else {
                     {}
                 }
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    SeatActionButton(
-                        modifier = Modifier.fillMaxSize(),
-                        side = side,
-                        iconColor = iconColor,
-                        modeType = modeType,
-                        level = level,
-                        onLongClick = onLongClick,
-                        onClick = onSingleClick,
-                        onDoubleClick = onDouble,
-                        horizontalSwipePointerKey = optimisticVariant,
-                        horizontalSwipeThresholdPx = if (enableInnerInteractions) {
-                            swipeThresholdPx
-                        } else {
-                            null
-                        },
-                        onHorizontalSwipeConfirmed = {
-                            val next = if (optimisticVariant == SEAT_HEAT_VENT_VARIANT_HEAT) {
-                                SEAT_HEAT_VENT_VARIANT_VENT
-                            } else {
-                                SEAT_HEAT_VENT_VARIANT_HEAT
-                            }
-                            optimisticVariant = next
-                            onSelectedVariantChange(next)
-                        },
-                        scale = scale
-                    )
-                }
-            }
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            SeatActionButton(
+                                modifier = Modifier.fillMaxSize(),
+                                side = side,
+                                iconColor = iconColor,
+                                modeType = modeType,
+                                level = level,
+                                onLongClick = onLongClick,
+                                onClick = onSingleClick,
+                                onDoubleClick = onDouble,
+                                horizontalSwipePointerKey = optimisticVariant,
+                                horizontalSwipeThresholdPx = if (enableInnerInteractions) {
+                                    swipeThresholdPx
+                                } else {
+                                    null
+                                },
+                                onHorizontalSwipeConfirmed = {
+                                    val next = if (optimisticVariant == SEAT_HEAT_VENT_VARIANT_HEAT) {
+                                        SEAT_HEAT_VENT_VARIANT_VENT
+                                    } else {
+                                        SEAT_HEAT_VENT_VARIANT_HEAT
+                                    }
+                                    optimisticVariant = next
+                                    onSelectedVariantChange(next)
+                                },
+                                scale = scale
+                            )
+                        }
+                    }
 
-            SeatHeatVentLayoutMode.Dual -> {
-                if (singleLineDualMetrics) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
+                    SeatHeatVentLayoutMode.Dual -> {
+                        if (singleLineDualMetrics) {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
                         SeatActionButton(
                             modifier = Modifier
                                 .weight(1f)
@@ -438,9 +494,7 @@ private fun SeatHeatVentWidget(
                     }
                 } else {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(4.dp),
+                        modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         SeatActionButton(
@@ -481,6 +535,8 @@ private fun SeatHeatVentWidget(
                             },
                             scale = scale
                         )
+                    }
+                }
                     }
                 }
             }
