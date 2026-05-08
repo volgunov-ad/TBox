@@ -46,7 +46,7 @@ import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.can.CanRepository
 import com.mengbo.mbCan.defines.MBAudioProperty
 import vad.dashing.tbox.fuel.FuelCoordinates
 import vad.dashing.tbox.fuel.FuelCostAccounting
@@ -490,7 +490,7 @@ class BackgroundService : Service() {
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
         MbCanDiagnostics.setEnabled(false)
         scope.launch {
-            MbCanRepository.bind(scope)
+            CanRepository.bind(this@BackgroundService, scope)
         }
         /*mbCanDebugProbeJob = scope.launch(exceptionHandler) {
             delay(MBCAN_DEBUG_PROBE_INTERVAL_MS)
@@ -905,13 +905,13 @@ class BackgroundService : Service() {
                     when (commandType) {
                         MBCAN_COMMAND_TOGGLE_PROPERTY -> {
                             if (propertyId != Int.MIN_VALUE) {
-                                val result = MbCanRepository.execute(MbCanCommand.ToggleProperty(propertyId))
+                                val result = CanRepository.execute(MbCanCommand.ToggleProperty(propertyId))
                                 MbCanDiagnostics.log("DEBUG", "toggle result success=${result.success} msg=${result.message}")
                             }
                         }
                         MBCAN_COMMAND_SET_PROPERTY -> {
                             if (propertyId != Int.MIN_VALUE) {
-                                val result = MbCanRepository.execute(MbCanCommand.SetProperty(propertyId, propertyValue))
+                                val result = CanRepository.execute(MbCanCommand.SetProperty(propertyId, propertyValue))
                                 MbCanDiagnostics.log("DEBUG", "set result success=${result.success} msg=${result.message}")
                             }
                         }
@@ -2935,7 +2935,7 @@ class BackgroundService : Service() {
         scope.launch(Dispatchers.IO + NonCancellable) {
             try {
                 withTimeout(2_000L) {
-                    MbCanRepository.unbind()
+                    CanRepository.unbind()
                 }
             } catch (e: Exception) {
                 MbCanDiagnostics.log("ERROR", "onDestroy mbCAN unbind failed: ${e.message}")

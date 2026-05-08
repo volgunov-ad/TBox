@@ -258,6 +258,72 @@ object MbCanRepository {
         }
     }
 
+    /**
+     * Lets non-mbCAN backends (e.g. VHAL) keep existing UI state flows alive without rewriting widgets.
+     */
+    fun applyExternalAvailability(available: Boolean, reason: String?) {
+        _availability.value = if (available) {
+            MbCanAvailability.Available
+        } else {
+            MbCanAvailability.Unavailable(reason ?: "Unavailable")
+        }
+    }
+
+    /**
+     * Applies a raw property value from external backend using the same decoding logic as mbCAN.
+     */
+    suspend fun applyExternalVehicleProperty(propertyId: Int, rawValue: Int?) {
+        withContext(stateApplyDispatcher) {
+            when (propertyId) {
+                MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH ->
+                    stateEngine.applySteeringCandidate(
+                        rawValue?.let { MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(it) }
+                            ?: MbCanBinaryState.Unknown
+                    )
+
+                MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH ->
+                    stateEngine.applyWindshieldHeatCandidate(
+                        rawValue?.let { MbCanSignalStateEngine.decodeFrontWindscreenHeatRaw(it) }
+                            ?: MbCanBinaryState.Unknown
+                    )
+
+                MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH ->
+                    stateEngine.applyHvacDefrosterCandidate(
+                        rawValue?.let { MbCanSignalStateEngine.decodeHvacDefrosterRaw(it) }
+                            ?: MbCanBinaryState.Unknown
+                    )
+
+                MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH ->
+                    stateEngine.applySeatCandidate(
+                        MbCanSeatSlot.FrontLeft,
+                        rawValue?.let { MbCanSignalStateEngine.decodeSeatModeRaw(it) }
+                            ?: MbCanSeatModeState.Unknown
+                    )
+
+                MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH ->
+                    stateEngine.applySeatCandidate(
+                        MbCanSeatSlot.FrontRight,
+                        rawValue?.let { MbCanSignalStateEngine.decodeSeatModeRaw(it) }
+                            ?: MbCanSeatModeState.Unknown
+                    )
+
+                MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH ->
+                    stateEngine.applySeatCandidate(
+                        MbCanSeatSlot.RearLeft,
+                        rawValue?.let { MbCanSignalStateEngine.decodeRearSeatHeatRaw(it) }
+                            ?: MbCanSeatModeState.Unknown
+                    )
+
+                MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH ->
+                    stateEngine.applySeatCandidate(
+                        MbCanSeatSlot.RearRight,
+                        rawValue?.let { MbCanSignalStateEngine.decodeRearSeatHeatRaw(it) }
+                            ?: MbCanSeatModeState.Unknown
+                    )
+            }
+        }
+    }
+
     private suspend fun executeToggleViaRegistry(propertyId: Int): MbCanCommandResult {
         MbCanDiagnostics.log("DEBUG", "executeToggleProperty propertyId=$propertyId")
         val spec = MbCanCommandRegistry.get(propertyId)
