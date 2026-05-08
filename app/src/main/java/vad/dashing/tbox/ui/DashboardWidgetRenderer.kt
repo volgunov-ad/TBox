@@ -5,8 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.R
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
@@ -18,6 +20,7 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -69,7 +72,10 @@ fun DashboardWidgetRenderer(
                 viewModel = tboxViewModel,
                 elevation = elevation,
                 shape = shape,
+                textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -81,9 +87,12 @@ fun DashboardWidgetRenderer(
                 onLongClick = onLongClick,
                 viewModel = tboxViewModel,
                 color = widgetTextColor,
+                textColor = widgetTextColor,
                 elevation = elevation,
                 shape = shape,
                 backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -97,6 +106,10 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                defaultTitleRes = R.string.data_title_net_widget_colored,
                 scale = widgetConfig.scale
             )
         }
@@ -111,6 +124,8 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -162,6 +177,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -178,6 +195,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 units = widgetConfig.showUnit,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -244,6 +263,8 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -256,6 +277,8 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -268,6 +291,8 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -282,6 +307,8 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 enableInnerInteractions = enableInnerInteractions,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -297,6 +324,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 enableInnerInteractions = enableInnerInteractions,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -311,6 +340,8 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 enableInnerInteractions = enableInnerInteractions,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -326,6 +357,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 enableInnerInteractions = enableInnerInteractions,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -339,6 +372,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 enableInnerInteractions = enableInnerInteractions,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -352,6 +387,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 enableInnerInteractions = enableInnerInteractions,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
                 scale = widgetConfig.scale
             )
         }
@@ -367,7 +404,10 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 backgroundColor = widgetBackgroundColor,
-                textColor = widgetTextColor
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                defaultTitle = stringResource(R.string.data_title_external_app_widget)
             )
         }
 
@@ -384,6 +424,20 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        EMPTY_TILE_WIDGET_DATA_KEY -> {
+            DashboardEmptyTileWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                defaultTitle = stringResource(R.string.data_title_empty_tile_widget)
             )
         }
 
@@ -514,7 +568,10 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                defaultTitle = stringResource(R.string.data_title_hide_floating_panels_widget)
             )
         }
 
@@ -526,7 +583,10 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                defaultTitle = stringResource(R.string.data_title_toggle_floating_panels_enabled_widget)
             )
         }
 

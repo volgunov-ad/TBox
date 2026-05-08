@@ -57,6 +57,7 @@ import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
@@ -176,6 +177,17 @@ internal class WidgetSelectionDialogState(
             initialConfig.launcherAppPackage
         } else {
             ""
+        }
+    )
+
+    var tileBackgroundImageRelPathLight by mutableStateOf(
+        initialConfig.tileBackgroundImageRelPathLight?.takeIf {
+            TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+        }
+    )
+    var tileBackgroundImageRelPathDark by mutableStateOf(
+        initialConfig.tileBackgroundImageRelPathDark?.takeIf {
+            TileBackgroundImageStorage.isAllowedStoredRelPath(it)
         }
     )
 
@@ -467,6 +479,8 @@ internal fun WidgetSelectionDialogForm(
     bottomContent: (@Composable () -> Unit)? = null,
     mainScreenPanelId: String = "",
     floatingDashboardPanelId: String = "",
+    widgetIndex: Int = 0,
+    tileBackgroundPanelStorageId: String = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
 ) {
     val context = LocalContext.current
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
@@ -598,13 +612,15 @@ internal fun WidgetSelectionDialogForm(
                             .fillMaxWidth()
                             .padding(top = 8.dp, bottom = 4.dp)
                     )
-                    SettingSwitch(
-                        state.showUnit,
-                        { state.showUnit = it },
-                        stringResource(R.string.widget_show_unit),
-                        "",
-                        state.togglesEnabled
-                    )
+                    if (WidgetsRepository.supportsShowUnit(state.selectedDataKey)) {
+                        SettingSwitch(
+                            state.showUnit,
+                            { state.showUnit = it },
+                            stringResource(R.string.widget_show_unit),
+                            "",
+                            state.togglesEnabled
+                        )
+                    }
                     if (WidgetsRepository.supportsSingleLineDualMetrics(state.selectedDataKey)) {
                         SettingSwitch(
                             state.singleLineDualMetrics,
@@ -745,6 +761,13 @@ internal fun WidgetSelectionDialogForm(
                             valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                         )
                     }
+                    TileBackgroundImageSettingsSection(
+                        state = state,
+                        settingsViewModel = settingsViewModel,
+                        panelStorageId = tileBackgroundPanelStorageId,
+                        widgetIndex = widgetIndex,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                    )
                     OutlinedButton(
                         onClick = { state.resetTileTextAndBackgroundColors() },
                         modifier = Modifier
@@ -1090,7 +1113,13 @@ internal fun applyWidgetSelectionChanges(
                         0
                     }
                 }
-            }
+            },
+            tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
+                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
+            tileBackgroundImageRelPathDark = state.tileBackgroundImageRelPathDark?.takeIf {
+                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")

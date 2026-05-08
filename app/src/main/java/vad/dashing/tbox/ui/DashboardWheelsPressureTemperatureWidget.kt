@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -25,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.R
+
 @Composable
 fun DashboardWheelsPressureTemperatureWidgetItem(
     widget: DashboardWidget,
@@ -36,6 +39,8 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     units: Boolean = true,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
@@ -66,6 +71,9 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
     val t3s by t3.collectAsStateWithLifecycle()
     val t4s by t4.collectAsStateWithLifecycle()
 
+    val defaultTitle = stringResource(R.string.data_title_wheels_pressure_temperature_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+
     DashboardWidgetScaffold(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -82,139 +90,152 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
+            DashboardWidgetTitleRowIfVisible(
+                showTitle = showTitle,
+                titleText = titleText,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor
+            )
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .wrapContentHeight(Alignment.Top),
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .weight(if (showTitle) 2f else 1f)
+                    .fillMaxSize()
             ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    PressureText(
-                        value = wheelsPressure.wheel1,
-                        displayText = p1s,
-                        availableHeight = availableHeight,
-                        align = TextAlign.Left,
-                        textType = TextType.TITLE,
-                        textColor = resolvedTextColor
-                    )
-                }
-                Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
-                    PressureText(
-                        value = wheelsPressure.wheel2,
-                        displayText = p2s,
-                        availableHeight = availableHeight,
-                        align = TextAlign.Right,
-                        textType = TextType.TITLE,
-                        textColor = resolvedTextColor
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .wrapContentHeight(Alignment.Top),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    TemperatureText(
-                        value = wheelsTemperature.wheel1,
-                        displayText = t1s,
-                        availableHeight = availableHeight,
-                        align = TextAlign.Left,
-                        textColor = resolvedTextColor
-                    )
-                }
-                Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
-                    TemperatureText(
-                        value = wheelsTemperature.wheel2,
-                        displayText = t2s,
-                        availableHeight = availableHeight,
-                        align = TextAlign.Right,
-                        textColor = resolvedTextColor
-                    )
-                }
-            }
-
-            if (units) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    horizontalArrangement = Arrangement.Center
+                        .wrapContentHeight(Alignment.Top),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = widget.unit,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.UNIT
-                        ),
-                        color = resolvedTextColor,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        lineHeight = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.UNIT
-                        ) * 1.3f,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Box(modifier = Modifier.weight(1f)) {
+                        PressureText(
+                            value = wheelsPressure.wheel1,
+                            displayText = p1s,
+                            availableHeight = availableHeight,
+                            align = TextAlign.Left,
+                            textType = TextType.TITLE,
+                            textColor = resolvedTextColor
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
+                        PressureText(
+                            value = wheelsPressure.wheel2,
+                            displayText = p2s,
+                            availableHeight = availableHeight,
+                            align = TextAlign.Right,
+                            textType = TextType.TITLE,
+                            textColor = resolvedTextColor
+                        )
+                    }
                 }
-            }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .wrapContentHeight(Alignment.Top),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        TemperatureText(
+                            value = wheelsTemperature.wheel1,
+                            displayText = t1s,
+                            availableHeight = availableHeight,
+                            align = TextAlign.Left,
+                            textColor = resolvedTextColor
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
+                        TemperatureText(
+                            value = wheelsTemperature.wheel2,
+                            displayText = t2s,
+                            availableHeight = availableHeight,
+                            align = TextAlign.Right,
+                            textColor = resolvedTextColor
+                        )
+                    }
+                }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .wrapContentHeight(Alignment.Bottom),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    PressureText(
-                        value = wheelsPressure.wheel3,
-                        displayText = p3s,
-                        availableHeight = availableHeight,
-                        align = TextAlign.Left,
-                        textType = TextType.TITLE,
-                        textColor = resolvedTextColor
-                    )
+                if (units) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .wrapContentHeight(Alignment.CenterVertically),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = widget.unit,
+                            fontSize = calculateResponsiveFontSize(
+                                containerHeight = availableHeight,
+                                textType = TextType.UNIT
+                            ),
+                            color = resolvedTextColor,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            lineHeight = calculateResponsiveFontSize(
+                                containerHeight = availableHeight,
+                                textType = TextType.UNIT
+                            ) * 1.3f,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
-                Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
-                    PressureText(
-                        value = wheelsPressure.wheel4,
-                        displayText = p4s,
-                        availableHeight = availableHeight,
-                        align = TextAlign.Right,
-                        textType = TextType.TITLE,
-                        textColor = resolvedTextColor
-                    )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .wrapContentHeight(Alignment.Bottom),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        PressureText(
+                            value = wheelsPressure.wheel3,
+                            displayText = p3s,
+                            availableHeight = availableHeight,
+                            align = TextAlign.Left,
+                            textType = TextType.TITLE,
+                            textColor = resolvedTextColor
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
+                        PressureText(
+                            value = wheelsPressure.wheel4,
+                            displayText = p4s,
+                            availableHeight = availableHeight,
+                            align = TextAlign.Right,
+                            textType = TextType.TITLE,
+                            textColor = resolvedTextColor
+                        )
+                    }
                 }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .wrapContentHeight(Alignment.Bottom),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    TemperatureText(
-                        value = wheelsTemperature.wheel3,
-                        displayText = t3s,
-                        availableHeight = availableHeight,
-                        align = TextAlign.Left,
-                        textColor = resolvedTextColor
-                    )
-                }
-                Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
-                    TemperatureText(
-                        value = wheelsTemperature.wheel4,
-                        displayText = t4s,
-                        availableHeight = availableHeight,
-                        align = TextAlign.Right,
-                        textColor = resolvedTextColor
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .wrapContentHeight(Alignment.Bottom),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        TemperatureText(
+                            value = wheelsTemperature.wheel3,
+                            displayText = t3s,
+                            availableHeight = availableHeight,
+                            align = TextAlign.Left,
+                            textColor = resolvedTextColor
+                        )
+                    }
+                    Box(modifier = Modifier.weight(1f).wrapContentWidth(Alignment.End)) {
+                        TemperatureText(
+                            value = wheelsTemperature.wheel4,
+                            displayText = t4s,
+                            availableHeight = availableHeight,
+                            align = TextAlign.Right,
+                            textColor = resolvedTextColor
+                        )
+                    }
                 }
             }
         }
