@@ -749,6 +749,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 5
         )
 
+    val wheelPressurePersistAcrossStops = settingsManager.wheelPressurePersistAcrossStopsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     init {
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
@@ -1622,6 +1629,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveSplitTripTimeMinutes(minutes: Int) {
         viewModelScope.launch {
             settingsManager.saveSplitTripTimeMinutes(minutes)
+        }
+    }
+
+    fun saveWheelPressurePersistAcrossStops(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWheelPressurePersistAcrossStopsSetting(enabled)
         }
     }
 }

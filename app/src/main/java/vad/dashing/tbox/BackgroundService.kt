@@ -104,6 +104,7 @@ class BackgroundService : Service() {
     private lateinit var fuelCalibrationMaturityThresholdSetting: StateFlow<Int>
     private lateinit var fuelPriceFuelIdSetting: StateFlow<Int>
     private lateinit var splitTripTimeMinutesSetting: StateFlow<Int>
+    private lateinit var wheelPressurePersistAcrossStopsSetting: StateFlow<Boolean>
     private val fuelPriceClient by lazy { FuelPriceClient() }
 
     private val serverPort = 50047
@@ -431,6 +432,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.fuelPriceFuelId)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, settingsSnap.splitTripTimeMinutes)
+            wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
+                .stateIn(scope, eager, settingsSnap.wheelPressurePersistAcrossStops)
         } else {
             autoModemRestart = settingsManager.autoModemRestartFlow
                 .stateIn(scope, eager, false)
@@ -476,6 +479,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, FuelTypes.DEFAULT_FUEL_ID)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, 5)
+            wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
+                .stateIn(scope, eager, false)
         }
     }
 
@@ -1295,7 +1300,9 @@ class BackgroundService : Service() {
     private fun startDataListener() {
         dataListenerJob = scope.launch {
             try {
-                restoreWheelPressuresFromAppDataIfNeeded()
+                if (wheelPressurePersistAcrossStopsSetting.value) {
+                    restoreWheelPressuresFromAppDataIfNeeded()
+                }
             } catch (e: Exception) {
                 TboxRepository.addLog("WARN", "Data Listener", "Wheel pressure restore: ${e.message}")
                 Log.w("Data Listener", "Wheel pressure restore failed", e)
@@ -1326,7 +1333,9 @@ class BackgroundService : Service() {
                         }
                         if (prevRpm > 0f && r == 0f) {
                             persistMotorHoursToStore()
-                            persistLastKnownWheelPressuresOnEngineStop()
+                            if (wheelPressurePersistAcrossStopsSetting.value) {
+                                persistLastKnownWheelPressuresOnEngineStop()
+                            }
                         }
                         onTripRpmSample(r, prevRpm, now)
                         prevRpm = r

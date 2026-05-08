@@ -275,6 +275,7 @@ fun SettingsTabContent(
     val canDataSaveCount by settingsViewModel.canDataSaveCount.collectAsStateWithLifecycle()
     val fuelPriceFuelId by settingsViewModel.fuelPriceFuelId.collectAsStateWithLifecycle()
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
+    val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
@@ -595,6 +596,13 @@ fun SettingsTabContent(
             "",
             1,
             100000
+        )
+        SettingSwitch(
+            wheelPressurePersistAcrossStops,
+            { enabled -> settingsViewModel.saveWheelPressurePersistAcrossStops(enabled) },
+            stringResource(R.string.settings_wheel_pressure_persist_title),
+            stringResource(R.string.settings_wheel_pressure_persist_desc),
+            true
         )
         SettingSwitch(
             isExpertModeEnabled,
