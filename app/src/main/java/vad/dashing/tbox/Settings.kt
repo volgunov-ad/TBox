@@ -38,6 +38,13 @@ enum class SetLauncherAppCustomIconResult {
     CopyFailed,
 }
 
+enum class SetTileBackgroundImageResult {
+    Success,
+    NotImageOrUnreadable,
+    DimensionsTooLarge,
+    CopyFailed,
+}
+
 data class FloatingDashboardWidgetConfig(
     val dataKey: String,
     val showTitle: Boolean = false,
@@ -72,7 +79,14 @@ data class FloatingDashboardWidgetConfig(
      */
     val valueAccuracy: Int? = null,
     /** Per-tile UI variant for widgets that support multiple modes (e.g. single seat heat vs vent). */
-    val selectedVariant: Int = 0
+    val selectedVariant: Int = 0,
+    /**
+     * Optional background image on top of the tile color (light theme).
+     * Path relative to [Context.filesDir]; must stay under [TileBackgroundImageStorage.DIR_NAME].
+     */
+    val tileBackgroundImageRelPathLight: String? = null,
+    /** Same as [tileBackgroundImageRelPathLight] for the dark theme. */
+    val tileBackgroundImageRelPathDark: String? = null,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -232,6 +246,10 @@ class SettingsManager(private val context: Context) {
         private val LAUNCHER_APP_ICON_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}launcher_app_icon_revision")
 
+        /** Bumped when per-tile background image files change (save / clear / backup import). */
+        private val TILE_BACKGROUND_IMAGE_REVISION_KEY =
+            intPreferencesKey("${KEY_PREFIX}tile_background_image_revision")
+
         private val MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_corner_button_size_dp")
         private val MAIN_SCREEN_CORNER_BTN_BG_LIGHT_KEY =
@@ -306,6 +324,8 @@ class SettingsManager(private val context: Context) {
         const val LAUNCHER_APP_ICONS_DIR = "launcher_app_icons"
         private const val MAX_LAUNCHER_APP_ICON_EDGE_PX = 512
         private const val MAX_LAUNCHER_APP_ICON_BYTES = 512 * 1024L
+        private const val MAX_TILE_BACKGROUND_EDGE_PX = 4096
+        private const val MAX_TILE_BACKGROUND_BYTES = 8 * 1024 * 1024L
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
         private const val DEFAULT_FUEL_TANK_LITERS = 57
         private const val DEFAULT_FUEL_CALIBRATION_ZONE_COUNT = 5
@@ -492,6 +512,10 @@ class SettingsManager(private val context: Context) {
 
     val launcherAppIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0 }
+        .distinctUntilChanged()
+
+    val tileBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
 
     val mainScreenCornerButtonSizeDpFlow: Flow<Int> = context.settingsDataStore.data
@@ -1009,6 +1033,8 @@ class SettingsManager(private val context: Context) {
     suspend fun clearNonExportedLocalAssetsAfterBackupImport() {
         withContext(Dispatchers.IO) {
             File(context.filesDir, LAUNCHER_APP_ICONS_DIR).takeIf { it.exists() }?.deleteRecursively()
+            File(context.filesDir, TileBackgroundImageStorage.DIR_NAME).takeIf { it.exists() }
+                ?.deleteRecursively()
             listOf(MAIN_SCREEN_WALLPAPER_LIGHT_FILE, MAIN_SCREEN_WALLPAPER_DARK_FILE).forEach { rel ->
                 File(context.filesDir, rel).takeIf { it.exists() }?.delete()
             }
@@ -1018,6 +1044,8 @@ class SettingsManager(private val context: Context) {
                 preferences[MAIN_SCREEN_WALLPAPER_DARK_SET_LEGACY_KEY] = false
                 val cur = preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0
                 preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
+                val curTile = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
+                preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = curTile + 1
             }
         }
     }
@@ -1026,6 +1054,72 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             val cur = preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0
             preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
+        }
+    }
+
+    private suspend fun bumpTileBackgroundImageRevision() {
+        context.settingsDataStore.edit { preferences ->
+            val cur = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
+            preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = cur + 1
+        }
+    }
+
+    /**
+     * Copies an image into [TileBackgroundImageStorage.DIR_NAME] for the given panel slot and theme.
+     * [sourceUri] `null` removes the file for that slot/theme. Returned path is suitable for
+     * [FloatingDashboardWidgetConfig.tileBackgroundImageRelPathLight] / Dark.
+     */
+    suspend fun setTileBackgroundImageFromUri(
+        panelStorageId: String,
+        widgetIndex: Int,
+        darkTheme: Boolean,
+        sourceUri: Uri?,
+    ): Pair<SetTileBackgroundImageResult, String?> {
+        return withContext(Dispatchers.IO) {
+            val rel = TileBackgroundImageStorage.relativePathFor(panelStorageId, widgetIndex, darkTheme)
+            val dest = File(context.filesDir, rel.replace('/', File.separatorChar))
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                dest.takeIf { it.exists() }?.delete()
+                bumpTileBackgroundImageRevision()
+                return@withContext Pair(SetTileBackgroundImageResult.Success, null)
+            }
+            val bounds = runCatching {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, opts)
+                }
+                opts
+            }.getOrNull() ?: return@withContext Pair(SetTileBackgroundImageResult.NotImageOrUnreadable, null)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return@withContext Pair(SetTileBackgroundImageResult.NotImageOrUnreadable, null)
+            }
+            if (bounds.outWidth > MAX_TILE_BACKGROUND_EDGE_PX ||
+                bounds.outHeight > MAX_TILE_BACKGROUND_EDGE_PX
+            ) {
+                return@withContext Pair(SetTileBackgroundImageResult.DimensionsTooLarge, null)
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L && dest.length() <= MAX_TILE_BACKGROUND_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withContext Pair(SetTileBackgroundImageResult.CopyFailed, null)
+            }
+            val decoded = BitmapFactory.decodeFile(dest.absolutePath)
+            if (decoded == null) {
+                dest.delete()
+                return@withContext Pair(SetTileBackgroundImageResult.NotImageOrUnreadable, null)
+            }
+            decoded.recycle()
+            bumpTileBackgroundImageRevision()
+            Pair(SetTileBackgroundImageResult.Success, rel)
         }
     }
 
@@ -1397,42 +1491,8 @@ class SettingsManager(private val context: Context) {
         )
         if (result.isSuccess) {
             clearNonExportedLocalAssetsAfterBackupImport()
-            sanitizeExternalAppWidgetsAfterBackupImport()
         }
         return result
-    }
-
-    private suspend fun sanitizeExternalAppWidgetsAfterBackupImport() {
-        context.settingsDataStore.edit { prefs ->
-            val dashKey = DASHBOARD_WIDGETS_KEY
-            val oldDash = parseWidgetConfigsFromString(prefs[dashKey] ?: "")
-            val newDash = clearExternalAppWidgetsAfterBackupImport(oldDash)
-            if (newDash != oldDash) {
-                prefs[dashKey] = serializeWidgetConfigs(newDash)
-            }
-
-            val floatKey = getStringKey(FLOATING_DASHBOARDS_LIST_KEY)
-            val floatRaw = prefs[floatKey] ?: ""
-            val floatList = parseFloatingDashboardsJson(floatRaw)
-            val newFloat = floatList.map { panel ->
-                val w = clearExternalAppWidgetsAfterBackupImport(panel.widgetsConfig)
-                if (w == panel.widgetsConfig) panel else panel.copy(widgetsConfig = w)
-            }
-            if (newFloat != floatList) {
-                prefs[floatKey] = serializeFloatingDashboards(newFloat)
-            }
-
-            val mainKey = getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)
-            val mainRaw = prefs[mainKey] ?: ""
-            val mainList = parseMainScreenDashboardsJson(mainRaw)
-            val newMain = mainList.map { panel ->
-                val w = clearExternalAppWidgetsAfterBackupImport(panel.widgetsConfig)
-                if (w == panel.widgetsConfig) panel else panel.copy(widgetsConfig = w)
-            }
-            if (newMain != mainList) {
-                prefs[mainKey] = serializeMainScreenDashboards(newMain)
-            }
-        }
     }
 
 }

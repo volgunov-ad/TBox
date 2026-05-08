@@ -103,25 +103,20 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.selectedVariant != 0) {
             obj.put("selectedVariant", config.selectedVariant)
         }
+        config.tileBackgroundImageRelPathLight?.let {
+            if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
+                obj.put("tileBackgroundImageRelPathLight", it)
+            }
+        }
+        config.tileBackgroundImageRelPathDark?.let {
+            if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
+                obj.put("tileBackgroundImageRelPathDark", it)
+            }
+        }
         array.put(obj)
     }
     return array
 }
-
-/**
- * After backup import, third-party app widget IDs may be invalid (e.g. provider app reinstalled).
- * Reset those tiles to empty slots while preserving layout/visual options.
- */
-fun clearExternalAppWidgetsAfterBackupImport(
-    configs: List<FloatingDashboardWidgetConfig>
-): List<FloatingDashboardWidgetConfig> =
-    configs.map { cfg ->
-        if (cfg.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
-            cfg.copy(dataKey = "", appWidgetId = null)
-        } else {
-            cfg
-        }
-    }
 
 fun normalizeWidgetConfigs(
     configs: List<FloatingDashboardWidgetConfig>,
@@ -202,6 +197,10 @@ private fun parseWidgetConfigsFromJsonArray(
                 val launcherAppPackage = item.optString("launcherAppPackage", "").trim().ifBlank {
                     item.optString("appPackageName", "").trim()
                 }
+                val tileLight = item.optString("tileBackgroundImageRelPathLight", "").trim()
+                    .takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
+                val tileDark = item.optString("tileBackgroundImageRelPathDark", "").trim()
+                    .takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey,
@@ -247,7 +246,9 @@ private fun parseWidgetConfigsFromJsonArray(
                         },
                         customTitle = item.optString("customTitle", "").trim(),
                         valueAccuracy = valueAccuracy,
-                        selectedVariant = item.optInt("selectedVariant", 0)
+                        selectedVariant = item.optInt("selectedVariant", 0),
+                        tileBackgroundImageRelPathLight = tileLight,
+                        tileBackgroundImageRelPathDark = tileDark,
                     )
                 )
             }

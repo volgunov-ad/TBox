@@ -284,7 +284,7 @@
 
     <string name="settings_misc_title">Misc</string>
     <string name="settings_backup_title">Backup</string>
-    <string name="settings_backup_desc">Export and import all app settings and trip/refuel app data (motor hours, trips, refuels, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
+    <string name="settings_backup_desc">Export and import all app settings and trip/refuel app data (motor hours, trips, refuels, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Tile background image paths are stored in JSON; on-device files under the app folder are cleared on import—re-pick images if needed. Custom app shortcut icons are not copied—re-pick after import if needed. Third-party app widget IDs are imported; if the provider is unavailable, the tile shows a placeholder until you pick the widget again.</string>
     <string name="settings_backup_export">Export JSON</string>
     <string name="settings_backup_export_without_trips">Export JSON without trips and refuels</string>
     <string name="settings_backup_import">Import JSON</string>
@@ -292,7 +292,7 @@
     <string name="dialog_save_backup_downloads">Save full backup (settings and data) to the Downloads folder</string>
     <string name="dialog_save_backup_downloads_no_trips">Save backup (settings and other app data, without trips, refuels, or trip favorites) to the Downloads folder</string>
     <string name="dialog_backup_import_title">Import backup</string>
-    <string name="dialog_backup_import_message">Current settings and app data will be fully replaced by the backup. The active trip in memory and storage will match the backup (if the backup has no open trip, any current open trip is replaced by the imported list). Tiles that host third-party app widgets are cleared after import (pick the widget again). Continue and choose a JSON file?</string>
+    <string name="dialog_backup_import_message">Current settings and app data will be fully replaced by the backup. The active trip in memory and storage will match the backup (if the backup has no open trip, any current open trip is replaced by the imported list). Tile background files and custom shortcut icon files in the app folder will be removed; missing image files or unavailable third-party widgets will not cause errors. Continue and choose a JSON file?</string>
     <string name="settings_expert_mode_title">Expert mode</string>
     <string name="settings_expert_mode_warning_desc">All changes in expert mode are made at your own risk.\nHowever, your actions in this mode cannot lead to irreversible consequences.</string>
     <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>
@@ -572,6 +572,13 @@
     <string name="widget_app_launcher_icon_too_large">Image is too large for an icon (max 512×512 px)</string>
     <string name="widget_app_launcher_icon_invalid">Could not read the image</string>
     <string name="widget_app_launcher_icon_copy_failed">Could not save the image</string>
+    <string name="widget_tile_background_image_title">Tile background image</string>
+    <string name="widget_tile_background_image_desc">Drawn on top of the tile background color for the theme selected above (light/dark). The image fits inside the tile without cropping.</string>
+    <string name="widget_tile_background_image_pick">Choose image</string>
+    <string name="widget_tile_background_image_remove">Remove image</string>
+    <string name="widget_tile_background_image_too_large">Image is too large (max 4096×4096 px)</string>
+    <string name="widget_tile_background_image_invalid">Could not read the image</string>
+    <string name="widget_tile_background_image_copy_failed">Could not save the image</string>
 
     <string name="cycle_voltage">Cycle voltage, V</string>
     <string name="cycle_speed">Cycle speed, km/h</string>
