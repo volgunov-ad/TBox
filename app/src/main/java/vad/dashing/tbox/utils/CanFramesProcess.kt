@@ -3,6 +3,7 @@ package vad.dashing.tbox.utils
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
 
 object CanFramesProcess {
 
@@ -207,6 +208,7 @@ object CanFramesProcess {
                     CanDataRepository.updateVoltage(voltage)
                     CanDataRepository.updateFuelLevelPercentage(fuelLevelPercentage)
                     if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
+                        FuelCalibrationLive.applyFromStableFilteredPercent(fuelLevelPercentage)
                         CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
                     }
                 } else if (canId == CAN_ID_FUEL_CONSUMPTION) {
