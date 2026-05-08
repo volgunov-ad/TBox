@@ -16,3 +16,4 @@
 local.properties
 .kotlin/
 .idea/
+/firmware_analysis/
