@@ -1027,14 +1027,13 @@ class SettingsManager(private val context: Context) {
     }
 
     /**
-     * Removes on-disk assets that are not part of the JSON backup (same idea as main-screen wallpapers).
+     * Removes on-disk assets that are not part of the JSON backup (main-screen wallpaper copies).
+     * Custom launcher icons and per-tile background files under `filesDir` are **not** deleted so
+     * existing files keep matching paths from the imported JSON without embedding binaries in the backup.
      * Call after a successful full settings import.
      */
     suspend fun clearNonExportedLocalAssetsAfterBackupImport() {
         withContext(Dispatchers.IO) {
-            File(context.filesDir, LAUNCHER_APP_ICONS_DIR).takeIf { it.exists() }?.deleteRecursively()
-            File(context.filesDir, TileBackgroundImageStorage.DIR_NAME).takeIf { it.exists() }
-                ?.deleteRecursively()
             listOf(MAIN_SCREEN_WALLPAPER_LIGHT_FILE, MAIN_SCREEN_WALLPAPER_DARK_FILE).forEach { rel ->
                 File(context.filesDir, rel).takeIf { it.exists() }?.delete()
             }

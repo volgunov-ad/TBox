@@ -205,14 +205,14 @@ fun MainDashboardTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(0.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 for (row in 0 until dashboardRows) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(0.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         for (col in 0 until dashboardCols) {
                             val index = row * dashboardCols + col
