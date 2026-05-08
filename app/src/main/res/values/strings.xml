@@ -44,10 +44,15 @@
     <string name="tab_refuels">Заправки</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_main_screen_settings">Настройки главного экрана</string>
+    <string name="tab_car_settings">Настройки автомобиля</string>
     <string name="tab_logs">Журнал</string>
     <string name="tab_info">Информация</string>
     <string name="tab_can">CAN</string>
     <string name="tab_widgets">Плитки</string>
+    <string name="car_settings_screen_title">Настройки автомобиля</string>
+    <string name="car_settings_audio_section_title">Аудио</string>
+    <string name="car_settings_audio_volume_speed_title">Громкость в зависимости от скорости</string>
+    <string name="car_settings_audio_volume_speed_desc">Автоматическая подстройка громкости при изменении скорости движения</string>
     <string name="menu_hide">Скрыть меню</string>
     <string name="menu_show">Показать меню</string>
     <string name="menu_navigate_home">Главная</string>
@@ -68,7 +73,7 @@
     <string name="widget_custom_title_hint">Пусто — по умолчанию</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
     <string name="widget_value_accuracy_title">Знаков после запятой</string>
-    <string name="widget_value_accuracy_desc">По умолчанию — как задано для каждого параметра в приложении.</string>
+    <string name="widget_value_accuracy_desc">По умолчанию — как задано для каждого параметра в приложении</string>
     <string name="widget_value_accuracy_default">По умолчанию</string>
     <string name="widget_value_accuracy_0">0</string>
     <string name="widget_value_accuracy_1">1</string>
@@ -453,6 +458,8 @@
     <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
     <string name="settings_fuel_price_fuel_type_title">Тип топлива для расчёта цены</string>
     <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
+    <string name="settings_wheel_pressure_persist_title">Запоминание давления в шинах</string>
+    <string name="settings_wheel_pressure_persist_desc">Сохранять при оборотах двигателя 0 и восстанавливать при запуске службы</string>
 
     <string name="trips_delete">Удалить поездку</string>
     <string name="trips_delete_confirm_title">Удалить поездку?</string>

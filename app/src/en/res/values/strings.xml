@@ -44,10 +44,15 @@
     <string name="tab_refuels">Refuels</string>
     <string name="tab_settings">Settings</string>
     <string name="tab_main_screen_settings">Main screen settings</string>
+    <string name="tab_car_settings">Car settings</string>
     <string name="tab_logs">Logs</string>
     <string name="tab_info">Info</string>
     <string name="tab_can">CAN</string>
     <string name="tab_widgets">Tiles</string>
+    <string name="car_settings_screen_title">Car settings</string>
+    <string name="car_settings_audio_section_title">Audio</string>
+    <string name="car_settings_audio_volume_speed_title">Speed-dependent volume</string>
+    <string name="car_settings_audio_volume_speed_desc">Automatically adjust media volume with vehicle speed</string>
     <string name="menu_hide">Hide menu</string>
     <string name="menu_show">Show menu</string>
     <string name="menu_navigate_home">Home</string>
@@ -68,7 +73,7 @@
     <string name="widget_custom_title_hint">Empty — default</string>
     <string name="widget_show_unit">Show unit</string>
     <string name="widget_value_accuracy_title">Decimal places</string>
-    <string name="widget_value_accuracy_desc">Default follows each parameter’s built-in formatting in the app.</string>
+    <string name="widget_value_accuracy_desc">Default follows each parameter’s built-in formatting in the app</string>
     <string name="widget_value_accuracy_default">Default</string>
     <string name="widget_value_accuracy_0">0</string>
     <string name="widget_value_accuracy_1">1</string>
@@ -454,6 +459,8 @@
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_fuel_price_fuel_type_title">Fuel for price lookup</string>
     <string name="settings_split_trip_time_title">Trip split time, min</string>
+    <string name="settings_wheel_pressure_persist_title">Remember tire pressures</string>
+    <string name="settings_wheel_pressure_persist_desc">Save when engine RPM is 0 and restore when the service starts</string>
 
     <string name="trips_delete">Delete trip</string>
     <string name="trips_delete_confirm_title">Delete trip?</string>

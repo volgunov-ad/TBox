@@ -26,7 +26,8 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     FrontLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     FrontRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     RearLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
-    RearRightSeatMode(setOf("eMBCAN_CFG_VEHICLE"))
+    RearRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
+    AudioVolumeSpeed(setOf("eMBCAN_CFG_AUDIO")),
 }
 
 sealed class MbCanBinaryState {
@@ -52,6 +53,8 @@ data class MbCanCommandResult(
 sealed class MbCanCommand {
     data class ToggleProperty(val propertyId: Int) : MbCanCommand()
     data class SetProperty(val propertyId: Int, val value: Int) : MbCanCommand()
+    data class ToggleAudioProperty(val propertyId: Int) : MbCanCommand()
+    data class SetAudioProperty(val propertyId: Int, val value: Int) : MbCanCommand()
     data class RefreshSignal(val signal: MbCanSignal) : MbCanCommand()
 }
 
@@ -79,8 +82,10 @@ object MbCanRepository {
     private const val POST_COMMAND_VERIFY_DELAY_MS = 500L
     private const val VEHICLE_CFG_MODULAR = 2
     private const val CFG_VEHICLE_DATA_TYPE = "eMBCAN_CFG_VEHICLE"
+    private const val CFG_AUDIO_DATA_TYPE = "eMBCAN_CFG_AUDIO"
     /** Coalesce rapid [eMBCAN_CFG_VEHICLE] pushes before updating [StateFlow]s (50–150 ms band). */
     private const val CFG_VEHICLE_PUSH_COALESCE_MS = 100L
+    private const val CFG_AUDIO_PUSH_COALESCE_MS = 100L
 
     /**
      * Single-thread dispatcher for streak counters, burst decisions, and [StateFlow] writes so push
@@ -93,6 +98,8 @@ object MbCanRepository {
     private val cfgPushHandler = Handler(Looper.getMainLooper())
     private val pendingCfgPushes = mutableMapOf<Int, Int>()
     private val flushCfgPushesRunnable = Runnable { flushPendingCfgPushes() }
+    private val pendingAudioPushes = mutableMapOf<Int, Int>()
+    private val flushAudioCfgPushesRunnable = Runnable { flushPendingAudioPushes() }
 
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
     private val sourceMutex = Mutex()
@@ -116,11 +123,14 @@ object MbCanRepository {
     val rearLeftSeatModeState: StateFlow<MbCanSeatModeState> = _rearLeftSeatModeState.asStateFlow()
     private val _rearRightSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val rearRightSeatModeState: StateFlow<MbCanSeatModeState> = _rearRightSeatModeState.asStateFlow()
+    private val _audioVolumeSpeedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val audioVolumeSpeedState: StateFlow<MbCanBinaryState> = _audioVolumeSpeedState.asStateFlow()
 
     private val stateEngine = MbCanSignalStateEngine(
         steeringFlow = _steeringWheelHeatState,
         windshieldHeatFlow = _frontWindscreenHeatState,
         hvacDefrosterFlow = _hvacDefrosterState,
+        volumeSpeedFlow = _audioVolumeSpeedState,
         frontLeftSeatFlow = _frontLeftSeatModeState,
         frontRightSeatFlow = _frontRightSeatModeState,
         rearLeftSeatFlow = _rearLeftSeatModeState,
@@ -143,8 +153,11 @@ object MbCanRepository {
         try {
             MbCanDiagnostics.log("DEBUG", "unbind()")
             cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
+            cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
+            synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
+            MbCanEngineFacade.syncAudioCfgCmdListener(false)
             reapplyJob?.cancel()
             reapplyJob = null
             boundScope = null
@@ -223,11 +236,63 @@ object MbCanRepository {
         }
     }
 
+    /**
+     * [eMBCAN_CFG_AUDIO] push ([IMBCmdListener.onCmdChanged]); [item] is [com.mengbo.mbCan.defines.MBAudioProperty] id.
+     */
+    fun scheduleAudioCfgPush(_modular: Int, item: Int, value: Int) {
+        when (item) {
+            MbCanKnownAudioPropertyId.VOLUME_SPEED -> Unit
+            else -> return
+        }
+        synchronized(pendingAudioPushes) {
+            pendingAudioPushes[item] = value
+        }
+        cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
+        cfgPushHandler.postDelayed(flushAudioCfgPushesRunnable, CFG_AUDIO_PUSH_COALESCE_MS)
+    }
+
+    private fun flushPendingAudioPushes() {
+        val snapshot = synchronized(pendingAudioPushes) {
+            if (pendingAudioPushes.isEmpty()) return
+            pendingAudioPushes.toMap().also { pendingAudioPushes.clear() }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            for ((item, raw) in snapshot) {
+                when (item) {
+                    MbCanKnownAudioPropertyId.VOLUME_SPEED ->
+                        stateEngine.applyVolumeSpeedCandidate(
+                            MbCanSignalStateEngine.decodeVolumeSpeedRaw(raw)
+                        )
+                }
+            }
+        }
+    }
+
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
         val signals = widgetKeys.mapNotNull { widgetKeyToSignal(it) }.toSet()
         MbCanDiagnostics.log(
             "DEBUG",
             "setSourceWidgetKeys source=$sourceId widgetKeys=${widgetKeys.joinToString()} signals=${signals.joinToString()}"
+        )
+        sourceMutex.withLock {
+            if (signals.isEmpty()) {
+                sourceSignals.remove(sourceId)
+            } else {
+                sourceSignals[sourceId] = signals
+            }
+        }
+        scheduleReapplyAllInterests()
+    }
+
+    /**
+     * Registers mbCAN interest for a UI surface by explicit [MbCanSignal]s (no widget-key indirection).
+     * Merged with widget-derived interests in [reapplyAllInterests].
+     */
+    suspend fun setSourceSignals(sourceId: String, signals: Set<MbCanSignal>) {
+        MbCanDiagnostics.log(
+            "DEBUG",
+            "setSourceSignals source=$sourceId signals=${signals.joinToString()}"
         )
         sourceMutex.withLock {
             if (signals.isEmpty()) {
@@ -251,6 +316,8 @@ object MbCanRepository {
         return when (command) {
             is MbCanCommand.ToggleProperty -> executeToggleViaRegistry(command.propertyId)
             is MbCanCommand.SetProperty -> executeSetViaRegistry(command.propertyId, command.value)
+            is MbCanCommand.ToggleAudioProperty -> executeToggleAudioViaRegistry(command.propertyId)
+            is MbCanCommand.SetAudioProperty -> executeSetAudioViaRegistry(command.propertyId, command.value)
             is MbCanCommand.RefreshSignal -> {
                 refreshSignal(command.signal)
                 MbCanCommandResult(true, "Refresh requested")
@@ -314,11 +381,64 @@ object MbCanRepository {
         return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
 
+    private suspend fun executeToggleAudioViaRegistry(propertyId: Int): MbCanCommandResult {
+        MbCanDiagnostics.log("DEBUG", "executeToggleAudioProperty propertyId=$propertyId")
+        val spec = MbCanAudioCommandRegistry.get(propertyId)
+            ?: return MbCanCommandResult(false, "No audio command policy for propertyId=$propertyId")
+        val policy = spec.policy as? MbCanCommandPolicy.ToggleBinary
+            ?: return MbCanCommandResult(false, "Toggle unsupported for audio propertyId=$propertyId")
+        if (availability.value !is MbCanAvailability.Available) {
+            return MbCanCommandResult(false, "mbCAN unavailable")
+        }
+        val current = MbCanEngineFacade.canGetAudioParam(propertyId)
+            ?: return MbCanCommandResult(false, "Pre-read failed")
+                .also { MbCanDiagnostics.log("ERROR", "audio toggle pre-read failed propertyId=$propertyId") }
+        val target = when (current) {
+            policy.onValue -> policy.offValue
+            policy.offValue -> policy.onValue
+            else -> policy.unknownFallbackValue
+        }
+        MbCanDiagnostics.log("DEBUG", "audio toggle pre-read current=$current target=$target propertyId=$propertyId")
+        return applyAudioSetAndVerify(spec, target)
+    }
+
+    private suspend fun executeSetAudioViaRegistry(propertyId: Int, value: Int): MbCanCommandResult {
+        MbCanDiagnostics.log("DEBUG", "executeSetAudioProperty propertyId=$propertyId value=$value")
+        val spec = MbCanAudioCommandRegistry.get(propertyId)
+            ?: return MbCanCommandResult(false, "No audio command policy for propertyId=$propertyId")
+        val policy = spec.policy as? MbCanCommandPolicy.SetExact
+            ?: return MbCanCommandResult(false, "Set unsupported for audio propertyId=$propertyId")
+        if (!policy.allowedValues.contains(value)) {
+            return MbCanCommandResult(false, "Value $value is not allowed for audio propertyId=$propertyId")
+        }
+        if (availability.value !is MbCanAvailability.Available) {
+            return MbCanCommandResult(false, "mbCAN unavailable")
+        }
+        return applyAudioSetAndVerify(spec, value)
+    }
+
+    private suspend fun applyAudioSetAndVerify(spec: MbCanAudioCommandSpec, targetValue: Int): MbCanCommandResult {
+        val propertyId = spec.propertyId
+        val setResult = MbCanEngineFacade.canSetAudioParam(propertyId, targetValue)
+            ?: return MbCanCommandResult(false, "Set audio command failed")
+                .also { MbCanDiagnostics.log("ERROR", "audio set failed propertyId=$propertyId value=$targetValue") }
+        MbCanDiagnostics.log("DEBUG", "audio set result=$setResult propertyId=$propertyId value=$targetValue")
+        if (setResult >= 0) {
+            spec.refreshSignal?.let { MbCanJobManager.requestBurst(it) }
+            delay(POST_COMMAND_VERIFY_DELAY_MS)
+            val after = MbCanEngineFacade.canGetAudioParam(propertyId)
+            MbCanDiagnostics.log("DEBUG", "audio set verify propertyId=$propertyId after=$after")
+            spec.refreshSignal?.let { refreshSignal(it) }
+        }
+        return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
+    }
+
     suspend fun refreshSignal(signal: MbCanSignal) {
         when (signal) {
             MbCanSignal.SteeringWheelHeat -> refreshSteeringWheelHeat()
             MbCanSignal.FrontWindscreenHeat -> refreshFrontWindscreenHeat()
             MbCanSignal.HvacDefroster -> refreshHvacDefroster()
+            MbCanSignal.AudioVolumeSpeed -> refreshAudioVolumeSpeed()
             MbCanSignal.FrontLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontLeft)
             MbCanSignal.FrontRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontRight)
             MbCanSignal.RearLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.RearLeft)
@@ -425,6 +545,39 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshAudioVolumeSpeed() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshAudioVolumeSpeed unavailable=$availability")
+                stateEngine.applyVolumeSpeedCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.VOLUME_SPEED)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeVolumeSpeedRaw(raw)
+            }
+            stateEngine.applyVolumeSpeedCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshAudioVolumeSpeed raw=$raw state=${_audioVolumeSpeedState.value}"
+            )
+        }
+    }
+
     private suspend fun refreshSeatSlot(slot: MbCanSeatSlot) {
         withContext(stateApplyDispatcher) {
             val propertyId = slot.propertyId
@@ -487,7 +640,11 @@ object MbCanRepository {
         val needsCfgVehicleListener = mergedSignals.any { signal ->
             signal.subscribeDataTypes.contains(CFG_VEHICLE_DATA_TYPE)
         }
+        val needsCfgAudioListener = mergedSignals.any { signal ->
+            signal.subscribeDataTypes.contains(CFG_AUDIO_DATA_TYPE)
+        }
         MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
+        MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener)
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {

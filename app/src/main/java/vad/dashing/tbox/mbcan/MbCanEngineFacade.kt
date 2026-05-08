@@ -24,6 +24,7 @@ object MbCanEngineFacade {
     private var canGetVehicleParamMethod: Method? = null
     private var canSetVehicleParamMethod: Method? = null
     private var canGetAudioParamMethod: Method? = null
+    private var canSetAudioParamMethod: Method? = null
     private var subscribeMethod: Method? = null
     private var unSubscribeMethod: Method? = null
     private var registerCarSettingsListenerMethod: Method? = null
@@ -32,7 +33,9 @@ object MbCanEngineFacade {
     private var registCmdListenerMethod: Method? = null
     private var unRegistCmdListenerMethod: Method? = null
     private var cfgVehicleDataType: Any? = null
+    private var cfgAudioDataType: Any? = null
     private var vehicleCfgCmdListenerProxy: Any? = null
+    private var audioCfgCmdListenerProxy: Any? = null
     private var initialized = false
 
     val availability: MbCanAvailability
@@ -70,6 +73,8 @@ object MbCanEngineFacade {
                 engineClass.getMethod("canSetVehicleParam", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
             canGetAudioParamMethod =
                 engineClass.getMethod("canGetAudioParam", Int::class.javaPrimitiveType)
+            canSetAudioParamMethod =
+                engineClass.getMethod("canSetAudioParam", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
             subscribeMethod = engineClass.getMethod("subscribeCanDataWithList", ArrayList::class.java)
             unSubscribeMethod = engineClass.getMethod("unSubscribeCanDataWithList", ArrayList::class.java)
             registerCarSettingsListenerMethod =
@@ -83,6 +88,7 @@ object MbCanEngineFacade {
             unRegistCmdListenerMethod = engineClass.getMethod("unRegistCMDListener", Class.forName(DATA_TYPE_CLASS))
             val dataTypeClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
             cfgVehicleDataType = java.lang.Enum.valueOf(dataTypeClass, "eMBCAN_CFG_VEHICLE")
+            cfgAudioDataType = java.lang.Enum.valueOf(dataTypeClass, "eMBCAN_CFG_AUDIO")
             initialized = true
             availabilityRef.set(MbCanAvailability.Available)
         } catch (t: Throwable) {
@@ -106,6 +112,16 @@ object MbCanEngineFacade {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
         return try {
             (canGetAudioParamMethod?.invoke(engineInstance, propertyId) as? Int)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /** [com.mengbo.mbCan.MBCanEngine.canSetAudioParam] — [com.mengbo.mbCan.defines.MBAudioProperty] value ids. */
+    fun canSetAudioParam(propertyId: Int, value: Int): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        return try {
+            (canSetAudioParamMethod?.invoke(engineInstance, propertyId, value) as? Int)
         } catch (_: Throwable) {
             null
         }
@@ -251,6 +267,62 @@ object MbCanEngineFacade {
             }
         }
         vehicleCfgCmdListenerProxy = null
+    }
+
+    /**
+     * Registers [IMBCmdListener] for [eMBCAN_CFG_AUDIO] (same [onCmdChanged] shape as vehicle cfg).
+     * Independent from [syncVehicleCfgCmdListener]; OEM clears listeners per data type on unregister.
+     */
+    @Synchronized
+    fun syncAudioCfgCmdListener(active: Boolean) {
+        if (!active) {
+            unregisterAudioCfgCmdListener()
+            return
+        }
+        if (audioCfgCmdListenerProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val dt = cfgAudioDataType ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            if (method.name == "onCmdChanged" && args != null && args.size >= 4) {
+                val modular = (args[0] as Number).toInt() and 0xFF
+                val rev = (args[1] as Number).toInt() and 0xFF
+                val item = (args[2] as Number).toInt() and 0xFFFF
+                val value = (args[3] as Number).toInt()
+                MbCanDiagnostics.log(
+                    "DEBUG",
+                    "cfgAudioPush modular=$modular rev=$rev item=$item value=$value"
+                )
+                MbCanRepository.scheduleAudioCfgPush(modular, item, value)
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        audioCfgCmdListenerProxy = proxy
+        try {
+            registCmdListenerMethod?.invoke(inst, dt, proxy)
+        } catch (_: Throwable) {
+            audioCfgCmdListenerProxy = null
+        }
+    }
+
+    @Synchronized
+    private fun unregisterAudioCfgCmdListener() {
+        val inst = engineInstance
+        val dt = cfgAudioDataType
+        if (inst != null && audioCfgCmdListenerProxy != null && dt != null) {
+            try {
+                unRegistCmdListenerMethod?.invoke(inst, dt)
+            } catch (_: Throwable) {
+            }
+        }
+        audioCfgCmdListenerProxy = null
     }
 
     /**

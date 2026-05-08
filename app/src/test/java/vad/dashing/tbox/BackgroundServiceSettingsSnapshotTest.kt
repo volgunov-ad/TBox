@@ -32,6 +32,7 @@ class BackgroundServiceSettingsSnapshotTest {
         assertEquals(80, snap.fuelCalibrationMaturityThreshold)
         assertEquals(FuelTypes.DEFAULT_FUEL_ID, snap.fuelPriceFuelId)
         assertEquals(5, snap.splitTripTimeMinutes)
+        assertFalse(snap.wheelPressurePersistAcrossStops)
         assertTrue(snap.floatingDashboards.isEmpty())
     }
 }

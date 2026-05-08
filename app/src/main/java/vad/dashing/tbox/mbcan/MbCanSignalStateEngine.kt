@@ -48,6 +48,7 @@ internal class MbCanSignalStateEngine(
     private val steeringFlow: MutableStateFlow<MbCanBinaryState>,
     private val windshieldHeatFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacDefrosterFlow: MutableStateFlow<MbCanBinaryState>,
+    private val volumeSpeedFlow: MutableStateFlow<MbCanBinaryState>,
     private val frontLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
     private val frontRightSeatFlow: MutableStateFlow<MbCanSeatModeState>,
     private val rearLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
@@ -60,6 +61,8 @@ internal class MbCanSignalStateEngine(
     private var windshieldUnavailableStreak = 0
     private var hvacDefrosterUnknownStreak = 0
     private var hvacDefrosterUnavailableStreak = 0
+    private var volumeSpeedUnknownStreak = 0
+    private var volumeSpeedUnavailableStreak = 0
     private var frontLeftUnknownStreak = 0
     private var frontLeftUnavailableStreak = 0
     private var frontRightUnknownStreak = 0
@@ -155,6 +158,34 @@ internal class MbCanSignalStateEngine(
                 hvacDefrosterUnknownStreak = 0
                 hvacDefrosterUnavailableStreak = 0
                 hvacDefrosterFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyVolumeSpeedCandidate(decoded: MbCanBinaryState) {
+        val published = volumeSpeedFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.AudioVolumeSpeed)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                volumeSpeedUnknownStreak += 1
+                volumeSpeedUnavailableStreak = 0
+                if (volumeSpeedUnknownStreak >= requiredConsecutiveProblems) {
+                    volumeSpeedFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                volumeSpeedUnavailableStreak += 1
+                volumeSpeedUnknownStreak = 0
+                if (volumeSpeedUnavailableStreak >= requiredConsecutiveProblems) {
+                    volumeSpeedFlow.value = decoded
+                }
+            }
+            else -> {
+                volumeSpeedUnknownStreak = 0
+                volumeSpeedUnavailableStreak = 0
+                volumeSpeedFlow.value = decoded
             }
         }
     }
@@ -256,5 +287,8 @@ internal class MbCanSignalStateEngine(
             4 -> MbCanSeatModeState.Heat(3)
             else -> MbCanSeatModeState.Unknown
         }
+
+        /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] — 1 off, 2 on (HU). */
+        fun decodeVolumeSpeedRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
     }
 }

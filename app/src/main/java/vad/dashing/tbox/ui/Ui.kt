@@ -124,8 +124,8 @@ fun TboxApp(
 }
 
 object TabItems {
-    /** Left menu order; tab index 11 is shown immediately after Settings (6). */
-    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 5, 6, 11, 7, 8, 9, 10)
+    /** Left menu order; 11 = main screen settings, 12 = car settings (after 11). */
+    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 5, 6, 11, 12, 7, 8, 9, 10)
 
     @Composable
     fun getItems(): List<TabItem> {
@@ -144,7 +144,11 @@ object TabItems {
             TabItem(
                 stringResource(R.string.tab_main_screen_settings),
                 ImageVector.vectorResource(R.drawable.ic_tab_main_screen_settings)
-            )
+            ),
+            TabItem(
+                stringResource(R.string.tab_car_settings),
+                ImageVector.vectorResource(R.drawable.ic_tab_car_settings)
+            ),
         )
     }
 }
@@ -410,6 +414,7 @@ fun TboxScreen(
                         settingsViewModel = settingsViewModel,
                         onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
                     )
+                    12 -> CarSettingsTab()
                     else -> ModemTab(viewModel, onServiceCommand)
                 }
             }
