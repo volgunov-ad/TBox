@@ -2025,6 +2025,10 @@ class BackgroundService : Service() {
             wheel2 = cur.wheel2 ?: saved.wheel2,
             wheel3 = cur.wheel3 ?: saved.wheel3,
             wheel4 = cur.wheel4 ?: saved.wheel4,
+            if (cur.wheel1 == null) SystemClock.elapsedRealtime() else cur.wheel1LastTimeNotNull,
+            if (cur.wheel2 == null) SystemClock.elapsedRealtime() else cur.wheel2LastTimeNotNull,
+            if (cur.wheel3 == null) SystemClock.elapsedRealtime() else cur.wheel3LastTimeNotNull,
+            if (cur.wheel4 == null) SystemClock.elapsedRealtime() else cur.wheel4LastTimeNotNull,
         )
         if (merged != cur) {
             CanDataRepository.updateWheelsPressure(merged)

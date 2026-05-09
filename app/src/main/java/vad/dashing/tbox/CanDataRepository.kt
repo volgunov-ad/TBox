@@ -14,6 +14,10 @@ data class Wheels(
     val wheel2: Float? = null,
     val wheel3: Float? = null,
     val wheel4: Float? = null,
+    val wheel1LastTimeNotNull: Long? = null,
+    val wheel2LastTimeNotNull: Long? = null,
+    val wheel3LastTimeNotNull: Long? = null,
+    val wheel4LastTimeNotNull: Long? = null,
 )
 
 data class CanFrame(

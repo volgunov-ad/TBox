@@ -1,5 +1,6 @@
 package vad.dashing.tbox.utils
 
+import android.os.SystemClock
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
@@ -19,6 +20,8 @@ object CanFramesProcess {
     private val canIdStringCache = mutableMapOf<Int, String>()
 
     private var carType: String = "1.5_6MT"
+
+    private const val PRESSURE_NULL_DEBOUNCE = 120_000L
 
     private const val FRAME_SIZE = 17
     private const val CAN_ID_OFFSET = 4
@@ -257,29 +260,69 @@ object CanFramesProcess {
                     val pressure1 = if (b4 != 0xFF.toByte()) {
                         unsignedByte(b4).toFloat() / 36f
                     } else {
-                        null
+                        if (SystemClock.elapsedRealtime() - (CanDataRepository.wheelsPressure.value.wheel1LastTimeNotNull ?: 0L) > PRESSURE_NULL_DEBOUNCE) {
+                            null
+                        } else {
+                            CanDataRepository.wheelsPressure.value.wheel1
+                        }
+                    }
+                    val wheel1LastTimeNotNull = if (b4 != 0xFF.toByte()) {
+                        SystemClock.elapsedRealtime()
+                    } else {
+                        CanDataRepository.wheelsPressure.value.wheel1LastTimeNotNull
                     }
                     val pressure2 = if (b5 != 0xFF.toByte()) {
                         unsignedByte(b5).toFloat() / 36f
                     } else {
-                        null
+                        if (SystemClock.elapsedRealtime() - (CanDataRepository.wheelsPressure.value.wheel2LastTimeNotNull ?: 0L) > PRESSURE_NULL_DEBOUNCE) {
+                            null
+                        } else {
+                            CanDataRepository.wheelsPressure.value.wheel2
+                        }
+                    }
+                    val wheel2LastTimeNotNull = if (b5 != 0xFF.toByte()) {
+                        SystemClock.elapsedRealtime()
+                    } else {
+                        CanDataRepository.wheelsPressure.value.wheel2LastTimeNotNull
                     }
                     val pressure3 = if (b6 != 0xFF.toByte()) {
                         unsignedByte(b6).toFloat() / 36f
                     } else {
-                        null
+                        if (SystemClock.elapsedRealtime() - (CanDataRepository.wheelsPressure.value.wheel3LastTimeNotNull ?: 0L) > PRESSURE_NULL_DEBOUNCE) {
+                            null
+                        } else {
+                            CanDataRepository.wheelsPressure.value.wheel3
+                        }
+                    }
+                    val wheel3LastTimeNotNull = if (b6 != 0xFF.toByte()) {
+                        SystemClock.elapsedRealtime()
+                    } else {
+                        CanDataRepository.wheelsPressure.value.wheel3LastTimeNotNull
                     }
                     val pressure4 = if (b7 != 0xFF.toByte()) {
                         unsignedByte(b7).toFloat() / 36f
                     } else {
-                        null
+                        if (SystemClock.elapsedRealtime() - (CanDataRepository.wheelsPressure.value.wheel4LastTimeNotNull ?: 0L) > PRESSURE_NULL_DEBOUNCE) {
+                            null
+                        } else {
+                            CanDataRepository.wheelsPressure.value.wheel4
+                        }
+                    }
+                    val wheel4LastTimeNotNull = if (b7 != 0xFF.toByte()) {
+                        SystemClock.elapsedRealtime()
+                    } else {
+                        CanDataRepository.wheelsPressure.value.wheel4LastTimeNotNull
                     }
                     CanDataRepository.updateWheelsPressure(
                         Wheels(
                             pressure1,
                             pressure2,
                             pressure3,
-                            pressure4
+                            pressure4,
+                            wheel1LastTimeNotNull,
+                            wheel2LastTimeNotNull,
+                            wheel3LastTimeNotNull,
+                            wheel4LastTimeNotNull,
                         )
                     )
                 } else if (canId == CAN_ID_CLIMATE_SET) {
