@@ -223,7 +223,7 @@ object CanFramesProcess {
                     val engineTemperature = unsignedByte(b2).toFloat() * 0.75f - 48f
                     CanDataRepository.updateEngineTemperature(engineTemperature)
 
-                    val param5 = unsignedByte(b4).toFloat() / 18f
+                    val param5 = unsignedByte(b4).toFloat() / 19f
                     CanDataRepository.updateParam5(param5)
 
                 } else if (canId == CAN_ID_SPEED_ACCURATE) {
