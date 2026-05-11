@@ -519,7 +519,7 @@
     <string name="refuels_price_source">АЗС</string>
     <string name="refuels_cost">Стоимость</string>
     <string name="refuels_calibration_train">Обучение</string>
-    <string name="refuels_calibration_section_title">Калибровка уровня топлива</string>
+    <string name="refuels_calibration_section_title">Настройки заправок</string>
     <string name="refuels_calibration_tank_hint">Смена объёма сбрасывает калибровку</string>
     <string name="refuels_calibration_zones_title">Число зон калибровки</string>
     <string name="refuels_calibration_zones_hint">Смена числа зон сбрасывает калибровку</string>

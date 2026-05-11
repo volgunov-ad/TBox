@@ -97,6 +97,7 @@ fun RefuelsTab(
 ) {
     val refuels by appDataViewModel.refuels.collectAsStateWithLifecycle()
     val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
+    val fuelPriceFuelId by settingsViewModel.fuelPriceFuelId.collectAsStateWithLifecycle()
     val fuelCalibrationJson by settingsViewModel.fuelCalibrationJson.collectAsStateWithLifecycle()
     val fuelCalibrationZoneCount by settingsViewModel.fuelCalibrationZoneCount.collectAsStateWithLifecycle()
     val fuelCalibrationMaturityThreshold by settingsViewModel.fuelCalibrationMaturityThreshold.collectAsStateWithLifecycle()
@@ -285,6 +286,14 @@ fun RefuelsTab(
                         .verticalScroll(calibrationScrollState),
                 ) {
                 SettingsTitle(stringResource(R.string.refuels_calibration_section_title))
+                SettingDropdownGeneric(
+                    selectedValue = FuelTypes.optionFor(fuelPriceFuelId),
+                    onValueChange = { option -> settingsViewModel.saveFuelPriceFuelId(option.id) },
+                    text = stringResource(R.string.settings_fuel_price_fuel_type_title),
+                    description = "",
+                    enabled = true,
+                    options = FuelTypes.options,
+                )
                 CalibrationIntCommitField(
                     title = stringResource(R.string.settings_fuel_tank_liters_title),
                     description = stringResource(R.string.refuels_calibration_tank_hint),
@@ -680,7 +689,7 @@ private fun parseSettingsInt(raw: String): Int? {
 }
 
 @Composable
-private fun CalibrationIntCommitField(
+internal fun CalibrationIntCommitField(
     title: String,
     description: String,
     draft: String,

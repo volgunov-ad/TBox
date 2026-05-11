@@ -387,6 +387,7 @@ fun TboxScreen(
                     6 -> SettingsTab(
                         viewModel,
                         settingsViewModel,
+                        appDataViewModel,
                         onTboxRestart,
                         onMockLocationSettingChanged,
                         onServiceCommand,
@@ -453,6 +454,7 @@ fun ModemModeSelector(
 fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
+    appDataViewModel: AppDataViewModel,
     onTboxRestartClick: () -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -463,6 +465,7 @@ fun SettingsTab(
     SettingsTabContent(
         viewModel = viewModel,
         settingsViewModel = settingsViewModel,
+        appDataViewModel = appDataViewModel,
         onTboxRestartClick = onTboxRestartClick,
         onMockLocationSettingChanged = onMockLocationSettingChanged,
         onServiceCommand = onServiceCommand,

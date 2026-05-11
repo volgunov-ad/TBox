@@ -520,7 +520,7 @@
     <string name="refuels_price_source">Station</string>
     <string name="refuels_cost">Cost</string>
     <string name="refuels_calibration_train">Train</string>
-    <string name="refuels_calibration_section_title">Fuel level calibration</string>
+    <string name="refuels_calibration_section_title">Refuel settings</string>
     <string name="refuels_calibration_tank_hint">Changing tank volume clears calibration</string>
     <string name="refuels_calibration_zones_title">Calibration zones</string>
     <string name="refuels_calibration_zones_hint">Changing calibration zones clears calibration</string>

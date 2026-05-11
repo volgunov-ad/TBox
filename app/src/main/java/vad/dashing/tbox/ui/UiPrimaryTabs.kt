@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -36,8 +37,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
-import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -232,6 +233,7 @@ fun ModemModeSelectorContent(
 fun SettingsTabContent(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
+    appDataViewModel: AppDataViewModel,
     onTboxRestartClick: () -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -272,7 +274,11 @@ fun SettingsTabContent(
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
 
     val canDataSaveCount by settingsViewModel.canDataSaveCount.collectAsStateWithLifecycle()
-    val fuelPriceFuelId by settingsViewModel.fuelPriceFuelId.collectAsStateWithLifecycle()
+    val fuelTankLiters by settingsViewModel.fuelTankLiters.collectAsStateWithLifecycle()
+    var miscTankLitersDraft by remember { mutableStateOf(fuelTankLiters.toString()) }
+    LaunchedEffect(fuelTankLiters) {
+        miscTankLitersDraft = fuelTankLiters.toString()
+    }
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
@@ -327,6 +333,7 @@ fun SettingsTabContent(
             isAutoRestartEnabled
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_prevent_reboot_title))
         SettingSwitch(
             isAutoSuspendTboxAppEnabled,
@@ -418,6 +425,7 @@ fun SettingsTabContent(
             true
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_floating_panels_title))
         if (hasFloatingPanels) {
             FloatingDashboardPanelEditor(
@@ -509,6 +517,7 @@ fun SettingsTabContent(
             enabled = hasFloatingPanels
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
@@ -529,6 +538,7 @@ fun SettingsTabContent(
             isGetLocDataEnabled
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_dashboard_screen_title))
         SettingSwitch(
             dashboardChart,
@@ -560,6 +570,7 @@ fun SettingsTabContent(
             SettingsManager.MAIN_TAB_DASHBOARD_GRID_OPTIONS
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
         SettingSwitch(
             isGetCanFrameEnabled,
@@ -580,14 +591,19 @@ fun SettingsTabContent(
             true
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_misc_title))
-        SettingDropdownGeneric(
-            FuelTypes.optionFor(fuelPriceFuelId),
-            { option -> settingsViewModel.saveFuelPriceFuelId(option.id) },
-            stringResource(R.string.settings_fuel_price_fuel_type_title),
-            "",
-            true,
-            FuelTypes.options
+        CalibrationIntCommitField(
+            title = stringResource(R.string.settings_fuel_tank_liters_title),
+            description = stringResource(R.string.refuels_calibration_tank_hint),
+            draft = miscTankLitersDraft,
+            onDraftChange = { miscTankLitersDraft = it },
+            savedValue = fuelTankLiters,
+            minValue = 1,
+            maxValue = 500,
+            onCommit = { value ->
+                appDataViewModel.applyFuelTankChangeWithCalibrationReset(value)
+            },
         )
         SettingInt(
             splitTripTimeMinutes,
@@ -676,6 +692,7 @@ fun SettingsTabContent(
             }
         }
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_backup_title))
         Text(
             text = stringResource(R.string.settings_backup_desc),
