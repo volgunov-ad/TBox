@@ -3,7 +3,6 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -98,7 +97,7 @@ private fun WidgetColorPresetSlotBox(
                 shape = shape,
             )
             .background(Color(colorValue))
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickableWithSound(enabled = enabled, onClick = onClick)
     )
 }
 
@@ -391,7 +390,7 @@ private fun ColorSwatchBox(
     onClick: (() -> Unit)?
 ) {
     val clickableModifier = if (onClick != null) {
-        Modifier.clickable(enabled = enabled, onClick = onClick)
+        Modifier.clickableWithSound(enabled = enabled, onClick = onClick)
     } else {
         Modifier
     }

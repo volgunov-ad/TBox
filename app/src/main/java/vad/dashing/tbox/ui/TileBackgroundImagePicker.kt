@@ -105,7 +105,7 @@ internal fun TileBackgroundImageSettingsSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             OutlinedButton(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     pendingPickDark = darkSegment
                     pickImage.launch("image/*")
                 },
@@ -120,7 +120,7 @@ internal fun TileBackgroundImageSettingsSection(
                 )
             }
             OutlinedButton(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     settingsViewModel.setTileBackgroundImageFromUri(
                         panelStorageId = panelStorageId,
                         widgetIndex = widgetIndex,

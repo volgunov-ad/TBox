@@ -35,6 +35,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -181,7 +182,7 @@ fun ModeButton(
     }
 
     Button(
-        onClick = onClick,
+        onClick = rememberWrappedOnClick(onClick),
         modifier = modifier,
         enabled = enabled,
         colors = ButtonDefaults.buttonColors(
@@ -226,7 +227,7 @@ fun TabMenuItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickableWithSound(onClick = onClick)
             .background(backgroundColor)
             .padding(
                 vertical = 16.dp,
@@ -331,9 +332,7 @@ fun SettingSwitch(
         Switch(
             checked = isChecked,
             enabled = enabled,
-            onCheckedChange = { enabled ->
-                onCheckedChange(enabled)
-            },
+            onCheckedChange = rememberWrappedOnCheckedChange(onCheckedChange),
             modifier = Modifier
                 .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
         )
@@ -386,7 +385,7 @@ fun SettingSwitchWithAction(
         Switch(
             checked = isChecked,
             enabled = enabled,
-            onCheckedChange = { onCheckedChange(it) },
+            onCheckedChange = rememberWrappedOnCheckedChange(onCheckedChange),
             modifier = Modifier
                 .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
         )
@@ -415,7 +414,7 @@ fun SettingSwitchWithAction(
         }
 
         OutlinedButton(
-            onClick = onActionClick,
+            onClick = rememberWrappedOnClick(onActionClick),
             enabled = actionEnabled,
             modifier = Modifier
                 .padding(start = 8.dp)
@@ -504,7 +503,7 @@ fun <T> GenericDropdownSelector(
 
     Box(modifier = Modifier.wrapContentSize()) {
         OutlinedButton(
-            onClick = { expanded = true },
+            onClick = rememberWrappedOnClick { expanded = true },
             enabled = enabled,
             modifier = Modifier.width(width)
         ) {
@@ -533,23 +532,26 @@ fun <T> GenericDropdownSelector(
             )
         ) {
             options.forEach { option ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = option.toString(),
-                            fontSize = itemFontSize,
-                            color = if (option == selectedValue) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            }
-                        )
-                    },
-                    onClick = {
+                key(option) {
+                    val menuItemClick = rememberWrappedOnClick {
                         onValueChange(option)
                         expanded = false
                     }
-                )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = option.toString(),
+                                fontSize = itemFontSize,
+                                color = if (option == selectedValue) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                        },
+                        onClick = menuItemClick
+                    )
+                }
             }
         }
     }
@@ -822,7 +824,7 @@ fun FloatingDashboardPanelEditor(
                     textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
                 )
                 Button(
-                    onClick = { onRenamePanel(effectiveId, trimmedDraft) },
+                    onClick = rememberWrappedOnClick { onRenamePanel(effectiveId, trimmedDraft) },
                     enabled = enabled && nameDirty
                 ) {
                     Text(
@@ -831,11 +833,11 @@ fun FloatingDashboardPanelEditor(
                     )
                 }
             }
-            Button(onClick = onAddPanel, enabled = enabled) {
+            Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
                 Text(stringResource(R.string.action_add), fontSize = 20.sp)
             }
             Button(
-                onClick = { onDeletePanel(effectiveId) },
+                onClick = rememberWrappedOnClick { onDeletePanel(effectiveId) },
                 enabled = enabled && deleteInProgressPanelId != effectiveId
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 20.sp)
@@ -904,7 +906,7 @@ fun MainScreenPanelEditor(
                     textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
                 )
                 Button(
-                    onClick = { onRenamePanel(effectiveId, trimmedDraft) },
+                    onClick = rememberWrappedOnClick { onRenamePanel(effectiveId, trimmedDraft) },
                     enabled = enabled && nameDirty
                 ) {
                     Text(
@@ -913,11 +915,11 @@ fun MainScreenPanelEditor(
                     )
                 }
             }
-            Button(onClick = onAddPanel, enabled = enabled) {
+            Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
                 Text(stringResource(R.string.action_add), fontSize = 20.sp)
             }
             Button(
-                onClick = { onDeletePanel(effectiveId) },
+                onClick = rememberWrappedOnClick { onDeletePanel(effectiveId) },
                 enabled = enabled && deleteInProgressPanelId != effectiveId
             ) {
                 Text(stringResource(R.string.action_delete), fontSize = 20.sp)
@@ -1219,7 +1221,7 @@ fun TboxApplicationControls(
         )
 
         Button(
-            onClick = {
+            onClick = rememberWrappedOnClick {
                 if (commandButtonsEnabled) {
                     commandButtonsEnabled = false
                     onServiceCommand(
@@ -1239,7 +1241,7 @@ fun TboxApplicationControls(
             )
         }
         Button(
-            onClick = {
+            onClick = rememberWrappedOnClick {
                 if (commandButtonsEnabled) {
                     commandButtonsEnabled = false
                     onServiceCommand(
@@ -1259,7 +1261,7 @@ fun TboxApplicationControls(
             )
         }
         Button(
-            onClick = {
+            onClick = rememberWrappedOnClick {
                 if (commandButtonsEnabled) {
                     commandButtonsEnabled = false
                     onServiceCommand(

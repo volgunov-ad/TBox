@@ -180,6 +180,11 @@ data class BackgroundServiceSettingsSnapshot(
     val fuelCalibrationMaturityThreshold: Int,
     val fuelPriceFuelId: Int,
     val splitTripTimeMinutes: Int,
+    /**
+     * When true, [BackgroundService] saves last non-zero wheel pressures when engine RPM drops to 0
+     * and restores them from app data when the service starts (if CAN still reports null/zero).
+     */
+    val wheelPressurePersistAcrossStops: Boolean,
 )
 
 class SettingsManager(private val context: Context) {
@@ -284,6 +289,9 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}fuel_calibration_maturity_threshold_l")
         private val FUEL_PRICE_FUEL_ID_KEY = intPreferencesKey("${KEY_PREFIX}fuel_price_fuel_id")
         private val SPLIT_TRIP_TIME_MINUTES_KEY = intPreferencesKey("${KEY_PREFIX}split_trip_time_minutes")
+        private val WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}wheel_pressure_persist_across_stops")
+        private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
 
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
@@ -625,6 +633,14 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[SPLIT_TRIP_TIME_MINUTES_KEY] ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES }
         .distinctUntilChanged()
 
+    val wheelPressurePersistAcrossStopsFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val uiClickSoundsFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[UI_CLICK_SOUNDS_KEY] ?: false }
+        .distinctUntilChanged()
+
     /**
      * Single DataStore read for all keys backing [BackgroundService] setting [kotlinx.coroutines.flow.StateFlow]s.
      */
@@ -660,6 +676,7 @@ class SettingsManager(private val context: Context) {
             fuelPriceFuelId = preferences[FUEL_PRICE_FUEL_ID_KEY] ?: FuelTypes.DEFAULT_FUEL_ID,
             splitTripTimeMinutes = preferences[SPLIT_TRIP_TIME_MINUTES_KEY]
                 ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES,
+            wheelPressurePersistAcrossStops = preferences[WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY] ?: false,
         )
     }
 
@@ -1301,6 +1318,18 @@ class SettingsManager(private val context: Context) {
     suspend fun saveSplitTripTimeMinutes(minutes: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[SPLIT_TRIP_TIME_MINUTES_KEY] = minutes.coerceIn(1, 100000)
+        }
+    }
+
+    suspend fun saveWheelPressurePersistAcrossStopsSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY] = enabled
+        }
+    }
+
+    suspend fun saveUiClickSoundsSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[UI_CLICK_SOUNDS_KEY] = enabled
         }
     }
 

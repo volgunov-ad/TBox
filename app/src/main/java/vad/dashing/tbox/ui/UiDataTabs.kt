@@ -184,21 +184,17 @@ fun CarDataTabContent(
             item { CarDataStatusRow(context, "fuelLevelPercentage", valueToString(fuelLevelPercentage)) }
             item { CarDataStatusRow(context, "fuelLevelPercentageFiltered", valueToString(fuelLevelPercentageFiltered)) }
             item {
-                val litersDisplay = fuelLevelCalibratedLiters
-                    ?: fuelLevelPercentageFiltered?.toFloat()?.times(fuelTankLiters.toFloat())?.div(100f)
                 CarDataStatusRow(
                     context,
                     "fuelLevelLiters",
-                    valueToString(litersDisplay, 2)
+                    valueToString(fuelLevelCalibratedLiters, 2)
                 )
             }
             item {
-                val litersDisplay = fuelLevelCalibratedLitersActual
-                    ?: fuelLevelPercentageFiltered?.toFloat()?.times(fuelTankLiters.toFloat())?.div(100f)
                 CarDataStatusRow(
                     context,
                     "fuelLevelLitersActual",
-                    valueToString(litersDisplay, 2)
+                    valueToString(fuelLevelCalibratedLitersActual, 2)
                 )
             }
             item { CarDataStatusRow(context, "currentFuelConsumption", valueToString(currentFuelConsumption, 1)) }
@@ -324,7 +320,7 @@ fun LogsTabContent(
                 trailingIcon = {
                     if (searchText.isNotEmpty()) {
                         IconButton(
-                            onClick = { LogsSessionState.setMessageFilter("") }
+                            onClick = rememberWrappedOnClick { LogsSessionState.setMessageFilter("") }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
@@ -361,7 +357,7 @@ fun LogsTabContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
-                onClick = { showSaveDialog = true },
+                onClick = rememberWrappedOnClick { showSaveDialog = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
@@ -381,7 +377,7 @@ fun LogsTabContent(
                     },
                     confirmButton = {
                         Button(
-                            onClick = {
+                            onClick = rememberWrappedOnClick {
                                 val csvLogEntries = mutableListOf<String>()
                                 logs.forEach { logEntry ->
                                     csvLogEntries.add(logEntry)
@@ -395,7 +391,7 @@ fun LogsTabContent(
                     },
                     dismissButton = {
                         OutlinedButton(
-                            onClick = { showSaveDialog = false }
+                            onClick = rememberWrappedOnClick { showSaveDialog = false }
                         ) {
                             AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                         }
@@ -456,7 +452,7 @@ fun CanTabContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
-                onClick = { showSaveDialog = true },
+                onClick = rememberWrappedOnClick { showSaveDialog = true },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
@@ -476,7 +472,7 @@ fun CanTabContent(
                     },
                     confirmButton = {
                         Button(
-                            onClick = {
+                            onClick = rememberWrappedOnClick {
                                 val csvCanEntries = mutableListOf<String>()
                                 sortedCanEntries.forEach { (canId, frames) ->
                                     frames.forEach { frame ->
@@ -499,7 +495,7 @@ fun CanTabContent(
                     },
                     dismissButton = {
                         OutlinedButton(
-                            onClick = { showSaveDialog = false }
+                            onClick = rememberWrappedOnClick { showSaveDialog = false }
                         ) {
                             AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                         }
@@ -581,7 +577,7 @@ fun ATcmdTabContent(
                 trailingIcon = {
                     if (atCmdText.isNotEmpty()) {
                         IconButton(
-                            onClick = { atCmdText = "" }
+                            onClick = rememberWrappedOnClick { atCmdText = "" }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
@@ -609,7 +605,7 @@ fun ATcmdTabContent(
             )
             Box(modifier = Modifier.wrapContentSize()) {
                 Button(
-                    onClick = {
+                    onClick = rememberWrappedOnClick {
                         if (atCmdText != "") {
                             onServiceCommand(
                                 BackgroundService.ACTION_SEND_AT,
@@ -631,7 +627,7 @@ fun ATcmdTabContent(
             }
             Box(modifier = Modifier.wrapContentSize()) {
                 Button(
-                    onClick = {
+                    onClick = rememberWrappedOnClick {
                         onServiceCommand(
                             BackgroundService.ACTION_READ_ALL_SMS,
                             "",

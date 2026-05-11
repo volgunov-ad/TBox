@@ -97,6 +97,7 @@ object MbCanCatalog {
         MbCanControlParam("ADAS", "LKA sensitivity", "eVEHICLE_PROPERTY_LAS_SENSITIVITY_LEVEL", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "EQ mode", "eAUDIO_PROPERTY_EQMODE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "Media volume key mode", "eAUDIO_PROPERTY_VOLUME_KEY", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "Volume vs speed", "eAUDIO_PROPERTY_VOLUME_SPEED", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "AVM language", "eAVM_SET_LANG", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("System", "System reboot", "eSYSTEM_REBOOT", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("System", "ICM brightness mode", "eVEHICLE_SET_ICM_BRIGHTNESS_MODE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -117,6 +118,34 @@ object MbCanKnownVehiclePropertyId {
     const val REAR_LEFT_SEAT_HEAT_SWITCH = 318
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_RR_HEATVENTSW] — rear heat only (values 1–4). */
     const val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
+}
+
+/** [com.mengbo.mbCan.defines.MBAudioProperty] integer ids for [com.mengbo.mbCan.MBCanEngine.canGetAudioParam]. */
+object MbCanKnownAudioPropertyId {
+    /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] */
+    const val VOLUME_SPEED = 13
+}
+
+data class MbCanAudioCommandSpec(
+    val propertyId: Int,
+    val policy: MbCanCommandPolicy,
+    val refreshSignal: MbCanSignal? = null,
+)
+
+object MbCanAudioCommandRegistry {
+    private val specsByPropertyId: Map<Int, MbCanAudioCommandSpec> = listOf(
+        MbCanAudioCommandSpec(
+            propertyId = MbCanKnownAudioPropertyId.VOLUME_SPEED,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2,
+            ),
+            refreshSignal = MbCanSignal.AudioVolumeSpeed,
+        ),
+    ).associateBy { it.propertyId }
+
+    fun get(propertyId: Int): MbCanAudioCommandSpec? = specsByPropertyId[propertyId]
 }
 
 object MbCanCommandRegistry {
