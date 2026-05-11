@@ -291,6 +291,7 @@ class SettingsManager(private val context: Context) {
         private val SPLIT_TRIP_TIME_MINUTES_KEY = intPreferencesKey("${KEY_PREFIX}split_trip_time_minutes")
         private val WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pressure_persist_across_stops")
+        private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
 
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
@@ -634,6 +635,10 @@ class SettingsManager(private val context: Context) {
 
     val wheelPressurePersistAcrossStopsFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val uiClickSoundsFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[UI_CLICK_SOUNDS_KEY] ?: false }
         .distinctUntilChanged()
 
     /**
@@ -1319,6 +1324,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveWheelPressurePersistAcrossStopsSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY] = enabled
+        }
+    }
+
+    suspend fun saveUiClickSoundsSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[UI_CLICK_SOUNDS_KEY] = enabled
         }
     }
 

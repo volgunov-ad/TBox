@@ -269,7 +269,7 @@ fun MainScreenSettingsTab(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             OutlinedButton(
-                onClick = { openManageAllFilesSettings() },
+                onClick = rememberWrappedOnClick { openManageAllFilesSettings() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
@@ -309,13 +309,13 @@ fun MainScreenSettingsTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { launchLightWallpaperPicker() },
+                onClick = rememberWrappedOnClick { launchLightWallpaperPicker() },
                 modifier = Modifier.weight(1f)
             ) {
                 Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), fontSize = 22.sp)
             }
             OutlinedButton(
-                onClick = { settingsViewModel.saveMainScreenWallpaperLightFolderUri(null) },
+                onClick = rememberWrappedOnClick { settingsViewModel.saveMainScreenWallpaperLightFolderUri(null) },
                 enabled = mainScreenWallpaperLightFolderUri.isNotBlank(),
                 modifier = Modifier.weight(1f)
             ) {
@@ -333,7 +333,7 @@ fun MainScreenSettingsTab(
                 singleLine = true,
             )
             OutlinedButton(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     if (normalizeFilesystemWallpaperFolderPath(lightFolderPathInput) != null) {
                         settingsViewModel.applyMainScreenWallpaperFilesystemFolderPath(
                             lightFolderPathInput,
@@ -378,13 +378,13 @@ fun MainScreenSettingsTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = { launchDarkWallpaperPicker() },
+                onClick = rememberWrappedOnClick { launchDarkWallpaperPicker() },
                 modifier = Modifier.weight(1f)
             ) {
                 Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), fontSize = 22.sp)
             }
             OutlinedButton(
-                onClick = { settingsViewModel.saveMainScreenWallpaperDarkFolderUri(null) },
+                onClick = rememberWrappedOnClick { settingsViewModel.saveMainScreenWallpaperDarkFolderUri(null) },
                 enabled = mainScreenWallpaperDarkFolderUri.isNotBlank(),
                 modifier = Modifier.weight(1f)
             ) {
@@ -402,7 +402,7 @@ fun MainScreenSettingsTab(
                 singleLine = true,
             )
             OutlinedButton(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     if (normalizeFilesystemWallpaperFolderPath(darkFolderPathInput) != null) {
                         settingsViewModel.applyMainScreenWallpaperFilesystemFolderPath(
                             darkFolderPathInput,
@@ -462,7 +462,7 @@ fun MainScreenSettingsTab(
             )
         }
         OutlinedButton(
-            onClick = {
+            onClick = rememberWrappedOnClick {
                 settingsViewModel.saveMainScreenCanvasBackgroundLight(LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT)
                 settingsViewModel.saveMainScreenCanvasBackgroundDark(DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT)
             },
@@ -541,7 +541,7 @@ fun MainScreenSettingsTab(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     settingsViewModel.saveMainScreenCornerButtonSizeDp(32)
                     settingsViewModel.saveMainScreenCornerButtonBackgroundLight(0x00000000)
                     settingsViewModel.saveMainScreenCornerButtonBackgroundDark(0x00000000)
@@ -584,7 +584,7 @@ fun MainScreenSettingsTab(
             )
         } else {
             Button(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     settingsViewModel.addMainScreenDashboard(newMainPanelDefaultName)
                 },
                 modifier = Modifier.padding(bottom = 8.dp)

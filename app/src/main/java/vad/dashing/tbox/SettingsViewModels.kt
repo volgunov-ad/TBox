@@ -756,6 +756,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val uiClickSoundsEnabled = settingsManager.uiClickSoundsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     init {
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
@@ -1635,6 +1642,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveWheelPressurePersistAcrossStops(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveWheelPressurePersistAcrossStopsSetting(enabled)
+        }
+    }
+
+    fun saveUiClickSoundsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUiClickSoundsSetting(enabled)
         }
     }
 }

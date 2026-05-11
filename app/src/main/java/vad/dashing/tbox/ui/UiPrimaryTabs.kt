@@ -3,7 +3,6 @@ package vad.dashing.tbox.ui
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -276,6 +275,7 @@ fun SettingsTabContent(
     val fuelPriceFuelId by settingsViewModel.fuelPriceFuelId.collectAsStateWithLifecycle()
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
+    val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
@@ -440,7 +440,7 @@ fun SettingsTabContent(
             )
         } else {
             Button(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
                 },
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -605,6 +605,13 @@ fun SettingsTabContent(
             true
         )
         SettingSwitch(
+            uiClickSoundsEnabled,
+            { enabled -> settingsViewModel.saveUiClickSoundsEnabled(enabled) },
+            stringResource(R.string.settings_ui_click_sounds_title),
+            stringResource(R.string.settings_ui_click_sounds_desc),
+            true
+        )
+        SettingSwitch(
             isExpertModeEnabled,
             { enabled ->
                 settingsViewModel.saveExpertModeSetting(enabled)
@@ -663,7 +670,7 @@ fun SettingsTabContent(
                     fontSize = 20.sp,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .clickable { showLocationRequirementsDialog(context) }
+                        .clickableWithSound { showLocationRequirementsDialog(context) }
                         .padding(top = 4.dp)
                 )
             }
@@ -682,7 +689,7 @@ fun SettingsTabContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
-                onClick = { showExportBackupDialog = true },
+                onClick = rememberWrappedOnClick { showExportBackupDialog = true },
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
@@ -693,7 +700,7 @@ fun SettingsTabContent(
                 )
             }
             Button(
-                onClick = { showImportBackupDialog = true },
+                onClick = rememberWrappedOnClick { showImportBackupDialog = true },
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
@@ -705,7 +712,7 @@ fun SettingsTabContent(
             }
         }
         Button(
-            onClick = { showExportBackupNoTripsDialog = true },
+            onClick = rememberWrappedOnClick { showExportBackupNoTripsDialog = true },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp)
@@ -725,7 +732,7 @@ fun SettingsTabContent(
                 text = { AppAlertDialogText(stringResource(R.string.dialog_save_backup_downloads)) },
                 confirmButton = {
                     Button(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             onExportSettingsBackup()
                             showExportBackupDialog = false
                         }
@@ -734,7 +741,7 @@ fun SettingsTabContent(
                     }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { showExportBackupDialog = false }) {
+                    OutlinedButton(onClick = rememberWrappedOnClick { showExportBackupDialog = false }) {
                         AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
@@ -748,7 +755,7 @@ fun SettingsTabContent(
                 text = { AppAlertDialogText(stringResource(R.string.dialog_save_backup_downloads_no_trips)) },
                 confirmButton = {
                     Button(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             onExportSettingsBackupWithoutTrips()
                             showExportBackupNoTripsDialog = false
                         }
@@ -757,7 +764,7 @@ fun SettingsTabContent(
                     }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { showExportBackupNoTripsDialog = false }) {
+                    OutlinedButton(onClick = rememberWrappedOnClick { showExportBackupNoTripsDialog = false }) {
                         AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
@@ -771,7 +778,7 @@ fun SettingsTabContent(
                 text = { AppAlertDialogText(stringResource(R.string.dialog_backup_import_message)) },
                 confirmButton = {
                     Button(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             onImportSettingsBackup()
                             showImportBackupDialog = false
                         }
@@ -780,7 +787,7 @@ fun SettingsTabContent(
                     }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { showImportBackupDialog = false }) {
+                    OutlinedButton(onClick = rememberWrappedOnClick { showImportBackupDialog = false }) {
                         AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
@@ -795,7 +802,7 @@ fun SettingsTabContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     if (restartButtonEnabled) {
                         restartButtonEnabled = false
                         onTboxRestartClick()
@@ -1013,7 +1020,7 @@ fun InfoTabContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             if (updateVersionButtonEnabled) {
                                 updateVersionButtonEnabled = false
                                 onServiceCommand(

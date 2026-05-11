@@ -4,7 +4,6 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.view.ViewGroup
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -134,7 +133,7 @@ fun ExternalAppWidgetItem(
     }
 
     val clickModifier = if (!isEditMode && handleClick) {
-        Modifier.clickable(onClick = onClick)
+        Modifier.clickableWithSound(onClick = onClick)
     } else {
         Modifier
     }

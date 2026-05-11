@@ -460,6 +460,8 @@
     <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
     <string name="settings_wheel_pressure_persist_title">Запоминание давления в шинах</string>
     <string name="settings_wheel_pressure_persist_desc">Сохранять при оборотах двигателя 0 и восстанавливать при запуске службы</string>
+    <string name="settings_ui_click_sounds_title">Звуки нажатий</string>
+    <string name="settings_ui_click_sounds_desc">Системный звук при нажатиях в интерфейсе, переключателях и виджетах панелей</string>
 
     <string name="trips_delete">Удалить поездку</string>
     <string name="trips_delete_confirm_title">Удалить поездку?</string>

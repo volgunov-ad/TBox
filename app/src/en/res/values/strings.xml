@@ -461,6 +461,8 @@
     <string name="settings_split_trip_time_title">Trip split time, min</string>
     <string name="settings_wheel_pressure_persist_title">Remember tire pressures</string>
     <string name="settings_wheel_pressure_persist_desc">Save when engine RPM is 0 and restore when the service starts</string>
+    <string name="settings_ui_click_sounds_title">Tap sounds</string>
+    <string name="settings_ui_click_sounds_desc">System click sound for UI, switches, and dashboard panel widgets</string>
 
     <string name="trips_delete">Delete trip</string>
     <string name="trips_delete_confirm_title">Delete trip?</string>

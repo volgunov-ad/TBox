@@ -5,7 +5,6 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +44,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
@@ -169,7 +169,7 @@ fun RefuelsTab(
             ) {
                 Button(
                     enabled = refuels.isNotEmpty(),
-                    onClick = { showExportDialog = true },
+                    onClick = rememberWrappedOnClick { showExportDialog = true },
                 ) {
                     Text(stringResource(R.string.refuels_export), fontSize = 22.sp)
                 }
@@ -322,7 +322,7 @@ fun RefuelsTab(
                     },
                 )
                 OutlinedButton(
-                    onClick = { pendingCalibrationReset = true },
+                    onClick = rememberWrappedOnClick { pendingCalibrationReset = true },
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
                     Text(stringResource(R.string.refuels_calibration_reset), fontSize = 20.sp)
@@ -369,7 +369,7 @@ fun RefuelsTab(
             text = { AppAlertDialogText(stringResource(R.string.refuels_delete_confirm_message)) },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = rememberWrappedOnClick {
                         appDataViewModel.deleteRefuel(id)
                         pendingDeleteRefuelId = null
                     },
@@ -378,7 +378,7 @@ fun RefuelsTab(
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { pendingDeleteRefuelId = null }) {
+                OutlinedButton(onClick = rememberWrappedOnClick { pendingDeleteRefuelId = null }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },
@@ -392,7 +392,7 @@ fun RefuelsTab(
             text = { AppAlertDialogText(stringResource(R.string.refuels_calibration_reset_confirm_message)) },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = rememberWrappedOnClick {
                         appDataViewModel.clearFuelCalibrationOnly()
                         pendingCalibrationReset = false
                     },
@@ -401,7 +401,7 @@ fun RefuelsTab(
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { pendingCalibrationReset = false }) {
+                OutlinedButton(onClick = rememberWrappedOnClick { pendingCalibrationReset = false }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },
@@ -415,7 +415,7 @@ fun RefuelsTab(
             text = { AppAlertDialogText(stringResource(R.string.dialog_save_refuels_downloads)) },
             confirmButton = {
                 Button(
-                    onClick = {
+                    onClick = rememberWrappedOnClick {
                         onSaveToFile(
                             "refuels",
                             buildRefuelExportLines(context, refuels, dateTimeFormat),
@@ -427,7 +427,7 @@ fun RefuelsTab(
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showExportDialog = false }) {
+                OutlinedButton(onClick = rememberWrappedOnClick { showExportDialog = false }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             }
@@ -560,7 +560,7 @@ private fun RefuelTableRow(
                 refuel.fuelPercentBefore != null &&
                     refuel.fuelPercentAfter != null &&
                     refuel.actualLiters > 0f -> {
-                    OutlinedButton(onClick = onRequestTrainCalibration) {
+                    OutlinedButton(onClick = rememberWrappedOnClick(onRequestTrainCalibration)) {
                         Text(
                             stringResource(R.string.refuels_calibration_train),
                             fontSize = 16.sp,
@@ -645,24 +645,27 @@ private fun RefuelFuelTypeCell(
             onDismissRequest = { expanded = false },
         ) {
             FuelTypes.options.forEach { option ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = option.label,
-                            fontSize = 24.sp,
-                            color = if (option.id == selected.id) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                        )
-                    },
-                    onClick = {
+                key(option.id) {
+                    val fuelMenuClick = rememberWrappedOnClick {
                         onSelect(option)
                         expanded = false
-                    },
-                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
-                )
+                    }
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = option.label,
+                                fontSize = 24.sp,
+                                color = if (option.id == selected.id) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                        },
+                        onClick = fuelMenuClick,
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                    )
+                }
             }
         }
     }
@@ -811,7 +814,7 @@ private fun RefuelCircleIconButton(
     content: @Composable () -> Unit,
 ) {
     IconButton(
-        onClick = onClick,
+        onClick = rememberWrappedOnClick(onClick),
         modifier = Modifier
             .size(40.dp)
             .background(
@@ -852,7 +855,7 @@ private fun RefuelCoordinatesCell(text: String, widthDp: Int, copyText: String?)
         text = text,
         widthDp = widthDp,
         modifier = if (copyText != null) {
-            Modifier.clickable {
+            Modifier.clickableWithSound {
                 scope.launch {
                     clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("coordinates", copyText)))
                 }

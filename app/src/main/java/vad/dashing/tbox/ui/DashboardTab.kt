@@ -515,7 +515,7 @@ fun MainScreenPanelWidgetSelectionDialog(
                 },
                 deleteAfterWholePanel = {
                     OutlinedButton(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             onDeletePanel()
                             onDismiss()
                         },

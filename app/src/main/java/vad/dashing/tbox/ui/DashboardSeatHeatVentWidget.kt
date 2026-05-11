@@ -3,7 +3,6 @@ package vad.dashing.tbox.ui
 import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -581,7 +580,7 @@ private fun SeatActionButton(
     Box(
         modifier = modifier
             .then(swipeModifier)
-            .combinedClickable(
+            .combinedClickableWithSound(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = onDoubleClick
