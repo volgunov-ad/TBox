@@ -3672,7 +3672,7 @@ class BackgroundService : Service() {
         }
         try {
             CanFramesProcess.process(data, canDataSaveCount.value,
-                if (wheelPressurePersistAcrossStopsSetting.value) 120_000L else 2000L)
+                if (wheelPressurePersistAcrossStopsSetting.value) 300_000L else 2000L)
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "CRT response",
                 "Error get CAN Frame: $e")
