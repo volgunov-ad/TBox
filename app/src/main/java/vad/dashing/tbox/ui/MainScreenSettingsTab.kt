@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -254,6 +255,7 @@ fun MainScreenSettingsTab(
             stringResource(R.string.settings_main_screen_open_on_boot_desc),
             true
         )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_wallpaper_title))
         Text(
             text = stringResource(R.string.settings_main_screen_wallpaper_folder_hint),
@@ -430,6 +432,8 @@ fun MainScreenSettingsTab(
             stringResource(R.string.settings_main_screen_wallpaper_scale_crop_desc),
             true
         )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_canvas_bg_title))
         Text(
             text = stringResource(R.string.settings_main_screen_canvas_bg_desc),
@@ -472,6 +476,8 @@ fun MainScreenSettingsTab(
         ) {
             Text(stringResource(R.string.settings_main_screen_canvas_bg_reset), fontSize = 20.sp)
         }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_corner_buttons_title))
         Text(
             text = stringResource(R.string.settings_main_screen_corner_buttons_size, mainScreenCornerButtonSizeDp),
@@ -562,6 +568,8 @@ fun MainScreenSettingsTab(
                 )
             }
         }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_panels_title))
         if (hasMainScreenPanels) {
             MainScreenPanelEditor(
