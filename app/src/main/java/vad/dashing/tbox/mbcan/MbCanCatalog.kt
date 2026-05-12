@@ -121,6 +121,24 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_DEFROSTER_FRONT = 122
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_CHG_WIRELESS_SWITCH] — 1 off, 2 on. */
     const val CHG_WIRELESS_SWITCH = 264
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_STEERING_MODE] — 0–6. */
+    const val VEHICLE_PROPERTY_STEERING_MODE = 24
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_EPS_MODE] — 0–6. */
+    const val VEHICLE_PROPERTY_EPS_MODE = 25
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYSTEM_MODE] — 0–6. */
+    const val SYSTEM_MODE = 73
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_DRIVEMODE] — 0–6. */
+    const val VEHICLE_DRIVEMODE = 145
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_POWERMODE] — 0–6. */
+    const val VEHICLE_POWERMODE = 147
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_DRIVEMODE_6DCT_WET] — 0–6. */
+    const val VEHICLE_DRIVEMODE_6DCT_WET = 149
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSOURCE_STATION_MODE] — 1 off, 2 on. */
+    const val SOURCE_STATION_MODE = 127
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_VEHWASH_MODESET] — 1 off, 2 on. */
+    const val VEHICLE_VEHWASH_MODESET = 252
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICEL_BRAKE_PEDA_FEEL_MODE] — 0–6. */
+    const val VEHICEL_BRAKE_PEDA_FEEL_MODE = 300
     const val FRONT_LEFT_SEAT_HEAT_VENT_SWITCH = 138
     const val FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH = 139
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_LR_HEATVENTSW] — rear heat only (values 1–4). */
@@ -212,6 +230,59 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.WirelessChargingSwitch
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_STEERING_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (0..6).toSet()),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (0..6).toSet()),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.SYSTEM_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (0..6).toSet()),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (0..6).toSet()),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICLE_POWERMODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (0..6).toSet()),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (0..6).toSet()),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICEL_BRAKE_PEDA_FEEL_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (0..6).toSet()),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.SOURCE_STATION_MODE,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICLE_VEHWASH_MODESET,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
