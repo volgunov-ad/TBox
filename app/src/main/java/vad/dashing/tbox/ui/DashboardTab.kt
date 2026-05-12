@@ -135,9 +135,7 @@ fun MainDashboardTab(
         }
         DisposableEffect(Unit) {
             onDispose {
-                coroutineScope.launch {
-                    MbCanRepository.clearSource("dashboard-tab-main")
-                }
+                MbCanRepository.enqueueClearSource("dashboard-tab-main")
             }
         }
     }

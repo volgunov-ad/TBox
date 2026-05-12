@@ -3,7 +3,9 @@ package vad.dashing.tbox.mbcan
 import android.os.Handler
 import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +66,19 @@ sealed class MbCanCommand {
 }
 
 object MbCanRepository {
+    /**
+     * Runs [clearSource] when UI leaves composition ([DisposableEffect] onDispose). A child of
+     * [rememberCoroutineScope] launched from onDispose is cancelled with the composition before
+     * [clearSource] runs; this scope is independent of that lifecycle.
+     */
+    private val uiClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
+
+    fun enqueueClearSource(sourceId: String) {
+        uiClearSourceScope.launch {
+            clearSource(sourceId)
+        }
+    }
+
     private data class WidgetSignalBinding(
         val widgetKey: String,
         val signal: MbCanSignal
@@ -821,7 +836,7 @@ object MbCanRepository {
 
     /**
      * Whether any widget [dataKey] on a panel needs mbCAN (subscribe/refresh). Used so panels without
-     * such widgets never call [setSourceWidgetKeys]/[clearSource].
+     * such widgets never call [setSourceWidgetKeys]/[enqueueClearSource].
      */
     fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean {
         return dataKeys.any { raw ->

@@ -30,7 +30,7 @@ import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.mbcan.MbCanSignal
 
-/** [MbCanRepository.setSourceSignals] / [MbCanRepository.clearSource] key for this tab. */
+/** [MbCanRepository.setSourceSignals] / [MbCanRepository.enqueueClearSource] key for this tab. */
 const val CAR_SETTINGS_MB_CAN_SOURCE_ID = "car-settings-tab"
 
 private val carSettingsZeroToSixOptions = (0..6).toList()
@@ -71,9 +71,7 @@ fun CarSettingsTab(
     }
     DisposableEffect(Unit) {
         onDispose {
-            coroutineScope.launch {
-                MbCanRepository.clearSource(CAR_SETTINGS_MB_CAN_SOURCE_ID)
-            }
+            MbCanRepository.enqueueClearSource(CAR_SETTINGS_MB_CAN_SOURCE_ID)
         }
     }
 
