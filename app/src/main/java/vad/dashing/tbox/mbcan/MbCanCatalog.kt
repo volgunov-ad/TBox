@@ -84,6 +84,7 @@ object MbCanCatalog {
         MbCanControlParam("Powertrain", "HDC switch", "eVEHICLE_HDC_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Powertrain", "ESC off switch", "eVEHICLE_ESCOFF_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Powertrain", "ISS switch", "eVEHICLE_ISS_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("EV/Charge", "Wireless phone charging switch", "eVEHICLE_CHG_WIRELESS_SWITCH", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Body/BCM", "Door auto lock", "eVEHICLE_PROPERTY_DOOR_AUTO_LOCK", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Body/BCM", "Ignition-off unlock", "eVEHICLE_PROPERTY_DOOR_IGNOFF_UNLOCK", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Body/BCM", "Mirror reverse turn location", "eVEHICLE_SET_MIRROR_REVERSE_TURN_LOC", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -118,6 +119,8 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_AIR_RECIRCULATION = 39
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_DEFROSTER_FRONT] — 1 off, 2 on. */
     const val HVAC_DEFROSTER_FRONT = 122
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_CHG_WIRELESS_SWITCH] — 1 off, 2 on. */
+    const val CHG_WIRELESS_SWITCH = 264
     const val FRONT_LEFT_SEAT_HEAT_VENT_SWITCH = 138
     const val FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH = 139
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_LR_HEATVENTSW] — rear heat only (values 1–4). */
@@ -200,6 +203,15 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.HvacDefrosterFront
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.WirelessChargingSwitch
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,

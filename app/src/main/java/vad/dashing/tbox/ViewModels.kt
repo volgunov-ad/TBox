@@ -407,6 +407,7 @@ object WidgetsRepository {
         "rearWindowMirrorsDefrostWidget" to DataTitle(R.string.data_title_rear_window_mirrors_defrost_widget),
         "hvacAirRecirculationWidget" to DataTitle(R.string.data_title_hvac_air_recirculation_widget),
         "hvacDefrosterFrontWidget" to DataTitle(R.string.data_title_hvac_defroster_front_widget),
+        "wirelessChargingWidget" to DataTitle(R.string.data_title_wireless_charging_widget),
         "frontLeftSeatHeatVentWidget" to DataTitle(R.string.data_title_front_left_seat_heat_vent_widget),
         "frontRightSeatHeatVentWidget" to DataTitle(R.string.data_title_front_right_seat_heat_vent_widget),
         FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to DataTitle(
@@ -482,6 +483,7 @@ object WidgetsRepository {
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
             "hvacDefrosterFrontWidget",
+            "wirelessChargingWidget",
             "frontLeftSeatHeatVentWidget",
             "frontRightSeatHeatVentWidget",
             FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
@@ -547,6 +549,7 @@ object WidgetsRepository {
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
             "hvacDefrosterFrontWidget",
+            "wirelessChargingWidget",
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }

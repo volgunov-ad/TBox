@@ -25,6 +25,7 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     HvacDefroster(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAirRecirculation(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefrosterFront(setOf("eMBCAN_CFG_VEHICLE")),
+    WirelessChargingSwitch(setOf("eMBCAN_CFG_VEHICLE")),
     FrontLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     FrontRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     RearLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
@@ -72,6 +73,7 @@ object MbCanRepository {
         WidgetSignalBinding("rearWindowMirrorsDefrostWidget", MbCanSignal.HvacDefroster),
         WidgetSignalBinding("hvacAirRecirculationWidget", MbCanSignal.HvacAirRecirculation),
         WidgetSignalBinding("hvacDefrosterFrontWidget", MbCanSignal.HvacDefrosterFront),
+        WidgetSignalBinding("wirelessChargingWidget", MbCanSignal.WirelessChargingSwitch),
         WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
         WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode),
         WidgetSignalBinding(FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontLeftSeatMode),
@@ -123,6 +125,8 @@ object MbCanRepository {
     val hvacAirRecirculationState: StateFlow<MbCanBinaryState> = _hvacAirRecirculationState.asStateFlow()
     private val _hvacDefrosterFrontState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacDefrosterFrontState: StateFlow<MbCanBinaryState> = _hvacDefrosterFrontState.asStateFlow()
+    private val _wirelessChargingState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val wirelessChargingState: StateFlow<MbCanBinaryState> = _wirelessChargingState.asStateFlow()
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
     private val _frontRightSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
@@ -140,6 +144,7 @@ object MbCanRepository {
         hvacDefrosterFlow = _hvacDefrosterState,
         hvacAirRecirculationFlow = _hvacAirRecirculationState,
         hvacDefrosterFrontFlow = _hvacDefrosterFrontState,
+        wirelessChargingFlow = _wirelessChargingState,
         volumeSpeedFlow = _audioVolumeSpeedState,
         frontLeftSeatFlow = _frontLeftSeatModeState,
         frontRightSeatFlow = _frontRightSeatModeState,
@@ -189,6 +194,7 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT,
+            MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
             MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH,
@@ -230,6 +236,10 @@ object MbCanRepository {
                     MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT ->
                         stateEngine.applyHvacDefrosterFrontCandidate(
                             MbCanSignalStateEngine.decodeHvacDefrosterFrontRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH ->
+                        stateEngine.applyWirelessChargingCandidate(
+                            MbCanSignalStateEngine.decodeWirelessChargingRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH ->
                         stateEngine.applySeatCandidate(
@@ -460,6 +470,7 @@ object MbCanRepository {
             MbCanSignal.HvacDefroster -> refreshHvacDefroster()
             MbCanSignal.HvacAirRecirculation -> refreshHvacAirRecirculation()
             MbCanSignal.HvacDefrosterFront -> refreshHvacDefrosterFront()
+            MbCanSignal.WirelessChargingSwitch -> refreshWirelessCharging()
             MbCanSignal.AudioVolumeSpeed -> refreshAudioVolumeSpeed()
             MbCanSignal.FrontLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontLeft)
             MbCanSignal.FrontRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontRight)
@@ -629,6 +640,39 @@ object MbCanRepository {
             MbCanDiagnostics.log(
                 "DEBUG",
                 "refreshHvacDefrosterFront raw=$raw state=${_hvacDefrosterFrontState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshWirelessCharging() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyWirelessChargingCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshWirelessCharging unavailable=$availability")
+                stateEngine.applyWirelessChargingCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeWirelessChargingRaw(raw)
+            }
+            stateEngine.applyWirelessChargingCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshWirelessCharging raw=$raw state=${_wirelessChargingState.value}"
             )
         }
     }

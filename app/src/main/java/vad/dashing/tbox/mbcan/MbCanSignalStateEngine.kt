@@ -50,6 +50,7 @@ internal class MbCanSignalStateEngine(
     private val hvacDefrosterFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacAirRecirculationFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacDefrosterFrontFlow: MutableStateFlow<MbCanBinaryState>,
+    private val wirelessChargingFlow: MutableStateFlow<MbCanBinaryState>,
     private val volumeSpeedFlow: MutableStateFlow<MbCanBinaryState>,
     private val frontLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
     private val frontRightSeatFlow: MutableStateFlow<MbCanSeatModeState>,
@@ -67,6 +68,8 @@ internal class MbCanSignalStateEngine(
     private var hvacAirRecirculationUnavailableStreak = 0
     private var hvacDefrosterFrontUnknownStreak = 0
     private var hvacDefrosterFrontUnavailableStreak = 0
+    private var wirelessChargingUnknownStreak = 0
+    private var wirelessChargingUnavailableStreak = 0
     private var volumeSpeedUnknownStreak = 0
     private var volumeSpeedUnavailableStreak = 0
     private var frontLeftUnknownStreak = 0
@@ -224,6 +227,34 @@ internal class MbCanSignalStateEngine(
         }
     }
 
+    suspend fun applyWirelessChargingCandidate(decoded: MbCanBinaryState) {
+        val published = wirelessChargingFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.WirelessChargingSwitch)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                wirelessChargingUnknownStreak += 1
+                wirelessChargingUnavailableStreak = 0
+                if (wirelessChargingUnknownStreak >= requiredConsecutiveProblems) {
+                    wirelessChargingFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                wirelessChargingUnavailableStreak += 1
+                wirelessChargingUnknownStreak = 0
+                if (wirelessChargingUnavailableStreak >= requiredConsecutiveProblems) {
+                    wirelessChargingFlow.value = decoded
+                }
+            }
+            else -> {
+                wirelessChargingUnknownStreak = 0
+                wirelessChargingUnavailableStreak = 0
+                wirelessChargingFlow.value = decoded
+            }
+        }
+    }
+
     suspend fun applyVolumeSpeedCandidate(decoded: MbCanBinaryState) {
         val published = volumeSpeedFlow.value
         if (decoded.isProblemState() && !published.isProblemState()) {
@@ -334,6 +365,9 @@ internal class MbCanSignalStateEngine(
 
         /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_DEFROSTER_FRONT] — 1 off, 2 on. */
         fun decodeHvacDefrosterFrontRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+
+        /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_CHG_WIRELESS_SWITCH] — 1 off, 2 on. */
+        fun decodeWirelessChargingRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
 
         /** Front seat heat + ventilation raw values (1 off, 2–4 heat, 5–7 vent). */
         fun decodeSeatModeRaw(raw: Int): MbCanSeatModeState = when (raw) {

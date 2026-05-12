@@ -325,6 +325,20 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "wirelessChargingWidget" -> {
+            DashboardWirelessChargingWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
         "frontLeftSeatHeatVentWidget" -> {
             DashboardFrontLeftSeatHeatVentWidgetItem(
                 onClick = onClick,

@@ -563,6 +563,7 @@
     <string name="data_title_rear_window_mirrors_defrost_widget">Rear window and mirror defrost widget</string>
     <string name="data_title_hvac_air_recirculation_widget">HVAC air recirculation widget</string>
     <string name="data_title_hvac_defroster_front_widget">Front windscreen defrost widget</string>
+    <string name="data_title_wireless_charging_widget">Wireless phone charging widget</string>
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
