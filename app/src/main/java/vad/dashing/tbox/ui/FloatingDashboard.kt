@@ -380,6 +380,10 @@ fun FloatingDashboard(
                             sendToggleFrontWindscreenHeat(context)
                         } else if (cfg?.dataKey == "rearWindowMirrorsDefrostWidget") {
                             sendToggleRearWindowMirrorsDefrost(context)
+                        } else if (cfg?.dataKey == "hvacAirRecirculationWidget") {
+                            sendToggleHvacAirRecirculation(context)
+                        } else if (cfg?.dataKey == "hvacDefrosterFrontWidget") {
+                            sendToggleHvacDefrosterFront(context)
                         } else if (
                             cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                             cfg.launcherAppPackage.isNotBlank()

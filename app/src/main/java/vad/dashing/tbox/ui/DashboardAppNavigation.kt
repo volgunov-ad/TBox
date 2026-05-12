@@ -17,6 +17,12 @@ private var windscreenHeatToggleBlockedUntilMs = 0L
 private val hvacDefrosterToggleLock = Any()
 private var hvacDefrosterToggleBlockedUntilMs = 0L
 
+private val hvacAirRecirculationToggleLock = Any()
+private var hvacAirRecirculationToggleBlockedUntilMs = 0L
+
+private val hvacDefrosterFrontToggleLock = Any()
+private var hvacDefrosterFrontToggleBlockedUntilMs = 0L
+
 internal fun launchAppFromWidget(context: Context, packageName: String) {
     if (packageName.isBlank()) return
     try {
@@ -143,6 +149,54 @@ internal fun sendToggleRearWindowMirrorsDefrost(context: Context) {
                 putExtra(
                     BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
                     MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleHvacAirRecirculation(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacAirRecirculationToggleLock) {
+        if (now < hvacAirRecirculationToggleBlockedUntilMs) return
+        hvacAirRecirculationToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleHvacDefrosterFront(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacDefrosterFrontToggleLock) {
+        if (now < hvacDefrosterFrontToggleBlockedUntilMs) return
+        hvacDefrosterFrontToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT
                 )
             }
         )
