@@ -15,6 +15,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.job
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -67,16 +69,29 @@ sealed class MbCanCommand {
 
 object MbCanRepository {
     /**
-     * Runs [clearSource] when UI leaves composition ([DisposableEffect] onDispose). A child of
-     * [rememberCoroutineScope] launched from onDispose is cancelled with the composition before
-     * [clearSource] runs; this scope is independent of that lifecycle.
+     * Runs [clearSource] after a delay when UI leaves composition ([DisposableEffect] onDispose).
+     * A child of [rememberCoroutineScope] launched from onDispose is cancelled with the composition
+     * before work runs; this scope is independent of that lifecycle. Debounced so brief navigation
+     * does not churn push subscription; [setSourceWidgetKeys] / [setSourceSignals] cancel the timer.
      */
-    private val uiClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(1))
+    private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = 5000L
+
+    private val debouncedClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val pendingDebouncedClearJobs = ConcurrentHashMap<String, Job>()
 
     fun enqueueClearSource(sourceId: String) {
-        uiClearSourceScope.launch {
-            clearSource(sourceId)
+        pendingDebouncedClearJobs.remove(sourceId)?.cancel()
+        val job = debouncedClearSourceScope.launch {
+            delay(CLEAR_SOURCE_PUSH_DEBOUNCE_MS)
+            if (pendingDebouncedClearJobs.remove(sourceId, coroutineContext.job)) {
+                clearSource(sourceId)
+            }
         }
+        pendingDebouncedClearJobs[sourceId] = job
+    }
+
+    private fun cancelDebouncedClearSource(sourceId: String) {
+        pendingDebouncedClearJobs.remove(sourceId)?.cancel()
     }
 
     private data class WidgetSignalBinding(
@@ -350,6 +365,7 @@ object MbCanRepository {
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
+        cancelDebouncedClearSource(sourceId)
         val signals = widgetKeys.mapNotNull { widgetKeyToSignal(it) }.toSet()
         MbCanDiagnostics.log(
             "DEBUG",
@@ -370,6 +386,7 @@ object MbCanRepository {
      * Merged with widget-derived interests in [reapplyAllInterests].
      */
     suspend fun setSourceSignals(sourceId: String, signals: Set<MbCanSignal>) {
+        cancelDebouncedClearSource(sourceId)
         MbCanDiagnostics.log(
             "DEBUG",
             "setSourceSignals source=$sourceId signals=${signals.joinToString()}"
