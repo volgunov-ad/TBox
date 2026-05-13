@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.Manifest
+import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -117,6 +118,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val requestHomeRoleLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { }
+
+    private var homeRoleAutoRequestConsumedThisProcess = false
+
     // Флаг для отслеживания состояния переключателя mock-локации
     private var isMockLocationSettingPending = false
 
@@ -181,6 +188,48 @@ class MainActivity : ComponentActivity() {
         scheduleMainActivityFirstLayoutTiming()
     }
 
+    private fun tryAutoRequestHomeRoleOncePerProcess() {
+        if (homeRoleAutoRequestConsumedThisProcess) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        val rm = getSystemService(RoleManager::class.java) ?: return
+        if (rm.isRoleHeld(RoleManager.ROLE_HOME)) return
+        homeRoleAutoRequestConsumedThisProcess = true
+        try {
+            requestHomeRoleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_HOME))
+        } catch (e: Exception) {
+            Log.w(TAG, "Auto HOME role request failed", e)
+            homeRoleAutoRequestConsumedThisProcess = false
+        }
+    }
+
+    /**
+     * Expert settings / manual: repeat the system HOME role dialog when the head unit keeps asking
+     * which launcher to use after every reboot.
+     */
+    fun requestHomeRoleForUser() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            Toast.makeText(this, getString(R.string.settings_home_role_api_low), Toast.LENGTH_LONG).show()
+            return
+        }
+        val rm = getSystemService(RoleManager::class.java) ?: run {
+            Toast.makeText(this, getString(R.string.settings_home_role_unavailable), Toast.LENGTH_LONG).show()
+            return
+        }
+        if (rm.isRoleHeld(RoleManager.ROLE_HOME)) {
+            Toast.makeText(this, getString(R.string.settings_home_role_already_held), Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            requestHomeRoleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_HOME))
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                e.message ?: getString(R.string.settings_home_role_unavailable),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     private fun scheduleMainActivityFirstLayoutTiming() {
         val decor = window.decorView
         decor.viewTreeObserver.addOnGlobalLayoutListener(
@@ -227,6 +276,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         applyHeadUnitFullscreenLayout()
+        window.decorView.post { tryAutoRequestHomeRoleOncePerProcess() }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
