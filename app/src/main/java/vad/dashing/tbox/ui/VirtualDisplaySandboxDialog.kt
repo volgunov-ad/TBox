@@ -182,7 +182,7 @@ fun VirtualDisplaySandboxDialog(
         } catch (e: Exception) {
             Toast.makeText(
                 appCtx,
-                e.message ?: appCtx.getString(R.string.settings_virtual_display_launch_failed),
+                userMessageForVirtualDisplayLaunchFailure(appCtx, e),
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -348,4 +348,35 @@ fun VirtualDisplaySandboxDialog(
         },
         dismissButton = {}
     )
+}
+
+private fun throwableMessageChain(t: Throwable): String = buildString {
+    var x: Throwable? = t
+    while (x != null) {
+        x.message?.let { msg ->
+            if (msg.isNotBlank()) {
+                append(msg)
+                append('\n')
+            }
+        }
+        x = x.cause
+    }
+}
+
+/**
+ * ActivityManager often returns "Permission Denial … with launchDisplayId=N" for third-party
+ * launches onto a [VirtualDisplay] from an untrusted app — not fixable via manifest permission.
+ */
+private fun userMessageForVirtualDisplayLaunchFailure(appCtx: Context, e: Exception): String {
+    val chain = throwableMessageChain(e)
+    val launchDisplayDenial = chain.contains("Permission Denial", ignoreCase = true) &&
+        chain.contains("launchDisplayId", ignoreCase = true)
+    return if (launchDisplayDenial) {
+        appCtx.getString(R.string.settings_virtual_display_third_party_denied)
+    } else if (e is SecurityException) {
+        appCtx.getString(R.string.settings_virtual_display_security_denied_short)
+    } else {
+        e.message?.takeIf { it.isNotBlank() }
+            ?: appCtx.getString(R.string.settings_virtual_display_launch_failed)
+    }
 }
