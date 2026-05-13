@@ -58,6 +58,8 @@ data class FloatingDashboardWidgetConfig(
     val mediaKeepPlayerForeground: Boolean = false,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
+    /** Launchable packages for the multi-app grid tile (at most 12 entries). */
+    val appGridPackages: List<String> = emptyList(),
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
     val appWidgetId: Int? = null,
     /**

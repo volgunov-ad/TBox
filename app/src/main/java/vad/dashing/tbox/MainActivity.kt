@@ -202,34 +202,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Expert settings / manual: repeat the system HOME role dialog when the head unit keeps asking
-     * which launcher to use after every reboot.
-     */
-    fun requestHomeRoleForUser() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            Toast.makeText(this, getString(R.string.settings_home_role_api_low), Toast.LENGTH_LONG).show()
-            return
-        }
-        val rm = getSystemService(RoleManager::class.java) ?: run {
-            Toast.makeText(this, getString(R.string.settings_home_role_unavailable), Toast.LENGTH_LONG).show()
-            return
-        }
-        if (rm.isRoleHeld(RoleManager.ROLE_HOME)) {
-            Toast.makeText(this, getString(R.string.settings_home_role_already_held), Toast.LENGTH_SHORT).show()
-            return
-        }
-        try {
-            requestHomeRoleLauncher.launch(rm.createRequestRoleIntent(RoleManager.ROLE_HOME))
-        } catch (e: Exception) {
-            Toast.makeText(
-                this,
-                e.message ?: getString(R.string.settings_home_role_unavailable),
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
     private fun scheduleMainActivityFirstLayoutTiming() {
         val decor = window.decorView
         decor.viewTreeObserver.addOnGlobalLayoutListener(

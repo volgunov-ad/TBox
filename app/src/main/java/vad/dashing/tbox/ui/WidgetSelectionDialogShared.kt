@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
+import vad.dashing.tbox.APP_GRID_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
@@ -57,6 +58,7 @@ import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.normalizeAppGridPackages
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizeWidgetScale
@@ -178,6 +180,14 @@ internal class WidgetSelectionDialogState(
         }
     )
 
+    var appGridSelectedPackages by mutableStateOf(
+        if (initialConfig.dataKey == APP_GRID_LAUNCHER_WIDGET_DATA_KEY) {
+            normalizeAppGridPackages(initialConfig.appGridPackages).toSet()
+        } else {
+            emptySet()
+        }
+    )
+
     /** `null` = default decimals per data key in provider; otherwise 0..2 fractional digits. */
     var valueAccuracy by mutableStateOf(initialConfig.valueAccuracy?.takeIf { it in 0..2 })
 
@@ -186,6 +196,9 @@ internal class WidgetSelectionDialogState(
 
     val isAppLauncherWidgetSelected: Boolean
         get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
+
+    val isAppGridWidgetSelected: Boolean
+        get() = selectedDataKey == APP_GRID_LAUNCHER_WIDGET_DATA_KEY
 
     val isExternalAppWidgetSelected: Boolean
         get() = selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
@@ -198,6 +211,7 @@ internal class WidgetSelectionDialogState(
             selectedDataKey.isEmpty() -> true
             isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
             isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
+            isAppGridWidgetSelected -> appGridSelectedPackages.isNotEmpty()
             else -> true
         }
 }
@@ -560,6 +574,22 @@ internal fun WidgetSelectionDialogForm(
                         settingsViewModel = settingsViewModel,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
+                    if (state.isAppGridWidgetSelected) {
+                        AppGridWidgetSettingsSection(
+                            settingsViewModel = settingsViewModel,
+                            selectedPackages = state.appGridSelectedPackages,
+                            onSelectionChange = { state.appGridSelectedPackages = it },
+                            enabled = state.togglesEnabled,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                        )
+                        if (state.appGridSelectedPackages.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.widget_app_grid_required),
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 20.sp
+                            )
+                        }
+                    }
                     SettingSwitch(
                         state.showTitle,
                         { state.showTitle = it },
@@ -1071,6 +1101,11 @@ internal fun applyWidgetSelectionChanges(
                 state.launcherAppPackage.trim()
             } else {
                 ""
+            },
+            appGridPackages = if (state.selectedDataKey == APP_GRID_LAUNCHER_WIDGET_DATA_KEY) {
+                orderedAppGridPackagesForStorage(state.appGridSelectedPackages)
+            } else {
+                emptyList()
             },
             appWidgetId = if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 externalAppWidgetId

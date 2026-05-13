@@ -7,7 +7,6 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.Display
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -83,12 +82,13 @@ object MainActivityIntentHelper {
 
     /**
      * Prefer starting on the built-in display so OEM hosts do not route the activity to a
-     * [android.hardware.display.VirtualDisplay] owned by another launcher.
+     * secondary display pipeline owned by another launcher. Uses display id **0** (same as
+     * [android.view.Display.DEFAULT_DISPLAY] / `adb shell am start --display 0`).
      */
     fun launchOnDefaultDisplayOptions(): Bundle? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
         return ActivityOptions.makeBasic().apply {
-            launchDisplayId = Display.DEFAULT_DISPLAY
+            launchDisplayId = 0
         }.toBundle()
     }
 

@@ -90,6 +90,10 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
+        val appGrid = normalizeAppGridPackages(config.appGridPackages)
+        if (appGrid.isNotEmpty()) {
+            obj.put("appGridPackages", JSONArray(appGrid))
+        }
         if (config.appWidgetId != null) {
             obj.put("appWidgetId", config.appWidgetId)
         }
@@ -199,6 +203,7 @@ private fun parseWidgetConfigsFromJsonArray(
                 val launcherAppPackage = item.optString("launcherAppPackage", "").trim().ifBlank {
                     item.optString("appPackageName", "").trim()
                 }
+                val appGridPackages = parseAppGridPackages(item)
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey,
@@ -237,6 +242,11 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             ""
                         },
+                        appGridPackages = if (dataKey == APP_GRID_LAUNCHER_WIDGET_DATA_KEY) {
+                            appGridPackages
+                        } else {
+                            emptyList()
+                        },
                         appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                             appWidgetId
                         } else {
@@ -256,6 +266,15 @@ private fun parseWidgetConfigsFromJsonArray(
         }
     }
     return configs
+}
+
+private fun parseAppGridPackages(item: JSONObject): List<String> {
+    val arr = item.optJSONArray("appGridPackages") ?: return emptyList()
+    val raw = mutableListOf<String>()
+    for (idx in 0 until arr.length()) {
+        raw.add(arr.optString(idx))
+    }
+    return normalizeAppGridPackages(raw)
 }
 
 private fun parseLegacyWidgetConfigs(rawValue: String): List<FloatingDashboardWidgetConfig> {
