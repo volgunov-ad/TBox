@@ -515,6 +515,7 @@
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
     <string name="data_title_media_volume_widget_vertical">Media volume widget (vertical)</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
+    <string name="data_title_app_grid_launcher_widget">App icon grid</string>
     <string name="data_title_external_app_widget">Third-party app widget</string>
     <string name="data_title_hide_floating_panels_widget">Hide floating panels</string>
     <string name="data_title_toggle_floating_panels_enabled_widget">Disable floating panels</string>
@@ -522,6 +523,12 @@
     <string name="widget_app_launcher_none_selected">No app selected</string>
     <string name="widget_app_launcher_required">Choose an app to save the widget</string>
     <string name="widget_app_launcher_pick_title">Choose app</string>
+    <string name="widget_app_grid_title">Apps in this tile (up to 12)</string>
+    <string name="widget_app_grid_hint">Several icons in one cell. Each tap launches the app full-screen (not embedded PiP).</string>
+    <string name="widget_app_grid_slots_used">Selected: %1$d / %2$d</string>
+    <string name="widget_app_grid_required">Select at least one app</string>
+    <string name="widget_app_grid_empty">Choose apps in tile settings</string>
+    <string name="widget_app_grid_default_title">Shortcuts (%1$d)</string>
     <string name="widget_app_launcher_search">Search</string>
     <string name="widget_app_launcher_no_icon">?</string>
     <string name="widget_app_launcher_change_icon">Change icon</string>

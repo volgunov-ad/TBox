@@ -518,6 +518,7 @@
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
+    <string name="data_title_app_grid_launcher_widget">Сетка ярлыков</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
     <string name="data_title_hide_floating_panels_widget">Скрытие плавающих панелей</string>
     <string name="data_title_toggle_floating_panels_enabled_widget">Отключение плавающих панелей</string>
@@ -525,6 +526,12 @@
     <string name="widget_app_launcher_none_selected">Приложение не выбрано</string>
     <string name="widget_app_launcher_required">Выберите приложение, чтобы сохранить виджет</string>
     <string name="widget_app_launcher_pick_title">Выбор приложения</string>
+    <string name="widget_app_grid_title">Приложения в этой плитке (до 12)</string>
+    <string name="widget_app_grid_hint">Несколько иконок в одной ячейке. Каждое нажатие запускает приложение на весь экран (не встраивание «картинка в картинке»).</string>
+    <string name="widget_app_grid_slots_used">Выбрано: %1$d / %2$d</string>
+    <string name="widget_app_grid_required">Выберите хотя бы одно приложение</string>
+    <string name="widget_app_grid_empty">Выберите приложения в настройках плитки</string>
+    <string name="widget_app_grid_default_title">Ярлыки (%1$d)</string>
     <string name="widget_app_launcher_search">Поиск</string>
     <string name="widget_app_launcher_no_icon">?</string>
     <string name="widget_app_launcher_change_icon">Изменить иконку</string>

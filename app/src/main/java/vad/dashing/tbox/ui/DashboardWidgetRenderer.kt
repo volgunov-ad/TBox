@@ -17,6 +17,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
+import vad.dashing.tbox.APP_GRID_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
@@ -255,6 +256,23 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        APP_GRID_LAUNCHER_WIDGET_DATA_KEY -> {
+            DashboardAppGridWidgetItem(
+                widget = widget,
+                packages = widgetConfig.appGridPackages,
+                customIconRevision = launcherAppIconRevision,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                isEditMode = isEditMode,
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
