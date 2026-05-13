@@ -299,26 +299,6 @@
     <string name="settings_home_launcher_open_settings">Open home app settings</string>
     <string name="settings_home_launcher_open_failed">Could not open launcher or default-apps settings. Open system Settings manually (default apps / home), or use ADB temporarily.</string>
     <string name="settings_home_launcher_troubleshoot_note">If shortcuts and settings still do nothing, the stock launcher process may be drawing above your window or intercepting starts. Check focus with: adb shell dumpsys window | grep -E \"mCurrentFocus|mFocusedApp\". That requires OEM changes or disabling the shell; a normal APK cannot remove it.</string>
-    <string name="settings_virtual_display_section_title">Virtual display (experiment)</string>
-    <string name="settings_virtual_display_section_desc">Uses DisplayManager.createVirtualDisplay with a SurfaceView surface. On Android 8+ you can try ActivityOptions.launchDisplayId. The system usually blocks third-party apps onto a virtual display (logcat: Permission Denial … launchDisplayId)—that is not a missing manifest permission for a normal app UID; it is Android/OEM policy.</string>
-    <string name="settings_virtual_display_open_button">Open experiment…</string>
-    <string name="settings_virtual_display_dialog_title">Virtual display</string>
-    <string name="settings_virtual_display_dialog_body">Once the surface is ready, the virtual display is created. Below is the launcher app list. Launching another app onto that display often ends with Permission Denial in logcat—that is normal for an ordinary app. Close the dialog to release resources.</string>
-    <string name="settings_virtual_display_created">Virtual display created: id=%1$d, size %2$d×%3$d</string>
-    <string name="settings_virtual_display_create_failed">createVirtualDisplay returned null</string>
-    <string name="settings_virtual_display_need_surface">Wait for the surface to be ready first</string>
-    <string name="settings_virtual_display_no_display_id">VirtualDisplay has no display id</string>
-    <string name="settings_virtual_display_api_low">launchDisplayId requires Android 8 (API 26)+</string>
-    <string name="settings_virtual_display_no_launch_intent">No launch intent for this package</string>
-    <string name="settings_virtual_display_launch_sent">Start request sent (displayId=%1$d)</string>
-    <string name="settings_virtual_display_launch_failed">Could not start on the virtual display</string>
-    <string name="settings_virtual_display_third_party_denied">The system denied starting on the virtual display (typical for third-party apps; not fixed by a manifest permission).</string>
-    <string name="settings_virtual_display_security_denied_short">The system denied starting on that display.</string>
-    <string name="settings_virtual_display_launch_selected_app">Launch selected on virtual display</string>
-    <string name="settings_virtual_display_pick_title">Other app (from launcher list)</string>
-    <string name="settings_virtual_display_none_selected_toast">Select an app in the list first</string>
-    <string name="settings_virtual_display_launch_self">Launch this app on the virtual display</string>
-    <string name="settings_virtual_display_close">Close</string>
     <string name="settings_backup_title">Backup</string>
     <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>

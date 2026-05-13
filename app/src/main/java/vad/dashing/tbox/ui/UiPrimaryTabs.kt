@@ -294,7 +294,6 @@ fun SettingsTabContent(
     var showImportBackupDialog by remember { mutableStateOf(false) }
 
     var showImmersivePackagePicker by remember { mutableStateOf(false) }
-    var showVirtualDisplaySandbox by remember { mutableStateOf(false) }
     var immersivePolicyPackageOrder by remember(immersivePolicyPackagesStored) {
         mutableStateOf(parseImmersivePolicyPackagesOrdered(immersivePolicyPackagesStored))
     }
@@ -754,33 +753,6 @@ fun SettingsTabContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-
-            SettingsTitle(stringResource(R.string.settings_virtual_display_section_title))
-            Text(
-                text = stringResource(R.string.settings_virtual_display_section_desc),
-                fontSize = 20.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            OutlinedButton(
-                onClick = { showVirtualDisplaySandbox = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_virtual_display_open_button),
-                    fontSize = 22.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            if (showVirtualDisplaySandbox) {
-                VirtualDisplaySandboxDialog(
-                    settingsViewModel = settingsViewModel,
-                    onDismissRequest = { showVirtualDisplaySandbox = false }
-                )
-            }
         }
 
         SettingsTitle(stringResource(R.string.settings_backup_title))

@@ -83,7 +83,7 @@ object MainActivityIntentHelper {
 
     /**
      * Prefer starting on the built-in display so OEM hosts do not route the activity to a
-     * [android.hardware.display.VirtualDisplay] owned by another launcher.
+     * secondary display pipeline owned by another launcher.
      */
     fun launchOnDefaultDisplayOptions(): Bundle? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
