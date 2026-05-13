@@ -43,7 +43,10 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -294,7 +297,15 @@ fun SettingsTabContent(
     val expertModeWarning = stringResource(R.string.settings_expert_mode_warning_desc)
     val newFloatingPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
 
+    LaunchedEffect(Unit) {
+        MbCanRepository.warmUpAvailabilityForUi()
+    }
+
     var restartButtonEnabled by remember { mutableStateOf(true) }
+
+    var huRebootButtonEnabled by remember { mutableStateOf(true) }
+    val mbCanAvailability by MbCanRepository.availability.collectAsStateWithLifecycle()
+    val mbCanAvailable = mbCanAvailability is MbCanAvailability.Available
 
     var showExportBackupDialog by remember { mutableStateOf(false) }
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
@@ -304,6 +315,13 @@ fun SettingsTabContent(
         if (!restartButtonEnabled) {
             delay(15000)
             restartButtonEnabled = true
+        }
+    }
+
+    LaunchedEffect(huRebootButtonEnabled) {
+        if (!huRebootButtonEnabled) {
+            delay(300_000L)
+            huRebootButtonEnabled = true
         }
     }
 
@@ -815,7 +833,7 @@ fun SettingsTabContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
@@ -825,10 +843,32 @@ fun SettingsTabContent(
                         onTboxRestartClick()
                     }
                 },
-                enabled = restartButtonEnabled && tboxConnected
+                enabled = restartButtonEnabled && tboxConnected,
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_tbox),
+                    fontSize = 24.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (huRebootButtonEnabled) {
+                        huRebootButtonEnabled = false
+                        sendSetMbCanProperty(
+                            context,
+                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
+                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
+                        )
+                    }
+                },
+                enabled = huRebootButtonEnabled && mbCanAvailable,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.button_reboot_hu),
                     fontSize = 24.sp,
                     maxLines = 2,
                     textAlign = TextAlign.Center

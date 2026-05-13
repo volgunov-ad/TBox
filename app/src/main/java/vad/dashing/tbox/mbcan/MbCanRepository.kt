@@ -227,6 +227,28 @@ object MbCanRepository {
         }
     }
 
+    /**
+     * Ensures mbCAN is initialized and republishes [availability] without any widget subscriptions.
+     * Used so Settings (e.g. "Reboot HU") can enable controls when no mbCAN dashboard widget was shown yet.
+     */
+    suspend fun warmUpAvailabilityForUi() = withContext(Dispatchers.Default) {
+        try {
+            if (MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.availability
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.ensureInitialized()
+            _availability.value = availability
+            MbCanDiagnostics.log("DEBUG", "warmUpAvailabilityForUi availability=$availability")
+            if (availability is MbCanAvailability.Available) {
+                MbCanJobManager.onEngineInitialized()
+                reapplyAllInterests()
+            }
+        } catch (e: Exception) {
+            MbCanDiagnostics.log("ERROR", "warmUpAvailabilityForUi ${e.message}")
+        }
+    }
+
     suspend fun unbind() {
         try {
             MbCanDiagnostics.log("DEBUG", "unbind()")

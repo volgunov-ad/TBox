@@ -325,6 +325,7 @@
     <string name="settings_mock_location_requirements">Requires permission and mock location setup</string>
     <string name="settings_mock_location_requirements_link">Tap to view requirements for mock locations</string>
     <string name="button_reboot_tbox">Reboot TBox</string>
+    <string name="button_reboot_hu">Reboot HU</string>
 
     <string name="dialog_mock_location_requirements_title">Mock location requirements (Developer options)</string>
     <string name="dialog_mock_location_missing_permission">No location permission granted\n</string>

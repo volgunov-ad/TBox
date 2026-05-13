@@ -330,6 +330,7 @@
     <string name="settings_mock_location_requirements">Требует настройки разрешений и настройки фиктивных местоположений</string>
     <string name="settings_mock_location_requirements_link">Нажмите для просмотра требований к фиктивным местоположениям</string>
     <string name="button_reboot_tbox">Перезагрузка TBox</string>
+    <string name="button_reboot_hu">Перезагрузить ГУ</string>
 
     <string name="dialog_mock_location_requirements_title">Требования для mock-локации (Настройки разработчика)</string>
     <string name="dialog_mock_location_missing_permission">Нет разрешения на доступ к местоположению\n</string>

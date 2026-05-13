@@ -131,6 +131,10 @@ object MbCanKnownVehiclePropertyId {
     const val VEHICLE_PROPERTY_EPS_MODE = 25
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYSTEM_MODE] — 0–6. */
     const val SYSTEM_MODE = 73
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYSTEM_REBOOT] — head unit reboot via [canSetVehicleParam]. */
+    const val SYSTEM_REBOOT = 74
+    /** Value written to [SYSTEM_REBOOT] to request HU reboot. */
+    const val SYSTEM_REBOOT_VALUE = 1
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_DRIVEMODE] — 0–6. */
     const val VEHICLE_DRIVEMODE = 145
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_POWERMODE] — 0–6. */
@@ -249,6 +253,12 @@ object MbCanCommandRegistry {
             propertyId = MbCanKnownVehiclePropertyId.SYSTEM_MODE,
             policy = MbCanCommandPolicy.SetExact(allowedValues = (0..6).toSet()),
             refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = setOf(MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE),
+            ),
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
