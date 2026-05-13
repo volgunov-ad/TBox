@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -57,10 +55,11 @@ internal fun AppGridWidgetSettingsSection(
             }
         }
     }
+    // Do not use verticalScroll here: this section is embedded inside WidgetSelectionDialogForm's
+    // scrollable advanced-settings column; nested scrollables get unbounded height in dialogs.
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
             .padding(vertical = 8.dp)
     ) {
         Text(
