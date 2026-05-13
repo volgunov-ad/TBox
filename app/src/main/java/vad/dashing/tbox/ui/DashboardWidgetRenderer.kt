@@ -63,6 +63,7 @@ fun DashboardWidgetRenderer(
 ) {
     val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val activeTripCustomLayout by settingsViewModel.activeTripCustomWidgetLayout.collectAsStateWithLifecycle()
+    val activeTripSimpleLayout by settingsViewModel.activeTripSimpleWidgetLayout.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
     when (widget.dataKey) {
@@ -522,6 +523,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 customTripLayout = activeTripCustomLayout,
+                simpleTripLayout = activeTripSimpleLayout,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
@@ -542,6 +544,7 @@ fun DashboardWidgetRenderer(
                 appDataViewModel = appDataViewModel,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
+                simpleTripLayout = activeTripSimpleLayout,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {

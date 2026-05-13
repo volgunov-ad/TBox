@@ -709,6 +709,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = ActiveTripCustomWidgetLayout.default(),
         )
 
+    val activeTripSimpleWidgetLayout = settingsManager.activeTripSimpleWidgetLayoutJsonFlow
+        .map { ActiveTripCustomWidgetLayout.parseSimple(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ActiveTripCustomWidgetLayout.defaultSimplified(),
+        )
+
     val canDataSaveCount = settingsManager.canDataSaveCountFlow
         .stateIn(
             scope = viewModelScope,
@@ -972,6 +980,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveActiveTripCustomWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
         viewModelScope.launch {
             settingsManager.saveActiveTripCustomWidgetLayoutJson(
+                ActiveTripCustomWidgetLayout.serialize(layout)
+            )
+        }
+    }
+
+    fun saveActiveTripSimpleWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
+        viewModelScope.launch {
+            settingsManager.saveActiveTripSimpleWidgetLayoutJson(
                 ActiveTripCustomWidgetLayout.serialize(layout)
             )
         }

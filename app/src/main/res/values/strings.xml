@@ -502,9 +502,12 @@
     <string name="trips_refuel_count">Заправки</string>
     <string name="trips_engine_start_count">Запуски двигателя</string>
     <string name="trips_export">Экспорт</string>
-    <string name="trips_edit_custom_widget">Изменить настраиваемый виджет поездки</string>
+    <string name="trips_edit_custom_widget">Изменить настраиваемый виджет</string>
+    <string name="trips_edit_simple_widget">Изменить упрощённый виджет</string>
     <string name="trips_custom_widget_dialog_title">Настраиваемый виджет поездки</string>
-    <string name="trips_custom_widget_dialog_hint">Отметьте параметры для отображения. Удерживайте значок справа и перетащите вверх или вниз, чтобы изменить порядок.</string>
+    <string name="trips_simple_widget_dialog_title">Упрощённый виджет поездки</string>
+    <string name="trips_custom_widget_dialog_hint">Отметьте параметры для отображения. За значок справа потяните вверх или вниз, чтобы изменить порядок.</string>
+    <string name="trips_simple_widget_dialog_hint">Отметьте параметры для отображения. За значок справа потяните вверх или вниз, чтобы изменить порядок.</string>
     <string name="trips_custom_widget_drag_handle_a11y">Переместить строку</string>
     <string name="dialog_save_trips_downloads">Сохранить все поездки в один файл в папку Загрузки</string>
     <string name="trips_export_separator">----------------------------------------</string>

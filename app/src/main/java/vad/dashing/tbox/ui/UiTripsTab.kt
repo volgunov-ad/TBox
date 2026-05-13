@@ -115,6 +115,7 @@ fun TripsTab(
 
     var showExportDialog by remember { mutableStateOf(false) }
     var showCustomTripWidgetDialog by remember { mutableStateOf(false) }
+    var showSimpleTripWidgetDialog by remember { mutableStateOf(false) }
     /** Id поездки, удаление которой подтверждается (не привязан к текущему выбору в списке). */
     var pendingDeleteTripId by remember { mutableStateOf<String?>(null) }
 
@@ -142,6 +143,11 @@ fun TripsTab(
                 onClick = rememberWrappedOnClick { showCustomTripWidgetDialog = true },
             ) {
                 Text(stringResource(R.string.trips_edit_custom_widget), fontSize = 24.sp)
+            }
+            Button(
+                onClick = rememberWrappedOnClick { showSimpleTripWidgetDialog = true },
+            ) {
+                Text(stringResource(R.string.trips_edit_simple_widget), fontSize = 24.sp)
             }
             Button(
                 onClick = rememberWrappedOnClick { if (trips.isNotEmpty()) showExportDialog = true },
@@ -301,6 +307,12 @@ fun TripsTab(
             settingsViewModel = settingsViewModel,
             visible = showCustomTripWidgetDialog,
             onDismiss = { showCustomTripWidgetDialog = false },
+        )
+        ActiveTripCustomWidgetConfigDialog(
+            settingsViewModel = settingsViewModel,
+            visible = showSimpleTripWidgetDialog,
+            target = ActiveTripWidgetLayoutEditorTarget.Simple,
+            onDismiss = { showSimpleTripWidgetDialog = false },
         )
 
         selectedTrip?.let { trip ->

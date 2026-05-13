@@ -39,6 +39,7 @@ fun DashboardActiveTripWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
     customTripLayout: ActiveTripCustomWidgetLayout? = null,
+    simpleTripLayout: ActiveTripCustomWidgetLayout? = null,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
@@ -144,6 +145,15 @@ fun DashboardActiveTripWidgetItem(
                         fontSize = rowFont,
                         color = resolvedTextColor
                     )
+                } else if (simplified) {
+                    ActiveTripCustomWidgetRows(
+                        trip = t,
+                        layout = simpleTripLayout ?: ActiveTripCustomWidgetLayout.defaultSimplified(),
+                        rowFont = rowFont,
+                        resolvedTextColor = resolvedTextColor,
+                        dateFmt = dateFmt,
+                        context = context,
+                    )
                 } else if (custom) {
                     ActiveTripCustomWidgetRows(
                         trip = t,
@@ -152,98 +162,6 @@ fun DashboardActiveTripWidgetItem(
                         resolvedTextColor = resolvedTextColor,
                         dateFmt = dateFmt,
                         context = context,
-                    )
-                } else if (simplified) {
-                    StatusRow(
-                        label = stringResource(R.string.trips_start_time),
-                        value = dateFmt.format(Date(t.startTimeEpochMs)),
-                        unit = "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    t.endTimeEpochMs?.let { endMs ->
-                        StatusRow(
-                            label = stringResource(R.string.trips_end_time),
-                            value = dateFmt.format(Date(endMs)),
-                            unit = "",
-                            fontSize = rowFont,
-                            color = resolvedTextColor
-                        )
-                    }
-                    StatusRow(
-                        label = stringResource(R.string.trips_odometer_start),
-                        value = t.odometerStartKm?.let { valueToString(it, 0) }
-                            ?: stringResource(R.string.value_no_data),
-                        unit = if (t.odometerStartKm != null) stringResource(R.string.unit_km) else "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
-                        label = stringResource(R.string.trips_distance),
-                        value = valueToString(t.distanceKm, 0),
-                        unit = stringResource(R.string.unit_km),
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
-                        label = stringResource(R.string.trips_moving_time),
-                        value = formatTripDurationHuman(context, t.movingTimeMs),
-                        unit = "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
-                        label = stringResource(R.string.trips_idle_time),
-                        value = formatTripDurationHuman(context, t.idleTimeMs),
-                        unit = "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
-                        label = stringResource(R.string.trips_total_time),
-                        value = formatTripDurationHuman(
-                            context,
-                            t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs
-                        ),
-                        unit = "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    val avgM = TripRepository.averageSpeedMovingKmH(t)
-                    StatusRow(
-                        label = stringResource(R.string.trips_avg_speed_moving),
-                        value = avgM?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
-                        unit = if (avgM != null) stringResource(R.string.unit_kmh) else "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
-                        label = stringResource(R.string.trips_avg_speed_trip),
-                        value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
-                        unit = if (avgT != null) stringResource(R.string.unit_kmh) else "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
-                        label = stringResource(R.string.trips_fuel_used),
-                        value = valueToString(t.fuelConsumedLiters, 1),
-                        unit = stringResource(R.string.unit_liter),
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
-                        label = stringResource(R.string.trips_fuel_consumption_l_100km),
-                        value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
-                        unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
-                        fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
-                    StatusRow(
-                        label = stringResource(R.string.trips_fuel_refueled),
-                        value = valueToString(t.fuelRefueledLiters, 1),
-                        unit = stringResource(R.string.unit_liter),
-                        fontSize = rowFont,
-                        color = resolvedTextColor
                     )
                 } else {
                     StatusRow(

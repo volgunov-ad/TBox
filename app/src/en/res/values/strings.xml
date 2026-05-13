@@ -503,9 +503,12 @@
     <string name="trips_refuel_count">Refuelings</string>
     <string name="trips_engine_start_count">Engine starts</string>
     <string name="trips_export">Export</string>
-    <string name="trips_edit_custom_widget">Edit custom trip widget</string>
+    <string name="trips_edit_custom_widget">Edit custom widget</string>
+    <string name="trips_edit_simple_widget">Edit simplified widget</string>
     <string name="trips_custom_widget_dialog_title">Custom trip widget</string>
-    <string name="trips_custom_widget_dialog_hint">Check the parameters to show. Long-press the icon on the right and drag up or down to reorder.</string>
+    <string name="trips_simple_widget_dialog_title">Simplified trip widget</string>
+    <string name="trips_custom_widget_dialog_hint">Check the parameters to show. Drag the handle on the right up or down to reorder.</string>
+    <string name="trips_simple_widget_dialog_hint">Check the parameters to show. Drag the handle on the right up or down to reorder.</string>
     <string name="trips_custom_widget_drag_handle_a11y">Move row</string>
     <string name="dialog_save_trips_downloads">Save all trips to one file in the Downloads folder</string>
     <string name="trips_export_separator">----------------------------------------</string>

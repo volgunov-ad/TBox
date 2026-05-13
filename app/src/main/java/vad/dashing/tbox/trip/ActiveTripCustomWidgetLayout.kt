@@ -59,8 +59,50 @@ data class ActiveTripCustomWidgetLayout(
                 ActiveTripCustomWidgetField.entries.map { Row(it, enabled = true) }
             )
 
-        fun parse(raw: String): ActiveTripCustomWidgetLayout {
-            if (raw.isBlank()) return default()
+        /**
+         * Default layout for the simplified trip tile: same fields and order as the historical
+         * hard-coded [vad.dashing.tbox.ui.DashboardActiveTripWidgetItem] simplified branch.
+         */
+        fun defaultSimplified(): ActiveTripCustomWidgetLayout {
+            val enabledInOrder = listOf(
+                ActiveTripCustomWidgetField.START_TIME,
+                ActiveTripCustomWidgetField.END_TIME,
+                ActiveTripCustomWidgetField.ODOMETER_START,
+                ActiveTripCustomWidgetField.DISTANCE,
+                ActiveTripCustomWidgetField.MOVING_TIME,
+                ActiveTripCustomWidgetField.IDLE_TIME,
+                ActiveTripCustomWidgetField.TOTAL_TIME,
+                ActiveTripCustomWidgetField.AVG_SPEED_MOVING,
+                ActiveTripCustomWidgetField.AVG_SPEED_TRIP,
+                ActiveTripCustomWidgetField.FUEL_USED,
+                ActiveTripCustomWidgetField.FUEL_CONSUMPTION,
+                ActiveTripCustomWidgetField.FUEL_REFUELED,
+            )
+            val enabledSet = enabledInOrder.toSet()
+            val disabled =
+                ActiveTripCustomWidgetField.entries.filter { it !in enabledSet }
+            return ActiveTripCustomWidgetLayout(
+                enabledInOrder.map { Row(it, enabled = true) } +
+                    disabled.map { Row(it, enabled = false) },
+            )
+        }
+
+        fun parse(raw: String): ActiveTripCustomWidgetLayout =
+            parseWithDefaults(raw, blankDefault = default(), missingFieldEnabled = true)
+
+        fun parseSimple(raw: String): ActiveTripCustomWidgetLayout =
+            parseWithDefaults(
+                raw,
+                blankDefault = defaultSimplified(),
+                missingFieldEnabled = false,
+            )
+
+        private fun parseWithDefaults(
+            raw: String,
+            blankDefault: ActiveTripCustomWidgetLayout,
+            missingFieldEnabled: Boolean,
+        ): ActiveTripCustomWidgetLayout {
+            if (raw.isBlank()) return blankDefault
             return try {
                 val root = JSONObject(raw)
                 val arr = root.getJSONArray("rows")
@@ -76,12 +118,12 @@ data class ActiveTripCustomWidgetLayout(
                 }
                 for (f in ActiveTripCustomWidgetField.entries) {
                     if (f.id !in seen) {
-                        parsed.add(Row(f, enabled = true))
+                        parsed.add(Row(f, enabled = missingFieldEnabled))
                     }
                 }
                 ActiveTripCustomWidgetLayout(parsed)
             } catch (_: Exception) {
-                default()
+                blankDefault
             }
         }
 
