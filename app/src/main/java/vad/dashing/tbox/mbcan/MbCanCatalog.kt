@@ -115,8 +115,12 @@ object MbCanKnownVehiclePropertyId {
     const val FRONT_WINDSCREEN_HEAT_SWITCH = 316
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER] — rear window + mirrors. */
     const val HVAC_DEFROSTER_SWITCH = 41
-    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION] — 1 off, 2 on. */
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION] — property id. */
     const val HVAC_AIR_RECIRCULATION = 39
+    /** [canSetVehicleParam]/[canGetVehicleParam] value: recirculation on. */
+    const val HVAC_AIR_RECIRCULATION_VALUE_ON = 1
+    /** Same property: recirculation off. */
+    const val HVAC_AIR_RECIRCULATION_VALUE_OFF = 2
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_DEFROSTER_FRONT] — 1 off, 2 on. */
     const val HVAC_DEFROSTER_FRONT = 122
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_CHG_WIRELESS_SWITCH] — 1 off, 2 on. */
@@ -207,9 +211,9 @@ object MbCanCommandRegistry {
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
             policy = MbCanCommandPolicy.ToggleBinary(
-                offValue = 1,
-                onValue = 2,
-                unknownFallbackValue = 2
+                offValue = MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF,
+                onValue = MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON,
+                unknownFallbackValue = MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF,
             ),
             refreshSignal = MbCanSignal.HvacAirRecirculation
         ),

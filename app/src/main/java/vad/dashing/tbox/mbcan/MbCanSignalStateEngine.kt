@@ -360,8 +360,12 @@ internal class MbCanSignalStateEngine(
         /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER] — rear window + mirrors; same 1/2 as steering if used as binary. */
         fun decodeHvacDefrosterRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
 
-        /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION] — 1 off, 2 on. */
-        fun decodeHvacAirRecirculationRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+        /** Same raw values as [MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON]/[_OFF] and [MbCanCommandRegistry] toggle. */
+        fun decodeHvacAirRecirculationRaw(raw: Int): MbCanBinaryState = when (raw) {
+            MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON -> MbCanBinaryState.On
+            MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF -> MbCanBinaryState.Off
+            else -> MbCanBinaryState.Unknown
+        }
 
         /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_DEFROSTER_FRONT] — 1 off, 2 on. */
         fun decodeHvacDefrosterFrontRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
