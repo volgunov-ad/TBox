@@ -897,13 +897,15 @@ private fun showOverlayRequirementsDialog(context: Context) {
 
 @Composable
 fun LocationTabContent(
-    viewModel: TboxViewModel
+    viewModel: TboxViewModel,
+    onServiceCommand: (String, String, String) -> Unit,
 ) {
     val yesLabel = stringResource(R.string.value_yes)
     val noLabel = stringResource(R.string.value_no)
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
+    val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -919,6 +921,15 @@ fun LocationTabContent(
         locationUpdateTime?.let { locationUpdateTime ->
             timeFormat.format(locationUpdateTime)
         } ?: ""
+    }
+
+    var locCommandButtonsEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(locCommandButtonsEnabled) {
+        if (!locCommandButtonsEnabled) {
+            delay(5000)
+            locCommandButtonsEnabled = true
+        }
     }
 
     Column(
@@ -941,6 +952,75 @@ fun LocationTabContent(
             item { StatusRow(stringResource(R.string.location_magnetic_direction), String.format(Locale.getDefault(), "%.1f", locValues.magneticDirection)) }
             item { StatusRow(stringResource(R.string.location_utc), dateTime) }
             item { StatusRow(stringResource(R.string.location_raw_data), locValues.rawValue) }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (locCommandButtonsEnabled) {
+                        locCommandButtonsEnabled = false
+                        onServiceCommand(
+                            BackgroundService.ACTION_TBOX_APP_RESUME,
+                            BackgroundService.EXTRA_APP_NAME,
+                            "LOC",
+                        )
+                    }
+                },
+                enabled = locCommandButtonsEnabled && tboxConnected,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.location_button_resume_loc),
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (locCommandButtonsEnabled) {
+                        locCommandButtonsEnabled = false
+                        onServiceCommand(
+                            BackgroundService.ACTION_TBOX_APP_SUSPEND,
+                            BackgroundService.EXTRA_APP_NAME,
+                            "LOC",
+                        )
+                    }
+                },
+                enabled = locCommandButtonsEnabled && tboxConnected,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.location_button_suspend_loc),
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (locCommandButtonsEnabled) {
+                        locCommandButtonsEnabled = false
+                        onServiceCommand(
+                            BackgroundService.ACTION_TBOX_APP_STOP,
+                            BackgroundService.EXTRA_APP_NAME,
+                            "LOC",
+                        )
+                    }
+                },
+                enabled = locCommandButtonsEnabled && tboxConnected,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.location_button_stop_loc),
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }
