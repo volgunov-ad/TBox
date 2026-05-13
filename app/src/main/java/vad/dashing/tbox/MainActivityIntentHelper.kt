@@ -1,9 +1,13 @@
 package vad.dashing.tbox
 
 import android.app.Activity
+import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
+import android.view.Display
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,10 +82,22 @@ object MainActivityIntentHelper {
     }
 
     /**
+     * Prefer starting on the built-in display so OEM hosts do not route the activity to a
+     * [android.hardware.display.VirtualDisplay] owned by another launcher.
+     */
+    fun launchOnDefaultDisplayOptions(): Bundle? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+        return ActivityOptions.makeBasic().apply {
+            launchDisplayId = Display.DEFAULT_DISPLAY
+        }.toBundle()
+    }
+
+    /**
      * Opens a system screen to change the default HOME app (or at least Settings).
      * [Settings.ACTION_HOME_SETTINGS] is often missing once this app is already the launcher.
      */
     fun tryOpenDefaultHomeOrAppSettings(context: Context): Boolean {
+        val opts = launchOnDefaultDisplayOptions()
         val candidates = listOf(
             Intent(Settings.ACTION_HOME_SETTINGS),
             Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
@@ -91,9 +107,14 @@ object MainActivityIntentHelper {
         for (base in candidates) {
             val intent = Intent(base).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             try {
-                context.startActivity(intent)
+                context.startActivity(intent, opts)
                 return true
             } catch (_: Exception) {
+                try {
+                    context.applicationContext.startActivity(intent, opts)
+                    return true
+                } catch (_: Exception) {
+                }
             }
         }
         return false

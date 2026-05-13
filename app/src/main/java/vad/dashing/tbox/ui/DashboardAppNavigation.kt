@@ -2,18 +2,46 @@ package vad.dashing.tbox.ui
 
 import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.MainActivityIntentHelper
+import vad.dashing.tbox.R
 
 internal fun launchAppFromWidget(context: Context, packageName: String) {
     if (packageName.isBlank()) return
+    val appCtx = context.applicationContext
     try {
         val pm = context.packageManager
-        val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
+        val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: run {
+            Toast.makeText(
+                appCtx,
+                appCtx.getString(R.string.widget_app_launcher_no_launch_intent, packageName),
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
         MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-        context.startActivity(launchIntent)
+        val opts = MainActivityIntentHelper.launchOnDefaultDisplayOptions()
+        try {
+            context.startActivity(launchIntent, opts)
+        } catch (e: Exception) {
+            try {
+                appCtx.startActivity(launchIntent, opts)
+            } catch (e2: Exception) {
+                Toast.makeText(
+                    appCtx,
+                    e2.message ?: e.message
+                        ?: appCtx.getString(R.string.widget_app_launch_start_failed),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     } catch (e: Exception) {
-        e.printStackTrace()
+        Toast.makeText(
+            appCtx,
+            e.message ?: appCtx.getString(R.string.widget_app_launch_start_failed),
+            Toast.LENGTH_LONG
+        ).show()
     }
 }
 

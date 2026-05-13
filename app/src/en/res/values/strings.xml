@@ -291,6 +291,7 @@
     <string name="settings_home_launcher_desc">This app is registered as a home (launcher) candidate. In system settings, set it as the default home app if your firmware allows. Many OEM head units lock the factory launcher only. After selection, the Home key opens TBox Monitor instead of the stock shell; use the app shortcut widget or the system app list to open other apps.</string>
     <string name="settings_home_launcher_open_settings">Open home app settings</string>
     <string name="settings_home_launcher_open_failed">Could not open launcher or default-apps settings. Open system Settings manually (default apps / home), or use ADB temporarily.</string>
+    <string name="settings_home_launcher_troubleshoot_note">If shortcuts and settings still do nothing, the stock launcher process may be drawing above your window or intercepting starts. Check focus with: adb shell dumpsys window | grep -E \"mCurrentFocus|mFocusedApp\". That requires OEM changes or disabling the shell; a normal APK cannot remove it.</string>
     <string name="settings_backup_title">Backup</string>
     <string name="settings_backup_desc">Export and import all app settings and trip-related app data (motor hours, trips, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
     <string name="settings_backup_export">Export JSON</string>
@@ -522,6 +523,8 @@
     <string name="widget_app_launcher_icon_too_large">Image is too large for an icon (max 512×512 px)</string>
     <string name="widget_app_launcher_icon_invalid">Could not read the image</string>
     <string name="widget_app_launcher_icon_copy_failed">Could not save the image</string>
+    <string name="widget_app_launcher_no_launch_intent">No launch window for package \"%1$s\". Check that the app is installed. On Android 11+ package visibility may block resolution (this build declares a queries block in the manifest).</string>
+    <string name="widget_app_launch_start_failed">Could not start the app</string>
 
     <string name="cycle_voltage">Cycle voltage, V</string>
     <string name="cycle_speed">Cycle speed, km/h</string>

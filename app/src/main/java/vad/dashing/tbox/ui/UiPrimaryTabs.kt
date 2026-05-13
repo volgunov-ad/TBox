@@ -720,6 +720,12 @@ fun SettingsTabContent(
                     textAlign = TextAlign.Center
                 )
             }
+            Text(
+                text = stringResource(R.string.settings_home_launcher_troubleshoot_note),
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
         }
 
         SettingsTitle(stringResource(R.string.settings_backup_title))

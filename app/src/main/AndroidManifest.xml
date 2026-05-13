@@ -33,6 +33,23 @@
         tools:ignore="ScopedStorage"
         android:minSdkVersion="30" />
 
+    <!-- Android 11+: без этого getLaunchIntentForPackage / старт чужих приложений часто «молчит». -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.HOME_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.MANAGE_DEFAULT_APPS_SETTINGS" />
+        </intent>
+    </queries>
+
     <application
         android:name="vad.dashing.tbox.TboxApplication"
         android:allowBackup="true"
