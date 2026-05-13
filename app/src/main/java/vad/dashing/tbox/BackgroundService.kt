@@ -1310,6 +1310,12 @@ class BackgroundService : Service() {
                 TboxRepository.addLog("WARN", "Data Listener", "Wheel pressure restore: ${e.message}")
                 Log.w("Data Listener", "Wheel pressure restore failed", e)
             }
+            try {
+                restoreLastKnownFuelLevelFromAppData()
+            } catch (e: Exception) {
+                TboxRepository.addLog("WARN", "Data Listener", "Fuel level restore: ${e.message}")
+                Log.w("Data Listener", "Fuel level restore failed", e)
+            }
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
                 var prevRpm = 0f
@@ -1339,6 +1345,7 @@ class BackgroundService : Service() {
                             if (wheelPressurePersistAcrossStopsSetting.value) {
                                 persistLastKnownWheelPressuresOnEngineStop()
                             }
+                            persistLastKnownFuelLevelOnEngineStop()
                         }
                         onTripRpmSample(r, prevRpm, now)
                         prevRpm = r
@@ -2013,6 +2020,34 @@ class BackgroundService : Service() {
 
     private suspend fun persistLastKnownWheelPressuresOnEngineStop() {
         appDataManager.saveLastKnownNonZeroWheelPressuresPartial(CanDataRepository.wheelsPressure.value)
+    }
+
+    private suspend fun persistLastKnownFuelLevelOnEngineStop() {
+        appDataManager.saveLastKnownFuelLevelPartial(
+            percentFiltered = CanDataRepository.fuelLevelPercentageFiltered.value,
+            calibratedStandardLiters = CanDataRepository.fuelLevelCalibratedLiters.value,
+        )
+    }
+
+    /**
+     * Восстанавливает последний уровень топлива с диска до прихода CAN (уровень по шине только при работающем двигателе).
+     * Вызывать после [ensureFuelEstimatorForReads] в пайплайне старта службы.
+     */
+    private suspend fun restoreLastKnownFuelLevelFromAppData() {
+        val (pct, liters) = withContext(Dispatchers.IO) {
+            appDataManager.loadLastKnownFuelLevel()
+        }
+        when {
+            pct != null -> {
+                CanDataRepository.updateFuelLevelPercentage(pct)
+                CanDataRepository.updateFuelLevelPercentageFiltered(pct)
+                FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
+            }
+            liters != null -> {
+                CanDataRepository.updateFuelLevelCalibratedLiters(liters)
+            }
+            else -> Unit
+        }
     }
 
     private suspend fun restoreWheelPressuresFromAppDataIfNeeded() {
