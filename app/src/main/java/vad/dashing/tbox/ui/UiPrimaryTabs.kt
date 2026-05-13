@@ -39,7 +39,6 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
-import vad.dashing.tbox.MainActivity
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
@@ -754,21 +753,6 @@ fun SettingsTabContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            val mainActivity = context as? MainActivity
-            if (mainActivity != null) {
-                OutlinedButton(
-                    onClick = { mainActivity.requestHomeRoleForUser() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings_home_role_request_button),
-                        fontSize = 20.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
         }
 
         SettingsTitle(stringResource(R.string.settings_backup_title))
