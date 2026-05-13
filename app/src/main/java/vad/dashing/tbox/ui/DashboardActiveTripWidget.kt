@@ -18,12 +18,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.trip.formatTripDurationHuman
 import vad.dashing.tbox.R
+import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
@@ -36,6 +38,7 @@ fun DashboardActiveTripWidgetItem(
     appDataViewModel: AppDataViewModel,
     showTitle: Boolean = false,
     titleOverride: String = "",
+    customTripLayout: ActiveTripCustomWidgetLayout? = null,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
@@ -106,6 +109,7 @@ fun DashboardActiveTripWidgetItem(
                 val rowFont = titleFont
                 val simplified = widget.dataKey == ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
                 val mini = widget.dataKey == ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
+                val custom = widget.dataKey == ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
                 val avgT = TripRepository.averageSpeedTripKmH(t)
                 val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(t)
                 if (mini) {
@@ -139,6 +143,15 @@ fun DashboardActiveTripWidgetItem(
                         unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
                         color = resolvedTextColor
+                    )
+                } else if (custom) {
+                    ActiveTripCustomWidgetRows(
+                        trip = t,
+                        layout = customTripLayout ?: ActiveTripCustomWidgetLayout.default(),
+                        rowFont = rowFont,
+                        resolvedTextColor = resolvedTextColor,
+                        dateFmt = dateFmt,
+                        context = context,
                     )
                 } else if (simplified) {
                     StatusRow(
@@ -274,6 +287,16 @@ fun DashboardActiveTripWidgetItem(
                     StatusRow(
                         label = stringResource(R.string.trips_idle_time),
                         value = formatTripDurationHuman(context, t.idleTimeMs),
+                        unit = "",
+                        fontSize = rowFont,
+                        color = resolvedTextColor
+                    )
+                    StatusRow(
+                        label = stringResource(R.string.trips_engine_running_time),
+                        value = formatTripDurationHuman(
+                            context,
+                            t.movingTimeMs + t.idleTimeMs
+                        ),
                         unit = "",
                         fontSize = rowFont,
                         color = resolvedTextColor

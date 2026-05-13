@@ -114,6 +114,7 @@ fun TripsTab(
     )
 
     var showExportDialog by remember { mutableStateOf(false) }
+    var showCustomTripWidgetDialog by remember { mutableStateOf(false) }
     /** Id поездки, удаление которой подтверждается (не привязан к текущему выбору в списке). */
     var pendingDeleteTripId by remember { mutableStateOf<String?>(null) }
 
@@ -134,8 +135,14 @@ fun TripsTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Button(
+                onClick = rememberWrappedOnClick { showCustomTripWidgetDialog = true },
+            ) {
+                Text(stringResource(R.string.trips_edit_custom_widget), fontSize = 24.sp)
+            }
             Button(
                 onClick = rememberWrappedOnClick { if (trips.isNotEmpty()) showExportDialog = true },
                 enabled = trips.isNotEmpty()
@@ -290,6 +297,12 @@ fun TripsTab(
             )
         }
 
+        ActiveTripCustomWidgetConfigDialog(
+            settingsViewModel = settingsViewModel,
+            visible = showCustomTripWidgetDialog,
+            onDismiss = { showCustomTripWidgetDialog = false },
+        )
+
         selectedTrip?.let { trip ->
             OutlinedTextField(
                 value = nameEdit,
@@ -405,6 +418,15 @@ fun TripsTab(
                     StatusRow(
                         stringResource(R.string.trips_idle_time),
                         formatTripDurationHuman(context, trip.idleTimeMs)
+                    )
+                }
+                item {
+                    StatusRow(
+                        stringResource(R.string.trips_engine_running_time),
+                        formatTripDurationHuman(
+                            context,
+                            trip.movingTimeMs + trip.idleTimeMs
+                        )
                     )
                 }
                 item {
@@ -597,6 +619,13 @@ internal fun buildTripExportLines(
             appendStatusLine(
                 context.getString(R.string.trips_idle_time),
                 formatTripDurationHuman(context, trip.idleTimeMs)
+            )
+            appendStatusLine(
+                context.getString(R.string.trips_engine_running_time),
+                formatTripDurationHuman(
+                    context,
+                    trip.movingTimeMs + trip.idleTimeMs
+                )
             )
             appendStatusLine(
                 context.getString(R.string.trips_parking_time),

@@ -23,6 +23,7 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import android.content.Context
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -700,6 +701,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val activeTripCustomWidgetLayout = settingsManager.activeTripCustomWidgetLayoutJsonFlow
+        .map { ActiveTripCustomWidgetLayout.parse(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ActiveTripCustomWidgetLayout.default(),
+        )
+
     val canDataSaveCount = settingsManager.canDataSaveCountFlow
         .stateIn(
             scope = viewModelScope,
@@ -957,6 +966,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockLocationSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockLocationSetting(enabled)
+        }
+    }
+
+    fun saveActiveTripCustomWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
+        viewModelScope.launch {
+            settingsManager.saveActiveTripCustomWidgetLayoutJson(
+                ActiveTripCustomWidgetLayout.serialize(layout)
+            )
         }
     }
 

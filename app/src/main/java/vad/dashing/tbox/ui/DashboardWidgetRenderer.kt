@@ -16,6 +16,7 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
@@ -61,6 +62,7 @@ fun DashboardWidgetRenderer(
     enableInnerInteractions: Boolean = true
 ) {
     val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val activeTripCustomLayout by settingsViewModel.activeTripCustomWidgetLayout.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
     when (widget.dataKey) {
@@ -508,6 +510,27 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 valueAccuracy = widgetConfig.valueAccuracy,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY -> {
+            DashboardActiveTripWidgetItem(
+                widget = widget,
+                appDataViewModel = appDataViewModel,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                customTripLayout = activeTripCustomLayout,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {
+                    if (appDataViewModel.activeTrip.value?.isActive == true) {
+                        onTripFinishAndStart()
+                    }
+                },
+                elevation = elevation,
+                shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
