@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.provider.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,17 +65,37 @@ object MainActivityIntentHelper {
         }
 
     /**
-     * Third-party app [Intent] from [android.content.pm.PackageManager.getLaunchIntentForPackage]:
-     * bring an existing task forward; [Intent.FLAG_ACTIVITY_NEW_TASK] only when [context] is not an [Activity].
+     * Third-party app [Intent] from [android.content.pm.PackageManager.getLaunchIntentForPackage].
+     * When [MainActivity] is the default HOME launcher, the app runs in the root home task; starting
+     * another app **must** use [Intent.FLAG_ACTIVITY_NEW_TASK] (and typically
+     * [Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED]) or the system will not show the target activity.
      */
-    fun applyExternalAppLaunchFlags(intent: Intent, context: Context) {
+    fun applyExternalAppLaunchFlags(intent: Intent, @Suppress("UNUSED_PARAMETER") context: Context) {
         intent.addFlags(
-            Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
         )
-        if (context !is Activity) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    /**
+     * Opens a system screen to change the default HOME app (or at least Settings).
+     * [Settings.ACTION_HOME_SETTINGS] is often missing once this app is already the launcher.
+     */
+    fun tryOpenDefaultHomeOrAppSettings(context: Context): Boolean {
+        val candidates = listOf(
+            Intent(Settings.ACTION_HOME_SETTINGS),
+            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+            Intent(Settings.ACTION_SETTINGS),
+            Intent().setClassName("com.android.settings", "com.android.settings.Settings"),
+        )
+        for (base in candidates) {
+            val intent = Intent(base).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                context.startActivity(intent)
+                return true
+            } catch (_: Exception) {
+            }
         }
+        return false
     }
 }

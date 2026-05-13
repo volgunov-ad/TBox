@@ -40,6 +40,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -701,16 +702,10 @@ fun SettingsTabContent(
             )
             Button(
                 onClick = {
-                    runCatching {
-                        context.startActivity(
-                            Intent(Settings.ACTION_HOME_SETTINGS).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                        )
-                    }.onFailure {
+                    if (!MainActivityIntentHelper.tryOpenDefaultHomeOrAppSettings(context)) {
                         Toast.makeText(
                             context,
-                            context.getString(R.string.settings_home_launcher_settings_failed),
+                            context.getString(R.string.settings_home_launcher_open_failed),
                             Toast.LENGTH_LONG
                         ).show()
                     }
