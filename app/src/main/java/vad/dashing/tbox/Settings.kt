@@ -376,6 +376,12 @@ class SettingsManager(private val context: Context) {
         // Ключ для сохранения конфигурации виджетов
         private val DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}dashboard_widgets")
 
+        private val ACTIVE_TRIP_CUSTOM_WIDGET_LAYOUT_KEY =
+            stringPreferencesKey("${KEY_PREFIX}active_trip_custom_widget_layout")
+
+        private val ACTIVE_TRIP_SIMPLE_WIDGET_LAYOUT_KEY =
+            stringPreferencesKey("${KEY_PREFIX}active_trip_simple_widget_layout")
+
     }
 
     // Flow для конфигурации виджетов
@@ -397,6 +403,16 @@ class SettingsManager(private val context: Context) {
             val rawJson = preferences[getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)] ?: ""
             parseMainScreenDashboardsJson(rawJson)
         }
+        .distinctUntilChanged()
+
+    /** JSON for [vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout]; empty string means defaults. */
+    val activeTripCustomWidgetLayoutJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ACTIVE_TRIP_CUSTOM_WIDGET_LAYOUT_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    /** JSON for simplified trip tile layout; empty string means [ActiveTripCustomWidgetLayout.defaultSimplified]. */
+    val activeTripSimpleWidgetLayoutJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ACTIVE_TRIP_SIMPLE_WIDGET_LAYOUT_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val autoModemRestartFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -686,6 +702,18 @@ class SettingsManager(private val context: Context) {
     suspend fun saveDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         context.settingsDataStore.edit { preferences ->
             preferences[DASHBOARD_WIDGETS_KEY] = serializeWidgetConfigs(config)
+        }
+    }
+
+    suspend fun saveActiveTripCustomWidgetLayoutJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ACTIVE_TRIP_CUSTOM_WIDGET_LAYOUT_KEY] = json
+        }
+    }
+
+    suspend fun saveActiveTripSimpleWidgetLayoutJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ACTIVE_TRIP_SIMPLE_WIDGET_LAYOUT_KEY] = json
         }
     }
 

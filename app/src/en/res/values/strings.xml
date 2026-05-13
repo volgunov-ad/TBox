@@ -474,6 +474,7 @@
     <string name="data_title_active_trip_widget">Current trip</string>
     <string name="data_title_active_trip_widget_simple">Current trip (simple)</string>
     <string name="data_title_active_trip_widget_mini">Current trip (mini)</string>
+    <string name="data_title_active_trip_widget_custom">Current trip (custom)</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_fuel_price_fuel_type_title">Fuel for price lookup</string>
@@ -500,6 +501,7 @@
     <string name="trips_distance">Distance</string>
     <string name="trips_moving_time">Moving time</string>
     <string name="trips_idle_time">Idle time (engine on)</string>
+    <string name="trips_engine_running_time">Engine running time</string>
     <string name="trips_parking_time">Parking time</string>
     <string name="trips_total_time">Total time</string>
     <string name="trips_active_trip_mini_enroute_label">Time on trip</string>
@@ -520,6 +522,13 @@
     <string name="trips_refuel_count">Refuelings</string>
     <string name="trips_engine_start_count">Engine starts</string>
     <string name="trips_export">Export</string>
+    <string name="trips_edit_custom_widget">Edit custom widget</string>
+    <string name="trips_edit_simple_widget">Edit simplified widget</string>
+    <string name="trips_custom_widget_dialog_title">Custom trip widget</string>
+    <string name="trips_simple_widget_dialog_title">Simplified trip widget</string>
+    <string name="trips_custom_widget_dialog_hint">Check the parameters to show. Drag the handle on the right up or down to reorder.</string>
+    <string name="trips_simple_widget_dialog_hint">Check the parameters to show. Drag the handle on the right up or down to reorder.</string>
+    <string name="trips_custom_widget_drag_handle_a11y">Move row</string>
     <string name="dialog_save_trips_downloads">Save all trips to one file in the Downloads folder</string>
     <string name="trips_export_separator">----------------------------------------</string>
     <string name="refuels_empty">No refuels</string>

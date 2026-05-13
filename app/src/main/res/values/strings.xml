@@ -473,6 +473,7 @@
     <string name="data_title_active_trip_widget">Текущая поездка</string>
     <string name="data_title_active_trip_widget_simple">Текущая поездка (упрощённый)</string>
     <string name="data_title_active_trip_widget_mini">Текущая поездка (мини)</string>
+    <string name="data_title_active_trip_widget_custom">Текущая поездка (настраиваемый)</string>
 
     <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
     <string name="settings_fuel_price_fuel_type_title">Тип топлива для расчёта цены</string>
@@ -499,6 +500,7 @@
     <string name="trips_distance">Пробег</string>
     <string name="trips_moving_time">Время в движении</string>
     <string name="trips_idle_time">Время в простое</string>
+    <string name="trips_engine_running_time">Время работы двигателя</string>
     <string name="trips_parking_time">Время парковки</string>
     <string name="trips_total_time">Общее время</string>
     <string name="trips_active_trip_mini_enroute_label">Время в пути</string>
@@ -519,6 +521,13 @@
     <string name="trips_refuel_count">Заправки</string>
     <string name="trips_engine_start_count">Запуски двигателя</string>
     <string name="trips_export">Экспорт</string>
+    <string name="trips_edit_custom_widget">Изменить настраиваемый виджет</string>
+    <string name="trips_edit_simple_widget">Изменить упрощённый виджет</string>
+    <string name="trips_custom_widget_dialog_title">Настраиваемый виджет поездки</string>
+    <string name="trips_simple_widget_dialog_title">Упрощённый виджет поездки</string>
+    <string name="trips_custom_widget_dialog_hint">Отметьте параметры для отображения. За значок справа потяните вверх или вниз, чтобы изменить порядок.</string>
+    <string name="trips_simple_widget_dialog_hint">Отметьте параметры для отображения. За значок справа потяните вверх или вниз, чтобы изменить порядок.</string>
+    <string name="trips_custom_widget_drag_handle_a11y">Переместить строку</string>
     <string name="dialog_save_trips_downloads">Сохранить все поездки в один файл в папку Загрузки</string>
     <string name="trips_export_separator">----------------------------------------</string>
     <string name="refuels_empty">Нет заправок</string>
