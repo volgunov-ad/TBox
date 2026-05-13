@@ -11,13 +11,23 @@ import android.view.SurfaceView
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,22 +36,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsViewModel
 
 /**
  * Expert experiment: create a [VirtualDisplay] backed by a [SurfaceView] surface, and optionally
- * start this app on that display (requires API 26+). Third-party apps may be blocked by the system.
+ * start this app or a user-picked launcher app on that display (API 26+). OEM may block launches.
  */
 @Composable
-fun VirtualDisplaySandboxDialog(onDismissRequest: () -> Unit) {
+fun VirtualDisplaySandboxDialog(
+    settingsViewModel: SettingsViewModel,
+    onDismissRequest: () -> Unit,
+) {
     val context = LocalContext.current
     val appCtx = context.applicationContext
     val displayManager = remember {
@@ -51,6 +71,21 @@ fun VirtualDisplaySandboxDialog(onDismissRequest: () -> Unit) {
     var lastWidth by remember { mutableIntStateOf(0) }
     var lastHeight by remember { mutableIntStateOf(0) }
     var statusLine by remember { mutableStateOf("") }
+    var selectedTargetPackage by remember { mutableStateOf("") }
+    var filterText by rememberSaveable { mutableStateOf("") }
+    val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val apps = rememberLaunchableAppEntries(iconRevision)
+    val needle = filterText.trim().lowercase()
+    val filteredApps = remember(apps, needle) {
+        if (needle.isEmpty()) {
+            apps
+        } else {
+            apps.filter {
+                it.label.lowercase().contains(needle) ||
+                    it.packageName.lowercase().contains(needle)
+            }
+        }
+    }
 
     fun releaseVirtualDisplay() {
         virtualDisplay?.release()
@@ -91,7 +126,15 @@ fun VirtualDisplaySandboxDialog(onDismissRequest: () -> Unit) {
         }
     }
 
-    fun tryLaunchSelfOnVirtualDisplay() {
+    fun tryLaunchPackageOnVirtualDisplay(packageName: String) {
+        if (packageName.isBlank()) {
+            Toast.makeText(
+                appCtx,
+                appCtx.getString(R.string.settings_virtual_display_none_selected_toast),
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
         val vd = virtualDisplay ?: run {
             Toast.makeText(
                 appCtx,
@@ -117,11 +160,11 @@ fun VirtualDisplaySandboxDialog(onDismissRequest: () -> Unit) {
             return
         }
         try {
-            val launchIntent = appCtx.packageManager.getLaunchIntentForPackage(appCtx.packageName)
+            val launchIntent = appCtx.packageManager.getLaunchIntentForPackage(packageName)
             if (launchIntent == null) {
                 Toast.makeText(
                     appCtx,
-                    appCtx.getString(R.string.settings_virtual_display_no_launch_intent),
+                    appCtx.getString(R.string.widget_app_launcher_no_launch_intent, packageName),
                     Toast.LENGTH_LONG
                 ).show()
                 return
@@ -159,7 +202,11 @@ fun VirtualDisplaySandboxDialog(onDismissRequest: () -> Unit) {
             )
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     text = stringResource(R.string.settings_virtual_display_dialog_body),
                     style = MaterialTheme.typography.bodyMedium,
@@ -209,13 +256,83 @@ fun VirtualDisplaySandboxDialog(onDismissRequest: () -> Unit) {
                         }
                     }
                 )
-                Button(
-                    onClick = { tryLaunchSelfOnVirtualDisplay() },
+                Text(
+                    text = stringResource(R.string.settings_virtual_display_pick_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                )
+                OutlinedTextField(
+                    value = filterText,
+                    onValueChange = { filterText = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    label = {
+                        Text(
+                            text = stringResource(R.string.widget_app_launcher_search),
+                            fontSize = 18.sp
+                        )
+                    },
+                    singleLine = true
+                )
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    filteredApps.forEach { app ->
+                        val pkg = app.packageName
+                        val selected = pkg == selectedTargetPackage
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedTargetPackage = pkg }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            RadioButton(
+                                selected = selected,
+                                onClick = { selectedTargetPackage = pkg }
+                            )
+                            if (app.icon != null) {
+                                Image(
+                                    bitmap = app.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(36.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.widget_app_launcher_no_icon),
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                            Text(
+                                text = app.label,
+                                fontSize = 18.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = { tryLaunchPackageOnVirtualDisplay(appCtx.packageName) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)
                 ) {
                     Text(stringResource(R.string.settings_virtual_display_launch_self))
+                }
+                Button(
+                    onClick = { tryLaunchPackageOnVirtualDisplay(selectedTargetPackage) },
+                    enabled = selectedTargetPackage.isNotBlank(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                ) {
+                    Text(stringResource(R.string.settings_virtual_display_launch_selected_app))
                 }
             }
         },

@@ -777,6 +777,7 @@ fun SettingsTabContent(
             }
             if (showVirtualDisplaySandbox) {
                 VirtualDisplaySandboxDialog(
+                    settingsViewModel = settingsViewModel,
                     onDismissRequest = { showVirtualDisplaySandbox = false }
                 )
             }

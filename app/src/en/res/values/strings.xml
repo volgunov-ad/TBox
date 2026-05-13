@@ -303,7 +303,7 @@
     <string name="settings_virtual_display_section_desc">Uses DisplayManager.createVirtualDisplay with a SurfaceView surface. On Android 8+ you can try launching this app on that display (ActivityOptions.launchDisplayId). Third-party apps and OEM shells often block or ignore this.</string>
     <string name="settings_virtual_display_open_button">Open experiment…</string>
     <string name="settings_virtual_display_dialog_title">Virtual display</string>
-    <string name="settings_virtual_display_dialog_body">Once the surface area appears, the virtual display is created. The button below tries to start another instance of this app on that display. Close the dialog to release resources.</string>
+    <string name="settings_virtual_display_dialog_body">Once the surface is ready, the virtual display is created. Below is the launcher app list: pick one and tap «Launch selected…», or launch this app. Close the dialog to release resources.</string>
     <string name="settings_virtual_display_created">Virtual display created: id=%1$d, size %2$d×%3$d</string>
     <string name="settings_virtual_display_create_failed">createVirtualDisplay returned null</string>
     <string name="settings_virtual_display_need_surface">Wait for the surface to be ready first</string>
@@ -312,6 +312,9 @@
     <string name="settings_virtual_display_no_launch_intent">No launch intent for this package</string>
     <string name="settings_virtual_display_launch_sent">Start request sent (displayId=%1$d)</string>
     <string name="settings_virtual_display_launch_failed">Could not start on the virtual display</string>
+    <string name="settings_virtual_display_launch_selected_app">Launch selected on virtual display</string>
+    <string name="settings_virtual_display_pick_title">Other app (from launcher list)</string>
+    <string name="settings_virtual_display_none_selected_toast">Select an app in the list first</string>
     <string name="settings_virtual_display_launch_self">Launch this app on the virtual display</string>
     <string name="settings_virtual_display_close">Close</string>
     <string name="settings_backup_title">Backup</string>

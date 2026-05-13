@@ -306,7 +306,7 @@
     <string name="settings_virtual_display_section_desc">Создаётся DisplayManager.createVirtualDisplay с поверхностью SurfaceView. На Android 8+ можно попробовать запустить это же приложение на созданном дисплее (ActivityOptions.launchDisplayId). Сторонние приложения и OEM-лаунчеры часто блокируют или игнорируют такой запуск.</string>
     <string name="settings_virtual_display_open_button">Открыть эксперимент…</string>
     <string name="settings_virtual_display_dialog_title">Виртуальный дисплей</string>
-    <string name="settings_virtual_display_dialog_body">После появления области Surface дисплей создаётся. Кнопка ниже пытается открыть второй экземпляр главного экрана на этом дисплее. Закройте диалог, чтобы освободить ресурс.</string>
+    <string name="settings_virtual_display_dialog_body">После появления области Surface дисплей создаётся. Ниже — список приложений с ярлыком: выберите пакет и нажмите «Запустить выбранное…», либо запустите это приложение. Закройте диалог, чтобы освободить ресурс.</string>
     <string name="settings_virtual_display_created">Виртуальный дисплей создан: id=%1$d, размер %2$d×%3$d</string>
     <string name="settings_virtual_display_create_failed">createVirtualDisplay вернул null</string>
     <string name="settings_virtual_display_need_surface">Сначала дождитесь отрисовки области Surface</string>
@@ -315,6 +315,9 @@
     <string name="settings_virtual_display_no_launch_intent">Нет launch intent для этого пакета</string>
     <string name="settings_virtual_display_launch_sent">Запрос отправлен (displayId=%1$d)</string>
     <string name="settings_virtual_display_launch_failed">Не удалось запустить на виртуальном дисплее</string>
+    <string name="settings_virtual_display_launch_selected_app">Запустить выбранное на виртуальном дисплее</string>
+    <string name="settings_virtual_display_pick_title">Другое приложение (из списка лаунчера)</string>
+    <string name="settings_virtual_display_none_selected_toast">Сначала выберите приложение в списке</string>
     <string name="settings_virtual_display_launch_self">Запустить это приложение на виртуальном дисплее</string>
     <string name="settings_virtual_display_close">Закрыть</string>
     <string name="settings_backup_title">Резервная копия</string>
