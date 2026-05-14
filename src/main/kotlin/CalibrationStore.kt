@@ -21,7 +21,7 @@ class CalibrationStore(
     }
 
     fun getZoneK(zoneIdx: Int): Double =
-        if (sensorLitersPerZone[zoneIdx] > 0) realLitersPerZone[zoneIdx] / sensorLitersPerZone[zoneIdx] else getGlobalK()
+        if (sensorLitersPerZone[zoneIdx] > 0) realLitersPerZone[zoneIdx] / sensorLitersPerZone[zoneIdx] else 1.0 //getGlobalK()
 
     fun getGlobalK(): Double {
         val matureK = sensorLitersPerZone.indices

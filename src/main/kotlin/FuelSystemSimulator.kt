@@ -7,53 +7,46 @@ class FuelSystemSimulator(
     private val efficiencyCalculator = FuelEfficiencyCalculator()
 
     fun runTestScenario() {
-        // Тестовые данные: добавим побольше моточасов для наглядности
         val history = listOf(
-            //FuelEntry(1000.0, 100.0, 5.0, 25.0, 22.0, 20.0), // +20 град, 100 мч
-            //FuelEntry(1500.0, 110.0, 10.0, 45.0, 38.0, -5.0), // -5 град, 110 мч (проехали 500км за 10ч)
-
-            // ТЕСТ ШУМА: В чеке 50л, а датчик поднялся всего на 5л (с 5 до 10)
-            // Разница колоссальная (90%), фильтр должен это "забанить"
-            //FuelEntry(2000.0, 100.0, 10.0, 30.0, 21.0, 15.0),
-
-            //FuelEntry(1000.0, 100.0, 10.0, 48.0, 40.0, 25.0),
-
-            //FuelEntry(1000.0, 100.0, 48.0, 48.0, 0.0, 10.0),
-
-            // Заправка 4 литра — должна ПРОЙТИ (больше 3.0)
-            //FuelEntry(1000.0, 100.0, 10.0, 14.1, 4.0, 15.0),
-
-            // Тест сопоставления реальной заправки в TbM и попытка иммитировать данные в текущем альгоритме
-            FuelEntry(1100.0, 105.0, 36.5, 50.0, 13.11, 15.0)
-
-
+            FuelEntry(1100.0, 105.0, 36.5, 50.0, 13.11, 8.0)
         )
 
+        // ПЕРЕМЕННЫЕ ДЛЯ СБОРА ИТОГОВ
+        var totalLiters = 0.0
+        var totalDistance = 0.0
+        var totalHours = 0.0
+
+        println("\n=== 1. Имитация обучения (Заправки) ===")
+
+        // ЕДИНЫЙ ПРОХОД: и фильтрация, и обучение, и накопление данных
         history.forEachIndexed { index, entry ->
             val sensorDelta = entry.sensorAfter - entry.sensorBefore
             val deviation = filter.calculateDeviation(entry)
             val threshold = filter.maxDeviationPercent
-            val minLimit = filter.minRefillLimit // Берем наш порог из фильтра
+            val minLimit = filter.minRefillLimit
 
             if (filter.isValid(entry)) {
                 val report = estimator.train(entry)
                 println("[Запись #${index + 1}] $report (Отклонение: ${"%.1f".format(deviation * 100)}%)")
+
+                // Накапливаем данные (начиная со второй записи)
+                if (index > 0) {
+                    val prev = history[index - 1]
+                    totalLiters += entry.litersByCheck
+                    totalDistance += (entry.odometerKm - prev.odometerKm)
+                    totalHours += (entry.engineHours - prev.engineHours)
+                }
             } else {
                 println("[Запись #${index + 1}] ⚠️ ОТКЛОНЕНО ФИЛЬТРОМ!")
 
                 when {
-                    // Причина 1: Слишком малый объем
                     entry.litersByCheck < minLimit -> {
                         println("   -> Причина: Объем заправки (${entry.litersByCheck} л) меньше порога обучения ($minLimit л).")
                         println("      (Данные отобразятся на экране, но не изменят калибровку бака)")
                     }
-
-                    // Причина 2: Уровень не поднялся
                     sensorDelta <= 0 -> {
                         println("   -> Причина: Датчик не зафиксировал рост уровня (Дельта: ${"%.1f".format(sensorDelta)} л).")
                     }
-
-                    // Причина 3: Аномальный шум (то, что мы уже делали)
                     else -> {
                         println("   -> Причина: Аномальное расхождение данных.")
                         println("   -> Отклонение: ${"%.1f".format(deviation * 100)}% (Порог: ${"%.1f".format(threshold * 100)}%)")
@@ -63,34 +56,7 @@ class FuelSystemSimulator(
             }
         }
 
-
-
-        // ПЕРЕМЕННЫЕ ДЛЯ СБОРА ИТОГОВ
-        var totalLiters = 0.0
-        var totalDistance = 0.0
-        var totalHours = 0.0
-
-        println("\n=== 1. Имитация обучения (Заправки) ===")
-
-        // Перебираем историю парами, чтобы посчитать разницу между заправками
-        for (i in 0 until history.size) {
-            val entry = history[i]
-            if (filter.isValid(entry)) {
-                println(estimator.train(entry))
-
-                // Накапливаем данные (начиная со второй заправки, когда есть дельта)
-                if (i > 0) {
-                    val prev = history[i-1]
-                    totalLiters += entry.litersByCheck
-                    totalDistance += (entry.odometerKm - prev.odometerKm)
-                    totalHours += (entry.engineHours - prev.engineHours)
-                }
-            }
-        }
-
         displayResults(totalLiters, totalDistance, totalHours)
-
-        // Вызываем наш "тяжелый тест" вручную для проверки логики пробок
         runHardModeTest()
     }
 
