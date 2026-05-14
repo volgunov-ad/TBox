@@ -232,20 +232,20 @@
     <string name="settings_floating_rows_title">Number of tile rows in floating panel</string>
     <string name="settings_floating_cols_title">Number of tile columns in floating panel</string>
 
-    <string name="settings_floating_usage_stats_hide_title">Hide panels over third-party apps</string>
-    <string name="settings_floating_usage_stats_hide_explanation">Using usage statistics (polled every 3 seconds): the dialog configures both hiding rules and a separate force-show rule (panels over selected apps even when “Show floating panel” is off). If rules conflict, hiding wins. Requires the “Usage access” permission.</string>
+    <string name="settings_floating_usage_stats_hide_title">Hide/show panels over third-party apps</string>
+    <string name="settings_floating_usage_stats_hide_explanation">The dialog configures both hiding rules and a separate force-show rule (panels over selected apps even when “Show floating panel” is off). If rules conflict, hiding wins. Requires the “Usage access” permission</string>
     <string name="settings_floating_usage_stats_hide_configure">Configure apps and panels</string>
     <string name="settings_floating_usage_stats_hide_dialog_title">Floating panels and third-party apps</string>
-    <string name="settings_floating_usage_stats_hide_dialog_intro">Two independent rule blocks below (usage stats polled every 3 seconds). If the same panel is listed for both hide and show, hide wins when the hide rule applies for the current foreground app. The same third-party package may appear in both app columns so different panels can follow different rules.</string>
+    <string name="settings_floating_usage_stats_hide_dialog_intro">Two independent rule blocks below. If the same panel is listed for both hide and show, hide wins when the hide rule applies for the current foreground app. The same third-party package may appear in both app columns so different panels can follow different rules</string>
     <string name="settings_floating_usage_stats_hide_section_title">Hide panels</string>
     <string name="settings_floating_usage_stats_hide_section_body">On the left, pick apps; on the right, pick floating panels to hide while any of those apps is the active foreground app.</string>
     <string name="settings_floating_usage_stats_show_section_title">Show panels</string>
-    <string name="settings_floating_usage_stats_show_section_body">On the left, pick apps; on the right, pick floating panels to show over other apps even when “Show floating panel” is off for that panel. When a different app is in the foreground, the normal on/off setting applies again.</string>
-    <string name="settings_floating_usage_stats_hide_permission_hint">Without usage access permission, hiding will not work.</string>
+    <string name="settings_floating_usage_stats_show_section_body">On the left, pick apps; on the right, pick floating panels to show over other apps even when “Show floating panel” is off for that panel. When a different app is in the foreground, the normal on/off setting applies again</string>
+    <string name="settings_floating_usage_stats_hide_permission_hint">Without usage access permission, hiding will not work</string>
     <string name="settings_floating_usage_stats_open_usage_settings">Open usage access settings</string>
     <string name="settings_floating_usage_stats_hide_column_apps">Apps</string>
     <string name="settings_floating_usage_stats_hide_column_panels">Floating panels</string>
-    <string name="settings_floating_usage_stats_hide_no_panels">No floating panels yet. Add a panel in the list above first.</string>
+    <string name="settings_floating_usage_stats_hide_no_panels">No floating panels yet. Add a panel in the list above first</string>
     <string name="settings_floating_usage_stats_hide_filter_apps">Search (hide)</string>
     <string name="settings_floating_usage_stats_show_filter_apps">Search (show)</string>
 
