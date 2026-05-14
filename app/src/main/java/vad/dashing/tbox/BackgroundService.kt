@@ -98,6 +98,8 @@ class BackgroundService : Service() {
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
+    private lateinit var usageStatsHideFloatingWatchPackages: StateFlow<Set<String>>
+    private lateinit var usageStatsHideFloatingPanelIds: StateFlow<Set<String>>
     private lateinit var canDataSaveCount: StateFlow<Int>
     private lateinit var fuelTankLitersSetting: StateFlow<Int>
     private lateinit var fuelCalibrationJsonSetting: StateFlow<String>
@@ -142,6 +144,7 @@ class BackgroundService : Service() {
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
+    private var usageStatsFloatingHideJob: Job? = null
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -383,6 +386,8 @@ class BackgroundService : Service() {
         private val settingsFlowWhileSubscribed = SharingStarted.WhileSubscribed(5_000L)
         private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
+        /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
+        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 3_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -419,6 +424,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
+            usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usageStatsHideFloatingWatchPackages)
+            usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.usageStatsHideFloatingPanelIds)
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, settingsSnap.canDataSaveCount)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
@@ -466,6 +475,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
+            usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
+                .stateIn(scope, warmOnCollect, emptySet())
+            usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
+                .stateIn(scope, warmOnCollect, emptySet())
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, 5)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
@@ -2197,11 +2210,58 @@ class BackgroundService : Service() {
                     }
             }
         }
+        startUsageStatsFloatingHideWatcher()
     }
 
     private fun stopSettingsListener() {
+        stopUsageStatsFloatingHideWatcher()
         settingsListenerJob?.cancel()
         settingsListenerJob = null
+    }
+
+    private fun startUsageStatsFloatingHideWatcher() {
+        if (usageStatsFloatingHideJob?.isActive == true) return
+        usageStatsFloatingHideJob = scope.launch {
+            var lastAppliedHideIds = emptySet<String>()
+            while (isActive) {
+                delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
+                val watch = usageStatsHideFloatingWatchPackages.value
+                val panelTargets = usageStatsHideFloatingPanelIds.value
+                val myPkg = packageName
+                val canRun = watch.isNotEmpty() &&
+                    panelTargets.isNotEmpty() &&
+                    UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)
+                val newHide = if (!canRun) {
+                    emptySet()
+                } else {
+                    val fg = UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
+                        this@BackgroundService,
+                        windowMs = 25_000L
+                    )
+                    if (fg != null && fg != myPkg && watch.contains(fg)) {
+                        panelTargets
+                    } else {
+                        emptySet()
+                    }
+                }
+                if (newHide != lastAppliedHideIds) {
+                    lastAppliedHideIds = newHide
+                    overlayController.setUsageStatsHiddenFloatingPanelIds(newHide)
+                    overlayController.syncFloatingDashboards(floatingDashboards.value)
+                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                }
+            }
+        }
+    }
+
+    private fun stopUsageStatsFloatingHideWatcher() {
+        usageStatsFloatingHideJob?.cancel()
+        usageStatsFloatingHideJob = null
+        scope.launch {
+            overlayController.setUsageStatsHiddenFloatingPanelIds(emptySet())
+            overlayController.syncFloatingDashboards(floatingDashboards.value)
+            overlayController.ensureFloatingDashboards(floatingDashboards.value)
+        }
     }
 
     private fun startPeriodicJob() {
@@ -2897,7 +2957,7 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, tboxClientReconnectJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob, openMainActivityJob
+            settingsListenerJob, usageStatsFloatingHideJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob, openMainActivityJob
         ).forEach { job ->
             job?.cancel()
         }

@@ -265,6 +265,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = emptyList()
         )
 
+    val usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
+
+    val usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
+
     private val selectedFloatingDashboardIdState = MutableStateFlow(DEFAULT_FLOATING_DASHBOARD_ID)
 
     private val _floatingPanelDeleteInProgressId = MutableStateFlow<String?>(null)
@@ -1544,6 +1558,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveFloatingDashboards(configs: List<FloatingDashboardConfig>) {
         viewModelScope.launch {
             settingsManager.saveFloatingDashboards(configs)
+        }
+    }
+
+    fun saveUsageStatsHideFloatingRules(watchPackages: Set<String>, floatingPanelIds: Set<String>) {
+        viewModelScope.launch {
+            settingsManager.saveUsageStatsHideFloatingRules(watchPackages, floatingPanelIds)
         }
     }
 

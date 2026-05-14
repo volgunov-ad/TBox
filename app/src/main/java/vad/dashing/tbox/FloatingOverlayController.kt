@@ -30,6 +30,8 @@ internal class FloatingOverlayController(
     private val overlayOffIds = mutableSetOf<String>()
     /** Panels temporarily closed by the «hide other floating panels» tile; cleared on restore or global suspend. */
     private val hiddenFloatingPanelIds = mutableSetOf<String>()
+    /** Panels hidden while a watched third-party app is in foreground ([BackgroundService] usage-stats poll). */
+    private val usageStatsHiddenFloatingPanelIds = mutableSetOf<String>()
     private var overlaysSuspended = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
@@ -42,6 +44,7 @@ internal class FloatingOverlayController(
     fun suspendOverlays() {
         overlaysSuspended = true
         hiddenFloatingPanelIds.clear()
+        usageStatsHiddenFloatingPanelIds.clear()
         closeAllOverlays()
     }
 
@@ -63,6 +66,7 @@ internal class FloatingOverlayController(
 
     fun onDestroy() {
         hiddenFloatingPanelIds.clear()
+        usageStatsHiddenFloatingPanelIds.clear()
         closeAllOverlays()
         lifecycleOwner.setCurrentState(Lifecycle.State.DESTROYED)
         lifecycleOwner.clear()
@@ -99,10 +103,11 @@ internal class FloatingOverlayController(
                 overlayRetryCounts.remove(id)
                 overlayOffIds.remove(id)
                 hiddenFloatingPanelIds.remove(id)
+                usageStatsHiddenFloatingPanelIds.remove(id)
             }
 
             enabledConfigs.forEach { config ->
-                if (hiddenFloatingPanelIds.contains(config.id)) {
+                if (isFloatingPanelTemporarilyHidden(config.id)) {
                     if (overlayViews.containsKey(config.id)) {
                         closeOverlay(config.id)
                     }
@@ -128,6 +133,7 @@ internal class FloatingOverlayController(
                 overlayRetryCounts.remove(id)
                 overlayOffIds.remove(id)
                 hiddenFloatingPanelIds.remove(id)
+                usageStatsHiddenFloatingPanelIds.remove(id)
             }
             FloatingOverlayLoadTimings.mark("float_sync_done")
             FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
@@ -145,7 +151,7 @@ internal class FloatingOverlayController(
             }
             val enabledConfigs = configs.filter { it.enabled }
             enabledConfigs.forEach { config ->
-                if (hiddenFloatingPanelIds.contains(config.id)) return@forEach
+                if (isFloatingPanelTemporarilyHidden(config.id)) return@forEach
                 if (overlayOffIds.contains(config.id)) return@forEach
                 if (overlayViews.containsKey(config.id)) {
                     overlayRetryCounts[config.id] = 0
@@ -348,6 +354,21 @@ internal class FloatingOverlayController(
                     closeOverlay(panelId)
                 }
             }
+        }
+    }
+
+    private fun isFloatingPanelTemporarilyHidden(panelId: String): Boolean =
+        hiddenFloatingPanelIds.contains(panelId) ||
+            usageStatsHiddenFloatingPanelIds.contains(panelId)
+
+    /**
+     * Panels listed here stay closed until cleared or foreground leaves the watched-app set
+     * ([BackgroundService] updates this set every few seconds).
+     */
+    suspend fun setUsageStatsHiddenFloatingPanelIds(ids: Set<String>) {
+        withContext(Dispatchers.Main) {
+            usageStatsHiddenFloatingPanelIds.clear()
+            usageStatsHiddenFloatingPanelIds.addAll(ids)
         }
     }
 }

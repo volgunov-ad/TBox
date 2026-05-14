@@ -299,6 +299,7 @@ fun SettingsTabContent(
     var showExportBackupDialog by remember { mutableStateOf(false) }
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
+    var showUsageStatsHideFloatingDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -516,6 +517,32 @@ fun SettingsTabContent(
             Modifier,
             enabled = hasFloatingPanels
         )
+
+        Text(
+            text = stringResource(R.string.settings_floating_usage_stats_hide_title),
+            modifier = Modifier.padding(top = 12.dp),
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.settings_floating_usage_stats_hide_explanation),
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            fontSize = 20.sp,
+            lineHeight = 20.sp * 1.35f,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { showUsageStatsHideFloatingDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_floating_usage_stats_hide_configure),
+                fontSize = 22.sp,
+            )
+        }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
@@ -808,6 +835,14 @@ fun SettingsTabContent(
                         AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
+            )
+        }
+
+        if (showUsageStatsHideFloatingDialog) {
+            UsageStatsHideFloatingPanelsDialog(
+                settingsViewModel = settingsViewModel,
+                floatingPanels = floatingDashboardsList,
+                onDismiss = { showUsageStatsHideFloatingDialog = false },
             )
         }
 

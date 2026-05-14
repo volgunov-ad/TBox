@@ -168,6 +168,10 @@ data class BackgroundServiceSettingsSnapshot(
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
     val floatingDashboards: List<FloatingDashboardConfig>,
+    /** Package names: when any of these is in foreground, listed floating panels are hidden (usage-stats poll). */
+    val usageStatsHideFloatingWatchPackages: Set<String>,
+    /** Floating dashboard ids to hide while a watched package is foreground. */
+    val usageStatsHideFloatingPanelIds: Set<String>,
     val canDataSaveCount: Int,
     val fuelTankLiters: Int,
     /** JSON калибровки топлива (пустая строка — нет данных). */
@@ -319,6 +323,8 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = false
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
+        private const val USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY = "usage_stats_hide_floating_watch_packages"
+        private const val USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY = "usage_stats_hide_floating_panel_ids"
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
         private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
@@ -389,6 +395,22 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             val rawJson = preferences[getStringKey(FLOATING_DASHBOARDS_LIST_KEY)] ?: ""
             parseFloatingDashboardsJson(rawJson)
+        }
+        .distinctUntilChanged()
+
+    val usageStatsHideFloatingWatchPackagesFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
+            )
+        }
+        .distinctUntilChanged()
+
+    val usageStatsHideFloatingPanelIdsFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY)] ?: "[]"
+            )
         }
         .distinctUntilChanged()
 
@@ -641,6 +663,27 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[UI_CLICK_SOUNDS_KEY] ?: false }
         .distinctUntilChanged()
 
+    private fun stringSetFromJsonArray(raw: String): Set<String> {
+        if (raw.isBlank()) return emptySet()
+        return try {
+            val a = JSONArray(raw)
+            buildSet {
+                for (i in 0 until a.length()) {
+                    val s = a.optString(i).trim()
+                    if (s.isNotEmpty()) add(s)
+                }
+            }
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun stringSetToJsonArray(values: Set<String>): String {
+        val a = JSONArray()
+        values.sorted().forEach { a.put(it) }
+        return a.toString()
+    }
+
     /**
      * Single DataStore read for all keys backing [BackgroundService] setting [kotlinx.coroutines.flow.StateFlow]s.
      */
@@ -666,6 +709,12 @@ class SettingsManager(private val context: Context) {
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
             mockLocation = preferences[MOCK_LOCATION] ?: false,
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
+            usageStatsHideFloatingWatchPackages = stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
+            ),
+            usageStatsHideFloatingPanelIds = stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY)] ?: "[]"
+            ),
             canDataSaveCount = preferences[CAN_DATA_SAVE_COUNT_KEY] ?: DEFAULT_CAN_DATA_SAVE_COUNT,
             fuelTankLiters = preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS,
             fuelCalibrationJson = preferences[FUEL_CALIBRATION_JSON_KEY].orEmpty(),
@@ -808,6 +857,15 @@ class SettingsManager(private val context: Context) {
                 )
             }
         saveCustomString(FLOATING_DASHBOARDS_LIST_KEY, serializeFloatingDashboards(normalized))
+    }
+
+    suspend fun saveUsageStatsHideFloatingRules(watchPackages: Set<String>, floatingPanelIds: Set<String>) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] =
+                stringSetToJsonArray(watchPackages)
+            preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY)] =
+                stringSetToJsonArray(floatingPanelIds)
+        }
     }
 
     suspend fun saveSelectedTab(tabIndex: Int) {
