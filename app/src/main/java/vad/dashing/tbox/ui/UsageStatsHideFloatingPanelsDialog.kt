@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
@@ -68,6 +70,7 @@ fun UsageStatsHideFloatingPanelsDialog(
     }
 
     val hasUsageAccess = UsageStatsHideFloatingHelper.hasUsageAccessPermission(context)
+    val dialogCoroutineScope = rememberCoroutineScope()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -221,12 +224,13 @@ fun UsageStatsHideFloatingPanelsDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = rememberWrappedOnClick {
-                    settingsViewModel.saveUsageStatsHideFloatingRules(draftWatch, draftPanels)
+            val onSaveClick = rememberWrappedOnClick {
+                dialogCoroutineScope.launch {
+                    settingsViewModel.persistUsageStatsHideFloatingRules(draftWatch, draftPanels)
                     onDismiss()
                 }
-            ) {
+            }
+            Button(onClick = onSaveClick) {
                 AppAlertDialogButtonLabel(stringResource(R.string.action_save))
             }
         },
