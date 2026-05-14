@@ -424,10 +424,12 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
+            // Eagerly: nothing in the service collects these flows; only .value is read. With
+            // WhileSubscribed the upstream DataStore would never run and rules would stay empty.
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
-                .stateIn(scope, warmOnCollect, settingsSnap.usageStatsHideFloatingWatchPackages)
+                .stateIn(scope, eager, settingsSnap.usageStatsHideFloatingWatchPackages)
             usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
-                .stateIn(scope, warmOnCollect, settingsSnap.usageStatsHideFloatingPanelIds)
+                .stateIn(scope, eager, settingsSnap.usageStatsHideFloatingPanelIds)
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, settingsSnap.canDataSaveCount)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
@@ -476,9 +478,9 @@ class BackgroundService : Service() {
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
-                .stateIn(scope, warmOnCollect, emptySet())
+                .stateIn(scope, eager, emptySet())
             usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
-                .stateIn(scope, warmOnCollect, emptySet())
+                .stateIn(scope, eager, emptySet())
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, 5)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
