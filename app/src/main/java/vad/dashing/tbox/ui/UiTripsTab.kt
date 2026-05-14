@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -136,7 +137,7 @@ fun TripsTab(
             horizontalArrangement = Arrangement.End
         ) {
             Button(
-                onClick = { if (trips.isNotEmpty()) showExportDialog = true },
+                onClick = rememberWrappedOnClick { if (trips.isNotEmpty()) showExportDialog = true },
                 enabled = trips.isNotEmpty()
             ) {
                 Text(stringResource(R.string.trips_export), fontSize = 24.sp)
@@ -196,26 +197,29 @@ fun TripsTab(
                         val star = if (favorites.contains(id)) " ★" else ""
                         val title = trip.name.trim().ifEmpty { "" }
                         val suffix = if (title.isNotEmpty()) " — $title" else ""
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "${dateTimeFormat.format(Date(trip.startTimeEpochMs))}$suffix$star",
-                                    style = tabTextStyle,
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            },
-                            onClick = {
+                        key(id) {
+                            val menuClick = rememberWrappedOnClick {
                                 selectedId = id
                                 expanded = false
-                            },
-                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                        )
+                            }
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "${dateTimeFormat.format(Date(trip.startTimeEpochMs))}$suffix$star",
+                                        style = tabTextStyle,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                onClick = menuClick,
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            )
+                        }
                     }
                 }
             }
             Button(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     if (selectedId.isNotEmpty() && selectedTrip != null && !selectedTrip.isActive) {
                         pendingDeleteTripId = selectedId
                     }
@@ -240,7 +244,7 @@ fun TripsTab(
                     text = { AppAlertDialogText(stringResource(R.string.trips_delete_confirm_message)) },
                     confirmButton = {
                         Button(
-                            onClick = {
+                            onClick = rememberWrappedOnClick {
                                 appDataViewModel.deleteTrip(tripId)
                                 pendingDeleteTripId = null
                             },
@@ -249,7 +253,7 @@ fun TripsTab(
                         }
                     },
                     dismissButton = {
-                        OutlinedButton(onClick = { pendingDeleteTripId = null }) {
+                        OutlinedButton(onClick = rememberWrappedOnClick { pendingDeleteTripId = null }) {
                             AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                         }
                     },
@@ -264,7 +268,7 @@ fun TripsTab(
                 text = { AppAlertDialogText(stringResource(R.string.dialog_save_trips_downloads)) },
                 confirmButton = {
                     Button(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             val lines = buildTripExportLines(
                                 context = context,
                                 trips = trips,
@@ -279,7 +283,7 @@ fun TripsTab(
                     }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { showExportDialog = false }) {
+                    OutlinedButton(onClick = rememberWrappedOnClick { showExportDialog = false }) {
                         AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                     }
                 }
@@ -323,7 +327,7 @@ fun TripsTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
-                    onClick = {
+                    onClick = rememberWrappedOnClick {
                         appDataViewModel.setTripFavorite(trip.id, !fav)
                     },
                     enabled = fav || favorites.size < TripRepository.MAX_FAVORITES
@@ -340,7 +344,7 @@ fun TripsTab(
                     )
                 }
                 if (trip.isActive && activeTrip?.id == trip.id) {
-                    Button(onClick = onTripFinishAndStart) {
+                    Button(onClick = rememberWrappedOnClick(onTripFinishAndStart)) {
                         Text(
                             stringResource(R.string.trips_finish),
                             fontSize = 24.sp

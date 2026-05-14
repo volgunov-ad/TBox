@@ -5,7 +5,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -149,7 +148,7 @@ fun MediaPlayersInlineSelection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = enabled) {
+                    .clickableWithSound(enabled = enabled) {
                         val updated = selectedPlayers.toMutableSet()
                         if (isChecked) {
                             updated.remove(pkg)
@@ -163,7 +162,7 @@ fun MediaPlayersInlineSelection(
             ) {
                 Checkbox(
                     checked = isChecked,
-                    onCheckedChange = { checked ->
+                    onCheckedChange = rememberWrappedOnCheckedChange { checked ->
                         val updated = selectedPlayers.toMutableSet()
                         if (checked) {
                             updated.add(pkg)
@@ -203,7 +202,7 @@ fun MediaPlayersInlineSelection(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedButton(
-                                onClick = {
+                                onClick = rememberWrappedOnClick {
                                     pendingIconPackage = pkg
                                     pickCustomIcon.launch("image/*")
                                 },
@@ -232,7 +231,7 @@ fun MediaPlayersInlineSelection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = enabled) {
+                    .clickableWithSound(enabled = enabled) {
                         val updated = selectedPlayers.toMutableSet()
                         if (isChecked) {
                             updated.remove(pkg)
@@ -246,7 +245,7 @@ fun MediaPlayersInlineSelection(
             ) {
                 Checkbox(
                     checked = isChecked,
-                    onCheckedChange = { checked ->
+                    onCheckedChange = rememberWrappedOnCheckedChange { checked ->
                         val updated = selectedPlayers.toMutableSet()
                         if (checked) {
                             updated.add(pkg)
@@ -297,7 +296,7 @@ fun MediaPlayersInlineSelection(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedButton(
-                                onClick = {
+                                onClick = rememberWrappedOnClick {
                                     pendingIconPackage = pkg
                                     pickCustomIcon.launch("image/*")
                                 },
@@ -335,7 +334,7 @@ private fun MusicPlayerIconDeleteButton(
         hasCustom = settingsViewModel.hasCustomLauncherAppIcon(packageName)
     }
     OutlinedButton(
-        onClick = { settingsViewModel.clearCustomLauncherAppIcon(packageName) },
+        onClick = rememberWrappedOnClick { settingsViewModel.clearCustomLauncherAppIcon(packageName) },
         enabled = enabled && hasCustom,
     ) {
         Text(

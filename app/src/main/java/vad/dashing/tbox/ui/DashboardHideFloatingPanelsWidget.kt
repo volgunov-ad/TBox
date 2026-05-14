@@ -1,8 +1,12 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,7 +26,11 @@ fun DashboardHideFloatingPanelsWidgetItem(
     shape: Dp,
     textColor: Color,
     backgroundColor: Color,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
+    defaultTitle: String,
 ) {
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
     DashboardWidgetScaffold(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -31,21 +39,37 @@ fun DashboardHideFloatingPanelsWidgetItem(
         shape = shape,
         textColor = textColor,
         backgroundColor = backgroundColor
-    ) { _, resolvedTextColor ->
+    ) { availableHeight, resolvedTextColor ->
         val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .wrapContentHeight(Alignment.CenterVertically),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val pad = 4.dp.toPx()
-                val maxRadius = min(size.width, size.height) / 2f - pad
-                val radius = (maxRadius * textScale).coerceIn(2f, maxRadius.coerceAtLeast(2f))
-                drawCircle(
-                    color = resolvedTextColor,
-                    radius = radius,
-                    center = Offset(size.width / 2f, size.height / 2f)
-                )
+            DashboardWidgetTitleRowIfVisible(
+                showTitle = showTitle,
+                titleText = titleText,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(if (showTitle) 2f else 1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val pad = 4.dp.toPx()
+                    val maxRadius = min(size.width, size.height) / 2f - pad
+                    val radius = (maxRadius * textScale).coerceIn(2f, maxRadius.coerceAtLeast(2f))
+                    drawCircle(
+                        color = resolvedTextColor,
+                        radius = radius,
+                        center = Offset(size.width / 2f, size.height / 2f)
+                    )
+                }
             }
         }
     }

@@ -1,7 +1,6 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +20,7 @@ import android.appwidget.AppWidgetManager
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -57,6 +57,7 @@ import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
@@ -179,6 +180,17 @@ internal class WidgetSelectionDialogState(
         }
     )
 
+    var tileBackgroundImageRelPathLight by mutableStateOf(
+        initialConfig.tileBackgroundImageRelPathLight?.takeIf {
+            TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+        }
+    )
+    var tileBackgroundImageRelPathDark by mutableStateOf(
+        initialConfig.tileBackgroundImageRelPathDark?.takeIf {
+            TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+        }
+    )
+
     /** `null` = default decimals per data key in provider; otherwise 0..2 fractional digits. */
     var valueAccuracy by mutableStateOf(initialConfig.valueAccuracy?.takeIf { it in 0..2 })
 
@@ -262,7 +274,7 @@ internal fun ExternalAppWidgetPickerSection(
             fontSize = 20.sp,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        OutlinedButton(onClick = onPickClick) {
+        OutlinedButton(onClick = rememberWrappedOnClick(onPickClick)) {
             Text(text = stringResource(R.string.widget_external_app_pick), fontSize = 22.sp)
         }
     }
@@ -281,7 +293,7 @@ internal fun WidgetColorThemeSegmentRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutlinedButton(
-            onClick = { onSegmentSelected(0) },
+            onClick = rememberWrappedOnClick { onSegmentSelected(0) },
             enabled = enabled,
             modifier = Modifier.weight(1f),
             border = BorderStroke(
@@ -313,7 +325,7 @@ internal fun WidgetColorThemeSegmentRow(
             )
         }
         OutlinedButton(
-            onClick = { onSegmentSelected(1) },
+            onClick = rememberWrappedOnClick { onSegmentSelected(1) },
             enabled = enabled,
             modifier = Modifier.weight(1f),
             border = BorderStroke(
@@ -467,6 +479,8 @@ internal fun WidgetSelectionDialogForm(
     bottomContent: (@Composable () -> Unit)? = null,
     mainScreenPanelId: String = "",
     floatingDashboardPanelId: String = "",
+    widgetIndex: Int = 0,
+    tileBackgroundPanelStorageId: String = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
 ) {
     val context = LocalContext.current
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
@@ -598,13 +612,15 @@ internal fun WidgetSelectionDialogForm(
                             .fillMaxWidth()
                             .padding(top = 8.dp, bottom = 4.dp)
                     )
-                    SettingSwitch(
-                        state.showUnit,
-                        { state.showUnit = it },
-                        stringResource(R.string.widget_show_unit),
-                        "",
-                        state.togglesEnabled
-                    )
+                    if (WidgetsRepository.supportsShowUnit(state.selectedDataKey)) {
+                        SettingSwitch(
+                            state.showUnit,
+                            { state.showUnit = it },
+                            stringResource(R.string.widget_show_unit),
+                            "",
+                            state.togglesEnabled
+                        )
+                    }
                     if (WidgetsRepository.supportsSingleLineDualMetrics(state.selectedDataKey)) {
                         SettingSwitch(
                             state.singleLineDualMetrics,
@@ -745,8 +761,15 @@ internal fun WidgetSelectionDialogForm(
                             valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
                         )
                     }
+                    TileBackgroundImageSettingsSection(
+                        state = state,
+                        settingsViewModel = settingsViewModel,
+                        panelStorageId = tileBackgroundPanelStorageId,
+                        widgetIndex = widgetIndex,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                    )
                     OutlinedButton(
-                        onClick = { state.resetTileTextAndBackgroundColors() },
+                        onClick = rememberWrappedOnClick { state.resetTileTextAndBackgroundColors() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 8.dp, bottom = 8.dp),
@@ -806,30 +829,31 @@ internal fun WidgetSelectionDialogForm(
                         singleLine = true,
                     )
                     filteredTileOptions.forEach { (key, displayName) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    state.applySelectedDataKey(key)
-                                }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = state.selectedDataKey == key,
-                                onClick = {
-                                    state.applySelectedDataKey(key)
-                                }
-                            )
-                            Text(
-                                text = displayName,
-                                fontSize = 24.sp,
+                        key(key) {
+                            val selectKey = rememberWrappedOnClick { state.applySelectedDataKey(key) }
+                            Row(
                                 modifier = Modifier
-                                    .padding(start = 8.dp)
-                                    .weight(1f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                                    .fillMaxWidth()
+                                    .clickableWithSound {
+                                        state.applySelectedDataKey(key)
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = state.selectedDataKey == key,
+                                    onClick = selectKey
+                                )
+                                Text(
+                                    text = displayName,
+                                    fontSize = 24.sp,
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .weight(1f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                     }
@@ -863,7 +887,7 @@ internal fun WidgetSelectionDialogActions(
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedButton(
-                onClick = {
+                onClick = rememberWrappedOnClick {
                     val next = !state.showAdvancedSettings
                     state.showAdvancedSettings = next
                     if (next) {
@@ -901,7 +925,7 @@ internal fun WidgetSelectionDialogActions(
             }
             if (showWholePanelButton) {
                 OutlinedButton(
-                    onClick = {
+                    onClick = rememberWrappedOnClick {
                         val next = !state.showWholePanelSettings
                         state.showWholePanelSettings = next
                         if (next) {
@@ -944,7 +968,7 @@ internal fun WidgetSelectionDialogActions(
             deleteAfterWholePanel?.invoke(this)
         }
         OutlinedButton(
-            onClick = onDismiss,
+            onClick = rememberWrappedOnClick(onDismiss),
             modifier = Modifier.padding(end = 12.dp)
         ) {
             Text(
@@ -954,7 +978,7 @@ internal fun WidgetSelectionDialogActions(
         }
         Button(
             enabled = state.canSaveSelection,
-            onClick = onSave
+            onClick = rememberWrappedOnClick(onSave)
         ) {
             Text(
                 text = stringResource(R.string.action_save),
@@ -1090,7 +1114,13 @@ internal fun applyWidgetSelectionChanges(
                         0
                     }
                 }
-            }
+            },
+            tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
+                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
+            tileBackgroundImageRelPathDark = state.tileBackgroundImageRelPathDark?.takeIf {
+                TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")

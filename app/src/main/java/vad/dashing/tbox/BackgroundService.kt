@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationJson
+import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
 import vad.dashing.tbox.fuellevelcalibration.FuelEntry
 import vad.dashing.tbox.fuellevelcalibration.FuelFilter
 import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
@@ -104,6 +105,7 @@ class BackgroundService : Service() {
     private lateinit var fuelCalibrationMaturityThresholdSetting: StateFlow<Int>
     private lateinit var fuelPriceFuelIdSetting: StateFlow<Int>
     private lateinit var splitTripTimeMinutesSetting: StateFlow<Int>
+    private lateinit var wheelPressurePersistAcrossStopsSetting: StateFlow<Boolean>
     private val fuelPriceClient by lazy { FuelPriceClient() }
 
     private val serverPort = 50047
@@ -431,6 +433,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.fuelPriceFuelId)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, settingsSnap.splitTripTimeMinutes)
+            wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
+                .stateIn(scope, eager, settingsSnap.wheelPressurePersistAcrossStops)
         } else {
             autoModemRestart = settingsManager.autoModemRestartFlow
                 .stateIn(scope, eager, false)
@@ -476,6 +480,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, FuelTypes.DEFAULT_FUEL_ID)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, 5)
+            wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
+                .stateIn(scope, eager, false)
         }
     }
 
@@ -697,6 +703,8 @@ class BackgroundService : Service() {
                         startTboxClientReconnectWatchdog()
                         yield()
                         startPeriodicJob()
+                        yield()
+                        ensureFuelEstimatorForReads()
                         yield()
                         startDataListener()
                         startFuelCalibratedLitersWatcher()
@@ -1294,6 +1302,14 @@ class BackgroundService : Service() {
 
     private fun startDataListener() {
         dataListenerJob = scope.launch {
+            try {
+                if (wheelPressurePersistAcrossStopsSetting.value) {
+                    restoreWheelPressuresFromAppDataIfNeeded()
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("WARN", "Data Listener", "Wheel pressure restore: ${e.message}")
+                Log.w("Data Listener", "Wheel pressure restore failed", e)
+            }
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
                 var prevRpm = 0f
@@ -1320,6 +1336,9 @@ class BackgroundService : Service() {
                         }
                         if (prevRpm > 0f && r == 0f) {
                             persistMotorHoursToStore()
+                            if (wheelPressurePersistAcrossStopsSetting.value) {
+                                persistLastKnownWheelPressuresOnEngineStop()
+                            }
                         }
                         onTripRpmSample(r, prevRpm, now)
                         prevRpm = r
@@ -1357,16 +1376,32 @@ class BackgroundService : Service() {
             ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()?.let { it / 100f * tankL }
 
     private fun baselineCalibratedStandardLitersFromPercent(percent: Float, tankL: Float): Float {
-        val tankI = fuelTankLitersSetting.value.coerceAtLeast(1)
-        val est = buildFuelEstimator(
-            tankI,
-            fuelCalibrationZoneCountSetting.value,
-            fuelCalibrationJsonSetting.value,
-            fuelCalibrationMaturityThresholdSetting.value,
-        )
+        val est = ensureFuelEstimatorForReads() ?: return percent / 100f * tankL
         val sensorLiters = percent / 100f * tankL
         val temp = (CanDataRepository.outsideTemperature.value ?: 15f).toDouble()
         return est.getCorrectedLiters(sensorLiters.toDouble(), temp).litersStandard.toFloat()
+    }
+
+    private fun ensureFuelEstimatorForReads(): FuelSmartEstimator? {
+        val key = FuelCalibrationLive.EstimatorSettingsKey(
+            tankLiters = fuelTankLitersSetting.value.coerceAtLeast(1),
+            zoneCount = fuelCalibrationZoneCountSetting.value,
+            calibrationJson = fuelCalibrationJsonSetting.value,
+            maturityThresholdLiters = fuelCalibrationMaturityThresholdSetting.value,
+        )
+        return FuelCalibrationLive.bindEstimatorIfChanged(key) {
+            buildFuelEstimator(
+                key.tankLiters,
+                key.zoneCount,
+                key.calibrationJson,
+                key.maturityThresholdLiters,
+            )
+        }
+    }
+
+    private fun refreshFuelCalibrationRepositoryOutputs() {
+        ensureFuelEstimatorForReads()
+        FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
     }
 
     /**
@@ -1976,6 +2011,30 @@ class BackgroundService : Service() {
         CarDataRepository.markPersisted(v)
     }
 
+    private suspend fun persistLastKnownWheelPressuresOnEngineStop() {
+        appDataManager.saveLastKnownNonZeroWheelPressuresPartial(CanDataRepository.wheelsPressure.value)
+    }
+
+    private suspend fun restoreWheelPressuresFromAppDataIfNeeded() {
+        val saved = withContext(Dispatchers.IO) {
+            appDataManager.loadLastKnownWheelPressures()
+        }
+        val cur = CanDataRepository.wheelsPressure.value
+        val merged = Wheels(
+            wheel1 = cur.wheel1 ?: saved.wheel1,
+            wheel2 = cur.wheel2 ?: saved.wheel2,
+            wheel3 = cur.wheel3 ?: saved.wheel3,
+            wheel4 = cur.wheel4 ?: saved.wheel4,
+            if (cur.wheel1 == null) SystemClock.elapsedRealtime() else cur.wheel1LastTimeNotNull,
+            if (cur.wheel2 == null) SystemClock.elapsedRealtime() else cur.wheel2LastTimeNotNull,
+            if (cur.wheel3 == null) SystemClock.elapsedRealtime() else cur.wheel3LastTimeNotNull,
+            if (cur.wheel4 == null) SystemClock.elapsedRealtime() else cur.wheel4LastTimeNotNull,
+        )
+        if (merged != cur) {
+            CanDataRepository.updateWheelsPressure(merged)
+        }
+    }
+
     private fun stopDataListener() {
         dataListenerJob?.cancel()
         dataListenerJob = null
@@ -2083,54 +2142,28 @@ class BackgroundService : Service() {
     private fun startFuelCalibratedLitersWatcher() {
         if (fuelCalibratedLitersJob?.isActive == true) return
         fuelCalibratedLitersJob = scope.launch {
-            data class FuelEstimatorCacheKey(
-                val tank: Int,
-                val zones: Int,
-                val json: String,
-                val maturity: Int,
-            )
-            var lastEstimatorKey: FuelEstimatorCacheKey? = null
-            var estimator: FuelSmartEstimator? = null
-            combine(
+            launch {
                 combine(
                     fuelTankLitersSetting,
                     fuelCalibrationZoneCountSetting,
                     fuelCalibrationJsonSetting,
-                ) { tank: Int, zones: Int, json: String ->
-                    Triple(tank, zones, json)
-                },
-                fuelCalibrationMaturityThresholdSetting,
-                CanDataRepository.fuelLevelPercentageFiltered,
-                CanDataRepository.outsideTemperature,
-            ) { tankZonesJson: Triple<Int, Int, String>, maturity: Int, pct: UInt?, outT: Float? ->
-                val (tank, zones, json) = tankZonesJson
-                val key = FuelEstimatorCacheKey(tank, zones, json, maturity)
-                if (lastEstimatorKey != key) {
-                    lastEstimatorKey = key
-                    estimator = buildFuelEstimator(tank, zones, json, maturity)
+                    fuelCalibrationMaturityThresholdSetting,
+                ) { _: Int, _: Int, _: String, _: Int ->
+                    refreshFuelCalibrationRepositoryOutputs()
+                }.collect { }
+            }
+            launch {
+                CanDataRepository.outsideTemperature.collect {
+                    FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
                 }
-                val est = estimator
-                if (est == null || pct == null) {
-                    CanDataRepository.updateFuelLevelCalibratedLiters(null)
-                    CanDataRepository.updateFuelLevelCalibratedLitersActual(null)
-                    CanDataRepository.updateFuelCalibrationConfidence(null)
-                } else {
-                    val tankL = tank.coerceAtLeast(1).toFloat()
-                    val sensorLiters = pct.toFloat() / 100f * tankL
-                    val temp = (outT ?: 15f).toDouble()
-                    val result = est.getCorrectedLiters(sensorLiters.toDouble(), temp)
-                    CanDataRepository.updateFuelLevelCalibratedLiters(result.litersStandard.toFloat())
-                    CanDataRepository.updateFuelLevelCalibratedLitersActual(result.litersActual.toFloat())
-                    CanDataRepository.updateFuelCalibrationConfidence(result.confidence.toFloat())
-                }
-                Unit
-            }.collect { }
+            }
         }
     }
 
     private fun stopFuelCalibratedLitersWatcher() {
         fuelCalibratedLitersJob?.cancel()
         fuelCalibratedLitersJob = null
+        FuelCalibrationLive.reset()
     }
 
     private fun startSettingsListener() {
@@ -3638,7 +3671,8 @@ class BackgroundService : Service() {
             return false
         }
         try {
-            CanFramesProcess.process(data, canDataSaveCount.value)
+            CanFramesProcess.process(data, canDataSaveCount.value,
+                if (wheelPressurePersistAcrossStopsSetting.value) 300_000L else 2000L)
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "CRT response",
                 "Error get CAN Frame: $e")

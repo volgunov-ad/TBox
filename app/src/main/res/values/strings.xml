@@ -44,10 +44,15 @@
     <string name="tab_refuels">Заправки</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_main_screen_settings">Настройки главного экрана</string>
+    <string name="tab_car_settings">Настройки автомобиля</string>
     <string name="tab_logs">Журнал</string>
     <string name="tab_info">Информация</string>
     <string name="tab_can">CAN</string>
     <string name="tab_widgets">Плитки</string>
+    <string name="car_settings_screen_title">Настройки автомобиля</string>
+    <string name="car_settings_audio_section_title">Аудио</string>
+    <string name="car_settings_audio_volume_speed_title">Громкость в зависимости от скорости</string>
+    <string name="car_settings_audio_volume_speed_desc">Автоматическая подстройка громкости при изменении скорости движения</string>
     <string name="menu_hide">Скрыть меню</string>
     <string name="menu_show">Показать меню</string>
     <string name="menu_navigate_home">Главная</string>
@@ -68,7 +73,7 @@
     <string name="widget_custom_title_hint">Пусто — по умолчанию</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>
     <string name="widget_value_accuracy_title">Знаков после запятой</string>
-    <string name="widget_value_accuracy_desc">По умолчанию — как задано для каждого параметра в приложении.</string>
+    <string name="widget_value_accuracy_desc">По умолчанию — как задано для каждого параметра в приложении</string>
     <string name="widget_value_accuracy_default">По умолчанию</string>
     <string name="widget_value_accuracy_0">0</string>
     <string name="widget_value_accuracy_1">1</string>
@@ -287,7 +292,7 @@
 
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_backup_title">Резервная копия</string>
-    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения, поездок и заправок (моторные часы, список поездок, избранное, журнал заправок) в один JSON-файл. Пути к папкам обоев главного экрана и выбранные файлы сохраняются в JSON; сами изображения не копируются. Пользовательские иконки ярлыков приложений в памяти устройства не копируются — после импорта при необходимости выберите их снова.</string>
+    <string name="settings_backup_desc">Экспорт и импорт всех настроек приложения, поездок и заправок (моторные часы, список поездок, избранное, журнал заправок) в один JSON-файл. Пути к папкам обоев главного экрана и выбранные файлы сохраняются в JSON; сами изображения не копируются. Пути к фоновым картинкам плиток и привязки пользовательских иконок ярлыков (по имени пакета) хранятся в JSON без встраивания файлов, чтобы не раздувать файл. При импорте файлы иконок и фонов плиток в папке приложения не удаляются: если файл уже есть на диске по пути из настроек, он подхватывается автоматически. Виджеты сторонних приложений: идентификаторы импортируются; если провайдер недоступен, на плитке показывается заглушка до повторного выбора.</string>
     <string name="settings_backup_export">Экспорт JSON</string>
     <string name="settings_backup_export_without_trips">Экспорт JSON без поездок и заправок</string>
     <string name="settings_backup_import">Импорт JSON</string>
@@ -295,7 +300,7 @@
     <string name="dialog_save_backup_downloads">Сохранить полную резервную копию (настройки и данные) в папку Загрузки</string>
     <string name="dialog_save_backup_downloads_no_trips">Сохранить резервную копию (настройки и прочие данные приложения без списка поездок, избранного поездок и журнала заправок) в папку Загрузки</string>
     <string name="dialog_backup_import_title">Импорт резервной копии</string>
-    <string name="dialog_backup_import_message">Текущие настройки и данные приложения будут полностью заменены содержимым файла. Активная поездка в памяти и в файле станет такой, как в резервной копии (если в копии нет незавершённой поездки — текущая будет завершена в данных). Плитки с виджетами сторонних приложений после импорта сбрасываются (нужно выбрать виджет заново). Продолжить и выбрать JSON-файл?</string>
+    <string name="dialog_backup_import_message">Текущие настройки и данные приложения будут полностью заменены содержимым файла. Активная поездка в памяти и в файле станет такой, как в резервной копии (если в копии нет незавершённой поездки — текущая будет завершена в данных). Файлы пользовательских иконок ярлыков и фонов плиток в папке приложения не удаляются: при совпадении путей из JSON с существующими файлами они будут использованы. Отсутствие файла на диске или недоступный виджет стороннего приложения не вызывает ошибок. Продолжить и выбрать JSON-файл?</string>
     <string name="settings_expert_mode_title">Экспертный режим</string>
     <string name="settings_expert_mode_warning_desc">Все изменения в экспертном режиме вы делаете на свой страх и риск.\nНо к необратимым последствиям ваши действия в этом режиме привести не могут</string>
     <string name="settings_can_frames_count_title">Количество сохраняемых CAN фреймов (1…3600)</string>
@@ -453,6 +458,10 @@
     <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
     <string name="settings_fuel_price_fuel_type_title">Тип топлива для расчёта цены</string>
     <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
+    <string name="settings_wheel_pressure_persist_title">Запоминание давления в шинах</string>
+    <string name="settings_wheel_pressure_persist_desc">Сохранять при оборотах двигателя 0 и восстанавливать при запуске службы</string>
+    <string name="settings_ui_click_sounds_title">Звуки нажатий</string>
+    <string name="settings_ui_click_sounds_desc">Системный звук при нажатиях в интерфейсе, переключателях и виджетах панелей</string>
 
     <string name="trips_delete">Удалить поездку</string>
     <string name="trips_delete_confirm_title">Удалить поездку?</string>
@@ -510,7 +519,7 @@
     <string name="refuels_price_source">АЗС</string>
     <string name="refuels_cost">Стоимость</string>
     <string name="refuels_calibration_train">Обучение</string>
-    <string name="refuels_calibration_section_title">Калибровка уровня топлива</string>
+    <string name="refuels_calibration_section_title">Настройки заправок</string>
     <string name="refuels_calibration_tank_hint">Смена объёма сбрасывает калибровку</string>
     <string name="refuels_calibration_zones_title">Число зон калибровки</string>
     <string name="refuels_calibration_zones_hint">Смена числа зон сбрасывает калибровку</string>
@@ -562,6 +571,7 @@
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
+    <string name="data_title_empty_tile_widget">Пустая</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
     <string name="data_title_hide_floating_panels_widget">Скрытие плавающих панелей</string>
     <string name="data_title_toggle_floating_panels_enabled_widget">Отключение плавающих панелей</string>
@@ -577,6 +587,13 @@
     <string name="widget_app_launcher_icon_too_large">Изображение слишком большое для иконки (макс. 512×512 px)</string>
     <string name="widget_app_launcher_icon_invalid">Не удалось прочитать изображение</string>
     <string name="widget_app_launcher_icon_copy_failed">Не удалось сохранить изображение</string>
+    <string name="widget_tile_background_image_title">Фоновая картинка плитки</string>
+    <string name="widget_tile_background_image_desc">Поверх цвета фона для выбранной темы (светлая/тёмная — переключатель выше). Картинка вписывается в плитку без обрезки.</string>
+    <string name="widget_tile_background_image_pick">Выбрать картинку</string>
+    <string name="widget_tile_background_image_remove">Удалить картинку</string>
+    <string name="widget_tile_background_image_too_large">Изображение слишком большое (макс. 4096×4096 px)</string>
+    <string name="widget_tile_background_image_invalid">Не удалось прочитать изображение</string>
+    <string name="widget_tile_background_image_copy_failed">Не удалось сохранить изображение</string>
 
     <string name="cycle_voltage">Cycle напряжение, В</string>
     <string name="cycle_speed">Cycle скорость, км/ч</string>

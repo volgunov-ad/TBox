@@ -25,6 +25,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -54,8 +55,9 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
+import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
-import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
@@ -220,8 +222,26 @@ fun MainDashboardTab(
                             val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
                             val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
                             val widgetBackgroundColor = widget.resolveBackgroundColorForTheme(currentTheme)
+                            val tileBgRelPath = (
+                                if (currentTheme == 2) {
+                                    widgetConfig.tileBackgroundImageRelPathDark
+                                } else {
+                                    widgetConfig.tileBackgroundImageRelPathLight
+                                }
+                                )?.takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
+                            val useTileBackgroundUnderlay = tileBgRelPath != null
+                            val shapeDp = normalizeWidgetShape(widgetConfig.shape).dp
 
                             Box(modifier = Modifier.weight(1f)) {
+                                if (useTileBackgroundUnderlay) {
+                                    DashboardTileBackgroundImageUnderlay(
+                                        relPath = tileBgRelPath,
+                                        backgroundColor = widgetBackgroundColor,
+                                        shapeDp = shapeDp,
+                                        settingsViewModel = settingsViewModel,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
                                 CompositionLocalProvider(
                                     LocalWidgetTextScale provides widgetTextScale
                                 ) {
@@ -239,7 +259,11 @@ fun MainDashboardTab(
                                         restartEnabled = restartEnabled,
                                         onTripFinishAndStart = onTripFinishAndStart,
                                         widgetTextColor = widgetTextColor,
-                                        widgetBackgroundColor = widgetBackgroundColor,
+                                        widgetBackgroundColor = if (useTileBackgroundUnderlay) {
+                                            Color.Transparent
+                                        } else {
+                                            widgetBackgroundColor
+                                        },
                                         onClick = {
                                             val cfg = widgetConfigs.getOrNull(index)
                                             if (
@@ -285,7 +309,7 @@ fun MainDashboardTab(
                                         externalWidgetHost = appWidgetHost,
                                         isEditMode = false,
                                         elevation = MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
-                                        shape = MAIN_DASHBOARD_DEFAULT_WIDGET_SHAPE.dp,
+                                        shape = shapeDp,
                                     )
                                 }
                             }
@@ -345,6 +369,8 @@ fun WidgetSelectionDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp),
+                widgetIndex = widgetIndex,
+                tileBackgroundPanelStorageId = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -452,6 +478,8 @@ fun MainScreenPanelWidgetSelectionDialog(
                     .fillMaxSize()
                     .padding(8.dp),
                 mainScreenPanelId = panelId,
+                widgetIndex = widgetIndex,
+                tileBackgroundPanelStorageId = panelId,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(
@@ -487,7 +515,7 @@ fun MainScreenPanelWidgetSelectionDialog(
                 },
                 deleteAfterWholePanel = {
                     OutlinedButton(
-                        onClick = {
+                        onClick = rememberWrappedOnClick {
                             onDeletePanel()
                             onDismiss()
                         },
@@ -594,6 +622,8 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
                     .fillMaxSize()
                     .padding(8.dp),
                 floatingDashboardPanelId = panelId,
+                widgetIndex = widgetIndex,
+                tileBackgroundPanelStorageId = panelId,
                 bottomContent = {
                     if (state.isExternalAppWidgetSelected) {
                         ExternalAppWidgetPickerSection(

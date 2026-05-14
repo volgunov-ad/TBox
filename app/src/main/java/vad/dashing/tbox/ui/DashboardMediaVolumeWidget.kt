@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -362,7 +361,7 @@ private fun MediaVolumeActionButton(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
                 shape = RoundedCornerShape(10.dp)
             )
-            .combinedClickable(
+            .combinedClickableWithSound(
                 enabled = interactionEnabled,
                 onClick = onClick,
                 onLongClick = onLongClick

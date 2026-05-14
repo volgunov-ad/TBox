@@ -6,7 +6,6 @@ import android.provider.Settings
 import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -321,7 +320,7 @@ fun DashboardMusicWidgetItem(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1.5f)
-                        .combinedClickable(
+                        .combinedClickableWithSound(
                             enabled = enableInnerInteractions,
                             onClick = {},
                             onLongClick = onLongClick,
@@ -372,7 +371,7 @@ fun DashboardMusicWidgetItem(
                         .fillMaxWidth()
                         .weight(1.5f)
                         .clip(RoundedCornerShape(8.dp))
-                        .combinedClickable(
+                        .combinedClickableWithSound(
                             enabled = enableInnerInteractions,
                             onClick = {
                                 if (!mediaState.notificationAccessGranted) {
@@ -653,7 +652,7 @@ private fun MediaControlActionButton(
                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
                 }
             )
-            .combinedClickable(
+            .combinedClickableWithSound(
                 enabled = interactionEnabled,
                 onClick = {
                     if (actionEnabled) {

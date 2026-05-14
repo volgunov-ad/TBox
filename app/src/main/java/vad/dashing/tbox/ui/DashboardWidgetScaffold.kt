@@ -1,8 +1,10 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
@@ -12,6 +14,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -32,14 +37,30 @@ fun DashboardWidgetScaffold(
 ) {
     val resolvedInteractionPolicy = LocalDashboardWidgetInteractionPolicy.current
     val useCardClickable = resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD
+    val playClick = rememberPlaySystemClickSound()
+    val wrappedOnClick = remember(onClick, playClick) {
+        { playClick(); onClick() }
+    }
+    val wrappedOnDouble = if (onDoubleClick != null) {
+        remember(onDoubleClick, playClick) {
+            { playClick(); onDoubleClick() }
+        }
+    } else {
+        null
+    }
+    val cardInteractionSource = remember { MutableInteractionSource() }
+    val cardIndication = LocalIndication.current
+    val onClickForPointer by rememberUpdatedState(onClick)
     Card(
         modifier = modifier
             .fillMaxSize()
             .combinedClickable(
+                interactionSource = cardInteractionSource,
+                indication = cardIndication,
                 enabled = useCardClickable,
-                onClick = onClick,
+                onClick = wrappedOnClick,
                 onLongClick = onLongClick,
-                onDoubleClick = onDoubleClick,
+                onDoubleClick = wrappedOnDouble,
             ),
         elevation = CardDefaults.cardElevation(elevation),
         colors = CardDefaults.cardColors(
@@ -76,7 +97,8 @@ fun DashboardWidgetScaffold(
                                                 height = size.height.toFloat()
                                             )
                                         ) {
-                                            onClick()
+                                            playClick()
+                                            onClickForPointer()
                                         }
                                     },
                                     onLongPress = { offset ->

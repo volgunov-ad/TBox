@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -82,6 +83,7 @@ fun FloatingDashboardUI(
     )
     )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
+    val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
 
     FloatingDashboardAppLauncherIconCacheDisposeEffect(panelId)
 
@@ -98,22 +100,24 @@ fun FloatingDashboardUI(
     }
 
     TboxAppTheme(theme = currentTheme) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = Color.Transparent
-        ) {
-            FloatingDashboard(
-                tboxViewModel = tboxViewModel,
-                canViewModel = canViewModel,
-                settingsViewModel = settingsViewModel,
-                appDataViewModel = appDataViewModel,
-                panelId = panelId,
-                onUpdateWindowSize = onUpdateWindowSize,
-                onUpdateWindowPosition = onUpdateWindowPosition,
-                onRebootTbox = onRebootTbox,
-                onTripFinishAndStart = onTripFinishAndStart,
-                windowParams = params
-            )
+        CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Transparent
+            ) {
+                FloatingDashboard(
+                    tboxViewModel = tboxViewModel,
+                    canViewModel = canViewModel,
+                    settingsViewModel = settingsViewModel,
+                    appDataViewModel = appDataViewModel,
+                    panelId = panelId,
+                    onUpdateWindowSize = onUpdateWindowSize,
+                    onUpdateWindowPosition = onUpdateWindowPosition,
+                    onRebootTbox = onRebootTbox,
+                    onTripFinishAndStart = onTripFinishAndStart,
+                    windowParams = params
+                )
+            }
         }
     }
 }

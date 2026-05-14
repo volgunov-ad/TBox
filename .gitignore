@@ -16,3 +16,6 @@
 local.properties
 .kotlin/
 .idea/
+
+# Local firmware unpack / analysis (large binaries)
+firmware_analysis/

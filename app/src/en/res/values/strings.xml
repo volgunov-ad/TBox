@@ -44,10 +44,15 @@
     <string name="tab_refuels">Refuels</string>
     <string name="tab_settings">Settings</string>
     <string name="tab_main_screen_settings">Main screen settings</string>
+    <string name="tab_car_settings">Car settings</string>
     <string name="tab_logs">Logs</string>
     <string name="tab_info">Info</string>
     <string name="tab_can">CAN</string>
     <string name="tab_widgets">Tiles</string>
+    <string name="car_settings_screen_title">Car settings</string>
+    <string name="car_settings_audio_section_title">Audio</string>
+    <string name="car_settings_audio_volume_speed_title">Speed-dependent volume</string>
+    <string name="car_settings_audio_volume_speed_desc">Automatically adjust media volume with vehicle speed</string>
     <string name="menu_hide">Hide menu</string>
     <string name="menu_show">Show menu</string>
     <string name="menu_navigate_home">Home</string>
@@ -68,7 +73,7 @@
     <string name="widget_custom_title_hint">Empty — default</string>
     <string name="widget_show_unit">Show unit</string>
     <string name="widget_value_accuracy_title">Decimal places</string>
-    <string name="widget_value_accuracy_desc">Default follows each parameter’s built-in formatting in the app.</string>
+    <string name="widget_value_accuracy_desc">Default follows each parameter’s built-in formatting in the app</string>
     <string name="widget_value_accuracy_default">Default</string>
     <string name="widget_value_accuracy_0">0</string>
     <string name="widget_value_accuracy_1">1</string>
@@ -284,7 +289,7 @@
 
     <string name="settings_misc_title">Misc</string>
     <string name="settings_backup_title">Backup</string>
-    <string name="settings_backup_desc">Export and import all app settings and trip/refuel app data (motor hours, trips, refuels, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Custom app shortcut icons on the device are not included—re-pick them after import if needed.</string>
+    <string name="settings_backup_desc">Export and import all app settings and trip/refuel app data (motor hours, trips, refuels, favorites) as one JSON file. Main screen wallpaper folder paths and the selected file name are stored in JSON; image files themselves are not copied. Tile background paths and custom shortcut icon bindings (by package name) are stored in JSON without embedding files, to keep the backup small. On import, shortcut icon and tile background files in the app folder are not deleted: if a path from settings points to an existing file, it is used automatically. Third-party app widget IDs are imported; if the provider is unavailable, the tile shows a placeholder until you pick the widget again.</string>
     <string name="settings_backup_export">Export JSON</string>
     <string name="settings_backup_export_without_trips">Export JSON without trips and refuels</string>
     <string name="settings_backup_import">Import JSON</string>
@@ -292,7 +297,7 @@
     <string name="dialog_save_backup_downloads">Save full backup (settings and data) to the Downloads folder</string>
     <string name="dialog_save_backup_downloads_no_trips">Save backup (settings and other app data, without trips, refuels, or trip favorites) to the Downloads folder</string>
     <string name="dialog_backup_import_title">Import backup</string>
-    <string name="dialog_backup_import_message">Current settings and app data will be fully replaced by the backup. The active trip in memory and storage will match the backup (if the backup has no open trip, any current open trip is replaced by the imported list). Tiles that host third-party app widgets are cleared after import (pick the widget again). Continue and choose a JSON file?</string>
+    <string name="dialog_backup_import_message">Current settings and app data will be fully replaced by the backup. The active trip in memory and storage will match the backup (if the backup has no open trip, any current open trip is replaced by the imported list). Custom shortcut icon and tile background files in the app folder are not deleted: when paths from the JSON match existing files, those files are used. Missing files on disk or unavailable third-party widgets will not cause errors. Continue and choose a JSON file?</string>
     <string name="settings_expert_mode_title">Expert mode</string>
     <string name="settings_expert_mode_warning_desc">All changes in expert mode are made at your own risk.\nHowever, your actions in this mode cannot lead to irreversible consequences.</string>
     <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>
@@ -454,6 +459,10 @@
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_fuel_price_fuel_type_title">Fuel for price lookup</string>
     <string name="settings_split_trip_time_title">Trip split time, min</string>
+    <string name="settings_wheel_pressure_persist_title">Remember tire pressures</string>
+    <string name="settings_wheel_pressure_persist_desc">Save when engine RPM is 0 and restore when the service starts</string>
+    <string name="settings_ui_click_sounds_title">Tap sounds</string>
+    <string name="settings_ui_click_sounds_desc">System click sound for UI, switches, and dashboard panel widgets</string>
 
     <string name="trips_delete">Delete trip</string>
     <string name="trips_delete_confirm_title">Delete trip?</string>
@@ -511,7 +520,7 @@
     <string name="refuels_price_source">Station</string>
     <string name="refuels_cost">Cost</string>
     <string name="refuels_calibration_train">Train</string>
-    <string name="refuels_calibration_section_title">Fuel level calibration</string>
+    <string name="refuels_calibration_section_title">Refuel settings</string>
     <string name="refuels_calibration_tank_hint">Changing tank volume clears calibration</string>
     <string name="refuels_calibration_zones_title">Calibration zones</string>
     <string name="refuels_calibration_zones_hint">Changing calibration zones clears calibration</string>
@@ -557,6 +566,7 @@
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
     <string name="data_title_media_volume_widget_vertical">Media volume widget (vertical)</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
+    <string name="data_title_empty_tile_widget">Empty</string>
     <string name="data_title_external_app_widget">Third-party app widget</string>
     <string name="data_title_hide_floating_panels_widget">Hide floating panels</string>
     <string name="data_title_toggle_floating_panels_enabled_widget">Disable floating panels</string>
@@ -572,6 +582,13 @@
     <string name="widget_app_launcher_icon_too_large">Image is too large for an icon (max 512×512 px)</string>
     <string name="widget_app_launcher_icon_invalid">Could not read the image</string>
     <string name="widget_app_launcher_icon_copy_failed">Could not save the image</string>
+    <string name="widget_tile_background_image_title">Tile background image</string>
+    <string name="widget_tile_background_image_desc">Drawn on top of the tile background color for the theme selected above (light/dark). The image fits inside the tile without cropping.</string>
+    <string name="widget_tile_background_image_pick">Choose image</string>
+    <string name="widget_tile_background_image_remove">Remove image</string>
+    <string name="widget_tile_background_image_too_large">Image is too large (max 4096×4096 px)</string>
+    <string name="widget_tile_background_image_invalid">Could not read the image</string>
+    <string name="widget_tile_background_image_copy_failed">Could not save the image</string>
 
     <string name="cycle_voltage">Cycle voltage, V</string>
     <string name="cycle_speed">Cycle speed, km/h</string>

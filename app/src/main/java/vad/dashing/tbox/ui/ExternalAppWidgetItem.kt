@@ -4,11 +4,13 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.view.ViewGroup
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -78,6 +80,9 @@ fun ExternalAppWidgetItem(
     backgroundColor: Color? = null,
     /** Matches title styling on other dashboard tiles ([DashboardWidgetItem] title row). */
     textColor: Color? = null,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
+    defaultTitle: String,
 ) {
     val context = LocalContext.current
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
@@ -128,10 +133,12 @@ fun ExternalAppWidgetItem(
     }
 
     val clickModifier = if (!isEditMode && handleClick) {
-        Modifier.clickable(onClick = onClick)
+        Modifier.clickableWithSound(onClick = onClick)
     } else {
         Modifier
     }
+
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
     Card(
         modifier = Modifier
@@ -146,11 +153,38 @@ fun ExternalAppWidgetItem(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    color = Color.Transparent
-                ),
-            contentAlignment = Alignment.Center
+                .background(color = Color.Transparent)
         ) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
+                val containerHeightForTitle = maxHeight
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (showTitle) {
+                        val titleFont = calculateResponsiveFontSize(
+                            containerHeight = containerHeightForTitle,
+                            textType = TextType.TITLE
+                        )
+                        Text(
+                            text = titleText,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, top = 4.dp, end = 4.dp),
+                            fontSize = titleFont,
+                            lineHeight = titleFont * 1.3f,
+                            fontWeight = FontWeight.Medium,
+                            color = resolvedColor,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
             if (hostView == null) {
                 val placeholder = if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
                     stringResource(R.string.widget_external_tile_empty)
@@ -257,6 +291,9 @@ fun ExternalAppWidgetItem(
                                 }
                             }
                     )
+                }
+            }
+                    }
                 }
             }
 

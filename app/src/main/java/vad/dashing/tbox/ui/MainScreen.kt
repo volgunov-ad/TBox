@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -602,7 +601,7 @@ private fun MainScreenDraggableCornerButton(
                         Modifier
                     }
                 )
-                .clickable(onClick = onClick)
+                .clickableWithSound(onClick = onClick)
                 .pointerInput(maxW, maxH, btnPx) {
                     detectDragGesturesAfterLongPress(
                         onDrag = { change, dragAmount ->

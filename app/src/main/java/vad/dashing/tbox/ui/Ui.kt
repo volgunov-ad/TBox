@@ -1,7 +1,6 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -91,8 +91,10 @@ fun TboxApp(
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
+    val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
 
     TboxAppTheme(theme = currentTheme) {
+        CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
         if (selectedTab == SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX) {
             MainScreen(
                 tboxViewModel = viewModel,
@@ -120,12 +122,13 @@ fun TboxApp(
                 onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
             )
         }
+        }
     }
 }
 
 object TabItems {
-    /** Left menu order; tab index 11 is shown immediately after Settings (6). */
-    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 5, 6, 11, 7, 8, 9, 10)
+    /** Left menu order; 11 = main screen settings, 12 = car settings (after 11). */
+    val tabMenuDisplayOrder = listOf(0, 1, 2, 3, 4, 5, 6, 11, 12, 7, 8, 9, 10)
 
     @Composable
     fun getItems(): List<TabItem> {
@@ -144,7 +147,11 @@ object TabItems {
             TabItem(
                 stringResource(R.string.tab_main_screen_settings),
                 ImageVector.vectorResource(R.drawable.ic_tab_main_screen_settings)
-            )
+            ),
+            TabItem(
+                stringResource(R.string.tab_car_settings),
+                ImageVector.vectorResource(R.drawable.ic_tab_car_settings)
+            ),
         )
     }
 }
@@ -235,13 +242,13 @@ fun TboxScreen(
                             tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier
                                 .size(menuIconSize)
-                                .clickable(onClick = {
+                                .clickableWithSound {
                                     if (isMenuVisible) {
                                         settingsViewModel.saveLeftMenuVisibleSetting(false)
                                     } else {
                                         settingsViewModel.saveLeftMenuVisibleSetting(true)
                                     }
-                                })
+                                }
                         )
                     }
 
@@ -380,6 +387,7 @@ fun TboxScreen(
                     6 -> SettingsTab(
                         viewModel,
                         settingsViewModel,
+                        appDataViewModel,
                         onTboxRestart,
                         onMockLocationSettingChanged,
                         onServiceCommand,
@@ -410,6 +418,7 @@ fun TboxScreen(
                         settingsViewModel = settingsViewModel,
                         onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
                     )
+                    12 -> CarSettingsTab()
                     else -> ModemTab(viewModel, onServiceCommand)
                 }
             }
@@ -445,6 +454,7 @@ fun ModemModeSelector(
 fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
+    appDataViewModel: AppDataViewModel,
     onTboxRestartClick: () -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -455,6 +465,7 @@ fun SettingsTab(
     SettingsTabContent(
         viewModel = viewModel,
         settingsViewModel = settingsViewModel,
+        appDataViewModel = appDataViewModel,
         onTboxRestartClick = onTboxRestartClick,
         onMockLocationSettingChanged = onMockLocationSettingChanged,
         onServiceCommand = onServiceCommand,

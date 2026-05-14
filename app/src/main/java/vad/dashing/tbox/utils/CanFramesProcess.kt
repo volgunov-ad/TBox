@@ -1,8 +1,10 @@
 package vad.dashing.tbox.utils
 
+import android.os.SystemClock
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
 
 object CanFramesProcess {
 
@@ -44,7 +46,7 @@ object CanFramesProcess {
     private const val CAN_ID_SEAT_MODES = 0x000005C4
     private const val CAN_ID_WINDOWS_BLOCKED = 0x000005FF
 
-    fun process(data: ByteArray, maxFrames: Int) {
+    fun process(data: ByteArray, maxFrames: Int, pressureNullDebounce: Long = 2000L) {
         TboxRepository.updateCanFrameTime()
         val rawValue = data.copyOfRange(4, data.size)
         for (i in 0 until rawValue.size step FRAME_SIZE) {
@@ -207,6 +209,7 @@ object CanFramesProcess {
                     CanDataRepository.updateVoltage(voltage)
                     CanDataRepository.updateFuelLevelPercentage(fuelLevelPercentage)
                     if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
+                        FuelCalibrationLive.applyFromStableFilteredPercent(fuelLevelPercentage)
                         CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
                     }
                 } else if (canId == CAN_ID_FUEL_CONSUMPTION) {
@@ -220,7 +223,7 @@ object CanFramesProcess {
                     val engineTemperature = unsignedByte(b2).toFloat() * 0.75f - 48f
                     CanDataRepository.updateEngineTemperature(engineTemperature)
 
-                    val param5 = unsignedByte(b4).toFloat() / 18f
+                    val param5 = unsignedByte(b4).toFloat() / 19f
                     CanDataRepository.updateParam5(param5)
 
                 } else if (canId == CAN_ID_SPEED_ACCURATE) {
@@ -252,32 +255,79 @@ object CanFramesProcess {
                         CanDataRepository.updateWheelsTemperature(it)
                     }
 
+                    val cur = CanDataRepository.wheelsPressure.value
+                    val curTime = SystemClock.elapsedRealtime()
+
                     val pressure1 = if (b4 != 0xFF.toByte()) {
                         unsignedByte(b4).toFloat() / 36f
                     } else {
-                        null
+                        if (curTime - (cur.wheel1LastTimeNotNull ?: 0L) > pressureNullDebounce) {
+                            null
+                        } else {
+                            cur.wheel1
+                        }
                     }
+                    val wheel1LastTimeNotNull = if (b4 != 0xFF.toByte()) {
+                        curTime
+                    } else {
+                        cur.wheel1LastTimeNotNull
+                    }
+
                     val pressure2 = if (b5 != 0xFF.toByte()) {
                         unsignedByte(b5).toFloat() / 36f
                     } else {
-                        null
+                        if (curTime - (cur.wheel2LastTimeNotNull ?: 0L) > pressureNullDebounce) {
+                            null
+                        } else {
+                            cur.wheel2
+                        }
                     }
+                    val wheel2LastTimeNotNull = if (b5 != 0xFF.toByte()) {
+                        curTime
+                    } else {
+                        cur.wheel2LastTimeNotNull
+                    }
+
                     val pressure3 = if (b6 != 0xFF.toByte()) {
                         unsignedByte(b6).toFloat() / 36f
                     } else {
-                        null
+                        if (curTime - (cur.wheel3LastTimeNotNull ?: 0L) > pressureNullDebounce) {
+                            null
+                        } else {
+                            cur.wheel3
+                        }
                     }
+                    val wheel3LastTimeNotNull = if (b6 != 0xFF.toByte()) {
+                        curTime
+                    } else {
+                        cur.wheel3LastTimeNotNull
+                    }
+
                     val pressure4 = if (b7 != 0xFF.toByte()) {
                         unsignedByte(b7).toFloat() / 36f
                     } else {
-                        null
+                        if (curTime - (cur.wheel4LastTimeNotNull ?: 0L) > pressureNullDebounce) {
+                            null
+                        } else {
+                            cur.wheel4
+                        }
                     }
+                    val wheel4LastTimeNotNull = if (b7 != 0xFF.toByte()) {
+                        curTime
+                    } else {
+                        cur.wheel4LastTimeNotNull
+                    }
+
                     CanDataRepository.updateWheelsPressure(
                         Wheels(
                             pressure1,
                             pressure2,
                             pressure3,
-                            pressure4
+                            pressure4,
+                            wheel1LastTimeNotNull,
+                            wheel2LastTimeNotNull,
+                            wheel3LastTimeNotNull,
+                            wheel4LastTimeNotNull,
                         )
                     )
                 } else if (canId == CAN_ID_CLIMATE_SET) {

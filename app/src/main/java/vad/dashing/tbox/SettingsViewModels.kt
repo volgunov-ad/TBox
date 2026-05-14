@@ -749,6 +749,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 5
         )
 
+    val wheelPressurePersistAcrossStops = settingsManager.wheelPressurePersistAcrossStopsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val uiClickSoundsEnabled = settingsManager.uiClickSoundsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     init {
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
@@ -1195,6 +1209,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 0
         )
 
+    val tileBackgroundImageRevision = settingsManager.tileBackgroundImageRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
     fun setCustomLauncherAppIconFromUri(
         packageName: String,
         sourceUri: Uri?,
@@ -1214,6 +1235,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
         settingsManager.hasCustomLauncherAppIcon(packageName)
+
+    fun setTileBackgroundImageFromUri(
+        panelStorageId: String,
+        widgetIndex: Int,
+        darkTheme: Boolean,
+        sourceUri: Uri?,
+        onResult: (SetTileBackgroundImageResult, String?) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val (r, path) = settingsManager.setTileBackgroundImageFromUri(
+                panelStorageId = panelStorageId,
+                widgetIndex = widgetIndex,
+                darkTheme = darkTheme,
+                sourceUri = sourceUri,
+            )
+            onResult(r, path)
+        }
+    }
 
     fun saveMainScreenDashboardWidgets(
         panelId: String,
@@ -1597,6 +1636,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveSplitTripTimeMinutes(minutes: Int) {
         viewModelScope.launch {
             settingsManager.saveSplitTripTimeMinutes(minutes)
+        }
+    }
+
+    fun saveWheelPressurePersistAcrossStops(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWheelPressurePersistAcrossStopsSetting(enabled)
+        }
+    }
+
+    fun saveUiClickSoundsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUiClickSoundsSetting(enabled)
         }
     }
 }

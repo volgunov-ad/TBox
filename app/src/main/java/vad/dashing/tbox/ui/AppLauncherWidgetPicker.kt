@@ -7,7 +7,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -228,7 +227,7 @@ internal fun AppLauncherWidgetSettingsSection(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = state.togglesEnabled) {
+                    .clickableWithSound(enabled = state.togglesEnabled) {
                         state.launcherAppPackage = app.packageName
                     }
                     .padding(vertical = 6.dp),
@@ -236,7 +235,7 @@ internal fun AppLauncherWidgetSettingsSection(
             ) {
                 RadioButton(
                     selected = isSelected,
-                    onClick = { state.launcherAppPackage = app.packageName },
+                    onClick = rememberWrappedOnClick { state.launcherAppPackage = app.packageName },
                     enabled = state.togglesEnabled
                 )
                 if (app.icon != null) {
@@ -279,7 +278,7 @@ internal fun AppLauncherWidgetSettingsSection(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedButton(
-                                onClick = {
+                                onClick = rememberWrappedOnClick {
                                     pendingIconPackage = app.packageName
                                     pickCustomIcon.launch("image/*")
                                 },
@@ -293,7 +292,7 @@ internal fun AppLauncherWidgetSettingsSection(
                                 )
                             }
                             OutlinedButton(
-                                onClick = {
+                                onClick = rememberWrappedOnClick {
                                     settingsViewModel.clearCustomLauncherAppIcon(app.packageName)
                                 },
                                 enabled = state.togglesEnabled && selectedHasCustomIcon
