@@ -58,10 +58,11 @@ fun UsageStatsHideFloatingPanelsDialog(
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(iconRevision)
 
-    var draftWatchHide by remember { mutableStateOf(savedWatchHide) }
-    var draftPanelsHide by remember { mutableStateOf(savedPanelsHide) }
-    var draftWatchShow by remember { mutableStateOf(savedWatchShow) }
-    var draftPanelsShow by remember { mutableStateOf(savedPanelsShow) }
+    // Key by saved sets so when DataStore emits after first frame (flows start empty), drafts refresh.
+    var draftWatchHide by remember(savedWatchHide) { mutableStateOf(savedWatchHide) }
+    var draftPanelsHide by remember(savedPanelsHide) { mutableStateOf(savedPanelsHide) }
+    var draftWatchShow by remember(savedWatchShow) { mutableStateOf(savedWatchShow) }
+    var draftPanelsShow by remember(savedPanelsShow) { mutableStateOf(savedPanelsShow) }
 
     var filterHideText by rememberSaveable { mutableStateOf("") }
     var filterShowText by rememberSaveable { mutableStateOf("") }
