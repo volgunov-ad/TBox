@@ -10,6 +10,15 @@ import android.os.Process
 
 internal object UsageStatsHideFloatingHelper {
 
+    /**
+     * UsageEvents can arrive late or in bursts on OEM / automotive stacks; use a longer lookback
+     * than the poll window so the last MOVE_TO_FOREGROUND / ACTIVITY_RESUMED is still in range.
+     */
+    private const val USAGE_EVENTS_LOOKBACK_MS = 300_000L
+
+    /** queryUsageStats is coarse on short windows; query a wider span when used as fallback. */
+    private const val MIN_STATS_QUERY_WINDOW_MS = 120_000L
+
     fun hasUsageAccessPermission(context: Context): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -30,17 +39,28 @@ internal object UsageStatsHideFloatingHelper {
     }
 
     /**
-     * Returns the package that is most likely in the foreground within [windowMs].
-     * Tries [UsageStatsManager.queryUsageStats] first (often more reliable on OEM / automotive
-     * head units), then falls back to [UsageStatsManager.queryEvents].
+     * Returns the package that is most likely in the foreground within roughly [windowMs].
+     * Prefers [UsageStatsManager.queryEvents] (chronological foreground transitions) over
+     * [UsageStatsManager.queryUsageStats], which often picks the wrong package on head units
+     * (system UI / lastTimeUsed noise) when queried with a short interval.
      */
     fun lastForegroundPackageWithin(context: Context, windowMs: Long): String? {
         if (!hasUsageAccessPermission(context)) return null
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
         val end = System.currentTimeMillis()
-        val begin = (end - windowMs).coerceAtLeast(0L)
-        foregroundFromQueryUsageStats(usm, begin, end)?.let { return it }
-        return foregroundFromUsageEvents(usm, begin, end)
+        val statsBegin = (end - maxOf(windowMs, MIN_STATS_QUERY_WINDOW_MS)).coerceAtLeast(0L)
+        val eventBegin = (end - maxOf(windowMs, USAGE_EVENTS_LOOKBACK_MS)).coerceAtLeast(0L)
+
+        foregroundFromUsageEvents(usm, eventBegin, end)?.let { return normalizePackage(it) }
+
+        foregroundFromQueryUsageStats(usm, statsBegin, end)?.let { return normalizePackage(it) }
+
+        return null
+    }
+
+    private fun normalizePackage(pkg: String?): String? {
+        val p = pkg?.trim().orEmpty()
+        return p.takeIf { it.isNotEmpty() }
     }
 
     private fun foregroundFromQueryUsageStats(
@@ -48,34 +68,47 @@ internal object UsageStatsHideFloatingHelper {
         begin: Long,
         end: Long,
     ): String? {
-        @Suppress("DEPRECATION")
-        val stats: List<UsageStats> = usm.queryUsageStats(UsageStatsManager.INTERVAL_BEST, begin, end)
-            ?: return null
-        if (stats.isEmpty()) return null
-        // lastTimeUsed must be recent enough to reflect a foreground switch, not background work
-        val freshnessCutoff = end - minOf(120_000L, (end - begin).coerceAtLeast(30_000L))
-        val candidates = stats.filter { it.lastTimeUsed >= freshnessCutoff }
-        if (candidates.isEmpty()) return null
-        return candidates.maxByOrNull { it.lastTimeUsed }?.packageName
+        return try {
+            @Suppress("DEPRECATION")
+            val stats: List<UsageStats> = usm.queryUsageStats(UsageStatsManager.INTERVAL_BEST, begin, end)
+                ?: return null
+            if (stats.isEmpty()) return null
+            val span = (end - begin).coerceAtLeast(30_000L)
+            val freshnessCutoff = end - minOf(180_000L, span)
+            val candidates = stats.filter { it.lastTimeUsed >= freshnessCutoff }
+            if (candidates.isEmpty()) return null
+            candidates.maxByOrNull { it.lastTimeUsed }?.packageName
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun isForegroundEventType(type: Int): Boolean {
+        if (type == UsageEvents.Event.MOVE_TO_FOREGROUND) return true
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            type == UsageEvents.Event.ACTIVITY_RESUMED
+        } else {
+            false
+        }
     }
 
     private fun foregroundFromUsageEvents(usm: UsageStatsManager, begin: Long, end: Long): String? {
-        val events = usm.queryEvents(begin, end)
-        val event = UsageEvents.Event()
-        var lastPkg: String? = null
-        var lastStamp = 0L
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
-            val t = event.eventType
-            if (t == UsageEvents.Event.MOVE_TO_FOREGROUND ||
-                t == UsageEvents.Event.ACTIVITY_RESUMED
-            ) {
+        return try {
+            val events = usm.queryEvents(begin, end)
+            val event = UsageEvents.Event()
+            var lastPkg: String? = null
+            var lastStamp = 0L
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (!isForegroundEventType(event.eventType)) continue
                 if (event.timeStamp >= lastStamp) {
                     lastStamp = event.timeStamp
                     lastPkg = event.packageName
                 }
             }
+            lastPkg
+        } catch (_: Exception) {
+            null
         }
-        return lastPkg
     }
 }

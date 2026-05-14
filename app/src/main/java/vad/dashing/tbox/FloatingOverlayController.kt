@@ -32,7 +32,7 @@ internal data class UsageStatsOverlayRulesState(
         val fg = foregroundPackage ?: return false
         if (fg == myPackageName) return false
         if (watchHidePackages.isEmpty() || hidePanelIds.isEmpty()) return false
-        return fg in watchHidePackages && hidePanelIds.contains(panelId)
+        return usageStatsWatchContains(watchHidePackages, fg) && hidePanelIds.contains(panelId)
     }
 
     /**
@@ -43,15 +43,26 @@ internal data class UsageStatsOverlayRulesState(
     fun isUsageStatsForceShowing(panelId: String, myPackageName: String): Boolean {
         val fg = foregroundPackage ?: return false
         if (fg == myPackageName) return false
-        if (fg in watchHidePackages && fg in watchShowPackages) return false
+        if (usageStatsWatchContains(watchHidePackages, fg) &&
+            usageStatsWatchContains(watchShowPackages, fg)
+        ) {
+            return false
+        }
         if (isUsageStatsForceHidden(panelId, myPackageName)) return false
         if (watchShowPackages.isEmpty() || showPanelIds.isEmpty()) return false
-        return fg in watchShowPackages && showPanelIds.contains(panelId)
+        return usageStatsWatchContains(watchShowPackages, fg) && showPanelIds.contains(panelId)
     }
 
     companion object {
         val EMPTY = UsageStatsOverlayRulesState(null, emptySet(), emptySet(), emptySet(), emptySet())
     }
+}
+
+/** Usage stats package names vs launcher-picked entries (trim / case). */
+internal fun usageStatsWatchContains(watch: Set<String>, foregroundPackage: String): Boolean {
+    val f = foregroundPackage.trim()
+    if (f.isEmpty()) return false
+    return watch.any { w -> w.trim().equals(f, ignoreCase = true) }
 }
 
 internal class FloatingOverlayController(
@@ -146,6 +157,9 @@ internal class FloatingOverlayController(
             }
 
             visibleConfigs.forEach { config ->
+                if (usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPkg)) {
+                    overlayOffIds.remove(config.id)
+                }
                 if (isFloatingPanelTemporarilyHidden(config.id, myPkg)) {
                     if (overlayViews.containsKey(config.id)) {
                         closeOverlay(config.id)
@@ -191,6 +205,9 @@ internal class FloatingOverlayController(
             val visibleConfigs = configs.filter { cfg -> shouldShowFloatingOverlay(cfg, myPkg) }
             visibleConfigs.forEach { config ->
                 if (isFloatingPanelTemporarilyHidden(config.id, myPkg)) return@forEach
+                if (usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPkg)) {
+                    overlayOffIds.remove(config.id)
+                }
                 if (overlayOffIds.contains(config.id)) return@forEach
                 if (overlayViews.containsKey(config.id)) {
                     overlayRetryCounts[config.id] = 0

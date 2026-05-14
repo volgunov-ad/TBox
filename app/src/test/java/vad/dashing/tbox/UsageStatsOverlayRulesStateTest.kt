@@ -7,6 +7,12 @@ import org.junit.Test
 class UsageStatsOverlayRulesStateTest {
 
     @Test
+    fun watchContains_isCaseInsensitive() {
+        assertTrue(usageStatsWatchContains(setOf(" Com.Example.App "), "com.example.app"))
+        assertFalse(usageStatsWatchContains(setOf("other"), "com.example.app"))
+    }
+
+    @Test
     fun forceShow_allowed_when_foreground_only_in_show_watch_hide_targets_other_app() {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "com.show.app",
