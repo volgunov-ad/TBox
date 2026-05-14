@@ -7,6 +7,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.os.Build
 import android.os.Process
+import kotlin.math.min
 
 internal object UsageStatsHideFloatingHelper {
 
@@ -39,21 +40,31 @@ internal object UsageStatsHideFloatingHelper {
     }
 
     /**
-     * Returns the package that is most likely in the foreground within roughly [windowMs].
-     * Prefers [UsageStatsManager.queryEvents] (chronological foreground transitions) over
-     * [UsageStatsManager.queryUsageStats], which often picks the wrong package on head units
-     * (system UI / lastTimeUsed noise) when queried with a short interval.
+     * Returns the package most likely representing the **user-visible third-party app**, excluding
+     * [Context.getPackageName] so that our own [android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY]
+     * windows do not replace the real foreground package in usage logs (which prevented
+     * force-show of disabled panels: rules saw «our» package and turned off immediately).
+     *
+     * Order: usage events (non-self foreground) → largest `totalTimeInForeground` among non-self
+     * stats → legacy max `lastTimeUsed` among non-self stats.
      */
     fun lastForegroundPackageWithin(context: Context, windowMs: Long): String? {
         if (!hasUsageAccessPermission(context)) return null
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
+        val myPkg = context.packageName
         val end = System.currentTimeMillis()
         val statsBegin = (end - maxOf(windowMs, MIN_STATS_QUERY_WINDOW_MS)).coerceAtLeast(0L)
         val eventBegin = (end - maxOf(windowMs, USAGE_EVENTS_LOOKBACK_MS)).coerceAtLeast(0L)
 
-        foregroundFromUsageEvents(usm, eventBegin, end)?.let { return normalizePackage(it) }
+        foregroundFromUsageEventsExcludePackage(usm, eventBegin, end, myPkg)?.let { return normalizePackage(it) }
 
-        foregroundFromQueryUsageStats(usm, statsBegin, end)?.let { return normalizePackage(it) }
+        foregroundFromMaxTotalForegroundTimeExcludePackage(usm, statsBegin, end, myPkg)?.let {
+            return normalizePackage(it)
+        }
+
+        foregroundFromQueryUsageStatsExcludePackage(usm, statsBegin, end, myPkg)?.let {
+            return normalizePackage(it)
+        }
 
         return null
     }
@@ -63,10 +74,11 @@ internal object UsageStatsHideFloatingHelper {
         return p.takeIf { it.isNotEmpty() }
     }
 
-    private fun foregroundFromQueryUsageStats(
+    private fun foregroundFromQueryUsageStatsExcludePackage(
         usm: UsageStatsManager,
         begin: Long,
         end: Long,
+        excludePackage: String,
     ): String? {
         return try {
             @Suppress("DEPRECATION")
@@ -75,9 +87,34 @@ internal object UsageStatsHideFloatingHelper {
             if (stats.isEmpty()) return null
             val span = (end - begin).coerceAtLeast(30_000L)
             val freshnessCutoff = end - minOf(180_000L, span)
-            val candidates = stats.filter { it.lastTimeUsed >= freshnessCutoff }
+            val candidates = stats.filter {
+                it.packageName != excludePackage && it.lastTimeUsed >= freshnessCutoff
+            }
             if (candidates.isEmpty()) return null
             candidates.maxByOrNull { it.lastTimeUsed }?.packageName
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Picks the non-excluded package with the largest [UsageStats.getTotalTimeInForeground] in the
+     * interval — stable while a music/navi app keeps the screen even if our overlay generates
+     * brief self-foreground events.
+     */
+    private fun foregroundFromMaxTotalForegroundTimeExcludePackage(
+        usm: UsageStatsManager,
+        begin: Long,
+        end: Long,
+        excludePackage: String,
+    ): String? {
+        return try {
+            @Suppress("DEPRECATION")
+            val stats: List<UsageStats> = usm.queryUsageStats(UsageStatsManager.INTERVAL_BEST, begin, end)
+                ?: return null
+            val others = stats.filter { it.packageName != excludePackage && it.totalTimeInForeground > 0L }
+            if (others.isEmpty()) return null
+            others.maxByOrNull { it.totalTimeInForeground }?.packageName
         } catch (_: Exception) {
             null
         }
@@ -92,21 +129,28 @@ internal object UsageStatsHideFloatingHelper {
         }
     }
 
-    private fun foregroundFromUsageEvents(usm: UsageStatsManager, begin: Long, end: Long): String? {
+    private fun foregroundFromUsageEventsExcludePackage(
+        usm: UsageStatsManager,
+        begin: Long,
+        end: Long,
+        excludePackage: String,
+    ): String? {
         return try {
             val events = usm.queryEvents(begin, end)
             val event = UsageEvents.Event()
-            var lastPkg: String? = null
-            var lastStamp = 0L
+            var bestPkg: String? = null
+            var bestStamp = -1L
             while (events.hasNextEvent()) {
                 events.getNextEvent(event)
                 if (!isForegroundEventType(event.eventType)) continue
-                if (event.timeStamp >= lastStamp) {
-                    lastStamp = event.timeStamp
-                    lastPkg = event.packageName
+                val pkg = event.packageName ?: continue
+                if (pkg == excludePackage) continue
+                if (event.timeStamp >= bestStamp) {
+                    bestStamp = event.timeStamp
+                    bestPkg = pkg
                 }
             }
-            lastPkg
+            bestPkg
         } catch (_: Exception) {
             null
         }

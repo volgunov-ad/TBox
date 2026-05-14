@@ -26,7 +26,7 @@ class UsageStatsOverlayRulesStateTest {
     }
 
     @Test
-    fun forceShow_blocked_when_same_app_in_both_watch_lists() {
+    fun forceShow_allowed_when_same_app_in_both_watch_lists_if_panel_not_in_hide_list() {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "com.other.app",
             watchHidePackages = setOf("com.other.app"),
@@ -34,7 +34,8 @@ class UsageStatsOverlayRulesStateTest {
             watchShowPackages = setOf("com.other.app"),
             showPanelIds = setOf("panel_b"),
         )
-        assertFalse(state.isUsageStatsForceShowing("panel_b", "vad.dashing.tbox"))
+        assertFalse(state.isUsageStatsForceHidden("panel_b", "vad.dashing.tbox"))
+        assertTrue(state.isUsageStatsForceShowing("panel_b", "vad.dashing.tbox"))
     }
 
     @Test

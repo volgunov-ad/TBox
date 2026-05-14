@@ -18,8 +18,7 @@ import vad.dashing.tbox.ui.MyLifecycleOwner
 
 /**
  * Foreground package + persisted usage-stats rule sets from [BackgroundService] polling.
- * Hide wins when it actually applies to a panel ([isUsageStatsForceHidden]); when the same
- * foreground app is listed in both watch lists, hide wins and force-show is suppressed.
+ * Hide wins when it actually applies to a panel ([isUsageStatsForceHidden]).
  */
 internal data class UsageStatsOverlayRulesState(
     val foregroundPackage: String?,
@@ -37,17 +36,11 @@ internal data class UsageStatsOverlayRulesState(
 
     /**
      * When a show-watched app is foreground, show listed panels even if disabled in settings.
-     * Suppressed when this panel is actually hidden by the hide rule ([isUsageStatsForceHidden]),
-     * or when the same foreground app is listed in both watch lists (hide list wins for that app).
+     * Suppressed when this panel is actually hidden by the hide rule ([isUsageStatsForceHidden]).
      */
     fun isUsageStatsForceShowing(panelId: String, myPackageName: String): Boolean {
         val fg = foregroundPackage ?: return false
         if (fg == myPackageName) return false
-        if (usageStatsWatchContains(watchHidePackages, fg) &&
-            usageStatsWatchContains(watchShowPackages, fg)
-        ) {
-            return false
-        }
         if (isUsageStatsForceHidden(panelId, myPackageName)) return false
         if (watchShowPackages.isEmpty() || showPanelIds.isEmpty()) return false
         return usageStatsWatchContains(watchShowPackages, fg) && showPanelIds.contains(panelId)
