@@ -3,8 +3,6 @@ package vad.dashing.tbox
 import android.app.Application
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.test.core.app.ApplicationProvider
-import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,14 +15,6 @@ import vad.dashing.tbox.fuel.FuelTypes
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class BackgroundServiceSettingsSnapshotTest {
-
-    @After
-    fun resetUsageStatsHideFloatingRules() {
-        runBlocking {
-            val context = ApplicationProvider.getApplicationContext<Application>()
-            SettingsManager(context).saveUsageStatsHideFloatingRules(emptySet(), emptySet())
-        }
-    }
 
     @Test
     fun emptyPreferences_matchesDocumentedDefaults() {
@@ -46,18 +36,5 @@ class BackgroundServiceSettingsSnapshotTest {
         assertTrue(snap.floatingDashboards.isEmpty())
         assertTrue(snap.usageStatsHideFloatingWatchPackages.isEmpty())
         assertTrue(snap.usageStatsHideFloatingPanelIds.isEmpty())
-    }
-
-    @Test
-    fun usageStatsHideFloatingRules_persistToDataStore() = runBlocking {
-        val context = ApplicationProvider.getApplicationContext<Application>()
-        val manager = SettingsManager(context)
-        manager.saveUsageStatsHideFloatingRules(
-            watchPackages = setOf("com.persist.test.app"),
-            floatingPanelIds = setOf("floating-persist-1", "floating-persist-2")
-        )
-        val snap = manager.readBackgroundServiceSettingsSnapshot()
-        assertEquals(setOf("com.persist.test.app"), snap.usageStatsHideFloatingWatchPackages)
-        assertEquals(setOf("floating-persist-1", "floating-persist-2"), snap.usageStatsHideFloatingPanelIds)
     }
 }

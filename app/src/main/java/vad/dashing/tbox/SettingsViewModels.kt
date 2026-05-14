@@ -1561,15 +1561,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    /**
-     * Persists usage-stats hide rules to DataStore. Call from a coroutine and await completion
-     * before closing the host UI (fire-and-forget launches can be cancelled before disk write).
-     */
-    suspend fun persistUsageStatsHideFloatingRules(
-        watchPackages: Set<String>,
-        floatingPanelIds: Set<String>,
-    ) {
-        withContext(Dispatchers.IO) {
+    fun saveUsageStatsHideFloatingRules(watchPackages: Set<String>, floatingPanelIds: Set<String>) {
+        viewModelScope.launch {
             settingsManager.saveUsageStatsHideFloatingRules(watchPackages, floatingPanelIds)
         }
     }
