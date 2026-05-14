@@ -2,7 +2,7 @@ class FuelSmartEstimator(
     val tankCapacity: Double = 50.0,      // Максимальный паспортный объем бака
     private val sensorMin: Double = 2.0,  // "Мертвая зона" снизу: уровень, ниже которого поплавок физически не опускается
     private val sensorMax: Double = 48.0, // "Мертвая зона" сверху: уровень, выше которого поплавок упирается в потолок
-    zoneCount: Int = 5                   // Количество участков, на которые мы дробим бак для калибровки нелинейности
+    zoneCount: Int = 11                   // Количество участков, на которые мы дробим бак для калибровки нелинейности
 ) {
     // ОБЪЕКТЫ-ПОМОЩНИКИ (ООП Делегаты)
 
@@ -10,7 +10,7 @@ class FuelSmartEstimator(
     private val physics = FuelPhysics()
 
     // Отвечает за хранение "опыта": массивы данных по каждой зоне и расчет их коэффициентов
-    private val store = CalibrationStore(zoneCount, tankCapacity, maturityThreshold = 80.0)
+    private val store = CalibrationStore(zoneCount, tankCapacity, maturityThreshold = 100.0)
 
     private val storage = FuelStorage()
 

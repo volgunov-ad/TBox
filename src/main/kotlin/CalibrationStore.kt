@@ -1,7 +1,7 @@
 class CalibrationStore(
     val zoneCount: Int,
     val tankCapacity: Double,
-    private val maturityThreshold: Double = 80.0
+    private val maturityThreshold: Double = 100.0
 ) {
     val zoneSize = tankCapacity / zoneCount
     var realLitersPerZone = DoubleArray(zoneCount) { 0.0 }
