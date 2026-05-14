@@ -172,6 +172,10 @@ data class BackgroundServiceSettingsSnapshot(
     val usageStatsHideFloatingWatchPackages: Set<String>,
     /** Floating dashboard ids to hide while a watched package is foreground. */
     val usageStatsHideFloatingPanelIds: Set<String>,
+    /** Package names: when foreground is one of these (and not in hide-watch), listed panels may be force-shown. */
+    val usageStatsForceShowFloatingWatchPackages: Set<String>,
+    /** Panels to show while a force-show watched app is foreground, even if «Показывать плавающую панель» is off. */
+    val usageStatsForceShowFloatingPanelIds: Set<String>,
     val canDataSaveCount: Int,
     val fuelTankLiters: Int,
     /** JSON калибровки топлива (пустая строка — нет данных). */
@@ -325,6 +329,8 @@ class SettingsManager(private val context: Context) {
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY = "usage_stats_hide_floating_watch_packages"
         private const val USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY = "usage_stats_hide_floating_panel_ids"
+        private const val USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY = "usage_stats_force_show_floating_watch_packages"
+        private const val USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY = "usage_stats_force_show_floating_panel_ids"
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
         private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
@@ -410,6 +416,22 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             stringSetFromJsonArray(
                 preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY)] ?: "[]"
+            )
+        }
+        .distinctUntilChanged()
+
+    val usageStatsForceShowFloatingWatchPackagesFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY)] ?: "[]"
+            )
+        }
+        .distinctUntilChanged()
+
+    val usageStatsForceShowFloatingPanelIdsFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY)] ?: "[]"
             )
         }
         .distinctUntilChanged()
@@ -715,6 +737,12 @@ class SettingsManager(private val context: Context) {
             usageStatsHideFloatingPanelIds = stringSetFromJsonArray(
                 preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY)] ?: "[]"
             ),
+            usageStatsForceShowFloatingWatchPackages = stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY)] ?: "[]"
+            ),
+            usageStatsForceShowFloatingPanelIds = stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY)] ?: "[]"
+            ),
             canDataSaveCount = preferences[CAN_DATA_SAVE_COUNT_KEY] ?: DEFAULT_CAN_DATA_SAVE_COUNT,
             fuelTankLiters = preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS,
             fuelCalibrationJson = preferences[FUEL_CALIBRATION_JSON_KEY].orEmpty(),
@@ -859,12 +887,21 @@ class SettingsManager(private val context: Context) {
         saveCustomString(FLOATING_DASHBOARDS_LIST_KEY, serializeFloatingDashboards(normalized))
     }
 
-    suspend fun saveUsageStatsHideFloatingRules(watchPackages: Set<String>, floatingPanelIds: Set<String>) {
+    suspend fun saveUsageStatsFloatingOverlayRules(
+        hideWatchPackages: Set<String>,
+        hidePanelIds: Set<String>,
+        showWatchPackages: Set<String>,
+        showPanelIds: Set<String>,
+    ) {
         context.settingsDataStore.edit { preferences ->
             preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] =
-                stringSetToJsonArray(watchPackages)
+                stringSetToJsonArray(hideWatchPackages)
             preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY)] =
-                stringSetToJsonArray(floatingPanelIds)
+                stringSetToJsonArray(hidePanelIds)
+            preferences[getStringKey(USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY)] =
+                stringSetToJsonArray(showWatchPackages)
+            preferences[getStringKey(USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY)] =
+                stringSetToJsonArray(showPanelIds)
         }
     }
 

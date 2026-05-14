@@ -100,6 +100,8 @@ class BackgroundService : Service() {
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
     private lateinit var usageStatsHideFloatingWatchPackages: StateFlow<Set<String>>
     private lateinit var usageStatsHideFloatingPanelIds: StateFlow<Set<String>>
+    private lateinit var usageStatsForceShowFloatingWatchPackages: StateFlow<Set<String>>
+    private lateinit var usageStatsForceShowFloatingPanelIds: StateFlow<Set<String>>
     private lateinit var canDataSaveCount: StateFlow<Int>
     private lateinit var fuelTankLitersSetting: StateFlow<Int>
     private lateinit var fuelCalibrationJsonSetting: StateFlow<String>
@@ -430,6 +432,10 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.usageStatsHideFloatingWatchPackages)
             usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
                 .stateIn(scope, eager, settingsSnap.usageStatsHideFloatingPanelIds)
+            usageStatsForceShowFloatingWatchPackages = settingsManager.usageStatsForceShowFloatingWatchPackagesFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsForceShowFloatingWatchPackages)
+            usageStatsForceShowFloatingPanelIds = settingsManager.usageStatsForceShowFloatingPanelIdsFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsForceShowFloatingPanelIds)
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, settingsSnap.canDataSaveCount)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
@@ -480,6 +486,10 @@ class BackgroundService : Service() {
             usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
                 .stateIn(scope, eager, emptySet())
             usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
+                .stateIn(scope, eager, emptySet())
+            usageStatsForceShowFloatingWatchPackages = settingsManager.usageStatsForceShowFloatingWatchPackagesFlow
+                .stateIn(scope, eager, emptySet())
+            usageStatsForceShowFloatingPanelIds = settingsManager.usageStatsForceShowFloatingPanelIdsFlow
                 .stateIn(scope, eager, emptySet())
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, 5)
@@ -2224,31 +2234,31 @@ class BackgroundService : Service() {
     private fun startUsageStatsFloatingHideWatcher() {
         if (usageStatsFloatingHideJob?.isActive == true) return
         usageStatsFloatingHideJob = scope.launch {
-            var lastAppliedHideIds = emptySet<String>()
+            var lastAppliedRules: UsageStatsOverlayRulesState? = null
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
-                val watch = usageStatsHideFloatingWatchPackages.value
-                val panelTargets = usageStatsHideFloatingPanelIds.value
-                val myPkg = packageName
-                val canRun = watch.isNotEmpty() &&
-                    panelTargets.isNotEmpty() &&
-                    UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)
-                val newHide = if (!canRun) {
-                    emptySet()
-                } else {
-                    val fg = UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
+                val watchHide = usageStatsHideFloatingWatchPackages.value
+                val hidePanels = usageStatsHideFloatingPanelIds.value
+                val watchShow = usageStatsForceShowFloatingWatchPackages.value
+                val showPanels = usageStatsForceShowFloatingPanelIds.value
+                val fg = if (UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)) {
+                    UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
                         this@BackgroundService,
                         windowMs = 25_000L
                     )
-                    if (fg != null && fg != myPkg && watch.contains(fg)) {
-                        panelTargets
-                    } else {
-                        emptySet()
-                    }
+                } else {
+                    null
                 }
-                if (newHide != lastAppliedHideIds) {
-                    lastAppliedHideIds = newHide
-                    overlayController.setUsageStatsHiddenFloatingPanelIds(newHide)
+                val newState = UsageStatsOverlayRulesState(
+                    foregroundPackage = fg,
+                    watchHidePackages = watchHide,
+                    hidePanelIds = hidePanels,
+                    watchShowPackages = watchShow,
+                    showPanelIds = showPanels,
+                )
+                if (newState != lastAppliedRules) {
+                    lastAppliedRules = newState
+                    overlayController.setUsageStatsOverlayRulesState(newState)
                     overlayController.syncFloatingDashboards(floatingDashboards.value)
                     overlayController.ensureFloatingDashboards(floatingDashboards.value)
                 }
@@ -2260,7 +2270,7 @@ class BackgroundService : Service() {
         usageStatsFloatingHideJob?.cancel()
         usageStatsFloatingHideJob = null
         scope.launch {
-            overlayController.setUsageStatsHiddenFloatingPanelIds(emptySet())
+            overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
             overlayController.syncFloatingDashboards(floatingDashboards.value)
             overlayController.ensureFloatingDashboards(floatingDashboards.value)
         }

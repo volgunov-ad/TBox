@@ -36,5 +36,7 @@ class BackgroundServiceSettingsSnapshotTest {
         assertTrue(snap.floatingDashboards.isEmpty())
         assertTrue(snap.usageStatsHideFloatingWatchPackages.isEmpty())
         assertTrue(snap.usageStatsHideFloatingPanelIds.isEmpty())
+        assertTrue(snap.usageStatsForceShowFloatingWatchPackages.isEmpty())
+        assertTrue(snap.usageStatsForceShowFloatingPanelIds.isEmpty())
     }
 }

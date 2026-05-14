@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -17,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,21 +51,34 @@ fun UsageStatsHideFloatingPanelsDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val savedWatch by settingsViewModel.usageStatsHideFloatingWatchPackages.collectAsStateWithLifecycle()
-    val savedPanels by settingsViewModel.usageStatsHideFloatingPanelIds.collectAsStateWithLifecycle()
+    val savedWatchHide by settingsViewModel.usageStatsHideFloatingWatchPackages.collectAsStateWithLifecycle()
+    val savedPanelsHide by settingsViewModel.usageStatsHideFloatingPanelIds.collectAsStateWithLifecycle()
+    val savedWatchShow by settingsViewModel.usageStatsForceShowFloatingWatchPackages.collectAsStateWithLifecycle()
+    val savedPanelsShow by settingsViewModel.usageStatsForceShowFloatingPanelIds.collectAsStateWithLifecycle()
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(iconRevision)
 
-    var draftWatch by remember { mutableStateOf(savedWatch) }
-    var draftPanels by remember { mutableStateOf(savedPanels) }
+    var draftWatchHide by remember { mutableStateOf(savedWatchHide) }
+    var draftPanelsHide by remember { mutableStateOf(savedPanelsHide) }
+    var draftWatchShow by remember { mutableStateOf(savedWatchShow) }
+    var draftPanelsShow by remember { mutableStateOf(savedPanelsShow) }
 
-    var filterText by rememberSaveable { mutableStateOf("") }
-    val needle = filterText.trim().lowercase()
-    val filteredApps = remember(apps, needle) {
-        if (needle.isEmpty()) apps
+    var filterHideText by rememberSaveable { mutableStateOf("") }
+    var filterShowText by rememberSaveable { mutableStateOf("") }
+    val needleHide = filterHideText.trim().lowercase()
+    val needleShow = filterShowText.trim().lowercase()
+    val filteredAppsHide = remember(apps, needleHide) {
+        if (needleHide.isEmpty()) apps
         else apps.filter {
-            it.label.lowercase().contains(needle) ||
-                it.packageName.lowercase().contains(needle)
+            it.label.lowercase().contains(needleHide) ||
+                it.packageName.lowercase().contains(needleHide)
+        }
+    }
+    val filteredAppsShow = remember(apps, needleShow) {
+        if (needleShow.isEmpty()) apps
+        else apps.filter {
+            it.label.lowercase().contains(needleShow) ||
+                it.packageName.lowercase().contains(needleShow)
         }
     }
 
@@ -77,7 +92,12 @@ fun UsageStatsHideFloatingPanelsDialog(
             AppAlertDialogTitle(stringResource(R.string.settings_floating_usage_stats_hide_dialog_title))
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
                 AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_hide_dialog_intro))
                 if (!hasUsageAccess) {
                     Text(
@@ -102,12 +122,19 @@ fun UsageStatsHideFloatingPanelsDialog(
                         )
                     }
                 }
+                Text(
+                    text = stringResource(R.string.settings_floating_usage_stats_hide_section_title),
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_hide_section_body))
                 OutlinedTextField(
-                    value = filterText,
-                    onValueChange = { filterText = it },
+                    value = filterHideText,
+                    onValueChange = { filterHideText = it },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp),
+                        .padding(top = 8.dp),
                     singleLine = true,
                     label = {
                         Text(
@@ -119,111 +146,101 @@ fun UsageStatsHideFloatingPanelsDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .height(400.dp),
+                        .padding(top = 8.dp)
+                        .height(320.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_floating_usage_stats_hide_column_apps),
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(bottom = 6.dp),
-                        )
-                        filteredApps.forEach { app ->
-                            val checked = draftWatch.contains(app.packageName)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Checkbox(
-                                    checked = checked,
-                                    onCheckedChange = { on ->
-                                        draftWatch = if (on) {
-                                            draftWatch + app.packageName
-                                        } else {
-                                            draftWatch - app.packageName
-                                        }
-                                    },
-                                )
-                                Text(
-                                    text = app.label,
-                                    fontSize = 20.sp,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-                    }
+                    UsageStatsAppsColumn(
+                        modifier = Modifier.weight(1f),
+                        apps = filteredAppsHide,
+                        selectedPackages = draftWatchHide,
+                        onTogglePackage = { pkg, on ->
+                            draftWatchHide = if (on) draftWatchHide + pkg else draftWatchHide - pkg
+                        },
+                        columnAppsLabel = stringResource(R.string.settings_floating_usage_stats_hide_column_apps),
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .width(1.dp)
                             .background(MaterialTheme.colorScheme.outlineVariant),
                     )
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState()),
-                    ) {
+                    UsageStatsPanelsColumn(
+                        modifier = Modifier.weight(1f),
+                        panels = floatingPanels,
+                        selectedIds = draftPanelsHide,
+                        onTogglePanel = { id, on ->
+                            draftPanelsHide = if (on) draftPanelsHide + id else draftPanelsHide - id
+                        },
+                        columnPanelsLabel = stringResource(R.string.settings_floating_usage_stats_hide_column_panels),
+                        noPanelsText = stringResource(R.string.settings_floating_usage_stats_hide_no_panels),
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                Text(
+                    text = stringResource(R.string.settings_floating_usage_stats_show_section_title),
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_show_section_body))
+                OutlinedTextField(
+                    value = filterShowText,
+                    onValueChange = { filterShowText = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    singleLine = true,
+                    label = {
                         Text(
-                            text = stringResource(R.string.settings_floating_usage_stats_hide_column_panels),
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(bottom = 6.dp),
+                            stringResource(R.string.settings_floating_usage_stats_show_filter_apps),
+                            fontSize = 18.sp,
                         )
-                        if (floatingPanels.isEmpty()) {
-                            Text(
-                                text = stringResource(R.string.settings_floating_usage_stats_hide_no_panels),
-                                fontSize = 20.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        } else {
-                            floatingPanels.forEach { panel ->
-                                val checked = draftPanels.contains(panel.id)
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Checkbox(
-                                        checked = checked,
-                                        onCheckedChange = { on ->
-                                            draftPanels = if (on) {
-                                                draftPanels + panel.id
-                                            } else {
-                                                draftPanels - panel.id
-                                            }
-                                        },
-                                    )
-                                    Text(
-                                        text = panel.name.ifBlank { panel.id },
-                                        fontSize = 20.sp,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    },
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .height(320.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    UsageStatsAppsColumn(
+                        modifier = Modifier.weight(1f),
+                        apps = filteredAppsShow,
+                        selectedPackages = draftWatchShow,
+                        onTogglePackage = { pkg, on ->
+                            draftWatchShow = if (on) draftWatchShow + pkg else draftWatchShow - pkg
+                        },
+                        columnAppsLabel = stringResource(R.string.settings_floating_usage_stats_hide_column_apps),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(1.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant),
+                    )
+                    UsageStatsPanelsColumn(
+                        modifier = Modifier.weight(1f),
+                        panels = floatingPanels,
+                        selectedIds = draftPanelsShow,
+                        onTogglePanel = { id, on ->
+                            draftPanelsShow = if (on) draftPanelsShow + id else draftPanelsShow - id
+                        },
+                        columnPanelsLabel = stringResource(R.string.settings_floating_usage_stats_hide_column_panels),
+                        noPanelsText = stringResource(R.string.settings_floating_usage_stats_hide_no_panels),
+                    )
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = rememberWrappedOnClick {
-                    settingsViewModel.saveUsageStatsHideFloatingRules(draftWatch, draftPanels)
+                    settingsViewModel.saveUsageStatsFloatingOverlayRules(
+                        draftWatchHide,
+                        draftPanelsHide,
+                        draftWatchShow,
+                        draftPanelsShow,
+                    )
                     onDismiss()
                 }
             ) {
@@ -236,4 +253,99 @@ fun UsageStatsHideFloatingPanelsDialog(
             }
         },
     )
+}
+
+@Composable
+private fun UsageStatsAppsColumn(
+    modifier: Modifier = Modifier,
+    apps: List<LaunchableAppEntry>,
+    selectedPackages: Set<String>,
+    onTogglePackage: (String, Boolean) -> Unit,
+    columnAppsLabel: String,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Text(
+            text = columnAppsLabel,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        apps.forEach { app ->
+            val checked = selectedPackages.contains(app.packageName)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = { on -> onTogglePackage(app.packageName, on) },
+                )
+                Text(
+                    text = app.label,
+                    fontSize = 20.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsageStatsPanelsColumn(
+    modifier: Modifier = Modifier,
+    panels: List<FloatingDashboardConfig>,
+    selectedIds: Set<String>,
+    onTogglePanel: (String, Boolean) -> Unit,
+    columnPanelsLabel: String,
+    noPanelsText: String,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Text(
+            text = columnPanelsLabel,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        if (panels.isEmpty()) {
+            Text(
+                text = noPanelsText,
+                fontSize = 20.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            panels.forEach { panel ->
+                val checked = selectedIds.contains(panel.id)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = checked,
+                        onCheckedChange = { on -> onTogglePanel(panel.id, on) },
+                    )
+                    Text(
+                        text = panel.name.ifBlank { panel.id },
+                        fontSize = 20.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
 }
