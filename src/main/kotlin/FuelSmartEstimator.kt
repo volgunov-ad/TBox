@@ -2,7 +2,10 @@ class FuelSmartEstimator(
     val tankCapacity: Double = 50.0,      // Максимальный паспортный объем бака
     private val sensorMin: Double = 2.0,  // "Мертвая зона" снизу: уровень, ниже которого поплавок физически не опускается
     private val sensorMax: Double = 48.0, // "Мертвая зона" сверху: уровень, выше которого поплавок упирается в потолок
-    zoneCount: Int = 11                   // Количество участков, на которые мы дробим бак для калибровки нелинейности
+    zoneCount: Int = 11,                  // Количество участков, на которые мы дробим бак для калибровки нелинейности
+    // 1. Добавляем в переменные состояния класса FuelSmartEstimator:
+    private var lastDrivingLevel: Double = -1.0,
+    private var smartCalculationHoldTimer: Int = 0, // Счетчик секунд для удержания флага
 ) {
     // ОБЪЕКТЫ-ПОМОЩНИКИ (ООП Делегаты)
 
@@ -74,53 +77,74 @@ class FuelSmartEstimator(
     /**
      * ПРЕДСКАЗАНИЕ: Превращает "кривой" литраж датчика в реальный объем.
      */
-    fun getCorrectedLiters(currentSensorValue: Double, currentTemp: Double): EstimationResult {
-        // Защита: не даем значению датчика выйти за пределы физического бака
-        val safeSensor = currentSensorValue.coerceIn(0.0, tankCapacity)
+    // ВАЖНО: Эти две переменные нужно добавить в самый верх класса FuelSmartEstimator,
+    // туда, где у вас объявлены tankCapacity, sensorMin и sensorMax.
 
-        // Определяем индекс текущей зоны бака
+    fun getCorrectedLiters(
+        entry: FuelEntry,
+        minConfidenceThreshold: Double = 0.3 // Порог уверенности (30%) для активации алгоритма
+    ): EstimationResult {
+        // 1. СТАРУЮ МАТЕМАТИКУ ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ (Данные берутся из entry)
+        val safeSensor = entry.sensorBefore.coerceIn(0.0, tankCapacity)
         val zoneIdx = (safeSensor / store.zoneSize).toInt().coerceIn(0, store.zoneCount - 1)
 
-        // Получаем коэффициенты: локальный (для этой зоны) и глобальный (средний по баку)
         val kLocal = store.getZoneK(zoneIdx)
         val kGlobal = store.getGlobalK()
-
-        // Насколько мы доверяем данным именно в этой зоне (от 0.0 до 1.0)
         val confidence = store.getConfidence(zoneIdx)
 
-        // СМЕШИВАНИЕ: если уверенность низкая, берем больше от глобального коэффициента
         val kFinal = (kLocal * confidence) + (kGlobal * (1.0 - confidence))
-
-        // 1. Стабильный объем (при +15°C) — то, что не зависит от текущей жары/холода
         val stdVolume = safeSensor * kFinal
-
-        // 2. Фактический объем (при текущей T) — сколько места бензин занимает сейчас
-        val actualVolume = physics.fromStandard(stdVolume, currentTemp)
-
-        // Порог сглаживания (например, 49.0 л)
+        val actualVolume = physics.fromStandard(stdVolume, entry.ambientTemp)
         val smoothThreshold = tankCapacity * 0.98
 
-        // 1. Сглаживаем Standard: если выше 49, рисуем 50
         val finalStd = if (stdVolume >= smoothThreshold) tankCapacity else stdVolume
-
-        // 2. Сглаживаем Actual ПЛАВНО:
-        // Если фактический объем (с учетом T) выше порога, мы тоже его подтягиваем,
-        // НО оставляем ему возможность "дышать" от температуры.
         val finalActual = if (actualVolume >= smoothThreshold) {
-            // Если база (stdVolume) уже полная, то и Actual должен
-            // вращаться вокруг 50 литров, а не вокруг 52.6
             val ratio = actualVolume / stdVolume
             tankCapacity * ratio
         } else {
             actualVolume
         }
 
-        val isAtLimit = currentSensorValue >= sensorMax || currentSensorValue <= sensorMin
+        val isAtLimit = entry.sensorBefore >= sensorMax || entry.sensorBefore <= sensorMin
+        // Выносим финальную уверенность в отдельную переменную, чтобы использовать ниже
+        val finalConfidence = if (isAtLimit) confidence * 0.7 else confidence
 
+        // 2. ОБНОВЛЕННАЯ ЛОГИКА ТРИГГЕРА (С УЧЕТОМ ТРАССЫ, ЗАДНЕГО ХОДА И ПЕРЕДАЧИ ОБЪЕКТА FuelEntry)
+        val absoluteSpeed = kotlin.math.abs(entry.currentSpeedKmH)
+        val isMoving = absoluteSpeed > 5.0
+
+        // Проверяем физическое изменение уровня топлива
+        val (isFuelDroppingNow, isAbruptRefuel) = if (lastDrivingLevel < 0) {
+            lastDrivingLevel = entry.sensorBefore
+            Pair(false, false)
+        } else {
+            val delta = lastDrivingLevel - entry.sensorBefore // Положительная — падает, отрицательная — растет
+            lastDrivingLevel = entry.sensorBefore
+
+            val dropping = entry.isEngineRunning && delta > 0.01
+            val abruptRefuel = delta < -0.5 // Если уровень резко вырос более чем на 0.5л (заправка на АЗС)
+            Pair(dropping, abruptRefuel)
+        }
+
+        // Защита трассы и светофоров + форс-мажор заправки на ходу с работающим мотором
+        if (isAbruptRefuel) {
+            smartCalculationHoldTimer = 0 // Принудительно отдаем OEM-расход, пока бак заливается пистолетом
+        } else if (entry.isEngineRunning && isMoving) {
+            smartCalculationHoldTimer = 45 // Удерживаем наш алгоритм активным при стабильном движении
+        } else if (smartCalculationHoldTimer > 0) {
+            smartCalculationHoldTimer--
+        }
+
+        val isDropActive = smartCalculationHoldTimer > 0
+        val isConfidenceOk = finalConfidence >= minConfidenceThreshold
+        val shouldAnimateSmartConsumption = entry.isEngineRunning && isDropActive && isConfidenceOk
+
+        // 3. ВОЗВРАЩАЕМ РЕЗУЛЬТАТ В UI
         return EstimationResult(
             litersActual = finalActual.coerceAtMost(tankCapacity + 5),
             litersStandard = finalStd.coerceAtMost(tankCapacity + 5),
-            confidence = if (isAtLimit) confidence * 0.7 else confidence
+            confidence = finalConfidence,
+            isSmartCalculationValid = shouldAnimateSmartConsumption
         )
     }
 

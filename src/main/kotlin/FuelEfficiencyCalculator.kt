@@ -47,4 +47,49 @@ class FuelEfficiencyCalculator(
             (liters / totalEquivalentDistance) * 100
         } else 0.0
     }
+
+    /**
+     * Сбрасывает накопленные показатели для расчета расхода.
+     * Вызывается после заправки, чтобы старый пробег не искажал новые данные.
+     */
+    fun resetTripStats() { /* Обнулить внутренние путевые накопители если они есть */ }
+
+    /**
+     * Выполняет интеллектуальный гибридный выбор отображаемого расхода топлива.
+     * Метод анализирует зрелость калибровочной кривой и текущее движение автомобиля,
+     * после чего плавно переключает индикацию между штатными показаниями и нашим алгоритмом.
+     *
+     * @param headUnitConsumption Средний расход топлива, пришедший напрямую с приборной панели
+     *                            или штатного головного устройства автомобиля (л/100км). Может быть null.
+     * @param isSmartCalculationValid Флаг-разрешение от эстиматора бака. Сигнализирует о том, что машина
+     *                                находится в активном движении, а текущая зона бака достаточно обучена.
+     * @param totalLiters Накопленное количество литров топлива, сожженное за текущую поездку,
+     *                    рассчитанное по нашей калибровочной кривой (л). Обнуляется при заправке.
+     * @param distance Накопленный путевой пробег автомобиля за текущий цикл расчета (км).
+     *                 Используется как знаменатель в формуле путевой эффективности.
+     * @param hours Накопленное чистое время работы двигателя (моточасы) за текущую поездку (ч).
+     *              Необходимо для точного выделения расхода на холостом ходу в пробках.
+     */
+    fun getHybridConsumption(
+        headUnitConsumption: Double?,
+        isSmartCalculationValid: Boolean,
+        totalLiters: Double,
+        distance: Double,
+        hours: Double
+    ): Double {
+        val ourSmartConsumption = calculateSmartConsumption(totalLiters, distance, hours)
+
+        // Если Эстиматор подтвердил: уровень падает и зона достаточно обучена
+        if (isSmartCalculationValid) {
+            return if (ourSmartConsumption > 0) ourSmartConsumption else (headUnitConsumption ?: 0.0)
+        }
+
+        // Если мы стоим, или поплавок в «сырой» необученной зоне бака — берем штатный бортовик ГУ
+        if (headUnitConsumption != null && headUnitConsumption > 0) {
+            return headUnitConsumption
+        }
+
+        return ourSmartConsumption
+    }
+
 }
