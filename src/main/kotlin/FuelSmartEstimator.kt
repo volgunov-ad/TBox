@@ -82,7 +82,7 @@ class FuelSmartEstimator(
 
     fun getCorrectedLiters(
         entry: FuelEntry,
-        minConfidenceThreshold: Double = 0.3 // Порог уверенности (30%) для активации алгоритма
+        minConfidenceThreshold: Double = 0.3, // Порог уверенности (30%) для активации алгоритма
     ): EstimationResult {
         // 1. СТАРУЮ МАТЕМАТИКУ ОСТАВЛЯЕМ БЕЗ ИЗМЕНЕНИЙ (Данные берутся из entry)
         val safeSensor = entry.sensorBefore.coerceIn(0.0, tankCapacity)
@@ -95,12 +95,16 @@ class FuelSmartEstimator(
         val kFinal = (kLocal * confidence) + (kGlobal * (1.0 - confidence))
         val stdVolume = safeSensor * kFinal
         val actualVolume = physics.fromStandard(stdVolume, entry.ambientTemp)
-        val smoothThreshold = tankCapacity * 0.98
+        val smoothThreshold = sensorMax - 1.5
 
+        // 2. Сглаживаем Standard: если бак полный по датчику, пишем максимум
         val finalStd = if (stdVolume >= smoothThreshold) tankCapacity else stdVolume
-        val finalActual = if (actualVolume >= smoothThreshold) {
-            val ratio = actualVolume / stdVolume
-            tankCapacity * ratio
+        // 3. ИСПРАВЛЕННОЕ СГЛАЖИВАНИЕ ACTUAL:
+        // Если базовый объем дошел до полного бака (finalStd == tankCapacity),
+        // то и фактический Actual принудительно равен tankCapacity.
+        // Горловина заполнена до краев, расширяться бензину физически некуда.
+        val finalActual = if (stdVolume >= smoothThreshold) {
+            tankCapacity
         } else {
             actualVolume
         }
@@ -144,7 +148,8 @@ class FuelSmartEstimator(
             litersActual = finalActual.coerceAtMost(tankCapacity + 5),
             litersStandard = finalStd.coerceAtMost(tankCapacity + 5),
             confidence = finalConfidence,
-            isSmartCalculationValid = shouldAnimateSmartConsumption
+            isSmartCalculationValid = shouldAnimateSmartConsumption,
+            tankCapacity = tankCapacity
         )
     }
 

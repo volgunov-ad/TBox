@@ -219,37 +219,124 @@ class FuelSystemSimulator(
         val src4 = if (highwayStep.isSmartCalculationValid) "⚡ [НАШ АЛГОРИТМ]" else "🚗 [ШТАТНОЕ ГУ]"
         println("  -> Едем по трассе 40 сек. Расход: $res4 л/100км | Источник: $src4")
 
+        // =================================================================
+        // 🧪 ВОСПРОИЗВЕДЕНИЕ БАГА: ЖАРА И ПОЛНЫЙ БАК (v2.3)
+        // =================================================================
         println("\n=======================================================")
         println("🧪 ВОСПРОИЗВЕДЕНИЕ БАГА: ЖАРА И ПОЛНЫЙ БАК")
         println("=======================================================")
 
-        // 1. Имитируем входные данные как на фото ГУ:
-        val hotTemp2 = 33.0     // Температура +33°C на экране
-        val sensorMax = 55.0   // Максимальное физическое значение, которое может выдать поплавок (100% заполнение бака для датчика)
+        val hotTemp2 = 33.0     // Температура +33°C на экране ГУ
+        val sensorMaxVal = 55.0 // Максимальный физический потолок поплавка
 
-        // 2. Создаем FuelEntry для теста (объем бака в системе сейчас настроен на 57)
         val bugEntry = FuelEntry(
-            odometerKm = 0.0,
-            engineHours = 0.0,
-            sensorBefore = sensorMax, // Датчик уперся в свой потолок
-            sensorAfter = sensorMax,
-            litersByCheck = 0.0,
-            ambientTemp = hotTemp2,
-            isEngineRunning = true,
-            currentSpeedKmH = 0.0
+            odometerKm = 0.0, engineHours = 0.0,
+            sensorBefore = sensorMaxVal, sensorAfter = sensorMaxVal,
+            litersByCheck = 0.0, ambientTemp = hotTemp2,
+            isEngineRunning = true, currentSpeedKmH = 0.0
         )
 
-        // 3. Вызываем расчет (пока еще старый, забагованный)
-        val result3 = estimator.getCorrectedLiters(bugEntry)
-
-        // 4. Считаем процент заполнения бака (как это делает шкала 100% на ГУ)
-        // Если Standard-объем дотянулся до предела, ГУ нарисует "100%"
-        val fillPercent = (result3.litersStandard / estimator.tankCapacity) * 100
+        // Получаем результат — процент считается автоматически внутри класса!
+        val bugResult = estimator.getCorrectedLiters(bugEntry)
 
         println("Настройки в ГУ: Объем бака = ${estimator.tankCapacity} л")
-        println("Показания Standard (базовые): ${result3.litersStandard} л -> Шкала ГУ отобразит: ${fillPercent.toInt()}%")
-        println("Показания Actual (вывод на экран): ${"%.1f".format(result3.litersActual)} л")
+        println("Показания Standard (базовые): ${"%.2f".format(bugResult.litersStandard)} л -> Шкала ГУ отобразит: ${bugResult.fuelPercent.toInt()}%")
+        println("Показания Actual (вывод на экран): ${"%.1f".format(bugResult.litersActual)} л")
 
+
+        // =================================================================
+        // 🔬 ДОПОЛНИТЕЛЬНЫЕ СТРЕСС-ТЕСТЫ ФИЗИКИ И КРАЕВЫХ ЗОН (ЛИТРЫ + %) (v2.3)
+        // =================================================================
+        println("\n=======================================================")
+        println("🔬 ДОПОЛНИТЕЛЬНЫЕ СТРЕСС-ТЕСТЫ ФИЗИКИ И КРАЕВЫХ ЗОН (ЛИТРЫ + %)")
+        println("=======================================================")
+
+        // -----------------------------------------------------------------
+        // ТЕСТ 1: Лютый мороз (-25°C) при почти пустом баке (Датчик = 6.0 л)
+        // -----------------------------------------------------------------
+        println("\n[Тест 1] Сильный мороз (-25°C), в баке осталось мало топлива:")
+        val winterLowEntry = FuelEntry(
+            odometerKm = 0.0, engineHours = 0.0,
+            sensorBefore = 6.0, sensorAfter = 6.0,
+            litersByCheck = 0.0, ambientTemp = -25.0,
+            isEngineRunning = true, currentSpeedKmH = 40.0
+        )
+        val resWinterLow = estimator.getCorrectedLiters(winterLowEntry)
+
+        println("  -> Датчик видит физически: 6.0 л")
+        println("  -> Базовый остаток (Standard): ${"%.2f".format(resWinterLow.litersStandard)} л")
+        println("  -> Шкала ГУ отобразит по нашему алгоритму: ${"%.1f".format(resWinterLow.fuelPercent)}%")
+        println("  -> На экран текстом (Actual литры): ${"%.2f".format(resWinterLow.litersActual)} л (Сжатие от холода)")
+
+
+        // -----------------------------------------------------------------
+        // ТЕСТ 2: Выход в нижнюю мертвую зону датчика ("Сухой бак")
+        // -----------------------------------------------------------------
+        println("\n[Тест 2] Топливо на донышке, датчик упал в мертвую зону снизу:")
+        val dryTankEntry = FuelEntry(
+            odometerKm = 0.0, engineHours = 0.0,
+            sensorBefore = 1.5, sensorAfter = 1.5,
+            litersByCheck = 0.0, ambientTemp = 15.0,
+            isEngineRunning = true, currentSpeedKmH = 20.0
+        )
+        val resDry = estimator.getCorrectedLiters(dryTankEntry)
+
+        println("  -> Датчик упал до: 1.5 л (Мертвая зона)")
+        println("  -> Шкала ГУ отобразит по нашему алгоритму: ${"%.1f".format(resDry.fuelPercent)}%")
+        println("  -> Итоговая уверенность алгоритма: ${(resDry.confidence * 100).toInt()}% (Снижена из-за лимита поплавка)")
+
+
+        // -----------------------------------------------------------------
+        // ТЕСТ 3: Езда на "лампочке" в крутую горку (Плескание на дне бака)
+        // -----------------------------------------------------------------
+        println("\n[Тест 3] Езда на лампочке в горку (Уровень колеблется на дне):")
+        val hill1 = FuelEntry(0.0, 0.0, 5.0, 5.0, 0.0, 15.0, true, 40.0)
+        estimator.getCorrectedLiters(hill1, minConfidenceThreshold = 0.0)
+
+        val hill2 = FuelEntry(0.0, 0.0, 3.0, 3.0, 0.0, 15.0, true, 40.0)
+        val resHill = estimator.getCorrectedLiters(hill2, minConfidenceThreshold = 0.0)
+
+        val resCons = efficiencyCalculator.getHybridConsumption(12.5, resHill.isSmartCalculationValid, 40.0, 500.0, 8.0)
+        val srcCons = if (resHill.isSmartCalculationValid) "⚡ [НАШ АЛГОРИТМ]" else "🚗 [ШТАТНОЕ ГУ]"
+
+        println("  -> Датчик резко качнулся вниз до 3.0 л!")
+        println("  -> Текущий путевой процент по нашему алгоритму: ${"%.1f".format(resHill.fuelPercent)}%")
+        println("  -> Доверие алгоритму расхода сохранено? ${resHill.isSmartCalculationValid} (Должно быть true)")
+        println("  -> Источник расхода на экране ГУ: $srcCons")
+
+        println("\n=======================================================")
+        println("🔬 МАТРИЧНЫЙ ТЕСТ: КРАЙНИЙ ВЕРХ БАКА (54л, 55л, 57л) ПРИ +35°C И -20°C")
+        println("=======================================================")
+
+        val hotDay = 35.0
+        val coldDay = -20.0
+
+        // Массив объемов для тестирования
+        val testVolumes = listOf(54.0, 55.0, 57.0)
+
+        println("\n--- ЧАСТЬ А: Экстремальная жара (+35°C) ---")
+        testVolumes.forEachIndexed { i, vol ->
+            val hotEntry = FuelEntry(
+                odometerKm = 0.0, engineHours = 0.0,
+                sensorBefore = vol, sensorAfter = vol,
+                litersByCheck = 0.0, ambientTemp = hotDay,
+                isEngineRunning = true, currentSpeedKmH = 60.0
+            )
+            val result = estimator.getCorrectedLiters(hotEntry)
+            println("[Кейс A.${i + 1}] Датчик: $vol л | На экран (Actual): ${"%.1f".format(result.litersActual)} л | Шкала ГУ: ${result.fuelPercent.toInt()}%")
+        }
+
+        println("\n--- ЧАСТЬ Б: Сильный мороз (-20°C) ---")
+        testVolumes.forEachIndexed { i, vol ->
+            val coldEntry = FuelEntry(
+                odometerKm = 0.0, engineHours = 0.0,
+                sensorBefore = vol, sensorAfter = vol,
+                litersByCheck = 0.0, ambientTemp = coldDay,
+                isEngineRunning = true, currentSpeedKmH = 60.0
+            )
+            val result = estimator.getCorrectedLiters(coldEntry)
+            println("[Кейс Б.${i + 1}] Датчик: $vol л | На экран (Actual): ${"%.1f".format(result.litersActual)} л | Шкала ГУ: ${result.fuelPercent.toInt()}%")
+        }
     }
 
     fun runHardModeTest() {
