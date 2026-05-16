@@ -218,6 +218,38 @@ class FuelSystemSimulator(
         val res4 = efficiencyCalculator.getHybridConsumption(9.5, highwayStep.isSmartCalculationValid, 12.0, 150.0, 2.5)
         val src4 = if (highwayStep.isSmartCalculationValid) "⚡ [НАШ АЛГОРИТМ]" else "🚗 [ШТАТНОЕ ГУ]"
         println("  -> Едем по трассе 40 сек. Расход: $res4 л/100км | Источник: $src4")
+
+        println("\n=======================================================")
+        println("🧪 ВОСПРОИЗВЕДЕНИЕ БАГА: ЖАРА И ПОЛНЫЙ БАК")
+        println("=======================================================")
+
+        // 1. Имитируем входные данные как на фото ГУ:
+        val hotTemp2 = 33.0     // Температура +33°C на экране
+        val sensorMax = 55.0   // Максимальное физическое значение, которое может выдать поплавок (100% заполнение бака для датчика)
+
+        // 2. Создаем FuelEntry для теста (объем бака в системе сейчас настроен на 57)
+        val bugEntry = FuelEntry(
+            odometerKm = 0.0,
+            engineHours = 0.0,
+            sensorBefore = sensorMax, // Датчик уперся в свой потолок
+            sensorAfter = sensorMax,
+            litersByCheck = 0.0,
+            ambientTemp = hotTemp2,
+            isEngineRunning = true,
+            currentSpeedKmH = 0.0
+        )
+
+        // 3. Вызываем расчет (пока еще старый, забагованный)
+        val result3 = estimator.getCorrectedLiters(bugEntry)
+
+        // 4. Считаем процент заполнения бака (как это делает шкала 100% на ГУ)
+        // Если Standard-объем дотянулся до предела, ГУ нарисует "100%"
+        val fillPercent = (result3.litersStandard / estimator.tankCapacity) * 100
+
+        println("Настройки в ГУ: Объем бака = ${estimator.tankCapacity} л")
+        println("Показания Standard (базовые): ${result3.litersStandard} л -> Шкала ГУ отобразит: ${fillPercent.toInt()}%")
+        println("Показания Actual (вывод на экран): ${"%.1f".format(result3.litersActual)} л")
+
     }
 
     fun runHardModeTest() {

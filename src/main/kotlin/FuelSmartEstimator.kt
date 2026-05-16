@@ -1,7 +1,7 @@
 class FuelSmartEstimator(
-    val tankCapacity: Double = 50.0,      // Максимальный паспортный объем бака
+    val tankCapacity: Double = 57.0,      // Максимальный паспортный объем бака
     private val sensorMin: Double = 2.0,  // "Мертвая зона" снизу: уровень, ниже которого поплавок физически не опускается
-    private val sensorMax: Double = 48.0, // "Мертвая зона" сверху: уровень, выше которого поплавок упирается в потолок
+    private val sensorMax: Double = 55.0, // "Мертвая зона" сверху: уровень, выше которого поплавок упирается в потолок
     zoneCount: Int = 11,                  // Количество участков, на которые мы дробим бак для калибровки нелинейности
     // 1. Добавляем в переменные состояния класса FuelSmartEstimator:
     private var lastDrivingLevel: Double = -1.0,
