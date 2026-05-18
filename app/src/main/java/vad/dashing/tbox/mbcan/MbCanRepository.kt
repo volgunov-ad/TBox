@@ -169,35 +169,17 @@ object MbCanRepository {
     private val _audioVolumeSpeedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val audioVolumeSpeedState: StateFlow<MbCanBinaryState> = _audioVolumeSpeedState.asStateFlow()
 
-    private val _carSettingsSteeringMode = MutableStateFlow<Int?>(null)
-    val carSettingsSteeringMode: StateFlow<Int?> = _carSettingsSteeringMode.asStateFlow()
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
-    private val _carSettingsSystemMode = MutableStateFlow<Int?>(null)
-    val carSettingsSystemMode: StateFlow<Int?> = _carSettingsSystemMode.asStateFlow()
     private val _carSettingsDriveMode = MutableStateFlow<Int?>(null)
     val carSettingsDriveMode: StateFlow<Int?> = _carSettingsDriveMode.asStateFlow()
-    private val _carSettingsPowerMode = MutableStateFlow<Int?>(null)
-    val carSettingsPowerMode: StateFlow<Int?> = _carSettingsPowerMode.asStateFlow()
     private val _carSettingsDriveMode6dctWet = MutableStateFlow<Int?>(null)
     val carSettingsDriveMode6dctWet: StateFlow<Int?> = _carSettingsDriveMode6dctWet.asStateFlow()
-    private val _carSettingsBrakePedalFeelMode = MutableStateFlow<Int?>(null)
-    val carSettingsBrakePedalFeelMode: StateFlow<Int?> = _carSettingsBrakePedalFeelMode.asStateFlow()
-    private val _carSettingsSourceStationMode = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
-    val carSettingsSourceStationMode: StateFlow<MbCanBinaryState> = _carSettingsSourceStationMode.asStateFlow()
-    private val _carSettingsVehWashMode = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
-    val carSettingsVehWashMode: StateFlow<MbCanBinaryState> = _carSettingsVehWashMode.asStateFlow()
 
     private val carSettingsCfgVehicleIds: Set<Int> = setOf(
-        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_STEERING_MODE,
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
-        MbCanKnownVehiclePropertyId.SYSTEM_MODE,
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
-        MbCanKnownVehiclePropertyId.VEHICLE_POWERMODE,
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET,
-        MbCanKnownVehiclePropertyId.VEHICEL_BRAKE_PEDA_FEEL_MODE,
-        MbCanKnownVehiclePropertyId.SOURCE_STATION_MODE,
-        MbCanKnownVehiclePropertyId.VEHICLE_VEHWASH_MODESET,
     )
 
     private val stateEngine = MbCanSignalStateEngine(
@@ -890,40 +872,19 @@ object MbCanRepository {
 
     private fun applyCarSettingsVehicleCfgPush(item: Int, raw: Int) {
         when (item) {
-            MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_STEERING_MODE ->
-                _carSettingsSteeringMode.value = decodeCarSettingsIntZeroToSix(raw)
             MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE ->
                 _carSettingsEpsMode.value = decodeCarSettingsIntZeroToSix(raw)
-            MbCanKnownVehiclePropertyId.SYSTEM_MODE ->
-                _carSettingsSystemMode.value = decodeCarSettingsIntZeroToSix(raw)
             MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE ->
                 _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(raw)
-            MbCanKnownVehiclePropertyId.VEHICLE_POWERMODE ->
-                _carSettingsPowerMode.value = decodeCarSettingsIntZeroToSix(raw)
             MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET ->
                 _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(raw)
-            MbCanKnownVehiclePropertyId.VEHICEL_BRAKE_PEDA_FEEL_MODE ->
-                _carSettingsBrakePedalFeelMode.value = decodeCarSettingsIntZeroToSix(raw)
-            MbCanKnownVehiclePropertyId.SOURCE_STATION_MODE ->
-                _carSettingsSourceStationMode.value = MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
-            MbCanKnownVehiclePropertyId.VEHICLE_VEHWASH_MODESET ->
-                _carSettingsVehWashMode.value = MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
         }
     }
 
     private fun clearCarSettingsIntParamFlows() {
-        _carSettingsSteeringMode.value = null
         _carSettingsEpsMode.value = null
-        _carSettingsSystemMode.value = null
         _carSettingsDriveMode.value = null
-        _carSettingsPowerMode.value = null
         _carSettingsDriveMode6dctWet.value = null
-        _carSettingsBrakePedalFeelMode.value = null
-    }
-
-    private fun setCarSettingsBinaryTogglesState(state: MbCanBinaryState) {
-        _carSettingsSourceStationMode.value = state
-        _carSettingsVehWashMode.value = state
     }
 
     private suspend fun refreshCarSettingsVehicleParams() {
@@ -931,7 +892,6 @@ object MbCanRepository {
             if (!MbCanEngineFacade.isInitialized()) {
                 _availability.value = MbCanEngineFacade.probeAvailability()
                 clearCarSettingsIntParamFlows()
-                setCarSettingsBinaryTogglesState(MbCanBinaryState.Unknown)
                 return@withContext
             }
 
@@ -940,32 +900,15 @@ object MbCanRepository {
             if (availability !is MbCanAvailability.Available) {
                 MbCanDiagnostics.log("WARN", "refreshCarSettingsVehicleParams unavailable=$availability")
                 clearCarSettingsIntParamFlows()
-                setCarSettingsBinaryTogglesState(
-                    MbCanBinaryState.Unavailable(
-                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
-                    )
-                )
                 return@withContext
             }
 
             fun readInt(id: Int): Int? =
                 MbCanEngineFacade.canGetVehicleParam(id)?.let { decodeCarSettingsIntZeroToSix(it) }
 
-            _carSettingsSteeringMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_STEERING_MODE)
             _carSettingsEpsMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE)
-            _carSettingsSystemMode.value = readInt(MbCanKnownVehiclePropertyId.SYSTEM_MODE)
             _carSettingsDriveMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE)
-            _carSettingsPowerMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_POWERMODE)
             _carSettingsDriveMode6dctWet.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
-            _carSettingsBrakePedalFeelMode.value =
-                readInt(MbCanKnownVehiclePropertyId.VEHICEL_BRAKE_PEDA_FEEL_MODE)
-
-            fun readBinary(id: Int): MbCanBinaryState {
-                val r = MbCanEngineFacade.canGetVehicleParam(id) ?: return MbCanBinaryState.Unknown
-                return MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(r)
-            }
-            _carSettingsSourceStationMode.value = readBinary(MbCanKnownVehiclePropertyId.SOURCE_STATION_MODE)
-            _carSettingsVehWashMode.value = readBinary(MbCanKnownVehiclePropertyId.VEHICLE_VEHWASH_MODESET)
             MbCanDiagnostics.log("DEBUG", "refreshCarSettingsVehicleParams refreshed")
         }
     }

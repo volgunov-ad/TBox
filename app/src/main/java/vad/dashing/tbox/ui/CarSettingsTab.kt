@@ -47,21 +47,9 @@ fun CarSettingsTab(
     val switchChecked = volumeSpeedState is MbCanBinaryState.On
     val switchEnabled = volumeSpeedState is MbCanBinaryState.On || volumeSpeedState is MbCanBinaryState.Off
 
-    val steeringMode by MbCanRepository.carSettingsSteeringMode.collectAsStateWithLifecycle()
     val epsMode by MbCanRepository.carSettingsEpsMode.collectAsStateWithLifecycle()
-    val systemMode by MbCanRepository.carSettingsSystemMode.collectAsStateWithLifecycle()
     val driveMode by MbCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
-    val powerMode by MbCanRepository.carSettingsPowerMode.collectAsStateWithLifecycle()
     val driveMode6dctWet by MbCanRepository.carSettingsDriveMode6dctWet.collectAsStateWithLifecycle()
-    val brakePedalFeel by MbCanRepository.carSettingsBrakePedalFeelMode.collectAsStateWithLifecycle()
-    val sourceStationMode by MbCanRepository.carSettingsSourceStationMode.collectAsStateWithLifecycle()
-    val vehWashMode by MbCanRepository.carSettingsVehWashMode.collectAsStateWithLifecycle()
-
-    val sourceStationChecked = sourceStationMode is MbCanBinaryState.On
-    val sourceStationSwitchEnabled =
-        sourceStationMode is MbCanBinaryState.On || sourceStationMode is MbCanBinaryState.Off
-    val vehWashChecked = vehWashMode is MbCanBinaryState.On
-    val vehWashSwitchEnabled = vehWashMode is MbCanBinaryState.On || vehWashMode is MbCanBinaryState.Off
 
     LaunchedEffect(Unit) {
         MbCanRepository.setSourceSignals(
@@ -108,47 +96,15 @@ fun CarSettingsTab(
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
         SettingsTitle(stringResource(R.string.car_settings_vehicle_section_title))
 
-        SettingDropdownGeneric(
-            selectedValue = steeringMode ?: 0,
-            onValueChange = { v ->
-                coroutineScope.launch {
-                    MbCanRepository.execute(
-                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_STEERING_MODE, v)
-                    )
-                }
-            },
-            text = stringResource(R.string.car_settings_steering_mode_title),
-            description = stringResource(R.string.car_settings_steering_mode_desc),
-            enabled = mbCanOk && steeringMode != null,
-            options = options,
+        StatusRow(
+            label = stringResource(R.string.car_settings_eps_mode_title),
+            value = epsMode?.toString() ?: stringResource(R.string.value_no_data),
         )
-        SettingDropdownGeneric(
-            selectedValue = epsMode ?: 0,
-            onValueChange = { v ->
-                coroutineScope.launch {
-                    MbCanRepository.execute(
-                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE, v)
-                    )
-                }
-            },
-            text = stringResource(R.string.car_settings_eps_mode_title),
-            description = stringResource(R.string.car_settings_eps_mode_desc),
-            enabled = mbCanOk && epsMode != null,
-            options = options,
-        )
-        SettingDropdownGeneric(
-            selectedValue = systemMode ?: 0,
-            onValueChange = { v ->
-                coroutineScope.launch {
-                    MbCanRepository.execute(
-                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.SYSTEM_MODE, v)
-                    )
-                }
-            },
-            text = stringResource(R.string.car_settings_system_mode_title),
-            description = stringResource(R.string.car_settings_system_mode_desc),
-            enabled = mbCanOk && systemMode != null,
-            options = options,
+        Text(
+            text = stringResource(R.string.car_settings_eps_mode_desc),
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp)
         )
         SettingDropdownGeneric(
             selectedValue = driveMode ?: 0,
@@ -165,20 +121,6 @@ fun CarSettingsTab(
             options = options,
         )
         SettingDropdownGeneric(
-            selectedValue = powerMode ?: 0,
-            onValueChange = { v ->
-                coroutineScope.launch {
-                    MbCanRepository.execute(
-                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_POWERMODE, v)
-                    )
-                }
-            },
-            text = stringResource(R.string.car_settings_power_mode_title),
-            description = stringResource(R.string.car_settings_power_mode_desc),
-            enabled = mbCanOk && powerMode != null,
-            options = options,
-        )
-        SettingDropdownGeneric(
             selectedValue = driveMode6dctWet ?: 0,
             onValueChange = { v ->
                 coroutineScope.launch {
@@ -191,47 +133,6 @@ fun CarSettingsTab(
             description = stringResource(R.string.car_settings_drive_mode_6dct_wet_desc),
             enabled = mbCanOk && driveMode6dctWet != null,
             options = options,
-        )
-        SettingDropdownGeneric(
-            selectedValue = brakePedalFeel ?: 0,
-            onValueChange = { v ->
-                coroutineScope.launch {
-                    MbCanRepository.execute(
-                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICEL_BRAKE_PEDA_FEEL_MODE, v)
-                    )
-                }
-            },
-            text = stringResource(R.string.car_settings_brake_pedal_feel_title),
-            description = stringResource(R.string.car_settings_brake_pedal_feel_desc),
-            enabled = mbCanOk && brakePedalFeel != null,
-            options = options,
-        )
-
-        SettingSwitch(
-            isChecked = sourceStationChecked,
-            onCheckedChange = {
-                coroutineScope.launch {
-                    MbCanRepository.execute(
-                        MbCanCommand.ToggleProperty(MbCanKnownVehiclePropertyId.SOURCE_STATION_MODE)
-                    )
-                }
-            },
-            text = stringResource(R.string.car_settings_source_station_mode_title),
-            description = stringResource(R.string.car_settings_source_station_mode_desc),
-            enabled = sourceStationSwitchEnabled && mbCanOk
-        )
-        SettingSwitch(
-            isChecked = vehWashChecked,
-            onCheckedChange = {
-                coroutineScope.launch {
-                    MbCanRepository.execute(
-                        MbCanCommand.ToggleProperty(MbCanKnownVehiclePropertyId.VEHICLE_VEHWASH_MODESET)
-                    )
-                }
-            },
-            text = stringResource(R.string.car_settings_vehwash_mode_title),
-            description = stringResource(R.string.car_settings_vehwash_mode_desc),
-            enabled = vehWashSwitchEnabled && mbCanOk
         )
     }
 }
