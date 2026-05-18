@@ -23,9 +23,6 @@ private var hvacAirRecirculationToggleBlockedUntilMs = 0L
 private val hvacDefrosterFrontToggleLock = Any()
 private var hvacDefrosterFrontToggleBlockedUntilMs = 0L
 
-private val wirelessChargingToggleLock = Any()
-private var wirelessChargingToggleBlockedUntilMs = 0L
-
 internal fun launchAppFromWidget(context: Context, packageName: String) {
     if (packageName.isBlank()) return
     try {
@@ -200,30 +197,6 @@ internal fun sendToggleHvacDefrosterFront(context: Context) {
                 putExtra(
                     BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
                     MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT
-                )
-            }
-        )
-    } catch (_: Exception) {
-    }
-}
-
-internal fun sendToggleWirelessCharging(context: Context) {
-    val now = SystemClock.uptimeMillis()
-    synchronized(wirelessChargingToggleLock) {
-        if (now < wirelessChargingToggleBlockedUntilMs) return
-        wirelessChargingToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
-    }
-    try {
-        context.startService(
-            Intent(context, BackgroundService::class.java).apply {
-                action = BackgroundService.ACTION_MBCAN_COMMAND
-                putExtra(
-                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
-                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
-                )
-                putExtra(
-                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
-                    MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH
                 )
             }
         )
