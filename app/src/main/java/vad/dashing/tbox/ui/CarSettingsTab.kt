@@ -58,6 +58,23 @@ private val gearboxModeOptions = listOf(
     CarSettingsModeOption(2, "NOR"),
 )
 
+private val pm25DisplayOptions = listOf(
+    CarSettingsModeOption(1, "Внутри"),
+    CarSettingsModeOption(2, "Снаружи"),
+)
+
+private val uvLampOptions = listOf(
+    CarSettingsModeOption(1, "Выкл"),
+    CarSettingsModeOption(2, "Вкл"),
+    CarSettingsModeOption(3, "Авто"),
+)
+
+private val sterilizeStrengthOptions = listOf(
+    CarSettingsModeOption(1, "Низкая"),
+    CarSettingsModeOption(2, "Средняя"),
+    CarSettingsModeOption(3, "Высокая"),
+)
+
 @Composable
 fun CarSettingsTab(
     modifier: Modifier = Modifier,
@@ -73,6 +90,9 @@ fun CarSettingsTab(
     val epsMode by MbCanRepository.carSettingsEpsMode.collectAsStateWithLifecycle()
     val driveMode by MbCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     val driveMode6dctWet by MbCanRepository.carSettingsDriveMode6dctWet.collectAsStateWithLifecycle()
+    val pm25DisplayToggle by MbCanRepository.carSettingsPm25DisplayToggle.collectAsStateWithLifecycle()
+    val uvLampReq by MbCanRepository.carSettingsUvLampReq.collectAsStateWithLifecycle()
+    val sterilizeStrengthReq by MbCanRepository.carSettingsSterilizeStrengthReq.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         MbCanRepository.setSourceSignals(
@@ -144,6 +164,45 @@ fun CarSettingsTab(
                 coroutineScope.launch {
                     MbCanRepository.execute(
                         MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET, rawValue)
+                    )
+                }
+            }
+        )
+        CarSettingsModeButtonsRow(
+            text = "Значение PM25, отображаемое на дисплее двери",
+            options = pm25DisplayOptions,
+            selectedRawValue = pm25DisplayToggle,
+            enabled = mbCanOk,
+            onValueChange = { rawValue ->
+                coroutineScope.launch {
+                    MbCanRepository.execute(
+                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_PM25_DISPLAY_TOGGLE, rawValue)
+                    )
+                }
+            }
+        )
+        CarSettingsModeButtonsRow(
+            text = "УФ лампа",
+            options = uvLampOptions,
+            selectedRawValue = uvLampReq,
+            enabled = mbCanOk,
+            onValueChange = { rawValue ->
+                coroutineScope.launch {
+                    MbCanRepository.execute(
+                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_UV_LAMP_REQ, rawValue)
+                    )
+                }
+            }
+        )
+        CarSettingsModeButtonsRow(
+            text = "Мощность стерилизации",
+            options = sterilizeStrengthOptions,
+            selectedRawValue = sterilizeStrengthReq,
+            enabled = mbCanOk,
+            onValueChange = { rawValue ->
+                coroutineScope.launch {
+                    MbCanRepository.execute(
+                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_STERILIZE_STRENGTH_REQ, rawValue)
                     )
                 }
             }

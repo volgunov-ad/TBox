@@ -92,6 +92,9 @@ object MbCanCatalog {
         MbCanControlParam("Climate", "HVAC auto", "eHVAC_AUTO_STATE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC fan speed", "eVEHICLE_PROPERTY_HVAC_FAN_SPEED", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC air recirculation", "eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION", MbCanConfidence.DECLARED_IN_API),
+        MbCanControlParam("Climate", "PM25 display source", "eVEHICLE_PM25_DISPLAY_TOGGLE", MbCanConfidence.DECLARED_IN_API),
+        MbCanControlParam("Climate", "UV lamp request", "eVEHICLE_UV_LAMP_REQ", MbCanConfidence.DECLARED_IN_API),
+        MbCanControlParam("Climate", "Sterilize strength request", "eVEHICLE_STERILIZE_STRENGTH_REQ", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "HVAC front defroster", "eHVAC_DEFROSTER_FRONT", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "HVAC temperature", "eVEHICLE_PROPERTY_HVAC_TEMPERATURE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "Fragrance switch", "eVEHICLE_PROPERTY_FRAGRANCE_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -141,6 +144,12 @@ object MbCanKnownVehiclePropertyId {
     const val VEHICLE_POWERMODE = 147
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_DRIVEMODE_6DCT_WET] — 0–6. */
     const val VEHICLE_DRIVEMODE_6DCT_WET = 149
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PM25_DISPLAY_TOGGLE] — 1 inside, 2 outside. */
+    const val VEHICLE_PM25_DISPLAY_TOGGLE = 163
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_UV_LAMP_REQ] — 1 off, 2 on, 3 auto. */
+    const val VEHICLE_UV_LAMP_REQ = 164
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_STERILIZE_STRENGTH_REQ] — 1 low, 2 medium, 3 high. */
+    const val VEHICLE_STERILIZE_STRENGTH_REQ = 165
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSOURCE_STATION_MODE] — 1 off, 2 on. */
     const val SOURCE_STATION_MODE = 127
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_VEHWASH_MODESET] — 1 off, 2 on. */
@@ -273,6 +282,21 @@ object MbCanCommandRegistry {
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET,
             policy = MbCanCommandPolicy.SetExact(allowedValues = (0..6).toSet()),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICLE_PM25_DISPLAY_TOGGLE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICLE_UV_LAMP_REQ,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.CarSettingsVehicleParams
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.VEHICLE_STERILIZE_STRENGTH_REQ,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
             refreshSignal = MbCanSignal.CarSettingsVehicleParams
         ),
         MbCanCommandSpec(
