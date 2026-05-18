@@ -210,6 +210,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val isAutoSuspendTboxLocEnabled = settingsManager.autoSuspendTboxLocFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val isAutoPreventTboxRestartEnabled = settingsManager.autoPreventTboxRestartFlow
         .stateIn(
             scope = viewModelScope,
@@ -1048,6 +1055,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveAutoSuspendTboxSwdSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveAutoSuspendTboxSwdSetting(enabled)
+        }
+    }
+
+    fun saveAutoSuspendTboxLocSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoSuspendTboxLocSetting(enabled)
         }
     }
 

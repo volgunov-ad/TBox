@@ -160,6 +160,7 @@ data class BackgroundServiceSettingsSnapshot(
     val autoSuspendTboxMdc: Boolean,
     val autoStopTboxMdc: Boolean,
     val autoSuspendTboxSwd: Boolean,
+    val autoSuspendTboxLoc: Boolean,
     val autoPreventTboxRestart: Boolean,
     val getCanFrame: Boolean,
     val getCycleSignal: Boolean,
@@ -227,6 +228,7 @@ class SettingsManager(private val context: Context) {
         private val AUTO_STOP_TBOX_MDC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_stop_tbox_mdc")
         private val AUTO_SUSPEND_TBOX_MDC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_mdc")
         private val AUTO_SUSPEND_TBOX_SWD_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_swd")
+        private val AUTO_SUSPEND_TBOX_LOC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_loc")
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
         private val GET_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}get_voltages")
         private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
@@ -499,6 +501,10 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[AUTO_SUSPEND_TBOX_SWD_KEY] ?: false }
         .distinctUntilChanged()
 
+    val autoSuspendTboxLocFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_SUSPEND_TBOX_LOC_KEY] ?: false }
+        .distinctUntilChanged()
+
     val autoPreventTboxRestartFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false }
         .distinctUntilChanged()
@@ -739,6 +745,7 @@ class SettingsManager(private val context: Context) {
             autoSuspendTboxMdc = preferences[AUTO_SUSPEND_TBOX_MDC_KEY] ?: false,
             autoStopTboxMdc = preferences[AUTO_STOP_TBOX_MDC_KEY] ?: false,
             autoSuspendTboxSwd = preferences[AUTO_SUSPEND_TBOX_SWD_KEY] ?: false,
+            autoSuspendTboxLoc = preferences[AUTO_SUSPEND_TBOX_LOC_KEY] ?: false,
             autoPreventTboxRestart = preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false,
             getCanFrame = preferences[GET_CAN_FRAME_KEY] ?: true,
             getCycleSignal = preferences[GET_CYCLE_SIGNAL_KEY] ?: false,
@@ -857,6 +864,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveAutoSuspendTboxSwdSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[AUTO_SUSPEND_TBOX_SWD_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAutoSuspendTboxLocSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = enabled
         }
     }
 

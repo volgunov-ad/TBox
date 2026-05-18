@@ -241,9 +241,11 @@
     <string name="settings_auto_stop_mdc_title">Автоматическая отправка команды STOP приложению MDC в TBox</string>
     <string name="settings_auto_stop_mdc_desc">Не рекомендуется включать данную опцию, если в TBox установлена SIM карта</string>
     <string name="settings_auto_suspend_swd_title">Автоматическая отправка команды SUSPEND приложению SWD в TBox</string>
+    <string name="settings_auto_suspend_loc_title">Автоматическая отправка команды SUSPEND приложению LOC в TBox</string>
     <string name="settings_auto_prevent_restart_swd_title">Автоматическая отправка команды PREVENT RESTART приложению SWD в TBox</string>
     <string name="settings_auto_prevent_restart_swd_desc">Отключение проверки состояния сети и аномалий в работе TBox. Эти проверки могут приводить к лишним перезагрузкам</string>
 
+    <string name="settings_tbox_apps_control_title">Настройки управления другими приложениями TBox</string>
     <string name="settings_floating_panels_title">Настройки плавающих панелей</string>
     <string name="settings_show_floating_panel_title">Показывать плавающую панель</string>
     <string name="settings_enable_floating_bg_title">Включить фон плавающей панели</string>
@@ -376,6 +378,7 @@
     <string name="info_confirm_suspend_app">Подтверждение команды SUSPEND приложению APP</string>
     <string name="info_confirm_suspend_mdc">Подтверждение команды SUSPEND приложению MDC</string>
     <string name="info_confirm_suspend_swd">Подтверждение команды SUSPEND приложению SWD</string>
+    <string name="info_confirm_suspend_loc">Подтверждение команды SUSPEND приложению LOC</string>
     <string name="info_confirm_stop_app">Подтверждение команды STOP приложению APP</string>
     <string name="info_confirm_stop_mdc">Подтверждение команды STOP приложению MDC</string>
     <string name="info_confirm_prevent_restart_swd">Подтверждение команды PREVENT RESTART приложению SWD</string>

@@ -249,6 +249,7 @@ fun SettingsTabContent(
     val isAutoSuspendTboxAppEnabled by settingsViewModel.isAutoSuspendTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoSuspendTboxMdcEnabled by settingsViewModel.isAutoSuspendTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoSuspendTboxSwdEnabled by settingsViewModel.isAutoSuspendTboxSwdEnabled.collectAsStateWithLifecycle()
+    val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxMdcEnabled by settingsViewModel.isAutoStopTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
@@ -441,6 +442,18 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_auto_prevent_restart_swd_title),
             stringResource(R.string.settings_auto_prevent_restart_swd_desc),
+            true
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_tbox_apps_control_title))
+        SettingSwitch(
+            isAutoSuspendTboxLocEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoSuspendTboxLocSetting(enabled)
+            },
+            stringResource(R.string.settings_auto_suspend_loc_title),
+            "",
             true
         )
 
@@ -1093,6 +1106,7 @@ fun InfoTabContent(
     val tboxAppSuspended by viewModel.tboxAppSuspended.collectAsStateWithLifecycle()
     val tboxMdcSuspended by viewModel.tboxMdcSuspended.collectAsStateWithLifecycle()
     val tboxSwdSuspended by viewModel.tboxSwdSuspended.collectAsStateWithLifecycle()
+    val tboxLocSuspended by viewModel.tboxLocSuspended.collectAsStateWithLifecycle()
     val tboxAppStoped by viewModel.tboxAppStoped.collectAsStateWithLifecycle()
     val tboxMdcStoped by viewModel.tboxMdcStoped.collectAsStateWithLifecycle()
     val appVersion by settingsViewModel.appVersion.collectAsStateWithLifecycle()
@@ -1134,6 +1148,12 @@ fun InfoTabContent(
                 StatusRow(
                     stringResource(R.string.info_confirm_suspend_swd),
                     if (tboxSwdSuspended) yesLabel else noLabel
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.info_confirm_suspend_loc),
+                    if (tboxLocSuspended) yesLabel else noLabel
                 )
             }
             item {

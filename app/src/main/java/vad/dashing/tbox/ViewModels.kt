@@ -107,6 +107,13 @@ class TboxViewModel : ViewModel() {
             initialValue = false
         )
 
+    val tboxLocSuspended: StateFlow<Boolean> = TboxRepository.tboxLocSuspended
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val gateVersion: StateFlow<String> = TboxRepository.gateVersion
         .stateIn(
             scope = viewModelScope,

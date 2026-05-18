@@ -238,9 +238,11 @@
     <string name="settings_auto_stop_mdc_title">Automatically send STOP command to MDC on TBox</string>
     <string name="settings_auto_stop_mdc_desc">Not recommended if SIM card is installed in TBox</string>
     <string name="settings_auto_suspend_swd_title">Automatically send SUSPEND command to SWD on TBox</string>
+    <string name="settings_auto_suspend_loc_title">Automatically send SUSPEND command to LOC on TBox</string>
     <string name="settings_auto_prevent_restart_swd_title">Automatically send PREVENT RESTART command to SWD on TBox</string>
     <string name="settings_auto_prevent_restart_swd_desc">Disables network and anomaly checks in TBox operation. These checks can cause extra reboots.</string>
 
+    <string name="settings_tbox_apps_control_title">Other TBox apps control settings</string>
     <string name="settings_floating_panels_title">Floating panels settings</string>
     <string name="settings_show_floating_panel_title">Show floating panel</string>
     <string name="settings_enable_floating_bg_title">Enable floating panel background</string>
@@ -369,6 +371,7 @@
     <string name="info_confirm_suspend_app">Confirm SUSPEND command for APP</string>
     <string name="info_confirm_suspend_mdc">Confirm SUSPEND command for MDC</string>
     <string name="info_confirm_suspend_swd">Confirm SUSPEND command for SWD</string>
+    <string name="info_confirm_suspend_loc">Confirm SUSPEND command for LOC</string>
     <string name="info_confirm_stop_app">Confirm STOP command for APP</string>
     <string name="info_confirm_stop_mdc">Confirm STOP command for MDC</string>
     <string name="info_confirm_prevent_restart_swd">Confirm PREVENT RESTART command for SWD</string>

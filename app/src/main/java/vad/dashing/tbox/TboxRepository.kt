@@ -149,6 +149,9 @@ object TboxRepository {
     private val _tboxSwdSuspended = MutableStateFlow(false)
     val tboxSwdSuspended: StateFlow<Boolean> = _tboxSwdSuspended.asStateFlow()
 
+    private val _tboxLocSuspended = MutableStateFlow(false)
+    val tboxLocSuspended: StateFlow<Boolean> = _tboxLocSuspended.asStateFlow()
+
     private val _tboxAppVersionAnswer = MutableStateFlow(false)
     val tboxAppVersionAnswer: StateFlow<Boolean> = _tboxAppVersionAnswer.asStateFlow()
 
@@ -329,6 +332,10 @@ object TboxRepository {
         _tboxSwdSuspended.setIfChanged(newValue)
     }
 
+    fun updateTboxLocSuspended(newValue: Boolean) {
+        _tboxLocSuspended.setIfChanged(newValue)
+    }
+
     fun updateTboxAppVersionAnswer(newValue: Boolean) {
         _tboxAppVersionAnswer.setIfChanged(newValue)
     }
@@ -362,6 +369,7 @@ object TboxRepository {
         _tboxMdcSuspended.value = false
         _tboxMdcStoped.value = false
         _tboxSwdSuspended.value = false
+        _tboxLocSuspended.value = false
         _gateVersion.value = ""
     }
 

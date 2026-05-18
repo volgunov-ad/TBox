@@ -90,6 +90,7 @@ class BackgroundService : Service() {
     private lateinit var autoSuspendTboxMdc: StateFlow<Boolean>
     private lateinit var autoStopTboxMdc: StateFlow<Boolean>
     private lateinit var autoSuspendTboxSwd: StateFlow<Boolean>
+    private lateinit var autoSuspendTboxLoc: StateFlow<Boolean>
     private lateinit var autoPreventTboxRestart: StateFlow<Boolean>
     private lateinit var getCanFrame: StateFlow<Boolean>
     private lateinit var getCycleSignal: StateFlow<Boolean>
@@ -208,6 +209,7 @@ class BackgroundService : Service() {
     private var suspendTboxAppLastTime = System.currentTimeMillis()
     private var suspendTboxMdcLastTime = System.currentTimeMillis()
     private var suspendTboxSwdLastTime = System.currentTimeMillis()
+    private var suspendTboxLocLastTime = System.currentTimeMillis()
     private var preventRestartLastTime = System.currentTimeMillis()
 
     private val broadcastReceiver = TboxBroadcastReceiver()
@@ -410,6 +412,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.autoStopTboxMdc)
             autoSuspendTboxSwd = settingsManager.autoSuspendTboxSwdFlow
                 .stateIn(scope, eager, settingsSnap.autoSuspendTboxSwd)
+            autoSuspendTboxLoc = settingsManager.autoSuspendTboxLocFlow
+                .stateIn(scope, eager, settingsSnap.autoSuspendTboxLoc)
             autoPreventTboxRestart = settingsManager.autoPreventTboxRestartFlow
                 .stateIn(scope, eager, settingsSnap.autoPreventTboxRestart)
             getCanFrame = settingsManager.getCanFrameFlow
@@ -466,6 +470,8 @@ class BackgroundService : Service() {
             autoStopTboxMdc = settingsManager.autoStopTboxMdcFlow
                 .stateIn(scope, eager, false)
             autoSuspendTboxSwd = settingsManager.autoSuspendTboxSwdFlow
+                .stateIn(scope, eager, false)
+            autoSuspendTboxLoc = settingsManager.autoSuspendTboxLocFlow
                 .stateIn(scope, eager, false)
             autoPreventTboxRestart = settingsManager.autoPreventTboxRestartFlow
                 .stateIn(scope, eager, false)
@@ -2467,6 +2473,19 @@ class BackgroundService : Service() {
                                 suspendTboxSwdLastTime = System.currentTimeMillis()
                             }
                         }
+                        if (autoSuspendTboxLoc.value) {
+                            // Отправка команды suspend loc, если она не была подтверждена,
+                            // но не чаще 1 раза в 15 секунд
+                            val suspendTboxLocTimeDiff = System.currentTimeMillis() - suspendTboxLocLastTime
+                            if (!TboxRepository.tboxLocSuspended.value && suspendTboxLocTimeDiff > 15000) {
+                                sendControlTboxApplication("LOC", "SUSPEND")
+                                suspendTboxLocLastTime = System.currentTimeMillis()
+                            } else if (suspendTboxLocTimeDiff > 900000) {
+                                // Отправка команды, через каждые 15 минут
+                                sendControlTboxApplication("LOC", "SUSPEND")
+                                suspendTboxLocLastTime = System.currentTimeMillis()
+                            }
+                        }
                         if (autoSuspendTboxApp.value) {
                             // Отправка команды suspend app, если она не была подтверждена,
                             // но не чаще 1 раза в 15 секунд
@@ -3200,6 +3219,8 @@ class BackgroundService : Service() {
 
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxMdcSuspended(false)
+                            TboxRepository.updateTboxMdcStoped(false)
                         }
 
                         0x84.toByte() -> {
@@ -3248,6 +3269,8 @@ class BackgroundService : Service() {
                         }
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxAppSuspended(false)
+                            TboxRepository.updateTboxAppStoped(false)
                         }
                         0x84.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
@@ -3274,6 +3297,7 @@ class BackgroundService : Service() {
                         }
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxSwdSuspended(false)
                         }
                         0x84.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
@@ -3344,9 +3368,11 @@ class BackgroundService : Service() {
                         }
                         0x82.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxLocSuspended(true)
                         }
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxLocSuspended(false)
                         }
                         0x84.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
@@ -4155,6 +4181,10 @@ class BackgroundService : Service() {
             if (autoSuspendTboxSwd.value) {
                 sendControlTboxApplication("SWD", "SUSPEND")
                 suspendTboxSwdLastTime = System.currentTimeMillis()
+            }
+            if (autoSuspendTboxLoc.value) {
+                sendControlTboxApplication("LOC", "SUSPEND")
+                suspendTboxLocLastTime = System.currentTimeMillis()
             }
             if (autoSuspendTboxMdc.value) {
                 sendControlTboxApplication("MDC", "SUSPEND")
