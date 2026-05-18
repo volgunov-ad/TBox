@@ -74,7 +74,7 @@ object MbCanRepository {
      * before work runs; this scope is independent of that lifecycle. Debounced so brief navigation
      * does not churn push subscription; [setSourceWidgetKeys] / [setSourceSignals] cancel the timer.
      */
-    private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = 5000L
+    private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = 3 * 60_000L
 
     private val debouncedClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val pendingDebouncedClearJobs = ConcurrentHashMap<String, Job>()
