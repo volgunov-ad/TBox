@@ -372,7 +372,6 @@
     <string name="location_raw_data">Сырые данные</string>
     <string name="location_button_resume_loc">RESUME LOC</string>
     <string name="location_button_suspend_loc">SUSPEND LOC</string>
-    <string name="location_button_stop_loc">STOP LOC</string>
 
     <string name="info_confirm_suspend_app">Подтверждение команды SUSPEND приложению APP</string>
     <string name="info_confirm_suspend_mdc">Подтверждение команды SUSPEND приложению MDC</string>

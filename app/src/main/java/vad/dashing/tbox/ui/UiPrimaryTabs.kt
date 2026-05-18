@@ -1076,26 +1076,6 @@ fun LocationTabContent(
                     textAlign = TextAlign.Center,
                 )
             }
-            Button(
-                onClick = rememberWrappedOnClick {
-                    if (locCommandButtonsEnabled) {
-                        locCommandButtonsEnabled = false
-                        onServiceCommand(
-                            BackgroundService.ACTION_TBOX_APP_STOP,
-                            BackgroundService.EXTRA_APP_NAME,
-                            "LOC",
-                        )
-                    }
-                },
-                enabled = locCommandButtonsEnabled && tboxConnected,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.location_button_stop_loc),
-                    fontSize = 18.sp,
-                    textAlign = TextAlign.Center,
-                )
-            }
         }
     }
 }
