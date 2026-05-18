@@ -392,6 +392,8 @@ object WidgetsRepository {
         "motorHours" to DataTitle(R.string.data_title_motor_hours, R.string.unit_hours),
         "motorHoursTrip" to DataTitle(R.string.data_title_motor_hours_trip, R.string.unit_hours),
         "motorHoursWidget" to DataTitle(R.string.data_title_motor_hours_widget),
+        "timeWidget" to DataTitle(R.string.data_title_time_widget),
+        "dateWidget" to DataTitle(R.string.data_title_date_widget),
         "activeTripWidget" to DataTitle(R.string.data_title_active_trip_widget),
         "activeTripWidgetSimple" to DataTitle(R.string.data_title_active_trip_widget_simple),
         "activeTripWidgetMini" to DataTitle(R.string.data_title_active_trip_widget_mini),
@@ -504,6 +506,8 @@ object WidgetsRepository {
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
+            "timeWidget",
+            "dateWidget",
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }
@@ -539,6 +543,8 @@ object WidgetsRepository {
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
+            "timeWidget",
+            "dateWidget",
             "restartTbox",
             "netWidget",
             "netWidgetNew",

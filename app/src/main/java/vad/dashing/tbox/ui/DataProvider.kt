@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.R
@@ -17,7 +19,9 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.seatModeToString
 import vad.dashing.tbox.valueToString
+import java.text.DateFormat
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 interface DataProvider {
@@ -52,6 +56,28 @@ class TboxDataProvider(
     private val restartFlow = MutableStateFlow(context.getString(R.string.tbox_short)).asStateFlow()
     private val emptyFlow = MutableStateFlow("").asStateFlow()
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    private val localTimeFlow = flow {
+        val formatter = DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault())
+        while (true) {
+            emit(formatter.format(Date()))
+            delay(1000)
+        }
+    }.distinctUntilChanged().stateIn(
+        scope = viewModel.viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault()).format(Date())
+    )
+    private val localDateFlow = flow {
+        val formatter = DateFormat.getDateInstance(DateFormat.SHORT, Locale.getDefault())
+        while (true) {
+            emit(formatter.format(Date()))
+            delay(1000)
+        }
+    }.distinctUntilChanged().stateIn(
+        scope = viewModel.viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DateFormat.getDateInstance(DateFormat.SHORT, Locale.getDefault()).format(Date())
+    )
 
     override fun getValueFlow(key: String, accuracy: Int?): StateFlow<String> {
         val cacheKey = ValueFlowCacheKey(key, accuracy)
@@ -178,6 +204,8 @@ class TboxDataProvider(
             }
             "motorHours" -> appDataViewModel.motorHours.mapState { valueToString(it, eff(1)) }
             "motorHoursTrip" -> canViewModel.motorHoursTrip.mapState { valueToString(it, eff(1)) }
+            "timeWidget" -> localTimeFlow
+            "dateWidget" -> localDateFlow
             "restartTbox" -> restartFlow
             else -> emptyFlow
         }

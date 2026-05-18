@@ -617,6 +617,8 @@
     <string name="data_title_music_widget">Music control widget</string>
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
     <string name="data_title_media_volume_widget_vertical">Media volume widget (vertical)</string>
+    <string name="data_title_time_widget">Time</string>
+    <string name="data_title_date_widget">Date</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
     <string name="data_title_empty_tile_widget">Empty</string>
     <string name="data_title_external_app_widget">Third-party app widget</string>
