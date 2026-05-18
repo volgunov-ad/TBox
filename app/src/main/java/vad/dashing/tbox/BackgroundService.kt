@@ -98,6 +98,10 @@ class BackgroundService : Service() {
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
+    private lateinit var usageStatsHideFloatingWatchPackages: StateFlow<Set<String>>
+    private lateinit var usageStatsHideFloatingPanelIds: StateFlow<Set<String>>
+    private lateinit var usageStatsForceShowFloatingWatchPackages: StateFlow<Set<String>>
+    private lateinit var usageStatsForceShowFloatingPanelIds: StateFlow<Set<String>>
     private lateinit var canDataSaveCount: StateFlow<Int>
     private lateinit var fuelTankLitersSetting: StateFlow<Int>
     private lateinit var fuelCalibrationJsonSetting: StateFlow<String>
@@ -142,6 +146,7 @@ class BackgroundService : Service() {
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
+    private var usageStatsFloatingHideJob: Job? = null
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -383,6 +388,8 @@ class BackgroundService : Service() {
         private val settingsFlowWhileSubscribed = SharingStarted.WhileSubscribed(5_000L)
         private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
+        /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
+        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 3_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -419,6 +426,16 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
+            // Eagerly: nothing in the service collects these flows; only .value is read. With
+            // WhileSubscribed the upstream DataStore would never run and rules would stay empty.
+            usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsHideFloatingWatchPackages)
+            usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsHideFloatingPanelIds)
+            usageStatsForceShowFloatingWatchPackages = settingsManager.usageStatsForceShowFloatingWatchPackagesFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsForceShowFloatingWatchPackages)
+            usageStatsForceShowFloatingPanelIds = settingsManager.usageStatsForceShowFloatingPanelIdsFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsForceShowFloatingPanelIds)
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, settingsSnap.canDataSaveCount)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
@@ -466,6 +483,14 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
+            usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
+                .stateIn(scope, eager, emptySet())
+            usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
+                .stateIn(scope, eager, emptySet())
+            usageStatsForceShowFloatingWatchPackages = settingsManager.usageStatsForceShowFloatingWatchPackagesFlow
+                .stateIn(scope, eager, emptySet())
+            usageStatsForceShowFloatingPanelIds = settingsManager.usageStatsForceShowFloatingPanelIdsFlow
+                .stateIn(scope, eager, emptySet())
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, 5)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
@@ -2232,11 +2257,58 @@ class BackgroundService : Service() {
                     }
             }
         }
+        startUsageStatsFloatingHideWatcher()
     }
 
     private fun stopSettingsListener() {
+        stopUsageStatsFloatingHideWatcher()
         settingsListenerJob?.cancel()
         settingsListenerJob = null
+    }
+
+    private fun startUsageStatsFloatingHideWatcher() {
+        if (usageStatsFloatingHideJob?.isActive == true) return
+        usageStatsFloatingHideJob = scope.launch {
+            var lastAppliedRules: UsageStatsOverlayRulesState? = null
+            while (isActive) {
+                delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
+                val watchHide = usageStatsHideFloatingWatchPackages.value
+                val hidePanels = usageStatsHideFloatingPanelIds.value
+                val watchShow = usageStatsForceShowFloatingWatchPackages.value
+                val showPanels = usageStatsForceShowFloatingPanelIds.value
+                val fg = if (UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)) {
+                    UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
+                        this@BackgroundService,
+                        windowMs = 25_000L
+                    )
+                } else {
+                    null
+                }
+                val newState = UsageStatsOverlayRulesState(
+                    foregroundPackage = fg,
+                    watchHidePackages = watchHide,
+                    hidePanelIds = hidePanels,
+                    watchShowPackages = watchShow,
+                    showPanelIds = showPanels,
+                )
+                if (newState != lastAppliedRules) {
+                    lastAppliedRules = newState
+                    overlayController.setUsageStatsOverlayRulesState(newState)
+                    overlayController.syncFloatingDashboards(floatingDashboards.value)
+                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                }
+            }
+        }
+    }
+
+    private fun stopUsageStatsFloatingHideWatcher() {
+        usageStatsFloatingHideJob?.cancel()
+        usageStatsFloatingHideJob = null
+        scope.launch {
+            overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
+            overlayController.syncFloatingDashboards(floatingDashboards.value)
+            overlayController.ensureFloatingDashboards(floatingDashboards.value)
+        }
     }
 
     private fun startPeriodicJob() {
@@ -2932,7 +3004,7 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, tboxClientReconnectJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob, openMainActivityJob
+            settingsListenerJob, usageStatsFloatingHideJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob, openMainActivityJob
         ).forEach { job ->
             job?.cancel()
         }

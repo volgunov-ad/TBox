@@ -254,6 +254,23 @@
     <string name="settings_floating_rows_title">Количество строк плиток плавающей панели</string>
     <string name="settings_floating_cols_title">Количество столбцов плиток плавающей панели</string>
 
+    <string name="settings_floating_usage_stats_hide_title">Скрытие/показ панелей при запуске сторонних приложений</string>
+    <string name="settings_floating_usage_stats_hide_explanation">В диалоговом окне задаются правила скрытия и отдельно — принудительного показа панелей поверх выбранных приложений (даже если «Показывать плавающую панель» выключено). При конфликте настроек приоритет у скрытия. Нужно разрешение «Доступ к данным об использовании»</string>
+    <string name="settings_floating_usage_stats_hide_configure">Настроить приложения и панели</string>
+    <string name="settings_floating_usage_stats_hide_dialog_title">Плавающие панели и сторонние приложения</string>
+    <string name="settings_floating_usage_stats_hide_dialog_intro">Ниже два независимых набора правил. Если одна и та же панель отмечена и для скрытия, и для показа, при активном приложении из списка скрытия для неё действует скрытие. Один и тот же сторонний пакет можно указать в обоих списках приложений: тогда для разных панелей могут действовать разные правила</string>
+    <string name="settings_floating_usage_stats_hide_section_title">Скрывать панели</string>
+    <string name="settings_floating_usage_stats_hide_section_body">Слева — приложения, при которых справа отмеченные панели временно скрываются</string>
+    <string name="settings_floating_usage_stats_show_section_title">Показывать панели</string>
+    <string name="settings_floating_usage_stats_show_section_body">Слева — приложения, при которых справа отмеченные панели показываются поверх других окон, даже если для панели выключено «Показывать плавающую панель». Когда активно другое приложение, снова действует обычная настройка вкл/выкл</string>
+    <string name="settings_floating_usage_stats_hide_permission_hint">Без разрешения на статистику использования скрытие работать не будет</string>
+    <string name="settings_floating_usage_stats_open_usage_settings">Открыть настройки доступа к статистике</string>
+    <string name="settings_floating_usage_stats_hide_column_apps">Приложения</string>
+    <string name="settings_floating_usage_stats_hide_column_panels">Плавающие панели</string>
+    <string name="settings_floating_usage_stats_hide_no_panels">Нет плавающих панелей. Сначала добавьте панель в списке выше</string>
+    <string name="settings_floating_usage_stats_hide_filter_apps">Поиск (скрытие)</string>
+    <string name="settings_floating_usage_stats_show_filter_apps">Поиск (показ)</string>
+
     <string name="settings_main_screen_open_on_boot_title">Автоматически открывать главный экран при запуске</string>
     <string name="settings_main_screen_open_on_boot_desc">После загрузки устройства, когда фоновая служба стартует автоматически, открывается окно приложения на главном экране (плитки дома)</string>
     <string name="settings_main_screen_wallpaper_title">Фон главного экрана</string>
@@ -503,7 +520,7 @@
     <string name="trips_odometer_start">Одометр в начале поездки</string>
     <string name="trips_distance">Пробег</string>
     <string name="trips_moving_time">Время в движении</string>
-    <string name="trips_idle_time">Время в простое</string>
+    <string name="trips_idle_time">Время простоя</string>
     <string name="trips_engine_running_time">Время работы двигателя</string>
     <string name="trips_parking_time">Время парковки</string>
     <string name="trips_total_time">Общее время</string>
