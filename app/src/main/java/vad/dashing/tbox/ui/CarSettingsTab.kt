@@ -1,8 +1,11 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
@@ -12,8 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -33,7 +36,27 @@ import vad.dashing.tbox.mbcan.MbCanSignal
 /** [MbCanRepository.setSourceSignals] / [MbCanRepository.enqueueClearSource] key for this tab. */
 const val CAR_SETTINGS_MB_CAN_SOURCE_ID = "car-settings-tab"
 
-private val carSettingsZeroToSixOptions = (0..6).toList()
+private data class CarSettingsModeOption(
+    val rawValue: Int,
+    val label: String
+) {
+    override fun toString(): String = label
+}
+
+private val vehicleDriveModeOptions = listOf(
+    CarSettingsModeOption(0, "ECO"),
+    CarSettingsModeOption(1, "NOR"),
+    CarSettingsModeOption(2, "SPT"),
+    CarSettingsModeOption(3, "SNOW"),
+    CarSettingsModeOption(4, "MUD"),
+    CarSettingsModeOption(5, "SAND"),
+)
+
+private val gearboxModeOptions = listOf(
+    CarSettingsModeOption(0, "SPT"),
+    CarSettingsModeOption(1, "ECO"),
+    CarSettingsModeOption(2, "NOR"),
+)
 
 @Composable
 fun CarSettingsTab(
@@ -64,7 +87,6 @@ fun CarSettingsTab(
     }
 
     val scrollState = rememberScrollState()
-    val options = remember { carSettingsZeroToSixOptions }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -100,39 +122,69 @@ fun CarSettingsTab(
             label = stringResource(R.string.car_settings_eps_mode_title),
             value = epsMode?.toString() ?: stringResource(R.string.value_no_data),
         )
-        Text(
-            text = stringResource(R.string.car_settings_eps_mode_desc),
-            fontSize = 20.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        SettingDropdownGeneric(
-            selectedValue = driveMode ?: 0,
-            onValueChange = { v ->
-                coroutineScope.launch {
-                    MbCanRepository.execute(
-                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE, v)
-                    )
-                }
-            },
+        CarSettingsModeButtonsRow(
             text = stringResource(R.string.car_settings_drive_mode_title),
-            description = stringResource(R.string.car_settings_drive_mode_desc),
-            enabled = mbCanOk && driveMode != null,
-            options = options,
-        )
-        SettingDropdownGeneric(
-            selectedValue = driveMode6dctWet ?: 0,
-            onValueChange = { v ->
+            options = vehicleDriveModeOptions,
+            selectedRawValue = driveMode,
+            enabled = mbCanOk,
+            onValueChange = { rawValue ->
                 coroutineScope.launch {
                     MbCanRepository.execute(
-                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET, v)
+                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE, rawValue)
                     )
                 }
-            },
-            text = stringResource(R.string.car_settings_drive_mode_6dct_wet_title),
-            description = stringResource(R.string.car_settings_drive_mode_6dct_wet_desc),
-            enabled = mbCanOk && driveMode6dctWet != null,
-            options = options,
+            }
         )
+        CarSettingsModeButtonsRow(
+            text = "Режим КПП",
+            options = gearboxModeOptions,
+            selectedRawValue = driveMode6dctWet,
+            enabled = mbCanOk,
+            onValueChange = { rawValue ->
+                coroutineScope.launch {
+                    MbCanRepository.execute(
+                        MbCanCommand.SetProperty(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET, rawValue)
+                    )
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CarSettingsModeButtonsRow(
+    text: String,
+    options: List<CarSettingsModeOption>,
+    selectedRawValue: Int?,
+    enabled: Boolean,
+    onValueChange: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.weight(0.35f),
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            modifier = Modifier.weight(0.65f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            options.forEach { option ->
+                ModeButton(
+                    text = option.label,
+                    isSelected = selectedRawValue == option.rawValue,
+                    onClick = { onValueChange(option.rawValue) },
+                    enabled = enabled,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
     }
 }
