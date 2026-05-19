@@ -89,13 +89,10 @@ class FuelSmartEstimator(
         val finalStd = if (stdVolume >= smoothThreshold) tankCapacity else stdVolume
 
         // 2. Сглаживаем Actual ПЛАВНО:
-        // Если фактический объем (с учетом T) выше порога, мы тоже его подтягиваем,
-        // НО оставляем ему возможность "дышать" от температуры.
-        val finalActual = if (actualVolume >= smoothThreshold) {
-            // Если база (stdVolume) уже полная, то и Actual должен
-            // вращаться вокруг 50 литров, а не вокруг 52.6
-            val ratio = actualVolume / stdVolume
-            tankCapacity * ratio
+        // Если базовая емкость Standard уже дошла до полного бака (finalStd == tankCapacity),
+        // то и фактический Actual принудительно прижимаем к tankCapacity, убирая температурный дрейф.
+        val finalActual = if (stdVolume >= smoothThreshold) {
+            tankCapacity
         } else {
             actualVolume
         }
