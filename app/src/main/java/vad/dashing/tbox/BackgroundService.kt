@@ -4150,9 +4150,9 @@ class BackgroundService : Service() {
                     TboxRepository.updateIsLocValuesTrue(false)
                 }
 
-                if (mockLocation.value) {
-                    locationMockManager.setMockLocation(locValues)
-                }
+//                if (mockLocation.value) {
+//                    locationMockManager.setMockLocation(locValues)
+//                }
 
                 TboxRepository.addLog(
                     "DEBUG", "LOC response",

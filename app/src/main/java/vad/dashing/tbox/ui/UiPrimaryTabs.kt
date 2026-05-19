@@ -736,30 +736,30 @@ fun SettingsTabContent(
                 1,
                 3600
             )
-            SettingSwitch(
-                isMockLocationEnabled,
-                { enabled ->
-                    onMockLocationSettingChanged(enabled)
-                },
-                stringResource(R.string.settings_mock_location_title),
-                if (canUseMockLocation) {
-                    stringResource(R.string.settings_mock_location_ready)
-                } else {
-                    stringResource(R.string.settings_mock_location_requirements)
-                },
-                true
-            )
-
-            if (!canUseMockLocation) {
-                Text(
-                    text = stringResource(R.string.settings_mock_location_requirements_link),
-                    fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clickableWithSound { showLocationRequirementsDialog(context) }
-                        .padding(top = 4.dp)
-                )
-            }
+//            SettingSwitch(
+//                isMockLocationEnabled,
+//                { enabled ->
+//                    onMockLocationSettingChanged(enabled)
+//                },
+//                stringResource(R.string.settings_mock_location_title),
+//                if (canUseMockLocation) {
+//                    stringResource(R.string.settings_mock_location_ready)
+//                } else {
+//                    stringResource(R.string.settings_mock_location_requirements)
+//                },
+//                true
+//            )
+//
+//            if (!canUseMockLocation) {
+//                Text(
+//                    text = stringResource(R.string.settings_mock_location_requirements_link),
+//                    fontSize = 20.sp,
+//                    color = MaterialTheme.colorScheme.primary,
+//                    modifier = Modifier
+//                        .clickableWithSound { showLocationRequirementsDialog(context) }
+//                        .padding(top = 4.dp)
+//                )
+//            }
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
