@@ -180,20 +180,11 @@ object MbCanRepository {
     val carSettingsDriveMode: StateFlow<Int?> = _carSettingsDriveMode.asStateFlow()
     private val _carSettingsDriveMode6dctWet = MutableStateFlow<Int?>(null)
     val carSettingsDriveMode6dctWet: StateFlow<Int?> = _carSettingsDriveMode6dctWet.asStateFlow()
-    private val _carSettingsPm25DisplayToggle = MutableStateFlow<Int?>(null)
-    val carSettingsPm25DisplayToggle: StateFlow<Int?> = _carSettingsPm25DisplayToggle.asStateFlow()
-    private val _carSettingsUvLampReq = MutableStateFlow<Int?>(null)
-    val carSettingsUvLampReq: StateFlow<Int?> = _carSettingsUvLampReq.asStateFlow()
-    private val _carSettingsSterilizeStrengthReq = MutableStateFlow<Int?>(null)
-    val carSettingsSterilizeStrengthReq: StateFlow<Int?> = _carSettingsSterilizeStrengthReq.asStateFlow()
 
     private val carSettingsCfgVehicleIds: Set<Int> = setOf(
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET,
-        MbCanKnownVehiclePropertyId.VEHICLE_PM25_DISPLAY_TOGGLE,
-        MbCanKnownVehiclePropertyId.VEHICLE_UV_LAMP_REQ,
-        MbCanKnownVehiclePropertyId.VEHICLE_STERILIZE_STRENGTH_REQ,
     )
 
     private val stateEngine = MbCanSignalStateEngine(
@@ -961,12 +952,6 @@ object MbCanRepository {
                 _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(raw)
             MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET ->
                 _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(raw)
-            MbCanKnownVehiclePropertyId.VEHICLE_PM25_DISPLAY_TOGGLE ->
-                _carSettingsPm25DisplayToggle.value = if (raw == 1 || raw == 2) raw else null
-            MbCanKnownVehiclePropertyId.VEHICLE_UV_LAMP_REQ ->
-                _carSettingsUvLampReq.value = if (raw in 1..3) raw else null
-            MbCanKnownVehiclePropertyId.VEHICLE_STERILIZE_STRENGTH_REQ ->
-                _carSettingsSterilizeStrengthReq.value = if (raw in 1..3) raw else null
         }
     }
 
@@ -974,9 +959,6 @@ object MbCanRepository {
         _carSettingsEpsMode.value = null
         _carSettingsDriveMode.value = null
         _carSettingsDriveMode6dctWet.value = null
-        _carSettingsPm25DisplayToggle.value = null
-        _carSettingsUvLampReq.value = null
-        _carSettingsSterilizeStrengthReq.value = null
     }
 
     private suspend fun refreshCarSettingsVehicleParams() {
@@ -1001,15 +983,6 @@ object MbCanRepository {
             _carSettingsEpsMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE)
             _carSettingsDriveMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE)
             _carSettingsDriveMode6dctWet.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
-            _carSettingsPm25DisplayToggle.value = MbCanEngineFacade
-                .canGetVehicleParam(MbCanKnownVehiclePropertyId.VEHICLE_PM25_DISPLAY_TOGGLE)
-                ?.takeIf { it == 1 || it == 2 }
-            _carSettingsUvLampReq.value = MbCanEngineFacade
-                .canGetVehicleParam(MbCanKnownVehiclePropertyId.VEHICLE_UV_LAMP_REQ)
-                ?.takeIf { it in 1..3 }
-            _carSettingsSterilizeStrengthReq.value = MbCanEngineFacade
-                .canGetVehicleParam(MbCanKnownVehiclePropertyId.VEHICLE_STERILIZE_STRENGTH_REQ)
-                ?.takeIf { it in 1..3 }
             MbCanDiagnostics.log("DEBUG", "refreshCarSettingsVehicleParams refreshed")
         }
     }
