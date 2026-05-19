@@ -80,6 +80,8 @@ data class FloatingDashboardWidgetConfig(
     val valueAccuracy: Int? = null,
     /** Per-tile UI variant for widgets that support multiple modes (e.g. single seat heat vs vent). */
     val selectedVariant: Int = 0,
+    /** Fixed target value for [DRIVE_MODE_WIDGET_DATA_KEY] tile. */
+    val selectedDriveMode: Int = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE,
     /** If true, media volume widget controls mbCAN `eAUDIO_PROPERTY_VOLUME` instead of Android AudioManager. */
     val mediaVolumeUseMbCan: Boolean = false,
     /**

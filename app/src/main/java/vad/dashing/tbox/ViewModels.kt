@@ -404,6 +404,7 @@ object WidgetsRepository {
         "locWidget" to DataTitle(R.string.data_title_loc_widget),
         "voltage+engineTemperatureWidget" to DataTitle(R.string.data_title_voltage_engine_temperature_widget),
         "gearBoxWidget" to DataTitle(R.string.data_title_gearbox_widget),
+        DRIVE_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_drive_mode_widget),
         "wheelsPressureWidget" to DataTitle(R.string.data_title_wheels_pressure_widget, R.string.unit_bar),
         "wheelsPressureTemperatureWidget" to DataTitle(
             R.string.data_title_wheels_pressure_temperature_widget,
@@ -508,6 +509,7 @@ object WidgetsRepository {
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
             "timeWidget",
             "dateWidget",
+            DRIVE_MODE_WIDGET_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }
@@ -561,6 +563,7 @@ object WidgetsRepository {
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
             "hvacDefrosterFrontWidget",
+            DRIVE_MODE_WIDGET_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }

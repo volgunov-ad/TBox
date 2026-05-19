@@ -104,6 +104,10 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.selectedVariant != 0) {
             obj.put("selectedVariant", config.selectedVariant)
         }
+        val selectedDriveMode = normalizeDriveModeWidgetRawValue(config.selectedDriveMode)
+        if (selectedDriveMode != DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE) {
+            obj.put("selectedDriveMode", selectedDriveMode)
+        }
         obj.put("mediaVolumeUseMbCan", config.mediaVolumeUseMbCan)
         config.tileBackgroundImageRelPathLight?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
@@ -251,6 +255,9 @@ private fun parseWidgetConfigsFromJsonArray(
                         customTitle = item.optString("customTitle", "").trim(),
                         valueAccuracy = valueAccuracy,
                         selectedVariant = item.optInt("selectedVariant", 0),
+                        selectedDriveMode = normalizeDriveModeWidgetRawValue(
+                            item.optInt("selectedDriveMode", DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE)
+                        ),
                         mediaVolumeUseMbCan = item.optBoolean("mediaVolumeUseMbCan", false),
                         tileBackgroundImageRelPathLight = tileLight,
                         tileBackgroundImageRelPathDark = tileDark,
