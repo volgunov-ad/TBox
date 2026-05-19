@@ -59,6 +59,7 @@ import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.isMediaVolumeWidgetDataKey
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizeWidgetScale
@@ -130,6 +131,7 @@ internal class WidgetSelectionDialogState(
     var mediaKeepPlayerForeground by mutableStateOf(
         initialConfig.mediaKeepPlayerForeground
     )
+    var mediaVolumeUseMbCan by mutableStateOf(initialConfig.mediaVolumeUseMbCan)
 
     var showAdvancedSettings by mutableStateOf(false)
     var showWholePanelSettings by mutableStateOf(false)
@@ -198,6 +200,9 @@ internal class WidgetSelectionDialogState(
         selectedDataKey = key
         if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
             singleLineDualMetrics = false
+        }
+        if (!isMediaVolumeWidgetDataKey(key)) {
+            mediaVolumeUseMbCan = false
         }
     }
 
@@ -661,6 +666,15 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = 300.dp
                         )
                     }
+                    if (isMediaVolumeWidgetDataKey(state.selectedDataKey)) {
+                        SettingSwitch(
+                            state.mediaVolumeUseMbCan,
+                            { state.mediaVolumeUseMbCan = it },
+                            stringResource(R.string.widget_media_volume_use_mbcan),
+                            "",
+                            state.togglesEnabled
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1115,6 +1129,8 @@ internal fun applyWidgetSelectionChanges(
                     }
                 }
             },
+            mediaVolumeUseMbCan = isMediaVolumeWidgetDataKey(state.selectedDataKey) &&
+                state.mediaVolumeUseMbCan,
             tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },

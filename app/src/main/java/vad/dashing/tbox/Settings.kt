@@ -80,6 +80,8 @@ data class FloatingDashboardWidgetConfig(
     val valueAccuracy: Int? = null,
     /** Per-tile UI variant for widgets that support multiple modes (e.g. single seat heat vs vent). */
     val selectedVariant: Int = 0,
+    /** If true, media volume widget controls mbCAN `eAUDIO_PROPERTY_VOLUME` instead of Android AudioManager. */
+    val mediaVolumeUseMbCan: Boolean = false,
     /**
      * Optional background image on top of the tile color (light theme).
      * Path relative to [Context.filesDir]; must stay under [TileBackgroundImageStorage.DIR_NAME].

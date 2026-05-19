@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,10 +38,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
+import vad.dashing.tbox.mbcan.MbCanRepository
 
 private const val MEDIA_VOLUME_SWIPE_STEP_PX = 58f
 private const val MEDIA_VOLUME_POLL_DELAY_MS = 350L
@@ -54,6 +58,7 @@ private data class MediaVolumeState(
 fun DashboardMediaVolumeWidgetItem(
     widget: DashboardWidget,
     isVertical: Boolean,
+    useMbCan: Boolean = false,
     showTitle: Boolean = true,
     titleOverride: String = "",
     onClick: () -> Unit = {},
@@ -65,14 +70,16 @@ fun DashboardMediaVolumeWidgetItem(
     backgroundColor: Color? = null
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val audioManager = remember(context) {
         context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
+    val mbCanVolume by MbCanRepository.audioVolumeState.collectAsStateWithLifecycle()
 
-    var volumeState by remember(widget.id, isVertical) {
+    var volumeState by remember(widget.id, isVertical, useMbCan) {
         mutableStateOf(readMediaVolumeState(audioManager))
     }
-    var lastNonZeroVolume by remember(widget.id, isVertical) {
+    var lastNonZeroVolume by remember(widget.id, isVertical, useMbCan) {
         mutableIntStateOf(kotlin.math.max(volumeState.current, 1))
     }
     var swipeAccumulator by remember(widget.id, isVertical) {
@@ -82,7 +89,10 @@ fun DashboardMediaVolumeWidgetItem(
     val defaultVolumeTitle = stringResource(R.string.widget_media_volume_title)
     val volumeTitleText = titleOverride.trim().ifBlank { defaultVolumeTitle }
 
-    LaunchedEffect(widget.id, isVertical) {
+    LaunchedEffect(widget.id, isVertical, useMbCan) {
+        if (useMbCan) {
+            return@LaunchedEffect
+        }
         while (true) {
             val updated = readMediaVolumeState(audioManager)
             if (updated != volumeState) {
@@ -95,7 +105,33 @@ fun DashboardMediaVolumeWidgetItem(
         }
     }
 
+    LaunchedEffect(useMbCan, mbCanVolume) {
+        if (!useMbCan) {
+            return@LaunchedEffect
+        }
+        val current = mbCanVolume ?: 0
+        volumeState = MediaVolumeState(
+            current = current,
+            muted = current == 0
+        )
+        if (current > 0) {
+            MbCanRepository.rememberAudioVolumeLastNonZeroInSession(current)
+        }
+    }
+
+    fun applyMbCanVolume(target: Int) {
+        scope.launch {
+            MbCanRepository.setAudioVolume(target)
+        }
+    }
+
     fun applyVolumeDelta(increase: Boolean) {
+        if (useMbCan) {
+            val direction = if (increase) 1 else -1
+            val next = (volumeState.current + direction).coerceAtLeast(0)
+            applyMbCanVolume(next)
+            return
+        }
         if (increase && volumeState.muted) {
             unmuteMediaStream(audioManager, lastNonZeroVolume)
         }
@@ -109,6 +145,15 @@ fun DashboardMediaVolumeWidgetItem(
     }
 
     fun toggleMute() {
+        if (useMbCan) {
+            if (volumeState.current > 0) {
+                MbCanRepository.rememberAudioVolumeLastNonZeroInSession(volumeState.current)
+                applyMbCanVolume(0)
+            } else {
+                applyMbCanVolume(MbCanRepository.audioVolumeRestoreCandidate())
+            }
+            return
+        }
         if (volumeState.muted) {
             unmuteMediaStream(audioManager, lastNonZeroVolume)
         } else {

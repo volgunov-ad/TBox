@@ -35,9 +35,11 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.isMbCanMediaVolumeEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.mbcan.MbCanSignal
 
 /**
  * Shared widget grid and frame overlays for floating overlay panels and MainScreen embedded panels.
@@ -80,6 +82,9 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCan = remember(widgetConfigs) {
         MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
+    val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
+    }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
             val activeKeys = widgetConfigs
@@ -91,6 +96,19 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 MbCanRepository.enqueueClearSource(mbCanInterestSourceId)
+            }
+        }
+    }
+    if (panelNeedsMbCanMediaVolume) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            MbCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-media-volume",
+                setOf(MbCanSignal.AudioVolume)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                MbCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
             }
         }
     }

@@ -104,6 +104,7 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.selectedVariant != 0) {
             obj.put("selectedVariant", config.selectedVariant)
         }
+        obj.put("mediaVolumeUseMbCan", config.mediaVolumeUseMbCan)
         config.tileBackgroundImageRelPathLight?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
                 obj.put("tileBackgroundImageRelPathLight", it)
@@ -250,6 +251,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         customTitle = item.optString("customTitle", "").trim(),
                         valueAccuracy = valueAccuracy,
                         selectedVariant = item.optInt("selectedVariant", 0),
+                        mediaVolumeUseMbCan = item.optBoolean("mediaVolumeUseMbCan", false),
                         tileBackgroundImageRelPathLight = tileLight,
                         tileBackgroundImageRelPathDark = tileDark,
                     )

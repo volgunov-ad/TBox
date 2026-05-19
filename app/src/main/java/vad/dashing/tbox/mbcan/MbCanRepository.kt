@@ -36,6 +36,7 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     FrontRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     RearLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     RearRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
+    AudioVolume(setOf("eMBCAN_CFG_AUDIO")),
     AudioVolumeSpeed(setOf("eMBCAN_CFG_AUDIO")),
 }
 
@@ -168,6 +169,10 @@ object MbCanRepository {
     val rearRightSeatModeState: StateFlow<MbCanSeatModeState> = _rearRightSeatModeState.asStateFlow()
     private val _audioVolumeSpeedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val audioVolumeSpeedState: StateFlow<MbCanBinaryState> = _audioVolumeSpeedState.asStateFlow()
+    private val _audioVolumeState = MutableStateFlow<Int?>(null)
+    val audioVolumeState: StateFlow<Int?> = _audioVolumeState.asStateFlow()
+    private val _audioVolumeLastNonZeroInSession = MutableStateFlow<Int?>(null)
+    val audioVolumeLastNonZeroInSession: StateFlow<Int?> = _audioVolumeLastNonZeroInSession.asStateFlow()
 
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
@@ -348,6 +353,7 @@ object MbCanRepository {
      */
     fun scheduleAudioCfgPush(_modular: Int, item: Int, value: Int) {
         when (item) {
+            MbCanKnownAudioPropertyId.VOLUME,
             MbCanKnownAudioPropertyId.VOLUME_SPEED -> Unit
             else -> return
         }
@@ -367,6 +373,7 @@ object MbCanRepository {
         scope.launch(stateApplyDispatcher) {
             for ((item, raw) in snapshot) {
                 when (item) {
+                    MbCanKnownAudioPropertyId.VOLUME -> applyAudioVolumeRaw(raw)
                     MbCanKnownAudioPropertyId.VOLUME_SPEED ->
                         stateEngine.applyVolumeSpeedCandidate(
                             MbCanSignalStateEngine.decodeVolumeSpeedRaw(raw)
@@ -551,6 +558,7 @@ object MbCanRepository {
             MbCanSignal.HvacDefrosterFront -> refreshHvacDefrosterFront()
             MbCanSignal.WirelessChargingSwitch -> refreshWirelessCharging()
             MbCanSignal.CarSettingsVehicleParams -> refreshCarSettingsVehicleParams()
+            MbCanSignal.AudioVolume -> refreshAudioVolume()
             MbCanSignal.AudioVolumeSpeed -> refreshAudioVolumeSpeed()
             MbCanSignal.FrontLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontLeft)
             MbCanSignal.FrontRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontRight)
@@ -788,6 +796,72 @@ object MbCanRepository {
                 "refreshAudioVolumeSpeed raw=$raw state=${_audioVolumeSpeedState.value}"
             )
         }
+    }
+
+    private suspend fun refreshAudioVolume() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _audioVolumeState.value = null
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshAudioVolume unavailable=$availability")
+                _audioVolumeState.value = null
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.VOLUME)
+            applyAudioVolumeRaw(raw)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshAudioVolume raw=$raw state=${_audioVolumeState.value}"
+            )
+        }
+    }
+
+    private fun applyAudioVolumeRaw(raw: Int?) {
+        val safeValue = raw?.coerceAtLeast(0)
+        val previous = _audioVolumeState.value
+        if (safeValue != null && safeValue > 0) {
+            _audioVolumeLastNonZeroInSession.value = safeValue
+        } else if (safeValue == 0 && (previous ?: 0) > 0) {
+            _audioVolumeLastNonZeroInSession.value = previous
+        }
+        _audioVolumeState.value = safeValue
+    }
+
+    fun rememberAudioVolumeLastNonZeroInSession(value: Int) {
+        if (value > 0) {
+            _audioVolumeLastNonZeroInSession.value = value
+        }
+    }
+
+    fun audioVolumeRestoreCandidate(defaultValue: Int = 10): Int {
+        return (_audioVolumeLastNonZeroInSession.value ?: defaultValue).coerceAtLeast(1)
+    }
+
+    suspend fun setAudioVolume(value: Int): MbCanCommandResult {
+        ensureMbCanReadyIfNeeded()
+        if (availability.value !is MbCanAvailability.Available) {
+            return MbCanCommandResult(false, "mbCAN unavailable")
+        }
+        val target = value.coerceAtLeast(0)
+        val before = _audioVolumeState.value ?: MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.VOLUME)
+        if (target == 0 && (before ?: 0) > 0) {
+            _audioVolumeLastNonZeroInSession.value = before
+        } else if (target > 0) {
+            _audioVolumeLastNonZeroInSession.value = target
+        }
+        val setResult = MbCanEngineFacade.canSetAudioParam(MbCanKnownAudioPropertyId.VOLUME, target)
+            ?: return MbCanCommandResult(false, "Set audio command failed")
+        if (setResult >= 0) {
+            applyAudioVolumeRaw(target)
+            MbCanJobManager.requestBurst(MbCanSignal.AudioVolume)
+        }
+        return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
 
     private suspend fun refreshSeatSlot(slot: MbCanSeatSlot) {

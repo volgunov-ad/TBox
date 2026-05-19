@@ -166,6 +166,8 @@ object MbCanKnownVehiclePropertyId {
 
 /** [com.mengbo.mbCan.defines.MBAudioProperty] integer ids for [com.mengbo.mbCan.MBCanEngine.canGetAudioParam]. */
 object MbCanKnownAudioPropertyId {
+    /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME] */
+    const val VOLUME = 2
     /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] */
     const val VOLUME_SPEED = 13
 }

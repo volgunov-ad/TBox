@@ -148,6 +148,7 @@
     <string name="widget_media_volume_action_increase">Increase media volume</string>
     <string name="widget_media_volume_action_decrease">Decrease media volume</string>
     <string name="widget_media_volume_action_mute">Toggle media mute</string>
+    <string name="widget_media_volume_use_mbcan">Use mbCAN mode</string>
     <string name="media_player_yandex_music">Yandex Music</string>
     <string name="media_player_yandex_music_auto_play">Yandex Music (Auto)</string>
     <string name="media_player_poweramp">Poweramp</string>

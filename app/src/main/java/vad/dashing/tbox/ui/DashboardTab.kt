@@ -58,11 +58,13 @@ import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
+import vad.dashing.tbox.isMbCanMediaVolumeEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.MbCanSignal
 
 @Composable
 fun MainDashboardTab(
@@ -104,6 +106,9 @@ fun MainDashboardTab(
     val panelNeedsMbCan = remember(widgetConfigs) {
         MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
+    val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
+    }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
@@ -136,6 +141,19 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 MbCanRepository.enqueueClearSource("dashboard-tab-main")
+            }
+        }
+    }
+    if (panelNeedsMbCanMediaVolume) {
+        LaunchedEffect(widgetConfigs) {
+            MbCanRepository.setSourceSignals(
+                "dashboard-tab-main-media-volume",
+                setOf(MbCanSignal.AudioVolume)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                MbCanRepository.enqueueClearSource("dashboard-tab-main-media-volume")
             }
         }
     }
