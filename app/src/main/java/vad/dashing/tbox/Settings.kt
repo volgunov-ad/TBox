@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -350,6 +351,7 @@ class SettingsManager(private val context: Context) {
         const val LAUNCHER_APP_ICONS_DIR = "launcher_app_icons"
         private const val MAX_LAUNCHER_APP_ICON_EDGE_PX = 512
         private const val MAX_LAUNCHER_APP_ICON_BYTES = 512 * 1024L
+        private const val MAX_LAUNCHER_APP_ICON_SOURCE_EDGE_PX = 16_384
         private const val MAX_TILE_BACKGROUND_EDGE_PX = 4096
         private const val MAX_TILE_BACKGROUND_BYTES = 8 * 1024 * 1024L
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
@@ -1301,21 +1303,51 @@ class SettingsManager(private val context: Context) {
             if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
                 return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
             }
-            if (bounds.outWidth > MAX_LAUNCHER_APP_ICON_EDGE_PX ||
-                bounds.outHeight > MAX_LAUNCHER_APP_ICON_EDGE_PX
+            if (bounds.outWidth > MAX_LAUNCHER_APP_ICON_SOURCE_EDGE_PX ||
+                bounds.outHeight > MAX_LAUNCHER_APP_ICON_SOURCE_EDGE_PX
             ) {
                 return@withContext SetLauncherAppCustomIconResult.DimensionsTooLarge
             }
-            val copiedOk = runCatching {
-                context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                    dest.outputStream().use { output -> input.copyTo(output) }
+            val normalizedIconBytes = runCatching {
+                val sampleSize = computeSampleSizeForMaxEdge(
+                    srcWidth = bounds.outWidth,
+                    srcHeight = bounds.outHeight,
+                    maxEdge = MAX_LAUNCHER_APP_ICON_EDGE_PX
+                )
+                val decoded = context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    BitmapFactory.decodeStream(
+                        input,
+                        null,
+                        BitmapFactory.Options().apply {
+                            inSampleSize = sampleSize
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        }
+                    )
+                } ?: return@runCatching null
+                val scaled = scaleBitmapDownToMaxEdge(decoded, MAX_LAUNCHER_APP_ICON_EDGE_PX)
+                if (scaled != decoded) decoded.recycle()
+                try {
+                    encodeLauncherIconUnderSizeLimit(scaled)
+                } finally {
+                    scaled.recycle()
+                }
+            }.getOrElse {
+                null
+            }
+            if (normalizedIconBytes == null) {
+                if (dest.exists()) dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            val writeOk = runCatching {
+                dest.outputStream().use { out ->
+                    out.write(normalizedIconBytes)
                 }
                 dest.exists() && dest.length() > 0L && dest.length() <= MAX_LAUNCHER_APP_ICON_BYTES
             }.getOrElse {
                 if (dest.exists()) dest.delete()
                 false
             }
-            if (!copiedOk) {
+            if (!writeOk) {
                 if (dest.exists()) dest.delete()
                 return@withContext SetLauncherAppCustomIconResult.CopyFailed
             }
@@ -1328,6 +1360,42 @@ class SettingsManager(private val context: Context) {
             bumpLauncherAppIconRevision()
             SetLauncherAppCustomIconResult.Success
         }
+    }
+
+    private fun computeSampleSizeForMaxEdge(srcWidth: Int, srcHeight: Int, maxEdge: Int): Int {
+        var sample = 1
+        while ((srcWidth / sample) > maxEdge || (srcHeight / sample) > maxEdge) {
+            sample *= 2
+        }
+        return sample.coerceAtLeast(1)
+    }
+
+    private fun scaleBitmapDownToMaxEdge(bitmap: Bitmap, maxEdge: Int): Bitmap {
+        if (bitmap.width <= maxEdge && bitmap.height <= maxEdge) return bitmap
+        val scale = minOf(
+            maxEdge.toFloat() / bitmap.width.toFloat(),
+            maxEdge.toFloat() / bitmap.height.toFloat()
+        )
+        val dstW = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val dstH = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(bitmap, dstW, dstH, true)
+    }
+
+    private fun encodeLauncherIconUnderSizeLimit(bitmap: Bitmap): ByteArray? {
+        fun encode(quality: Int): ByteArray? {
+            val stream = ByteArrayOutputStream()
+            val ok = bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality, stream)
+            if (!ok) return null
+            return stream.toByteArray()
+        }
+        val qualitySteps = intArrayOf(95, 90, 85, 80, 75, 70, 65, 60)
+        for (quality in qualitySteps) {
+            val bytes = encode(quality) ?: continue
+            if (bytes.isNotEmpty() && bytes.size <= MAX_LAUNCHER_APP_ICON_BYTES) {
+                return bytes
+            }
+        }
+        return null
     }
 
     suspend fun saveMainScreenDashboards(configs: List<MainScreenPanelConfig>) {
