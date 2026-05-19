@@ -133,8 +133,8 @@ class FuelSmartEstimator(
         // Защита трассы и светофоров + форс-мажор заправки на ходу с работающим мотором
         if (isAbruptRefuel) {
             smartCalculationHoldTimer = 0 // Принудительно отдаем OEM-расход, пока бак заливается пистолетом
-        } else if (entry.isEngineRunning && isMoving) {
-            smartCalculationHoldTimer = 45 // Удерживаем наш алгоритм активным при стабильном движении
+        } else if (entry.isEngineRunning && (isMoving || isFuelDroppingNow)) {
+            smartCalculationHoldTimer = 45 // Удерживаем наш алгоритм активным при стабильном движении или явном расходе топлива
         } else if (smartCalculationHoldTimer > 0) {
             smartCalculationHoldTimer--
         }
