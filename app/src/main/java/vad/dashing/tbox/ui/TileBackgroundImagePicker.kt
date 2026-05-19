@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -45,12 +46,16 @@ internal fun TileBackgroundImageSettingsSection(
     }
     val hasImage = !currentPath.isNullOrBlank() &&
         TileBackgroundImageStorage.isAllowedStoredRelPath(currentPath)
-    var pendingPickDark by remember { mutableStateOf(false) }
+    val canPickImage = remember(context) {
+        android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
+            .resolveActivity(context.packageManager) != null
+    }
+    var pendingPickDark by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val pickImage = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        val isDark = pendingPickDark
-        pendingPickDark = false
+        val isDark = pendingPickDark ?: darkSegment
+        pendingPickDark = null
         if (uri == null) return@rememberLauncherForActivityResult
         settingsViewModel.setTileBackgroundImageFromUri(
             panelStorageId = panelStorageId,
@@ -106,8 +111,16 @@ internal fun TileBackgroundImageSettingsSection(
         ) {
             OutlinedButton(
                 onClick = rememberWrappedOnClick {
-                    pendingPickDark = darkSegment
-                    pickImage.launch("image/*")
+                    if (canPickImage) {
+                        pendingPickDark = darkSegment
+                        pickImage.launch("image/*")
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 },
                 enabled = state.togglesEnabled,
                 modifier = Modifier.weight(1f)

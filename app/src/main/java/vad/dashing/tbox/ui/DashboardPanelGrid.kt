@@ -15,7 +15,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,7 +22,6 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
@@ -37,9 +35,11 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.isMbCanMediaVolumeEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.mbcan.MbCanSignal
 
 /**
  * Shared widget grid and frame overlays for floating overlay panels and MainScreen embedded panels.
@@ -78,10 +78,12 @@ internal fun DashboardPanelGridAndFrames(
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 0.dp,
 ) {
-    val coroutineScope = rememberCoroutineScope()
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
         MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
+    }
+    val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
@@ -93,9 +95,20 @@ internal fun DashboardPanelGridAndFrames(
         }
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
-                coroutineScope.launch {
-                    MbCanRepository.clearSource(mbCanInterestSourceId)
-                }
+                MbCanRepository.enqueueClearSource(mbCanInterestSourceId)
+            }
+        }
+    }
+    if (panelNeedsMbCanMediaVolume) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            MbCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-media-volume",
+                setOf(MbCanSignal.AudioVolume)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                MbCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
             }
         }
     }

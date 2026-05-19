@@ -7,6 +7,7 @@ import kotlin.math.roundToInt
 
 private const val LEGACY_WIDGETS_SEPARATOR = "|"
 private const val LEGACY_APP_LAUNCHER_WIDGET_DATA_KEY = "launchAppWidget"
+private val REMOVED_WIDGET_DATA_KEYS = setOf("wirelessChargingWidget")
 const val DEFAULT_WIDGET_SCALE = 1.0f
 private const val MIN_WIDGET_SCALE = 0.1f
 private const val MAX_WIDGET_SCALE = 2f
@@ -103,6 +104,11 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.selectedVariant != 0) {
             obj.put("selectedVariant", config.selectedVariant)
         }
+        val selectedDriveMode = normalizeDriveModeWidgetRawValue(config.selectedDriveMode)
+        if (selectedDriveMode != DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE) {
+            obj.put("selectedDriveMode", selectedDriveMode)
+        }
+        obj.put("mediaVolumeUseMbCan", config.mediaVolumeUseMbCan)
         config.tileBackgroundImageRelPathLight?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
                 obj.put("tileBackgroundImageRelPathLight", it)
@@ -143,6 +149,8 @@ fun loadWidgetsFromConfig(
         val widgetConfig = configs.getOrNull(index)
             ?: FloatingDashboardWidgetConfig(dataKey = "")
         val dataKey = widgetConfig.dataKey
+            .takeUnless { it in REMOVED_WIDGET_DATA_KEYS }
+            .orEmpty()
         if (dataKey.isNotEmpty() && dataKey != "null") {
             DashboardWidget(
                 id = index,
@@ -181,10 +189,10 @@ private fun parseWidgetConfigsFromJsonArray(
                 val rawDataKey = item.optString("dataKey").ifBlank {
                     item.optString("type")
                 }.trim()
-                val dataKey = if (rawDataKey == LEGACY_APP_LAUNCHER_WIDGET_DATA_KEY) {
-                    APP_LAUNCHER_WIDGET_DATA_KEY
-                } else {
-                    rawDataKey
+                val dataKey = when {
+                    rawDataKey == LEGACY_APP_LAUNCHER_WIDGET_DATA_KEY -> APP_LAUNCHER_WIDGET_DATA_KEY
+                    rawDataKey in REMOVED_WIDGET_DATA_KEYS -> ""
+                    else -> rawDataKey
                 }
                 val appWidgetId = item.optInt("appWidgetId", -1)
                     .takeIf { it != -1 }
@@ -247,6 +255,10 @@ private fun parseWidgetConfigsFromJsonArray(
                         customTitle = item.optString("customTitle", "").trim(),
                         valueAccuracy = valueAccuracy,
                         selectedVariant = item.optInt("selectedVariant", 0),
+                        selectedDriveMode = normalizeDriveModeWidgetRawValue(
+                            item.optInt("selectedDriveMode", DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE)
+                        ),
+                        mediaVolumeUseMbCan = item.optBoolean("mediaVolumeUseMbCan", false),
                         tileBackgroundImageRelPathLight = tileLight,
                         tileBackgroundImageRelPathDark = tileDark,
                     )
@@ -266,7 +278,10 @@ private fun parseWidgetConfigsFromJsonArray(
 private fun parseLegacyWidgetConfigs(rawValue: String): List<FloatingDashboardWidgetConfig> {
     if (rawValue.isBlank()) return emptyList()
     return rawValue.split(LEGACY_WIDGETS_SEPARATOR).map { dataKey ->
-        FloatingDashboardWidgetConfig(dataKey = dataKey.trim())
+        val normalizedDataKey = dataKey.trim()
+            .takeUnless { it in REMOVED_WIDGET_DATA_KEYS }
+            .orEmpty()
+        FloatingDashboardWidgetConfig(dataKey = normalizedDataKey)
     }
 }
 

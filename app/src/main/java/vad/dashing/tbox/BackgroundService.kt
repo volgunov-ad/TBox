@@ -90,6 +90,7 @@ class BackgroundService : Service() {
     private lateinit var autoSuspendTboxMdc: StateFlow<Boolean>
     private lateinit var autoStopTboxMdc: StateFlow<Boolean>
     private lateinit var autoSuspendTboxSwd: StateFlow<Boolean>
+    private lateinit var autoSuspendTboxLoc: StateFlow<Boolean>
     private lateinit var autoPreventTboxRestart: StateFlow<Boolean>
     private lateinit var getCanFrame: StateFlow<Boolean>
     private lateinit var getCycleSignal: StateFlow<Boolean>
@@ -98,6 +99,10 @@ class BackgroundService : Service() {
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
+    private lateinit var usageStatsHideFloatingWatchPackages: StateFlow<Set<String>>
+    private lateinit var usageStatsHideFloatingPanelIds: StateFlow<Set<String>>
+    private lateinit var usageStatsForceShowFloatingWatchPackages: StateFlow<Set<String>>
+    private lateinit var usageStatsForceShowFloatingPanelIds: StateFlow<Set<String>>
     private lateinit var canDataSaveCount: StateFlow<Int>
     private lateinit var fuelTankLitersSetting: StateFlow<Int>
     private lateinit var fuelCalibrationJsonSetting: StateFlow<String>
@@ -142,6 +147,7 @@ class BackgroundService : Service() {
     private var generalStateBroadcastJob: Job? = null
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
+    private var usageStatsFloatingHideJob: Job? = null
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -203,6 +209,7 @@ class BackgroundService : Service() {
     private var suspendTboxAppLastTime = System.currentTimeMillis()
     private var suspendTboxMdcLastTime = System.currentTimeMillis()
     private var suspendTboxSwdLastTime = System.currentTimeMillis()
+    private var suspendTboxLocLastTime = System.currentTimeMillis()
     private var preventRestartLastTime = System.currentTimeMillis()
 
     private val broadcastReceiver = TboxBroadcastReceiver()
@@ -383,6 +390,8 @@ class BackgroundService : Service() {
         private val settingsFlowWhileSubscribed = SharingStarted.WhileSubscribed(5_000L)
         private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
+        /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
+        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 3_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -403,6 +412,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.autoStopTboxMdc)
             autoSuspendTboxSwd = settingsManager.autoSuspendTboxSwdFlow
                 .stateIn(scope, eager, settingsSnap.autoSuspendTboxSwd)
+            autoSuspendTboxLoc = settingsManager.autoSuspendTboxLocFlow
+                .stateIn(scope, eager, settingsSnap.autoSuspendTboxLoc)
             autoPreventTboxRestart = settingsManager.autoPreventTboxRestartFlow
                 .stateIn(scope, eager, settingsSnap.autoPreventTboxRestart)
             getCanFrame = settingsManager.getCanFrameFlow
@@ -419,6 +430,16 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.mockLocation)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.floatingDashboards)
+            // Eagerly: nothing in the service collects these flows; only .value is read. With
+            // WhileSubscribed the upstream DataStore would never run and rules would stay empty.
+            usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsHideFloatingWatchPackages)
+            usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsHideFloatingPanelIds)
+            usageStatsForceShowFloatingWatchPackages = settingsManager.usageStatsForceShowFloatingWatchPackagesFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsForceShowFloatingWatchPackages)
+            usageStatsForceShowFloatingPanelIds = settingsManager.usageStatsForceShowFloatingPanelIdsFlow
+                .stateIn(scope, eager, settingsSnap.usageStatsForceShowFloatingPanelIds)
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, settingsSnap.canDataSaveCount)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
@@ -450,6 +471,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, false)
             autoSuspendTboxSwd = settingsManager.autoSuspendTboxSwdFlow
                 .stateIn(scope, eager, false)
+            autoSuspendTboxLoc = settingsManager.autoSuspendTboxLocFlow
+                .stateIn(scope, eager, false)
             autoPreventTboxRestart = settingsManager.autoPreventTboxRestartFlow
                 .stateIn(scope, eager, false)
             getCanFrame = settingsManager.getCanFrameFlow
@@ -466,6 +489,14 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, false)
             floatingDashboards = settingsManager.floatingDashboardsFlow
                 .stateIn(scope, warmOnCollect, emptyList())
+            usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
+                .stateIn(scope, eager, emptySet())
+            usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
+                .stateIn(scope, eager, emptySet())
+            usageStatsForceShowFloatingWatchPackages = settingsManager.usageStatsForceShowFloatingWatchPackagesFlow
+                .stateIn(scope, eager, emptySet())
+            usageStatsForceShowFloatingPanelIds = settingsManager.usageStatsForceShowFloatingPanelIdsFlow
+                .stateIn(scope, eager, emptySet())
             canDataSaveCount = settingsManager.canDataSaveCountFlow
                 .stateIn(scope, eager, 5)
             fuelTankLitersSetting = settingsManager.fuelTankLitersFlow
@@ -1310,6 +1341,12 @@ class BackgroundService : Service() {
                 TboxRepository.addLog("WARN", "Data Listener", "Wheel pressure restore: ${e.message}")
                 Log.w("Data Listener", "Wheel pressure restore failed", e)
             }
+            try {
+                restoreLastKnownFuelLevelFromAppData()
+            } catch (e: Exception) {
+                TboxRepository.addLog("WARN", "Data Listener", "Fuel level restore: ${e.message}")
+                Log.w("Data Listener", "Fuel level restore failed", e)
+            }
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
                 var prevRpm = 0f
@@ -1339,6 +1376,7 @@ class BackgroundService : Service() {
                             if (wheelPressurePersistAcrossStopsSetting.value) {
                                 persistLastKnownWheelPressuresOnEngineStop()
                             }
+                            persistLastKnownFuelLevelOnEngineStop()
                         }
                         onTripRpmSample(r, prevRpm, now)
                         prevRpm = r
@@ -2015,6 +2053,34 @@ class BackgroundService : Service() {
         appDataManager.saveLastKnownNonZeroWheelPressuresPartial(CanDataRepository.wheelsPressure.value)
     }
 
+    private suspend fun persistLastKnownFuelLevelOnEngineStop() {
+        appDataManager.saveLastKnownFuelLevelPartial(
+            percentFiltered = CanDataRepository.fuelLevelPercentageFiltered.value,
+            calibratedStandardLiters = CanDataRepository.fuelLevelCalibratedLiters.value,
+        )
+    }
+
+    /**
+     * Восстанавливает последний уровень топлива с диска до прихода CAN (уровень по шине только при работающем двигателе).
+     * Вызывать после [ensureFuelEstimatorForReads] в пайплайне старта службы.
+     */
+    private suspend fun restoreLastKnownFuelLevelFromAppData() {
+        val (pct, liters) = withContext(Dispatchers.IO) {
+            appDataManager.loadLastKnownFuelLevel()
+        }
+        when {
+            pct != null -> {
+                CanDataRepository.updateFuelLevelPercentage(pct)
+                CanDataRepository.updateFuelLevelPercentageFiltered(pct)
+                FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
+            }
+            liters != null -> {
+                CanDataRepository.updateFuelLevelCalibratedLiters(liters)
+            }
+            else -> Unit
+        }
+    }
+
     private suspend fun restoreWheelPressuresFromAppDataIfNeeded() {
         val saved = withContext(Dispatchers.IO) {
             appDataManager.loadLastKnownWheelPressures()
@@ -2197,11 +2263,58 @@ class BackgroundService : Service() {
                     }
             }
         }
+        startUsageStatsFloatingHideWatcher()
     }
 
     private fun stopSettingsListener() {
+        stopUsageStatsFloatingHideWatcher()
         settingsListenerJob?.cancel()
         settingsListenerJob = null
+    }
+
+    private fun startUsageStatsFloatingHideWatcher() {
+        if (usageStatsFloatingHideJob?.isActive == true) return
+        usageStatsFloatingHideJob = scope.launch {
+            var lastAppliedRules: UsageStatsOverlayRulesState? = null
+            while (isActive) {
+                delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
+                val watchHide = usageStatsHideFloatingWatchPackages.value
+                val hidePanels = usageStatsHideFloatingPanelIds.value
+                val watchShow = usageStatsForceShowFloatingWatchPackages.value
+                val showPanels = usageStatsForceShowFloatingPanelIds.value
+                val fg = if (UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)) {
+                    UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
+                        this@BackgroundService,
+                        windowMs = 25_000L
+                    )
+                } else {
+                    null
+                }
+                val newState = UsageStatsOverlayRulesState(
+                    foregroundPackage = fg,
+                    watchHidePackages = watchHide,
+                    hidePanelIds = hidePanels,
+                    watchShowPackages = watchShow,
+                    showPanelIds = showPanels,
+                )
+                if (newState != lastAppliedRules) {
+                    lastAppliedRules = newState
+                    overlayController.setUsageStatsOverlayRulesState(newState)
+                    overlayController.syncFloatingDashboards(floatingDashboards.value)
+                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                }
+            }
+        }
+    }
+
+    private fun stopUsageStatsFloatingHideWatcher() {
+        usageStatsFloatingHideJob?.cancel()
+        usageStatsFloatingHideJob = null
+        scope.launch {
+            overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
+            overlayController.syncFloatingDashboards(floatingDashboards.value)
+            overlayController.ensureFloatingDashboards(floatingDashboards.value)
+        }
     }
 
     private fun startPeriodicJob() {
@@ -2358,6 +2471,19 @@ class BackgroundService : Service() {
                                 // Отправка команды, через каждые 15 минут
                                 sendControlTboxApplication("SWD", "SUSPEND")
                                 suspendTboxSwdLastTime = System.currentTimeMillis()
+                            }
+                        }
+                        if (autoSuspendTboxLoc.value) {
+                            // Отправка команды suspend loc, если она не была подтверждена,
+                            // но не чаще 1 раза в 15 секунд
+                            val suspendTboxLocTimeDiff = System.currentTimeMillis() - suspendTboxLocLastTime
+                            if (!TboxRepository.tboxLocSuspended.value && suspendTboxLocTimeDiff > 15000) {
+                                sendControlTboxApplication("LOC", "SUSPEND")
+                                suspendTboxLocLastTime = System.currentTimeMillis()
+                            } else if (suspendTboxLocTimeDiff > 900000) {
+                                // Отправка команды, через каждые 15 минут
+                                sendControlTboxApplication("LOC", "SUSPEND")
+                                suspendTboxLocLastTime = System.currentTimeMillis()
                             }
                         }
                         if (autoSuspendTboxApp.value) {
@@ -2897,7 +3023,7 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, tboxClientReconnectJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob, openMainActivityJob
+            settingsListenerJob, usageStatsFloatingHideJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob, openMainActivityJob
         ).forEach { job ->
             job?.cancel()
         }
@@ -3093,6 +3219,8 @@ class BackgroundService : Service() {
 
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxMdcSuspended(false)
+                            TboxRepository.updateTboxMdcStoped(false)
                         }
 
                         0x84.toByte() -> {
@@ -3141,6 +3269,8 @@ class BackgroundService : Service() {
                         }
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxAppSuspended(false)
+                            TboxRepository.updateTboxAppStoped(false)
                         }
                         0x84.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
@@ -3167,6 +3297,7 @@ class BackgroundService : Service() {
                         }
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxSwdSuspended(false)
                         }
                         0x84.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
@@ -3237,9 +3368,11 @@ class BackgroundService : Service() {
                         }
                         0x82.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxLocSuspended(true)
                         }
                         0x83.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                            TboxRepository.updateTboxLocSuspended(false)
                         }
                         0x84.toByte() -> {
                             needEndLog = !ansAppControl(tidName, cmd, receivedData)
@@ -4017,9 +4150,9 @@ class BackgroundService : Service() {
                     TboxRepository.updateIsLocValuesTrue(false)
                 }
 
-                if (mockLocation.value) {
-                    locationMockManager.setMockLocation(locValues)
-                }
+//                if (mockLocation.value) {
+//                    locationMockManager.setMockLocation(locValues)
+//                }
 
                 TboxRepository.addLog(
                     "DEBUG", "LOC response",
@@ -4048,6 +4181,10 @@ class BackgroundService : Service() {
             if (autoSuspendTboxSwd.value) {
                 sendControlTboxApplication("SWD", "SUSPEND")
                 suspendTboxSwdLastTime = System.currentTimeMillis()
+            }
+            if (autoSuspendTboxLoc.value) {
+                sendControlTboxApplication("LOC", "SUSPEND")
+                suspendTboxLocLastTime = System.currentTimeMillis()
             }
             if (autoSuspendTboxMdc.value) {
                 sendControlTboxApplication("MDC", "SUSPEND")

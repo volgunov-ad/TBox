@@ -53,6 +53,25 @@
     <string name="car_settings_audio_section_title">Audio</string>
     <string name="car_settings_audio_volume_speed_title">Speed-dependent volume</string>
     <string name="car_settings_audio_volume_speed_desc">Automatically adjust media volume with vehicle speed</string>
+    <string name="car_settings_vehicle_section_title">Modes and parameters</string>
+    <string name="car_settings_steering_mode_title">Steering mode</string>
+    <string name="car_settings_steering_mode_desc">eVEHICLE_PROPERTY_STEERING_MODE (0–6)</string>
+    <string name="car_settings_eps_mode_title">EPS mode</string>
+    <string name="car_settings_eps_mode_desc">eVEHICLE_PROPERTY_EPS_MODE (0–6)</string>
+    <string name="car_settings_system_mode_title">System mode</string>
+    <string name="car_settings_system_mode_desc">eSYSTEM_MODE (0–6)</string>
+    <string name="car_settings_drive_mode_title">Drive mode</string>
+    <string name="car_settings_drive_mode_desc">eVEHICLE_DRIVEMODE (0–6)</string>
+    <string name="car_settings_power_mode_title">Power mode</string>
+    <string name="car_settings_power_mode_desc">eVEHICLE_POWERMODE (0–6)</string>
+    <string name="car_settings_drive_mode_6dct_wet_title">Drive mode (6DCT wet)</string>
+    <string name="car_settings_drive_mode_6dct_wet_desc">eVEHICLE_DRIVEMODE_6DCT_WET (0–6)</string>
+    <string name="car_settings_brake_pedal_feel_title">Brake pedal feel</string>
+    <string name="car_settings_brake_pedal_feel_desc">eVEHICEL_BRAKE_PEDA_FEEL_MODE (0–6)</string>
+    <string name="car_settings_source_station_mode_title">Source / station mode</string>
+    <string name="car_settings_source_station_mode_desc">eSOURCE_STATION_MODE</string>
+    <string name="car_settings_vehwash_mode_title">Car wash mode</string>
+    <string name="car_settings_vehwash_mode_desc">eVEHICLE_VEHWASH_MODESET</string>
     <string name="menu_hide">Hide menu</string>
     <string name="menu_show">Show menu</string>
     <string name="menu_navigate_home">Home</string>
@@ -129,6 +148,9 @@
     <string name="widget_media_volume_action_increase">Increase media volume</string>
     <string name="widget_media_volume_action_decrease">Decrease media volume</string>
     <string name="widget_media_volume_action_mute">Toggle media mute</string>
+    <string name="widget_media_volume_use_mbcan">Use mbCAN mode</string>
+    <string name="widget_drive_mode_target_title">Drive mode for button</string>
+    <string name="widget_drive_mode_target_desc">Command sent on tap</string>
     <string name="media_player_yandex_music">Yandex Music</string>
     <string name="media_player_yandex_music_auto_play">Yandex Music (Auto)</string>
     <string name="media_player_poweramp">Poweramp</string>
@@ -219,9 +241,11 @@
     <string name="settings_auto_stop_mdc_title">Automatically send STOP command to MDC on TBox</string>
     <string name="settings_auto_stop_mdc_desc">Not recommended if SIM card is installed in TBox</string>
     <string name="settings_auto_suspend_swd_title">Automatically send SUSPEND command to SWD on TBox</string>
+    <string name="settings_auto_suspend_loc_title">Automatically send SUSPEND command to LOC on TBox</string>
     <string name="settings_auto_prevent_restart_swd_title">Automatically send PREVENT RESTART command to SWD on TBox</string>
     <string name="settings_auto_prevent_restart_swd_desc">Disables network and anomaly checks in TBox operation. These checks can cause extra reboots.</string>
 
+    <string name="settings_tbox_apps_control_title">Other TBox apps control settings</string>
     <string name="settings_floating_panels_title">Floating panels settings</string>
     <string name="settings_show_floating_panel_title">Show floating panel</string>
     <string name="settings_enable_floating_bg_title">Enable floating panel background</string>
@@ -231,6 +255,27 @@
     <string name="settings_floating_tbox_disconnect_indicator_title">TBox disconnect indicator</string>
     <string name="settings_floating_rows_title">Number of tile rows in floating panel</string>
     <string name="settings_floating_cols_title">Number of tile columns in floating panel</string>
+    <string name="settings_panels_order_button">Panel order</string>
+    <string name="settings_floating_panels_order_dialog_title">Floating panel order</string>
+    <string name="settings_main_screen_panels_order_dialog_title">Main screen panel order</string>
+    <string name="settings_panels_order_dialog_hint">Drag the handle on the right up or down to change panel order. A larger row number means the panel is higher in overlay stacking order.</string>
+
+    <string name="settings_floating_usage_stats_hide_title">Hide/show panels over third-party apps</string>
+    <string name="settings_floating_usage_stats_hide_explanation">The dialog configures both hiding rules and a separate force-show rule (panels over selected apps even when “Show floating panel” is off). If rules conflict, hiding wins. Requires the “Usage access” permission</string>
+    <string name="settings_floating_usage_stats_hide_configure">Configure apps and panels</string>
+    <string name="settings_floating_usage_stats_hide_dialog_title">Floating panels and third-party apps</string>
+    <string name="settings_floating_usage_stats_hide_dialog_intro">Two independent rule blocks below. If the same panel is listed for both hide and show, hide wins when the hide rule applies for the current foreground app. The same third-party package may appear in both app columns so different panels can follow different rules</string>
+    <string name="settings_floating_usage_stats_hide_section_title">Hide panels</string>
+    <string name="settings_floating_usage_stats_hide_section_body">On the left, pick apps; on the right, pick floating panels to hide while any of those apps is the active foreground app.</string>
+    <string name="settings_floating_usage_stats_show_section_title">Show panels</string>
+    <string name="settings_floating_usage_stats_show_section_body">On the left, pick apps; on the right, pick floating panels to show over other apps even when “Show floating panel” is off for that panel. When a different app is in the foreground, the normal on/off setting applies again</string>
+    <string name="settings_floating_usage_stats_hide_permission_hint">Without usage access permission, hiding will not work</string>
+    <string name="settings_floating_usage_stats_open_usage_settings">Open usage access settings</string>
+    <string name="settings_floating_usage_stats_hide_column_apps">Apps</string>
+    <string name="settings_floating_usage_stats_hide_column_panels">Floating panels</string>
+    <string name="settings_floating_usage_stats_hide_no_panels">No floating panels yet. Add a panel in the list above first</string>
+    <string name="settings_floating_usage_stats_hide_filter_apps">Search (hide)</string>
+    <string name="settings_floating_usage_stats_show_filter_apps">Search (show)</string>
 
     <string name="settings_main_screen_open_on_boot_title">Automatically open main screen on startup</string>
     <string name="settings_main_screen_open_on_boot_desc">After the device boots and the background service starts automatically, opens the app on the home main screen</string>
@@ -306,6 +351,7 @@
     <string name="settings_mock_location_requirements">Requires permission and mock location setup</string>
     <string name="settings_mock_location_requirements_link">Tap to view requirements for mock locations</string>
     <string name="button_reboot_tbox">Reboot TBox</string>
+    <string name="button_reboot_hu">Reboot HU</string>
 
     <string name="dialog_mock_location_requirements_title">Mock location requirements (Developer options)</string>
     <string name="dialog_mock_location_missing_permission">No location permission granted\n</string>
@@ -332,6 +378,7 @@
     <string name="info_confirm_suspend_app">Confirm SUSPEND command for APP</string>
     <string name="info_confirm_suspend_mdc">Confirm SUSPEND command for MDC</string>
     <string name="info_confirm_suspend_swd">Confirm SUSPEND command for SWD</string>
+    <string name="info_confirm_suspend_loc">Confirm SUSPEND command for LOC</string>
     <string name="info_confirm_stop_app">Confirm STOP command for APP</string>
     <string name="info_confirm_stop_mdc">Confirm STOP command for MDC</string>
     <string name="info_confirm_prevent_restart_swd">Confirm PREVENT RESTART command for SWD</string>
@@ -455,6 +502,7 @@
     <string name="data_title_active_trip_widget">Current trip</string>
     <string name="data_title_active_trip_widget_simple">Current trip (simple)</string>
     <string name="data_title_active_trip_widget_mini">Current trip (mini)</string>
+    <string name="data_title_active_trip_widget_custom">Current trip (custom)</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_fuel_price_fuel_type_title">Fuel for price lookup</string>
@@ -481,6 +529,7 @@
     <string name="trips_distance">Distance</string>
     <string name="trips_moving_time">Moving time</string>
     <string name="trips_idle_time">Idle time (engine on)</string>
+    <string name="trips_engine_running_time">Engine running time</string>
     <string name="trips_parking_time">Parking time</string>
     <string name="trips_total_time">Total time</string>
     <string name="trips_active_trip_mini_enroute_label">Time on trip</string>
@@ -501,6 +550,13 @@
     <string name="trips_refuel_count">Refuelings</string>
     <string name="trips_engine_start_count">Engine starts</string>
     <string name="trips_export">Export</string>
+    <string name="trips_edit_custom_widget">Edit custom widget</string>
+    <string name="trips_edit_simple_widget">Edit simplified widget</string>
+    <string name="trips_custom_widget_dialog_title">Custom trip widget</string>
+    <string name="trips_simple_widget_dialog_title">Simplified trip widget</string>
+    <string name="trips_custom_widget_dialog_hint">Check the parameters to show. Drag the handle on the right up or down to reorder.</string>
+    <string name="trips_simple_widget_dialog_hint">Check the parameters to show. Drag the handle on the right up or down to reorder.</string>
+    <string name="trips_custom_widget_drag_handle_a11y">Move row</string>
     <string name="dialog_save_trips_downloads">Save all trips to one file in the Downloads folder</string>
     <string name="trips_export_separator">----------------------------------------</string>
     <string name="refuels_empty">No refuels</string>
@@ -553,6 +609,7 @@
     <string name="data_title_loc_widget">Navigation widget</string>
     <string name="data_title_voltage_engine_temperature_widget">Voltage and engine temperature widget</string>
     <string name="data_title_gearbox_widget">Gearbox mode widget with current gear and temperature</string>
+    <string name="data_title_drive_mode_widget">Drive mode widget</string>
     <string name="data_title_wheels_pressure_widget">Tire pressure widget</string>
     <string name="data_title_wheels_pressure_temperature_widget">Tire pressure and temperature widget</string>
     <string name="data_title_temp_in_out_widget">Outside and inside temperature widget</string>
@@ -561,10 +618,15 @@
     <string name="data_title_steering_wheel_heat_widget">Steering wheel heating widget</string>
     <string name="data_title_front_windscreen_heat_widget">Front windscreen heating widget</string>
     <string name="data_title_rear_window_mirrors_defrost_widget">Rear window and mirror defrost widget</string>
+    <string name="data_title_hvac_air_recirculation_widget">HVAC air recirculation widget</string>
+    <string name="data_title_hvac_defroster_front_widget">Front windscreen defrost widget</string>
+    <string name="data_title_wireless_charging_widget">Wireless phone charging widget</string>
     <string name="data_title_restart_tbox">TBox reboot button</string>
     <string name="data_title_music_widget">Music control widget</string>
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
     <string name="data_title_media_volume_widget_vertical">Media volume widget (vertical)</string>
+    <string name="data_title_time_widget">Time</string>
+    <string name="data_title_date_widget">Date</string>
     <string name="data_title_app_launcher_widget">App shortcut</string>
     <string name="data_title_empty_tile_widget">Empty</string>
     <string name="data_title_external_app_widget">Third-party app widget</string>

@@ -166,11 +166,17 @@ internal fun AppLauncherWidgetSettingsSection(
             false
         }
     }
-    var pendingIconPackage by remember { mutableStateOf<String?>(null) }
+    val canPickImage = remember(context) {
+        Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
+            .resolveActivity(context.packageManager) != null
+    }
+    var pendingIconPackage by rememberSaveable { mutableStateOf<String?>(null) }
     val pickCustomIcon = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        val pkg = pendingIconPackage ?: return@rememberLauncherForActivityResult
+        val pkg = pendingIconPackage
+            ?: state.launcherAppPackage.takeIf { it.isNotBlank() }
+            ?: return@rememberLauncherForActivityResult
         pendingIconPackage = null
         if (uri == null) return@rememberLauncherForActivityResult
         settingsViewModel.setCustomLauncherAppIconFromUri(pkg, uri) { result ->
@@ -279,8 +285,16 @@ internal fun AppLauncherWidgetSettingsSection(
                         ) {
                             OutlinedButton(
                                 onClick = rememberWrappedOnClick {
-                                    pendingIconPackage = app.packageName
-                                    pickCustomIcon.launch("image/*")
+                                    if (canPickImage) {
+                                        pendingIconPackage = app.packageName
+                                        pickCustomIcon.launch("image/*")
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
                                 },
                                 enabled = state.togglesEnabled,
                             ) {

@@ -44,6 +44,9 @@ import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
+import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
+import vad.dashing.tbox.DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget
@@ -59,9 +62,11 @@ import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.isMediaVolumeWidgetDataKey
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizeWidgetScale
+import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
 private val WidgetSelectionDialogActionButtonFontSize = 22.sp
@@ -129,6 +134,14 @@ internal class WidgetSelectionDialogState(
     // anymani: новое свойство для опции "Оставить плеер на переднем плане"
     var mediaKeepPlayerForeground by mutableStateOf(
         initialConfig.mediaKeepPlayerForeground
+    )
+    var mediaVolumeUseMbCan by mutableStateOf(initialConfig.mediaVolumeUseMbCan)
+    var selectedDriveMode by mutableIntStateOf(
+        if (initialConfig.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+            normalizeDriveModeWidgetRawValue(initialConfig.selectedDriveMode)
+        } else {
+            DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+        }
     )
 
     var showAdvancedSettings by mutableStateOf(false)
@@ -198,6 +211,12 @@ internal class WidgetSelectionDialogState(
         selectedDataKey = key
         if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
             singleLineDualMetrics = false
+        }
+        if (!isMediaVolumeWidgetDataKey(key)) {
+            mediaVolumeUseMbCan = false
+        }
+        if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
+            selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
         }
     }
 
@@ -661,6 +680,29 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = 300.dp
                         )
                     }
+                    if (isMediaVolumeWidgetDataKey(state.selectedDataKey)) {
+                        SettingSwitch(
+                            state.mediaVolumeUseMbCan,
+                            { state.mediaVolumeUseMbCan = it },
+                            stringResource(R.string.widget_media_volume_use_mbcan),
+                            "",
+                            state.togglesEnabled
+                        )
+                    }
+                    if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+                        val selectedOption = DRIVE_MODE_WIDGET_OPTIONS.firstOrNull {
+                            it.rawValue == normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
+                        } ?: DRIVE_MODE_WIDGET_OPTIONS.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedOption,
+                            onValueChange = { state.selectedDriveMode = it.rawValue },
+                            text = stringResource(R.string.widget_drive_mode_target_title),
+                            description = stringResource(R.string.widget_drive_mode_target_desc),
+                            enabled = state.togglesEnabled,
+                            options = DRIVE_MODE_WIDGET_OPTIONS,
+                            selectorWidth = 220.dp
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1115,6 +1157,13 @@ internal fun applyWidgetSelectionChanges(
                     }
                 }
             },
+            selectedDriveMode = if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+                normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
+            } else {
+                DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+            },
+            mediaVolumeUseMbCan = isMediaVolumeWidgetDataKey(state.selectedDataKey) &&
+                state.mediaVolumeUseMbCan,
             tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },

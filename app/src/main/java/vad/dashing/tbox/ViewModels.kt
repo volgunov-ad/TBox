@@ -107,6 +107,13 @@ class TboxViewModel : ViewModel() {
             initialValue = false
         )
 
+    val tboxLocSuspended: StateFlow<Boolean> = TboxRepository.tboxLocSuspended
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val gateVersion: StateFlow<String> = TboxRepository.gateVersion
         .stateIn(
             scope = viewModelScope,
@@ -385,15 +392,19 @@ object WidgetsRepository {
         "motorHours" to DataTitle(R.string.data_title_motor_hours, R.string.unit_hours),
         "motorHoursTrip" to DataTitle(R.string.data_title_motor_hours_trip, R.string.unit_hours),
         "motorHoursWidget" to DataTitle(R.string.data_title_motor_hours_widget),
+        "timeWidget" to DataTitle(R.string.data_title_time_widget),
+        "dateWidget" to DataTitle(R.string.data_title_date_widget),
         "activeTripWidget" to DataTitle(R.string.data_title_active_trip_widget),
         "activeTripWidgetSimple" to DataTitle(R.string.data_title_active_trip_widget_simple),
         "activeTripWidgetMini" to DataTitle(R.string.data_title_active_trip_widget_mini),
+        ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY to DataTitle(R.string.data_title_active_trip_widget_custom),
         "netWidget" to DataTitle(R.string.data_title_net_widget),
         "netWidgetNew" to DataTitle(R.string.data_title_net_widget_new),
         "netWidgetColored" to DataTitle(R.string.data_title_net_widget_colored),
         "locWidget" to DataTitle(R.string.data_title_loc_widget),
         "voltage+engineTemperatureWidget" to DataTitle(R.string.data_title_voltage_engine_temperature_widget),
         "gearBoxWidget" to DataTitle(R.string.data_title_gearbox_widget),
+        DRIVE_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_drive_mode_widget),
         "wheelsPressureWidget" to DataTitle(R.string.data_title_wheels_pressure_widget, R.string.unit_bar),
         "wheelsPressureTemperatureWidget" to DataTitle(
             R.string.data_title_wheels_pressure_temperature_widget,
@@ -405,6 +416,8 @@ object WidgetsRepository {
         "steeringWheelHeatWidget" to DataTitle(R.string.data_title_steering_wheel_heat_widget),
         "frontWindscreenHeatWidget" to DataTitle(R.string.data_title_front_windscreen_heat_widget),
         "rearWindowMirrorsDefrostWidget" to DataTitle(R.string.data_title_rear_window_mirrors_defrost_widget),
+        "hvacAirRecirculationWidget" to DataTitle(R.string.data_title_hvac_air_recirculation_widget),
+        "hvacDefrosterFrontWidget" to DataTitle(R.string.data_title_hvac_defroster_front_widget),
         "frontLeftSeatHeatVentWidget" to DataTitle(R.string.data_title_front_left_seat_heat_vent_widget),
         "frontRightSeatHeatVentWidget" to DataTitle(R.string.data_title_front_right_seat_heat_vent_widget),
         FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to DataTitle(
@@ -478,6 +491,8 @@ object WidgetsRepository {
             "steeringWheelHeatWidget",
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
+            "hvacAirRecirculationWidget",
+            "hvacDefrosterFrontWidget",
             "frontLeftSeatHeatVentWidget",
             "frontRightSeatHeatVentWidget",
             FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
@@ -492,6 +507,9 @@ object WidgetsRepository {
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
+            "timeWidget",
+            "dateWidget",
+            DRIVE_MODE_WIDGET_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }
@@ -527,6 +545,8 @@ object WidgetsRepository {
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
+            "timeWidget",
+            "dateWidget",
             "restartTbox",
             "netWidget",
             "netWidgetNew",
@@ -541,6 +561,9 @@ object WidgetsRepository {
             "steeringWheelHeatWidget",
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
+            "hvacAirRecirculationWidget",
+            "hvacDefrosterFrontWidget",
+            DRIVE_MODE_WIDGET_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }

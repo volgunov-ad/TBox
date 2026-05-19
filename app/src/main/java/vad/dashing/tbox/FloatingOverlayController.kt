@@ -16,6 +16,48 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.ui.FloatingDashboardUI
 import vad.dashing.tbox.ui.MyLifecycleOwner
 
+/**
+ * Foreground package + persisted usage-stats rule sets from [BackgroundService] polling.
+ * Hide wins when it actually applies to a panel ([isUsageStatsForceHidden]).
+ */
+internal data class UsageStatsOverlayRulesState(
+    val foregroundPackage: String?,
+    val watchHidePackages: Set<String>,
+    val hidePanelIds: Set<String>,
+    val watchShowPackages: Set<String>,
+    val showPanelIds: Set<String>,
+) {
+    fun isUsageStatsForceHidden(panelId: String, myPackageName: String): Boolean {
+        val fg = foregroundPackage ?: return false
+        if (fg == myPackageName) return false
+        if (watchHidePackages.isEmpty() || hidePanelIds.isEmpty()) return false
+        return usageStatsWatchContains(watchHidePackages, fg) && hidePanelIds.contains(panelId)
+    }
+
+    /**
+     * When a show-watched app is foreground, show listed panels even if disabled in settings.
+     * Suppressed when this panel is actually hidden by the hide rule ([isUsageStatsForceHidden]).
+     */
+    fun isUsageStatsForceShowing(panelId: String, myPackageName: String): Boolean {
+        val fg = foregroundPackage ?: return false
+        if (fg == myPackageName) return false
+        if (isUsageStatsForceHidden(panelId, myPackageName)) return false
+        if (watchShowPackages.isEmpty() || showPanelIds.isEmpty()) return false
+        return usageStatsWatchContains(watchShowPackages, fg) && showPanelIds.contains(panelId)
+    }
+
+    companion object {
+        val EMPTY = UsageStatsOverlayRulesState(null, emptySet(), emptySet(), emptySet(), emptySet())
+    }
+}
+
+/** Usage stats package names vs launcher-picked entries (trim / case). */
+internal fun usageStatsWatchContains(watch: Set<String>, foregroundPackage: String): Boolean {
+    val f = foregroundPackage.trim()
+    if (f.isEmpty()) return false
+    return watch.any { w -> w.trim().equals(f, ignoreCase = true) }
+}
+
 internal class FloatingOverlayController(
     private val service: Service,
     private val settingsManager: SettingsManager,
@@ -30,6 +72,7 @@ internal class FloatingOverlayController(
     private val overlayOffIds = mutableSetOf<String>()
     /** Panels temporarily closed by the «hide other floating panels» tile; cleared on restore or global suspend. */
     private val hiddenFloatingPanelIds = mutableSetOf<String>()
+    private var usageStatsOverlayRules: UsageStatsOverlayRulesState = UsageStatsOverlayRulesState.EMPTY
     private var overlaysSuspended = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
@@ -42,6 +85,7 @@ internal class FloatingOverlayController(
     fun suspendOverlays() {
         overlaysSuspended = true
         hiddenFloatingPanelIds.clear()
+        usageStatsOverlayRules = UsageStatsOverlayRulesState.EMPTY
         closeAllOverlays()
     }
 
@@ -63,6 +107,7 @@ internal class FloatingOverlayController(
 
     fun onDestroy() {
         hiddenFloatingPanelIds.clear()
+        usageStatsOverlayRules = UsageStatsOverlayRulesState.EMPTY
         closeAllOverlays()
         lifecycleOwner.setCurrentState(Lifecycle.State.DESTROYED)
         lifecycleOwner.clear()
@@ -87,10 +132,13 @@ internal class FloatingOverlayController(
                 FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
                 return@withContext
             }
+            val myPkg = service.packageName
             val configMap = configs.associateBy { it.id }
-            val enabledConfigs = configs.filter { it.enabled }
+            val visibleConfigs = configs.filter { cfg ->
+                shouldShowFloatingOverlay(cfg, myPkg)
+            }
 
-            val enabledIds = enabledConfigs.map { it.id }.toSet()
+            val visibleIds = visibleConfigs.map { it.id }.toSet()
             val existingIds = overlayViews.keys.toSet()
 
             // Remove counters for configs that no longer exist.
@@ -101,8 +149,11 @@ internal class FloatingOverlayController(
                 hiddenFloatingPanelIds.remove(id)
             }
 
-            enabledConfigs.forEach { config ->
-                if (hiddenFloatingPanelIds.contains(config.id)) {
+            visibleConfigs.forEach { config ->
+                if (usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPkg)) {
+                    overlayOffIds.remove(config.id)
+                }
+                if (isFloatingPanelTemporarilyHidden(config.id, myPkg)) {
                     if (overlayViews.containsKey(config.id)) {
                         closeOverlay(config.id)
                     }
@@ -114,21 +165,22 @@ internal class FloatingOverlayController(
                 if (view != null) {
                     updateOverlayLayout(config)
                 } else {
-                    openOverlay(config)
+                    openOverlay(config, myPkg)
                 }
             }
 
-            val idsToClose = existingIds - enabledIds
+            val idsToClose = existingIds - visibleIds
             idsToClose.forEach { id ->
                 closeOverlay(id)
             }
 
-            val disabledIds = configMap.keys - enabledIds
+            val disabledIds = configMap.keys - visibleIds
             disabledIds.forEach { id ->
                 overlayRetryCounts.remove(id)
                 overlayOffIds.remove(id)
                 hiddenFloatingPanelIds.remove(id)
             }
+            reorderVisibleOverlays(visibleConfigs.map { it.id })
             FloatingOverlayLoadTimings.mark("float_sync_done")
             FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
         }
@@ -143,9 +195,13 @@ internal class FloatingOverlayController(
                 FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.ensure")
                 return@withContext
             }
-            val enabledConfigs = configs.filter { it.enabled }
-            enabledConfigs.forEach { config ->
-                if (hiddenFloatingPanelIds.contains(config.id)) return@forEach
+            val myPkg = service.packageName
+            val visibleConfigs = configs.filter { cfg -> shouldShowFloatingOverlay(cfg, myPkg) }
+            visibleConfigs.forEach { config ->
+                if (isFloatingPanelTemporarilyHidden(config.id, myPkg)) return@forEach
+                if (usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPkg)) {
+                    overlayOffIds.remove(config.id)
+                }
                 if (overlayOffIds.contains(config.id)) return@forEach
                 if (overlayViews.containsKey(config.id)) {
                     overlayRetryCounts[config.id] = 0
@@ -159,14 +215,22 @@ internal class FloatingOverlayController(
                     return@forEach
                 }
                 overlayRetryCounts[config.id] = retryCount + 1
-                openOverlay(config)
+                openOverlay(config, myPkg)
             }
             FloatingOverlayLoadTimings.mark("float_ensure_done")
             FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.ensure")
         }
     }
 
-    private fun openOverlay(config: FloatingDashboardConfig) {
+    private fun shouldShowFloatingOverlay(config: FloatingDashboardConfig, myPackageName: String): Boolean {
+        if (usageStatsOverlayRules.isUsageStatsForceHidden(config.id, myPackageName)) {
+            return false
+        }
+        if (config.enabled) return true
+        return usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPackageName)
+    }
+
+    private fun openOverlay(config: FloatingDashboardConfig, myPackageName: String) {
         if (windowManager == null) {
             try {
                 windowManager = service.getSystemService(WindowManager::class.java)
@@ -181,7 +245,7 @@ internal class FloatingOverlayController(
             }
         }
 
-        if (!config.enabled) {
+        if (!config.enabled && !usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPackageName)) {
             TboxRepository.addLog("DEBUG", TAG, "Setting off: ${config.id}")
             return
         }
@@ -322,6 +386,31 @@ internal class FloatingOverlayController(
     }
 
     /**
+     * Keeps z-order aligned with config order: later ids are moved to front (above earlier ids).
+     * This makes panel order changes effective immediately without service restart.
+     */
+    private fun reorderVisibleOverlays(orderedVisibleIds: List<String>) {
+        val wm = windowManager ?: return
+        if (orderedVisibleIds.isEmpty()) return
+
+        val currentVisibleOrder = overlayViews.keys.filter { id ->
+            orderedVisibleIds.any { it == id }
+        }
+        if (currentVisibleOrder == orderedVisibleIds) return
+
+        orderedVisibleIds.forEach { panelId ->
+            val view = overlayViews[panelId] ?: return@forEach
+            val params = overlayParams[panelId] ?: return@forEach
+            try {
+                wm.removeView(view)
+                wm.addView(view, params)
+            } catch (_: Exception) {
+                // Best-effort z-order update; normal sync/ensure loop will recover if needed.
+            }
+        }
+    }
+
+    /**
      * If [hiddenFloatingPanelIds] is empty, hides every floating panel in [currentlyShownIds] except [originPanelId].
      * If already hiding, clears the hidden set so panels can be shown again (caller should run sync/ensure).
      */
@@ -348,6 +437,20 @@ internal class FloatingOverlayController(
                     closeOverlay(panelId)
                 }
             }
+        }
+    }
+
+    private fun isFloatingPanelTemporarilyHidden(panelId: String, myPackageName: String): Boolean =
+        hiddenFloatingPanelIds.contains(panelId) ||
+            usageStatsOverlayRules.isUsageStatsForceHidden(panelId, myPackageName)
+
+    /**
+     * Updates usage-stats-driven visibility; [BackgroundService] calls this every poll before
+     * [syncFloatingDashboards] / [ensureFloatingDashboards].
+     */
+    suspend fun setUsageStatsOverlayRulesState(state: UsageStatsOverlayRulesState) {
+        withContext(Dispatchers.Main) {
+            usageStatsOverlayRules = state
         }
     }
 }

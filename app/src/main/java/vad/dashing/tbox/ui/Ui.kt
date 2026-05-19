@@ -366,7 +366,7 @@ fun TboxScreen(
                     } else {
                         ModemTab(viewModel, onServiceCommand)
                     }
-                    2 -> LocationTab(viewModel)
+                    2 -> LocationTab(viewModel, onServiceCommand)
                     3 -> CarDataTab(
                         canViewModel,
                         cycleViewModel,
@@ -477,9 +477,13 @@ fun SettingsTab(
 
 @Composable
 fun LocationTab(
-    viewModel: TboxViewModel
+    viewModel: TboxViewModel,
+    onServiceCommand: (String, String, String) -> Unit,
 ) {
-    LocationTabContent(viewModel = viewModel)
+    LocationTabContent(
+        viewModel = viewModel,
+        onServiceCommand = onServiceCommand,
+    )
 }
 
 @Composable

@@ -49,6 +49,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
@@ -58,11 +59,15 @@ import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
+import vad.dashing.tbox.isMbCanMediaVolumeEnabled
+import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.MbCanSignal
 
 @Composable
 fun MainDashboardTab(
@@ -104,6 +109,9 @@ fun MainDashboardTab(
     val panelNeedsMbCan = remember(widgetConfigs) {
         MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
+    val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
+    }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
@@ -135,9 +143,20 @@ fun MainDashboardTab(
         }
         DisposableEffect(Unit) {
             onDispose {
-                coroutineScope.launch {
-                    MbCanRepository.clearSource("dashboard-tab-main")
-                }
+                MbCanRepository.enqueueClearSource("dashboard-tab-main")
+            }
+        }
+    }
+    if (panelNeedsMbCanMediaVolume) {
+        LaunchedEffect(widgetConfigs) {
+            MbCanRepository.setSourceSignals(
+                "dashboard-tab-main-media-volume",
+                setOf(MbCanSignal.AudioVolume)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                MbCanRepository.enqueueClearSource("dashboard-tab-main-media-volume")
             }
         }
     }
@@ -271,6 +290,12 @@ fun MainDashboardTab(
                                                 cfg.launcherAppPackage.isNotBlank()
                                             ) {
                                                 launchAppFromWidget(context, cfg.launcherAppPackage)
+                                            } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+                                                sendSetMbCanProperty(
+                                                    context = context,
+                                                    propertyId = MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
+                                                    value = normalizeDriveModeWidgetRawValue(cfg.selectedDriveMode)
+                                                )
                                             }
                                         },
                                         onLongClick = { showDialogForIndex = index },

@@ -43,7 +43,10 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -246,6 +249,7 @@ fun SettingsTabContent(
     val isAutoSuspendTboxAppEnabled by settingsViewModel.isAutoSuspendTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoSuspendTboxMdcEnabled by settingsViewModel.isAutoSuspendTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoSuspendTboxSwdEnabled by settingsViewModel.isAutoSuspendTboxSwdEnabled.collectAsStateWithLifecycle()
+    val isAutoSuspendTboxLocEnabled by settingsViewModel.isAutoSuspendTboxLocEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxAppEnabled by settingsViewModel.isAutoStopTboxAppEnabled.collectAsStateWithLifecycle()
     val isAutoStopTboxMdcEnabled by settingsViewModel.isAutoStopTboxMdcEnabled.collectAsStateWithLifecycle()
     val isAutoPreventTboxRestartEnabled by settingsViewModel.isAutoPreventTboxRestartEnabled.collectAsStateWithLifecycle()
@@ -294,16 +298,33 @@ fun SettingsTabContent(
     val expertModeWarning = stringResource(R.string.settings_expert_mode_warning_desc)
     val newFloatingPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
 
+    LaunchedEffect(Unit) {
+        MbCanRepository.warmUpAvailabilityForUi()
+    }
+
     var restartButtonEnabled by remember { mutableStateOf(true) }
+
+    var huRebootButtonEnabled by remember { mutableStateOf(true) }
+    val mbCanAvailability by MbCanRepository.availability.collectAsStateWithLifecycle()
+    val mbCanAvailable = mbCanAvailability is MbCanAvailability.Available
 
     var showExportBackupDialog by remember { mutableStateOf(false) }
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
+    var showUsageStatsHideFloatingDialog by remember { mutableStateOf(false) }
+    var showFloatingPanelOrderDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
             delay(15000)
             restartButtonEnabled = true
+        }
+    }
+
+    LaunchedEffect(huRebootButtonEnabled) {
+        if (!huRebootButtonEnabled) {
+            delay(300_000L)
+            huRebootButtonEnabled = true
         }
     }
 
@@ -426,6 +447,18 @@ fun SettingsTabContent(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_tbox_apps_control_title))
+        SettingSwitch(
+            isAutoSuspendTboxLocEnabled,
+            { enabled ->
+                settingsViewModel.saveAutoSuspendTboxLocSetting(enabled)
+            },
+            stringResource(R.string.settings_auto_suspend_loc_title),
+            "",
+            true
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_floating_panels_title))
         if (hasFloatingPanels) {
             FloatingDashboardPanelEditor(
@@ -446,6 +479,17 @@ fun SettingsTabContent(
                 deleteInProgressPanelId = floatingPanelDeleteInProgressId,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { showFloatingPanelOrderDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_panels_order_button),
+                    fontSize = 22.sp,
+                )
+            }
         } else {
             Button(
                 onClick = rememberWrappedOnClick {
@@ -516,6 +560,32 @@ fun SettingsTabContent(
             Modifier,
             enabled = hasFloatingPanels
         )
+
+        Text(
+            text = stringResource(R.string.settings_floating_usage_stats_hide_title),
+            modifier = Modifier.padding(top = 12.dp),
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.settings_floating_usage_stats_hide_explanation),
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            fontSize = 20.sp,
+            lineHeight = 20.sp * 1.35f,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { showUsageStatsHideFloatingDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_floating_usage_stats_hide_configure),
+                fontSize = 22.sp,
+            )
+        }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
@@ -666,30 +736,30 @@ fun SettingsTabContent(
                 1,
                 3600
             )
-            SettingSwitch(
-                isMockLocationEnabled,
-                { enabled ->
-                    onMockLocationSettingChanged(enabled)
-                },
-                stringResource(R.string.settings_mock_location_title),
-                if (canUseMockLocation) {
-                    stringResource(R.string.settings_mock_location_ready)
-                } else {
-                    stringResource(R.string.settings_mock_location_requirements)
-                },
-                true
-            )
-
-            if (!canUseMockLocation) {
-                Text(
-                    text = stringResource(R.string.settings_mock_location_requirements_link),
-                    fontSize = 20.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clickableWithSound { showLocationRequirementsDialog(context) }
-                        .padding(top = 4.dp)
-                )
-            }
+//            SettingSwitch(
+//                isMockLocationEnabled,
+//                { enabled ->
+//                    onMockLocationSettingChanged(enabled)
+//                },
+//                stringResource(R.string.settings_mock_location_title),
+//                if (canUseMockLocation) {
+//                    stringResource(R.string.settings_mock_location_ready)
+//                } else {
+//                    stringResource(R.string.settings_mock_location_requirements)
+//                },
+//                true
+//            )
+//
+//            if (!canUseMockLocation) {
+//                Text(
+//                    text = stringResource(R.string.settings_mock_location_requirements_link),
+//                    fontSize = 20.sp,
+//                    color = MaterialTheme.colorScheme.primary,
+//                    modifier = Modifier
+//                        .clickableWithSound { showLocationRequirementsDialog(context) }
+//                        .padding(top = 4.dp)
+//                )
+//            }
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -811,11 +881,45 @@ fun SettingsTabContent(
             )
         }
 
+        if (showUsageStatsHideFloatingDialog) {
+            UsageStatsHideFloatingPanelsDialog(
+                settingsViewModel = settingsViewModel,
+                floatingPanels = floatingDashboardsList,
+                onDismiss = { showUsageStatsHideFloatingDialog = false },
+            )
+        }
+        if (showFloatingPanelOrderDialog) {
+            PanelOrderConfigDialog(
+                visible = true,
+                title = stringResource(R.string.settings_floating_panels_order_dialog_title),
+                hint = stringResource(R.string.settings_panels_order_dialog_hint),
+                items = floatingDashboardsList.map { panel ->
+                    PanelOrderItem(
+                        id = panel.id,
+                        name = panel.name.ifBlank { panel.id },
+                    )
+                },
+                onDismiss = { showFloatingPanelOrderDialog = false },
+                onSave = { orderedIds ->
+                    val byId = floatingDashboardsList.associateBy { it.id }
+                    val reordered = buildList {
+                        orderedIds.forEach { panelId ->
+                            byId[panelId]?.let { add(it) }
+                        }
+                        floatingDashboardsList.forEach { panel ->
+                            if (orderedIds.none { it == panel.id }) add(panel)
+                        }
+                    }
+                    settingsViewModel.saveFloatingDashboards(reordered)
+                },
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
@@ -825,10 +929,32 @@ fun SettingsTabContent(
                         onTboxRestartClick()
                     }
                 },
-                enabled = restartButtonEnabled && tboxConnected
+                enabled = restartButtonEnabled && tboxConnected,
+                modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_tbox),
+                    fontSize = 24.sp,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (huRebootButtonEnabled) {
+                        huRebootButtonEnabled = false
+                        sendSetMbCanProperty(
+                            context,
+                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
+                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
+                        )
+                    }
+                },
+                enabled = huRebootButtonEnabled && mbCanAvailable,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.button_reboot_hu),
                     fontSize = 24.sp,
                     maxLines = 2,
                     textAlign = TextAlign.Center
@@ -897,13 +1023,15 @@ private fun showOverlayRequirementsDialog(context: Context) {
 
 @Composable
 fun LocationTabContent(
-    viewModel: TboxViewModel
+    viewModel: TboxViewModel,
+    onServiceCommand: (String, String, String) -> Unit,
 ) {
     val yesLabel = stringResource(R.string.value_yes)
     val noLabel = stringResource(R.string.value_no)
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
+    val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -919,6 +1047,15 @@ fun LocationTabContent(
         locationUpdateTime?.let { locationUpdateTime ->
             timeFormat.format(locationUpdateTime)
         } ?: ""
+    }
+
+    var locCommandButtonsEnabled by remember { mutableStateOf(true) }
+
+    LaunchedEffect(locCommandButtonsEnabled) {
+        if (!locCommandButtonsEnabled) {
+            delay(5000)
+            locCommandButtonsEnabled = true
+        }
     }
 
     Column(
@@ -942,6 +1079,55 @@ fun LocationTabContent(
             item { StatusRow(stringResource(R.string.location_utc), dateTime) }
             item { StatusRow(stringResource(R.string.location_raw_data), locValues.rawValue) }
         }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (locCommandButtonsEnabled) {
+                        locCommandButtonsEnabled = false
+                        onServiceCommand(
+                            BackgroundService.ACTION_TBOX_APP_RESUME,
+                            BackgroundService.EXTRA_APP_NAME,
+                            "LOC",
+                        )
+                    }
+                },
+                enabled = locCommandButtonsEnabled && tboxConnected,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.location_button_resume_loc),
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (locCommandButtonsEnabled) {
+                        locCommandButtonsEnabled = false
+                        onServiceCommand(
+                            BackgroundService.ACTION_TBOX_APP_SUSPEND,
+                            BackgroundService.EXTRA_APP_NAME,
+                            "LOC",
+                        )
+                    }
+                },
+                enabled = locCommandButtonsEnabled && tboxConnected,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.location_button_suspend_loc),
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
 }
 
@@ -958,6 +1144,7 @@ fun InfoTabContent(
     val tboxAppSuspended by viewModel.tboxAppSuspended.collectAsStateWithLifecycle()
     val tboxMdcSuspended by viewModel.tboxMdcSuspended.collectAsStateWithLifecycle()
     val tboxSwdSuspended by viewModel.tboxSwdSuspended.collectAsStateWithLifecycle()
+    val tboxLocSuspended by viewModel.tboxLocSuspended.collectAsStateWithLifecycle()
     val tboxAppStoped by viewModel.tboxAppStoped.collectAsStateWithLifecycle()
     val tboxMdcStoped by viewModel.tboxMdcStoped.collectAsStateWithLifecycle()
     val appVersion by settingsViewModel.appVersion.collectAsStateWithLifecycle()
@@ -999,6 +1186,12 @@ fun InfoTabContent(
                 StatusRow(
                     stringResource(R.string.info_confirm_suspend_swd),
                     if (tboxSwdSuspended) yesLabel else noLabel
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.info_confirm_suspend_loc),
+                    if (tboxLocSuspended) yesLabel else noLabel
                 )
             }
             item {

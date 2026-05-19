@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +42,13 @@ class AppDataManager(private val context: Context) {
         private val WHEEL2_PRESSURE_LAST_KEY = floatPreferencesKey("${KEY_PREFIX}wheel2_pressure_last")
         private val WHEEL3_PRESSURE_LAST_KEY = floatPreferencesKey("${KEY_PREFIX}wheel3_pressure_last")
         private val WHEEL4_PRESSURE_LAST_KEY = floatPreferencesKey("${KEY_PREFIX}wheel4_pressure_last")
+
+        /** Last stable filtered fuel % from CAN (0…100), saved on engine stop like wheel pressures. */
+        private val FUEL_LAST_FILTERED_PERCENT_KEY = intPreferencesKey("${KEY_PREFIX}fuel_last_filtered_percent")
+
+        /** Last standard calibrated tank liters matching [FUEL_LAST_FILTERED_PERCENT_KEY]. */
+        private val FUEL_LAST_CALIBRATED_STD_LITERS_KEY =
+            floatPreferencesKey("${KEY_PREFIX}fuel_last_calibrated_std_liters")
     }
 
     // Flow для моторных часов
@@ -114,5 +122,35 @@ class AppDataManager(private val context: Context) {
             wheel3 = read(WHEEL3_PRESSURE_LAST_KEY),
             wheel4 = read(WHEEL4_PRESSURE_LAST_KEY),
         )
+    }
+
+    /**
+     * Сохраняет последний известный отфильтрованный % и калиброванные стандартные литры с шины
+     * (на переходе RPM > 0 → 0). Ключ не перезаписывается, если соответствующее значение недоступно.
+     */
+    suspend fun saveLastKnownFuelLevelPartial(
+        percentFiltered: UInt?,
+        calibratedStandardLiters: Float?,
+    ) {
+        context.appDataStore.edit { preferences ->
+            if (percentFiltered != null) {
+                preferences[FUEL_LAST_FILTERED_PERCENT_KEY] =
+                    percentFiltered.toInt().coerceIn(0, 100)
+            }
+            val liters = calibratedStandardLiters
+            if (liters != null && liters.isFinite() && liters >= 0f) {
+                preferences[FUEL_LAST_CALIBRATED_STD_LITERS_KEY] = liters
+            }
+        }
+    }
+
+    /** Пара: отфильтрованный % (если был сохранён), стандартные калиброванные литры (если были). */
+    suspend fun loadLastKnownFuelLevel(): Pair<UInt?, Float?> {
+        val preferences = context.appDataStore.data.first()
+        val pct = preferences[FUEL_LAST_FILTERED_PERCENT_KEY]
+            ?.coerceIn(0, 100)
+            ?.toUInt()
+        val liters = preferences[FUEL_LAST_CALIBRATED_STD_LITERS_KEY]?.takeIf { it.isFinite() && it >= 0f }
+        return Pair(pct, liters)
     }
 }

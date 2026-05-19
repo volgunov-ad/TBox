@@ -48,6 +48,9 @@ internal class MbCanSignalStateEngine(
     private val steeringFlow: MutableStateFlow<MbCanBinaryState>,
     private val windshieldHeatFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacDefrosterFlow: MutableStateFlow<MbCanBinaryState>,
+    private val hvacAirRecirculationFlow: MutableStateFlow<MbCanBinaryState>,
+    private val hvacDefrosterFrontFlow: MutableStateFlow<MbCanBinaryState>,
+    private val wirelessChargingFlow: MutableStateFlow<MbCanBinaryState>,
     private val volumeSpeedFlow: MutableStateFlow<MbCanBinaryState>,
     private val frontLeftSeatFlow: MutableStateFlow<MbCanSeatModeState>,
     private val frontRightSeatFlow: MutableStateFlow<MbCanSeatModeState>,
@@ -61,6 +64,12 @@ internal class MbCanSignalStateEngine(
     private var windshieldUnavailableStreak = 0
     private var hvacDefrosterUnknownStreak = 0
     private var hvacDefrosterUnavailableStreak = 0
+    private var hvacAirRecirculationUnknownStreak = 0
+    private var hvacAirRecirculationUnavailableStreak = 0
+    private var hvacDefrosterFrontUnknownStreak = 0
+    private var hvacDefrosterFrontUnavailableStreak = 0
+    private var wirelessChargingUnknownStreak = 0
+    private var wirelessChargingUnavailableStreak = 0
     private var volumeSpeedUnknownStreak = 0
     private var volumeSpeedUnavailableStreak = 0
     private var frontLeftUnknownStreak = 0
@@ -158,6 +167,90 @@ internal class MbCanSignalStateEngine(
                 hvacDefrosterUnknownStreak = 0
                 hvacDefrosterUnavailableStreak = 0
                 hvacDefrosterFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyHvacAirRecirculationCandidate(decoded: MbCanBinaryState) {
+        val published = hvacAirRecirculationFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.HvacAirRecirculation)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                hvacAirRecirculationUnknownStreak += 1
+                hvacAirRecirculationUnavailableStreak = 0
+                if (hvacAirRecirculationUnknownStreak >= requiredConsecutiveProblems) {
+                    hvacAirRecirculationFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                hvacAirRecirculationUnavailableStreak += 1
+                hvacAirRecirculationUnknownStreak = 0
+                if (hvacAirRecirculationUnavailableStreak >= requiredConsecutiveProblems) {
+                    hvacAirRecirculationFlow.value = decoded
+                }
+            }
+            else -> {
+                hvacAirRecirculationUnknownStreak = 0
+                hvacAirRecirculationUnavailableStreak = 0
+                hvacAirRecirculationFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyHvacDefrosterFrontCandidate(decoded: MbCanBinaryState) {
+        val published = hvacDefrosterFrontFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.HvacDefrosterFront)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                hvacDefrosterFrontUnknownStreak += 1
+                hvacDefrosterFrontUnavailableStreak = 0
+                if (hvacDefrosterFrontUnknownStreak >= requiredConsecutiveProblems) {
+                    hvacDefrosterFrontFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                hvacDefrosterFrontUnavailableStreak += 1
+                hvacDefrosterFrontUnknownStreak = 0
+                if (hvacDefrosterFrontUnavailableStreak >= requiredConsecutiveProblems) {
+                    hvacDefrosterFrontFlow.value = decoded
+                }
+            }
+            else -> {
+                hvacDefrosterFrontUnknownStreak = 0
+                hvacDefrosterFrontUnavailableStreak = 0
+                hvacDefrosterFrontFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyWirelessChargingCandidate(decoded: MbCanBinaryState) {
+        val published = wirelessChargingFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.WirelessChargingSwitch)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                wirelessChargingUnknownStreak += 1
+                wirelessChargingUnavailableStreak = 0
+                if (wirelessChargingUnknownStreak >= requiredConsecutiveProblems) {
+                    wirelessChargingFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                wirelessChargingUnavailableStreak += 1
+                wirelessChargingUnknownStreak = 0
+                if (wirelessChargingUnavailableStreak >= requiredConsecutiveProblems) {
+                    wirelessChargingFlow.value = decoded
+                }
+            }
+            else -> {
+                wirelessChargingUnknownStreak = 0
+                wirelessChargingUnavailableStreak = 0
+                wirelessChargingFlow.value = decoded
             }
         }
     }
@@ -266,6 +359,19 @@ internal class MbCanSignalStateEngine(
 
         /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER] — rear window + mirrors; same 1/2 as steering if used as binary. */
         fun decodeHvacDefrosterRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+
+        /** Same raw values as [MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON]/[_OFF] and [MbCanCommandRegistry] toggle. */
+        fun decodeHvacAirRecirculationRaw(raw: Int): MbCanBinaryState = when (raw) {
+            MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON -> MbCanBinaryState.On
+            MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF -> MbCanBinaryState.Off
+            else -> MbCanBinaryState.Unknown
+        }
+
+        /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_DEFROSTER_FRONT] — 1 off, 2 on. */
+        fun decodeHvacDefrosterFrontRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+
+        /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_CHG_WIRELESS_SWITCH] — 1 off, 2 on. */
+        fun decodeWirelessChargingRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
 
         /** Front seat heat + ventilation raw values (1 off, 2–4 heat, 5–7 vent). */
         fun decodeSeatModeRaw(raw: Int): MbCanSeatModeState = when (raw) {

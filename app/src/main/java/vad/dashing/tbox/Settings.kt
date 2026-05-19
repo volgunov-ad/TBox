@@ -80,6 +80,10 @@ data class FloatingDashboardWidgetConfig(
     val valueAccuracy: Int? = null,
     /** Per-tile UI variant for widgets that support multiple modes (e.g. single seat heat vs vent). */
     val selectedVariant: Int = 0,
+    /** Fixed target value for [DRIVE_MODE_WIDGET_DATA_KEY] tile. */
+    val selectedDriveMode: Int = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE,
+    /** If true, media volume widget controls mbCAN `eAUDIO_PROPERTY_VOLUME` instead of Android AudioManager. */
+    val mediaVolumeUseMbCan: Boolean = false,
     /**
      * Optional background image on top of the tile color (light theme).
      * Path relative to [Context.filesDir]; must stay under [TileBackgroundImageStorage.DIR_NAME].
@@ -160,6 +164,7 @@ data class BackgroundServiceSettingsSnapshot(
     val autoSuspendTboxMdc: Boolean,
     val autoStopTboxMdc: Boolean,
     val autoSuspendTboxSwd: Boolean,
+    val autoSuspendTboxLoc: Boolean,
     val autoPreventTboxRestart: Boolean,
     val getCanFrame: Boolean,
     val getCycleSignal: Boolean,
@@ -168,6 +173,14 @@ data class BackgroundServiceSettingsSnapshot(
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
     val floatingDashboards: List<FloatingDashboardConfig>,
+    /** Package names: when any of these is in foreground, listed floating panels are hidden (usage-stats poll). */
+    val usageStatsHideFloatingWatchPackages: Set<String>,
+    /** Floating dashboard ids to hide while a watched package is foreground. */
+    val usageStatsHideFloatingPanelIds: Set<String>,
+    /** Package names: when foreground is one of these (and not in hide-watch), listed panels may be force-shown. */
+    val usageStatsForceShowFloatingWatchPackages: Set<String>,
+    /** Panels to show while a force-show watched app is foreground, even if «Показывать плавающую панель» is off. */
+    val usageStatsForceShowFloatingPanelIds: Set<String>,
     val canDataSaveCount: Int,
     val fuelTankLiters: Int,
     /** JSON калибровки топлива (пустая строка — нет данных). */
@@ -219,6 +232,7 @@ class SettingsManager(private val context: Context) {
         private val AUTO_STOP_TBOX_MDC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_stop_tbox_mdc")
         private val AUTO_SUSPEND_TBOX_MDC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_mdc")
         private val AUTO_SUSPEND_TBOX_SWD_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_swd")
+        private val AUTO_SUSPEND_TBOX_LOC_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_suspend_tbox_loc")
         private val AUTO_PREVENT_TBOX_RESTART_KEY = booleanPreferencesKey("${KEY_PREFIX}auto_prevent_tbox_restart")
         private val GET_VOLTAGES_KEY = booleanPreferencesKey("${KEY_PREFIX}get_voltages")
         private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
@@ -319,6 +333,10 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION = false
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
+        private const val USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY = "usage_stats_hide_floating_watch_packages"
+        private const val USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY = "usage_stats_hide_floating_panel_ids"
+        private const val USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY = "usage_stats_force_show_floating_watch_packages"
+        private const val USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY = "usage_stats_force_show_floating_panel_ids"
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
         private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
@@ -376,6 +394,12 @@ class SettingsManager(private val context: Context) {
         // Ключ для сохранения конфигурации виджетов
         private val DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}dashboard_widgets")
 
+        private val ACTIVE_TRIP_CUSTOM_WIDGET_LAYOUT_KEY =
+            stringPreferencesKey("${KEY_PREFIX}active_trip_custom_widget_layout")
+
+        private val ACTIVE_TRIP_SIMPLE_WIDGET_LAYOUT_KEY =
+            stringPreferencesKey("${KEY_PREFIX}active_trip_simple_widget_layout")
+
     }
 
     // Flow для конфигурации виджетов
@@ -392,11 +416,53 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    val usageStatsHideFloatingWatchPackagesFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
+            )
+        }
+        .distinctUntilChanged()
+
+    val usageStatsHideFloatingPanelIdsFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY)] ?: "[]"
+            )
+        }
+        .distinctUntilChanged()
+
+    val usageStatsForceShowFloatingWatchPackagesFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY)] ?: "[]"
+            )
+        }
+        .distinctUntilChanged()
+
+    val usageStatsForceShowFloatingPanelIdsFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY)] ?: "[]"
+            )
+        }
+        .distinctUntilChanged()
+
     val mainScreenDashboardsFlow: Flow<List<MainScreenPanelConfig>> = context.settingsDataStore.data
         .map { preferences ->
             val rawJson = preferences[getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)] ?: ""
             parseMainScreenDashboardsJson(rawJson)
         }
+        .distinctUntilChanged()
+
+    /** JSON for [vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout]; empty string means defaults. */
+    val activeTripCustomWidgetLayoutJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ACTIVE_TRIP_CUSTOM_WIDGET_LAYOUT_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    /** JSON for simplified trip tile layout; empty string means [ActiveTripCustomWidgetLayout.defaultSimplified]. */
+    val activeTripSimpleWidgetLayoutJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ACTIVE_TRIP_SIMPLE_WIDGET_LAYOUT_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val autoModemRestartFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -437,6 +503,10 @@ class SettingsManager(private val context: Context) {
 
     val autoSuspendTboxSwdFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[AUTO_SUSPEND_TBOX_SWD_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val autoSuspendTboxLocFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[AUTO_SUSPEND_TBOX_LOC_KEY] ?: false }
         .distinctUntilChanged()
 
     val autoPreventTboxRestartFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -641,6 +711,27 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[UI_CLICK_SOUNDS_KEY] ?: false }
         .distinctUntilChanged()
 
+    private fun stringSetFromJsonArray(raw: String): Set<String> {
+        if (raw.isBlank()) return emptySet()
+        return try {
+            val a = JSONArray(raw)
+            buildSet {
+                for (i in 0 until a.length()) {
+                    val s = a.optString(i).trim()
+                    if (s.isNotEmpty()) add(s)
+                }
+            }
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun stringSetToJsonArray(values: Set<String>): String {
+        val a = JSONArray()
+        values.sorted().forEach { a.put(it) }
+        return a.toString()
+    }
+
     /**
      * Single DataStore read for all keys backing [BackgroundService] setting [kotlinx.coroutines.flow.StateFlow]s.
      */
@@ -658,6 +749,7 @@ class SettingsManager(private val context: Context) {
             autoSuspendTboxMdc = preferences[AUTO_SUSPEND_TBOX_MDC_KEY] ?: false,
             autoStopTboxMdc = preferences[AUTO_STOP_TBOX_MDC_KEY] ?: false,
             autoSuspendTboxSwd = preferences[AUTO_SUSPEND_TBOX_SWD_KEY] ?: false,
+            autoSuspendTboxLoc = preferences[AUTO_SUSPEND_TBOX_LOC_KEY] ?: false,
             autoPreventTboxRestart = preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false,
             getCanFrame = preferences[GET_CAN_FRAME_KEY] ?: true,
             getCycleSignal = preferences[GET_CYCLE_SIGNAL_KEY] ?: false,
@@ -666,6 +758,18 @@ class SettingsManager(private val context: Context) {
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
             mockLocation = preferences[MOCK_LOCATION] ?: false,
             floatingDashboards = parseFloatingDashboardsJson(floatingRaw),
+            usageStatsHideFloatingWatchPackages = stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
+            ),
+            usageStatsHideFloatingPanelIds = stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY)] ?: "[]"
+            ),
+            usageStatsForceShowFloatingWatchPackages = stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY)] ?: "[]"
+            ),
+            usageStatsForceShowFloatingPanelIds = stringSetFromJsonArray(
+                preferences[getStringKey(USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY)] ?: "[]"
+            ),
             canDataSaveCount = preferences[CAN_DATA_SAVE_COUNT_KEY] ?: DEFAULT_CAN_DATA_SAVE_COUNT,
             fuelTankLiters = preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS,
             fuelCalibrationJson = preferences[FUEL_CALIBRATION_JSON_KEY].orEmpty(),
@@ -686,6 +790,18 @@ class SettingsManager(private val context: Context) {
     suspend fun saveDashboardWidgets(config: List<FloatingDashboardWidgetConfig>) {
         context.settingsDataStore.edit { preferences ->
             preferences[DASHBOARD_WIDGETS_KEY] = serializeWidgetConfigs(config)
+        }
+    }
+
+    suspend fun saveActiveTripCustomWidgetLayoutJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ACTIVE_TRIP_CUSTOM_WIDGET_LAYOUT_KEY] = json
+        }
+    }
+
+    suspend fun saveActiveTripSimpleWidgetLayoutJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ACTIVE_TRIP_SIMPLE_WIDGET_LAYOUT_KEY] = json
         }
     }
 
@@ -755,6 +871,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveAutoSuspendTboxLocSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = enabled
+        }
+    }
+
     suspend fun saveAutoPreventTboxRestartSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[AUTO_PREVENT_TBOX_RESTART_KEY] = enabled
@@ -808,6 +930,24 @@ class SettingsManager(private val context: Context) {
                 )
             }
         saveCustomString(FLOATING_DASHBOARDS_LIST_KEY, serializeFloatingDashboards(normalized))
+    }
+
+    suspend fun saveUsageStatsFloatingOverlayRules(
+        hideWatchPackages: Set<String>,
+        hidePanelIds: Set<String>,
+        showWatchPackages: Set<String>,
+        showPanelIds: Set<String>,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] =
+                stringSetToJsonArray(hideWatchPackages)
+            preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY)] =
+                stringSetToJsonArray(hidePanelIds)
+            preferences[getStringKey(USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY)] =
+                stringSetToJsonArray(showWatchPackages)
+            preferences[getStringKey(USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY)] =
+                stringSetToJsonArray(showPanelIds)
+        }
     }
 
     suspend fun saveSelectedTab(tabIndex: Int) {

@@ -34,5 +34,9 @@ class BackgroundServiceSettingsSnapshotTest {
         assertEquals(5, snap.splitTripTimeMinutes)
         assertFalse(snap.wheelPressurePersistAcrossStops)
         assertTrue(snap.floatingDashboards.isEmpty())
+        assertTrue(snap.usageStatsHideFloatingWatchPackages.isEmpty())
+        assertTrue(snap.usageStatsHideFloatingPanelIds.isEmpty())
+        assertTrue(snap.usageStatsForceShowFloatingWatchPackages.isEmpty())
+        assertTrue(snap.usageStatsForceShowFloatingPanelIds.isEmpty())
     }
 }

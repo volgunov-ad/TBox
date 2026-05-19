@@ -16,6 +16,7 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
@@ -29,6 +30,7 @@ import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 
 @Composable
@@ -61,6 +63,8 @@ fun DashboardWidgetRenderer(
     enableInnerInteractions: Boolean = true
 ) {
     val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val activeTripCustomLayout by settingsViewModel.activeTripCustomWidgetLayout.collectAsStateWithLifecycle()
+    val activeTripSimpleLayout by settingsViewModel.activeTripSimpleWidgetLayout.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
     when (widget.dataKey) {
@@ -163,6 +167,20 @@ fun DashboardWidgetRenderer(
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        DRIVE_MODE_WIDGET_DATA_KEY -> {
+            DashboardDriveModeWidgetItem(
+                selectedDriveModeRawValue = widgetConfig.selectedDriveMode,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride
             )
         }
 
@@ -285,6 +303,34 @@ fun DashboardWidgetRenderer(
 
         "rearWindowMirrorsDefrostWidget" -> {
             DashboardRearWindowMirrorsDefrostWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        "hvacAirRecirculationWidget" -> {
+            DashboardHvacAirRecirculationWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        "hvacDefrosterFrontWidget" -> {
+            DashboardHvacDefrosterFrontWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
@@ -464,6 +510,7 @@ fun DashboardWidgetRenderer(
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
                 isVertical = false,
+                useMbCan = widgetConfig.mediaVolumeUseMbCan,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
@@ -480,6 +527,7 @@ fun DashboardWidgetRenderer(
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
                 isVertical = true,
+                useMbCan = widgetConfig.mediaVolumeUseMbCan,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
@@ -513,12 +561,35 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY -> {
+            DashboardActiveTripWidgetItem(
+                widget = widget,
+                appDataViewModel = appDataViewModel,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                customTripLayout = activeTripCustomLayout,
+                simpleTripLayout = activeTripSimpleLayout,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {
+                    if (appDataViewModel.activeTrip.value?.isActive == true) {
+                        onTripFinishAndStart()
+                    }
+                },
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
         ACTIVE_TRIP_WIDGET_DATA_KEY, ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY, ACTIVE_TRIP_WIDGET_MINI_DATA_KEY -> {
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
+                simpleTripLayout = activeTripSimpleLayout,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {

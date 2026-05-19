@@ -3,7 +3,9 @@ package vad.dashing.tbox.mbcan
 import android.os.Handler
 import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,7 +15,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.job
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
@@ -23,10 +28,16 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
     FrontWindscreenHeat(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefroster(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacAirRecirculation(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacDefrosterFront(setOf("eMBCAN_CFG_VEHICLE")),
+    WirelessChargingSwitch(setOf("eMBCAN_CFG_VEHICLE")),
+    /** Vehicle cfg params shown on [vad.dashing.tbox.ui.CarSettingsTab] (poll + push). */
+    CarSettingsVehicleParams(setOf("eMBCAN_CFG_VEHICLE")),
     FrontLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     FrontRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     RearLeftSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     RearRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
+    AudioVolume(setOf("eMBCAN_CFG_AUDIO")),
     AudioVolumeSpeed(setOf("eMBCAN_CFG_AUDIO")),
 }
 
@@ -59,6 +70,32 @@ sealed class MbCanCommand {
 }
 
 object MbCanRepository {
+    /**
+     * Runs [clearSource] after a delay when UI leaves composition ([DisposableEffect] onDispose).
+     * A child of [rememberCoroutineScope] launched from onDispose is cancelled with the composition
+     * before work runs; this scope is independent of that lifecycle. Debounced so brief navigation
+     * does not churn push subscription; [setSourceWidgetKeys] / [setSourceSignals] cancel the timer.
+     */
+    private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = 3 * 60_000L
+
+    private val debouncedClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val pendingDebouncedClearJobs = ConcurrentHashMap<String, Job>()
+
+    fun enqueueClearSource(sourceId: String) {
+        pendingDebouncedClearJobs.remove(sourceId)?.cancel()
+        val job = debouncedClearSourceScope.launch {
+            delay(CLEAR_SOURCE_PUSH_DEBOUNCE_MS)
+            if (pendingDebouncedClearJobs.remove(sourceId, coroutineContext.job)) {
+                clearSource(sourceId)
+            }
+        }
+        pendingDebouncedClearJobs[sourceId] = job
+    }
+
+    private fun cancelDebouncedClearSource(sourceId: String) {
+        pendingDebouncedClearJobs.remove(sourceId)?.cancel()
+    }
+
     private data class WidgetSignalBinding(
         val widgetKey: String,
         val signal: MbCanSignal
@@ -68,6 +105,9 @@ object MbCanRepository {
         WidgetSignalBinding("steeringWheelHeatWidget", MbCanSignal.SteeringWheelHeat),
         WidgetSignalBinding("frontWindscreenHeatWidget", MbCanSignal.FrontWindscreenHeat),
         WidgetSignalBinding("rearWindowMirrorsDefrostWidget", MbCanSignal.HvacDefroster),
+        WidgetSignalBinding("hvacAirRecirculationWidget", MbCanSignal.HvacAirRecirculation),
+        WidgetSignalBinding("hvacDefrosterFrontWidget", MbCanSignal.HvacDefrosterFront),
+        WidgetSignalBinding(DRIVE_MODE_WIDGET_DATA_KEY, MbCanSignal.CarSettingsVehicleParams),
         WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
         WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode),
         WidgetSignalBinding(FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontLeftSeatMode),
@@ -115,6 +155,12 @@ object MbCanRepository {
     val frontWindscreenHeatState: StateFlow<MbCanBinaryState> = _frontWindscreenHeatState.asStateFlow()
     private val _hvacDefrosterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacDefrosterState: StateFlow<MbCanBinaryState> = _hvacDefrosterState.asStateFlow()
+    private val _hvacAirRecirculationState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAirRecirculationState: StateFlow<MbCanBinaryState> = _hvacAirRecirculationState.asStateFlow()
+    private val _hvacDefrosterFrontState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacDefrosterFrontState: StateFlow<MbCanBinaryState> = _hvacDefrosterFrontState.asStateFlow()
+    private val _wirelessChargingState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val wirelessChargingState: StateFlow<MbCanBinaryState> = _wirelessChargingState.asStateFlow()
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
     private val _frontRightSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
@@ -125,11 +171,31 @@ object MbCanRepository {
     val rearRightSeatModeState: StateFlow<MbCanSeatModeState> = _rearRightSeatModeState.asStateFlow()
     private val _audioVolumeSpeedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val audioVolumeSpeedState: StateFlow<MbCanBinaryState> = _audioVolumeSpeedState.asStateFlow()
+    private val _audioVolumeState = MutableStateFlow<Int?>(null)
+    val audioVolumeState: StateFlow<Int?> = _audioVolumeState.asStateFlow()
+    private val _audioVolumeLastNonZeroInSession = MutableStateFlow<Int?>(null)
+    val audioVolumeLastNonZeroInSession: StateFlow<Int?> = _audioVolumeLastNonZeroInSession.asStateFlow()
+
+    private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
+    val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
+    private val _carSettingsDriveMode = MutableStateFlow<Int?>(null)
+    val carSettingsDriveMode: StateFlow<Int?> = _carSettingsDriveMode.asStateFlow()
+    private val _carSettingsDriveMode6dctWet = MutableStateFlow<Int?>(null)
+    val carSettingsDriveMode6dctWet: StateFlow<Int?> = _carSettingsDriveMode6dctWet.asStateFlow()
+
+    private val carSettingsCfgVehicleIds: Set<Int> = setOf(
+        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET,
+    )
 
     private val stateEngine = MbCanSignalStateEngine(
         steeringFlow = _steeringWheelHeatState,
         windshieldHeatFlow = _frontWindscreenHeatState,
         hvacDefrosterFlow = _hvacDefrosterState,
+        hvacAirRecirculationFlow = _hvacAirRecirculationState,
+        hvacDefrosterFrontFlow = _hvacDefrosterFrontState,
+        wirelessChargingFlow = _wirelessChargingState,
         volumeSpeedFlow = _audioVolumeSpeedState,
         frontLeftSeatFlow = _frontLeftSeatModeState,
         frontRightSeatFlow = _frontRightSeatModeState,
@@ -146,6 +212,28 @@ object MbCanRepository {
             scheduleReapplyAllInterests()
         } catch (e: Exception) {
             MbCanDiagnostics.log("ERROR", "bind() failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Ensures mbCAN is initialized and republishes [availability] without any widget subscriptions.
+     * Used so Settings (e.g. "Reboot HU") can enable controls when no mbCAN dashboard widget was shown yet.
+     */
+    suspend fun warmUpAvailabilityForUi() = withContext(Dispatchers.Default) {
+        try {
+            if (MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.availability
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.ensureInitialized()
+            _availability.value = availability
+            MbCanDiagnostics.log("DEBUG", "warmUpAvailabilityForUi availability=$availability")
+            if (availability is MbCanAvailability.Available) {
+                MbCanJobManager.onEngineInitialized()
+                reapplyAllInterests()
+            }
+        } catch (e: Exception) {
+            MbCanDiagnostics.log("ERROR", "warmUpAvailabilityForUi ${e.message}")
         }
     }
 
@@ -177,6 +265,10 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
+            MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
+            MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT,
+            MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH,
+            in carSettingsCfgVehicleIds,
             MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
             MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH,
@@ -211,6 +303,19 @@ object MbCanRepository {
                         stateEngine.applyHvacDefrosterCandidate(
                             MbCanSignalStateEngine.decodeHvacDefrosterRaw(raw)
                         )
+                    MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
+                        stateEngine.applyHvacAirRecirculationCandidate(
+                            MbCanSignalStateEngine.decodeHvacAirRecirculationRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT ->
+                        stateEngine.applyHvacDefrosterFrontCandidate(
+                            MbCanSignalStateEngine.decodeHvacDefrosterFrontRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH ->
+                        stateEngine.applyWirelessChargingCandidate(
+                            MbCanSignalStateEngine.decodeWirelessChargingRaw(raw)
+                        )
+                    in carSettingsCfgVehicleIds -> applyCarSettingsVehicleCfgPush(item, raw)
                     MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH ->
                         stateEngine.applySeatCandidate(
                             MbCanSeatSlot.FrontLeft,
@@ -241,6 +346,7 @@ object MbCanRepository {
      */
     fun scheduleAudioCfgPush(_modular: Int, item: Int, value: Int) {
         when (item) {
+            MbCanKnownAudioPropertyId.VOLUME,
             MbCanKnownAudioPropertyId.VOLUME_SPEED -> Unit
             else -> return
         }
@@ -260,6 +366,7 @@ object MbCanRepository {
         scope.launch(stateApplyDispatcher) {
             for ((item, raw) in snapshot) {
                 when (item) {
+                    MbCanKnownAudioPropertyId.VOLUME -> applyAudioVolumeRaw(raw)
                     MbCanKnownAudioPropertyId.VOLUME_SPEED ->
                         stateEngine.applyVolumeSpeedCandidate(
                             MbCanSignalStateEngine.decodeVolumeSpeedRaw(raw)
@@ -270,6 +377,7 @@ object MbCanRepository {
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
+        cancelDebouncedClearSource(sourceId)
         val signals = widgetKeys.mapNotNull { widgetKeyToSignal(it) }.toSet()
         MbCanDiagnostics.log(
             "DEBUG",
@@ -290,6 +398,7 @@ object MbCanRepository {
      * Merged with widget-derived interests in [reapplyAllInterests].
      */
     suspend fun setSourceSignals(sourceId: String, signals: Set<MbCanSignal>) {
+        cancelDebouncedClearSource(sourceId)
         MbCanDiagnostics.log(
             "DEBUG",
             "setSourceSignals source=$sourceId signals=${signals.joinToString()}"
@@ -438,6 +547,11 @@ object MbCanRepository {
             MbCanSignal.SteeringWheelHeat -> refreshSteeringWheelHeat()
             MbCanSignal.FrontWindscreenHeat -> refreshFrontWindscreenHeat()
             MbCanSignal.HvacDefroster -> refreshHvacDefroster()
+            MbCanSignal.HvacAirRecirculation -> refreshHvacAirRecirculation()
+            MbCanSignal.HvacDefrosterFront -> refreshHvacDefrosterFront()
+            MbCanSignal.WirelessChargingSwitch -> refreshWirelessCharging()
+            MbCanSignal.CarSettingsVehicleParams -> refreshCarSettingsVehicleParams()
+            MbCanSignal.AudioVolume -> refreshAudioVolume()
             MbCanSignal.AudioVolumeSpeed -> refreshAudioVolumeSpeed()
             MbCanSignal.FrontLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontLeft)
             MbCanSignal.FrontRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontRight)
@@ -545,6 +659,105 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshHvacAirRecirculation() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshHvacAirRecirculation unavailable=$availability")
+                stateEngine.applyHvacAirRecirculationCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeHvacAirRecirculationRaw(raw)
+            }
+            stateEngine.applyHvacAirRecirculationCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshHvacAirRecirculation raw=$raw state=${_hvacAirRecirculationState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshHvacDefrosterFront() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshHvacDefrosterFront unavailable=$availability")
+                stateEngine.applyHvacDefrosterFrontCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeHvacDefrosterFrontRaw(raw)
+            }
+            stateEngine.applyHvacDefrosterFrontCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshHvacDefrosterFront raw=$raw state=${_hvacDefrosterFrontState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshWirelessCharging() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyWirelessChargingCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshWirelessCharging unavailable=$availability")
+                stateEngine.applyWirelessChargingCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeWirelessChargingRaw(raw)
+            }
+            stateEngine.applyWirelessChargingCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshWirelessCharging raw=$raw state=${_wirelessChargingState.value}"
+            )
+        }
+    }
+
     private suspend fun refreshAudioVolumeSpeed() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -576,6 +789,72 @@ object MbCanRepository {
                 "refreshAudioVolumeSpeed raw=$raw state=${_audioVolumeSpeedState.value}"
             )
         }
+    }
+
+    private suspend fun refreshAudioVolume() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _audioVolumeState.value = null
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshAudioVolume unavailable=$availability")
+                _audioVolumeState.value = null
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.VOLUME)
+            applyAudioVolumeRaw(raw)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshAudioVolume raw=$raw state=${_audioVolumeState.value}"
+            )
+        }
+    }
+
+    private fun applyAudioVolumeRaw(raw: Int?) {
+        val safeValue = raw?.coerceAtLeast(0)
+        val previous = _audioVolumeState.value
+        if (safeValue != null && safeValue > 0) {
+            _audioVolumeLastNonZeroInSession.value = safeValue
+        } else if (safeValue == 0 && (previous ?: 0) > 0) {
+            _audioVolumeLastNonZeroInSession.value = previous
+        }
+        _audioVolumeState.value = safeValue
+    }
+
+    fun rememberAudioVolumeLastNonZeroInSession(value: Int) {
+        if (value > 0) {
+            _audioVolumeLastNonZeroInSession.value = value
+        }
+    }
+
+    fun audioVolumeRestoreCandidate(defaultValue: Int = 10): Int {
+        return (_audioVolumeLastNonZeroInSession.value ?: defaultValue).coerceAtLeast(1)
+    }
+
+    suspend fun setAudioVolume(value: Int): MbCanCommandResult {
+        ensureMbCanReadyIfNeeded()
+        if (availability.value !is MbCanAvailability.Available) {
+            return MbCanCommandResult(false, "mbCAN unavailable")
+        }
+        val target = value.coerceAtLeast(0)
+        val before = _audioVolumeState.value ?: MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.VOLUME)
+        if (target == 0 && (before ?: 0) > 0) {
+            _audioVolumeLastNonZeroInSession.value = before
+        } else if (target > 0) {
+            _audioVolumeLastNonZeroInSession.value = target
+        }
+        val setResult = MbCanEngineFacade.canSetAudioParam(MbCanKnownAudioPropertyId.VOLUME, target)
+            ?: return MbCanCommandResult(false, "Set audio command failed")
+        if (setResult >= 0) {
+            applyAudioVolumeRaw(target)
+            MbCanJobManager.requestBurst(MbCanSignal.AudioVolume)
+        }
+        return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
 
     private suspend fun refreshSeatSlot(slot: MbCanSeatSlot) {
@@ -653,12 +932,60 @@ object MbCanRepository {
 
     /**
      * Whether any widget [dataKey] on a panel needs mbCAN (subscribe/refresh). Used so panels without
-     * such widgets never call [setSourceWidgetKeys]/[clearSource].
+     * such widgets never call [setSourceWidgetKeys]/[enqueueClearSource].
      */
     fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean {
         return dataKeys.any { raw ->
             val key = raw.trim()
             key.isNotBlank() && key != "null" && widgetKeyToSignal(key) != null
+        }
+    }
+
+    private val carSettingsZeroToSixRange = 0..6
+
+    private fun decodeCarSettingsIntZeroToSix(raw: Int): Int? =
+        if (raw in carSettingsZeroToSixRange) raw else null
+
+    private fun applyCarSettingsVehicleCfgPush(item: Int, raw: Int) {
+        when (item) {
+            MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE ->
+                _carSettingsEpsMode.value = decodeCarSettingsIntZeroToSix(raw)
+            MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE ->
+                _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(raw)
+            MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET ->
+                _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(raw)
+        }
+    }
+
+    private fun clearCarSettingsIntParamFlows() {
+        _carSettingsEpsMode.value = null
+        _carSettingsDriveMode.value = null
+        _carSettingsDriveMode6dctWet.value = null
+    }
+
+    private suspend fun refreshCarSettingsVehicleParams() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                clearCarSettingsIntParamFlows()
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshCarSettingsVehicleParams unavailable=$availability")
+                clearCarSettingsIntParamFlows()
+                return@withContext
+            }
+
+            fun readInt(id: Int): Int? =
+                MbCanEngineFacade.canGetVehicleParam(id)?.let { decodeCarSettingsIntZeroToSix(it) }
+
+            _carSettingsEpsMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE)
+            _carSettingsDriveMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE)
+            _carSettingsDriveMode6dctWet.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
+            MbCanDiagnostics.log("DEBUG", "refreshCarSettingsVehicleParams refreshed")
         }
     }
 }

@@ -97,6 +97,7 @@ fun MainScreenSettingsTab(
     var mainScreenBgSegment by remember { mutableIntStateOf(0) }
     var lightFolderPathInput by remember { mutableStateOf("") }
     var darkFolderPathInput by remember { mutableStateOf("") }
+    var showMainScreenPanelOrderDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(mainScreenWallpaperLightFolderUri) {
         val u = mainScreenWallpaperLightFolderUri
@@ -590,6 +591,17 @@ fun MainScreenSettingsTab(
                 deleteInProgressPanelId = mainScreenPanelDeleteInProgressId,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { showMainScreenPanelOrderDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_panels_order_button),
+                    fontSize = 22.sp,
+                )
+            }
         } else {
             Button(
                 onClick = rememberWrappedOnClick {
@@ -652,5 +664,31 @@ fun MainScreenSettingsTab(
             modifier = Modifier.padding(top = 8.dp),
             enabled = hasMainScreenPanels
         )
+        if (showMainScreenPanelOrderDialog) {
+            PanelOrderConfigDialog(
+                visible = true,
+                title = stringResource(R.string.settings_main_screen_panels_order_dialog_title),
+                hint = stringResource(R.string.settings_panels_order_dialog_hint),
+                items = mainScreenPanelsList.map { panel ->
+                    PanelOrderItem(
+                        id = panel.id,
+                        name = panel.name.ifBlank { panel.id },
+                    )
+                },
+                onDismiss = { showMainScreenPanelOrderDialog = false },
+                onSave = { orderedIds ->
+                    val byId = mainScreenPanelsList.associateBy { it.id }
+                    val reordered = buildList {
+                        orderedIds.forEach { panelId ->
+                            byId[panelId]?.let { add(it) }
+                        }
+                        mainScreenPanelsList.forEach { panel ->
+                            if (orderedIds.none { it == panel.id }) add(panel)
+                        }
+                    }
+                    settingsViewModel.saveMainScreenDashboards(reordered)
+                },
+            )
+        }
     }
 }

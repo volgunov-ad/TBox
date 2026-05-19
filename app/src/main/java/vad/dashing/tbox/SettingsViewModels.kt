@@ -23,6 +23,7 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import android.content.Context
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -209,6 +210,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val isAutoSuspendTboxLocEnabled = settingsManager.autoSuspendTboxLocFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val isAutoPreventTboxRestartEnabled = settingsManager.autoPreventTboxRestartFlow
         .stateIn(
             scope = viewModelScope,
@@ -263,6 +271,34 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
+        )
+
+    val usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
+
+    val usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
+
+    val usageStatsForceShowFloatingWatchPackages = settingsManager.usageStatsForceShowFloatingWatchPackagesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
+        )
+
+    val usageStatsForceShowFloatingPanelIds = settingsManager.usageStatsForceShowFloatingPanelIdsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet()
         )
 
     private val selectedFloatingDashboardIdState = MutableStateFlow(DEFAULT_FLOATING_DASHBOARD_ID)
@@ -700,6 +736,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val activeTripCustomWidgetLayout = settingsManager.activeTripCustomWidgetLayoutJsonFlow
+        .map { ActiveTripCustomWidgetLayout.parse(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ActiveTripCustomWidgetLayout.default(),
+        )
+
+    val activeTripSimpleWidgetLayout = settingsManager.activeTripSimpleWidgetLayoutJsonFlow
+        .map { ActiveTripCustomWidgetLayout.parseSimple(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ActiveTripCustomWidgetLayout.defaultSimplified(),
+        )
+
     val canDataSaveCount = settingsManager.canDataSaveCountFlow
         .stateIn(
             scope = viewModelScope,
@@ -960,6 +1012,22 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveActiveTripCustomWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
+        viewModelScope.launch {
+            settingsManager.saveActiveTripCustomWidgetLayoutJson(
+                ActiveTripCustomWidgetLayout.serialize(layout)
+            )
+        }
+    }
+
+    fun saveActiveTripSimpleWidgetLayout(layout: ActiveTripCustomWidgetLayout) {
+        viewModelScope.launch {
+            settingsManager.saveActiveTripSimpleWidgetLayoutJson(
+                ActiveTripCustomWidgetLayout.serialize(layout)
+            )
+        }
+    }
+
     fun saveAutoSuspendTboxAppSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveAutoSuspendTboxAppSetting(enabled)
@@ -987,6 +1055,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveAutoSuspendTboxSwdSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveAutoSuspendTboxSwdSetting(enabled)
+        }
+    }
+
+    fun saveAutoSuspendTboxLocSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAutoSuspendTboxLocSetting(enabled)
         }
     }
 
@@ -1544,6 +1618,28 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveFloatingDashboards(configs: List<FloatingDashboardConfig>) {
         viewModelScope.launch {
             settingsManager.saveFloatingDashboards(configs)
+        }
+    }
+
+    fun saveMainScreenDashboards(configs: List<MainScreenPanelConfig>) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenDashboards(configs)
+        }
+    }
+
+    fun saveUsageStatsFloatingOverlayRules(
+        hideWatchPackages: Set<String>,
+        hidePanelIds: Set<String>,
+        showWatchPackages: Set<String>,
+        showPanelIds: Set<String>,
+    ) {
+        viewModelScope.launch {
+            settingsManager.saveUsageStatsFloatingOverlayRules(
+                hideWatchPackages,
+                hidePanelIds,
+                showWatchPackages,
+                showPanelIds,
+            )
         }
     }
 
