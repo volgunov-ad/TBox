@@ -312,6 +312,7 @@ fun SettingsTabContent(
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
     var showUsageStatsHideFloatingDialog by remember { mutableStateOf(false) }
+    var showFloatingPanelOrderDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -478,6 +479,17 @@ fun SettingsTabContent(
                 deleteInProgressPanelId = floatingPanelDeleteInProgressId,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { showFloatingPanelOrderDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_panels_order_button),
+                    fontSize = 22.sp,
+                )
+            }
         } else {
             Button(
                 onClick = rememberWrappedOnClick {
@@ -874,6 +886,32 @@ fun SettingsTabContent(
                 settingsViewModel = settingsViewModel,
                 floatingPanels = floatingDashboardsList,
                 onDismiss = { showUsageStatsHideFloatingDialog = false },
+            )
+        }
+        if (showFloatingPanelOrderDialog) {
+            PanelOrderConfigDialog(
+                visible = true,
+                title = stringResource(R.string.settings_floating_panels_order_dialog_title),
+                hint = stringResource(R.string.settings_panels_order_dialog_hint),
+                items = floatingDashboardsList.map { panel ->
+                    PanelOrderItem(
+                        id = panel.id,
+                        name = panel.name.ifBlank { panel.id },
+                    )
+                },
+                onDismiss = { showFloatingPanelOrderDialog = false },
+                onSave = { orderedIds ->
+                    val byId = floatingDashboardsList.associateBy { it.id }
+                    val reordered = buildList {
+                        orderedIds.forEach { panelId ->
+                            byId[panelId]?.let { add(it) }
+                        }
+                        floatingDashboardsList.forEach { panel ->
+                            if (orderedIds.none { it == panel.id }) add(panel)
+                        }
+                    }
+                    settingsViewModel.saveFloatingDashboards(reordered)
+                },
             )
         }
 

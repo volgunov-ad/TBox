@@ -258,6 +258,10 @@
     <string name="settings_floating_tbox_disconnect_indicator_title">Индикатор отключения TBox</string>
     <string name="settings_floating_rows_title">Количество строк плиток плавающей панели</string>
     <string name="settings_floating_cols_title">Количество столбцов плиток плавающей панели</string>
+    <string name="settings_panels_order_button">Порядок панелей</string>
+    <string name="settings_floating_panels_order_dialog_title">Порядок плавающих панелей</string>
+    <string name="settings_main_screen_panels_order_dialog_title">Порядок панелей главного экрана</string>
+    <string name="settings_panels_order_dialog_hint">Потяните значок справа вверх или вниз, чтобы изменить порядок панелей. Чем больше номер строки, тем выше панель по порядку наложения.</string>
 
     <string name="settings_floating_usage_stats_hide_title">Скрытие/показ панелей при запуске сторонних приложений</string>
     <string name="settings_floating_usage_stats_hide_explanation">В диалоговом окне задаются правила скрытия и отдельно — принудительного показа панелей поверх выбранных приложений (даже если «Показывать плавающую панель» выключено). При конфликте настроек приоритет у скрытия. Нужно разрешение «Доступ к данным об использовании»</string>

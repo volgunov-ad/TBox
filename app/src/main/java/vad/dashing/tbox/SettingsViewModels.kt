@@ -1621,6 +1621,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMainScreenDashboards(configs: List<MainScreenPanelConfig>) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenDashboards(configs)
+        }
+    }
+
     fun saveUsageStatsFloatingOverlayRules(
         hideWatchPackages: Set<String>,
         hidePanelIds: Set<String>,

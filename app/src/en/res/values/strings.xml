@@ -255,6 +255,10 @@
     <string name="settings_floating_tbox_disconnect_indicator_title">TBox disconnect indicator</string>
     <string name="settings_floating_rows_title">Number of tile rows in floating panel</string>
     <string name="settings_floating_cols_title">Number of tile columns in floating panel</string>
+    <string name="settings_panels_order_button">Panel order</string>
+    <string name="settings_floating_panels_order_dialog_title">Floating panel order</string>
+    <string name="settings_main_screen_panels_order_dialog_title">Main screen panel order</string>
+    <string name="settings_panels_order_dialog_hint">Drag the handle on the right up or down to change panel order. A larger row number means the panel is higher in overlay stacking order.</string>
 
     <string name="settings_floating_usage_stats_hide_title">Hide/show panels over third-party apps</string>
     <string name="settings_floating_usage_stats_hide_explanation">The dialog configures both hiding rules and a separate force-show rule (panels over selected apps even when “Show floating panel” is off). If rules conflict, hiding wins. Requires the “Usage access” permission</string>

@@ -180,6 +180,7 @@ internal class FloatingOverlayController(
                 overlayOffIds.remove(id)
                 hiddenFloatingPanelIds.remove(id)
             }
+            reorderVisibleOverlays(visibleConfigs.map { it.id })
             FloatingOverlayLoadTimings.mark("float_sync_done")
             FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
         }
@@ -381,6 +382,31 @@ internal class FloatingOverlayController(
         params.y = newY
         overlayViews[config.id]?.let { view ->
             windowManager?.updateViewLayout(view, params)
+        }
+    }
+
+    /**
+     * Keeps z-order aligned with config order: later ids are moved to front (above earlier ids).
+     * This makes panel order changes effective immediately without service restart.
+     */
+    private fun reorderVisibleOverlays(orderedVisibleIds: List<String>) {
+        val wm = windowManager ?: return
+        if (orderedVisibleIds.isEmpty()) return
+
+        val currentVisibleOrder = overlayViews.keys.filter { id ->
+            orderedVisibleIds.any { it == id }
+        }
+        if (currentVisibleOrder == orderedVisibleIds) return
+
+        orderedVisibleIds.forEach { panelId ->
+            val view = overlayViews[panelId] ?: return@forEach
+            val params = overlayParams[panelId] ?: return@forEach
+            try {
+                wm.removeView(view)
+                wm.addView(view, params)
+            } catch (_: Exception) {
+                // Best-effort z-order update; normal sync/ensure loop will recover if needed.
+            }
         }
     }
 
