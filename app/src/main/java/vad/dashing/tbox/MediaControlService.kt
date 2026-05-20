@@ -24,6 +24,8 @@ const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
 
 /** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
 private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 3500L
+/** After manual play button launch: if session exists but still paused, send one more play command. */
+private const val LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS = 7000L
 
 enum class SupportedMediaPlayer(
     val packageName: String,
@@ -299,7 +301,8 @@ object SharedMediaControlService {
             context.applicationContext,
             targetPackage,
             scheduleColdStartPlayRetry = true,
-            keepPlayerForeground = keepPlayerForeground // anymani: передаём флаг при ручном запуске
+            keepPlayerForeground = keepPlayerForeground, // anymani: передаём флаг при ручном запуске
+            scheduleLateSessionPlayRetry = true
         )
     }
 
@@ -367,6 +370,28 @@ object SharedMediaControlService {
             if (!needsRetry) return@launch
             sendMediaPlayKeyEvent(appContext, targetPackage)
             launchPlayerApp(appContext, targetPackage, scheduleColdStartPlayRetry = false)
+        }
+    }
+
+    internal fun scheduleLateSessionPlayRetryIfNeeded(appContext: Context, targetPackage: String) {
+        launchPlayerVerifyScope.launch {
+            delay(LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS)
+            var shouldSendFallbackKey = false
+            synchronized(this@SharedMediaControlService) {
+                initializeLocked(appContext)
+                syncControllersLocked()
+                val controller = resolveControllerLocked(
+                    selectedPackages = setOf(targetPackage),
+                    preferredPackage = targetPackage,
+                    strictPreferred = true
+                ) ?: return@synchronized
+                if (controller.playbackState.isPlayingState()) return@synchronized
+                controller.transportControls.play()
+                shouldSendFallbackKey = true
+            }
+            if (shouldSendFallbackKey) {
+                sendMediaPlayKeyEvent(appContext, targetPackage)
+            }
         }
     }
 
@@ -693,20 +718,26 @@ private fun launchPlayerApp(
     context: Context,
     packageName: String,
     scheduleColdStartPlayRetry: Boolean = true,
-    keepPlayerForeground: Boolean = false // anymani: флаг для контроля возврата лаунчера
+    keepPlayerForeground: Boolean = false, // anymani: флаг для контроля возврата лаунчера
+    scheduleLateSessionPlayRetry: Boolean = false
 ) {
     val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
     MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
+    val shouldReturnToMain = !keepPlayerForeground && MainActivityForegroundTracker.isMainActivityVisible.value
 
-    // anymani: условно планируем возврат лаунчера только если не нужно держать плеер
-    if (!keepPlayerForeground) {
-        DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(context)
-    }
-
-    runCatching {
+    val launched = runCatching {
         context.startActivity(launchIntent)
+    }.isSuccess
+    if (!launched) return
+
+    // Return only if MainActivity was visible at the moment the player launch started.
+    if (shouldReturnToMain) {
+        DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(context)
     }
     if (scheduleColdStartPlayRetry) {
         SharedMediaControlService.scheduleColdStartPlayRetryIfNeeded(context.applicationContext, packageName)
+    }
+    if (scheduleLateSessionPlayRetry) {
+        SharedMediaControlService.scheduleLateSessionPlayRetryIfNeeded(context.applicationContext, packageName)
     }
 }

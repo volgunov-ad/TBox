@@ -57,6 +57,7 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.SupportedMediaPlayer
+import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.orderedMediaPlayerPackages
 import vad.dashing.tbox.resolveMediaPlayersForWidget
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
@@ -174,8 +175,6 @@ fun DashboardMusicWidgetItem(
             positionMs = estimatedPositionMs
         )
     }
-    var autoPlayTriggered by remember(widget.id) { mutableStateOf(false) }
-
     LaunchedEffect(
         widget.id,
         selectedPackage,
@@ -184,7 +183,6 @@ fun DashboardMusicWidgetItem(
         widgetConfig.mediaKeepPlayerForeground // anymani: учитываем опцию в зависимостях
     ) {
         if (!widgetConfig.mediaAutoPlayOnInit) return@LaunchedEffect
-        if (autoPlayTriggered) return@LaunchedEffect
         if (selectedPackage.isBlank()) return@LaunchedEffect
         if (widgetConfig.mediaAutoPlayOnlyWhenEngineRunning) {
             // engineRPM uses WhileSubscribed(5000): polling .value never subscribes, so RPM may never
@@ -197,12 +195,11 @@ fun DashboardMusicWidgetItem(
                         .first()
                 }
                 if (gotPositiveRpm == null) {
-                    autoPlayTriggered = true
                     return@LaunchedEffect
                 }
             }
         }
-        autoPlayTriggered = true
+        if (!TboxRepository.tryConsumeMediaAutoPlayOnce()) return@LaunchedEffect
         val autoPlayPackage = selectedPackage
         SharedMediaControlService.play(
             context = context,

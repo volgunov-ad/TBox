@@ -194,6 +194,9 @@ object TboxRepository {
     private val _floatingDashboardShownIds = MutableStateFlow<Set<String>>(emptySet())
     val floatingDashboardShownIds: StateFlow<Set<String>> = _floatingDashboardShownIds.asStateFlow()
 
+    private val _mediaAutoPlayConsumed = MutableStateFlow(false)
+    val mediaAutoPlayConsumed: StateFlow<Boolean> = _mediaAutoPlayConsumed.asStateFlow()
+
     private val _gateVersion = MutableStateFlow<String>("")
     val gateVersion: StateFlow<String> = _gateVersion.asStateFlow()
 
@@ -382,5 +385,16 @@ object TboxRepository {
                 current - panelId
             }
         }
+    }
+
+    /**
+     * Global one-shot gate for music widget autoplay within current process lifetime.
+     * Returns true only for the first successful consumer.
+     */
+    @Synchronized
+    fun tryConsumeMediaAutoPlayOnce(): Boolean {
+        if (_mediaAutoPlayConsumed.value) return false
+        _mediaAutoPlayConsumed.value = true
+        return true
     }
 }

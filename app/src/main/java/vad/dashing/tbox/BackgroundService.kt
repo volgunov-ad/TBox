@@ -3079,7 +3079,7 @@ class BackgroundService : Service() {
             }
             tryBringMainToFront()
             delay(OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS)
-            if (!MainActivityForegroundTracker.isMainActivityInForeground.value) {
+            if (!MainActivityForegroundTracker.isMainActivityVisible.value) {
                 tryBringMainToFront()
             }
         }
