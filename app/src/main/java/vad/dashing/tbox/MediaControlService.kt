@@ -23,7 +23,7 @@ import java.util.LinkedHashSet
 const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
 
 /** After [launchPlayerApp] from a cold start, re-send play if session still not playing (matches widget auto-play verify). */
-private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 3500L
+private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 5000L
 /** After manual play button launch: if session exists but still paused, send one more play command. */
 private const val LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS = 7000L
 
