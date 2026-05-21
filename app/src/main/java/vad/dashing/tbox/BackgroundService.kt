@@ -99,6 +99,8 @@ class BackgroundService : Service() {
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
+    /** Last signature of fields that affect floating overlay window presence/layout/z-order. */
+    private var lastFloatingOverlayLayoutSignature: String? = null
     private lateinit var usageStatsHideFloatingWatchPackages: StateFlow<Set<String>>
     private lateinit var usageStatsHideFloatingPanelIds: StateFlow<Set<String>>
     private lateinit var usageStatsForceShowFloatingWatchPackages: StateFlow<Set<String>>
@@ -2259,7 +2261,11 @@ class BackgroundService : Service() {
                 floatingDashboards
                     .drop(1) // Пропускаем начальное значение
                     .collect { configs ->
-                        overlayController.syncFloatingDashboards(configs)
+                        val newSignature = buildFloatingOverlayLayoutSignature(configs)
+                        if (newSignature != lastFloatingOverlayLayoutSignature) {
+                            lastFloatingOverlayLayoutSignature = newSignature
+                            overlayController.syncFloatingDashboards(configs)
+                        }
                     }
             }
         }
@@ -2272,17 +2278,39 @@ class BackgroundService : Service() {
         settingsListenerJob = null
     }
 
+    /**
+     * Includes only fields that affect overlay windows: order, id, enabled and geometry.
+     * Content-only widget config changes (e.g. mediaSelectedPlayer, seat selectedVariant) are ignored.
+     */
+    private fun buildFloatingOverlayLayoutSignature(configs: List<FloatingDashboardConfig>): String {
+        if (configs.isEmpty()) return "empty"
+        return configs.mapIndexed { index, cfg ->
+            "$index|${cfg.id}|${cfg.enabled}|${cfg.startX}|${cfg.startY}|${cfg.width}|${cfg.height}"
+        }.joinToString("||")
+    }
+
     private fun startUsageStatsFloatingHideWatcher() {
         if (usageStatsFloatingHideJob?.isActive == true) return
         usageStatsFloatingHideJob = scope.launch {
             var lastAppliedRules: UsageStatsOverlayRulesState? = null
+            var stableForegroundPackage: String? = null
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
                 val watchHide = usageStatsHideFloatingWatchPackages.value
                 val hidePanels = usageStatsHideFloatingPanelIds.value
                 val watchShow = usageStatsForceShowFloatingWatchPackages.value
                 val showPanels = usageStatsForceShowFloatingPanelIds.value
-                val fg = if (UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)) {
+                val hasHideRules = watchHide.isNotEmpty() && hidePanels.isNotEmpty()
+                val hasShowRules = watchShow.isNotEmpty() && showPanels.isNotEmpty()
+                val hasAnyRules = hasHideRules || hasShowRules
+                if (!hasAnyRules) {
+                    stableForegroundPackage = null
+                }
+                val isMainActivityInForeground = hasAnyRules &&
+                    MainActivityForegroundTracker.isMainActivityInForeground.value
+                val sampledForeground = if (hasAnyRules &&
+                    UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)
+                ) {
                     UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
                         this@BackgroundService,
                         windowMs = 25_000L
@@ -2290,8 +2318,32 @@ class BackgroundService : Service() {
                 } else {
                     null
                 }
+                val candidateForeground = sampledForeground
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { pkg ->
+                        when {
+                            UsageStatsHideFloatingHelper.isNeutralForegroundPackage(this@BackgroundService, pkg) -> null
+                            pkg == packageName && !isMainActivityInForeground -> null
+                            else -> pkg
+                        }
+                    }
+
+                val effectiveForeground = if (!hasAnyRules) {
+                    null
+                } else {
+                    when {
+                        candidateForeground.isNullOrBlank() -> stableForegroundPackage
+                        else -> {
+                            stableForegroundPackage = candidateForeground
+                            stableForegroundPackage
+                        }
+                    }
+                }
                 val newState = UsageStatsOverlayRulesState(
-                    foregroundPackage = fg,
+                    foregroundPackage = effectiveForeground,
+                    // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
+                    isMainActivityVisible = isMainActivityInForeground,
                     watchHidePackages = watchHide,
                     hidePanelIds = hidePanels,
                     watchShowPackages = watchShow,

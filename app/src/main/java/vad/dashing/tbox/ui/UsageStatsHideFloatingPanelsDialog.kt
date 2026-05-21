@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -249,8 +250,21 @@ fun UsageStatsHideFloatingPanelsDialog(
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = rememberWrappedOnClick { onDismiss() }) {
-                AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = rememberWrappedOnClick {
+                        draftWatchHide = emptySet()
+                        draftPanelsHide = emptySet()
+                        draftWatchShow = emptySet()
+                        draftPanelsShow = emptySet()
+                    }
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_clear))
+                }
+                Spacer(modifier = Modifier.width(2.dp))
+                OutlinedButton(onClick = rememberWrappedOnClick { onDismiss() }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
             }
         },
     )

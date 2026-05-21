@@ -88,8 +88,18 @@ fun DashboardMusicWidgetItem(
     val carouselPackages = remember(selectedPlayers) {
         orderedMediaPlayerPackages(selectedPlayers)
     }
-    var selectedPackage by remember(widget.id, carouselPackages, widgetConfig.mediaSelectedPlayer) {
+    var selectedPackage by remember(widget.id, carouselPackages) {
         mutableStateOf(resolveInitialSelectedPackage(widgetConfig, carouselPackages))
+    }
+    LaunchedEffect(widget.id, carouselPackages, widgetConfig.mediaSelectedPlayer) {
+        if (carouselPackages.isEmpty()) {
+            if (selectedPackage.isNotEmpty()) selectedPackage = ""
+            return@LaunchedEffect
+        }
+        // Keep current in-memory carousel choice while it is valid; delayed persistence should not
+        // snap UI back and make swipe feel "blocked".
+        if (selectedPackage in carouselPackages) return@LaunchedEffect
+        selectedPackage = resolveInitialSelectedPackage(widgetConfig, carouselPackages)
     }
     var horizontalDragDistance by remember(widget.id, carouselPackages) {
         mutableFloatStateOf(0f)

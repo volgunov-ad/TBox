@@ -5,6 +5,7 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Process
 import kotlin.math.min
@@ -19,6 +20,12 @@ internal object UsageStatsHideFloatingHelper {
 
     /** queryUsageStats is coarse on short windows; query a wider span when used as fallback. */
     private const val MIN_STATS_QUERY_WINDOW_MS = 120_000L
+    private const val HOME_PACKAGES_CACHE_TTL_MS = 60_000L
+    private val neutralForegroundPackages = setOf("com.android.systemui")
+    @Volatile
+    private var cachedHomePackages: Set<String> = emptySet()
+    @Volatile
+    private var cachedHomePackagesAtMs: Long = 0L
 
     fun hasUsageAccessPermission(context: Context): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
@@ -56,6 +63,35 @@ internal object UsageStatsHideFloatingHelper {
         foregroundFromQueryUsageStats(usm, statsBegin, end)?.let { return normalizePackage(it) }
 
         return null
+    }
+
+    /**
+     * True for launcher/system packages that should not trigger hide/show policy transitions.
+     */
+    fun isNeutralForegroundPackage(context: Context, pkg: String): Boolean {
+        val normalized = pkg.trim().lowercase()
+        if (normalized.isBlank()) return true
+        if (normalized in neutralForegroundPackages) return true
+        return normalized in resolveHomePackages(context)
+    }
+
+    private fun resolveHomePackages(context: Context): Set<String> {
+        val now = System.currentTimeMillis()
+        val cached = cachedHomePackages
+        if (cached.isNotEmpty() && now - cachedHomePackagesAtMs <= HOME_PACKAGES_CACHE_TTL_MS) {
+            return cached
+        }
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val resolved = runCatching {
+            context.packageManager
+                .queryIntentActivities(intent, 0)
+                .mapNotNull { it.activityInfo?.packageName?.trim()?.lowercase() }
+                .filter { it.isNotBlank() }
+                .toSet()
+        }.getOrDefault(emptySet())
+        cachedHomePackages = resolved
+        cachedHomePackagesAtMs = now
+        return resolved
     }
 
     private fun normalizePackage(pkg: String?): String? {

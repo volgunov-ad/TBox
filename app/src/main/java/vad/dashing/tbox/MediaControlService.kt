@@ -26,6 +26,8 @@ const val MUSIC_WIDGET_DATA_KEY = "musicWidget"
 private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 4000L
 /** After manual play button launch: if session exists but still paused, send one more play command. */
 private const val LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS = 7000L
+/** Poll cadence for early play/session detection after external player launch. */
+private const val PLAYER_LAUNCH_STATE_POLL_MS = 250L
 
 enum class SupportedMediaPlayer(
     val packageName: String,
@@ -375,23 +377,70 @@ object SharedMediaControlService {
 
     internal fun scheduleLateSessionPlayRetryIfNeeded(appContext: Context, targetPackage: String) {
         launchPlayerVerifyScope.launch {
-            delay(LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS)
+            val deadline = SystemClock.elapsedRealtime() + LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS
             var shouldSendFallbackKey = false
-            synchronized(this@SharedMediaControlService) {
-                initializeLocked(appContext)
-                syncControllersLocked()
-                val controller = resolveControllerLocked(
-                    selectedPackages = setOf(targetPackage),
-                    preferredPackage = targetPackage,
-                    strictPreferred = true
-                ) ?: return@synchronized
-                if (controller.playbackState.isPlayingState()) return@synchronized
-                controller.transportControls.play()
-                shouldSendFallbackKey = true
+            while (SystemClock.elapsedRealtime() < deadline) {
+                var shouldExit = false
+                synchronized(this@SharedMediaControlService) {
+                    initializeLocked(appContext)
+                    syncControllersLocked()
+                    val controller = resolveControllerLocked(
+                        selectedPackages = setOf(targetPackage),
+                        preferredPackage = targetPackage,
+                        strictPreferred = true
+                    )
+                    when {
+                        controller == null -> Unit
+                        controller.playbackState.isPlayingState() -> {
+                            shouldExit = true
+                        }
+                        else -> {
+                            controller.transportControls.play()
+                            shouldSendFallbackKey = true
+                            shouldExit = true
+                        }
+                    }
+                }
+                if (shouldExit) break
+                delay(PLAYER_LAUNCH_STATE_POLL_MS)
             }
             if (shouldSendFallbackKey) {
                 sendMediaPlayKeyEvent(appContext, targetPackage)
             }
+        }
+    }
+
+    internal fun scheduleDeferredMainReturnOnPlaybackStartIfNeeded(
+        appContext: Context,
+        targetPackage: String,
+        maxWaitMs: Long = DeferredMainActivityRequest.AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS
+    ) {
+        launchPlayerVerifyScope.launch {
+            val deadline = SystemClock.elapsedRealtime() + maxWaitMs.coerceAtLeast(0L)
+            while (SystemClock.elapsedRealtime() < deadline) {
+                val isPlaying = synchronized(this@SharedMediaControlService) {
+                    initializeLocked(appContext)
+                    syncControllersLocked()
+                    val controller = resolveControllerLocked(
+                        selectedPackages = setOf(targetPackage),
+                        preferredPackage = targetPackage,
+                        strictPreferred = true
+                    )
+                    controller?.playbackState.isPlayingState()
+                }
+                if (isPlaying == true) {
+                    DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(
+                        context = appContext,
+                        delayMs = 0L
+                    )
+                    return@launch
+                }
+                delay(PLAYER_LAUNCH_STATE_POLL_MS)
+            }
+            DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(
+                context = appContext,
+                delayMs = 0L
+            )
         }
     }
 
@@ -732,7 +781,10 @@ private fun launchPlayerApp(
 
     // Return only if MainActivity was visible at the moment the player launch started.
     if (shouldReturnToMain) {
-        DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(context)
+        SharedMediaControlService.scheduleDeferredMainReturnOnPlaybackStartIfNeeded(
+            appContext = context.applicationContext,
+            targetPackage = packageName
+        )
     }
     if (scheduleColdStartPlayRetry) {
         SharedMediaControlService.scheduleColdStartPlayRetryIfNeeded(context.applicationContext, packageName)
