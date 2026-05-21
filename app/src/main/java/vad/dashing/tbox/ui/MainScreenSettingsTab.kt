@@ -72,6 +72,8 @@ fun MainScreenSettingsTab(
     val mainScreenPanelCols by settingsViewModel.mainScreenPanelCols.collectAsStateWithLifecycle()
     val isMainScreenOpenOnBootEnabled by
         settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
+    val mainScreenOpenOnBootDelaySeconds by
+        settingsViewModel.mainScreenOpenOnBootDelaySeconds.collectAsStateWithLifecycle()
     val mainScreenWallpaperLightFolderUri by
         settingsViewModel.mainScreenWallpaperLightFolderUri.collectAsStateWithLifecycle()
     val mainScreenWallpaperDarkFolderUri by
@@ -255,6 +257,16 @@ fun MainScreenSettingsTab(
             stringResource(R.string.settings_main_screen_open_on_boot_title),
             stringResource(R.string.settings_main_screen_open_on_boot_desc),
             true
+        )
+        SettingInt(
+            value = mainScreenOpenOnBootDelaySeconds,
+            onValueChange = { value ->
+                settingsViewModel.saveMainScreenOpenOnBootDelaySeconds(value)
+            },
+            text = stringResource(R.string.settings_main_screen_open_on_boot_delay_title),
+            description = stringResource(R.string.settings_main_screen_open_on_boot_delay_desc),
+            minValue = SettingsManager.MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS,
+            maxValue = SettingsManager.MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_wallpaper_title))

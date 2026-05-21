@@ -569,6 +569,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val mainScreenOpenOnBootDelaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SettingsManager.DEFAULT_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS
+        )
+
     val mainScreenWallpaperLightFolderUri = settingsManager.mainScreenWallpaperLightFolderUriFlow
         .stateIn(
             scope = viewModelScope,
@@ -1155,6 +1162,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMainScreenOpenOnBoot(enabled)
+        }
+    }
+
+    fun saveMainScreenOpenOnBootDelaySeconds(delaySeconds: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenOpenOnBootDelaySeconds(delaySeconds)
         }
     }
 

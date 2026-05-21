@@ -4340,8 +4340,9 @@ class BackgroundService : Service() {
         try {
             val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
             if (!enabled) return
+            val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
-            scheduleOpenMainActivity(2000L)
+            scheduleOpenMainActivity(delaySeconds.toLong() * 1000L)
         } catch (e: Exception) {
             Log.e("BackgroundService", "Open main screen after boot failed", e)
             TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")
