@@ -518,6 +518,20 @@ class BackgroundService : Service() {
         }
     }
 
+    private fun startLogLevelSync() {
+        scope.launch {
+            try {
+                settingsManager.logLevelFlow.collect { savedLevel ->
+                    TboxRepository.updateMinLogLevel(savedLevel)
+                }
+            } catch (e: Exception) {
+                Log.e("Background Service", "Log level sync failed", e)
+                TboxRepository.updateMinLogLevel(null)
+                TboxRepository.addLog("ERROR", "Background Service", "Log level sync: ${e.message}")
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
 
@@ -527,6 +541,7 @@ class BackgroundService : Service() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+        startLogLevelSync()
         MbCanDiagnostics.setEnabled(false)
         scope.launch {
             MbCanRepository.bind(scope)
