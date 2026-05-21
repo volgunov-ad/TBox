@@ -393,7 +393,7 @@ class BackgroundService : Service() {
         private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
         /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
-        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 3_000L
+        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 4_000L
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -2322,11 +2322,7 @@ class BackgroundService : Service() {
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }
                     ?.let { pkg ->
-                        when {
-                            UsageStatsHideFloatingHelper.isNeutralForegroundPackage(this@BackgroundService, pkg) -> null
-                            pkg == packageName && !isMainActivityInForeground -> null
-                            else -> pkg
-                        }
+                        if (pkg == packageName && !isMainActivityInForeground) null else pkg
                     }
 
                 val effectiveForeground = if (!hasAnyRules) {
