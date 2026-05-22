@@ -9,7 +9,7 @@ import android.content.Intent
  */
 object DeferredMainActivityRequest {
 
-    const val AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS = 5000L
+    const val AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS = 10000L
 
     /**
      * If [MainActivity] is currently visible on screen, asks [BackgroundService] to open it again
@@ -19,7 +19,6 @@ object DeferredMainActivityRequest {
         context: Context,
         delayMs: Long = AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS
     ) {
-        if (!MainActivityForegroundTracker.isMainActivityVisible.value) return
         val app = context.applicationContext
         val intent = Intent(app, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_OPEN_MAIN_ACTIVITY

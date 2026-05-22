@@ -27,7 +27,7 @@ private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 4000L
 /** After manual play button launch: if session exists but still paused, send one more play command. */
 private const val LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS = 7000L
 /** Poll cadence for early play/session detection after external player launch. */
-private const val PLAYER_LAUNCH_STATE_POLL_MS = 250L
+private const val PLAYER_LAUNCH_STATE_POLL_MS = 500L
 
 enum class SupportedMediaPlayer(
     val packageName: String,
@@ -428,7 +428,7 @@ object SharedMediaControlService {
                     )
                     controller?.playbackState.isPlayingState()
                 }
-                if (isPlaying == true) {
+                if (isPlaying) {
                     DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(
                         context = appContext,
                         delayMs = 0L
@@ -606,10 +606,8 @@ object SharedMediaControlService {
         strictPreferred: Boolean = false
     ): MediaController? {
         val selected = orderedMediaPlayerPackages(selectedPackages)
-        val effectiveSelection = if (selected.isEmpty()) {
+        val effectiveSelection = selected.ifEmpty {
             orderedMediaPlayerPackages(requestedPackages)
-        } else {
-            selected
         }
         val normalizedPreferred = normalizeMediaPlayerPackages(listOf(preferredPackage)).firstOrNull()
         val prioritizedSelection = if (normalizedPreferred != null && normalizedPreferred in effectiveSelection) {
