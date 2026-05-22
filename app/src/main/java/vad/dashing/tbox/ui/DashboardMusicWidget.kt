@@ -217,6 +217,7 @@ fun DashboardMusicWidgetItem(
             preferredPackage = autoPlayPackage,
             keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground // anymani: передаём флаг
         )
+        /* Избыточный участок кода
         delay(AUTO_PLAY_VERIFY_DELAY_MS)
         val isPlaying = SharedMediaControlService.playerStates.value[autoPlayPackage]?.isPlaying == true
         if (!isPlaying) {
@@ -226,7 +227,7 @@ fun DashboardMusicWidgetItem(
                 preferredPackage = autoPlayPackage,
                 keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground // anymani: передаём флаг
             )
-        }
+        }*/
     }
 
     LaunchedEffect(widget.id, selectedPackage, isPlaying, durationMs) {

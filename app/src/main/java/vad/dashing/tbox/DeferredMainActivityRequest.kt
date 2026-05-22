@@ -12,7 +12,7 @@ object DeferredMainActivityRequest {
     const val AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS = 10000L
 
     /**
-     * If [MainActivity] is currently visible on screen, asks [BackgroundService] to open it again
+     * Asks [BackgroundService] to open [MainActivity]
      * after [AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS]. Repeated calls replace the previous scheduled job.
      */
     fun scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(

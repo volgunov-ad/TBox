@@ -339,7 +339,8 @@ object SharedMediaControlService {
         launchPlayerApp(
             context.applicationContext,
             targetPackage, scheduleColdStartPlayRetry = true,
-            keepPlayerForeground = keepPlayerForeground // anymani: передаём флаг в launchPlayerApp
+            keepPlayerForeground = keepPlayerForeground, // anymani: передаём флаг в launchPlayerApp
+            scheduleLateSessionPlayRetry = true
         )
     }
 
