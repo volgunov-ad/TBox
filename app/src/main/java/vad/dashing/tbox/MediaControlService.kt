@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import android.provider.Settings
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -143,7 +144,13 @@ fun collectMediaPlayersFromWidgetConfigs(
 }
 
 object SharedMediaControlService {
-    private val launchPlayerVerifyScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val launchPlayerVerifyExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        runCatching {
+            TboxRepository.addLog("ERROR", "MediaControl", "Launch verify error: ${throwable.message}")
+        }
+    }
+    private val launchPlayerVerifyScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.Default + launchPlayerVerifyExceptionHandler)
 
     private var appContext: Context? = null
     private var mediaSessionManager: MediaSessionManager? = null
@@ -359,30 +366,9 @@ object SharedMediaControlService {
 
     internal fun scheduleColdStartPlayRetryIfNeeded(appContext: Context, targetPackage: String) {
         launchPlayerVerifyScope.launch {
-            delay(LAUNCH_PLAYER_VERIFY_DELAY_MS)
-            val needsRetry = synchronized(this@SharedMediaControlService) {
-                initializeLocked(appContext)
-                syncControllersLocked()
-                val controller = resolveControllerLocked(
-                    selectedPackages = setOf(targetPackage),
-                    preferredPackage = targetPackage,
-                    strictPreferred = true
-                )
-                controller == null || !controller.playbackState.isPlayingState()
-            }
-            if (!needsRetry) return@launch
-            sendMediaPlayKeyEvent(appContext, targetPackage)
-            launchPlayerApp(appContext, targetPackage, scheduleColdStartPlayRetry = false)
-        }
-    }
-
-    internal fun scheduleLateSessionPlayRetryIfNeeded(appContext: Context, targetPackage: String) {
-        launchPlayerVerifyScope.launch {
-            val deadline = SystemClock.elapsedRealtime() + LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS
-            var shouldSendFallbackKey = false
-            while (SystemClock.elapsedRealtime() < deadline) {
-                var shouldExit = false
-                synchronized(this@SharedMediaControlService) {
+            try {
+                delay(LAUNCH_PLAYER_VERIFY_DELAY_MS)
+                val needsRetry = synchronized(this@SharedMediaControlService) {
                     initializeLocked(appContext)
                     syncControllersLocked()
                     val controller = resolveControllerLocked(
@@ -390,23 +376,52 @@ object SharedMediaControlService {
                         preferredPackage = targetPackage,
                         strictPreferred = true
                     )
-                    when {
-                        controller == null -> Unit
-                        controller.playbackState.isPlayingState() -> {
-                            shouldExit = true
-                        }
-                        else -> {
-                            controller.transportControls.play()
-                            shouldSendFallbackKey = true
-                            shouldExit = true
+                    controller == null || !controller.playbackState.isPlayingState()
+                }
+                if (!needsRetry) return@launch
+                sendMediaPlayKeyEvent(appContext, targetPackage)
+                launchPlayerApp(appContext, targetPackage, scheduleColdStartPlayRetry = false)
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "MediaControl", "Cold start retry failed: ${e.message}")
+            }
+        }
+    }
+
+    internal fun scheduleLateSessionPlayRetryIfNeeded(appContext: Context, targetPackage: String) {
+        launchPlayerVerifyScope.launch {
+            try {
+                val deadline = SystemClock.elapsedRealtime() + LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS
+                var shouldSendFallbackKey = false
+                while (SystemClock.elapsedRealtime() < deadline) {
+                    var shouldExit = false
+                    synchronized(this@SharedMediaControlService) {
+                        initializeLocked(appContext)
+                        syncControllersLocked()
+                        val controller = resolveControllerLocked(
+                            selectedPackages = setOf(targetPackage),
+                            preferredPackage = targetPackage,
+                            strictPreferred = true
+                        )
+                        when {
+                            controller == null -> Unit
+                            controller.playbackState.isPlayingState() -> {
+                                shouldExit = true
+                            }
+                            else -> {
+                                controller.transportControls.play()
+                                shouldSendFallbackKey = true
+                                shouldExit = true
+                            }
                         }
                     }
+                    if (shouldExit) break
+                    delay(PLAYER_LAUNCH_STATE_POLL_MS)
                 }
-                if (shouldExit) break
-                delay(PLAYER_LAUNCH_STATE_POLL_MS)
-            }
-            if (shouldSendFallbackKey) {
-                sendMediaPlayKeyEvent(appContext, targetPackage)
+                if (shouldSendFallbackKey) {
+                    sendMediaPlayKeyEvent(appContext, targetPackage)
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "MediaControl", "Late play retry failed: ${e.message}")
             }
         }
     }
@@ -417,31 +432,35 @@ object SharedMediaControlService {
         maxWaitMs: Long = DeferredMainActivityRequest.AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS
     ) {
         launchPlayerVerifyScope.launch {
-            val deadline = SystemClock.elapsedRealtime() + maxWaitMs.coerceAtLeast(0L)
-            while (SystemClock.elapsedRealtime() < deadline) {
-                val isPlaying = synchronized(this@SharedMediaControlService) {
-                    initializeLocked(appContext)
-                    syncControllersLocked()
-                    val controller = resolveControllerLocked(
-                        selectedPackages = setOf(targetPackage),
-                        preferredPackage = targetPackage,
-                        strictPreferred = true
-                    )
-                    controller?.playbackState.isPlayingState()
+            try {
+                val deadline = SystemClock.elapsedRealtime() + maxWaitMs.coerceAtLeast(0L)
+                while (SystemClock.elapsedRealtime() < deadline) {
+                    val isPlaying = synchronized(this@SharedMediaControlService) {
+                        initializeLocked(appContext)
+                        syncControllersLocked()
+                        val controller = resolveControllerLocked(
+                            selectedPackages = setOf(targetPackage),
+                            preferredPackage = targetPackage,
+                            strictPreferred = true
+                        )
+                        controller?.playbackState.isPlayingState()
+                    }
+                    if (isPlaying) {
+                        DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(
+                            context = appContext,
+                            delayMs = 0L
+                        )
+                        return@launch
+                    }
+                    delay(PLAYER_LAUNCH_STATE_POLL_MS)
                 }
-                if (isPlaying) {
-                    DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(
-                        context = appContext,
-                        delayMs = 0L
-                    )
-                    return@launch
-                }
-                delay(PLAYER_LAUNCH_STATE_POLL_MS)
+                DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(
+                    context = appContext,
+                    delayMs = 0L
+                )
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "MediaControl", "Deferred main return failed: ${e.message}")
             }
-            DeferredMainActivityRequest.scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(
-                context = appContext,
-                delayMs = 0L
-            )
         }
     }
 
@@ -750,16 +769,20 @@ private fun hasNotificationListenerAccess(
 }
 
 private fun sendMediaPlayKeyEvent(context: Context, packageName: String) {
-    val keyDown = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
-        setPackage(packageName)
-        putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+    try {
+        val keyDown = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            setPackage(packageName)
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+        }
+        val keyUp = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+            setPackage(packageName)
+            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
+        }
+        context.sendOrderedBroadcast(keyDown, null)
+        context.sendOrderedBroadcast(keyUp, null)
+    } catch (e: Exception) {
+        TboxRepository.addLog("ERROR", "MediaControl", "Media play key broadcast failed: ${e.message}")
     }
-    val keyUp = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
-        setPackage(packageName)
-        putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
-    }
-    context.sendOrderedBroadcast(keyDown, null)
-    context.sendOrderedBroadcast(keyUp, null)
 }
 
 private fun launchPlayerApp(
