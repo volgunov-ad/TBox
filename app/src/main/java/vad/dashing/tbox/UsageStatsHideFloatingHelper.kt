@@ -19,7 +19,6 @@ internal object UsageStatsHideFloatingHelper {
 
     /** queryUsageStats is coarse on short windows; query a wider span when used as fallback. */
     private const val MIN_STATS_QUERY_WINDOW_MS = 120_000L
-
     fun hasUsageAccessPermission(context: Context): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

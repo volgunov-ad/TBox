@@ -22,14 +22,19 @@ import vad.dashing.tbox.ui.MyLifecycleOwner
  */
 internal data class UsageStatsOverlayRulesState(
     val foregroundPackage: String?,
+    val isMainActivityVisible: Boolean,
     val watchHidePackages: Set<String>,
     val hidePanelIds: Set<String>,
     val watchShowPackages: Set<String>,
     val showPanelIds: Set<String>,
 ) {
+    private fun shouldIgnoreOwnPackageForeground(myPackageName: String, fg: String): Boolean {
+        return fg == myPackageName && !isMainActivityVisible
+    }
+
     fun isUsageStatsForceHidden(panelId: String, myPackageName: String): Boolean {
         val fg = foregroundPackage ?: return false
-        if (fg == myPackageName) return false
+        if (shouldIgnoreOwnPackageForeground(myPackageName, fg)) return false
         if (watchHidePackages.isEmpty() || hidePanelIds.isEmpty()) return false
         return usageStatsWatchContains(watchHidePackages, fg) && hidePanelIds.contains(panelId)
     }
@@ -40,14 +45,21 @@ internal data class UsageStatsOverlayRulesState(
      */
     fun isUsageStatsForceShowing(panelId: String, myPackageName: String): Boolean {
         val fg = foregroundPackage ?: return false
-        if (fg == myPackageName) return false
+        if (shouldIgnoreOwnPackageForeground(myPackageName, fg)) return false
         if (isUsageStatsForceHidden(panelId, myPackageName)) return false
         if (watchShowPackages.isEmpty() || showPanelIds.isEmpty()) return false
         return usageStatsWatchContains(watchShowPackages, fg) && showPanelIds.contains(panelId)
     }
 
     companion object {
-        val EMPTY = UsageStatsOverlayRulesState(null, emptySet(), emptySet(), emptySet(), emptySet())
+        val EMPTY = UsageStatsOverlayRulesState(
+            foregroundPackage = null,
+            isMainActivityVisible = false,
+            watchHidePackages = emptySet(),
+            hidePanelIds = emptySet(),
+            watchShowPackages = emptySet(),
+            showPanelIds = emptySet()
+        )
     }
 }
 
@@ -318,7 +330,7 @@ internal class FloatingOverlayController(
             }
 
             overlayRetryCounts[config.id] = 0
-            TboxRepository.addLog("INFO", TAG, "Shown: ${config.id}")
+            TboxRepository.addLog("DEBUG", TAG, "Shown: ${config.id}")
             FloatingOverlayLoadTimings.mark("float_shown_${config.id.replace(Regex("[^a-zA-Z0-9_-]"), "_")}")
         } catch (e: Exception) {
             Log.e(TAG, "Error adding view", e)
@@ -340,7 +352,7 @@ internal class FloatingOverlayController(
 
         overlayRetryCounts.remove(panelId)
         overlayOffIds.remove(panelId)
-        TboxRepository.addLog("INFO", TAG, "Closed: $panelId")
+        TboxRepository.addLog("DEBUG", TAG, "Closed: $panelId")
     }
 
     private fun updateWindowPosition(panelId: String, x: Int, y: Int) {

@@ -245,6 +245,8 @@ class SettingsManager(private val context: Context) {
         private val LEFT_MENU_VISIBLE = booleanPreferencesKey("${KEY_PREFIX}left_menu_visible")
         private val MAIN_SCREEN_OPEN_ON_BOOT_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_open_on_boot")
+        private val MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_open_on_boot_delay_seconds")
         /** Legacy: copied single image per theme (pre folder-based wallpapers). */
         private val MAIN_SCREEN_WALLPAPER_LIGHT_SET_LEGACY_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_light")
@@ -362,6 +364,9 @@ class SettingsManager(private val context: Context) {
         const val FUEL_CALIBRATION_MATURITY_THRESHOLD_MIN = 5
         const val FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX = 500
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
+        const val MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 0
+        const val MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 60
+        const val DEFAULT_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 2
         private const val MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 10
         private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 50
         /** Fully transparent — only the icon is visible over the main-screen canvas. */
@@ -565,6 +570,20 @@ class SettingsManager(private val context: Context) {
     /** After device boot, open [MainActivity] on the main home screen (tab 100) when enabled. */
     val mainScreenOpenOnBootFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Delay before opening [MainActivity] after boot auto-start, in seconds. */
+    val mainScreenOpenOnBootDelaySecondsFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS_KEY]
+                ?: DEFAULT_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS
+        }
+        .map {
+            it.coerceIn(
+                MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS,
+                MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS
+            )
+        }
         .distinctUntilChanged()
 
     val mainScreenWallpaperLightFolderUriFlow: Flow<String> = context.settingsDataStore.data
@@ -1105,6 +1124,16 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_OPEN_ON_BOOT_KEY] = enabled
+        }
+    }
+
+    suspend fun saveMainScreenOpenOnBootDelaySeconds(delaySeconds: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS_KEY] =
+                delaySeconds.coerceIn(
+                    MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS,
+                    MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS
+                )
         }
     }
 

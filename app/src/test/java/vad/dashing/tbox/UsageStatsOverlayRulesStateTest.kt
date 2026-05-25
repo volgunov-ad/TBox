@@ -16,6 +16,7 @@ class UsageStatsOverlayRulesStateTest {
     fun forceShow_allowed_when_foreground_only_in_show_watch_hide_targets_other_app() {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "com.show.app",
+            isMainActivityVisible = false,
             watchHidePackages = setOf("com.hide.app"),
             hidePanelIds = setOf("panel_a"),
             watchShowPackages = setOf("com.show.app"),
@@ -29,6 +30,7 @@ class UsageStatsOverlayRulesStateTest {
     fun forceShow_allowed_when_same_app_in_both_watch_lists_if_panel_not_in_hide_list() {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "com.other.app",
+            isMainActivityVisible = false,
             watchHidePackages = setOf("com.other.app"),
             hidePanelIds = setOf("panel_a"),
             watchShowPackages = setOf("com.other.app"),
@@ -42,6 +44,7 @@ class UsageStatsOverlayRulesStateTest {
     fun forceShow_blocked_when_hide_rule_applies_to_panel() {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "com.other.app",
+            isMainActivityVisible = false,
             watchHidePackages = setOf("com.other.app"),
             hidePanelIds = setOf("panel_b"),
             watchShowPackages = setOf("com.other.app"),
@@ -49,5 +52,31 @@ class UsageStatsOverlayRulesStateTest {
         )
         assertTrue(state.isUsageStatsForceHidden("panel_b", "vad.dashing.tbox"))
         assertFalse(state.isUsageStatsForceShowing("panel_b", "vad.dashing.tbox"))
+    }
+
+    @Test
+    fun forceHide_applies_for_own_package_when_main_activity_visible() {
+        val state = UsageStatsOverlayRulesState(
+            foregroundPackage = "vad.dashing.tbox",
+            isMainActivityVisible = true,
+            watchHidePackages = setOf("vad.dashing.tbox"),
+            hidePanelIds = setOf("panel_main"),
+            watchShowPackages = emptySet(),
+            showPanelIds = emptySet(),
+        )
+        assertTrue(state.isUsageStatsForceHidden("panel_main", "vad.dashing.tbox"))
+    }
+
+    @Test
+    fun forceHide_ignored_for_own_package_when_main_activity_not_visible() {
+        val state = UsageStatsOverlayRulesState(
+            foregroundPackage = "vad.dashing.tbox",
+            isMainActivityVisible = false,
+            watchHidePackages = setOf("vad.dashing.tbox"),
+            hidePanelIds = setOf("panel_main"),
+            watchShowPackages = emptySet(),
+            showPanelIds = emptySet(),
+        )
+        assertFalse(state.isUsageStatsForceHidden("panel_main", "vad.dashing.tbox"))
     }
 }

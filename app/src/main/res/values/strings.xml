@@ -282,6 +282,8 @@
 
     <string name="settings_main_screen_open_on_boot_title">Автоматически открывать главный экран при запуске</string>
     <string name="settings_main_screen_open_on_boot_desc">После загрузки устройства, когда фоновая служба стартует автоматически, открывается окно приложения на главном экране (плитки дома)</string>
+    <string name="settings_main_screen_open_on_boot_delay_title">Задержка автозапуска главного экрана, сек</string>
+    <string name="settings_main_screen_open_on_boot_delay_desc">Задержка перед открытием главного экрана после запуска службы при старте устройства (0–60; по умолчанию 2).</string>
     <string name="settings_main_screen_wallpaper_title">Фон главного экрана</string>
     <string name="settings_main_screen_wallpaper_light">Папка с обоями (светлая тема)</string>
     <string name="settings_main_screen_wallpaper_dark">Папка с обоями (тёмная тема)</string>

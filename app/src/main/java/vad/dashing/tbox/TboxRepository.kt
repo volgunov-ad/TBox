@@ -101,6 +101,13 @@ data class HdmData(
 )
 
 object TboxRepository {
+    private enum class LogLevel(val priority: Int) {
+        DEBUG(0),
+        INFO(1),
+        WARN(2),
+        ERROR(3),
+    }
+
     private val _netState = MutableStateFlow(NetState())
     val netState: StateFlow<NetState> = _netState.asStateFlow()
 
@@ -194,6 +201,9 @@ object TboxRepository {
     private val _floatingDashboardShownIds = MutableStateFlow<Set<String>>(emptySet())
     val floatingDashboardShownIds: StateFlow<Set<String>> = _floatingDashboardShownIds.asStateFlow()
 
+    private val _mediaAutoPlayConsumed = MutableStateFlow(false)
+    val mediaAutoPlayConsumed: StateFlow<Boolean> = _mediaAutoPlayConsumed.asStateFlow()
+
     private val _gateVersion = MutableStateFlow<String>("")
     val gateVersion: StateFlow<String> = _gateVersion.asStateFlow()
 
@@ -203,6 +213,8 @@ object TboxRepository {
     private val timeFormat: ThreadLocal<SimpleDateFormat> = ThreadLocal.withInitial {
         SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     }
+    @Volatile
+    private var minLogLevel: LogLevel? = null
 
     private fun <T> MutableStateFlow<T>.setIfChanged(newValue: T) {
         if (value != newValue) {
@@ -210,7 +222,34 @@ object TboxRepository {
         }
     }
 
+    private fun parseLogLevel(rawLevel: String?): LogLevel? {
+        return when (rawLevel?.trim()?.uppercase(Locale.ROOT)) {
+            "DEBUG" -> LogLevel.DEBUG
+            "INFO" -> LogLevel.INFO
+            "WARN" -> LogLevel.WARN
+            "ERROR" -> LogLevel.ERROR
+            else -> null
+        }
+    }
+
+    fun updateMinLogLevel(level: String?) {
+        minLogLevel = if (level == null) {
+            null
+        } else {
+            parseLogLevel(level) ?: LogLevel.INFO
+        }
+    }
+
+    private fun shouldPersistLogEntry(level: String): Boolean {
+        val threshold = minLogLevel ?: return true
+        val entryLevel = parseLogLevel(level) ?: return true
+        return entryLevel.priority >= threshold.priority
+    }
+
     fun addLog(level: String, tag: String, message: String) {
+        if (!shouldPersistLogEntry(level)) {
+            return
+        }
         val timestamp = timeFormat.get()?.format(Date())
         val logEntry = "[$timestamp] $level: $tag. $message"
 
@@ -382,5 +421,16 @@ object TboxRepository {
                 current - panelId
             }
         }
+    }
+
+    /**
+     * Global one-shot gate for music widget autoplay within current process lifetime.
+     * Returns true only for the first successful consumer.
+     */
+    @Synchronized
+    fun tryConsumeMediaAutoPlayOnce(): Boolean {
+        if (_mediaAutoPlayConsumed.value) return false
+        _mediaAutoPlayConsumed.value = true
+        return true
     }
 }

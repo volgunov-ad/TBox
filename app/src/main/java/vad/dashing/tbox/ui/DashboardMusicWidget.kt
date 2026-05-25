@@ -57,6 +57,7 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.SupportedMediaPlayer
+import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.orderedMediaPlayerPackages
 import vad.dashing.tbox.resolveMediaPlayersForWidget
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
@@ -87,8 +88,18 @@ fun DashboardMusicWidgetItem(
     val carouselPackages = remember(selectedPlayers) {
         orderedMediaPlayerPackages(selectedPlayers)
     }
-    var selectedPackage by remember(widget.id, carouselPackages, widgetConfig.mediaSelectedPlayer) {
+    var selectedPackage by remember(widget.id, carouselPackages) {
         mutableStateOf(resolveInitialSelectedPackage(widgetConfig, carouselPackages))
+    }
+    LaunchedEffect(widget.id, carouselPackages, widgetConfig.mediaSelectedPlayer) {
+        if (carouselPackages.isEmpty()) {
+            if (selectedPackage.isNotEmpty()) selectedPackage = ""
+            return@LaunchedEffect
+        }
+        // Keep current in-memory carousel choice while it is valid; delayed persistence should not
+        // snap UI back and make swipe feel "blocked".
+        if (selectedPackage in carouselPackages) return@LaunchedEffect
+        selectedPackage = resolveInitialSelectedPackage(widgetConfig, carouselPackages)
     }
     var horizontalDragDistance by remember(widget.id, carouselPackages) {
         mutableFloatStateOf(0f)
@@ -174,8 +185,6 @@ fun DashboardMusicWidgetItem(
             positionMs = estimatedPositionMs
         )
     }
-    var autoPlayTriggered by remember(widget.id) { mutableStateOf(false) }
-
     LaunchedEffect(
         widget.id,
         selectedPackage,
@@ -184,7 +193,6 @@ fun DashboardMusicWidgetItem(
         widgetConfig.mediaKeepPlayerForeground // anymani: учитываем опцию в зависимостях
     ) {
         if (!widgetConfig.mediaAutoPlayOnInit) return@LaunchedEffect
-        if (autoPlayTriggered) return@LaunchedEffect
         if (selectedPackage.isBlank()) return@LaunchedEffect
         if (widgetConfig.mediaAutoPlayOnlyWhenEngineRunning) {
             // engineRPM uses WhileSubscribed(5000): polling .value never subscribes, so RPM may never
@@ -197,12 +205,11 @@ fun DashboardMusicWidgetItem(
                         .first()
                 }
                 if (gotPositiveRpm == null) {
-                    autoPlayTriggered = true
                     return@LaunchedEffect
                 }
             }
         }
-        autoPlayTriggered = true
+        if (!TboxRepository.tryConsumeMediaAutoPlayOnce()) return@LaunchedEffect
         val autoPlayPackage = selectedPackage
         SharedMediaControlService.play(
             context = context,
@@ -210,6 +217,7 @@ fun DashboardMusicWidgetItem(
             preferredPackage = autoPlayPackage,
             keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground // anymani: передаём флаг
         )
+        /* Избыточный участок кода
         delay(AUTO_PLAY_VERIFY_DELAY_MS)
         val isPlaying = SharedMediaControlService.playerStates.value[autoPlayPackage]?.isPlaying == true
         if (!isPlaying) {
@@ -219,7 +227,7 @@ fun DashboardMusicWidgetItem(
                 preferredPackage = autoPlayPackage,
                 keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground // anymani: передаём флаг
             )
-        }
+        }*/
     }
 
     LaunchedEffect(widget.id, selectedPackage, isPlaying, durationMs) {

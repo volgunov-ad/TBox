@@ -9,18 +9,20 @@ import android.content.Intent
  */
 object DeferredMainActivityRequest {
 
-    const val AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS = 5000L
+    const val AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS = 10000L
 
     /**
-     * If [MainActivity] is currently in the foreground, asks [BackgroundService] to open it again
+     * Asks [BackgroundService] to open [MainActivity]
      * after [AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS]. Repeated calls replace the previous scheduled job.
      */
-    fun scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(context: Context) {
-        if (!MainActivityForegroundTracker.isMainActivityInForeground.value) return
+    fun scheduleReturnAfterExternalPlayerLaunchIfMainWasVisible(
+        context: Context,
+        delayMs: Long = AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS
+    ) {
         val app = context.applicationContext
         val intent = Intent(app, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_OPEN_MAIN_ACTIVITY
-            putExtra(BackgroundService.EXTRA_OPEN_MAIN_DELAY_MS, AFTER_MUSIC_WIDGET_PLAYER_LAUNCH_MS)
+            putExtra(BackgroundService.EXTRA_OPEN_MAIN_DELAY_MS, delayMs.coerceAtLeast(0L))
         }
         try {
             app.startService(intent)

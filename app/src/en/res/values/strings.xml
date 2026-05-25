@@ -279,6 +279,8 @@
 
     <string name="settings_main_screen_open_on_boot_title">Automatically open main screen on startup</string>
     <string name="settings_main_screen_open_on_boot_desc">After the device boots and the background service starts automatically, opens the app on the home main screen</string>
+    <string name="settings_main_screen_open_on_boot_delay_title">Main screen auto-open delay, sec</string>
+    <string name="settings_main_screen_open_on_boot_delay_desc">Delay before opening the main screen after boot-time service start (0–60; default 2).</string>
     <string name="settings_main_screen_wallpaper_title">Main screen background</string>
     <string name="settings_main_screen_wallpaper_light">Wallpaper folder (light theme)</string>
     <string name="settings_main_screen_wallpaper_dark">Wallpaper folder (dark theme)</string>
