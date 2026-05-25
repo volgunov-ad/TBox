@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -46,7 +47,7 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -260,6 +261,7 @@ fun SettingsTabContent(
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
+    val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
 
     val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
@@ -298,14 +300,15 @@ fun SettingsTabContent(
     val expertModeWarning = stringResource(R.string.settings_expert_mode_warning_desc)
     val newFloatingPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
 
-    LaunchedEffect(Unit) {
-        MbCanRepository.warmUpAvailabilityForUi()
+    LaunchedEffect(headUnitCanMode) {
+        UniversalCanRepository.setMode(headUnitCanMode)
+        UniversalCanRepository.warmUpAvailabilityForUi()
     }
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
     var huRebootButtonEnabled by remember { mutableStateOf(true) }
-    val mbCanAvailability by MbCanRepository.availability.collectAsStateWithLifecycle()
+    val mbCanAvailability by UniversalCanRepository.availability.collectAsStateWithLifecycle()
     val mbCanAvailable = mbCanAvailability is MbCanAvailability.Available
 
     var showExportBackupDialog by remember { mutableStateOf(false) }
@@ -334,6 +337,36 @@ fun SettingsTabContent(
             .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
+        SettingsTitle(stringResource(R.string.settings_hu_type_title))
+        Text(
+            text = stringResource(R.string.settings_hu_type_desc),
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ModeButton(
+                text = stringResource(R.string.settings_hu_type_android9),
+                isSelected = headUnitCanMode == HeadUnitCanMode.Android9MbCan,
+                onClick = { settingsViewModel.saveHeadUnitCanMode(HeadUnitCanMode.Android9MbCan) },
+                enabled = true,
+                modifier = Modifier.weight(1f)
+            )
+            ModeButton(
+                text = stringResource(R.string.settings_hu_type_android10),
+                isSelected = headUnitCanMode == HeadUnitCanMode.Android10Vhal,
+                onClick = { settingsViewModel.saveHeadUnitCanMode(HeadUnitCanMode.Android10Vhal) },
+                enabled = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
         SettingsTitle(stringResource(R.string.settings_network_control_title))
         SettingSwitch(
             isAutoRestartEnabled,

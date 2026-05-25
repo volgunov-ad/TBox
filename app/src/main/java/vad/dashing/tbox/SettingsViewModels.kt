@@ -822,6 +822,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val headUnitCanMode = settingsManager.headUnitCanModeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = HeadUnitCanMode.Android9MbCan
+        )
+
     init {
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
@@ -1757,6 +1764,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveUiClickSoundsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveUiClickSoundsSetting(enabled)
+        }
+    }
+
+    fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
+        viewModelScope.launch {
+            settingsManager.saveHeadUnitCanMode(mode)
         }
     }
 }

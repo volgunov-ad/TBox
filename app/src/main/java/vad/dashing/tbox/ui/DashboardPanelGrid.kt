@@ -22,7 +22,7 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
@@ -80,7 +80,7 @@ internal fun DashboardPanelGridAndFrames(
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
-        MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
+        UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
     val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
@@ -91,24 +91,24 @@ internal fun DashboardPanelGridAndFrames(
                 .map { it.dataKey.trim() }
                 .filter { it.isNotBlank() && it != "null" }
                 .toSet()
-            MbCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
+            UniversalCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
         }
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
-                MbCanRepository.enqueueClearSource(mbCanInterestSourceId)
+                UniversalCanRepository.enqueueClearSource(mbCanInterestSourceId)
             }
         }
     }
     if (panelNeedsMbCanMediaVolume) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
-            MbCanRepository.setSourceSignals(
+            UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-media-volume",
                 setOf(MbCanSignal.AudioVolume)
             )
         }
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
-                MbCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
             }
         }
     }

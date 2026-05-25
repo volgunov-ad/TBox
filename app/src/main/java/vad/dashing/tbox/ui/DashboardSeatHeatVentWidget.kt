@@ -40,7 +40,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SEAT_HEAT_VENT_VARIANT_HEAT
 import vad.dashing.tbox.SEAT_HEAT_VENT_VARIANT_VENT
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
 
 private val SeatHeatOnColor = Color(0xFFFF9800)
@@ -66,7 +66,7 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val mode by MbCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
+    val mode by UniversalCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_left_seat_heat_vent_widget)
     SeatHeatVentWidget(
         side = SeatSide.FrontLeft,
@@ -104,7 +104,7 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val mode by MbCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
+    val mode by UniversalCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_right_seat_heat_vent_widget)
     SeatHeatVentWidget(
         side = SeatSide.FrontRight,
@@ -143,7 +143,7 @@ fun DashboardFrontLeftSeatHeatVentSingleWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val mode by MbCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
+    val mode by UniversalCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_left_seat_heat_vent_single_widget)
     SeatHeatVentWidget(
         side = SeatSide.FrontLeft,
@@ -182,7 +182,7 @@ fun DashboardFrontRightSeatHeatVentSingleWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val mode by MbCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
+    val mode by UniversalCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_right_seat_heat_vent_single_widget)
     SeatHeatVentWidget(
         side = SeatSide.FrontRight,
@@ -219,7 +219,7 @@ fun DashboardRearLeftSeatHeatWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val mode by MbCanRepository.rearLeftSeatModeState.collectAsStateWithLifecycle()
+    val mode by UniversalCanRepository.rearLeftSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_rear_left_seat_heat_widget)
     SeatHeatVentWidget(
         side = SeatSide.BackLeft,
@@ -256,7 +256,7 @@ fun DashboardRearRightSeatHeatWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val mode by MbCanRepository.rearRightSeatModeState.collectAsStateWithLifecycle()
+    val mode by UniversalCanRepository.rearRightSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_rear_right_seat_heat_widget)
     SeatHeatVentWidget(
         side = SeatSide.BackRight,

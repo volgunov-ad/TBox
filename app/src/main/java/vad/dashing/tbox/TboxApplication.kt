@@ -6,8 +6,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.trip.favoritesSetFromJson
 import vad.dashing.tbox.trip.tripsListFromJson
@@ -17,9 +19,15 @@ class TboxApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AppContextHolder.init(this)
         MainActivityForegroundTracker.register(this)
         val appDataManager = AppDataManager(this)
         val settingsManager = SettingsManager(this)
+        applicationScope.launch {
+            settingsManager.headUnitCanModeFlow.collectLatest { mode ->
+                UniversalCanRepository.setMode(mode)
+            }
+        }
         applicationScope.launch {
             try {
                 settingsManager.migrateSelectedTabIndexIfNeeded()

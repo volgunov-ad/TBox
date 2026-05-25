@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 private val HvacDefrosterFrontOnColor = Color(0xFF0066CC)
 
@@ -39,7 +39,7 @@ fun DashboardHvacDefrosterFrontWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val state by MbCanRepository.hvacDefrosterFrontState.collectAsStateWithLifecycle()
+    val state by UniversalCanRepository.hvacDefrosterFrontState.collectAsStateWithLifecycle()
     val iconColor = when (state) {
         is MbCanBinaryState.On -> HvacDefrosterFrontOnColor
         is MbCanBinaryState.Off -> textColor

@@ -308,6 +308,7 @@ class SettingsManager(private val context: Context) {
         private val WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pressure_persist_across_stops")
         private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
+        private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
 
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
@@ -728,6 +729,12 @@ class SettingsManager(private val context: Context) {
 
     val uiClickSoundsFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[UI_CLICK_SOUNDS_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val headUnitCanModeFlow: Flow<HeadUnitCanMode> = context.settingsDataStore.data
+        .map { preferences ->
+            HeadUnitCanMode.fromStorageValue(preferences[HEAD_UNIT_CAN_MODE_KEY])
+        }
         .distinctUntilChanged()
 
     private fun stringSetFromJsonArray(raw: String): Set<String> {
@@ -1499,6 +1506,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveUiClickSoundsSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[UI_CLICK_SOUNDS_KEY] = enabled
+        }
+    }
+
+    suspend fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HEAD_UNIT_CAN_MODE_KEY] = mode.storageValue
         }
     }
 

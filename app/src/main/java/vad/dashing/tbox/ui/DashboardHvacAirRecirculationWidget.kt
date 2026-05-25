@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 private val HvacAirRecirculationOnColor = Color(0xFF0066CC)
 
@@ -39,7 +39,7 @@ fun DashboardHvacAirRecirculationWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val state by MbCanRepository.hvacAirRecirculationState.collectAsStateWithLifecycle()
+    val state by UniversalCanRepository.hvacAirRecirculationState.collectAsStateWithLifecycle()
     val iconColor = when (state) {
         is MbCanBinaryState.On -> HvacAirRecirculationOnColor
         is MbCanBinaryState.Off -> textColor

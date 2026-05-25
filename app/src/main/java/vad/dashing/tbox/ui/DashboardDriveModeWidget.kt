@@ -23,7 +23,7 @@ import androidx.compose.ui.res.stringResource
 import vad.dashing.tbox.DriveModeWidgetOption
 import vad.dashing.tbox.R
 import vad.dashing.tbox.resolveDriveModeWidgetOption
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 private val DriveModeWidgetEcoColor = Color(0xD900A400)
 private val DriveModeWidgetNorColor = Color(0xD9004DFF)
@@ -44,7 +44,7 @@ fun DashboardDriveModeWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
 ) {
-    val currentDriveMode by MbCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
+    val currentDriveMode by UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     val selectedMode = resolveDriveModeWidgetOption(selectedDriveModeRawValue)
     val isSelectedModeActive = currentDriveMode == selectedMode.rawValue
     val defaultTitle = stringResource(R.string.data_title_drive_mode_widget)
