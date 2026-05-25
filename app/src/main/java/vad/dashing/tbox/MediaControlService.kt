@@ -771,7 +771,7 @@ private fun launchPlayerApp(
 ) {
     val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
     MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-    val shouldReturnToMain = !keepPlayerForeground && MainActivityForegroundTracker.isMainActivityVisible.value
+    val shouldReturnToMain = !keepPlayerForeground && MainActivityForegroundTracker.isMainActivityInForeground.value
 
     val launched = runCatching {
         context.startActivity(launchIntent)
