@@ -5,6 +5,7 @@ import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
+import vad.dashing.tbox.trip.TripRepository
 
 object CanFramesProcess {
 
@@ -208,9 +209,13 @@ object CanFramesProcess {
                     CanDataRepository.updateOdometer(odometer)
                     CanDataRepository.updateVoltage(voltage)
                     CanDataRepository.updateFuelLevelPercentage(fuelLevelPercentage)
-                    if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
-                        FuelCalibrationLive.applyFromStableFilteredPercent(fuelLevelPercentage)
-                        CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
+                    // Стабильный filtered и калибровка — только в активной поездке, чтобы скачок
+                    // после заправки на стоянке не «съелся» до старта учёта.
+                    if (TripRepository.activeTrip.value != null) {
+                        if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
+                            FuelCalibrationLive.applyFromStableFilteredPercent(fuelLevelPercentage)
+                            CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
+                        }
                     }
                 } else if (canId == CAN_ID_FUEL_CONSUMPTION) {
                     val currentFuelConsumption = if (b2 != 0xFF.toByte() && b3 != 0xFF.toByte()) {
