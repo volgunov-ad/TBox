@@ -5,6 +5,7 @@ import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
+import vad.dashing.tbox.trip.TripRepository
 
 object CanFramesProcess {
 
