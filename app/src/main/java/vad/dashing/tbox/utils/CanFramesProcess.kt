@@ -211,11 +211,11 @@ object CanFramesProcess {
                     CanDataRepository.updateFuelLevelPercentage(fuelLevelPercentage)
                     // Стабильный filtered и калибровка — только в активной поездке, чтобы скачок
                     // после заправки на стоянке не «съелся» до старта учёта.
-                    if (TripRepository.activeTrip.value != null &&
-                        fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)
-                    ) {
-                        FuelCalibrationLive.applyFromStableFilteredPercent(fuelLevelPercentage)
-                        CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
+                    if (TripRepository.activeTrip.value != null) {
+                        if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
+                            FuelCalibrationLive.applyFromStableFilteredPercent(fuelLevelPercentage)
+                            CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
+                        }
                     }
                 } else if (canId == CAN_ID_FUEL_CONSUMPTION) {
                     val currentFuelConsumption = if (b2 != 0xFF.toByte() && b3 != 0xFF.toByte()) {
