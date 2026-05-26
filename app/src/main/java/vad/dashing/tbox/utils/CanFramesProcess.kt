@@ -209,7 +209,11 @@ object CanFramesProcess {
                     CanDataRepository.updateOdometer(odometer)
                     CanDataRepository.updateVoltage(voltage)
                     CanDataRepository.updateFuelLevelPercentage(fuelLevelPercentage)
-                    if (fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)) {
+                    // Стабильный filtered и калибровка — только в активной поездке, чтобы скачок
+                    // после заправки на стоянке не «съелся» до старта учёта.
+                    if (TripRepository.activeTrip.value != null &&
+                        fuelLevelPercentageBuffer.addValue(fuelLevelPercentage)
+                    ) {
                         FuelCalibrationLive.applyFromStableFilteredPercent(fuelLevelPercentage)
                         CanDataRepository.updateFuelLevelPercentageFiltered(fuelLevelPercentage)
                     }
