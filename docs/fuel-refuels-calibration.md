@@ -6,14 +6,26 @@
 
 ---
 
-## 1. Два разных «литража»
+## 1. Три уровня данных по топливу
 
-| Поток | Откуда данные | Назначение |
-|--------|-----------------|------------|
-| **Процент с CAN** | Отфильтрованный `fuelLevelPercentageFiltered` | Поля заправки «до/после %», отображение; при отсутствии калиброванных литров — линейный fallback для учёта |
-| **Откалиброванные литры** | Тот же процент + **JSON калибровки** + **температура снаружи** | Поле `fuelLevelCalibratedLiters` (стандарт +15 °C); **учёт расхода и заправок в поездке** (`TripFuelAccounting.applyFuelCalibratedLitersStep`) |
+| Поток | Поле в репозитории | Откуда | Назначение |
+|--------|---------------------|--------|------------|
+| **Сырой % с CAN** | `fuelLevelPercentage` | Каждый кадр `CAN_ID_SPEED_VOLTAGE_FUEL` | Диагностика, «Данные авто»; обновляется **всегда**, вне зависимости от поездки |
+| **Стабильный отфильтрованный %** | `fuelLevelPercentageFiltered` | Буфер `FuelLevelBuffer` (15 одинаковых подряд значений) — **только при активной поездке** | Поля заправки «до/после %», плитки; при отсутствии калиброванных литров — линейный fallback для учёта |
+| **Откалиброванные литры** | `fuelLevelCalibratedLiters` | Тот же стабильный % + **JSON калибровки** + **температура снаружи** | Учёт расхода и заправок в поездке (`TripFuelAccounting.applyFuelCalibratedLitersStep`) |
 
 Калибровка **не** подменяет сырые проценты CAN; она даёт вторую оценку объёма в литрах.
+
+### 1.1. Почему буфер и калибровка только в активной поездке
+
+В `CanFramesProcess` стабильный filtered и вызов `FuelCalibrationLive.applyFromStableFilteredPercent` выполняются **только если** `TripRepository.activeTrip != null`:
+
+- пока двигатель заглушен и поездки нет, скачок уровня после заправки **не проходит** через буфер сглаживания — при следующем старте поездки учёт увидит полный скачок;
+- на стоянке без активной поездки сырой `fuelLevelPercentage` всё равно обновляется с шины (если кадры приходят).
+
+При **остановке двигателя** служба сохраняет последние известные filtered % и калиброванные литры (`persistLastKnownFuelLevelOnEngineStop`); при **старте службы** они подставляются до прихода CAN (`restoreLastKnownFuelLevelFromAppData`). Комментарий в коде: уровень с шины в типичном сценарии актуален при работающем двигателе.
+
+При смене настроек калибровки или наружной температуры `FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()` пересчитывает литры по **уже сохранённому** filtered % (без нового кадра CAN).
 
 ---
 
@@ -22,12 +34,12 @@
 Условия выполняются внутри активной поездки при каждом новом отсчёте уровня (см. `BackgroundService.applyActiveTripFuelStep`):
 
 1. Берётся текущий **калиброванный** уровень в литрах (стандарт), при необходимости — линейно из `%` и бака; для записи заправки — текущий **отфильтрованный** `pctNow`.
-2. С предыдущим уровнем в литрах (`tripLastFuelLitersCalibrated`) вызывается `TripFuelAccounting.applyFuelCalibratedLitersStep`; пороги **2 п.п.** и **0,15 п.п.** заданы в процентах, но **переводятся в литры** как доля от объёма бака (тот же смысл, что раньше на линейной модели).
+2. С предыдущим уровнем в литрах (`tripLastFuelLitersCalibrated`) вызывается `TripFuelAccounting.applyFuelCalibratedLitersStep`; пороги **4 п.п.** и **0,3 п.п.** заданы в процентах (`TripFuelAccounting`) и **переводятся в литры** как доля от объёма бака.
 
 ### 2.1. Правило «это заправка»
 
-- Если за один шаг **калиброванные литры** выросли не менее чем на **2% бака** в литрах (`REFUEL_RISE_PERCENT` от номинального объёма), шаг считается **заправкой**.
-- Мелкие падения уровня (меньше **0,15% бака** в литрах) при списании игнорируются как шум (`CONSUME_MIN_DELTA_PERCENT`).
+- Если за один шаг **калиброванные литры** выросли не менее чем на **4% бака** в литрах (`REFUEL_RISE_PERCENT = 4f`), шаг считается **заправкой**.
+- Мелкие падения уровня (меньше **0,3% бака** в литрах, `CONSUME_MIN_DELTA_PERCENT = 0.3f`) при списании игнорируются как шум.
 
 ### 2.2. Литры в момент заправки
 
@@ -139,23 +151,16 @@
 
 ## 7. Непрерывный расчёт откалиброванных литров
 
-В `BackgroundService` запущен корутинный коллектор (`startFuelCalibratedLitersWatcher`), который при изменении любого из:
+**С CAN (во время активной поездки):** после стабилизации буфера вызывается `FuelCalibrationLive.applyFromStableFilteredPercent` → `getCorrectedLiters` → обновление полей в `CanDataRepository`.
 
-- объём бака,
-- число зон,
-- строка JSON калибровки,
-- отфильтрованный процент топлива,
-- температура снаружи,
+**Без нового кадра:** в `BackgroundService` коллектор `startFuelCalibratedLitersWatcher` при изменении объёма бака, числа зон, JSON калибровки или порога зрелости пересобирает `FuelSmartEstimator`; отдельная корутина реагирует на **температуру снаружи** через `reapplyFromRepositoryFilteredPercentOrClear()` по текущему `fuelLevelPercentageFiltered`.
 
-пересобирает при необходимости `FuelSmartEstimator` и вызывает:
-
-`getCorrectedLiters(sensorLiters, currentTemp)`,
-
-где `sensorLiters = pct / 100 × tank`, `currentTemp` — наружная температура или **15 °C**.
+`getCorrectedLiters(sensorLiters, currentTemp)`, где `sensorLiters = pct / 100 × tank`, `currentTemp` — наружная температура или **15 °C**.
 
 Результат публикуется в `CanDataRepository`:
 
-- `fuelLevelCalibratedLiters` — литры;
+- `fuelLevelCalibratedLiters` — литры (стандарт +15 °C);
+- `fuelLevelCalibratedLitersActual` — с учётом текущей температуры;
 - `fuelCalibrationConfidence` — число 0…1 (с учётом зоны и «мёртвых» зон).
 
 ---
@@ -178,11 +183,11 @@
 
 ## 9. Краткая цепочка «от CAN до экрана»
 
-1. CAN → буфер → **`fuelLevelPercentageFiltered`** и параллельно **`fuelLevelCalibratedLiters`** (через оценщик).
-2. При росте калиброванных литров на величину ≥ 2% бака во время поездки → **`RefuelRecord`** (в записи — **проценты** до/после с CAN; литры — дельта по калибровке).
+1. CAN → **`fuelLevelPercentage`** (всегда); при **активной поездке** и 15 одинаковых подряд значениях в буфере → **`fuelLevelPercentageFiltered`** → **`fuelLevelCalibratedLiters`** (оценщик).
+2. В активной поездке `applyActiveTripFuelStep`: при росте калиброванных литров на величину ≥ **4%** бака → **`RefuelRecord`** (в записи — **проценты** до/после с filtered; литры — дельта по калибровке).
 3. Пользователь при необходимости правит литры/температуру.
 4. По кнопке → **`train`** (фильтр → зоны → JSON).
-5. Постоянно → **`getCorrectedLiters`** → **откалиброванные литры** и уверенность.
+5. При смене настроек/температуры → пересчёт по сохранённому filtered %; на шине — снова п. 1 только в активной поездке.
 
 ---
 
@@ -195,6 +200,7 @@
 | Калибровка | `fuellevelcalibration/*`, в т.ч. `FuelSmartEstimator`, `FuelPhysics`, `CalibrationStore`, `FuelCalibrationJson`, `FuelFilter` |
 | Настройки и сбросы | `Settings.kt` (`saveFuelTankLitersAndClearFuelCalibration`, …), `AppDataViewModels.kt` |
 | UI | `UiRefuelsTab.kt` |
-| Поток откалиброванных литров | `BackgroundService.startFuelCalibratedLitersWatcher` |
+| Буфер и gate по активной поездке | `CanFramesProcess.kt` (`FuelLevelBuffer`), `utils/Buffers.kt` |
+| Поток откалиброванных литров | `FuelCalibrationLive`, `BackgroundService.startFuelCalibratedLitersWatcher`, сохранение при остановке двигателя |
 
 Если поведение на машине расходится с ожиданиями, имеет смысл сверить: объём бака, число зон, качество процента CAN, корректность **литров по чеку** и **температуры** в записи заправки, а также сообщения лога службы после `train` и при отклонении фильтром.
