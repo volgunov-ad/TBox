@@ -29,3 +29,14 @@
 * `gradlew.bat assembleRuRelease`
 * `gradlew.bat assembleEnDebug`
 * `gradlew.bat assembleEnRelease`
+
+== Документация
+
+| Файл | Содержание |
+|------|------------|
+| [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) | Руководство пользователя (интерфейс, TBox, настройки) |
+| [docs/Trips.md](docs/Trips.md) | Логика поездок: старт, split, parking, ручное завершение |
+| [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка уровня топлива, учёт в поездке |
+| [Changelog.dm](Changelog.dm) | История версий (кратко, по релизам) |
+| [changelog.md](changelog.md) | Сводный changelog с 1.0.0 |
+| [AGENTS.md](AGENTS.md) | Сборка и окружение для разработки (Cursor Cloud) |
