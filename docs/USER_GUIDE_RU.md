@@ -6,6 +6,59 @@
 
 ---
 
+## Кратко: режимы CAN (mbCAN / VHAL)
+
+В приложении есть два режима работы с CAN:
+
+- **ГУ с Android 9** -> используется backend **mbCAN**.
+- **ГУ с Android 10** -> используется backend **VHAL** (`android.car` / `CarPropertyManager`).
+
+Переключение находится в настройках (две кнопки выбора типа ГУ).
+
+### Что делает приложение при переключении
+
+1. Сохраняет выбранный режим в настройках (`DataStore`).
+2. Общий слой `UniversalCanRepository` переключает активный backend.
+3. Старый backend отключается (`unbind`), новый подключается (`bind`).
+4. Все виджеты и экран настроек продолжают работать через единый API.
+
+Это сделано специально, чтобы поведение Android 9 не ломалось при доработках Android 10.
+
+### Как понять, что Android 10 (VHAL) работает
+
+В журнале (экспертный режим) должны быть строки:
+
+- `VHAL connected, propertyService=property`
+- `Availability: AVAILABLE`
+- при действии в UI: `SetProperty ... result=true`
+
+Если есть `result=true`, команда реально записана в VHAL.
+
+### Типовые проблемы и что это значит
+
+- `VHAL connect failed ...`  
+  Проблема на этапе подключения к `Car`/`CarPropertyManager`.
+
+- `POSSIBLE_PERMISSION ... SecurityException ... requires android.car.permission...`  
+  Ограничение прав на конкретный `propertyId` (часто на уровне системы/подписи ГУ).
+
+- `SetProperty ... result=false` без `SecurityException`  
+  Обычно проблема маппинга `propertyId` или значения команды.
+
+### Быстрый чеклист после установки
+
+1. Установить APK.
+2. В настройках выбрать **ГУ с Android 10**.
+3. Включить экспертный режим.
+4. Открыть журнал.
+5. Проверить 2-3 виджета/настройки (например, drive mode).
+6. Убедиться, что в логе есть `Availability: AVAILABLE` и `SetProperty ... result=true`.
+
+Подробная техническая версия (архитектура, маппинг, backend lifecycle):  
+`docs/CAN_BACKENDS_RU.md`
+
+---
+
 ## Часть 1. Пошаговые инструкции
 
 ### 1.1. Первый запуск и проверка связи

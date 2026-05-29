@@ -1,6 +1,8 @@
 package vad.dashing.tbox.mbcan
 
 import android.content.Context
+import android.content.ServiceConnection
+import android.os.Handler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,42 +21,109 @@ import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
+import vad.dashing.tbox.TboxRepository
 
 private class CarPropertyBridge(private val context: Context) {
     private var car: Any? = null
     private var propertyManager: Any? = null
+    @Volatile
+    private var serviceConnected: Boolean = false
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: android.content.ComponentName?, service: android.os.IBinder?) {
+            serviceConnected = true
+            Android10VhalRepository.logInfo("Car service connected")
+        }
+
+        override fun onServiceDisconnected(name: android.content.ComponentName?) {
+            serviceConnected = false
+            Android10VhalRepository.logWarn("Car service disconnected")
+        }
+    }
 
     fun connect(): MbCanAvailability {
         return runCatching {
             val carClass = Class.forName("android.car.Car")
-            val createCar = carClass.methods.firstOrNull { method ->
-                method.name == "createCar" &&
-                    java.lang.reflect.Modifier.isStatic(method.modifiers) &&
-                    method.parameterTypes.firstOrNull() == Context::class.java
-            } ?: throw IllegalStateException("Car.createCar(Context) not found")
-            val carInstance = createCar.invoke(null, context)
+            val carInstance = createCar(carClass)
                 ?: throw IllegalStateException("Car instance is null")
             carClass.getMethod("connect").invoke(carInstance)
+            waitForServiceConnection()
 
             val propertyService = runCatching {
                 carClass.getField("PROPERTY_SERVICE").get(null) as String
             }.getOrDefault("property")
-            val manager = carClass.getMethod("getCarManager", String::class.java)
-                .invoke(carInstance, propertyService)
-                ?: throw IllegalStateException("CarPropertyManager is null")
+            val manager = acquirePropertyManager(carClass, carInstance, propertyService)
             car = carInstance
             propertyManager = manager
+            Android10VhalRepository.logInfo("VHAL connected, propertyService=$propertyService")
         }.fold(
             onSuccess = { MbCanAvailability.Available },
-            onFailure = { MbCanAvailability.Unavailable("VHAL connect failed: ${it.message}") }
+            onFailure = {
+                val root = (it as? java.lang.reflect.InvocationTargetException)?.targetException ?: it
+                val msg = "VHAL connect failed: ${root.javaClass.simpleName}: ${root.message}"
+                Android10VhalRepository.logError(msg)
+                MbCanAvailability.Unavailable(msg)
+            }
         )
+    }
+
+    private fun waitForServiceConnection(timeoutMs: Long = 2_500L, stepMs: Long = 50L) {
+        val start = System.currentTimeMillis()
+        while (!serviceConnected && (System.currentTimeMillis() - start) < timeoutMs) {
+            Thread.sleep(stepMs)
+        }
+    }
+
+    private fun acquirePropertyManager(
+        carClass: Class<*>,
+        carInstance: Any,
+        propertyService: String,
+    ): Any {
+        var lastError: Throwable? = null
+        repeat(20) {
+            val manager = runCatching {
+                carClass.getMethod("getCarManager", String::class.java)
+                    .invoke(carInstance, propertyService)
+            }.onFailure { lastError = it }.getOrNull()
+            if (manager != null) return manager
+            Thread.sleep(100L)
+        }
+        throw IllegalStateException("CarPropertyManager is null: ${lastError?.javaClass?.simpleName}: ${lastError?.message}")
+    }
+
+    private fun createCar(carClass: Class<*>): Any? {
+        // Matches stock firmware apps:
+        // Car.createCar(Context, ServiceConnection) or Car.createCar(Context, ServiceConnection, Handler)
+        val method2 = runCatching {
+            carClass.getMethod("createCar", Context::class.java, ServiceConnection::class.java)
+        }.getOrNull()
+        if (method2 != null) {
+            Android10VhalRepository.logInfo("Using Car.createCar(Context, ServiceConnection)")
+            return method2.invoke(null, context, serviceConnection)
+        }
+
+        val method3 = runCatching {
+            carClass.getMethod("createCar", Context::class.java, ServiceConnection::class.java, Handler::class.java)
+        }.getOrNull()
+        if (method3 != null) {
+            Android10VhalRepository.logInfo("Using Car.createCar(Context, ServiceConnection, Handler)")
+            return method3.invoke(null, context, serviceConnection, null)
+        }
+
+        Android10VhalRepository.logError("No compatible Car.createCar overload found")
+        return null
     }
 
     fun disconnect() {
         runCatching {
             val c = car ?: return
             c.javaClass.getMethod("disconnect").invoke(c)
+            Android10VhalRepository.logInfo("VHAL disconnected")
+        }.onFailure {
+            Android10VhalRepository.logWarn(
+                "VHAL disconnect error: ${it.javaClass.simpleName}: ${it.message}"
+            )
         }
+        serviceConnected = false
         car = null
         propertyManager = null
     }
@@ -65,6 +134,8 @@ private class CarPropertyBridge(private val context: Context) {
             manager.javaClass
                 .getMethod("getIntProperty", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
                 .invoke(manager, propertyId, areaId) as Int
+        }.onFailure {
+            Android10VhalRepository.logReadFailure(propertyId, areaId, it)
         }.getOrNull()
     }
 
@@ -80,18 +151,26 @@ private class CarPropertyBridge(private val context: Context) {
                 )
                 .invoke(manager, propertyId, areaId, value)
             true
+        }.onFailure {
+            Android10VhalRepository.logWriteFailure(propertyId, areaId, value, it)
         }.getOrDefault(false)
     }
 }
 
 object Android10VhalRepository {
     private const val POLL_INTERVAL_MS = 1_500L
+    private const val LOG_TAG = "VHAL_A10"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
     private val sourceMutex = Mutex()
     private var pollJob: Job? = null
     private var bridge: CarPropertyBridge? = null
+    private val readErrorsLogged = mutableSetOf<String>()
+    private val writeErrorsLogged = mutableSetOf<String>()
+    private var lastAvailabilityReason: String? = null
+    @Volatile
+    private var carInfoPermissionDenied: Boolean = false
 
     private val _availability = MutableStateFlow<MbCanAvailability>(MbCanAvailability.Unknown)
     val availability: StateFlow<MbCanAvailability> = _availability.asStateFlow()
@@ -145,9 +224,73 @@ object Android10VhalRepository {
     private fun currentUnavailableReason(): String =
         (availability.value as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
 
+    private fun permissionDeniedReasonOrNull(): String? {
+        return if (carInfoPermissionDenied) {
+            "Missing permission android.car.permission.CAR_INFO"
+        } else {
+            null
+        }
+    }
+
+    internal fun logInfo(message: String) {
+        TboxRepository.addLog("INFO", LOG_TAG, message)
+    }
+
+    internal fun logWarn(message: String) {
+        TboxRepository.addLog("WARN", LOG_TAG, message)
+    }
+
+    internal fun logError(message: String) {
+        TboxRepository.addLog("ERROR", LOG_TAG, message)
+    }
+
+    internal fun logReadFailure(propertyId: Int, areaId: Int, throwable: Throwable) {
+        val key = "$propertyId:$areaId:${throwable.javaClass.name}:${throwable.message}"
+        synchronized(readErrorsLogged) {
+            if (!readErrorsLogged.add(key)) return
+        }
+        val root = (throwable.cause ?: throwable)
+        val prefix = if (root is SecurityException) "POSSIBLE_PERMISSION" else "READ_FAILED"
+        if (root is SecurityException && root.message?.contains("android.car.permission.CAR_INFO") == true) {
+            carInfoPermissionDenied = true
+            _availability.value = MbCanAvailability.Unavailable("Missing permission android.car.permission.CAR_INFO")
+        }
+        TboxRepository.addLog(
+            "WARN",
+            LOG_TAG,
+            "$prefix propertyId=$propertyId areaId=$areaId " +
+                "error=${root.javaClass.simpleName}: ${root.message}"
+        )
+    }
+
+    internal fun logWriteFailure(propertyId: Int, areaId: Int, value: Int, throwable: Throwable) {
+        val key = "$propertyId:$areaId:$value:${throwable.javaClass.name}:${throwable.message}"
+        synchronized(writeErrorsLogged) {
+            if (!writeErrorsLogged.add(key)) return
+        }
+        val root = (throwable.cause ?: throwable)
+        val prefix = if (root is SecurityException) "POSSIBLE_PERMISSION" else "WRITE_FAILED"
+        if (root is SecurityException && root.message?.contains("android.car.permission.CAR_INFO") == true) {
+            carInfoPermissionDenied = true
+            _availability.value = MbCanAvailability.Unavailable("Missing permission android.car.permission.CAR_INFO")
+        }
+        TboxRepository.addLog(
+            "WARN",
+            LOG_TAG,
+            "$prefix propertyId=$propertyId areaId=$areaId value=$value " +
+                "error=${root.javaClass.simpleName}: ${root.message}"
+        )
+    }
+
     private suspend fun ensureConnected(): MbCanAvailability = withContext(Dispatchers.Default) {
         val context = AppContextHolder.appContextOrNull
-            ?: return@withContext MbCanAvailability.Unavailable("No app context")
+            ?: return@withContext MbCanAvailability.Unavailable("No app context").also {
+                val reason = "No app context"
+                if (lastAvailabilityReason != reason) {
+                    logWarn("Availability: $reason")
+                    lastAvailabilityReason = reason
+                }
+            }
         val existing = bridge
         if (existing != null && availability.value is MbCanAvailability.Available) {
             return@withContext availability.value
@@ -157,18 +300,30 @@ object Android10VhalRepository {
         _availability.value = result
         if (result is MbCanAvailability.Available) {
             bridge = newBridge
+            if (lastAvailabilityReason != "AVAILABLE") {
+                logInfo("Availability: AVAILABLE")
+                lastAvailabilityReason = "AVAILABLE"
+            }
         } else {
             newBridge.disconnect()
+            val reason = (result as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
+            if (lastAvailabilityReason != reason) {
+                logWarn("Availability: $reason")
+                lastAvailabilityReason = reason
+            }
         }
         result
     }
 
     suspend fun bind(_scope: CoroutineScope) {
+        logInfo("bind()")
+        carInfoPermissionDenied = false
         ensureConnected()
         restartPolling()
     }
 
     suspend fun unbind() {
+        logInfo("unbind()")
         pollJob?.cancel()
         pollJob = null
         bridge?.disconnect()
@@ -176,6 +331,7 @@ object Android10VhalRepository {
     }
 
     suspend fun warmUpAvailabilityForUi() {
+        logInfo("warmUpAvailabilityForUi()")
         ensureConnected()
     }
 
@@ -239,7 +395,11 @@ object Android10VhalRepository {
     private suspend fun restartPolling() {
         pollJob?.cancel()
         val interestedSignals = sourceMutex.withLock { sourceSignals.values.flatten().toSet() }
-        if (interestedSignals.isEmpty()) return
+        if (interestedSignals.isEmpty()) {
+            logInfo("polling stopped: no interested signals")
+            return
+        }
+        logInfo("polling started: signals=${interestedSignals.size} ${interestedSignals.joinToString()}")
         pollJob = scope.launch {
             while (true) {
                 interestedSignals.forEach { signal -> refreshSignal(signal) }
@@ -249,6 +409,32 @@ object Android10VhalRepository {
     }
 
     suspend fun refreshSignal(signal: MbCanSignal) {
+        permissionDeniedReasonOrNull()?.let { deniedReason ->
+            when (signal) {
+                MbCanSignal.SteeringWheelHeat -> stateEngine.applySteeringCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.FrontWindscreenHeat -> stateEngine.applyWindshieldHeatCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.HvacDefroster -> stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.HvacAirRecirculation -> stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.AudioVolumeSpeed -> stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.FrontLeftSeatMode ->
+                    stateEngine.applySeatCandidate(MbCanSeatSlot.FrontLeft, MbCanSeatModeState.Unavailable(deniedReason))
+                MbCanSignal.FrontRightSeatMode ->
+                    stateEngine.applySeatCandidate(MbCanSeatSlot.FrontRight, MbCanSeatModeState.Unavailable(deniedReason))
+                MbCanSignal.RearLeftSeatMode ->
+                    stateEngine.applySeatCandidate(MbCanSeatSlot.RearLeft, MbCanSeatModeState.Unavailable(deniedReason))
+                MbCanSignal.RearRightSeatMode ->
+                    stateEngine.applySeatCandidate(MbCanSeatSlot.RearRight, MbCanSeatModeState.Unavailable(deniedReason))
+                MbCanSignal.AudioVolume -> _audioVolumeState.value = null
+                MbCanSignal.CarSettingsVehicleParams -> {
+                    _carSettingsEpsMode.value = null
+                    _carSettingsDriveMode.value = null
+                    _carSettingsDriveMode6dctWet.value = null
+                }
+                MbCanSignal.WirelessChargingSwitch -> Unit
+            }
+            return
+        }
         val connection = ensureConnected()
         if (connection !is MbCanAvailability.Available) {
             val reason = currentUnavailableReason()
@@ -392,6 +578,9 @@ object Android10VhalRepository {
     }
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {
+        permissionDeniedReasonOrNull()?.let { deniedReason ->
+            return MbCanCommandResult(false, deniedReason)
+        }
         val connection = ensureConnected()
         if (connection !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, currentUnavailableReason())
@@ -404,6 +593,7 @@ object Android10VhalRepository {
                     ?: return MbCanCommandResult(false, "Toggle unsupported for propertyId=${command.propertyId}")
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
+                logInfo("ToggleProperty request=${command.propertyId} effective=$effectivePropertyId")
                 val current = bridge?.getIntProperty(effectivePropertyId)
                     ?: return MbCanCommandResult(false, "Property read failed")
                 val target = when (current) {
@@ -412,6 +602,7 @@ object Android10VhalRepository {
                     else -> policy.unknownFallbackValue
                 }
                 val ok = bridge?.setIntProperty(effectivePropertyId, target) == true
+                logInfo("ToggleProperty result=$ok propertyId=$effectivePropertyId current=$current target=$target")
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
             }
@@ -425,7 +616,12 @@ object Android10VhalRepository {
                 }
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
+                logInfo(
+                    "SetProperty request=${command.propertyId} effective=$effectivePropertyId " +
+                        "value=${command.value}"
+                )
                 val ok = bridge?.setIntProperty(effectivePropertyId, command.value) == true
+                logInfo("SetProperty result=$ok propertyId=$effectivePropertyId value=${command.value}")
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
             }
@@ -436,6 +632,7 @@ object Android10VhalRepository {
                     ?: return MbCanCommandResult(false, "Toggle unsupported for audio propertyId=${command.propertyId}")
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
+                logInfo("ToggleAudioProperty request=${command.propertyId} effective=$effectivePropertyId")
                 val current = bridge?.getIntProperty(effectivePropertyId)
                     ?: return MbCanCommandResult(false, "Audio property read failed")
                 val target = when (current) {
@@ -444,6 +641,7 @@ object Android10VhalRepository {
                     else -> policy.unknownFallbackValue
                 }
                 val ok = bridge?.setIntProperty(effectivePropertyId, target) == true
+                logInfo("ToggleAudioProperty result=$ok propertyId=$effectivePropertyId current=$current target=$target")
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
             }
@@ -457,11 +655,17 @@ object Android10VhalRepository {
                 }
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
+                logInfo(
+                    "SetAudioProperty request=${command.propertyId} effective=$effectivePropertyId " +
+                        "value=${command.value}"
+                )
                 val ok = bridge?.setIntProperty(effectivePropertyId, command.value) == true
+                logInfo("SetAudioProperty result=$ok propertyId=$effectivePropertyId value=${command.value}")
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
             }
             is MbCanCommand.RefreshSignal -> {
+                logInfo("RefreshSignal ${command.signal}")
                 refreshSignal(command.signal)
                 MbCanCommandResult(true, "Refresh requested")
             }
@@ -469,6 +673,9 @@ object Android10VhalRepository {
     }
 
     suspend fun setAudioVolume(value: Int): MbCanCommandResult {
+        permissionDeniedReasonOrNull()?.let { deniedReason ->
+            return MbCanCommandResult(false, deniedReason)
+        }
         val connection = ensureConnected()
         if (connection !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, currentUnavailableReason())
@@ -476,7 +683,9 @@ object Android10VhalRepository {
         val target = value.coerceAtLeast(0)
         val effectiveVolumeId = FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownAudioPropertyId.VOLUME)
             ?: MbCanKnownAudioPropertyId.VOLUME
+        logInfo("setAudioVolume request=$value effectivePropertyId=$effectiveVolumeId")
         val ok = bridge?.setIntProperty(effectiveVolumeId, target) == true
+        logInfo("setAudioVolume result=$ok value=$target propertyId=$effectiveVolumeId")
         if (ok) {
             _audioVolumeState.value = target
             if (target > 0) _audioVolumeLastNonZeroInSession.value = target

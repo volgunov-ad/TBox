@@ -23,6 +23,51 @@
         android:minSdkVersion="29" />
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission
+        android:name="android.car.permission.CAR_INFO"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_VENDOR_EXTENSION"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_SPEED"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_POWERTRAIN"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_ENERGY"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_ENERGY_PORTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_EXTERIOR_LIGHTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_EXTERIOR_ENVIRONMENT"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CABIN"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_AUDIO_VOLUME"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_AUDIO_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_CAR_CLIMATE"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_INTERIOR_LIGHTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_EXTERIOR_LIGHTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_DISPLAY_UNITS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- Разрешения хранилища только для Android 9-10 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"

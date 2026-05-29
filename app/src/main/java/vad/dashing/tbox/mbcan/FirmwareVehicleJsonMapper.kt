@@ -29,10 +29,61 @@ object FirmwareVehicleJsonMapper {
 
     /**
      * Explicit verified translations between legacy mbCAN ids and firmware ids.
-     * Keep empty until a mapping is confirmed from evidence (logs/dumps/docs).
+     *
+     * Evidence source:
+     * - D:\Dashing\AirConditioning\sources\android\car\VehiclePropertyIds.java
+     * - D:\Dashing\CarSettings\sources\android\car\VehiclePropertyIds.java
+     * - usage in AirConditioning / CarSettings app sources (setIntProperty/getIntProperty).
      */
-    private val explicitWriteIdMap: Map<Int, Int> = emptyMap()
-    private val explicitReadIdMap: Map<Int, Int> = emptyMap()
+    private val explicitWriteIdMap: Map<Int, Int> = mapOf(
+        // MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH to 289412679, // T_0401_SET_MFS_Heat
+        // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289415309, // T_0201_SET_FrontWindscreenHeatiReq
+        // MBVehicleProperty.eHVAC_DEFROSTER_FRONT
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT to 289415309, // T_0201_SET_FrontWindscreenHeatiReq
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER (rear window + mirrors)
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH to 289415299, // T_0201_IHU_5_RearDefrostSwitch_Req
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION to 289415302, // T_0201_IHU_5_CirculationMode_Req
+        // Seat controls
+        MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415316, // T_0201_SET_FLSeatHeatVentSwReq
+        MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415315, // T_0201_SET_FRSeatHeatVentSwReq
+        MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH to 289415345, // T_0203_SET_LRSeatHeatVentSwReq
+        MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH to 289415344, // T_0203_SET_RRSeatHeatVentSwReq
+        // Car settings (drive/eps)
+        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE to 289412662, // T_0401_IHU_1_DVD_SET_EPSmode
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE to 289412695, // T_0401_IHU_9_DriveMode
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
+        // Audio
+        MbCanKnownAudioPropertyId.VOLUME to 557849090, // AUDIO_CURRENT_MAIN_VOLUME
+        MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849153, // AUDIO_WITH_SPEED
+    )
+
+    private val explicitReadIdMap: Map<Int, Int> = mapOf(
+        // MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH to 289412111, // R_0400_RBCM_MFS_HeatSts
+        // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289412114, // R_0400_RBCM_FGHeat_Request_CommandFeedb
+        // MBVehicleProperty.eHVAC_DEFROSTER_FRONT
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT to 289412114, // R_0400_RBCM_FGHeat_Request_CommandFeedb
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER (rear window + mirrors)
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH to 289415177, // R_0200_CEM_IPM_RearDefrosts
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION to 289415172, // R_0200_CEM_IPM_RecyMode
+        // Seat states
+        MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415193, // R_0200_CEM_IPM_FLSeatHeatVentSwSts
+        MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415192, // R_0200_CEM_IPM_FRSeatHeatVentSwSts
+        MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH to 289415203, // R_0202_RBCM_2_LRSeatHeatVentSwSts
+        MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH to 289415202, // R_0202_RBCM_2__RRSeatHeatVentSwSts
+        // Car settings (drive/eps)
+        MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE to 289412124, // R_0400_EPS_1_EPSModeSts
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE to 289412695, // T_0401_IHU_9_DriveMode
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
+        // Audio
+        MbCanKnownAudioPropertyId.VOLUME to 557849090, // AUDIO_CURRENT_MAIN_VOLUME
+        MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849153, // AUDIO_WITH_SPEED
+    )
 
     fun resolveWritePropertyId(requestedPropertyId: Int): Int? {
         val tables = loadTables() ?: return null

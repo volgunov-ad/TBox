@@ -29,3 +29,7 @@
 * `gradlew.bat assembleRuRelease`
 * `gradlew.bat assembleEnDebug`
 * `gradlew.bat assembleEnRelease`
+
+== Техническая документация по CAN backend
+Подробное описание выбора режима `mbCAN`/`VHAL`, работы `UniversalCanRepository`, подключения и диагностики:
+* `docs/CAN_BACKENDS_RU.md`
