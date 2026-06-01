@@ -1482,11 +1482,29 @@ class BackgroundService : Service() {
     private fun applyActiveTripFuelStep(tankL: Float) {
         val pctNow = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
         val litersNow = currentFuelAccountingLiters(tankL) ?: return
+        // ЗАЩИТА ОТ ФАНТОМНЫХ ЗАПРАВОК:
+        // Проверяем, не изменился ли объем бака или сетка калибровки в RAM-буфере.
+        tripLastFuelLitersCalibrated?.let { lastLiters ->
+            tripLastFuelPercent?.let { lastPercent ->
+                val expectedLitersForCurrentTank = (lastPercent / 100f) * tankL
+                // Если литры в буфере не бьются с текущим объемом бака (дельта > 0.5 л),
+                // значит пользователь изменил настройки или сбросил калибровку.
+                if (kotlin.math.abs(lastLiters - expectedLitersForCurrentTank) > 0.5f) {
+                    // Мягко обновляем буфер под новые настройки и выходим, блокируя ложный триггер заправки
+                    tripLastFuelLitersCalibrated = litersNow
+                    tripLastFuelPercent = pctNow
+                    return
+                }
+            }
+        }
         var refuelTripId: String? = null
         var refueledLiters = 0f
-        var percentBefore: Float? = null
+        var percentBefore: Float? = pctNow
         TripRepository.updateActiveTrip { cur ->
             val beforePct = tripLastFuelPercent
+            if (beforePct != null) {
+                percentBefore = beforePct // Перезаписываем реальным значением ДО заправки, если оно есть
+            }
             val step = TripFuelAccounting.applyFuelCalibratedLitersStep(
                 currentConsumedLiters = cur.fuelConsumedLiters,
                 lastCalibratedLiters = tripLastFuelLitersCalibrated,
@@ -1499,7 +1517,6 @@ class BackgroundService : Service() {
             if (step.refuelDetected && step.refueledLitersThisStep > 0f) {
                 refuelTripId = cur.id
                 refueledLiters = step.refueledLitersThisStep
-                percentBefore = beforePct
             }
             cur.copy(
                 fuelConsumedLiters = step.consumedLiters,
