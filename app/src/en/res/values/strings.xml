@@ -352,6 +352,8 @@
     <string name="settings_expert_mode_title">Expert mode</string>
     <string name="settings_expert_mode_warning_desc">All changes in expert mode are made at your own risk.\nHowever, your actions in this mode cannot lead to irreversible consequences.</string>
     <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>
+    <string name="settings_mbcan_diagnostics_title">CAN diagnostics (mbCAN/VHAL)</string>
+    <string name="settings_mbcan_diagnostics_desc">One switch for MBCAN_TMP and VHAL_A10 logs. Enabled only for the current background service session and not persisted.</string>
     <string name="settings_mock_location_title">Inject system location data (Mock locations)</string>
     <string name="settings_mock_location_ready">Ready to use</string>
     <string name="settings_mock_location_requirements">Requires permission and mock location setup</string>

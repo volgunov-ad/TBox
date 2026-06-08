@@ -22,7 +22,6 @@ import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
-import vad.dashing.tbox.TboxRepository
 
 private class CarPropertyBridge(private val context: Context) {
     private var car: Any? = null
@@ -343,15 +342,15 @@ object Android10VhalRepository {
     }
 
     internal fun logInfo(message: String) {
-        TboxRepository.addLog("INFO", LOG_TAG, message)
+        MbCanDiagnostics.log(level = "INFO", tag = LOG_TAG, message = message)
     }
 
     internal fun logWarn(message: String) {
-        TboxRepository.addLog("WARN", LOG_TAG, message)
+        MbCanDiagnostics.log(level = "WARN", tag = LOG_TAG, message = message)
     }
 
     internal fun logError(message: String) {
-        TboxRepository.addLog("ERROR", LOG_TAG, message)
+        MbCanDiagnostics.log(level = "ERROR", tag = LOG_TAG, message = message)
     }
 
     internal fun logReadFailure(propertyId: Int, areaId: Int, throwable: Throwable) {
@@ -365,10 +364,10 @@ object Android10VhalRepository {
             carInfoPermissionDenied = true
             _availability.value = MbCanAvailability.Unavailable("Missing permission android.car.permission.CAR_INFO")
         }
-        TboxRepository.addLog(
-            "WARN",
-            LOG_TAG,
-            "$prefix propertyId=$propertyId areaId=$areaId " +
+        MbCanDiagnostics.log(
+            level = "WARN",
+            tag = LOG_TAG,
+            message = "$prefix propertyId=$propertyId areaId=$areaId " +
                 "error=${root.javaClass.simpleName}: ${root.message}"
         )
     }
@@ -384,10 +383,10 @@ object Android10VhalRepository {
             carInfoPermissionDenied = true
             _availability.value = MbCanAvailability.Unavailable("Missing permission android.car.permission.CAR_INFO")
         }
-        TboxRepository.addLog(
-            "WARN",
-            LOG_TAG,
-            "$prefix propertyId=$propertyId areaId=$areaId value=$value " +
+        MbCanDiagnostics.log(
+            level = "WARN",
+            tag = LOG_TAG,
+            message = "$prefix propertyId=$propertyId areaId=$areaId value=$value " +
                 "error=${root.javaClass.simpleName}: ${root.message}"
         )
     }
