@@ -10,7 +10,7 @@ fun isMediaVolumeWidgetDataKey(dataKey: String): Boolean {
 }
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalMediaVolumeEnabled(): Boolean {
-    return isMediaVolumeWidgetDataKey(dataKey) && useMbCanVhal
+    return isMediaVolumeWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
 }
 
 fun isEngineRpmWidgetDataKey(dataKey: String): Boolean {
@@ -18,5 +18,9 @@ fun isEngineRpmWidgetDataKey(dataKey: String): Boolean {
 }
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalEngineRpmEnabled(): Boolean {
-    return isEngineRpmWidgetDataKey(dataKey) && useMbCanVhal
+    return isEngineRpmWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalWidgetEnabled(): Boolean {
+    return WidgetsRepository.supportsUseMbCanVhal(dataKey) && useMbCanVhal
 }

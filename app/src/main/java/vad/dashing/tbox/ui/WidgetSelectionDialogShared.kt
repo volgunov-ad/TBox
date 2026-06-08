@@ -62,8 +62,6 @@ import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
-import vad.dashing.tbox.isEngineRpmWidgetDataKey
-import vad.dashing.tbox.isMediaVolumeWidgetDataKey
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizeWidgetScale
@@ -213,7 +211,7 @@ internal class WidgetSelectionDialogState(
         if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
             singleLineDualMetrics = false
         }
-        if (!isMediaVolumeWidgetDataKey(key) && !isEngineRpmWidgetDataKey(key)) {
+        if (!WidgetsRepository.supportsUseMbCanVhal(key)) {
             useMbCanVhal = false
         }
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
@@ -681,10 +679,7 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = 300.dp
                         )
                     }
-                    if (
-                        isMediaVolumeWidgetDataKey(state.selectedDataKey) ||
-                        isEngineRpmWidgetDataKey(state.selectedDataKey)
-                    ) {
+                    if (WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey)) {
                         SettingSwitch(
                             state.useMbCanVhal,
                             { state.useMbCanVhal = it },
@@ -1166,10 +1161,8 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
             },
-            useMbCanVhal = (
-                isMediaVolumeWidgetDataKey(state.selectedDataKey) ||
-                    isEngineRpmWidgetDataKey(state.selectedDataKey)
-                ) && state.useMbCanVhal,
+            useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey) &&
+                state.useMbCanVhal,
             tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },
