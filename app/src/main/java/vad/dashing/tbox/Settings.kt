@@ -82,8 +82,8 @@ data class FloatingDashboardWidgetConfig(
     val selectedVariant: Int = 0,
     /** Fixed target value for [DRIVE_MODE_WIDGET_DATA_KEY] tile. */
     val selectedDriveMode: Int = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE,
-    /** If true, media volume widget controls mbCAN `eAUDIO_PROPERTY_VOLUME` instead of Android AudioManager. */
-    val mediaVolumeUseMbCan: Boolean = false,
+    /** If true, media volume widget controls CAN backend (mbCAN/VHAL) instead of Android AudioManager. */
+    val useMbCanVhal: Boolean = false,
     /**
      * Optional background image on top of the tile color (light theme).
      * Path relative to [Context.filesDir]; must stay under [TileBackgroundImageStorage.DIR_NAME].

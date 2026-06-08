@@ -135,7 +135,7 @@ internal class WidgetSelectionDialogState(
     var mediaKeepPlayerForeground by mutableStateOf(
         initialConfig.mediaKeepPlayerForeground
     )
-    var mediaVolumeUseMbCan by mutableStateOf(initialConfig.mediaVolumeUseMbCan)
+    var useMbCanVhal by mutableStateOf(initialConfig.useMbCanVhal)
     var selectedDriveMode by mutableIntStateOf(
         if (initialConfig.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
             normalizeDriveModeWidgetRawValue(initialConfig.selectedDriveMode)
@@ -213,7 +213,7 @@ internal class WidgetSelectionDialogState(
             singleLineDualMetrics = false
         }
         if (!isMediaVolumeWidgetDataKey(key)) {
-            mediaVolumeUseMbCan = false
+            useMbCanVhal = false
         }
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
@@ -682,9 +682,9 @@ internal fun WidgetSelectionDialogForm(
                     }
                     if (isMediaVolumeWidgetDataKey(state.selectedDataKey)) {
                         SettingSwitch(
-                            state.mediaVolumeUseMbCan,
-                            { state.mediaVolumeUseMbCan = it },
-                            stringResource(R.string.widget_media_volume_use_mbcan),
+                            state.useMbCanVhal,
+                            { state.useMbCanVhal = it },
+                            stringResource(R.string.widget_media_volume_use_mbcan_vhal),
                             "",
                             state.togglesEnabled
                         )
@@ -1162,8 +1162,8 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
             },
-            mediaVolumeUseMbCan = isMediaVolumeWidgetDataKey(state.selectedDataKey) &&
-                state.mediaVolumeUseMbCan,
+            useMbCanVhal = isMediaVolumeWidgetDataKey(state.selectedDataKey) &&
+                state.useMbCanVhal,
             tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },

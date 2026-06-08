@@ -8,6 +8,6 @@ fun isMediaVolumeWidgetDataKey(dataKey: String): Boolean {
         dataKey == MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 }
 
-fun FloatingDashboardWidgetConfig.isMbCanMediaVolumeEnabled(): Boolean {
-    return isMediaVolumeWidgetDataKey(dataKey) && mediaVolumeUseMbCan
+fun FloatingDashboardWidgetConfig.isMbCanVhalMediaVolumeEnabled(): Boolean {
+    return isMediaVolumeWidgetDataKey(dataKey) && useMbCanVhal
 }

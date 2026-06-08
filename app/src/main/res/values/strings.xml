@@ -151,7 +151,7 @@
     <string name="widget_media_volume_action_increase">Увеличить громкость медиа</string>
     <string name="widget_media_volume_action_decrease">Уменьшить громкость медиа</string>
     <string name="widget_media_volume_action_mute">Включить или выключить звук медиа</string>
-    <string name="widget_media_volume_use_mbcan">Работа через mbCAN</string>
+    <string name="widget_media_volume_use_mbcan_vhal">Работа через CAN (mbCAN/VHAL)</string>
     <string name="widget_drive_mode_target_title">Режим вождения для кнопки</string>
     <string name="widget_drive_mode_target_desc">Команда, отправляемая при нажатии</string>
     <string name="media_player_yandex_music">Я.Музыка</string>

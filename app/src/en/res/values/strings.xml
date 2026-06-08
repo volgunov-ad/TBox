@@ -148,7 +148,7 @@
     <string name="widget_media_volume_action_increase">Increase media volume</string>
     <string name="widget_media_volume_action_decrease">Decrease media volume</string>
     <string name="widget_media_volume_action_mute">Toggle media mute</string>
-    <string name="widget_media_volume_use_mbcan">Use mbCAN mode</string>
+    <string name="widget_media_volume_use_mbcan_vhal">Use CAN mode (mbCAN/VHAL)</string>
     <string name="widget_drive_mode_target_title">Drive mode for button</string>
     <string name="widget_drive_mode_target_desc">Command sent on tap</string>
     <string name="media_player_yandex_music">Yandex Music</string>

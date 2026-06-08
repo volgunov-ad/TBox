@@ -35,7 +35,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.isMbCanMediaVolumeEnabled
+import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -82,8 +82,8 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCan = remember(widgetConfigs) {
         UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
-    val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
+    val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
@@ -99,7 +99,7 @@ internal fun DashboardPanelGridAndFrames(
             }
         }
     }
-    if (panelNeedsMbCanMediaVolume) {
+    if (panelNeedsMbCanVhalMediaVolume) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
             UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-media-volume",

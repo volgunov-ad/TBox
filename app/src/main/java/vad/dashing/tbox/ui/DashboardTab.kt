@@ -59,7 +59,7 @@ import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
-import vad.dashing.tbox.isMbCanMediaVolumeEnabled
+import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
@@ -109,8 +109,8 @@ fun MainDashboardTab(
     val panelNeedsMbCan = remember(widgetConfigs) {
         UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
-    val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
+    val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
     }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
@@ -147,7 +147,7 @@ fun MainDashboardTab(
             }
         }
     }
-    if (panelNeedsMbCanMediaVolume) {
+    if (panelNeedsMbCanVhalMediaVolume) {
         LaunchedEffect(widgetConfigs) {
             UniversalCanRepository.setSourceSignals(
                 "dashboard-tab-main-media-volume",
