@@ -34,6 +34,16 @@
 
 Если есть `result=true`, команда реально записана в VHAL.
 
+### Подписка и интервалы обновления (кратко)
+
+- **Android 9 / mbCAN**: используется и push-callback, и poll.
+  - обычный poll: примерно раз в **30 сек**;
+  - после команды: burst-poll примерно раз в **1.5 сек** (около **15 сек**).
+- **Android 10 / VHAL**: используется push-callback + poll fallback.
+  - push: `CarPropertyManager.registerListener(..., 0.0f)` для активных `propertyId`;
+  - poll fallback: как в mbCAN — обычно примерно раз в **30 сек**;
+  - после успешных команд: burst-период примерно раз в **1.5 сек** (около **15 сек**).
+
 ### Типовые проблемы и что это значит
 
 - `VHAL connect failed ...`  

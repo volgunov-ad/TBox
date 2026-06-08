@@ -65,6 +65,31 @@
 - propertyId в этом режиме — legacy mbCAN ids (`MbCanKnownVehiclePropertyId`, `MbCanKnownAudioPropertyId`);
 - поведение старого ГУ не должно изменяться при развитии VHAL backend.
 
+### 3.1 Подписка push (callback) в mbCAN
+
+В `mbCAN` используется комбинированная модель:
+
+- **push callback** от vendor-движка (через `IMBCmdListener.onCmdChanged`);
+- **poll** как страховка и для периодической валидации состояния.
+
+Как это реализовано:
+
+- `MbCanRepository` через `MbCanEngineFacade.sync*CmdListener(...)` включает callback-listener только когда есть активные интересы сигналов;
+- входящие push-события буферизуются и коалесцируются:
+  - `CFG_VEHICLE_PUSH_COALESCE_MS = 100 ms`,
+  - `CFG_AUDIO_PUSH_COALESCE_MS = 100 ms`;
+- после коалесса значения применяются в `StateFlow` на отдельном single-thread dispatcher.
+
+### 3.2 Poll interval в mbCAN
+
+Интервалы polling задаёт `MbCanJobManager`:
+
+- `NORMAL_POLL_MS = 30_000 ms` (обычный режим);
+- `BURST_POLL_MS = 1_500 ms` (ускоренный режим после команд);
+- `BURST_DURATION_MS = 15_000 ms` (длительность burst-окна).
+
+То есть после команды чтение идёт чаще (1.5 сек), затем возвращается к 30 сек.
+
 ---
 
 ## 4) Как работает Android 10 backend (`Android10VhalRepository`)
@@ -91,7 +116,28 @@
 - для каждого сигнала вызывается `refreshSignal(...)`;
 - чтение делается через `CarPropertyManager.getIntProperty(propertyId, areaId=0)`.
 
-### 4.3 Запись команд
+### 4.3 Подписка push (callback) в VHAL
+
+Реализована комбинированная схема (как в штатных приложениях `CarSettings` / `AirConditioning`):
+
+- после `Car.createCar(..., ServiceConnection)` и получения `CarPropertyManager` выполняется
+  `registerListener(listener, propertyId, 0.0f)` для активных `propertyId`;
+- входящие `onChangeEvent` сразу применяются в `StateFlow` (быстрое push-обновление);
+- ошибки `onErrorEvent` логируются в `TboxRepository` (`VHAL_A10`);
+- при изменении набора виджетов/сигналов список подписок пересобирается (`register/unregister`).
+
+### 4.4 Poll interval в VHAL
+
+Интервалы такие же, как в `mbCAN`:
+
+- `NORMAL_POLL_INTERVAL_MS = 30_000 ms`;
+- `BURST_POLL_INTERVAL_MS = 1_500 ms`;
+- `BURST_DURATION_MS = 15_000 ms`.
+
+Polling остаётся fallback-механизмом: даже при push-событиях выполняется периодическая валидация состояний.
+После успешных команд (`set/toggle`) запускается burst-окно, затем интервал возвращается к 30 сек.
+
+### 4.5 Запись команд
 
 Команды (`ToggleProperty`, `SetProperty`, аудио-команды) идут через:
 
@@ -99,7 +145,7 @@
 
 Перед записью применяется резолвинг `propertyId` (см. раздел 5).
 
-### 4.4 Диагностика и логи
+### 4.6 Диагностика и логи
 
 Добавлены диагностические логи в `TboxRepository` (tag: `VHAL_A10`):
 
