@@ -41,12 +41,28 @@
   - `MbCanRepository` (Android 9),
   - `Android10VhalRepository` (Android 10);
 - предоставляет единые `StateFlow` для состояний (подогревы, сиденья, drive mode, аудио и т.д.);
+- предоставляет единые `StateFlow` для RPM (`engineRpmState`) в режимах mbCAN/VHAL;
 - управляет `bind/unbind`, `setSourceSignals`, `execute(...)`, `setAudioVolume(...)`.
 
 Зачем это нужно:
 
 - UI-виджеты и экран настроек работают через один API;
 - добавление/исправление backend не требует переписывать все composable и service-слой.
+
+### 2.1 Ключевые функции и аргументы (`UniversalCanRepository`)
+
+- `setMode(mode: HeadUnitCanMode)`  
+  `mode` — `Android9MbCan` или `Android10Vhal`.
+- `bind(scope: CoroutineScope)` / `unbind()`  
+  `scope` — корутинный scope сервиса/приложения для фоновых job.
+- `setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>)`  
+  `sourceId` — идентификатор экрана/панели; `widgetKeys` — набор `dataKey` активных виджетов.
+- `setSourceSignals(sourceId: String, signals: Set<MbCanSignal>)`  
+  Явная подписка на сигналы (например, `AudioVolume`, `EngineRpm`), когда нужно не через `dataKey`.
+- `execute(command: MbCanCommand): MbCanCommandResult`  
+  `command` — `ToggleProperty/SetProperty/ToggleAudioProperty/SetAudioProperty/RefreshSignal`.
+- `setAudioVolume(value: Int): MbCanCommandResult`  
+  `value` — целевая громкость.
 
 ---
 
@@ -75,10 +91,26 @@
 Как это реализовано:
 
 - `MbCanRepository` через `MbCanEngineFacade.sync*CmdListener(...)` включает callback-listener только когда есть активные интересы сигналов;
+- для RPM дополнительно используется callback `onVehicleEngineStatusChange(MBCanVehicleEngine)` и polling чтение `MBCanVehicleEngine.getfSpeed()`;
 - входящие push-события буферизуются и коалесцируются:
   - `CFG_VEHICLE_PUSH_COALESCE_MS = 100 ms`,
   - `CFG_AUDIO_PUSH_COALESCE_MS = 100 ms`;
 - после коалесса значения применяются в `StateFlow` на отдельном single-thread dispatcher.
+
+Ключевые вызовы в mbCAN:
+
+- `MbCanEngineFacade.subscribe(dataTypeNames: Set<String>)` / `unSubscribe(...)`  
+  `dataTypeNames` — enum-имена vendor-типа, например `eMBCAN_CFG_VEHICLE`, `eMBCAN_CFG_AUDIO`, `eMBCAN_VEHICLE_ENGINE`.
+- `MbCanEngineFacade.syncVehicleCfgCmdListener(active: Boolean)`  
+  Подключает/отключает `IMBCmdListener` для push по `eMBCAN_CFG_VEHICLE`.
+- `MbCanEngineFacade.syncAudioCfgCmdListener(active: Boolean)`  
+  Подключает/отключает `IMBCmdListener` для push по `eMBCAN_CFG_AUDIO`.
+- `MbCanEngineFacade.registerSettingsTelemetryBridge()` / `unregisterSettingsTelemetryBridge()`  
+  Включает callback `onVehicleEngineStatusChange(MBCanVehicleEngine)` (используется для push RPM).
+- `MbCanEngineFacade.canGetVehicleParam(propertyId: Int): Int?` / `canSetVehicleParam(propertyId: Int, value: Int): Int?`
+- `MbCanEngineFacade.canGetAudioParam(propertyId: Int): Int?` / `canSetAudioParam(propertyId: Int, value: Int): Int?`
+- `MbCanEngineFacade.readVehicleEngineRpm(): Float?`  
+  Читает RPM через `getMbCanData(22, MBCanVehicleEngine.class)` и `MBCanVehicleEngine.getfSpeed()`.
 
 ### 3.2 Poll interval в mbCAN
 
@@ -104,6 +136,14 @@
 - ожидание `onServiceConnected`,
 - получение `CarPropertyManager` через `getCarManager(Car.PROPERTY_SERVICE)`.
 
+Функции/аргументы подключения:
+
+- `Car.createCar(context: Context, serviceConnection: ServiceConnection)`
+- `Car.createCar(context: Context, serviceConnection: ServiceConnection, handler: Handler?)`
+- `car.connect()` / `car.disconnect()`
+- `car.getCarManager(serviceName: String)`  
+  `serviceName` обычно `Car.PROPERTY_SERVICE` (`"property"`).
+
 Если подключение не удалось:
 
 - `availability = Unavailable(...)`;
@@ -115,6 +155,14 @@
 - при наличии источников запускается polling-цикл (`POLL_INTERVAL_MS`);
 - для каждого сигнала вызывается `refreshSignal(...)`;
 - чтение делается через `CarPropertyManager.getIntProperty(propertyId, areaId=0)`.
+- для RPM в VHAL используется `propertyId = 291504901` (`ENGINE_RPM`).
+
+Ключевые вызовы чтения/записи:
+
+- `CarPropertyManager.getIntProperty(propertyId: Int, areaId: Int)`
+- `CarPropertyManager.setIntProperty(propertyId: Int, areaId: Int, value: Int)`
+- `registerListener(listener, propertyId, 0.0f)` / `unregisterListener(listener, propertyId)`  
+  `0.0f` — on-change rate, как в штатных приложениях.
 
 ### 4.3 Подписка push (callback) в VHAL
 
@@ -147,7 +195,12 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 ### 4.6 Диагностика и логи
 
-Добавлены диагностические логи в `TboxRepository` (tag: `VHAL_A10`):
+Диагностика `mbCAN` и `VHAL` включается **единой** опцией (`ACTION_SET_MBCAN_DIAGNOSTICS`):
+
+- `MBCAN_TMP` и `VHAL_A10` пишутся только когда включён флаг `MbCanDiagnostics.enabled`;
+- флаг сессионный (не сохраняется между перезапусками `BackgroundService`).
+
+Логи `VHAL_A10` содержат:
 
 - `bind/unbind`, старт/стоп polling;
 - какой overload `Car.createCar` выбран;
@@ -162,6 +215,16 @@ Polling остаётся fallback-механизмом: даже при push-с�
 ## 5) Маппинг propertyId для Android 10
 
 В VHAL режиме нельзя использовать legacy mbCAN ids напрямую. Для этого используется `FirmwareVehicleJsonMapper`.
+
+Источники ID:
+
+- VHAL ID берутся из `android.car.VehiclePropertyIds` штатной прошивки.
+  - локальная reference-копия в проекте: `docs/reference/VehiclePropertyIds.java`
+  - исходный файл: `D:\Dashing\CarSettings\sources\android\car\VehiclePropertyIds.java`
+- mbCAN ID берутся из vendor-библиотеки `com.mengbo.mbCan`:
+  - `com.mengbo.mbCan.defines.*` (типы/enum/константы),
+  - `com.mengbo.mbCan.entity.*` (структуры данных, например `MBCanVehicleEngine`),
+  - плюс наши внутренние маппинги `MbCanKnownVehiclePropertyId` / `MbCanKnownAudioPropertyId`.
 
 Источники маппинга:
 
@@ -210,7 +273,35 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 ---
 
-## 8) Что проверять при диагностике
+## 8) useMbCanVhal в виджетах
+
+`FloatingDashboardWidgetConfig.useMbCanVhal` доступен только для типов, перечисленных в
+`WidgetsRepository.supportsUseMbCanVhal(...)`:
+
+- `mediaVolumeWidgetHorizontal`
+- `mediaVolumeWidgetVertical`
+- `engineRPM`
+
+Поведение:
+
+- при `useMbCanVhal = false` виджет использует обычный источник (например, `engineRPM` из CAN-frame pipeline);
+- при `useMbCanVhal = true` виджет работает через `UniversalCanRepository` (mbCAN/VHAL backend);
+- для таких виджетов панель регистрирует соответствующие CAN interests через `setSourceSignals(...)`.
+
+Какие именно сигналы и функции используются:
+
+- `mediaVolumeWidgetHorizontal` / `mediaVolumeWidgetVertical`
+  - interest: `MbCanSignal.AudioVolume`
+  - чтение: `UniversalCanRepository.audioVolumeState`
+  - запись: `UniversalCanRepository.setAudioVolume(value: Int)`
+- `engineRPM`
+  - interest: `MbCanSignal.EngineRpm`
+  - чтение: `UniversalCanRepository.engineRpmState`
+  - запись не используется (read-only сигнал).
+
+---
+
+## 9) Что проверять при диагностике
 
 Минимальный чеклист по логам:
 

@@ -97,8 +97,8 @@ private class CarPropertyBridge(private val context: Context) {
     }
 
     private fun createCar(carClass: Class<*>): Any? {
-        // Matches stock firmware apps:
-        // Car.createCar(Context, ServiceConnection) or Car.createCar(Context, ServiceConnection, Handler)
+        // Matches confirmed working path from latest production logs and stock apps.
+        // Keep only Car.createCar(Context, ServiceConnection).
         val method2 = runCatching {
             carClass.getMethod("createCar", Context::class.java, ServiceConnection::class.java)
         }.getOrNull()
@@ -106,16 +106,7 @@ private class CarPropertyBridge(private val context: Context) {
             Android10VhalRepository.logInfo("Using Car.createCar(Context, ServiceConnection)")
             return method2.invoke(null, context, serviceConnection)
         }
-
-        val method3 = runCatching {
-            carClass.getMethod("createCar", Context::class.java, ServiceConnection::class.java, Handler::class.java)
-        }.getOrNull()
-        if (method3 != null) {
-            Android10VhalRepository.logInfo("Using Car.createCar(Context, ServiceConnection, Handler)")
-            return method3.invoke(null, context, serviceConnection, null)
-        }
-
-        Android10VhalRepository.logError("No compatible Car.createCar overload found")
+        Android10VhalRepository.logError("Missing Car.createCar(Context, ServiceConnection)")
         return null
     }
 
