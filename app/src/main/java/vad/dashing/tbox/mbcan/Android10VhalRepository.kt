@@ -552,7 +552,7 @@ object Android10VhalRepository {
         }
     }
 
-    private fun applyPushPropertyUpdate(propertyId: Int, raw: Int) {
+    private suspend fun applyPushPropertyUpdate(propertyId: Int, raw: Int) {
         fun resolved(id: Int): Int = FirmwareVehicleJsonMapper.resolveReadPropertyId(id) ?: id
         when (propertyId) {
             resolved(MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH) ->
