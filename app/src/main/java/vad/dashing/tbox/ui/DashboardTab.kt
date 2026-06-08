@@ -59,6 +59,7 @@ import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
+import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.normalizeWidgetConfigs
@@ -112,6 +113,9 @@ fun MainDashboardTab(
     val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
     }
+    val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
+    }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
@@ -157,6 +161,19 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("dashboard-tab-main-media-volume")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineRpm) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-engine-rpm",
+                setOf(MbCanSignal.EngineRpm)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-engine-rpm")
             }
         }
     }

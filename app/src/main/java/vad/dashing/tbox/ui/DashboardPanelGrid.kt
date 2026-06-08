@@ -35,6 +35,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
@@ -85,6 +86,9 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
     }
+    val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
+    }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
             val activeKeys = widgetConfigs
@@ -109,6 +113,19 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineRpm) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-engine-rpm",
+                setOf(MbCanSignal.EngineRpm)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-engine-rpm")
             }
         }
     }

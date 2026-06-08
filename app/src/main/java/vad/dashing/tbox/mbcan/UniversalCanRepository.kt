@@ -177,6 +177,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val engineRpmState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.engineRpmState
+            } else {
+                Android10VhalRepository.engineRpmState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     fun setMode(mode: HeadUnitCanMode) {
         if (_mode.value == mode) return
         _mode.value = mode

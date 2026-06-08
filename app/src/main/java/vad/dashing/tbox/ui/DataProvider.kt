@@ -17,6 +17,7 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.seatModeToString
 import vad.dashing.tbox.valueToString
 import java.text.DateFormat
@@ -37,6 +38,8 @@ object DashboardCompositeTileFlowKeys {
     const val WHEEL3_PRESSURE_WHEELS_TILE = "wheel3Pressure_wheelsTile"
     const val WHEEL4_PRESSURE_WHEELS_TILE = "wheel4Pressure_wheelsTile"
 }
+
+const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
 
 private data class ValueFlowCacheKey(val key: String, val accuracy: Int?)
 
@@ -96,6 +99,7 @@ class TboxDataProvider(
             "steerAngle" -> canViewModel.steerAngle.mapState { valueToString(it, eff(1)) }
             "steerSpeed" -> canViewModel.steerSpeed.mapState { valueToString(it, eff(1)) }
             "engineRPM" -> canViewModel.engineRPM.mapState { valueToString(it, eff(1)) }
+            ENGINE_RPM_CAN_FLOW_KEY -> UniversalCanRepository.engineRpmState.mapState { valueToString(it, eff(1)) }
             "param1" -> canViewModel.param1.mapState { valueToString(it, eff(1)) }
             "param2" -> canViewModel.param2.mapState { valueToString(it, eff(1)) }
             "param3" -> canViewModel.param3.mapState { valueToString(it, eff(1)) }

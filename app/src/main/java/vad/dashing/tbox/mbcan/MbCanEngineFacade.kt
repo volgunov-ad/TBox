@@ -187,8 +187,15 @@ object MbCanEngineFacade {
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
             when (method.name) {
-                "onCanVehicleSpeed",
-                "onVehicleEngineStatusChange" -> Unit
+                "onCanVehicleSpeed" -> Unit
+                "onVehicleEngineStatusChange" -> {
+                    val engine = args?.getOrNull(0)
+                    val rpm = runCatching {
+                        val getter = engine?.javaClass?.getMethod("getfSpeed")
+                        (getter?.invoke(engine) as? Number)?.toFloat()
+                    }.getOrNull()
+                    MbCanRepository.scheduleEngineRpmPush(rpm)
+                }
             }
             null
         }
@@ -310,6 +317,23 @@ object MbCanEngineFacade {
         } catch (_: Throwable) {
             audioCfgCmdListenerProxy = null
         }
+    }
+
+    /**
+     * Reads RPM from [com.mengbo.mbCan.entity.MBCanVehicleEngine#getfSpeed()] via
+     * [com.mengbo.mbCan.MBCanEngine.getMbCanData] data type 22 (eMBCAN_VEHICLE_ENGINE).
+     */
+    fun readVehicleEngineRpm(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val engCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleEngine")
+            val engObj = getMbCanData.invoke(inst, 22, engCls) ?: return null
+            val fs = engCls.getMethod("getfSpeed").invoke(engObj) as? Number
+            fs?.toFloat()
+        }.getOrNull()
     }
 
     @Synchronized

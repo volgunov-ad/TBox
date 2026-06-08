@@ -39,6 +39,7 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     RearRightSeatMode(setOf("eMBCAN_CFG_VEHICLE")),
     AudioVolume(setOf("eMBCAN_CFG_AUDIO")),
     AudioVolumeSpeed(setOf("eMBCAN_CFG_AUDIO")),
+    EngineRpm(setOf("eMBCAN_VEHICLE_ENGINE")),
 }
 
 sealed class MbCanBinaryState {
@@ -175,6 +176,8 @@ object MbCanRepository {
     val audioVolumeState: StateFlow<Int?> = _audioVolumeState.asStateFlow()
     private val _audioVolumeLastNonZeroInSession = MutableStateFlow<Int?>(null)
     val audioVolumeLastNonZeroInSession: StateFlow<Int?> = _audioVolumeLastNonZeroInSession.asStateFlow()
+    private val _engineRpmState = MutableStateFlow<Float?>(null)
+    val engineRpmState: StateFlow<Float?> = _engineRpmState.asStateFlow()
 
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
@@ -246,6 +249,7 @@ object MbCanRepository {
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
+            MbCanEngineFacade.unregisterSettingsTelemetryBridge()
             reapplyJob?.cancel()
             reapplyJob = null
             boundScope = null
@@ -355,6 +359,16 @@ object MbCanRepository {
         }
         cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
         cfgPushHandler.postDelayed(flushAudioCfgPushesRunnable, CFG_AUDIO_PUSH_COALESCE_MS)
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback.
+     */
+    fun scheduleEngineRpmPush(rpm: Float?) {
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _engineRpmState.value = rpm?.coerceAtLeast(0f)
+        }
     }
 
     private fun flushPendingAudioPushes() {
@@ -557,6 +571,7 @@ object MbCanRepository {
             MbCanSignal.FrontRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.FrontRight)
             MbCanSignal.RearLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.RearLeft)
             MbCanSignal.RearRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.RearRight)
+            MbCanSignal.EngineRpm -> refreshEngineRpm()
         }
     }
 
@@ -815,6 +830,23 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshEngineRpm() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _engineRpmState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _engineRpmState.value = null
+                return@withContext
+            }
+            _engineRpmState.value = MbCanEngineFacade.readVehicleEngineRpm()?.coerceAtLeast(0f)
+        }
+    }
+
     private fun applyAudioVolumeRaw(raw: Int?) {
         val safeValue = raw?.coerceAtLeast(0)
         val previous = _audioVolumeState.value
@@ -922,8 +954,14 @@ object MbCanRepository {
         val needsCfgAudioListener = mergedSignals.any { signal ->
             signal.subscribeDataTypes.contains(CFG_AUDIO_DATA_TYPE)
         }
+        val needsSettingsTelemetry = mergedSignals.contains(MbCanSignal.EngineRpm)
         MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
         MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener)
+        if (needsSettingsTelemetry) {
+            MbCanEngineFacade.registerSettingsTelemetryBridge()
+        } else {
+            MbCanEngineFacade.unregisterSettingsTelemetryBridge()
+        }
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {

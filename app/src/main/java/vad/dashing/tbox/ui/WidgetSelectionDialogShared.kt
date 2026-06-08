@@ -62,6 +62,7 @@ import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.isEngineRpmWidgetDataKey
 import vad.dashing.tbox.isMediaVolumeWidgetDataKey
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
@@ -212,7 +213,7 @@ internal class WidgetSelectionDialogState(
         if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
             singleLineDualMetrics = false
         }
-        if (!isMediaVolumeWidgetDataKey(key)) {
+        if (!isMediaVolumeWidgetDataKey(key) && !isEngineRpmWidgetDataKey(key)) {
             useMbCanVhal = false
         }
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
@@ -680,7 +681,10 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = 300.dp
                         )
                     }
-                    if (isMediaVolumeWidgetDataKey(state.selectedDataKey)) {
+                    if (
+                        isMediaVolumeWidgetDataKey(state.selectedDataKey) ||
+                        isEngineRpmWidgetDataKey(state.selectedDataKey)
+                    ) {
                         SettingSwitch(
                             state.useMbCanVhal,
                             { state.useMbCanVhal = it },
@@ -1162,8 +1166,10 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
             },
-            useMbCanVhal = isMediaVolumeWidgetDataKey(state.selectedDataKey) &&
-                state.useMbCanVhal,
+            useMbCanVhal = (
+                isMediaVolumeWidgetDataKey(state.selectedDataKey) ||
+                    isEngineRpmWidgetDataKey(state.selectedDataKey)
+                ) && state.useMbCanVhal,
             tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },

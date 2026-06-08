@@ -263,6 +263,7 @@ private class CarPropertyBridge(private val context: Context) {
 }
 
 object Android10VhalRepository {
+    private const val VHAL_ENGINE_RPM_PROPERTY_ID = 291_504_901
     private const val NORMAL_POLL_INTERVAL_MS = 30_000L
     private const val BURST_POLL_INTERVAL_MS = 1_500L
     private const val BURST_DURATION_MS = 15_000L
@@ -299,6 +300,8 @@ object Android10VhalRepository {
     private val _audioVolumeState = MutableStateFlow<Int?>(null)
     val audioVolumeState: StateFlow<Int?> = _audioVolumeState.asStateFlow()
     private val _audioVolumeLastNonZeroInSession = MutableStateFlow<Int?>(null)
+    private val _engineRpmState = MutableStateFlow<Float?>(null)
+    val engineRpmState: StateFlow<Float?> = _engineRpmState.asStateFlow()
 
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
@@ -545,6 +548,7 @@ object Android10VhalRepository {
             MbCanSignal.RearLeftSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH))
             MbCanSignal.RearRightSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH))
             MbCanSignal.WirelessChargingSwitch -> emptySet()
+            MbCanSignal.EngineRpm -> setOf(VHAL_ENGINE_RPM_PROPERTY_ID)
         }
     }
 
@@ -581,6 +585,8 @@ object Android10VhalRepository {
                 stateEngine.applySeatCandidate(MbCanSeatSlot.RearLeft, MbCanSignalStateEngine.decodeRearSeatHeatRaw(raw))
             resolved(MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH) ->
                 stateEngine.applySeatCandidate(MbCanSeatSlot.RearRight, MbCanSignalStateEngine.decodeRearSeatHeatRaw(raw))
+            VHAL_ENGINE_RPM_PROPERTY_ID ->
+                _engineRpmState.value = raw.toFloat().coerceAtLeast(0f)
         }
     }
 
@@ -619,6 +625,7 @@ object Android10VhalRepository {
                 MbCanSignal.RearRightSeatMode ->
                     stateEngine.applySeatCandidate(MbCanSeatSlot.RearRight, MbCanSeatModeState.Unavailable(deniedReason))
                 MbCanSignal.AudioVolume -> _audioVolumeState.value = null
+                MbCanSignal.EngineRpm -> _engineRpmState.value = null
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
@@ -647,6 +654,7 @@ object Android10VhalRepository {
                 MbCanSignal.RearRightSeatMode ->
                     stateEngine.applySeatCandidate(MbCanSeatSlot.RearRight, MbCanSeatModeState.Unavailable(reason))
                 MbCanSignal.AudioVolume -> _audioVolumeState.value = null
+                MbCanSignal.EngineRpm -> _engineRpmState.value = null
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
@@ -765,6 +773,10 @@ object Android10VhalRepository {
                 val raw = bridge?.getIntProperty(propertyId)
                 val decoded = raw?.let(MbCanSignalStateEngine::decodeRearSeatHeatRaw) ?: MbCanSeatModeState.Unknown
                 stateEngine.applySeatCandidate(MbCanSeatSlot.RearRight, decoded)
+            }
+            MbCanSignal.EngineRpm -> {
+                val raw = bridge?.getIntProperty(VHAL_ENGINE_RPM_PROPERTY_ID)
+                _engineRpmState.value = raw?.toFloat()?.coerceAtLeast(0f)
             }
             MbCanSignal.WirelessChargingSwitch -> Unit
         }
