@@ -82,22 +82,23 @@ class FuelSmartEstimator(
         // 2. Фактический объем (при текущей T) — сколько места бензин занимает сейчас
         val actualVolume = physics.fromStandard(stdVolume, currentTemp)
 
-        // Порог сглаживания (например, 49.0 л)
-        val smoothThreshold = tankCapacity * 0.98
+        val isAtLimit = currentSensorValue >= sensorMax || currentSensorValue <= sensorMin
 
-        // 1. Сглаживаем Standard: если выше 49, рисуем 50
-        val finalStd = if (stdVolume >= smoothThreshold) tankCapacity else stdVolume
-
-        // 2. Сглаживаем Actual ПЛАВНО:
-        // Если базовая емкость Standard уже дошла до полного бака (finalStd == tankCapacity),
-        // то и фактический Actual принудительно прижимаем к tankCapacity, убирая температурный дрейф.
-        val finalActual = if (stdVolume >= smoothThreshold) {
+        // Если датчик уровня уперся в верхнюю мертвую зону (полный бак) —
+        // принудительно выставляем паспортную емкость бака, игнорируя сбойные зоны калибровки
+        val finalStd = if (currentSensorValue >= sensorMax) {
             tankCapacity
         } else {
-            actualVolume
+            val smoothThreshold = tankCapacity * 0.98
+            if (stdVolume >= smoothThreshold) tankCapacity else stdVolume
         }
 
-        val isAtLimit = currentSensorValue >= sensorMax || currentSensorValue <= sensorMin
+        val finalActual = if (currentSensorValue >= sensorMax) {
+            tankCapacity
+        } else {
+            val smoothThreshold = tankCapacity * 0.98
+            if (stdVolume >= smoothThreshold) tankCapacity else actualVolume
+        }
 
         return EstimationResult(
             litersActual = finalActual.coerceAtMost(tankCapacity + 5),
