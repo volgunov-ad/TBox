@@ -316,6 +316,7 @@ object Android10VhalRepository {
     private const val VHAL_ENGINE_RPM_PROPERTY_ID = 289_414_951
     private const val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = 289_414_949
     private const val VHAL_CAR_SPEED_PROPERTY_ID = 289_414_964
+    private const val VHAL_ENGINE_RPM_SCALE = 4f
     private const val NORMAL_POLL_INTERVAL_MS = 30_000L
     private const val BURST_POLL_INTERVAL_MS = 1_500L
     private const val BURST_DURATION_MS = 15_000L
@@ -730,7 +731,7 @@ object Android10VhalRepository {
     private fun decodeEngineRpm(raw: Any?): Float? {
         val numeric = (raw as? Number)?.toFloat() ?: return null
         if (numeric < 0f) return null
-        return numeric
+        return numeric * VHAL_ENGINE_RPM_SCALE
     }
 
     private fun decodeEngineTemperature(raw: Any?): Float? {
