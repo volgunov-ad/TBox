@@ -126,9 +126,10 @@ object MbCanRepository {
     private const val VEHICLE_CFG_MODULAR = 2
     private const val CFG_VEHICLE_DATA_TYPE = "eMBCAN_CFG_VEHICLE"
     private const val CFG_AUDIO_DATA_TYPE = "eMBCAN_CFG_AUDIO"
-    /** Coalesce rapid [eMBCAN_CFG_VEHICLE] pushes before updating [StateFlow]s (50–150 ms band). */
-    private const val CFG_VEHICLE_PUSH_COALESCE_MS = 100L
-    private const val CFG_AUDIO_PUSH_COALESCE_MS = 100L
+    /** Coalesce rapid push updates before applying to [StateFlow]s. */
+    private const val PUSH_STATE_COALESCE_MS = 200L
+    /** Coalesce debug push logs so runtime logs stay readable. */
+    private const val PUSH_DEBUG_LOG_COALESCE_MS = 1_000L
 
     /**
      * Single-thread dispatcher for streak counters, burst decisions, and [StateFlow] writes so push
@@ -143,6 +144,11 @@ object MbCanRepository {
     private val flushCfgPushesRunnable = Runnable { flushPendingCfgPushes() }
     private val pendingAudioPushes = mutableMapOf<Int, Int>()
     private val flushAudioCfgPushesRunnable = Runnable { flushPendingAudioPushes() }
+    private val telemetryPushLock = Any()
+    private val pendingTelemetryPushes = mutableMapOf<MbCanSignal, Float?>()
+    private val flushTelemetryPushesRunnable = Runnable { flushPendingTelemetryPushes() }
+    private val pendingPushDebugByKey = mutableMapOf<String, Pair<Int, String>>()
+    private val flushPushDebugRunnable = Runnable { flushPendingPushDebugLogs() }
 
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
     private val sourceMutex = Mutex()
@@ -251,8 +257,12 @@ object MbCanRepository {
             MbCanDiagnostics.log("DEBUG", "unbind()")
             cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
+            cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
+            cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
+            synchronized(telemetryPushLock) { pendingTelemetryPushes.clear() }
+            synchronized(pendingPushDebugByKey) { pendingPushDebugByKey.clear() }
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
@@ -288,8 +298,9 @@ object MbCanRepository {
         synchronized(pendingCfgPushes) {
             pendingCfgPushes[item] = value
         }
+        recordPushDebugEvent("cfg_vehicle/$item", "raw=$value")
         cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
-        cfgPushHandler.postDelayed(flushCfgPushesRunnable, CFG_VEHICLE_PUSH_COALESCE_MS)
+        cfgPushHandler.postDelayed(flushCfgPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
     private fun flushPendingCfgPushes() {
@@ -363,38 +374,45 @@ object MbCanRepository {
         synchronized(pendingAudioPushes) {
             pendingAudioPushes[item] = value
         }
+        recordPushDebugEvent("cfg_audio/$item", "raw=$value")
         cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
-        cfgPushHandler.postDelayed(flushAudioCfgPushesRunnable, CFG_AUDIO_PUSH_COALESCE_MS)
+        cfgPushHandler.postDelayed(flushAudioCfgPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
     /**
      * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback.
      */
     fun scheduleEngineRpmPush(rpm: Float?) {
-        val scope = boundScope ?: return
-        scope.launch(stateApplyDispatcher) {
-            _engineRpmState.value = rpm?.coerceAtLeast(0f)
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.EngineRpm] = rpm?.coerceAtLeast(0f)
         }
+        recordPushDebugEvent("telemetry/engine_rpm", "raw=$rpm")
+        cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
+        cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
     /**
      * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback.
      */
     fun scheduleEngineTemperaturePush(temperature: Float?) {
-        val scope = boundScope ?: return
-        scope.launch(stateApplyDispatcher) {
-            _engineTemperatureState.value = temperature
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.EngineTemperature] = temperature
         }
+        recordPushDebugEvent("telemetry/engine_temp", "raw=$temperature")
+        cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
+        cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
     /**
      * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback.
      */
     fun scheduleCarSpeedPush(speed: Float?) {
-        val scope = boundScope ?: return
-        scope.launch(stateApplyDispatcher) {
-            _carSpeedState.value = speed?.coerceAtLeast(0f)
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.CarSpeed] = speed?.coerceAtLeast(0f)
         }
+        recordPushDebugEvent("telemetry/car_speed", "raw=$speed")
+        cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
+        cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
     private fun flushPendingAudioPushes() {
@@ -414,6 +432,45 @@ object MbCanRepository {
                 }
             }
         }
+    }
+
+    private fun flushPendingTelemetryPushes() {
+        val snapshot = synchronized(telemetryPushLock) {
+            if (pendingTelemetryPushes.isEmpty()) return
+            pendingTelemetryPushes.toMap().also { pendingTelemetryPushes.clear() }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            snapshot.forEach { (signal, value) ->
+                when (signal) {
+                    MbCanSignal.EngineRpm -> _engineRpmState.value = value
+                    MbCanSignal.EngineTemperature -> _engineTemperatureState.value = value
+                    MbCanSignal.CarSpeed -> _carSpeedState.value = value
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    private fun recordPushDebugEvent(key: String, sample: String) {
+        synchronized(pendingPushDebugByKey) {
+            val prev = pendingPushDebugByKey[key]
+            val nextCount = (prev?.first ?: 0) + 1
+            pendingPushDebugByKey[key] = nextCount to sample
+        }
+        cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
+        cfgPushHandler.postDelayed(flushPushDebugRunnable, PUSH_DEBUG_LOG_COALESCE_MS)
+    }
+
+    private fun flushPendingPushDebugLogs() {
+        val snapshot = synchronized(pendingPushDebugByKey) {
+            if (pendingPushDebugByKey.isEmpty()) return
+            pendingPushDebugByKey.toMap().also { pendingPushDebugByKey.clear() }
+        }
+        val body = snapshot.entries.joinToString("; ") { (key, payload) ->
+            "$key count=${payload.first} last=${payload.second}"
+        }
+        MbCanDiagnostics.log("DEBUG", "push_coalesced[$body]")
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {

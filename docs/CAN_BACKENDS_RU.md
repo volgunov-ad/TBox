@@ -16,6 +16,21 @@
   - `Android10Vhal`
 - настройка хранится в `DataStore` (через `SettingsManager` / `SettingsViewModel`).
 
+Дополнительно к ручному выбору работает автоfallback backend:
+
+- на старте выполняется цикл попыток `3 + 3`:
+  - 3 попытки bind для сохранённого режима;
+  - при неуспехе — автопереключение на альтернативный режим и ещё 3 попытки;
+  - если оба backend неуспешны — возврат в исходный режим и `lock` автоfallback.
+- между попытками выдерживается пауза `1.2s`;
+- окно одной попытки bind — `3.5s` (с финальной проверкой `warmUpAvailabilityForUi()` перед fail);
+- `SettingsManager` хранит служебные поля:
+  - `can_auto_bind_enabled`,
+  - `can_auto_bind_locked`,
+  - `can_auto_bind_last_primary_mode`,
+  - `can_auto_bind_last_result`.
+- при ручном выборе режима lock автоfallback сбрасывается.
+
 Где применяется:
 
 - при старте приложения (`TboxApplication`) режим считывается и передаётся в `UniversalCanRepository.setMode(...)`;
@@ -44,6 +59,11 @@
 - предоставляет единые `StateFlow` для RPM (`engineRpmState`) в режимах mbCAN/VHAL;
 - управляет `bind/unbind`, `setSourceSignals`, `execute(...)`, `setAudioVolume(...)`.
 
+Синхронизация переключений:
+
+- `setMode`, `bind`, `unbind`, `warmUpAvailabilityForUi`, `autoResolveModeOnStartup` сериализованы единым `modeSwitchMutex`;
+- это убирает гонки rebind между `headUnitCanModeFlow` и автоfallback.
+
 Зачем это нужно:
 
 - UI-виджеты и экран настроек работают через один API;
@@ -51,7 +71,7 @@
 
 ### 2.1 Ключевые функции и аргументы (`UniversalCanRepository`)
 
-- `setMode(mode: HeadUnitCanMode)`  
+- `setMode(mode: HeadUnitCanMode)` *(suspend)*  
   `mode` — `Android9MbCan` или `Android10Vhal`.
 - `bind(scope: CoroutineScope)` / `unbind()`  
   `scope` — корутинный scope сервиса/приложения для фоновых job.
@@ -63,6 +83,8 @@
   `command` — `ToggleProperty/SetProperty/ToggleAudioProperty/SetAudioProperty/RefreshSignal`.
 - `setAudioVolume(value: Int): MbCanCommandResult`  
   `value` — целевая громкость.
+- `autoResolveModeOnStartup(settingsManager: SettingsManager, scope: CoroutineScope)`  
+  выполняет автоfallback `3+3` на старте.
 
 ---
 
@@ -93,9 +115,15 @@
 - `MbCanRepository` через `MbCanEngineFacade.sync*CmdListener(...)` включает callback-listener только когда есть активные интересы сигналов;
 - для RPM дополнительно используется callback `onVehicleEngineStatusChange(MBCanVehicleEngine)` и polling чтение `MBCanVehicleEngine.getfSpeed()`;
 - входящие push-события буферизуются и коалесцируются:
-  - `CFG_VEHICLE_PUSH_COALESCE_MS = 100 ms`,
-  - `CFG_AUDIO_PUSH_COALESCE_MS = 100 ms`;
+  - `PUSH_STATE_COALESCE_MS = 200 ms` для применения в `StateFlow`,
+  - `PUSH_DEBUG_LOG_COALESCE_MS = 1000 ms` для debug-логов push;
 - после коалесса значения применяются в `StateFlow` на отдельном single-thread dispatcher.
+
+Что означает `PUSH_STATE_COALESCE_MS`:
+
+- это окно времени, в течение которого backend собирает несколько быстрых push-событий по одному и тому же сигналу и применяет в `StateFlow` только последнее значение;
+- с `200 ms` UI получает стабильные обновления без лишней "дребезги" и без потери актуального состояния;
+- это не задержка polling-цикла и не таймаут подключения — только анти-спам для push-path записи в state.
 
 Ключевые вызовы в mbCAN:
 
@@ -131,7 +159,6 @@
 Используется схема, совместимая со штатными приложениями прошивки:
 
 - `Car.createCar(Context, ServiceConnection)` (основной путь),
-- fallback: `Car.createCar(Context, ServiceConnection, Handler)`,
 - `car.connect()`,
 - ожидание `onServiceConnected`,
 - получение `CarPropertyManager` через `getCarManager(Car.PROPERTY_SERVICE)`.
@@ -139,7 +166,6 @@
 Функции/аргументы подключения:
 
 - `Car.createCar(context: Context, serviceConnection: ServiceConnection)`
-- `Car.createCar(context: Context, serviceConnection: ServiceConnection, handler: Handler?)`
 - `car.connect()` / `car.disconnect()`
 - `car.getCarManager(serviceName: String)`  
   `serviceName` обычно `Car.PROPERTY_SERVICE` (`"property"`).
@@ -169,10 +195,18 @@
 Реализована комбинированная схема (как в штатных приложениях `CarSettings` / `AirConditioning`):
 
 - после `Car.createCar(..., ServiceConnection)` и получения `CarPropertyManager` выполняется
-  `registerListener(listener, propertyId, 0.0f)` для активных `propertyId`;
-- входящие `onChangeEvent` сразу применяются в `StateFlow` (быстрое push-обновление);
+  `registerListener(listener, propertyId, rateHz)` для активных `propertyId`;
+- входящие `onChangeEvent` коалесцируются:
+  - `PUSH_STATE_COALESCE_MS = 200 ms` для применения в `StateFlow`,
+  - `PUSH_DEBUG_LOG_COALESCE_MS = 1000 ms` для debug-логов push;
 - ошибки `onErrorEvent` логируются в `TboxRepository` (`VHAL_A10`);
 - при изменении набора виджетов/сигналов список подписок пересобирается (`register/unregister`).
+
+Детали регистрации:
+
+- `rateHz` выбирается по типу property (`on-change`/`continuous`) и пробуется с fallback-наборами (`0.0/1.0/5.0`);
+- перед подпиской логируется конфиг property (`changeMode/access/minRate/maxRate/areaIds`);
+- proxy-listener явно обрабатывает `hashCode/equals/toString`, чтобы исключить NPE при `registerListener` на некоторых HU-сборках.
 
 ### 4.4 Poll interval в VHAL
 
@@ -289,6 +323,7 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - при `useMbCanVhal = false` виджет использует обычный источник (например, `engineRPM` из CAN-frame pipeline);
 - при `useMbCanVhal = true` виджет работает через `UniversalCanRepository` (mbCAN/VHAL backend);
 - для таких виджетов панель регистрирует соответствующие CAN interests через `setSourceSignals(...)`.
+- `enqueueClearSource(...)` в обоих backend работает с одинаковым debounce (`3 минуты`), чтобы поведение интересов не расходилось между mbCAN/VHAL.
 
 Какие именно сигналы и функции используются:
 
@@ -321,8 +356,11 @@ Polling остаётся fallback-механизмом: даже при push-с�
 1. Есть `VHAL connected, propertyService=property`.
 2. Есть `Availability: AVAILABLE`.
 3. Есть `polling started: signals=...` при открытии виджетов.
-4. Для команды есть `SetProperty request=...` и `SetProperty result=true`.
-5. Нет циклических `InvocationTargetException` / `POSSIBLE_PERMISSION`.
+4. Для push-пути есть `VHAL push onChange propertyId=...` (если property поддерживает push).
+   В текущей реализации вместо частых одиночных строк ожидается агрегированный debug-лог
+   `VHAL push coalesced[...]` (раз в ~1 секунду при активном потоке событий).
+5. Для команды есть `SetProperty request=...` и `SetProperty result=true`.
+6. Нет циклических `InvocationTargetException` / `POSSIBLE_PERMISSION` / `registerListener ... NullPointerException`.
 
 Если пункты 1-2 не выполняются:
 

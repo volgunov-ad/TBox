@@ -3,6 +3,7 @@ package vad.dashing.tbox.mbcan
 import android.content.Context
 import android.content.ServiceConnection
 import android.os.Handler
+import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -193,7 +194,7 @@ private class CarPropertyBridge(private val context: Context) {
                     )
                     .invoke(manager, listener, propertyId)
                 registeredPushPropertyIds.remove(propertyId)
-                Android10VhalRepository.logInfo("VHAL push unregistered propertyId=$propertyId")
+                Android10VhalRepository.logDebug("VHAL push unregistered propertyId=$propertyId")
             }.onFailure {
                 Android10VhalRepository.logWarn(
                     "VHAL push unregister failed propertyId=$propertyId " +
@@ -227,7 +228,7 @@ private class CarPropertyBridge(private val context: Context) {
                         val accepted = (attempt.getOrNull() as? Boolean) ?: true
                         if (accepted) {
                             registeredPushPropertyIds.add(propertyId)
-                            Android10VhalRepository.logInfo("VHAL push registered propertyId=$propertyId rate=$rateHz")
+                            Android10VhalRepository.logDebug("VHAL push registered propertyId=$propertyId rate=$rateHz")
                             registered = true
                             break
                         } else {
@@ -324,12 +325,21 @@ object Android10VhalRepository {
     private const val PUSH_RATE_ON_CHANGE = 0.0f
     private const val PUSH_RATE_CONTINUOUS = 1.0f
     private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = 3 * 60_000L
+    private const val PUSH_STATE_COALESCE_MS = 200L
+    private const val PUSH_DEBUG_LOG_COALESCE_MS = 1_000L
     private val carSettingsZeroToSixRange = 0..6
     private val loggedPropertyConfigs = mutableSetOf<Int>()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val debouncedClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val pendingDebouncedClearJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+    private val pushCoalesceHandler = Handler(Looper.getMainLooper())
+    private val pendingPushStateLock = Any()
+    private val pendingPushState = mutableMapOf<Int, Any?>()
+    private val flushPushStateRunnable = Runnable { flushPendingPushState() }
+    private val pendingPushDebugLock = Any()
+    private val pendingPushDebug = mutableMapOf<Int, PushDebugBucket>()
+    private val flushPushDebugRunnable = Runnable { flushPendingPushDebug() }
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
     private val sourceMutex = Mutex()
     private var pollJob: Job? = null
@@ -397,6 +407,12 @@ object Android10VhalRepository {
         rearRightSeatFlow = _rearRightSeatModeState
     )
 
+    private data class PushDebugBucket(
+        val count: Int,
+        val areaId: Int,
+        val value: Any?,
+    )
+
     private fun currentUnavailableReason(): String =
         (availability.value as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
 
@@ -410,6 +426,10 @@ object Android10VhalRepository {
 
     internal fun logInfo(message: String) {
         MbCanDiagnostics.log(level = "INFO", tag = LOG_TAG, message = message)
+    }
+
+    internal fun logDebug(message: String) {
+        MbCanDiagnostics.log(level = "DEBUG", tag = LOG_TAG, message = message)
     }
 
     internal fun logWarn(message: String) {
@@ -556,22 +576,26 @@ object Android10VhalRepository {
     }
 
     suspend fun bind(_scope: CoroutineScope) {
-        logInfo("bind()")
+        logDebug("bind()")
         carInfoPermissionDenied = false
         ensureConnected()
         restartPolling()
     }
 
     suspend fun unbind() {
-        logInfo("unbind()")
+        logDebug("unbind()")
         pollJob?.cancel()
         pollJob = null
+        pushCoalesceHandler.removeCallbacks(flushPushStateRunnable)
+        pushCoalesceHandler.removeCallbacks(flushPushDebugRunnable)
+        synchronized(pendingPushStateLock) { pendingPushState.clear() }
+        synchronized(pendingPushDebugLock) { pendingPushDebug.clear() }
         bridge?.disconnect()
         bridge = null
     }
 
     suspend fun warmUpAvailabilityForUi() {
-        logInfo("warmUpAvailabilityForUi()")
+        logDebug("warmUpAvailabilityForUi()")
         ensureConnected()
     }
 
@@ -594,7 +618,7 @@ object Android10VhalRepository {
                 else -> null
             }
         }.toSet()
-        logInfo(
+        logDebug(
             "setSourceWidgetKeys sourceId=$sourceId widgetKeys=${widgetKeys.joinToString()} " +
                 "signals=${signals.joinToString()}"
         )
@@ -606,7 +630,7 @@ object Android10VhalRepository {
 
     suspend fun setSourceSignals(sourceId: String, signals: Set<MbCanSignal>) {
         cancelDebouncedClearSource(sourceId)
-        logInfo("setSourceSignals sourceId=$sourceId signals=${signals.joinToString()}")
+        logDebug("setSourceSignals sourceId=$sourceId signals=${signals.joinToString()}")
         sourceMutex.withLock {
             if (signals.isEmpty()) sourceSignals.remove(sourceId) else sourceSignals[sourceId] = signals
         }
@@ -618,7 +642,7 @@ object Android10VhalRepository {
         val job = debouncedClearSourceScope.launch {
             delay(CLEAR_SOURCE_PUSH_DEBOUNCE_MS)
             if (pendingDebouncedClearJobs.remove(sourceId, coroutineContext.job)) {
-                logInfo("enqueueClearSource sourceId=$sourceId")
+                logDebug("enqueueClearSource sourceId=$sourceId")
                 sourceMutex.withLock { sourceSignals.remove(sourceId) }
                 restartPolling()
             }
@@ -650,10 +674,10 @@ object Android10VhalRepository {
         val interestedSignals = sourceMutex.withLock { sourceSignals.values.flatten().toSet() }
         syncPushListeners(interestedSignals)
         if (interestedSignals.isEmpty()) {
-            logInfo("polling stopped: no interested signals")
+            logDebug("polling stopped: no interested signals")
             return
         }
-        logInfo("polling started: signals=${interestedSignals.size} ${interestedSignals.joinToString()}")
+        logDebug("polling started: signals=${interestedSignals.size} ${interestedSignals.joinToString()}")
         pollJob = scope.launch {
             while (true) {
                 interestedSignals.forEach { signal -> refreshSignal(signal) }
@@ -666,7 +690,7 @@ object Android10VhalRepository {
 
     private fun requestBurstPolling() {
         burstUntilMs = System.currentTimeMillis() + BURST_DURATION_MS
-        logInfo("polling burst requested until=$burstUntilMs")
+        logDebug("polling burst requested until=$burstUntilMs")
     }
 
     private fun signalReadPropertyIds(signal: MbCanSignal): Set<Int> {
@@ -796,19 +820,55 @@ object Android10VhalRepository {
         val interestedPropertyIds = interestedSignals.flatMapTo(mutableSetOf()) { signalReadPropertyIds(it) }
         localBridge.setPushCallbacks(
             onChange = { propertyId, areaId, value ->
-                scope.launch {
-                    logInfo(
-                        "VHAL push onChange propertyId=$propertyId areaId=$areaId " +
-                            "value=$value type=${value?.javaClass?.simpleName ?: "null"}"
-                    )
-                    applyPushPropertyUpdate(propertyId, value)
-                }
+                enqueuePushOnChange(propertyId = propertyId, areaId = areaId, value = value)
             },
             onError = { propertyId, areaId ->
                 logWarn("VHAL push onError propertyId=$propertyId areaId=$areaId")
             }
         )
         localBridge.syncPushSubscriptions(interestedPropertyIds)
+    }
+
+    private fun enqueuePushOnChange(propertyId: Int, areaId: Int, value: Any?) {
+        synchronized(pendingPushStateLock) {
+            pendingPushState[propertyId] = value
+        }
+        synchronized(pendingPushDebugLock) {
+            val prev = pendingPushDebug[propertyId]
+            pendingPushDebug[propertyId] = PushDebugBucket(
+                count = (prev?.count ?: 0) + 1,
+                areaId = areaId,
+                value = value
+            )
+        }
+        pushCoalesceHandler.removeCallbacks(flushPushStateRunnable)
+        pushCoalesceHandler.postDelayed(flushPushStateRunnable, PUSH_STATE_COALESCE_MS)
+        pushCoalesceHandler.removeCallbacks(flushPushDebugRunnable)
+        pushCoalesceHandler.postDelayed(flushPushDebugRunnable, PUSH_DEBUG_LOG_COALESCE_MS)
+    }
+
+    private fun flushPendingPushState() {
+        val snapshot = synchronized(pendingPushStateLock) {
+            if (pendingPushState.isEmpty()) return
+            pendingPushState.toMap().also { pendingPushState.clear() }
+        }
+        scope.launch {
+            snapshot.forEach { (propertyId, value) ->
+                applyPushPropertyUpdate(propertyId, value)
+            }
+        }
+    }
+
+    private fun flushPendingPushDebug() {
+        val snapshot = synchronized(pendingPushDebugLock) {
+            if (pendingPushDebug.isEmpty()) return
+            pendingPushDebug.toMap().also { pendingPushDebug.clear() }
+        }
+        val body = snapshot.entries.joinToString("; ") { (propertyId, bucket) ->
+            "propertyId=$propertyId count=${bucket.count} areaId=${bucket.areaId} " +
+                "last=${bucket.value} type=${bucket.value?.javaClass?.simpleName ?: "null"}"
+        }
+        logDebug("VHAL push coalesced[$body]")
     }
 
     suspend fun refreshSignal(signal: MbCanSignal) {
@@ -1011,7 +1071,7 @@ object Android10VhalRepository {
                     ?: return MbCanCommandResult(false, "Toggle unsupported for propertyId=${command.propertyId}")
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
-                logInfo("ToggleProperty request=${command.propertyId} effective=$effectivePropertyId")
+                logDebug("ToggleProperty request=${command.propertyId} effective=$effectivePropertyId")
                 val current = bridge?.getIntProperty(effectivePropertyId)
                     ?: return MbCanCommandResult(false, "Property read failed")
                 val target = when (current) {
@@ -1020,7 +1080,7 @@ object Android10VhalRepository {
                     else -> policy.unknownFallbackValue
                 }
                 val ok = bridge?.setIntProperty(effectivePropertyId, target) == true
-                logInfo("ToggleProperty result=$ok propertyId=$effectivePropertyId current=$current target=$target")
+                logDebug("ToggleProperty result=$ok propertyId=$effectivePropertyId current=$current target=$target")
                 if (ok) requestBurstPolling()
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
@@ -1035,12 +1095,12 @@ object Android10VhalRepository {
                 }
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
-                logInfo(
+                logDebug(
                     "SetProperty request=${command.propertyId} effective=$effectivePropertyId " +
                         "value=${command.value}"
                 )
                 val ok = bridge?.setIntProperty(effectivePropertyId, command.value) == true
-                logInfo("SetProperty result=$ok propertyId=$effectivePropertyId value=${command.value}")
+                logDebug("SetProperty result=$ok propertyId=$effectivePropertyId value=${command.value}")
                 if (ok) requestBurstPolling()
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
@@ -1052,7 +1112,7 @@ object Android10VhalRepository {
                     ?: return MbCanCommandResult(false, "Toggle unsupported for audio propertyId=${command.propertyId}")
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
-                logInfo("ToggleAudioProperty request=${command.propertyId} effective=$effectivePropertyId")
+                logDebug("ToggleAudioProperty request=${command.propertyId} effective=$effectivePropertyId")
                 val current = bridge?.getIntProperty(effectivePropertyId)
                     ?: return MbCanCommandResult(false, "Audio property read failed")
                 val target = when (current) {
@@ -1061,7 +1121,7 @@ object Android10VhalRepository {
                     else -> policy.unknownFallbackValue
                 }
                 val ok = bridge?.setIntProperty(effectivePropertyId, target) == true
-                logInfo("ToggleAudioProperty result=$ok propertyId=$effectivePropertyId current=$current target=$target")
+                logDebug("ToggleAudioProperty result=$ok propertyId=$effectivePropertyId current=$current target=$target")
                 if (ok) requestBurstPolling()
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
@@ -1076,18 +1136,18 @@ object Android10VhalRepository {
                 }
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
-                logInfo(
+                logDebug(
                     "SetAudioProperty request=${command.propertyId} effective=$effectivePropertyId " +
                         "value=${command.value}"
                 )
                 val ok = bridge?.setIntProperty(effectivePropertyId, command.value) == true
-                logInfo("SetAudioProperty result=$ok propertyId=$effectivePropertyId value=${command.value}")
+                logDebug("SetAudioProperty result=$ok propertyId=$effectivePropertyId value=${command.value}")
                 if (ok) requestBurstPolling()
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
             }
             is MbCanCommand.RefreshSignal -> {
-                logInfo("RefreshSignal ${command.signal}")
+                logDebug("RefreshSignal ${command.signal}")
                 refreshSignal(command.signal)
                 MbCanCommandResult(true, "Refresh requested")
             }
@@ -1105,9 +1165,9 @@ object Android10VhalRepository {
         val target = value.coerceAtLeast(0)
         val effectiveVolumeId = FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownAudioPropertyId.VOLUME)
             ?: MbCanKnownAudioPropertyId.VOLUME
-        logInfo("setAudioVolume request=$value effectivePropertyId=$effectiveVolumeId")
+        logDebug("setAudioVolume request=$value effectivePropertyId=$effectiveVolumeId")
         val ok = bridge?.setIntProperty(effectiveVolumeId, target) == true
-        logInfo("setAudioVolume result=$ok value=$target propertyId=$effectiveVolumeId")
+        logDebug("setAudioVolume result=$ok value=$target propertyId=$effectiveVolumeId")
         if (ok) {
             requestBurstPolling()
             _audioVolumeState.value = target
