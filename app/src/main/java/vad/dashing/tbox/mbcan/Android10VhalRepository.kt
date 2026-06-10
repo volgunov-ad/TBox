@@ -11,6 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -315,9 +316,13 @@ object Android10VhalRepository {
     private const val CAR_ENGINE_DETAILED_PERMISSION = "android.car.permission.CAR_ENGINE_DETAILED"
     private const val PUSH_RATE_ON_CHANGE = 0.0f
     private const val PUSH_RATE_CONTINUOUS = 1.0f
+    private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = 3 * 60_000L
+    private val carSettingsZeroToSixRange = 0..6
     private val loggedPropertyConfigs = mutableSetOf<Int>()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val debouncedClearSourceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val pendingDebouncedClearJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
     private val sourceMutex = Mutex()
     private var pollJob: Job? = null
@@ -564,8 +569,9 @@ object Android10VhalRepository {
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
+        cancelDebouncedClearSource(sourceId)
         val signals = widgetKeys.mapNotNull { key ->
-            when (key) {
+            when (UniversalCanRepository.normalizeWidgetDataKey(key)) {
                 "steeringWheelHeatWidget" -> MbCanSignal.SteeringWheelHeat
                 "frontWindscreenHeatWidget" -> MbCanSignal.FrontWindscreenHeat
                 "rearWindowMirrorsDefrostWidget" -> MbCanSignal.HvacDefroster
@@ -592,6 +598,7 @@ object Android10VhalRepository {
     }
 
     suspend fun setSourceSignals(sourceId: String, signals: Set<MbCanSignal>) {
+        cancelDebouncedClearSource(sourceId)
         logInfo("setSourceSignals sourceId=$sourceId signals=${signals.joinToString()}")
         sourceMutex.withLock {
             if (signals.isEmpty()) sourceSignals.remove(sourceId) else sourceSignals[sourceId] = signals
@@ -600,15 +607,20 @@ object Android10VhalRepository {
     }
 
     fun enqueueClearSource(sourceId: String) {
-        scope.launch {
-            logInfo("enqueueClearSource sourceId=$sourceId")
-            sourceMutex.withLock { sourceSignals.remove(sourceId) }
-            restartPolling()
+        pendingDebouncedClearJobs.remove(sourceId)?.cancel()
+        val job = debouncedClearSourceScope.launch {
+            delay(CLEAR_SOURCE_PUSH_DEBOUNCE_MS)
+            if (pendingDebouncedClearJobs.remove(sourceId, coroutineContext.job)) {
+                logInfo("enqueueClearSource sourceId=$sourceId")
+                sourceMutex.withLock { sourceSignals.remove(sourceId) }
+                restartPolling()
+            }
         }
+        pendingDebouncedClearJobs[sourceId] = job
     }
 
     fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean {
-        return dataKeys.any { key ->
+        return dataKeys.map(UniversalCanRepository::normalizeWidgetDataKey).any { key ->
             key in setOf(
                 "steeringWheelHeatWidget",
                 "frontWindscreenHeatWidget",
@@ -698,6 +710,11 @@ object Android10VhalRepository {
         return (raw as? Number)?.toFloat()?.coerceAtLeast(0f)
     }
 
+    private fun decodeCarSettingsIntZeroToSix(raw: Int?): Int? {
+        val value = raw ?: return null
+        return if (value in carSettingsZeroToSixRange) value else null
+    }
+
     private fun readNumericProperty(propertyId: Int): Float? {
         val asInt = bridge?.getIntProperty(propertyId)
         if (asInt != null) return asInt.toFloat()
@@ -737,11 +754,11 @@ object Android10VhalRepository {
                     stateEngine.applyVolumeSpeedCandidate(MbCanSignalStateEngine.decodeVolumeSpeedRaw(it))
                 }
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE) ->
-                raw?.let { _carSettingsEpsMode.value = it }
+                _carSettingsEpsMode.value = decodeCarSettingsIntZeroToSix(raw)
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE) ->
-                raw?.let { _carSettingsDriveMode.value = it }
+                _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(raw)
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET) ->
-                raw?.let { _carSettingsDriveMode6dctWet.value = it }
+                _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(raw)
             resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) ->
                 raw?.let {
                     stateEngine.applySeatCandidate(MbCanSeatSlot.FrontLeft, MbCanSignalStateEngine.decodeSeatModeRaw(it))
@@ -922,9 +939,9 @@ object Android10VhalRepository {
                 val driveWetId = FirmwareVehicleJsonMapper
                     .resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
                     ?: MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET
-                _carSettingsEpsMode.value = bridge?.getIntProperty(epsId)
-                _carSettingsDriveMode.value = bridge?.getIntProperty(driveId)
-                _carSettingsDriveMode6dctWet.value = bridge?.getIntProperty(driveWetId)
+                _carSettingsEpsMode.value = decodeCarSettingsIntZeroToSix(bridge?.getIntProperty(epsId))
+                _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(bridge?.getIntProperty(driveId))
+                _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(bridge?.getIntProperty(driveWetId))
             }
             MbCanSignal.FrontLeftSeatMode -> {
                 val propertyId = FirmwareVehicleJsonMapper
@@ -1100,5 +1117,9 @@ object Android10VhalRepository {
 
     fun audioVolumeRestoreCandidate(defaultValue: Int = 10): Int {
         return (_audioVolumeLastNonZeroInSession.value ?: defaultValue).coerceAtLeast(1)
+    }
+
+    private fun cancelDebouncedClearSource(sourceId: String) {
+        pendingDebouncedClearJobs.remove(sourceId)?.cancel()
     }
 }

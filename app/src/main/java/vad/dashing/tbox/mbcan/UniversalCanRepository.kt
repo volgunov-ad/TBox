@@ -32,7 +32,7 @@ object UniversalCanRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var boundScope: CoroutineScope? = null
-    private val autoResolveMutex = Mutex()
+    private val modeSwitchMutex = Mutex()
 
     private val _mode = MutableStateFlow(HeadUnitCanMode.Android9MbCan)
     val mode: StateFlow<HeadUnitCanMode> = _mode.asStateFlow()
@@ -217,45 +217,27 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    fun setMode(mode: HeadUnitCanMode) {
-        if (_mode.value == mode) return
-        _mode.value = mode
-        boundScope?.let { scopeToRebind ->
-            scope.launch {
-                when (mode) {
-                    HeadUnitCanMode.Android9MbCan -> {
-                        Android10VhalRepository.unbind()
-                        MbCanRepository.bind(scopeToRebind)
-                    }
-                    HeadUnitCanMode.Android10Vhal -> {
-                        MbCanRepository.unbind()
-                        Android10VhalRepository.bind(scopeToRebind)
-                    }
-                }
-            }
+    suspend fun setMode(mode: HeadUnitCanMode) {
+        modeSwitchMutex.withLock {
+            setModeLocked(mode, rebindIfBound = true)
         }
     }
 
     suspend fun bind(scope: CoroutineScope) {
-        boundScope = scope
-        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
-            MbCanRepository.bind(scope)
-        } else {
-            Android10VhalRepository.bind(scope)
+        modeSwitchMutex.withLock {
+            bindLocked(scope)
         }
     }
 
     suspend fun unbind() {
-        boundScope = null
-        MbCanRepository.unbind()
-        Android10VhalRepository.unbind()
+        modeSwitchMutex.withLock {
+            unbindLocked()
+        }
     }
 
     suspend fun warmUpAvailabilityForUi() {
-        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
-            MbCanRepository.warmUpAvailabilityForUi()
-        } else {
-            Android10VhalRepository.warmUpAvailabilityForUi()
+        modeSwitchMutex.withLock {
+            warmUpAvailabilityForUiLocked()
         }
     }
 
@@ -327,7 +309,7 @@ object UniversalCanRepository {
         settingsManager: SettingsManager,
         scope: CoroutineScope,
     ) {
-        autoResolveMutex.withLock {
+        modeSwitchMutex.withLock {
             if (!settingsManager.canAutoBindEnabledFlow.first()) {
                 MbCanDiagnostics.log("INFO", "AUTO_CAN startup skipped: disabled")
                 return
@@ -386,13 +368,13 @@ object UniversalCanRepository {
                 "AUTO_CAN alternative failed mode=${alternativeMode.storageValue} reason=${alternativeResult.reason}"
             )
 
-            setMode(primaryMode)
+            setModeLocked(primaryMode, rebindIfBound = false)
             settingsManager.saveHeadUnitCanMode(primaryMode)
             settingsManager.saveCanAutoBindLocked(true)
             settingsManager.saveCanAutoBindLastResult(
                 "locked_after_fail:${primaryMode.storageValue}|${alternativeMode.storageValue}"
             )
-            bind(scope)
+            bindLocked(scope)
             MbCanDiagnostics.log(
                 "WARN",
                 "AUTO_CAN locked after failed retries; reverted to ${primaryMode.storageValue}"
@@ -407,10 +389,14 @@ object UniversalCanRepository {
     ): AutoBindAttemptResult {
         repeat(AUTO_BIND_ATTEMPTS_PER_MODE) { index ->
             val attempt = index + 1
-            setMode(mode)
-            unbind()
-            bind(scope)
-            val attemptResult = waitForAvailability(AUTO_BIND_ATTEMPT_TIMEOUT_MS)
+            setModeLocked(mode, rebindIfBound = false)
+            warmUpAvailabilityForUiLocked()
+            unbindLocked()
+            bindLocked(scope)
+            val attemptResult = waitForAvailability(
+                timeoutMs = AUTO_BIND_ATTEMPT_TIMEOUT_MS,
+                onTimeoutProbe = { warmUpAvailabilityForUiLocked() }
+            )
             MbCanDiagnostics.log(
                 "INFO",
                 "AUTO_CAN $attemptLabel attempt=$attempt/${AUTO_BIND_ATTEMPTS_PER_MODE} " +
@@ -426,11 +412,15 @@ object UniversalCanRepository {
         return AutoBindAttemptResult(
             success = false,
             attempt = AUTO_BIND_ATTEMPTS_PER_MODE,
-            reason = (availability.value as? MbCanAvailability.Unavailable)?.reason ?: "timeout"
+            reason = (availability.value as? MbCanAvailability.Unavailable)?.reason
+                ?: "timeout_unknown"
         )
     }
 
-    private suspend fun waitForAvailability(timeoutMs: Long): AvailabilityAttemptResult {
+    private suspend fun waitForAvailability(
+        timeoutMs: Long,
+        onTimeoutProbe: suspend () -> Unit,
+    ): AvailabilityAttemptResult {
         val startedAt = System.currentTimeMillis()
         while ((System.currentTimeMillis() - startedAt) < timeoutMs) {
             when (val current = availability.value) {
@@ -448,7 +438,21 @@ object UniversalCanRepository {
             }
             delay(120L)
         }
-        return AvailabilityAttemptResult(success = false, summary = "timeout")
+        onTimeoutProbe()
+        return when (val current = availability.value) {
+            MbCanAvailability.Available -> AvailabilityAttemptResult(
+                success = true,
+                summary = "available_after_timeout_probe"
+            )
+            is MbCanAvailability.Unavailable -> AvailabilityAttemptResult(
+                success = false,
+                summary = "unavailable_reason:${current.reason}"
+            )
+            MbCanAvailability.Unknown -> AvailabilityAttemptResult(
+                success = false,
+                summary = "timeout_unknown"
+            )
+        }
     }
 
     private fun HeadUnitCanMode.otherMode(): HeadUnitCanMode {
@@ -469,4 +473,51 @@ object UniversalCanRepository {
         val attempt: Int,
         val reason: String?,
     )
+
+    internal fun normalizeWidgetDataKey(raw: String): String = raw.trim()
+
+    internal fun isMeaningfulWidgetDataKey(raw: String): Boolean {
+        val key = normalizeWidgetDataKey(raw)
+        return key.isNotBlank() && key != "null"
+    }
+
+    private suspend fun setModeLocked(mode: HeadUnitCanMode, rebindIfBound: Boolean) {
+        if (_mode.value == mode) return
+        _mode.value = mode
+        if (!rebindIfBound) return
+        val scopeToRebind = boundScope ?: return
+        when (mode) {
+            HeadUnitCanMode.Android9MbCan -> {
+                Android10VhalRepository.unbind()
+                MbCanRepository.bind(scopeToRebind)
+            }
+            HeadUnitCanMode.Android10Vhal -> {
+                MbCanRepository.unbind()
+                Android10VhalRepository.bind(scopeToRebind)
+            }
+        }
+    }
+
+    private suspend fun bindLocked(scope: CoroutineScope) {
+        boundScope = scope
+        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanRepository.bind(scope)
+        } else {
+            Android10VhalRepository.bind(scope)
+        }
+    }
+
+    private suspend fun unbindLocked() {
+        boundScope = null
+        MbCanRepository.unbind()
+        Android10VhalRepository.unbind()
+    }
+
+    private suspend fun warmUpAvailabilityForUiLocked() {
+        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanRepository.warmUpAvailabilityForUi()
+        } else {
+            Android10VhalRepository.warmUpAvailabilityForUi()
+        }
+    }
 }

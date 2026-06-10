@@ -418,7 +418,9 @@ object MbCanRepository {
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
         cancelDebouncedClearSource(sourceId)
-        val signals = widgetKeys.mapNotNull { widgetKeyToSignal(it) }.toSet()
+        val signals = widgetKeys.mapNotNull { key ->
+            widgetKeyToSignal(UniversalCanRepository.normalizeWidgetDataKey(key))
+        }.toSet()
         MbCanDiagnostics.log(
             "DEBUG",
             "setSourceWidgetKeys source=$sourceId widgetKeys=${widgetKeys.joinToString()} signals=${signals.joinToString()}"
@@ -1038,8 +1040,8 @@ object MbCanRepository {
      */
     fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean {
         return dataKeys.any { raw ->
-            val key = raw.trim()
-            key.isNotBlank() && key != "null" && widgetKeyToSignal(key) != null
+            UniversalCanRepository.isMeaningfulWidgetDataKey(raw) &&
+                widgetKeyToSignal(UniversalCanRepository.normalizeWidgetDataKey(raw)) != null
         }
     }
 
