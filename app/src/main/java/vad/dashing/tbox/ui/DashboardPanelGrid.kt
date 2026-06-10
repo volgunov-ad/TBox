@@ -36,7 +36,9 @@ import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
+import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
+import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -89,6 +91,12 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
     }
+    val panelNeedsMbCanVhalEngineTemperature = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineTemperatureEnabled() }
+    }
+    val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
+    }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
             val activeKeys = widgetConfigs
@@ -126,6 +134,32 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-engine-rpm")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineTemperature) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-engine-temperature",
+                setOf(MbCanSignal.EngineTemperature)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-engine-temperature")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalCarSpeed) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-car-speed",
+                setOf(MbCanSignal.CarSpeed)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-car-speed")
             }
         }
     }

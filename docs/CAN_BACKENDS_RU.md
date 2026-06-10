@@ -281,6 +281,8 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `mediaVolumeWidgetHorizontal`
 - `mediaVolumeWidgetVertical`
 - `engineRPM`
+- `engineTemperature`
+- `carSpeed`
 
 Поведение:
 
@@ -298,6 +300,17 @@ Polling остаётся fallback-механизмом: даже при push-с�
   - interest: `MbCanSignal.EngineRpm`
   - чтение: `UniversalCanRepository.engineRpmState`
   - запись не используется (read-only сигнал).
+- `engineTemperature`
+  - interest: `MbCanSignal.EngineTemperature`
+  - чтение: `UniversalCanRepository.engineTemperatureState`
+  - запись не используется (read-only сигнал).
+- `carSpeed`
+  - interest: `MbCanSignal.CarSpeed`
+  - чтение: `UniversalCanRepository.carSpeedState`
+  - запись не используется (read-only сигнал).
+
+Полный список штатных VHAL push-подписок (ID/имена), извлечённый из `CarSettings`/`AirConditioning`/`Launcher`,
+сохранён отдельно: `docs/STOCK_PUSH_SUBSCRIPTIONS_RU.md`.
 
 ---
 

@@ -36,6 +36,9 @@
         android:name="android.car.permission.CAR_POWERTRAIN"
         tools:ignore="ProtectedPermissions" />
     <uses-permission
+        android:name="android.car.permission.CAR_ENGINE_DETAILED"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
         android:name="android.car.permission.CAR_ENERGY"
         tools:ignore="ProtectedPermissions" />
     <uses-permission

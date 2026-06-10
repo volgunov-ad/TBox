@@ -40,6 +40,8 @@ object DashboardCompositeTileFlowKeys {
 }
 
 const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
+const val ENGINE_TEMPERATURE_CAN_FLOW_KEY = "engineTemperature_can"
+const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
 
 private data class ValueFlowCacheKey(val key: String, val accuracy: Int?)
 
@@ -106,6 +108,7 @@ class TboxDataProvider(
             "param4" -> canViewModel.param4.mapState { valueToString(it, eff(1)) }
             "param5" -> canViewModel.param5.mapState { valueToString(it, eff(1)) }
             "carSpeed" -> canViewModel.carSpeed.mapState { valueToString(it, eff(1)) }
+            CAR_SPEED_CAN_FLOW_KEY -> UniversalCanRepository.carSpeedState.mapState { valueToString(it, eff(1)) }
             "carSpeedAccurate" -> canViewModel.carSpeedAccurate.mapState { valueToString(it, eff(1)) }
             "wheel1Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel1, eff(1)) }
             "wheel2Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel2, eff(1)) }
@@ -156,6 +159,9 @@ class TboxDataProvider(
                 valueToString(it, eff(1))
             }
             "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, eff(1)) }
+            ENGINE_TEMPERATURE_CAN_FLOW_KEY -> UniversalCanRepository.engineTemperatureState.mapState {
+                valueToString(it, eff(1))
+            }
             // Voltage+engine composite used integer °C for engine line when accuracy is default.
             DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE -> canViewModel.engineTemperature.mapState {
                 valueToString(it, eff(0))

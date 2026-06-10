@@ -40,6 +40,8 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     AudioVolume(setOf("eMBCAN_CFG_AUDIO")),
     AudioVolumeSpeed(setOf("eMBCAN_CFG_AUDIO")),
     EngineRpm(setOf("eMBCAN_VEHICLE_ENGINE")),
+    EngineTemperature(setOf("eMBCAN_VEHICLE_ENGINE")),
+    CarSpeed(setOf("eMBCAN_VEHICLE_SPEED")),
 }
 
 sealed class MbCanBinaryState {
@@ -178,6 +180,10 @@ object MbCanRepository {
     val audioVolumeLastNonZeroInSession: StateFlow<Int?> = _audioVolumeLastNonZeroInSession.asStateFlow()
     private val _engineRpmState = MutableStateFlow<Float?>(null)
     val engineRpmState: StateFlow<Float?> = _engineRpmState.asStateFlow()
+    private val _engineTemperatureState = MutableStateFlow<Float?>(null)
+    val engineTemperatureState: StateFlow<Float?> = _engineTemperatureState.asStateFlow()
+    private val _carSpeedState = MutableStateFlow<Float?>(null)
+    val carSpeedState: StateFlow<Float?> = _carSpeedState.asStateFlow()
 
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
@@ -368,6 +374,26 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _engineRpmState.value = rpm?.coerceAtLeast(0f)
+        }
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback.
+     */
+    fun scheduleEngineTemperaturePush(temperature: Float?) {
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _engineTemperatureState.value = temperature
+        }
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback.
+     */
+    fun scheduleCarSpeedPush(speed: Float?) {
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _carSpeedState.value = speed?.coerceAtLeast(0f)
         }
     }
 
@@ -572,6 +598,8 @@ object MbCanRepository {
             MbCanSignal.RearLeftSeatMode -> refreshSeatSlot(MbCanSeatSlot.RearLeft)
             MbCanSignal.RearRightSeatMode -> refreshSeatSlot(MbCanSeatSlot.RearRight)
             MbCanSignal.EngineRpm -> refreshEngineRpm()
+            MbCanSignal.EngineTemperature -> refreshEngineTemperature()
+            MbCanSignal.CarSpeed -> refreshCarSpeed()
         }
     }
 
@@ -847,6 +875,40 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshEngineTemperature() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _engineTemperatureState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _engineTemperatureState.value = null
+                return@withContext
+            }
+            _engineTemperatureState.value = MbCanEngineFacade.readVehicleEngineTemperature()
+        }
+    }
+
+    private suspend fun refreshCarSpeed() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _carSpeedState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _carSpeedState.value = null
+                return@withContext
+            }
+            _carSpeedState.value = MbCanEngineFacade.readVehicleSpeed()?.coerceAtLeast(0f)
+        }
+    }
+
     private fun applyAudioVolumeRaw(raw: Int?) {
         val safeValue = raw?.coerceAtLeast(0)
         val previous = _audioVolumeState.value
@@ -954,7 +1016,9 @@ object MbCanRepository {
         val needsCfgAudioListener = mergedSignals.any { signal ->
             signal.subscribeDataTypes.contains(CFG_AUDIO_DATA_TYPE)
         }
-        val needsSettingsTelemetry = mergedSignals.contains(MbCanSignal.EngineRpm)
+        val needsSettingsTelemetry = mergedSignals.contains(MbCanSignal.EngineRpm) ||
+            mergedSignals.contains(MbCanSignal.EngineTemperature) ||
+            mergedSignals.contains(MbCanSignal.CarSpeed)
         MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
         MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener)
         if (needsSettingsTelemetry) {

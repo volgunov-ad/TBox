@@ -60,7 +60,9 @@ import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
+import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
+import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
@@ -115,6 +117,12 @@ fun MainDashboardTab(
     }
     val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
+    }
+    val panelNeedsMbCanVhalEngineTemperature = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineTemperatureEnabled() }
+    }
+    val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
     }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
@@ -174,6 +182,32 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("dashboard-tab-main-engine-rpm")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineTemperature) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-engine-temperature",
+                setOf(MbCanSignal.EngineTemperature)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-engine-temperature")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalCarSpeed) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-car-speed",
+                setOf(MbCanSignal.CarSpeed)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-car-speed")
             }
         }
     }
