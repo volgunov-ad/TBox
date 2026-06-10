@@ -1769,7 +1769,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
         viewModelScope.launch {
-            settingsManager.saveHeadUnitCanMode(mode)
+            settingsManager.saveHeadUnitCanModeByUser(mode)
         }
     }
 }

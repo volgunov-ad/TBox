@@ -4,14 +4,19 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.HeadUnitCanMode
+import vad.dashing.tbox.SettingsManager
 
 /**
  * One entry point for car-control/CAN behavior across HU platforms.
@@ -21,8 +26,13 @@ import vad.dashing.tbox.HeadUnitCanMode
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 object UniversalCanRepository {
+    private const val AUTO_BIND_ATTEMPTS_PER_MODE = 3
+    private const val AUTO_BIND_ATTEMPT_TIMEOUT_MS = 3_500L
+    private const val AUTO_BIND_ATTEMPT_PAUSE_MS = 1_200L
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var boundScope: CoroutineScope? = null
+    private val autoResolveMutex = Mutex()
 
     private val _mode = MutableStateFlow(HeadUnitCanMode.Android9MbCan)
     val mode: StateFlow<HeadUnitCanMode> = _mode.asStateFlow()
@@ -312,4 +322,151 @@ object UniversalCanRepository {
             Android10VhalRepository.audioVolumeRestoreCandidate(defaultValue)
         }
     }
+
+    suspend fun autoResolveModeOnStartup(
+        settingsManager: SettingsManager,
+        scope: CoroutineScope,
+    ) {
+        autoResolveMutex.withLock {
+            if (!settingsManager.canAutoBindEnabledFlow.first()) {
+                MbCanDiagnostics.log("INFO", "AUTO_CAN startup skipped: disabled")
+                return
+            }
+            if (settingsManager.canAutoBindLockedFlow.first()) {
+                MbCanDiagnostics.log("INFO", "AUTO_CAN startup skipped: locked")
+                return
+            }
+            val primaryMode = settingsManager.headUnitCanModeFlow.first()
+            val alternativeMode = primaryMode.otherMode()
+            settingsManager.saveCanAutoBindLastPrimaryMode(primaryMode)
+            MbCanDiagnostics.log(
+                "INFO",
+                "AUTO_CAN startup begin primary=${primaryMode.storageValue} alternative=${alternativeMode.storageValue}"
+            )
+
+            val primaryResult = bindModeWithRetries(
+                mode = primaryMode,
+                scope = scope,
+                attemptLabel = "primary"
+            )
+            if (primaryResult.success) {
+                settingsManager.saveCanAutoBindLastResult(
+                    "primary_ok:${primaryMode.storageValue}:attempt=${primaryResult.attempt}"
+                )
+                MbCanDiagnostics.log(
+                    "INFO",
+                    "AUTO_CAN primary success mode=${primaryMode.storageValue} attempt=${primaryResult.attempt}"
+                )
+                return
+            }
+            MbCanDiagnostics.log(
+                "WARN",
+                "AUTO_CAN primary failed mode=${primaryMode.storageValue} reason=${primaryResult.reason}"
+            )
+
+            setMode(alternativeMode)
+            settingsManager.saveHeadUnitCanMode(alternativeMode)
+            val alternativeResult = bindModeWithRetries(
+                mode = alternativeMode,
+                scope = scope,
+                attemptLabel = "alternative"
+            )
+            if (alternativeResult.success) {
+                settingsManager.saveCanAutoBindLastResult(
+                    "alternative_ok:${alternativeMode.storageValue}:attempt=${alternativeResult.attempt}"
+                )
+                MbCanDiagnostics.log(
+                    "INFO",
+                    "AUTO_CAN alternative success mode=${alternativeMode.storageValue} attempt=${alternativeResult.attempt}"
+                )
+                return
+            }
+            MbCanDiagnostics.log(
+                "WARN",
+                "AUTO_CAN alternative failed mode=${alternativeMode.storageValue} reason=${alternativeResult.reason}"
+            )
+
+            setMode(primaryMode)
+            settingsManager.saveHeadUnitCanMode(primaryMode)
+            settingsManager.saveCanAutoBindLocked(true)
+            settingsManager.saveCanAutoBindLastResult(
+                "locked_after_fail:${primaryMode.storageValue}|${alternativeMode.storageValue}"
+            )
+            bind(scope)
+            MbCanDiagnostics.log(
+                "WARN",
+                "AUTO_CAN locked after failed retries; reverted to ${primaryMode.storageValue}"
+            )
+        }
+    }
+
+    private suspend fun bindModeWithRetries(
+        mode: HeadUnitCanMode,
+        scope: CoroutineScope,
+        attemptLabel: String,
+    ): AutoBindAttemptResult {
+        repeat(AUTO_BIND_ATTEMPTS_PER_MODE) { index ->
+            val attempt = index + 1
+            setMode(mode)
+            unbind()
+            bind(scope)
+            val attemptResult = waitForAvailability(AUTO_BIND_ATTEMPT_TIMEOUT_MS)
+            MbCanDiagnostics.log(
+                "INFO",
+                "AUTO_CAN $attemptLabel attempt=$attempt/${AUTO_BIND_ATTEMPTS_PER_MODE} " +
+                    "mode=${mode.storageValue} result=${attemptResult.summary}"
+            )
+            if (attemptResult.success) {
+                return AutoBindAttemptResult(success = true, attempt = attempt, reason = null)
+            }
+            if (attempt < AUTO_BIND_ATTEMPTS_PER_MODE) {
+                delay(AUTO_BIND_ATTEMPT_PAUSE_MS)
+            }
+        }
+        return AutoBindAttemptResult(
+            success = false,
+            attempt = AUTO_BIND_ATTEMPTS_PER_MODE,
+            reason = (availability.value as? MbCanAvailability.Unavailable)?.reason ?: "timeout"
+        )
+    }
+
+    private suspend fun waitForAvailability(timeoutMs: Long): AvailabilityAttemptResult {
+        val startedAt = System.currentTimeMillis()
+        while ((System.currentTimeMillis() - startedAt) < timeoutMs) {
+            when (val current = availability.value) {
+                MbCanAvailability.Available -> return AvailabilityAttemptResult(
+                    success = true,
+                    summary = "available"
+                )
+                is MbCanAvailability.Unavailable -> return AvailabilityAttemptResult(
+                    success = false,
+                    summary = "unavailable:${current.reason}"
+                )
+                MbCanAvailability.Unknown -> {
+                    // Continue polling for a definitive backend state within timeout window.
+                }
+            }
+            delay(120L)
+        }
+        return AvailabilityAttemptResult(success = false, summary = "timeout")
+    }
+
+    private fun HeadUnitCanMode.otherMode(): HeadUnitCanMode {
+        return if (this == HeadUnitCanMode.Android9MbCan) {
+            HeadUnitCanMode.Android10Vhal
+        } else {
+            HeadUnitCanMode.Android9MbCan
+        }
+    }
+
+    private data class AvailabilityAttemptResult(
+        val success: Boolean,
+        val summary: String,
+    )
+
+    private data class AutoBindAttemptResult(
+        val success: Boolean,
+        val attempt: Int,
+        val reason: String?,
+    )
 }

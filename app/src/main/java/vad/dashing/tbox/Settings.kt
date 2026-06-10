@@ -309,6 +309,12 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}wheel_pressure_persist_across_stops")
         private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
+        private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
+        private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
+        private val CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}can_auto_bind_last_primary_mode")
+        private val CAN_AUTO_BIND_LAST_RESULT_KEY =
+            stringPreferencesKey("${KEY_PREFIX}can_auto_bind_last_result")
 
         // String настройки
         private val LOG_LEVEL_KEY = stringPreferencesKey("${KEY_PREFIX}log_level")
@@ -735,6 +741,24 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             HeadUnitCanMode.fromStorageValue(preferences[HEAD_UNIT_CAN_MODE_KEY])
         }
+        .distinctUntilChanged()
+
+    val canAutoBindEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[CAN_AUTO_BIND_ENABLED_KEY] ?: true }
+        .distinctUntilChanged()
+
+    val canAutoBindLockedFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[CAN_AUTO_BIND_LOCKED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val canAutoBindLastPrimaryModeFlow: Flow<HeadUnitCanMode?> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY]?.let(HeadUnitCanMode::fromStorageValue)
+        }
+        .distinctUntilChanged()
+
+    val canAutoBindLastResultFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[CAN_AUTO_BIND_LAST_RESULT_KEY].orEmpty() }
         .distinctUntilChanged()
 
     private fun stringSetFromJsonArray(raw: String): Set<String> {
@@ -1512,6 +1536,46 @@ class SettingsManager(private val context: Context) {
     suspend fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
         context.settingsDataStore.edit { preferences ->
             preferences[HEAD_UNIT_CAN_MODE_KEY] = mode.storageValue
+        }
+    }
+
+    suspend fun saveHeadUnitCanModeByUser(mode: HeadUnitCanMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HEAD_UNIT_CAN_MODE_KEY] = mode.storageValue
+            preferences[CAN_AUTO_BIND_LOCKED_KEY] = false
+            preferences.remove(CAN_AUTO_BIND_LAST_RESULT_KEY)
+        }
+    }
+
+    suspend fun saveCanAutoBindEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CAN_AUTO_BIND_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveCanAutoBindLocked(locked: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CAN_AUTO_BIND_LOCKED_KEY] = locked
+        }
+    }
+
+    suspend fun saveCanAutoBindLastPrimaryMode(mode: HeadUnitCanMode?) {
+        context.settingsDataStore.edit { preferences ->
+            if (mode == null) {
+                preferences.remove(CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY)
+            } else {
+                preferences[CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY] = mode.storageValue
+            }
+        }
+    }
+
+    suspend fun saveCanAutoBindLastResult(result: String) {
+        context.settingsDataStore.edit { preferences ->
+            if (result.isBlank()) {
+                preferences.remove(CAN_AUTO_BIND_LAST_RESULT_KEY)
+            } else {
+                preferences[CAN_AUTO_BIND_LAST_RESULT_KEY] = result
+            }
         }
     }
 

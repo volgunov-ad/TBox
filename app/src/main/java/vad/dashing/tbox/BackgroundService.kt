@@ -550,6 +550,10 @@ class BackgroundService : Service() {
         MbCanDiagnostics.setEnabled(false)
         scope.launch {
             UniversalCanRepository.bind(scope)
+            UniversalCanRepository.autoResolveModeOnStartup(
+                settingsManager = settingsManager,
+                scope = scope
+            )
         }
         /*mbCanDebugProbeJob = scope.launch(exceptionHandler) {
             delay(MBCAN_DEBUG_PROBE_INTERVAL_MS)
