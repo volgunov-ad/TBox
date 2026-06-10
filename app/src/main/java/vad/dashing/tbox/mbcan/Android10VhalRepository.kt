@@ -274,9 +274,15 @@ private class CarPropertyBridge(private val context: Context) {
         val proxy = Proxy.newProxyInstance(
             listenerInterface.classLoader,
             arrayOf(listenerInterface)
-        ) { _, method, args ->
-            when (method.name) {
-                "onChangeEvent" -> {
+        ) { proxyObj, method, args ->
+            when {
+                method.declaringClass == Any::class.java && method.name == "hashCode" ->
+                    System.identityHashCode(proxyObj)
+                method.declaringClass == Any::class.java && method.name == "equals" ->
+                    (proxyObj === args?.getOrNull(0))
+                method.declaringClass == Any::class.java && method.name == "toString" ->
+                    "CarPropertyEventListenerProxy@" + Integer.toHexString(System.identityHashCode(proxyObj))
+                method.name == "onChangeEvent" -> {
                     val event = args?.getOrNull(0) ?: return@newProxyInstance null
                     val propertyId = runCatching {
                         event.javaClass.getMethod("getPropertyId").invoke(event) as Int
@@ -290,9 +296,10 @@ private class CarPropertyBridge(private val context: Context) {
                     onPushPropertyChanged?.invoke(propertyId, areaId, value)
                     null
                 }
-                "onErrorEvent" -> {
-                    val propertyId = (args?.getOrNull(0) as? Int) ?: return@newProxyInstance null
-                    val areaId = (args.getOrNull(1) as? Int) ?: 0
+                method.name == "onErrorEvent" -> {
+                    val propertyId = (args?.getOrNull(0) as? Number)?.toInt()
+                        ?: return@newProxyInstance null
+                    val areaId = (args.getOrNull(1) as? Number)?.toInt() ?: 0
                     onPushPropertyError?.invoke(propertyId, areaId)
                     null
                 }
