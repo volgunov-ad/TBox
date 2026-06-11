@@ -337,9 +337,11 @@ object Android10VhalRepository {
     private val pushCoalesceHandler = Handler(Looper.getMainLooper())
     private val pendingPushStateLock = Any()
     private val pendingPushState = mutableMapOf<Int, Any?>()
+    private var pushStateFlushScheduled = false
     private val flushPushStateRunnable = Runnable { flushPendingPushState() }
     private val pendingPushDebugLock = Any()
     private val pendingPushDebug = mutableMapOf<Int, PushDebugBucket>()
+    private var pushDebugFlushScheduled = false
     private val flushPushDebugRunnable = Runnable { flushPendingPushDebug() }
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
     private val sourceMutex = Mutex()
@@ -589,8 +591,14 @@ object Android10VhalRepository {
         pollJob = null
         pushCoalesceHandler.removeCallbacks(flushPushStateRunnable)
         pushCoalesceHandler.removeCallbacks(flushPushDebugRunnable)
-        synchronized(pendingPushStateLock) { pendingPushState.clear() }
-        synchronized(pendingPushDebugLock) { pendingPushDebug.clear() }
+        synchronized(pendingPushStateLock) {
+            pendingPushState.clear()
+            pushStateFlushScheduled = false
+        }
+        synchronized(pendingPushDebugLock) {
+            pendingPushDebug.clear()
+            pushDebugFlushScheduled = false
+        }
         bridge?.disconnect()
         bridge = null
     }
@@ -833,6 +841,10 @@ object Android10VhalRepository {
     private fun enqueuePushOnChange(propertyId: Int, areaId: Int, value: Any?) {
         synchronized(pendingPushStateLock) {
             pendingPushState[propertyId] = value
+            if (!pushStateFlushScheduled) {
+                pushStateFlushScheduled = true
+                pushCoalesceHandler.postDelayed(flushPushStateRunnable, PUSH_STATE_COALESCE_MS)
+            }
         }
         synchronized(pendingPushDebugLock) {
             val prev = pendingPushDebug[propertyId]
@@ -841,15 +853,16 @@ object Android10VhalRepository {
                 areaId = areaId,
                 value = value
             )
+            if (!pushDebugFlushScheduled) {
+                pushDebugFlushScheduled = true
+                pushCoalesceHandler.postDelayed(flushPushDebugRunnable, PUSH_DEBUG_LOG_COALESCE_MS)
+            }
         }
-        pushCoalesceHandler.removeCallbacks(flushPushStateRunnable)
-        pushCoalesceHandler.postDelayed(flushPushStateRunnable, PUSH_STATE_COALESCE_MS)
-        pushCoalesceHandler.removeCallbacks(flushPushDebugRunnable)
-        pushCoalesceHandler.postDelayed(flushPushDebugRunnable, PUSH_DEBUG_LOG_COALESCE_MS)
     }
 
     private fun flushPendingPushState() {
         val snapshot = synchronized(pendingPushStateLock) {
+            pushStateFlushScheduled = false
             if (pendingPushState.isEmpty()) return
             pendingPushState.toMap().also { pendingPushState.clear() }
         }
@@ -862,6 +875,7 @@ object Android10VhalRepository {
 
     private fun flushPendingPushDebug() {
         val snapshot = synchronized(pendingPushDebugLock) {
+            pushDebugFlushScheduled = false
             if (pendingPushDebug.isEmpty()) return
             pendingPushDebug.toMap().also { pendingPushDebug.clear() }
         }

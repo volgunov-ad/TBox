@@ -141,13 +141,19 @@ object MbCanRepository {
 
     private val cfgPushHandler = Handler(Looper.getMainLooper())
     private val pendingCfgPushes = mutableMapOf<Int, Int>()
+    private val cfgPushScheduleLock = Any()
+    private var cfgPushFlushScheduled = false
     private val flushCfgPushesRunnable = Runnable { flushPendingCfgPushes() }
     private val pendingAudioPushes = mutableMapOf<Int, Int>()
+    private val audioPushScheduleLock = Any()
+    private var audioPushFlushScheduled = false
     private val flushAudioCfgPushesRunnable = Runnable { flushPendingAudioPushes() }
     private val telemetryPushLock = Any()
     private val pendingTelemetryPushes = mutableMapOf<MbCanSignal, Float?>()
+    private var telemetryPushFlushScheduled = false
     private val flushTelemetryPushesRunnable = Runnable { flushPendingTelemetryPushes() }
     private val pendingPushDebugByKey = mutableMapOf<String, Pair<Int, String>>()
+    private var pushDebugFlushScheduled = false
     private val flushPushDebugRunnable = Runnable { flushPendingPushDebugLogs() }
 
     private val sourceSignals = mutableMapOf<String, Set<MbCanSignal>>()
@@ -261,8 +267,16 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
-            synchronized(telemetryPushLock) { pendingTelemetryPushes.clear() }
-            synchronized(pendingPushDebugByKey) { pendingPushDebugByKey.clear() }
+            synchronized(cfgPushScheduleLock) { cfgPushFlushScheduled = false }
+            synchronized(audioPushScheduleLock) { audioPushFlushScheduled = false }
+            synchronized(telemetryPushLock) {
+                pendingTelemetryPushes.clear()
+                telemetryPushFlushScheduled = false
+            }
+            synchronized(pendingPushDebugByKey) {
+                pendingPushDebugByKey.clear()
+                pushDebugFlushScheduled = false
+            }
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
@@ -299,11 +313,17 @@ object MbCanRepository {
             pendingCfgPushes[item] = value
         }
         recordPushDebugEvent("cfg_vehicle/$item", "raw=$value")
-        cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
+        synchronized(cfgPushScheduleLock) {
+            if (cfgPushFlushScheduled) return
+            cfgPushFlushScheduled = true
+        }
         cfgPushHandler.postDelayed(flushCfgPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
     private fun flushPendingCfgPushes() {
+        synchronized(cfgPushScheduleLock) {
+            cfgPushFlushScheduled = false
+        }
         val snapshot = synchronized(pendingCfgPushes) {
             if (pendingCfgPushes.isEmpty()) return
             pendingCfgPushes.toMap().also { pendingCfgPushes.clear() }
@@ -375,7 +395,10 @@ object MbCanRepository {
             pendingAudioPushes[item] = value
         }
         recordPushDebugEvent("cfg_audio/$item", "raw=$value")
-        cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
+        synchronized(audioPushScheduleLock) {
+            if (audioPushFlushScheduled) return
+            audioPushFlushScheduled = true
+        }
         cfgPushHandler.postDelayed(flushAudioCfgPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
@@ -385,10 +408,12 @@ object MbCanRepository {
     fun scheduleEngineRpmPush(rpm: Float?) {
         synchronized(telemetryPushLock) {
             pendingTelemetryPushes[MbCanSignal.EngineRpm] = rpm?.coerceAtLeast(0f)
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
         }
         recordPushDebugEvent("telemetry/engine_rpm", "raw=$rpm")
-        cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
-        cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
     /**
@@ -397,10 +422,12 @@ object MbCanRepository {
     fun scheduleEngineTemperaturePush(temperature: Float?) {
         synchronized(telemetryPushLock) {
             pendingTelemetryPushes[MbCanSignal.EngineTemperature] = temperature
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
         }
         recordPushDebugEvent("telemetry/engine_temp", "raw=$temperature")
-        cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
-        cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
     /**
@@ -409,13 +436,18 @@ object MbCanRepository {
     fun scheduleCarSpeedPush(speed: Float?) {
         synchronized(telemetryPushLock) {
             pendingTelemetryPushes[MbCanSignal.CarSpeed] = speed?.coerceAtLeast(0f)
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
         }
         recordPushDebugEvent("telemetry/car_speed", "raw=$speed")
-        cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
-        cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
     }
 
     private fun flushPendingAudioPushes() {
+        synchronized(audioPushScheduleLock) {
+            audioPushFlushScheduled = false
+        }
         val snapshot = synchronized(pendingAudioPushes) {
             if (pendingAudioPushes.isEmpty()) return
             pendingAudioPushes.toMap().also { pendingAudioPushes.clear() }
@@ -436,6 +468,7 @@ object MbCanRepository {
 
     private fun flushPendingTelemetryPushes() {
         val snapshot = synchronized(telemetryPushLock) {
+            telemetryPushFlushScheduled = false
             if (pendingTelemetryPushes.isEmpty()) return
             pendingTelemetryPushes.toMap().also { pendingTelemetryPushes.clear() }
         }
@@ -457,13 +490,15 @@ object MbCanRepository {
             val prev = pendingPushDebugByKey[key]
             val nextCount = (prev?.first ?: 0) + 1
             pendingPushDebugByKey[key] = nextCount to sample
+            if (pushDebugFlushScheduled) return
+            pushDebugFlushScheduled = true
         }
-        cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
         cfgPushHandler.postDelayed(flushPushDebugRunnable, PUSH_DEBUG_LOG_COALESCE_MS)
     }
 
     private fun flushPendingPushDebugLogs() {
         val snapshot = synchronized(pendingPushDebugByKey) {
+            pushDebugFlushScheduled = false
             if (pendingPushDebugByKey.isEmpty()) return
             pendingPushDebugByKey.toMap().also { pendingPushDebugByKey.clear() }
         }
