@@ -185,11 +185,7 @@ object MbCanAudioCommandRegistry {
     private val specsByPropertyId: Map<Int, MbCanAudioCommandSpec> = listOf(
         MbCanAudioCommandSpec(
             propertyId = MbCanKnownAudioPropertyId.VOLUME_SPEED,
-            policy = MbCanCommandPolicy.ToggleBinary(
-                offValue = 1,
-                onValue = 2,
-                unknownFallbackValue = 2,
-            ),
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3, 4)),
             refreshSignal = MbCanSignal.AudioVolumeSpeed,
         ),
     ).associateBy { it.propertyId }

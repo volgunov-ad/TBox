@@ -375,6 +375,8 @@ object Android10VhalRepository {
     val hvacDefrosterFrontState: StateFlow<MbCanBinaryState> = _hvacDefrosterFrontState.asStateFlow()
     private val _audioVolumeSpeedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val audioVolumeSpeedState: StateFlow<MbCanBinaryState> = _audioVolumeSpeedState.asStateFlow()
+    private val _audioVolumeSpeedModeState = MutableStateFlow<Int?>(null)
+    val audioVolumeSpeedModeState: StateFlow<Int?> = _audioVolumeSpeedModeState.asStateFlow()
     private val _audioVolumeState = MutableStateFlow<Int?>(null)
     val audioVolumeState: StateFlow<Int?> = _audioVolumeState.asStateFlow()
     private val _audioVolumeLastNonZeroInSession = MutableStateFlow<Int?>(null)
@@ -805,6 +807,7 @@ object Android10VhalRepository {
             }
             resolved(MbCanKnownAudioPropertyId.VOLUME_SPEED) ->
                 raw?.let {
+                    _audioVolumeSpeedModeState.value = decodeAudioVolumeSpeedMode(it)
                     stateEngine.applyVolumeSpeedCandidate(MbCanSignalStateEngine.decodeVolumeSpeedRaw(it))
                 }
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE) ->
@@ -909,7 +912,10 @@ object Android10VhalRepository {
                 MbCanSignal.HvacDefroster -> stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacAirRecirculation -> stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(deniedReason))
-                MbCanSignal.AudioVolumeSpeed -> stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.AudioVolumeSpeed -> {
+                    _audioVolumeSpeedModeState.value = null
+                    stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                }
                 MbCanSignal.FrontLeftSeatMode ->
                     stateEngine.applySeatCandidate(MbCanSeatSlot.FrontLeft, MbCanSeatModeState.Unavailable(deniedReason))
                 MbCanSignal.FrontRightSeatMode ->
@@ -941,7 +947,10 @@ object Android10VhalRepository {
                 MbCanSignal.HvacDefroster -> stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacAirRecirculation -> stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(reason))
-                MbCanSignal.AudioVolumeSpeed -> stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unavailable(reason))
+                MbCanSignal.AudioVolumeSpeed -> {
+                    _audioVolumeSpeedModeState.value = null
+                    stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unavailable(reason))
+                }
                 MbCanSignal.FrontLeftSeatMode ->
                     stateEngine.applySeatCandidate(MbCanSeatSlot.FrontLeft, MbCanSeatModeState.Unavailable(reason))
                 MbCanSignal.FrontRightSeatMode ->
@@ -1032,6 +1041,7 @@ object Android10VhalRepository {
                     .resolveReadPropertyId(MbCanKnownAudioPropertyId.VOLUME_SPEED)
                     ?: MbCanKnownAudioPropertyId.VOLUME_SPEED
                 val raw = bridge?.getIntProperty(propertyId)
+                _audioVolumeSpeedModeState.value = raw?.let(::decodeAudioVolumeSpeedMode)
                 stateEngine.applyVolumeSpeedCandidate(
                     raw?.let(MbCanSignalStateEngine::decodeVolumeSpeedRaw) ?: MbCanBinaryState.Unknown
                 )
@@ -1233,6 +1243,8 @@ object Android10VhalRepository {
     fun audioVolumeRestoreCandidate(defaultValue: Int = 10): Int {
         return (_audioVolumeLastNonZeroInSession.value ?: defaultValue).coerceAtLeast(1)
     }
+
+    private fun decodeAudioVolumeSpeedMode(raw: Int): Int? = raw.takeIf { it in 1..4 }
 
     private fun cancelDebouncedClearSource(sourceId: String) {
         pendingDebouncedClearJobs.remove(sourceId)?.cancel()

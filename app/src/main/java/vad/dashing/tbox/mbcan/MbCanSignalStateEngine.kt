@@ -425,7 +425,11 @@ internal class MbCanSignalStateEngine(
             else -> MbCanSeatModeState.Unknown
         }
 
-        /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] — 1 off, 2 on (HU). */
-        fun decodeVolumeSpeedRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+        /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] — 1 off, 2..4 on. */
+        fun decodeVolumeSpeedRaw(raw: Int): MbCanBinaryState = when (raw) {
+            1 -> MbCanBinaryState.Off
+            2, 3, 4 -> MbCanBinaryState.On
+            else -> MbCanBinaryState.Unknown
+        }
     }
 }

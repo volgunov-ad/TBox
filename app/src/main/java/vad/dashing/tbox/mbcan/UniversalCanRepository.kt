@@ -167,6 +167,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
 
+    val audioVolumeSpeedModeState: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.audioVolumeSpeedModeState
+            } else {
+                Android10VhalRepository.audioVolumeSpeedModeState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val carSettingsEpsMode: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

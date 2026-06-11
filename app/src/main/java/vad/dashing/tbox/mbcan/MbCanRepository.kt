@@ -191,6 +191,8 @@ object MbCanRepository {
     val rearRightSeatModeState: StateFlow<MbCanSeatModeState> = _rearRightSeatModeState.asStateFlow()
     private val _audioVolumeSpeedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val audioVolumeSpeedState: StateFlow<MbCanBinaryState> = _audioVolumeSpeedState.asStateFlow()
+    private val _audioVolumeSpeedModeState = MutableStateFlow<Int?>(null)
+    val audioVolumeSpeedModeState: StateFlow<Int?> = _audioVolumeSpeedModeState.asStateFlow()
     private val _audioVolumeState = MutableStateFlow<Int?>(null)
     val audioVolumeState: StateFlow<Int?> = _audioVolumeState.asStateFlow()
     private val _audioVolumeLastNonZeroInSession = MutableStateFlow<Int?>(null)
@@ -468,10 +470,12 @@ object MbCanRepository {
             for ((item, raw) in snapshot) {
                 when (item) {
                     MbCanKnownAudioPropertyId.VOLUME -> applyAudioVolumeRaw(raw)
-                    MbCanKnownAudioPropertyId.VOLUME_SPEED ->
+                    MbCanKnownAudioPropertyId.VOLUME_SPEED -> {
+                        _audioVolumeSpeedModeState.value = decodeAudioVolumeSpeedMode(raw)
                         stateEngine.applyVolumeSpeedCandidate(
                             MbCanSignalStateEngine.decodeVolumeSpeedRaw(raw)
                         )
+                    }
                 }
             }
         }
@@ -944,6 +948,7 @@ object MbCanRepository {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
                 _availability.value = MbCanEngineFacade.probeAvailability()
+                _audioVolumeSpeedModeState.value = null
                 stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unknown)
                 return@withContext
             }
@@ -952,6 +957,7 @@ object MbCanRepository {
             _availability.value = availability
             if (availability !is MbCanAvailability.Available) {
                 MbCanDiagnostics.log("WARN", "refreshAudioVolumeSpeed unavailable=$availability")
+                _audioVolumeSpeedModeState.value = null
                 stateEngine.applyVolumeSpeedCandidate(
                     MbCanBinaryState.Unavailable(
                         reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
@@ -965,10 +971,12 @@ object MbCanRepository {
             } else {
                 MbCanSignalStateEngine.decodeVolumeSpeedRaw(raw)
             }
+            _audioVolumeSpeedModeState.value = raw?.let(::decodeAudioVolumeSpeedMode)
             stateEngine.applyVolumeSpeedCandidate(decoded)
             MbCanDiagnostics.log(
                 "DEBUG",
-                "refreshAudioVolumeSpeed raw=$raw state=${_audioVolumeSpeedState.value}"
+                "refreshAudioVolumeSpeed raw=$raw mode=${_audioVolumeSpeedModeState.value} " +
+                    "state=${_audioVolumeSpeedState.value}"
             )
         }
     }
@@ -1186,6 +1194,8 @@ object MbCanRepository {
 
     private fun decodeCarSettingsIntZeroToSix(raw: Int): Int? =
         if (raw in carSettingsZeroToSixRange) raw else null
+
+    private fun decodeAudioVolumeSpeedMode(raw: Int): Int? = raw.takeIf { it in 1..4 }
 
     private fun applyCarSettingsVehicleCfgPush(item: Int, raw: Int) {
         when (item) {

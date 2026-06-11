@@ -59,7 +59,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
         // Audio
         MbCanKnownAudioPropertyId.VOLUME to 557849090, // AUDIO_CURRENT_MAIN_VOLUME
-        MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849153, // AUDIO_WITH_SPEED
+        MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849227, // AUDIO_VOL_VSC_MOD_REQ
     )
 
     private val explicitReadIdMap: Map<Int, Int> = mapOf(
@@ -86,7 +86,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
         // Audio
         MbCanKnownAudioPropertyId.VOLUME to 557849090, // AUDIO_CURRENT_MAIN_VOLUME
-        MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849153, // AUDIO_WITH_SPEED
+        MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849227, // AUDIO_VOL_VSC_MOD_REQ
     )
 
     fun resolveWritePropertyId(requestedPropertyId: Int): Int? {

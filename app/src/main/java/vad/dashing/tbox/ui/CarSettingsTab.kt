@@ -26,7 +26,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanAvailability
-import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
@@ -58,6 +57,13 @@ private val gearboxModeOptions = listOf(
     CarSettingsModeOption(2, "NOR"),
 )
 
+private val speedVolumeModeOptions = listOf(
+    CarSettingsModeOption(1, "Выкл"),
+    CarSettingsModeOption(2, "Низкий"),
+    CarSettingsModeOption(3, "Средний"),
+    CarSettingsModeOption(4, "Высокий"),
+)
+
 @Composable
 fun CarSettingsTab(
     modifier: Modifier = Modifier,
@@ -66,9 +72,7 @@ fun CarSettingsTab(
     val availability by UniversalCanRepository.availability.collectAsStateWithLifecycle()
     val mbCanOk = availability is MbCanAvailability.Available
 
-    val volumeSpeedState by UniversalCanRepository.audioVolumeSpeedState.collectAsStateWithLifecycle()
-    val switchChecked = volumeSpeedState is MbCanBinaryState.On
-    val switchEnabled = volumeSpeedState is MbCanBinaryState.On || volumeSpeedState is MbCanBinaryState.Off
+    val speedVolumeMode by UniversalCanRepository.audioVolumeSpeedModeState.collectAsStateWithLifecycle()
 
     val epsMode by UniversalCanRepository.carSettingsEpsMode.collectAsStateWithLifecycle()
     val driveMode by UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
@@ -101,18 +105,21 @@ fun CarSettingsTab(
             modifier = Modifier.padding(bottom = 16.dp)
         )
         SettingsTitle(stringResource(R.string.car_settings_audio_section_title))
-        SettingSwitch(
-            isChecked = switchChecked,
-            onCheckedChange = {
+        CarSettingsModeButtonsRow(
+            text = stringResource(R.string.car_settings_audio_volume_speed_title),
+            options = speedVolumeModeOptions,
+            selectedRawValue = speedVolumeMode,
+            enabled = mbCanOk,
+            onValueChange = { rawValue ->
                 coroutineScope.launch {
                     UniversalCanRepository.execute(
-                        MbCanCommand.ToggleAudioProperty(MbCanKnownAudioPropertyId.VOLUME_SPEED)
+                        MbCanCommand.SetAudioProperty(
+                            MbCanKnownAudioPropertyId.VOLUME_SPEED,
+                            rawValue
+                        )
                     )
                 }
             },
-            text = stringResource(R.string.car_settings_audio_volume_speed_title),
-            description = stringResource(R.string.car_settings_audio_volume_speed_desc),
-            enabled = switchEnabled && mbCanOk
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
