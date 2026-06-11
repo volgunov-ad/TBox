@@ -143,7 +143,7 @@ fun CarSettingsTab(
             }
         )
         CarSettingsModeButtonsRow(
-            text = "Режим КПП",
+            text = stringResource(R.string.car_settings_drive_mode_6dct_wet_title),
             options = gearboxModeOptions,
             selectedRawValue = driveMode6dctWet,
             enabled = mbCanOk,
