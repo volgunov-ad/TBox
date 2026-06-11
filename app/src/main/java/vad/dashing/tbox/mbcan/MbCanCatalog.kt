@@ -107,13 +107,16 @@ object MbCanCatalog {
         MbCanControlParam("Multimedia", "AVM language", "eAVM_SET_LANG", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("System", "System reboot", "eSYSTEM_REBOOT", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("System", "ICM brightness mode", "eVEHICLE_SET_ICM_BRIGHTNESS_MODE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
-        MbCanControlParam("System", "Steering wheel heating switch", "eVEHICLE_SET_MFS_HEAT_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS)
+        MbCanControlParam("System", "Steering wheel heating switch", "eVEHICLE_SET_MFS_HEAT_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("System", "Wiper maintenance switch", "eVEHICLE_SET_WIPER_MAINTENANCE_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS)
     )
 }
 
 object MbCanKnownVehiclePropertyId {
     // MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH.
     const val STEERING_WHEEL_HEAT_SWITCH = 188
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_WIPER_MAINTENANCE_SWITCH]. */
+    const val WIPER_MAINTENANCE_SWITCH = 185
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT] */
     const val FRONT_WINDSCREEN_HEAT_SWITCH = 316
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER] — rear window + mirrors. */
@@ -204,6 +207,15 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.SteeringWheelHeat
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 2,
+                onValue = 1,
+                unknownFallbackValue = 1
+            ),
+            refreshSignal = MbCanSignal.WiperMaintenance
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,

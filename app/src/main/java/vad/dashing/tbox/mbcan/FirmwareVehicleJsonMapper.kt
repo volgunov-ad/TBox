@@ -38,6 +38,8 @@ object FirmwareVehicleJsonMapper {
     private val explicitWriteIdMap: Map<Int, Int> = mapOf(
         // MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH to 289412679, // T_0401_SET_MFS_Heat
+        // MBVehicleProperty.eVEHICLE_SET_WIPER_MAINTENANCE_SWITCH
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH to 289412682, // T_0401_SET_Wiper_Maintenance
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289415309, // T_0201_SET_FrontWindscreenHeatiReq
         // MBVehicleProperty.eHVAC_DEFROSTER_FRONT
@@ -63,6 +65,8 @@ object FirmwareVehicleJsonMapper {
     private val explicitReadIdMap: Map<Int, Int> = mapOf(
         // MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH to 289412111, // R_0400_RBCM_MFS_HeatSts
+        // MBVehicleProperty.eVEHICLE_SET_WIPER_MAINTENANCE_SWITCH
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH to 289412194, // R_0400_CEM_Wiper_MaintenanceSts
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289412114, // R_0400_RBCM_FGHeat_Request_CommandFeedb
         // MBVehicleProperty.eHVAC_DEFROSTER_FRONT
