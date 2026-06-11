@@ -45,8 +45,8 @@ import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
-import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget

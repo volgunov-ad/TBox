@@ -46,8 +46,7 @@ import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
-import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
-import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.resolveDriveModeWidgetOption
 import kotlin.math.roundToInt
 
 private data class PanelPxLayout(
@@ -394,10 +393,11 @@ fun MainScreenDashboardPanel(
                 } else if (cfg?.dataKey == "hvacDefrosterFrontWidget") {
                     sendToggleHvacDefrosterFront(context)
                 } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+                    val selectedMode = resolveDriveModeWidgetOption(cfg.selectedDriveMode)
                     sendSetMbCanProperty(
                         context = context,
-                        propertyId = MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
-                        value = normalizeDriveModeWidgetRawValue(cfg.selectedDriveMode)
+                        propertyId = selectedMode.propertyId,
+                        value = selectedMode.propertyValue
                     )
                 } else if (
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&

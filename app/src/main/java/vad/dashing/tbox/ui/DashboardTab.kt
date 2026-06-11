@@ -63,13 +63,12 @@ import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
-import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
+import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanSignal
 
 @Composable
@@ -342,10 +341,13 @@ fun MainDashboardTab(
                                             ) {
                                                 launchAppFromWidget(context, cfg.launcherAppPackage)
                                             } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+                                                val selectedMode = resolveDriveModeWidgetOption(
+                                                    cfg.selectedDriveMode
+                                                )
                                                 sendSetMbCanProperty(
                                                     context = context,
-                                                    propertyId = MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
-                                                    value = normalizeDriveModeWidgetRawValue(cfg.selectedDriveMode)
+                                                    propertyId = selectedMode.propertyId,
+                                                    value = selectedMode.propertyValue
                                                 )
                                             }
                                         },
