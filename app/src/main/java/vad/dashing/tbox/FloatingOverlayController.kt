@@ -23,6 +23,7 @@ import vad.dashing.tbox.ui.MyLifecycleOwner
 internal data class UsageStatsOverlayRulesState(
     val foregroundPackage: String?,
     val isMainActivityVisible: Boolean,
+    val suppressFloatingPanelUsageStatsHide: Boolean,
     val watchHidePackages: Set<String>,
     val hidePanelIds: Set<String>,
     val watchShowPackages: Set<String>,
@@ -33,6 +34,7 @@ internal data class UsageStatsOverlayRulesState(
     }
 
     fun isUsageStatsForceHidden(panelId: String, myPackageName: String): Boolean {
+        if (suppressFloatingPanelUsageStatsHide) return false
         val fg = foregroundPackage ?: return false
         if (shouldIgnoreOwnPackageForeground(myPackageName, fg)) return false
         if (watchHidePackages.isEmpty() || hidePanelIds.isEmpty()) return false
@@ -55,6 +57,7 @@ internal data class UsageStatsOverlayRulesState(
         val EMPTY = UsageStatsOverlayRulesState(
             foregroundPackage = null,
             isMainActivityVisible = false,
+            suppressFloatingPanelUsageStatsHide = false,
             watchHidePackages = emptySet(),
             hidePanelIds = emptySet(),
             watchShowPackages = emptySet(),
@@ -192,7 +195,9 @@ internal class FloatingOverlayController(
                 overlayOffIds.remove(id)
                 hiddenFloatingPanelIds.remove(id)
             }
-            reorderVisibleOverlays(visibleConfigs.map { it.id })
+            if (!FloatingPanelEditModeTracker.shouldSuppressUsageStatsHide()) {
+                reorderVisibleOverlays(visibleConfigs.map { it.id })
+            }
             FloatingOverlayLoadTimings.mark("float_sync_done")
             FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
         }
@@ -343,7 +348,9 @@ internal class FloatingOverlayController(
         overlayParams.remove(panelId)
         if (view != null) {
             try {
-                windowManager?.removeView(view)
+                if (view.isAttachedToWindow) {
+                    windowManager?.removeView(view)
+                }
             } catch (e: Exception) {
                 TboxRepository.addLog("ERROR", TAG, "Error removing view")
                 Log.e(TAG, "Error removing view", e)

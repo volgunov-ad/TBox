@@ -60,6 +60,7 @@ import androidx.compose.runtime.snapshotFlow
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.FloatingPanelEditModeTracker
 import vad.dashing.tbox.FloatingDashboardTileEditRequestBus
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
@@ -201,6 +202,12 @@ fun MainScreen(
                     floatingOverlayEditRequest = null
                 }
             } else {
+                DisposableEffect(panelId) {
+                    FloatingPanelEditModeTracker.setTileEditDialogOpen(panelId, true)
+                    onDispose {
+                        FloatingPanelEditModeTracker.setTileEditDialogOpen(panelId, false)
+                    }
+                }
                 LaunchedEffect(
                     widgetConfigs,
                     panelConfig.rows,

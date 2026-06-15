@@ -150,6 +150,8 @@ class BackgroundService : Service() {
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
     private var usageStatsFloatingHideJob: Job? = null
+    private var lastUsageStatsOverlayRules: UsageStatsOverlayRulesState? = null
+    private var usageStatsStableForegroundPackage: String? = null
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -2333,72 +2335,91 @@ class BackgroundService : Service() {
     private fun startUsageStatsFloatingHideWatcher() {
         if (usageStatsFloatingHideJob?.isActive == true) return
         usageStatsFloatingHideJob = scope.launch {
-            var lastAppliedRules: UsageStatsOverlayRulesState? = null
-            var stableForegroundPackage: String? = null
+            launch {
+                FloatingPanelEditModeTracker.suppressUsageStatsHide.collect {
+                    applyUsageStatsOverlayRulesIfChanged()
+                }
+            }
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
-                val watchHide = usageStatsHideFloatingWatchPackages.value
-                val hidePanels = usageStatsHideFloatingPanelIds.value
-                val watchShow = usageStatsForceShowFloatingWatchPackages.value
-                val showPanels = usageStatsForceShowFloatingPanelIds.value
-                val hasHideRules = watchHide.isNotEmpty() && hidePanels.isNotEmpty()
-                val hasShowRules = watchShow.isNotEmpty() && showPanels.isNotEmpty()
-                val hasAnyRules = hasHideRules || hasShowRules
-                if (!hasAnyRules) {
-                    stableForegroundPackage = null
-                }
-                val isMainActivityInForeground = hasAnyRules &&
-                    MainActivityForegroundTracker.isMainActivityInForeground.value
-                val sampledForeground = if (hasAnyRules &&
-                    UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)
-                ) {
-                    UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
-                        this@BackgroundService,
-                        windowMs = 25_000L
-                    )
-                } else {
-                    null
-                }
-                val candidateForeground = sampledForeground
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let { pkg ->
-                        if (pkg == packageName && !isMainActivityInForeground) null else pkg
-                    }
+                applyUsageStatsOverlayRulesIfChanged()
+            }
+        }
+    }
 
-                val effectiveForeground = if (!hasAnyRules) {
-                    null
-                } else {
-                    when {
-                        candidateForeground.isNullOrBlank() -> stableForegroundPackage
-                        else -> {
-                            stableForegroundPackage = candidateForeground
-                            stableForegroundPackage
-                        }
+    private suspend fun applyUsageStatsOverlayRulesIfChanged() {
+        val newState = buildUsageStatsOverlayRulesState()
+        if (newState == lastUsageStatsOverlayRules) return
+        lastUsageStatsOverlayRules = newState
+        overlayController.setUsageStatsOverlayRulesState(newState)
+        overlayController.syncFloatingDashboards(floatingDashboards.value)
+        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+    }
+
+    private fun buildUsageStatsOverlayRulesState(): UsageStatsOverlayRulesState {
+        val watchHide = usageStatsHideFloatingWatchPackages.value
+        val hidePanels = usageStatsHideFloatingPanelIds.value
+        val watchShow = usageStatsForceShowFloatingWatchPackages.value
+        val showPanels = usageStatsForceShowFloatingPanelIds.value
+        val hasHideRules = watchHide.isNotEmpty() && hidePanels.isNotEmpty()
+        val hasShowRules = watchShow.isNotEmpty() && showPanels.isNotEmpty()
+        val hasAnyRules = hasHideRules || hasShowRules
+        if (!hasAnyRules) {
+            usageStatsStableForegroundPackage = null
+        }
+        val isMainActivityInForeground = hasAnyRules &&
+            MainActivityForegroundTracker.isMainActivityInForeground.value
+        val sampledForeground = if (hasAnyRules &&
+            UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)
+        ) {
+            UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
+                this@BackgroundService,
+                windowMs = 25_000L
+            )
+        } else {
+            null
+        }
+        val candidateForeground = sampledForeground
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { pkg ->
+                if (pkg == packageName && !isMainActivityInForeground) null else pkg
+            }
+
+        val effectiveForeground = if (!hasAnyRules) {
+            null
+        } else {
+            when {
+                candidateForeground.isNullOrBlank() -> {
+                    if (usageStatsStableForegroundPackage == packageName && !isMainActivityInForeground) {
+                        usageStatsStableForegroundPackage = null
                     }
+                    usageStatsStableForegroundPackage
                 }
-                val newState = UsageStatsOverlayRulesState(
-                    foregroundPackage = effectiveForeground,
-                    // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
-                    isMainActivityVisible = isMainActivityInForeground,
-                    watchHidePackages = watchHide,
-                    hidePanelIds = hidePanels,
-                    watchShowPackages = watchShow,
-                    showPanelIds = showPanels,
-                )
-                if (newState != lastAppliedRules) {
-                    lastAppliedRules = newState
-                    overlayController.setUsageStatsOverlayRulesState(newState)
-                    overlayController.syncFloatingDashboards(floatingDashboards.value)
-                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                else -> {
+                    usageStatsStableForegroundPackage = candidateForeground
+                    usageStatsStableForegroundPackage
                 }
             }
         }
+        return UsageStatsOverlayRulesState(
+            foregroundPackage = effectiveForeground,
+            // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
+            isMainActivityVisible = isMainActivityInForeground,
+            suppressFloatingPanelUsageStatsHide =
+                FloatingPanelEditModeTracker.shouldSuppressUsageStatsHide(),
+            watchHidePackages = watchHide,
+            hidePanelIds = hidePanels,
+            watchShowPackages = watchShow,
+            showPanelIds = showPanels,
+        )
     }
 
     private fun stopUsageStatsFloatingHideWatcher() {
         usageStatsFloatingHideJob?.cancel()
         usageStatsFloatingHideJob = null
+        lastUsageStatsOverlayRules = null
+        usageStatsStableForegroundPackage = null
         scope.launch {
             overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
             overlayController.syncFloatingDashboards(floatingDashboards.value)

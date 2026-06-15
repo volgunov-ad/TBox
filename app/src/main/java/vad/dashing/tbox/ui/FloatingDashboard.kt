@@ -35,6 +35,7 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.FloatingPanelEditModeTracker
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.MainActivityIntentHelper
@@ -173,6 +174,13 @@ fun FloatingDashboard(
     var pendingSeatHeatVentVariant by remember(panelId) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
+
+    DisposableEffect(panelId, isEditMode) {
+        FloatingPanelEditModeTracker.setOverlayEditMode(panelId, isEditMode)
+        onDispose {
+            FloatingPanelEditModeTracker.setOverlayEditMode(panelId, false)
+        }
+    }
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
