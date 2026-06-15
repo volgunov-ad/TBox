@@ -203,11 +203,11 @@ data class BackgroundServiceSettingsSnapshot(
 class SettingsManager(private val context: Context) {
 
     companion object {
-        /** Tab index that shows the home [vad.dashing.tbox.ui.MainScreen] instead of [vad.dashing.tbox.ui.TboxScreen]. */
-        const val MAIN_SCREEN_SELECTED_TAB_INDEX = 100
+        /** Tab key for the home [vad.dashing.tbox.ui.MainScreen] (no left sidebar). */
+        const val MAIN_SCREEN_TAB_KEY = "main_screen"
 
-        /** Left menu tab index for the Trips section ([vad.dashing.tbox.ui.TabItems]). */
-        const val TRIPS_SELECTED_TAB_INDEX = 4
+        /** Left menu tab key for the Trips section. */
+        const val TRIPS_TAB_KEY = "trips"
 
         /** Max tile rows/columns for main-screen embedded panels and floating overlay dashboards. */
         const val DASHBOARD_PANEL_MAX_GRID_DIMENSION = 10
@@ -412,6 +412,9 @@ class SettingsManager(private val context: Context) {
         private val ACTIVE_TRIP_SIMPLE_WIDGET_LAYOUT_KEY =
             stringPreferencesKey("${KEY_PREFIX}active_trip_simple_widget_layout")
 
+        private val LEFT_MENU_LAYOUT_KEY =
+            stringPreferencesKey("${KEY_PREFIX}left_menu_layout")
+
     }
 
     // Flow для конфигурации виджетов
@@ -549,11 +552,16 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[LEFT_MENU_VISIBLE] ?: true }
         .distinctUntilChanged()
 
-    val selectedTabFlow: Flow<Int> = context.settingsDataStore.data
+    val selectedTabFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[SELECTED_TAB_KEY]?.toIntOrNull()
-                ?: MAIN_SCREEN_SELECTED_TAB_INDEX
+            vad.dashing.tbox.ui.LeftMenuLayout.parseSelectedTabKey(
+                preferences[SELECTED_TAB_KEY],
+            )
         }
+        .distinctUntilChanged()
+
+    val leftMenuLayoutJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[LEFT_MENU_LAYOUT_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val mainScreenSettingsButtonFlow: Flow<MainScreenSettingsButtonPosition> =
@@ -1000,22 +1008,31 @@ class SettingsManager(private val context: Context) {
         }
     }
 
-    suspend fun saveSelectedTab(tabIndex: Int) {
+    suspend fun saveSelectedTab(tabKey: String) {
         context.settingsDataStore.edit { preferences ->
-            preferences[SELECTED_TAB_KEY] = tabIndex.toString()
+            preferences[SELECTED_TAB_KEY] = tabKey
+        }
+    }
+
+    suspend fun saveLeftMenuLayoutJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LEFT_MENU_LAYOUT_KEY] = json
         }
     }
 
     /**
-     * One-time compatibility for tab insertions: shift stored indices after Trips so the same
-     * screen stays selected (Main screen index 100 is unchanged).
+     * If the persisted sidebar tab is disabled in the menu layout, switch to the first visible tab.
+     * [main_screen] is left unchanged.
      */
-    suspend fun migrateSelectedTabIndexIfNeeded() {
-        val raw = context.settingsDataStore.data.first()[SELECTED_TAB_KEY]?.toIntOrNull()
-            ?: return
-        if (raw == MAIN_SCREEN_SELECTED_TAB_INDEX) return
-        if (raw in 5..10) {
-            saveSelectedTab(raw + 1)
+    suspend fun reconcileSelectedTabWithMenuLayoutIfNeeded() {
+        val prefs = context.settingsDataStore.data.first()
+        val rawKey = prefs[SELECTED_TAB_KEY].orEmpty()
+        val layout = vad.dashing.tbox.ui.LeftMenuLayout.parse(
+            prefs[LEFT_MENU_LAYOUT_KEY].orEmpty(),
+        )
+        val resolved = vad.dashing.tbox.ui.LeftMenuLayout.resolveSelectedTab(rawKey, layout)
+        if (resolved != vad.dashing.tbox.ui.LeftMenuLayout.parseSelectedTabKey(rawKey)) {
+            saveSelectedTab(resolved)
         }
     }
 

@@ -30,9 +30,8 @@ class TboxApplication : Application() {
         }
         applicationScope.launch {
             try {
-                settingsManager.migrateSelectedTabIndexIfNeeded()
+                settingsManager.reconcileSelectedTabWithMenuLayoutIfNeeded()
             } catch (_: Exception) {
-                // Non-fatal; settings screen can retry migrations if needed.
             }
             try {
                 settingsManager.migrateMainScreenWallpaperFilesToFolderUrisIfNeeded()

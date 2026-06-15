@@ -411,7 +411,7 @@ fun FloatingDashboard(
                             launchAppFromWidget(context, cfg.launcherAppPackage)
                         } else if (isFloatingDashboardClickAction) {
                             if (cfg != null && isActiveTripWidgetDataKey(cfg.dataKey)) {
-                                settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_SELECTED_TAB_INDEX)
+                                settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_TAB_KEY)
                             }
                             openMainActivityFromWidget(context)
                         }

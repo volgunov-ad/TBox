@@ -24,6 +24,7 @@ import android.content.Context
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
+import vad.dashing.tbox.ui.LeftMenuLayout
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -476,7 +477,15 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX
+            initialValue = SettingsManager.MAIN_SCREEN_TAB_KEY
+        )
+
+    val leftMenuLayout = settingsManager.leftMenuLayoutJsonFlow
+        .map { LeftMenuLayout.parse(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = LeftMenuLayout.default(),
         )
 
     val mainScreenSettingsButtonPosition = settingsManager.mainScreenSettingsButtonFlow
@@ -1148,9 +1157,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         selectedMainScreenPanelIdState.value = list.first().id
     }
 
-    fun saveSelectedTab(tabIndex: Int) {
+    fun saveSelectedTab(tabKey: String) {
         viewModelScope.launch {
-            settingsManager.saveSelectedTab(tabIndex)
+            settingsManager.saveSelectedTab(tabKey)
+        }
+    }
+
+    fun saveLeftMenuLayout(layout: LeftMenuLayout) {
+        viewModelScope.launch {
+            settingsManager.saveLeftMenuLayoutJson(LeftMenuLayout.serialize(layout))
+            val currentTab = settingsManager.selectedTabFlow.first()
+            if (!LeftMenuLayout.isSidebarTabEnabled(currentTab, layout) &&
+                currentTab != SettingsManager.MAIN_SCREEN_TAB_KEY
+            ) {
+                settingsManager.saveSelectedTab(LeftMenuLayout.firstVisibleTabKey(layout))
+            }
         }
     }
 

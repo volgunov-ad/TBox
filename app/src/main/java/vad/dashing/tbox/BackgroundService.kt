@@ -4388,7 +4388,7 @@ class BackgroundService : Service() {
             val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
             if (!enabled) return
             val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
-            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
+            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
             scheduleOpenMainActivity(delaySeconds.toLong() * 1000L)
         } catch (e: Exception) {
             Log.e("BackgroundService", "Open main screen after boot failed", e)

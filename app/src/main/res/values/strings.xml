@@ -43,6 +43,7 @@
     <string name="tab_trips">Поездки</string>
     <string name="tab_refuels">Заправки</string>
     <string name="tab_settings">Настройки</string>
+    <string name="tab_floating_panels_settings">Настройки плавающих панелей</string>
     <string name="tab_main_screen_settings">Настройки главного экрана</string>
     <string name="tab_car_settings">Настройки автомобиля</string>
     <string name="tab_logs">Журнал</string>
@@ -340,6 +341,12 @@
     <string name="settings_data_from_tbox_title">Получение данных от TBox</string>
     <string name="settings_get_can_data_title">Получать данные CAN от TBox</string>
     <string name="settings_get_geo_data_title">Получать данные о геопозиции от TBox</string>
+
+    <string name="settings_left_menu_title">Меню</string>
+    <string name="settings_left_menu_edit">Настроить пункты меню</string>
+    <string name="left_menu_config_dialog_title">Пункты меню</string>
+    <string name="left_menu_config_dialog_hint">Отметьте нужные пункты и перетащите за значок списка, чтобы изменить порядок. «Настройки» и «Настройки главного экрана» всегда включены.</string>
+    <string name="left_menu_config_drag_handle_a11y">Перетащить пункт меню</string>
 
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_backup_title">Резервная копия</string>

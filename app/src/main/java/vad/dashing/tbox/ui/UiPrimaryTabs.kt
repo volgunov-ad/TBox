@@ -264,17 +264,6 @@ fun SettingsTabContent(
     val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
 
-    val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
-    val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
-    val isFloatingDashboardShowTboxDisconnectIndicator by
-        settingsViewModel.isFloatingDashboardShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
-    val floatingDashboardsList by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
-    val hasFloatingPanels = floatingDashboardsList.isNotEmpty()
-    val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
-    val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
-    val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
-    val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
-
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
@@ -298,7 +287,6 @@ fun SettingsTabContent(
     val warningTitle = stringResource(R.string.warning_title)
     val warningSuspendStop = stringResource(R.string.warning_suspend_stop_manual_reboot)
     val expertModeWarning = stringResource(R.string.settings_expert_mode_warning_desc)
-    val newFloatingPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
 
     LaunchedEffect(headUnitCanMode) {
         UniversalCanRepository.setMode(headUnitCanMode)
@@ -314,8 +302,7 @@ fun SettingsTabContent(
     var showExportBackupDialog by remember { mutableStateOf(false) }
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
-    var showUsageStatsHideFloatingDialog by remember { mutableStateOf(false) }
-    var showFloatingPanelOrderDialog by remember { mutableStateOf(false) }
+    var showLeftMenuConfigDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -492,135 +479,6 @@ fun SettingsTabContent(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_floating_panels_title))
-        if (hasFloatingPanels) {
-            FloatingDashboardPanelEditor(
-                panels = floatingDashboardsList,
-                selectedPanelId = activeFloatingDashboardId,
-                onSelectPanelId = { panelId ->
-                    settingsViewModel.saveSelectedFloatingDashboardId(panelId)
-                },
-                onRenamePanel = { panelId, name ->
-                    settingsViewModel.saveFloatingDashboardName(panelId, name)
-                },
-                onAddPanel = {
-                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
-                },
-                onDeletePanel = { panelId ->
-                    settingsViewModel.deleteFloatingDashboard(panelId)
-                },
-                deleteInProgressPanelId = floatingPanelDeleteInProgressId,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            OutlinedButton(
-                onClick = rememberWrappedOnClick { showFloatingPanelOrderDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_panels_order_button),
-                    fontSize = 22.sp,
-                )
-            }
-        } else {
-            Button(
-                onClick = rememberWrappedOnClick {
-                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
-                },
-                modifier = Modifier.padding(bottom = 8.dp)
-            ) {
-                Text(stringResource(R.string.action_add), fontSize = 22.sp)
-            }
-        }
-        SettingSwitch(
-            isFloatingDashboardEnabled,
-            { enabled ->
-                if (enabled) {
-                    if (Settings.canDrawOverlays(context)) {
-                        settingsViewModel.saveFloatingDashboardSetting(true)
-                    } else {
-                        showOverlayRequirementsDialog(context)
-                    }
-                } else {
-                    settingsViewModel.saveFloatingDashboardSetting(false)
-                }
-            },
-            stringResource(R.string.settings_show_floating_panel_title),
-            "",
-            hasFloatingPanels
-        )
-        SettingSwitch(
-            isFloatingDashboardClickAction,
-            { enabled ->
-                settingsViewModel.saveFloatingDashboardClickAction(enabled)
-            },
-            stringResource(R.string.settings_open_app_on_panel_click_title),
-            "",
-            hasFloatingPanels
-        )
-        SettingSwitch(
-            isFloatingDashboardShowTboxDisconnectIndicator,
-            { enabled ->
-                settingsViewModel.saveFloatingDashboardShowTboxDisconnectIndicator(enabled)
-            },
-            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
-            "",
-            hasFloatingPanels
-        )
-        SettingDropdownGeneric(
-            floatingDashboardRows,
-            { rows ->
-                settingsViewModel.saveFloatingDashboardRows(rows)
-            },
-            stringResource(R.string.settings_floating_rows_title),
-            "",
-            hasFloatingPanels,
-            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
-        )
-        SettingDropdownGeneric(
-            floatingDashboardCols,
-            { cols ->
-                settingsViewModel.saveFloatingDashboardCols(cols)
-            },
-            stringResource(R.string.settings_floating_cols_title),
-            "",
-            hasFloatingPanels,
-            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
-        )
-        FloatingDashboardPositionSizeSettings(
-            settingsViewModel,
-            Modifier,
-            enabled = hasFloatingPanels
-        )
-
-        Text(
-            text = stringResource(R.string.settings_floating_usage_stats_hide_title),
-            modifier = Modifier.padding(top = 12.dp),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(R.string.settings_floating_usage_stats_hide_explanation),
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-            fontSize = 20.sp,
-            lineHeight = 20.sp * 1.35f,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        OutlinedButton(
-            onClick = rememberWrappedOnClick { showUsageStatsHideFloatingDialog = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.settings_floating_usage_stats_hide_configure),
-                fontSize = 22.sp,
-            )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
@@ -693,6 +551,15 @@ fun SettingsTabContent(
             "",
             true
         )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_left_menu_title))
+        Button(
+            onClick = rememberWrappedOnClick { showLeftMenuConfigDialog = true },
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            Text(stringResource(R.string.settings_left_menu_edit), fontSize = 24.sp)
+        }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_misc_title))
@@ -914,39 +781,11 @@ fun SettingsTabContent(
             )
         }
 
-        if (showUsageStatsHideFloatingDialog) {
-            UsageStatsHideFloatingPanelsDialog(
-                settingsViewModel = settingsViewModel,
-                floatingPanels = floatingDashboardsList,
-                onDismiss = { showUsageStatsHideFloatingDialog = false },
-            )
-        }
-        if (showFloatingPanelOrderDialog) {
-            PanelOrderConfigDialog(
-                visible = true,
-                title = stringResource(R.string.settings_floating_panels_order_dialog_title),
-                hint = stringResource(R.string.settings_panels_order_dialog_hint),
-                items = floatingDashboardsList.map { panel ->
-                    PanelOrderItem(
-                        id = panel.id,
-                        name = panel.name.ifBlank { panel.id },
-                    )
-                },
-                onDismiss = { showFloatingPanelOrderDialog = false },
-                onSave = { orderedIds ->
-                    val byId = floatingDashboardsList.associateBy { it.id }
-                    val reordered = buildList {
-                        orderedIds.forEach { panelId ->
-                            byId[panelId]?.let { add(it) }
-                        }
-                        floatingDashboardsList.forEach { panel ->
-                            if (orderedIds.none { it == panel.id }) add(panel)
-                        }
-                    }
-                    settingsViewModel.saveFloatingDashboards(reordered)
-                },
-            )
-        }
+        LeftMenuConfigDialog(
+            settingsViewModel = settingsViewModel,
+            visible = showLeftMenuConfigDialog,
+            onDismiss = { showLeftMenuConfigDialog = false },
+        )
 
         Row(
             modifier = Modifier
@@ -994,6 +833,198 @@ fun SettingsTabContent(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun FloatingPanelsSettingsTabContent(
+    settingsViewModel: SettingsViewModel,
+) {
+    val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
+    val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
+    val isFloatingDashboardShowTboxDisconnectIndicator by
+        settingsViewModel.isFloatingDashboardShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
+    val floatingDashboardsList by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
+    val hasFloatingPanels = floatingDashboardsList.isNotEmpty()
+    val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
+    val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
+    val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
+    val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
+
+    val scrollState = rememberScrollState()
+    val context = LocalContext.current
+    val newFloatingPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
+
+    var showUsageStatsHideFloatingDialog by remember { mutableStateOf(false) }
+    var showFloatingPanelOrderDialog by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(18.dp),
+    ) {
+        SettingsTitle(stringResource(R.string.settings_floating_panels_title))
+        if (hasFloatingPanels) {
+            FloatingDashboardPanelEditor(
+                panels = floatingDashboardsList,
+                selectedPanelId = activeFloatingDashboardId,
+                onSelectPanelId = { panelId ->
+                    settingsViewModel.saveSelectedFloatingDashboardId(panelId)
+                },
+                onRenamePanel = { panelId, name ->
+                    settingsViewModel.saveFloatingDashboardName(panelId, name)
+                },
+                onAddPanel = {
+                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
+                },
+                onDeletePanel = { panelId ->
+                    settingsViewModel.deleteFloatingDashboard(panelId)
+                },
+                deleteInProgressPanelId = floatingPanelDeleteInProgressId,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { showFloatingPanelOrderDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_panels_order_button),
+                    fontSize = 22.sp,
+                )
+            }
+        } else {
+            Button(
+                onClick = rememberWrappedOnClick {
+                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
+                },
+                modifier = Modifier.padding(bottom = 8.dp),
+            ) {
+                Text(stringResource(R.string.action_add), fontSize = 24.sp)
+            }
+        }
+        SettingSwitch(
+            isFloatingDashboardEnabled,
+            { enabled ->
+                if (enabled) {
+                    if (Settings.canDrawOverlays(context)) {
+                        settingsViewModel.saveFloatingDashboardSetting(true)
+                    } else {
+                        showOverlayRequirementsDialog(context)
+                    }
+                } else {
+                    settingsViewModel.saveFloatingDashboardSetting(false)
+                }
+            },
+            stringResource(R.string.settings_show_floating_panel_title),
+            "",
+            hasFloatingPanels,
+        )
+        SettingSwitch(
+            isFloatingDashboardClickAction,
+            { enabled ->
+                settingsViewModel.saveFloatingDashboardClickAction(enabled)
+            },
+            stringResource(R.string.settings_open_app_on_panel_click_title),
+            "",
+            hasFloatingPanels,
+        )
+        SettingSwitch(
+            isFloatingDashboardShowTboxDisconnectIndicator,
+            { enabled ->
+                settingsViewModel.saveFloatingDashboardShowTboxDisconnectIndicator(enabled)
+            },
+            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
+            "",
+            hasFloatingPanels,
+        )
+        SettingDropdownGeneric(
+            floatingDashboardRows,
+            { rows ->
+                settingsViewModel.saveFloatingDashboardRows(rows)
+            },
+            stringResource(R.string.settings_floating_rows_title),
+            "",
+            hasFloatingPanels,
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS,
+        )
+        SettingDropdownGeneric(
+            floatingDashboardCols,
+            { cols ->
+                settingsViewModel.saveFloatingDashboardCols(cols)
+            },
+            stringResource(R.string.settings_floating_cols_title),
+            "",
+            hasFloatingPanels,
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS,
+        )
+        FloatingDashboardPositionSizeSettings(
+            settingsViewModel,
+            Modifier,
+            enabled = hasFloatingPanels,
+        )
+
+        Text(
+            text = stringResource(R.string.settings_floating_usage_stats_hide_title),
+            modifier = Modifier.padding(top = 12.dp),
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.settings_floating_usage_stats_hide_explanation),
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            fontSize = 20.sp,
+            lineHeight = 20.sp * 1.35f,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { showUsageStatsHideFloatingDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_floating_usage_stats_hide_configure),
+                fontSize = 22.sp,
+            )
+        }
+    }
+
+    if (showUsageStatsHideFloatingDialog) {
+        UsageStatsHideFloatingPanelsDialog(
+            settingsViewModel = settingsViewModel,
+            floatingPanels = floatingDashboardsList,
+            onDismiss = { showUsageStatsHideFloatingDialog = false },
+        )
+    }
+    if (showFloatingPanelOrderDialog) {
+        PanelOrderConfigDialog(
+            visible = true,
+            title = stringResource(R.string.settings_floating_panels_order_dialog_title),
+            hint = stringResource(R.string.settings_panels_order_dialog_hint),
+            items = floatingDashboardsList.map { panel ->
+                PanelOrderItem(
+                    id = panel.id,
+                    name = panel.name.ifBlank { panel.id },
+                )
+            },
+            onDismiss = { showFloatingPanelOrderDialog = false },
+            onSave = { orderedIds ->
+                val byId = floatingDashboardsList.associateBy { it.id }
+                val reordered = buildList {
+                    orderedIds.forEach { panelId ->
+                        byId[panelId]?.let { add(it) }
+                    }
+                    floatingDashboardsList.forEach { panel ->
+                        if (orderedIds.none { it == panel.id }) add(panel)
+                    }
+                }
+                settingsViewModel.saveFloatingDashboards(reordered)
+            },
+        )
     }
 }
 

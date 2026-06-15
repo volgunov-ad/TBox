@@ -212,7 +212,7 @@ class MainActivity : ComponentActivity() {
         if (panelId.isBlank() || widgetIndex < 0) return
         FloatingDashboardTileEditRequestBus.post(panelId, widgetIndex)
         lifecycleScope.launch(Dispatchers.IO) {
-            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
+            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
         }
     }
 
