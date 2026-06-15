@@ -19,6 +19,11 @@ object FirmwareVehicleJsonMapper {
     private const val SEND_JSON_PATH = "/system/etc/adayo/vehicle/send.json"
     private const val RECEIVE_JSON_PATH = "/system/etc/adayo/vehicle/receive.json"
 
+    // Direct VHAL telemetry property ids used by Android10VhalRepository.
+    const val VHAL_ENGINE_RPM_PROPERTY_ID = 289_414_951 // R_0900_EMS_1_EngineSpd
+    const val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = 289_414_949 // R_0900_EMS1G_EngineCoolantTemperture
+    const val VHAL_CAR_SPEED_PROPERTY_ID = 289_414_964 // R_0900_ICM_1_DisplayVehicleSpeed
+
     private data class Tables(
         val sendIds: Set<Int>,
         val receiveIds: Set<Int>,
@@ -82,7 +87,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH to 289415202, // R_0202_RBCM_2__RRSeatHeatVentSwSts
         // Car settings (drive/eps)
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE to 289412124, // R_0400_EPS_1_EPSModeSts
-        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE to 289412695, // T_0401_IHU_9_DriveMode
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE to 289412123, // R_0400_TCU_G_DriverMode_7
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
         // Audio
         MbCanKnownAudioPropertyId.VOLUME to 557849090, // AUDIO_CURRENT_MAIN_VOLUME
@@ -90,14 +95,14 @@ object FirmwareVehicleJsonMapper {
     )
 
     fun resolveWritePropertyId(requestedPropertyId: Int): Int? {
-        val tables = loadTables() ?: return null
         explicitWriteIdMap[requestedPropertyId]?.let { return it }
+        val tables = loadTables() ?: return null
         return requestedPropertyId.takeIf { tables.sendIds.contains(it) }
     }
 
     fun resolveReadPropertyId(requestedPropertyId: Int): Int? {
-        val tables = loadTables() ?: return null
         explicitReadIdMap[requestedPropertyId]?.let { return it }
+        val tables = loadTables() ?: return null
         return requestedPropertyId.takeIf { tables.receiveIds.contains(it) }
     }
 

@@ -314,11 +314,9 @@ private class CarPropertyBridge(private val context: Context) {
 }
 
 object Android10VhalRepository {
-    private const val VHAL_WIPER_MAINTENANCE_READ_PROPERTY_ID = 289_412_194
-    private const val VHAL_WIPER_MAINTENANCE_WRITE_PROPERTY_ID = 289_412_682
-    private const val VHAL_ENGINE_RPM_PROPERTY_ID = 289_414_951
-    private const val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = 289_414_949
-    private const val VHAL_CAR_SPEED_PROPERTY_ID = 289_414_964
+    private val VHAL_ENGINE_RPM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID
+    private val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_TEMPERATURE_PROPERTY_ID
+    private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
     private const val VHAL_ENGINE_RPM_SCALE = 4f
     private const val NORMAL_POLL_INTERVAL_MS = 30_000L
     private const val BURST_POLL_INTERVAL_MS = 1_500L
@@ -716,7 +714,7 @@ object Android10VhalRepository {
         fun resolved(id: Int): Int = FirmwareVehicleJsonMapper.resolveReadPropertyId(id) ?: id
         return when (signal) {
             MbCanSignal.SteeringWheelHeat -> setOf(resolved(MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH))
-            MbCanSignal.WiperMaintenance -> setOf(VHAL_WIPER_MAINTENANCE_READ_PROPERTY_ID)
+            MbCanSignal.WiperMaintenance -> setOf(resolved(MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH))
             MbCanSignal.FrontWindscreenHeat -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH))
             MbCanSignal.HvacDefroster -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH))
             MbCanSignal.HvacAirRecirculation -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION))
@@ -766,6 +764,64 @@ object Android10VhalRepository {
         return if (value in carSettingsZeroToSixRange) value else null
     }
 
+    // For several VHAL read-status properties in stock apps, ON is encoded as 1 and OFF as 2.
+    // Keep this decoder local to Android10VhalRepository to avoid affecting mbCAN behavior.
+    private fun decodeVhalBinaryOneIsOn(raw: Int): MbCanBinaryState = when (raw) {
+        1 -> MbCanBinaryState.On
+        // Stock UI checks "==1" for ON; everything else is treated as unchecked/off.
+        0, 2 -> MbCanBinaryState.Off
+        else -> MbCanBinaryState.Unknown
+    }
+
+    private fun isVhalBinaryToggleProperty(propertyId: Int): Boolean = when (propertyId) {
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT -> true
+        else -> false
+    }
+
+    private fun decodeVhalBinaryReadState(propertyId: Int, raw: Int): MbCanBinaryState = when (propertyId) {
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
+            MbCanSignalStateEngine.decodeHvacAirRecirculationRaw(raw)
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT ->
+            decodeVhalBinaryOneIsOn(raw)
+        else -> MbCanBinaryState.Unknown
+    }
+
+    private fun encodeVhalBinaryWriteValue(propertyId: Int, targetOn: Boolean): Int? = when (propertyId) {
+        // Stock: T_0401_SET_MFS_Heat and T_0401_SET_Wiper_Maintenance use 1=on, 2=off.
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH ->
+            if (targetOn) 1 else 2
+        // Stock: these writes use 2=on, 1=off.
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT ->
+            if (targetOn) 2 else 1
+        // Recirculation: 1=inside(recirc on), 2=outside(recirc off).
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
+            if (targetOn) MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON
+            else MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF
+        else -> null
+    }
+
+    private fun latestBinaryState(propertyId: Int): MbCanBinaryState = when (propertyId) {
+        MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH -> _steeringWheelHeatState.value
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH -> _wiperMaintenanceState.value
+        MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH -> _frontWindscreenHeatState.value
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH -> _hvacDefrosterState.value
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION -> _hvacAirRecirculationState.value
+        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT -> _hvacDefrosterFrontState.value
+        else -> MbCanBinaryState.Unknown
+    }
+
     private fun readNumericProperty(propertyId: Int): Float? {
         val asInt = bridge?.getIntProperty(propertyId)
         if (asInt != null) return asInt.toFloat()
@@ -778,20 +834,19 @@ object Android10VhalRepository {
         when (propertyId) {
             resolved(MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH) ->
                 raw?.let {
-                    stateEngine.applySteeringCandidate(MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(it))
+                    stateEngine.applySteeringCandidate(decodeVhalBinaryOneIsOn(it))
                 }
-            resolved(MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH),
-            VHAL_WIPER_MAINTENANCE_READ_PROPERTY_ID ->
+            resolved(MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH) ->
                 raw?.let {
-                    stateEngine.applyWiperMaintenanceCandidate(MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(it))
+                    stateEngine.applyWiperMaintenanceCandidate(decodeVhalBinaryOneIsOn(it))
                 }
             resolved(MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH) ->
                 raw?.let {
-                    stateEngine.applyWindshieldHeatCandidate(MbCanSignalStateEngine.decodeFrontWindscreenHeatRaw(it))
+                    stateEngine.applyWindshieldHeatCandidate(decodeVhalBinaryOneIsOn(it))
                 }
             resolved(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH) ->
                 raw?.let {
-                    stateEngine.applyHvacDefrosterCandidate(MbCanSignalStateEngine.decodeHvacDefrosterRaw(it))
+                    stateEngine.applyHvacDefrosterCandidate(decodeVhalBinaryOneIsOn(it))
                 }
             resolved(MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION) ->
                 raw?.let {
@@ -799,7 +854,7 @@ object Android10VhalRepository {
                 }
             resolved(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT) ->
                 raw?.let {
-                    stateEngine.applyHvacDefrosterFrontCandidate(MbCanSignalStateEngine.decodeHvacDefrosterFrontRaw(it))
+                    stateEngine.applyHvacDefrosterFrontCandidate(decodeVhalBinaryOneIsOn(it))
                 }
             resolved(MbCanKnownAudioPropertyId.VOLUME) -> raw?.let {
                 _audioVolumeState.value = it.coerceAtLeast(0)
@@ -980,16 +1035,16 @@ object Android10VhalRepository {
                     ?: MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applySteeringCandidate(
-                    raw?.let(MbCanSignalStateEngine::decodeSteeringWheelHeatRaw) ?: MbCanBinaryState.Unknown
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }
             MbCanSignal.WiperMaintenance -> {
                 val propertyId = FirmwareVehicleJsonMapper
                     .resolveReadPropertyId(MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH)
-                    ?: VHAL_WIPER_MAINTENANCE_READ_PROPERTY_ID
+                    ?: MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applyWiperMaintenanceCandidate(
-                    raw?.let(MbCanSignalStateEngine::decodeSteeringWheelHeatRaw) ?: MbCanBinaryState.Unknown
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }
             MbCanSignal.FrontWindscreenHeat -> {
@@ -998,7 +1053,7 @@ object Android10VhalRepository {
                     ?: MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applyWindshieldHeatCandidate(
-                    raw?.let(MbCanSignalStateEngine::decodeFrontWindscreenHeatRaw) ?: MbCanBinaryState.Unknown
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }
             MbCanSignal.HvacDefroster -> {
@@ -1007,7 +1062,7 @@ object Android10VhalRepository {
                     ?: MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applyHvacDefrosterCandidate(
-                    raw?.let(MbCanSignalStateEngine::decodeHvacDefrosterRaw) ?: MbCanBinaryState.Unknown
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }
             MbCanSignal.HvacAirRecirculation -> {
@@ -1025,7 +1080,7 @@ object Android10VhalRepository {
                     ?: MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applyHvacDefrosterFrontCandidate(
-                    raw?.let(MbCanSignalStateEngine::decodeHvacDefrosterFrontRaw) ?: MbCanBinaryState.Unknown
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }
             MbCanSignal.AudioVolume -> {
@@ -1120,21 +1175,33 @@ object Android10VhalRepository {
                 val policy = spec.policy as? MbCanCommandPolicy.ToggleBinary
                     ?: return MbCanCommandResult(false, "Toggle unsupported for propertyId=${command.propertyId}")
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
-                    ?: if (command.propertyId == MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH) {
-                        VHAL_WIPER_MAINTENANCE_WRITE_PROPERTY_ID
-                    } else {
-                        command.propertyId
-                    }
+                    ?: command.propertyId
                 logDebug("ToggleProperty request=${command.propertyId} effective=$effectivePropertyId")
-                val current = bridge?.getIntProperty(effectivePropertyId)
-                    ?: return MbCanCommandResult(false, "Property read failed")
-                val target = when (current) {
-                    policy.onValue -> policy.offValue
-                    policy.offValue -> policy.onValue
-                    else -> policy.unknownFallbackValue
+                val target = if (isVhalBinaryToggleProperty(command.propertyId)) {
+                    val readPropertyId = FirmwareVehicleJsonMapper.resolveReadPropertyId(command.propertyId)
+                        ?: command.propertyId
+                    val currentRaw = bridge?.getIntProperty(readPropertyId)
+                    val currentState = currentRaw
+                        ?.let { decodeVhalBinaryReadState(command.propertyId, it) }
+                        ?: latestBinaryState(command.propertyId)
+                    val targetOn = when (currentState) {
+                        MbCanBinaryState.On -> false
+                        MbCanBinaryState.Off -> true
+                        else -> true
+                    }
+                    encodeVhalBinaryWriteValue(command.propertyId, targetOn)
+                        ?: return MbCanCommandResult(false, "No VHAL write mapping for propertyId=${command.propertyId}")
+                } else {
+                    val current = bridge?.getIntProperty(effectivePropertyId)
+                        ?: return MbCanCommandResult(false, "Property read failed")
+                    when (current) {
+                        policy.onValue -> policy.offValue
+                        policy.offValue -> policy.onValue
+                        else -> policy.unknownFallbackValue
+                    }
                 }
                 val ok = bridge?.setIntProperty(effectivePropertyId, target) == true
-                logDebug("ToggleProperty result=$ok propertyId=$effectivePropertyId current=$current target=$target")
+                logDebug("ToggleProperty result=$ok propertyId=$effectivePropertyId target=$target")
                 if (ok) requestBurstPolling()
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
@@ -1148,11 +1215,7 @@ object Android10VhalRepository {
                     return MbCanCommandResult(false, "Value ${command.value} is not allowed")
                 }
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
-                    ?: if (command.propertyId == MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH) {
-                        VHAL_WIPER_MAINTENANCE_WRITE_PROPERTY_ID
-                    } else {
-                        command.propertyId
-                    }
+                    ?: command.propertyId
                 logDebug(
                     "SetProperty request=${command.propertyId} effective=$effectivePropertyId " +
                         "value=${command.value}"
