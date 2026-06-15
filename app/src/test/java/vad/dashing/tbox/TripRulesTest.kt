@@ -10,7 +10,7 @@ import vad.dashing.tbox.trip.TripRules
 
 /**
  * Documents expected trip behaviour for split time and cold-start resume.
- * [BackgroundService] implements RPM samples; these rules mirror the decisions.
+ * [BackgroundService] applies these rules on a 1 s periodic RPM snapshot; these tests mirror the decisions.
  */
 class TripRulesTest {
 

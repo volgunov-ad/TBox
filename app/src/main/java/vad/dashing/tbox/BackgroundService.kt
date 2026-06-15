@@ -235,8 +235,8 @@ class BackgroundService : Service() {
     private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
 
     /**
-     * In-RAM state for automatic trips: each CAN RPM sample drives [onTripRpmSample]. Split-window
-     * length comes from [splitTripTimeMinutesSetting] (same semantics as [vad.dashing.tbox.trip.TripRules]).
+     * In-RAM state for automatic trips: [onTripPeriodicSample] runs on a 1 s tick (RPM snapshot).
+     * Split-window length comes from [splitTripTimeMinutesSetting] (same semantics as [vad.dashing.tbox.trip.TripRules]).
      */
     private var tripPrevRpmForStart = 0f
     /** True once we have seen RPM > 0 this service session; blocks spurious "new trip" on first samples. */
@@ -256,7 +256,7 @@ class BackgroundService : Service() {
     private var tripLastFuelLitersCalibrated: Float? = null
     private var tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
     private var tripLastPersistedSnapshot: TripRecord? = null
-    /** First RPM sample after service start or reload: special-case resume vs new trip without double-counting. */
+    /** First periodic sample after service start or reload: special-case resume vs new trip without double-counting. */
     private var tripFirstSampleAfterSessionStart = true
     private var isLastSMS: Boolean = false
 
@@ -384,6 +384,7 @@ class BackgroundService : Service() {
         )
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
+        private const val ACCOUNTING_SAMPLE_INTERVAL_MS = 1_000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS = 2000L
         /** No Tbox client reconnect attempts until this long after [serviceStartElapsed] (first init / first reply). */
@@ -1375,44 +1376,41 @@ class BackgroundService : Service() {
                 TboxRepository.addLog("WARN", "Data Listener", "Fuel level restore: ${e.message}")
                 Log.w("Data Listener", "Fuel level restore failed", e)
             }
-            // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
-                var prevRpm = 0f
+                var prevRpmForEngineStop = 0f
                 var lastMotorHoursPeriodicPersistAt = SystemClock.elapsedRealtime()
-                CanDataRepository.engineRPM
-                    .drop(1)
-                    .collect { rpm ->
+                while (isActive) {
                     try {
-                        val r = rpm ?: 0f
-                        val motorHours = motorHoursBuffer.updateValue(r)
-                        val motorHoursTrip = motorHoursTripBuffer.updateValue(r)
+                        val now = SystemClock.elapsedRealtime()
+                        val rpm = CanDataRepository.engineRPM.value ?: 0f
+                        val motorHours = motorHoursBuffer.updateValue(rpm)
+                        val motorHoursTrip = motorHoursTripBuffer.updateValue(rpm)
                         if (motorHours != 0f) {
                             CarDataRepository.addMotorHours(motorHours)
                         }
                         if (motorHoursTrip != 0f) {
                             CanDataRepository.addMotorHoursTrip(motorHoursTrip)
                         }
-                        val now = SystemClock.elapsedRealtime()
                         if (now - lastMotorHoursPeriodicPersistAt >= MOTOR_HOURS_PERSIST_INTERVAL_MS &&
                             CarDataRepository.needsPersistence()
                         ) {
                             lastMotorHoursPeriodicPersistAt = now
                             persistMotorHoursToStore()
                         }
-                        if (prevRpm > 0f && r == 0f) {
+                        if (prevRpmForEngineStop > 0f && rpm == 0f) {
                             persistMotorHoursToStore()
                             if (wheelPressurePersistAcrossStopsSetting.value) {
                                 persistLastKnownWheelPressuresOnEngineStop()
                             }
                             persistLastKnownFuelLevelOnEngineStop()
                         }
-                        onTripRpmSample(r, prevRpm, now)
-                        prevRpm = r
+                        onTripPeriodicSample(now)
+                        prevRpmForEngineStop = rpm
                     } catch (e: Exception) {
-                        TboxRepository.addLog("ERROR", "Data Listener",
-                            "Fatal error in motor hours")
-                        Log.e("Data Listener", "Fatal error in motor hours", e)
+                        TboxRepository.addLog("ERROR", "Data Listener", "Fatal error in periodic accounting")
+                        Log.e("Data Listener", "Fatal error in periodic accounting", e)
                     }
+                    delay(ACCOUNTING_SAMPLE_INTERVAL_MS)
                 }
             }
         }
@@ -1690,14 +1688,16 @@ class BackgroundService : Service() {
     }
 
     /**
-     * One decision per RPM sample: maintain active trip, end on engine off, optionally reopen the same
-     * trip after a short stop, or start a new trip after a longer gap. Moving vs idle time uses speed
-     * (not RPM) for samples while the trip is active and RPM > 0.
+     * One decision per periodic (1 s) tick: maintain active trip, end on engine off, optionally reopen
+     * the same trip after a short stop, or start a new trip after a longer gap. Moving vs idle time
+     * uses speed (not RPM) for samples while the trip is active and RPM > 0.
      */
-    private fun onTripRpmSample(rpm: Float, prevRpm: Float, nowElapsedMs: Long) {
+    private fun onTripPeriodicSample(nowElapsedMs: Long) {
         if (!TripRepository.isTripsProcessingEnabled()) return
         if (!tripsFromDiskReady.get()) return
         synchronized(TripRepository.lock) {
+            val rpm = CanDataRepository.engineRPM.value ?: 0f
+            val prevRpm = tripPrevRpmForStart
             val wallNow = System.currentTimeMillis()
             val splitWindowMs = splitTripTimeMinutesSetting.value * 60_000L
             val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
