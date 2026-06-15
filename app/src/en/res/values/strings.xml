@@ -148,7 +148,7 @@
     <string name="widget_media_volume_action_increase">Increase media volume</string>
     <string name="widget_media_volume_action_decrease">Decrease media volume</string>
     <string name="widget_media_volume_action_mute">Toggle media mute</string>
-    <string name="widget_media_volume_use_mbcan">Use mbCAN mode</string>
+    <string name="widget_media_volume_use_mbcan_vhal">Use CAN mode (mbCAN/VHAL)</string>
     <string name="widget_drive_mode_target_title">Drive mode for button</string>
     <string name="widget_drive_mode_target_desc">Command sent on tap</string>
     <string name="media_player_yandex_music">Yandex Music</string>
@@ -225,6 +225,10 @@
     <string name="modem_mode_disabled">Disabled</string>
 
     <string name="settings_network_control_title">Network control settings</string>
+    <string name="settings_hu_type_title">HU type and CAN stack</string>
+    <string name="settings_hu_type_desc">Android 9 uses mbCAN. Android 10 switches CAN controls to the new firmware stack (without mbCAN).</string>
+    <string name="settings_hu_type_android9">HU with Android 9</string>
+    <string name="settings_hu_type_android10">HU with Android 10</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
     <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
     <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>
@@ -348,6 +352,8 @@
     <string name="settings_expert_mode_title">Expert mode</string>
     <string name="settings_expert_mode_warning_desc">All changes in expert mode are made at your own risk.\nHowever, your actions in this mode cannot lead to irreversible consequences.</string>
     <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>
+    <string name="settings_mbcan_diagnostics_title">CAN diagnostics (mbCAN/VHAL)</string>
+    <string name="settings_mbcan_diagnostics_desc">One switch for MBCAN_TMP and VHAL_A10 logs. Enabled only for the current background service session and not persisted.</string>
     <string name="settings_mock_location_title">Inject system location data (Mock locations)</string>
     <string name="settings_mock_location_ready">Ready to use</string>
     <string name="settings_mock_location_requirements">Requires permission and mock location setup</string>

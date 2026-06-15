@@ -54,3 +54,7 @@
 | [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 0.15.2) |
 | [changelog.md](changelog.md) | Сводный список возможностей (агрегат) |
 | [AGENTS.md](AGENTS.md) | Сборка и окружение для разработки (Cursor Cloud) |
+
+== Техническая документация по CAN backend
+Подробное описание выбора режима `mbCAN`/`VHAL`, работы `UniversalCanRepository`, подключения и диагностики:
+* `docs/CAN_BACKENDS_RU.md`

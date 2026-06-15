@@ -46,6 +46,7 @@ enum class MbCanSeatSlot {
  */
 internal class MbCanSignalStateEngine(
     private val steeringFlow: MutableStateFlow<MbCanBinaryState>,
+    private val wiperMaintenanceFlow: MutableStateFlow<MbCanBinaryState>,
     private val windshieldHeatFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacDefrosterFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacAirRecirculationFlow: MutableStateFlow<MbCanBinaryState>,
@@ -60,6 +61,8 @@ internal class MbCanSignalStateEngine(
 ) {
     private var steeringUnknownStreak = 0
     private var steeringUnavailableStreak = 0
+    private var wiperMaintenanceUnknownStreak = 0
+    private var wiperMaintenanceUnavailableStreak = 0
     private var windshieldUnknownStreak = 0
     private var windshieldUnavailableStreak = 0
     private var hvacDefrosterUnknownStreak = 0
@@ -111,6 +114,34 @@ internal class MbCanSignalStateEngine(
                 steeringUnknownStreak = 0
                 steeringUnavailableStreak = 0
                 steeringFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyWiperMaintenanceCandidate(decoded: MbCanBinaryState) {
+        val published = wiperMaintenanceFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.WiperMaintenance)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                wiperMaintenanceUnknownStreak += 1
+                wiperMaintenanceUnavailableStreak = 0
+                if (wiperMaintenanceUnknownStreak >= requiredConsecutiveProblems) {
+                    wiperMaintenanceFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                wiperMaintenanceUnavailableStreak += 1
+                wiperMaintenanceUnknownStreak = 0
+                if (wiperMaintenanceUnavailableStreak >= requiredConsecutiveProblems) {
+                    wiperMaintenanceFlow.value = decoded
+                }
+            }
+            else -> {
+                wiperMaintenanceUnknownStreak = 0
+                wiperMaintenanceUnavailableStreak = 0
+                wiperMaintenanceFlow.value = decoded
             }
         }
     }
@@ -394,7 +425,11 @@ internal class MbCanSignalStateEngine(
             else -> MbCanSeatModeState.Unknown
         }
 
-        /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] — 1 off, 2 on (HU). */
-        fun decodeVolumeSpeedRaw(raw: Int): MbCanBinaryState = decodeSteeringWheelHeatRaw(raw)
+        /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] — 1 off, 2..4 on. */
+        fun decodeVolumeSpeedRaw(raw: Int): MbCanBinaryState = when (raw) {
+            1 -> MbCanBinaryState.Off
+            2, 3, 4 -> MbCanBinaryState.On
+            else -> MbCanBinaryState.Unknown
+        }
     }
 }

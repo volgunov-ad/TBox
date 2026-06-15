@@ -151,7 +151,7 @@
     <string name="widget_media_volume_action_increase">Увеличить громкость медиа</string>
     <string name="widget_media_volume_action_decrease">Уменьшить громкость медиа</string>
     <string name="widget_media_volume_action_mute">Включить или выключить звук медиа</string>
-    <string name="widget_media_volume_use_mbcan">Работа через mbCAN</string>
+    <string name="widget_media_volume_use_mbcan_vhal">Работа через CAN (mbCAN/VHAL)</string>
     <string name="widget_drive_mode_target_title">Режим вождения для кнопки</string>
     <string name="widget_drive_mode_target_desc">Команда, отправляемая при нажатии</string>
     <string name="media_player_yandex_music">Я.Музыка</string>
@@ -228,6 +228,10 @@
     <string name="modem_mode_disabled">Выключен</string>
 
     <string name="settings_network_control_title">Настройки контроля сети</string>
+    <string name="settings_hu_type_title">Тип ГУ и стек CAN</string>
+    <string name="settings_hu_type_desc">Android 9 использует mbCAN. Android 10 переводит CAN-управление на новый стек прошивки (без mbCAN).</string>
+    <string name="settings_hu_type_android9">ГУ с Android 9</string>
+    <string name="settings_hu_type_android10">ГУ с Android 10</string>
     <string name="settings_auto_modem_restart_title">Автоматический перезапуск модема</string>
     <string name="settings_auto_modem_restart_desc">Автоматически перезапускать модем при потере подключения к сети. Проверка происходит с периодичностью 10 секунд в первый раз и 5 минут в последующие разы (сброс таймера до 10 секунд происходит при подключении сети)</string>
     <string name="settings_auto_tbox_reboot_title">Автоматическая перезагрузка TBox</string>
@@ -351,8 +355,8 @@
     <string name="settings_expert_mode_title">Экспертный режим</string>
     <string name="settings_expert_mode_warning_desc">Все изменения в экспертном режиме вы делаете на свой страх и риск.\nНо к необратимым последствиям ваши действия в этом режиме привести не могут</string>
     <string name="settings_can_frames_count_title">Количество сохраняемых CAN фреймов (1…3600)</string>
-    <string name="settings_mbcan_diagnostics_title">Диагностика mbCAN (MBCAN_TMP)</string>
-    <string name="settings_mbcan_diagnostics_desc">Логи включаются только на текущую сессию фоновой службы и не сохраняются</string>
+    <string name="settings_mbcan_diagnostics_title">Диагностика CAN (mbCAN/VHAL)</string>
+    <string name="settings_mbcan_diagnostics_desc">Единая опция для логов MBCAN_TMP и VHAL_A10. Включается только на текущую сессию фоновой службы и не сохраняется</string>
     <string name="settings_mock_location_title">Подменять системные данные о геопозиции (Фиктивные местоположения)</string>
     <string name="settings_mock_location_ready">Готово к использованию</string>
     <string name="settings_mock_location_requirements">Требует настройки разрешений и настройки фиктивных местоположений</string>
@@ -619,6 +623,7 @@
     <string name="data_title_fuel_level_widget">Виджет уровня топлива</string>
     <string name="data_title_air_quality_widget">Виджет качества воздуха</string>
     <string name="data_title_steering_wheel_heat_widget">Виджет обогрева рулевого колеса</string>
+    <string name="data_title_wiper_maintenance_widget">Виджет режима обслуживания стеклоочистителей</string>
     <string name="data_title_front_windscreen_heat_widget">Виджет обогрева лобового стекла</string>
     <string name="data_title_rear_window_mirrors_defrost_widget">Виджет обогрева заднего стекла и зеркал</string>
     <string name="data_title_hvac_air_recirculation_widget">Виджет рециркуляции воздуха</string>

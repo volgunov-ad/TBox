@@ -45,8 +45,8 @@ import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
-import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget
@@ -62,7 +62,6 @@ import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
-import vad.dashing.tbox.isMediaVolumeWidgetDataKey
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizeWidgetScale
@@ -135,7 +134,7 @@ internal class WidgetSelectionDialogState(
     var mediaKeepPlayerForeground by mutableStateOf(
         initialConfig.mediaKeepPlayerForeground
     )
-    var mediaVolumeUseMbCan by mutableStateOf(initialConfig.mediaVolumeUseMbCan)
+    var useMbCanVhal by mutableStateOf(initialConfig.useMbCanVhal)
     var selectedDriveMode by mutableIntStateOf(
         if (initialConfig.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
             normalizeDriveModeWidgetRawValue(initialConfig.selectedDriveMode)
@@ -212,8 +211,8 @@ internal class WidgetSelectionDialogState(
         if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
             singleLineDualMetrics = false
         }
-        if (!isMediaVolumeWidgetDataKey(key)) {
-            mediaVolumeUseMbCan = false
+        if (!WidgetsRepository.supportsUseMbCanVhal(key)) {
+            useMbCanVhal = false
         }
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
@@ -680,11 +679,11 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = 300.dp
                         )
                     }
-                    if (isMediaVolumeWidgetDataKey(state.selectedDataKey)) {
+                    if (WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey)) {
                         SettingSwitch(
-                            state.mediaVolumeUseMbCan,
-                            { state.mediaVolumeUseMbCan = it },
-                            stringResource(R.string.widget_media_volume_use_mbcan),
+                            state.useMbCanVhal,
+                            { state.useMbCanVhal = it },
+                            stringResource(R.string.widget_media_volume_use_mbcan_vhal),
                             "",
                             state.togglesEnabled
                         )
@@ -1162,8 +1161,8 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
             },
-            mediaVolumeUseMbCan = isMediaVolumeWidgetDataKey(state.selectedDataKey) &&
-                state.mediaVolumeUseMbCan,
+            useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey) &&
+                state.useMbCanVhal,
             tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },

@@ -59,14 +59,16 @@ import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
-import vad.dashing.tbox.isMbCanMediaVolumeEnabled
-import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
+import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
+import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
+import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
+import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
+import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
-import vad.dashing.tbox.mbcan.MbCanRepository
-import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.MbCanSignal
 
 @Composable
@@ -107,10 +109,19 @@ fun MainDashboardTab(
     var pendingMusicSelection by remember { mutableStateOf<Pair<Int, String>?>(null) }
     var pendingSeatHeatVentVariant by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val panelNeedsMbCan = remember(widgetConfigs) {
-        MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
+        UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
-    val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
+    val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
+    }
+    val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
+    }
+    val panelNeedsMbCanVhalEngineTemperature = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineTemperatureEnabled() }
+    }
+    val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
     }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
@@ -139,24 +150,63 @@ fun MainDashboardTab(
                 .map { it.dataKey.trim() }
                 .filter { it.isNotBlank() && it != "null" }
                 .toSet()
-            MbCanRepository.setSourceWidgetKeys("dashboard-tab-main", activeKeys)
+            UniversalCanRepository.setSourceWidgetKeys("dashboard-tab-main", activeKeys)
         }
         DisposableEffect(Unit) {
             onDispose {
-                MbCanRepository.enqueueClearSource("dashboard-tab-main")
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main")
             }
         }
     }
-    if (panelNeedsMbCanMediaVolume) {
+    if (panelNeedsMbCanVhalMediaVolume) {
         LaunchedEffect(widgetConfigs) {
-            MbCanRepository.setSourceSignals(
+            UniversalCanRepository.setSourceSignals(
                 "dashboard-tab-main-media-volume",
                 setOf(MbCanSignal.AudioVolume)
             )
         }
         DisposableEffect(Unit) {
             onDispose {
-                MbCanRepository.enqueueClearSource("dashboard-tab-main-media-volume")
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-media-volume")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineRpm) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-engine-rpm",
+                setOf(MbCanSignal.EngineRpm)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-engine-rpm")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineTemperature) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-engine-temperature",
+                setOf(MbCanSignal.EngineTemperature)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-engine-temperature")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalCarSpeed) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-car-speed",
+                setOf(MbCanSignal.CarSpeed)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-car-speed")
             }
         }
     }
@@ -291,10 +341,13 @@ fun MainDashboardTab(
                                             ) {
                                                 launchAppFromWidget(context, cfg.launcherAppPackage)
                                             } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+                                                val selectedMode = resolveDriveModeWidgetOption(
+                                                    cfg.selectedDriveMode
+                                                )
                                                 sendSetMbCanProperty(
                                                     context = context,
-                                                    propertyId = MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
-                                                    value = normalizeDriveModeWidgetRawValue(cfg.selectedDriveMode)
+                                                    propertyId = selectedMode.propertyId,
+                                                    value = selectedMode.propertyValue
                                                 )
                                             }
                                         },

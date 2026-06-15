@@ -22,7 +22,7 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
@@ -35,7 +35,10 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.isMbCanMediaVolumeEnabled
+import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
+import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
+import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
+import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -80,10 +83,19 @@ internal fun DashboardPanelGridAndFrames(
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
-        MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
+        UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
-    val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
+    val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
+    }
+    val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
+    }
+    val panelNeedsMbCanVhalEngineTemperature = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineTemperatureEnabled() }
+    }
+    val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
@@ -91,24 +103,63 @@ internal fun DashboardPanelGridAndFrames(
                 .map { it.dataKey.trim() }
                 .filter { it.isNotBlank() && it != "null" }
                 .toSet()
-            MbCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
+            UniversalCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
         }
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
-                MbCanRepository.enqueueClearSource(mbCanInterestSourceId)
+                UniversalCanRepository.enqueueClearSource(mbCanInterestSourceId)
             }
         }
     }
-    if (panelNeedsMbCanMediaVolume) {
+    if (panelNeedsMbCanVhalMediaVolume) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
-            MbCanRepository.setSourceSignals(
+            UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-media-volume",
                 setOf(MbCanSignal.AudioVolume)
             )
         }
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
-                MbCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineRpm) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-engine-rpm",
+                setOf(MbCanSignal.EngineRpm)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-engine-rpm")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineTemperature) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-engine-temperature",
+                setOf(MbCanSignal.EngineTemperature)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-engine-temperature")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalCarSpeed) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-car-speed",
+                setOf(MbCanSignal.CarSpeed)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-car-speed")
             }
         }
     }

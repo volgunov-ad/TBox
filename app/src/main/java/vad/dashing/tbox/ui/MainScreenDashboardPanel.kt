@@ -41,12 +41,12 @@ import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
+import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
-import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
-import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.resolveDriveModeWidgetOption
 import kotlin.math.roundToInt
 
 private data class PanelPxLayout(
@@ -382,6 +382,8 @@ fun MainScreenDashboardPanel(
                     showDialogForIndex = index
                 } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
                     sendToggleSteeringWheelHeat(context)
+                } else if (cfg?.dataKey == WIPER_MAINTENANCE_WIDGET_DATA_KEY) {
+                    sendToggleWiperMaintenance(context)
                 } else if (cfg?.dataKey == "frontWindscreenHeatWidget") {
                     sendToggleFrontWindscreenHeat(context)
                 } else if (cfg?.dataKey == "rearWindowMirrorsDefrostWidget") {
@@ -391,10 +393,11 @@ fun MainScreenDashboardPanel(
                 } else if (cfg?.dataKey == "hvacDefrosterFrontWidget") {
                     sendToggleHvacDefrosterFront(context)
                 } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
+                    val selectedMode = resolveDriveModeWidgetOption(cfg.selectedDriveMode)
                     sendSetMbCanProperty(
                         context = context,
-                        propertyId = MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
-                        value = normalizeDriveModeWidgetRawValue(cfg.selectedDriveMode)
+                        propertyId = selectedMode.propertyId,
+                        value = selectedMode.propertyValue
                     )
                 } else if (
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&

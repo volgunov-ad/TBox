@@ -47,7 +47,7 @@ import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import com.mengbo.mbCan.defines.MBAudioProperty
 import vad.dashing.tbox.fuel.FuelCoordinates
 import vad.dashing.tbox.fuel.FuelCostAccounting
@@ -541,10 +541,19 @@ class BackgroundService : Service() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+        scope.launch {
+            settingsManager.headUnitCanModeFlow.collect { mode ->
+                UniversalCanRepository.setMode(mode)
+            }
+        }
         startLogLevelSync()
         MbCanDiagnostics.setEnabled(false)
         scope.launch {
-            MbCanRepository.bind(scope)
+            UniversalCanRepository.bind(scope)
+            UniversalCanRepository.autoResolveModeOnStartup(
+                settingsManager = settingsManager,
+                scope = scope
+            )
         }
         /*mbCanDebugProbeJob = scope.launch(exceptionHandler) {
             delay(MBCAN_DEBUG_PROBE_INTERVAL_MS)
@@ -961,13 +970,13 @@ class BackgroundService : Service() {
                     when (commandType) {
                         MBCAN_COMMAND_TOGGLE_PROPERTY -> {
                             if (propertyId != Int.MIN_VALUE) {
-                                val result = MbCanRepository.execute(MbCanCommand.ToggleProperty(propertyId))
+                                val result = UniversalCanRepository.execute(MbCanCommand.ToggleProperty(propertyId))
                                 MbCanDiagnostics.log("DEBUG", "toggle result success=${result.success} msg=${result.message}")
                             }
                         }
                         MBCAN_COMMAND_SET_PROPERTY -> {
                             if (propertyId != Int.MIN_VALUE) {
-                                val result = MbCanRepository.execute(MbCanCommand.SetProperty(propertyId, propertyValue))
+                                val result = UniversalCanRepository.execute(MbCanCommand.SetProperty(propertyId, propertyValue))
                                 MbCanDiagnostics.log("DEBUG", "set result success=${result.success} msg=${result.message}")
                             }
                         }
@@ -3174,7 +3183,7 @@ class BackgroundService : Service() {
         scope.launch(Dispatchers.IO + NonCancellable) {
             try {
                 withTimeout(2_000L) {
-                    MbCanRepository.unbind()
+                    UniversalCanRepository.unbind()
                 }
             } catch (e: Exception) {
                 MbCanDiagnostics.log("ERROR", "onDestroy mbCAN unbind failed: ${e.message}")
