@@ -51,8 +51,7 @@
 | [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) | Руководство пользователя (интерфейс, TBox, настройки) |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
-| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 0.15.2) |
-| [changelog.md](changelog.md) | Сводный список возможностей (агрегат) |
+| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 0.16.0) |
 | [AGENTS.md](AGENTS.md) | Сборка и окружение для разработки (Cursor Cloud) |
 
 == Техническая документация по CAN backend
