@@ -599,6 +599,8 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 customTripLayout = activeTripCustomLayout,
                 simpleTripLayout = activeTripSimpleLayout,
+                showRowDividers = widgetConfig.tripWidgetShowRowDividers,
+                labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
@@ -620,6 +622,8 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 simpleTripLayout = activeTripSimpleLayout,
+                showRowDividers = widgetConfig.tripWidgetShowRowDividers,
+                labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {

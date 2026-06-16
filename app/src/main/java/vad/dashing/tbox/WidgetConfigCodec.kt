@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import kotlin.math.roundToInt
 
 private const val LEGACY_WIDGETS_SEPARATOR = "|"
@@ -117,6 +118,21 @@ fun serializeWidgetConfigsToJsonArray(
         config.tileBackgroundImageRelPathDark?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
                 obj.put("tileBackgroundImageRelPathDark", it)
+            }
+        }
+        if (isActiveTripWidgetDataKey(config.dataKey)) {
+            if (!config.tripWidgetShowRowDividers) {
+                obj.put("tripWidgetShowRowDividers", false)
+            }
+            if (config.tripWidgetLabelColumnWidthPercent !=
+                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
+            ) {
+                obj.put(
+                    "tripWidgetLabelColumnWidthPercent",
+                    TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                        config.tripWidgetLabelColumnWidthPercent,
+                    ),
+                )
             }
         }
         array.put(obj)
@@ -261,6 +277,16 @@ private fun parseWidgetConfigsFromJsonArray(
                         useMbCanVhal = item.optBoolean("useMbCanVhal", false),
                         tileBackgroundImageRelPathLight = tileLight,
                         tileBackgroundImageRelPathDark = tileDark,
+                        tripWidgetShowRowDividers = item.optBoolean(
+                            "tripWidgetShowRowDividers",
+                            TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
+                        ),
+                        tripWidgetLabelColumnWidthPercent = TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                            item.optInt(
+                                "tripWidgetLabelColumnWidthPercent",
+                                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
+                            ),
+                        ),
                     )
                 )
             }

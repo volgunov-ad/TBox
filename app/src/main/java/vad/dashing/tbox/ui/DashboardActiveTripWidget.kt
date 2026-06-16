@@ -27,6 +27,7 @@ import vad.dashing.tbox.trip.formatTripDurationHuman
 import vad.dashing.tbox.R
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -40,6 +41,8 @@ fun DashboardActiveTripWidgetItem(
     titleOverride: String = "",
     customTripLayout: ActiveTripCustomWidgetLayout? = null,
     simpleTripLayout: ActiveTripCustomWidgetLayout? = null,
+    showRowDividers: Boolean = TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
+    labelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
@@ -119,8 +122,10 @@ fun DashboardActiveTripWidgetItem(
                         value = valueToString(t.distanceKm, 0),
                         unit = stringResource(R.string.unit_km),
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_active_trip_mini_enroute_label),
                         value = formatTripDurationHuman(
@@ -129,22 +134,28 @@ fun DashboardActiveTripWidgetItem(
                         ),
                         unit = "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_fuel_consumption_l_100km),
                         value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_fuel_used),
                         value = valueToString(t.fuelConsumedLiters, 1),
                         unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                 } else if (simplified) {
                     ActiveTripCustomWidgetRows(
                         trip = t,
@@ -153,6 +164,8 @@ fun DashboardActiveTripWidgetItem(
                         resolvedTextColor = resolvedTextColor,
                         dateFmt = dateFmt,
                         context = context,
+                        showRowDividers = showRowDividers,
+                        labelColumnWidthPercent = labelColumnWidthPercent,
                     )
                 } else if (custom) {
                     ActiveTripCustomWidgetRows(
@@ -162,6 +175,8 @@ fun DashboardActiveTripWidgetItem(
                         resolvedTextColor = resolvedTextColor,
                         dateFmt = dateFmt,
                         context = context,
+                        showRowDividers = showRowDividers,
+                        labelColumnWidthPercent = labelColumnWidthPercent,
                     )
                 } else {
                     StatusRow(
@@ -169,16 +184,20 @@ fun DashboardActiveTripWidgetItem(
                         value = dateFmt.format(Date(t.startTimeEpochMs)),
                         unit = "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     t.endTimeEpochMs?.let { endMs ->
                         StatusRow(
                             label = stringResource(R.string.trips_end_time),
                             value = dateFmt.format(Date(endMs)),
                             unit = "",
                             fontSize = rowFont,
-                            color = resolvedTextColor
-                        )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     }
                     StatusRow(
                         label = stringResource(R.string.trips_odometer_start),
@@ -186,29 +205,37 @@ fun DashboardActiveTripWidgetItem(
                             ?: stringResource(R.string.value_no_data),
                         unit = if (t.odometerStartKm != null) stringResource(R.string.unit_km) else "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_distance),
                         value = valueToString(t.distanceKm, 0),
                         unit = stringResource(R.string.unit_km),
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_moving_time),
                         value = formatTripDurationHuman(context, t.movingTimeMs),
                         unit = "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_idle_time),
                         value = formatTripDurationHuman(context, t.idleTimeMs),
                         unit = "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_engine_running_time),
                         value = formatTripDurationHuman(
@@ -217,15 +244,19 @@ fun DashboardActiveTripWidgetItem(
                         ),
                         unit = "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_parking_time),
                         value = formatTripDurationHuman(context, t.parkingTimeMs),
                         unit = "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_total_time),
                         value = formatTripDurationHuman(
@@ -234,37 +265,47 @@ fun DashboardActiveTripWidgetItem(
                         ),
                         unit = "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_engine_start_count),
                         value = valueToString(t.engineStartCount),
                         unit = "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_max_speed),
                         value = valueToString(t.maxSpeed, 1),
                         unit = stringResource(R.string.unit_kmh),
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_max_engine_temp),
                         value = t.maxEngineTemp?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (t.maxEngineTemp != null) stringResource(R.string.unit_celsius) else "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     t.maxGearboxOilTemp?.let { gb ->
                         StatusRow(
                             label = stringResource(R.string.trips_max_gearbox_temp),
                             value = valueToString(gb),
                             unit = stringResource(R.string.unit_celsius),
                             fontSize = rowFont,
-                            color = resolvedTextColor
-                        )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     }
                     StatusRow(
                         label = stringResource(R.string.trips_min_outside_temp),
@@ -272,66 +313,84 @@ fun DashboardActiveTripWidgetItem(
                             ?: stringResource(R.string.value_no_data),
                         unit = if (t.minOutsideTemp != null) stringResource(R.string.unit_celsius) else "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_max_outside_temp),
                         value = t.maxOutsideTemp?.let { valueToString(it, 1) }
                             ?: stringResource(R.string.value_no_data),
                         unit = if (t.maxOutsideTemp != null) stringResource(R.string.unit_celsius) else "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     val avgM = TripRepository.averageSpeedMovingKmH(t)
                     StatusRow(
                         label = stringResource(R.string.trips_avg_speed_moving),
                         value = avgM?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (avgM != null) stringResource(R.string.unit_kmh) else "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_avg_speed_trip),
                         value = avgT?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (avgT != null) stringResource(R.string.unit_kmh) else "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_fuel_used),
                         value = valueToString(t.fuelConsumedLiters, 1),
                         unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_fuel_consumption_l_100km),
                         value = avgFuel?.let { valueToString(it, 1) } ?: stringResource(R.string.value_no_data),
                         unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_fuel_refueled),
                         value = valueToString(t.fuelRefueledLiters, 1),
                         unit = stringResource(R.string.unit_liter),
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_fuel_refueled_cost),
                         value = valueToString(t.fuelRefueledCostRub, 2),
                         unit = stringResource(R.string.unit_ruble),
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                     StatusRow(
                         label = stringResource(R.string.trips_refuel_count),
                         value = valueToString(t.refuelCount),
                         unit = "",
                         fontSize = rowFont,
-                        color = resolvedTextColor
-                    )
+                    color = resolvedTextColor,
+                    showDivider = showRowDividers,
+                    labelColumnWidthPercent = labelColumnWidthPercent,
+                )
                 }
             }
         }

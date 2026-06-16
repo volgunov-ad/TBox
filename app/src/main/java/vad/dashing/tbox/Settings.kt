@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
@@ -91,6 +92,10 @@ data class FloatingDashboardWidgetConfig(
     val tileBackgroundImageRelPathLight: String? = null,
     /** Same as [tileBackgroundImageRelPathLight] for the dark theme. */
     val tileBackgroundImageRelPathDark: String? = null,
+    /** Horizontal dividers between rows on trip widget tiles. */
+    val tripWidgetShowRowDividers: Boolean = TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
+    /** First column width (percent) for trip widget row layout. */
+    val tripWidgetLabelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */

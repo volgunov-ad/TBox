@@ -30,7 +30,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -94,16 +93,10 @@ fun ActiveTripCustomWidgetConfigDialog(
         ActiveTripWidgetLayoutEditorTarget.Simple -> R.string.trips_simple_widget_dialog_hint
     }
     val draftRows = remember { mutableStateListOf<ActiveTripCustomWidgetLayout.Row>() }
-    var draftShowRowDividers by remember { mutableStateOf(true) }
-    var draftLabelColumnWidthPercent by remember {
-        mutableIntStateOf(ActiveTripCustomWidgetLayout.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT)
-    }
     LaunchedEffect(visible, persisted, target) {
         if (visible) {
             draftRows.clear()
             draftRows.addAll(persisted.rows)
-            draftShowRowDividers = persisted.showRowDividers
-            draftLabelColumnWidthPercent = persisted.labelColumnWidthPercent
         }
     }
 
@@ -135,21 +128,6 @@ fun ActiveTripCustomWidgetConfigDialog(
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 20.sp),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(bottom = 8.dp)
-                )
-                SettingSwitch(
-                    isChecked = draftShowRowDividers,
-                    onCheckedChange = { draftShowRowDividers = it },
-                    text = stringResource(R.string.trips_widget_show_row_dividers_title),
-                    description = "",
-                    enabled = true,
-                )
-                SettingInt(
-                    value = draftLabelColumnWidthPercent,
-                    onValueChange = { draftLabelColumnWidthPercent = it },
-                    text = stringResource(R.string.trips_widget_label_column_width_title),
-                    description = stringResource(R.string.trips_widget_label_column_width_desc),
-                    minValue = ActiveTripCustomWidgetLayout.MIN_LABEL_COLUMN_WIDTH_PERCENT,
-                    maxValue = ActiveTripCustomWidgetLayout.MAX_LABEL_COLUMN_WIDTH_PERCENT,
                 )
                 LazyColumn(
                     modifier = Modifier
@@ -263,11 +241,7 @@ fun ActiveTripCustomWidgetConfigDialog(
                     }
                     Button(
                         onClick = rememberWrappedOnClick {
-                            val layout = ActiveTripCustomWidgetLayout(
-                                rows = draftRows.toList(),
-                                showRowDividers = draftShowRowDividers,
-                                labelColumnWidthPercent = draftLabelColumnWidthPercent,
-                            )
+                            val layout = ActiveTripCustomWidgetLayout(draftRows.toList())
                             when (target) {
                                 ActiveTripWidgetLayoutEditorTarget.Custom ->
                                     settingsViewModel.saveActiveTripCustomWidgetLayout(layout)

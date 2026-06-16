@@ -52,6 +52,7 @@ import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
+import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
@@ -64,6 +65,7 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
@@ -207,6 +209,13 @@ internal class WidgetSelectionDialogState(
 
     /** `null` = default decimals per data key in provider; otherwise 0..2 fractional digits. */
     var valueAccuracy by mutableStateOf(initialConfig.valueAccuracy?.takeIf { it in 0..2 })
+
+    var tripWidgetShowRowDividers by mutableStateOf(initialConfig.tripWidgetShowRowDividers)
+    var tripWidgetLabelColumnWidthPercent by mutableIntStateOf(
+        TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+            initialConfig.tripWidgetLabelColumnWidthPercent,
+        ),
+    )
 
     fun applySelectedDataKey(key: String) {
         selectedDataKey = key
@@ -715,6 +724,23 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = 220.dp
                         )
                     }
+                    if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                        SettingSwitch(
+                            state.tripWidgetShowRowDividers,
+                            { state.tripWidgetShowRowDividers = it },
+                            stringResource(R.string.trips_widget_show_row_dividers_title),
+                            "",
+                            state.togglesEnabled,
+                        )
+                        SettingInt(
+                            value = state.tripWidgetLabelColumnWidthPercent,
+                            onValueChange = { state.tripWidgetLabelColumnWidthPercent = it },
+                            text = stringResource(R.string.trips_widget_label_column_width_title),
+                            description = stringResource(R.string.trips_widget_label_column_width_desc),
+                            minValue = TripWidgetTileDisplay.MIN_LABEL_COLUMN_WIDTH_PERCENT,
+                            maxValue = TripWidgetTileDisplay.MAX_LABEL_COLUMN_WIDTH_PERCENT,
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1181,6 +1207,18 @@ internal fun applyWidgetSelectionChanges(
             },
             tileBackgroundImageRelPathDark = state.tileBackgroundImageRelPathDark?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
+            tripWidgetShowRowDividers = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                state.tripWidgetShowRowDividers
+            } else {
+                TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS
+            },
+            tripWidgetLabelColumnWidthPercent = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                    state.tripWidgetLabelColumnWidthPercent,
+                )
+            } else {
+                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
             },
         )
     } else {

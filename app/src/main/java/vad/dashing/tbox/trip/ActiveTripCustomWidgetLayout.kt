@@ -47,8 +47,6 @@ enum class ActiveTripCustomWidgetField(
 
 data class ActiveTripCustomWidgetLayout(
     val rows: List<Row>,
-    val showRowDividers: Boolean = true,
-    val labelColumnWidthPercent: Int = DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
 ) {
     data class Row(
         val field: ActiveTripCustomWidgetField,
@@ -56,13 +54,6 @@ data class ActiveTripCustomWidgetLayout(
     )
 
     companion object {
-        const val DEFAULT_LABEL_COLUMN_WIDTH_PERCENT = 60
-        const val MIN_LABEL_COLUMN_WIDTH_PERCENT = 20
-        const val MAX_LABEL_COLUMN_WIDTH_PERCENT = 80
-
-        fun normalizeLabelColumnWidthPercent(raw: Int): Int =
-            raw.coerceIn(MIN_LABEL_COLUMN_WIDTH_PERCENT, MAX_LABEL_COLUMN_WIDTH_PERCENT)
-
         fun default(): ActiveTripCustomWidgetLayout =
             ActiveTripCustomWidgetLayout(
                 ActiveTripCustomWidgetField.entries.map { Row(it, enabled = true) }
@@ -130,16 +121,7 @@ data class ActiveTripCustomWidgetLayout(
                         parsed.add(Row(f, enabled = missingFieldEnabled))
                     }
                 }
-                ActiveTripCustomWidgetLayout(
-                    rows = parsed,
-                    showRowDividers = root.optBoolean("showRowDividers", true),
-                    labelColumnWidthPercent = normalizeLabelColumnWidthPercent(
-                        root.optInt(
-                            "labelColumnWidthPercent",
-                            DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
-                        ),
-                    ),
-                )
+                ActiveTripCustomWidgetLayout(rows = parsed)
             } catch (_: Exception) {
                 blankDefault
             }
@@ -156,8 +138,6 @@ data class ActiveTripCustomWidgetLayout(
             }
             return JSONObject()
                 .put("rows", arr)
-                .put("showRowDividers", layout.showRowDividers)
-                .put("labelColumnWidthPercent", layout.labelColumnWidthPercent)
                 .toString()
         }
 

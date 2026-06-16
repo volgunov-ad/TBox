@@ -10,6 +10,7 @@ import vad.dashing.tbox.trip.ActiveTripCustomWidgetField
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.trip.formatTripDurationHuman
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
@@ -23,13 +24,15 @@ fun ActiveTripCustomWidgetRows(
     resolvedTextColor: Color,
     dateFmt: SimpleDateFormat,
     context: Context,
+    showRowDividers: Boolean = TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
+    labelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
 ) {
     val avgT = TripRepository.averageSpeedTripKmH(trip)
     val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(trip)
     val avgM = TripRepository.averageSpeedMovingKmH(trip)
     val noData = stringResource(R.string.value_no_data)
-    val showDivider = layout.showRowDividers
-    val labelColumnWidthPercent = layout.labelColumnWidthPercent
+    val showDivider = showRowDividers
+    val labelColWidth = labelColumnWidthPercent
 
     for (row in layout.rows) {
         if (!row.enabled) continue
@@ -42,7 +45,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.END_TIME -> {
@@ -54,7 +57,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.ODOMETER_START -> {
@@ -65,7 +68,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.DISTANCE -> {
@@ -76,7 +79,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MOVING_TIME -> {
@@ -87,7 +90,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.IDLE_TIME -> {
@@ -98,7 +101,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.ENGINE_RUNNING_TIME -> {
@@ -112,7 +115,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.PARKING_TIME -> {
@@ -123,7 +126,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.TOTAL_TIME -> {
@@ -137,7 +140,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.ENGINE_START_COUNT -> {
@@ -148,7 +151,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MAX_SPEED -> {
@@ -159,7 +162,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MAX_ENGINE_TEMP -> {
@@ -170,7 +173,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MAX_GEARBOX_TEMP -> {
@@ -182,7 +185,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MIN_OUTSIDE_TEMP -> {
@@ -193,7 +196,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MAX_OUTSIDE_TEMP -> {
@@ -204,7 +207,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.AVG_SPEED_MOVING -> {
@@ -215,7 +218,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.AVG_SPEED_TRIP -> {
@@ -226,7 +229,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_USED -> {
@@ -237,7 +240,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_CONSUMPTION -> {
@@ -248,7 +251,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_REFUELED -> {
@@ -259,7 +262,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_REFUELED_COST -> {
@@ -270,7 +273,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.REFUEL_COUNT -> {
@@ -281,7 +284,7 @@ fun ActiveTripCustomWidgetRows(
                     fontSize = rowFont,
                     color = resolvedTextColor,
                     showDivider = showDivider,
-                    labelColumnWidthPercent = labelColumnWidthPercent,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
         }
