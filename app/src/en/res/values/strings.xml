@@ -606,6 +606,7 @@
     <string name="trips_custom_widget_dialog_hint">Check the parameters to show. Drag the handle on the right up or down to reorder.</string>
     <string name="trips_simple_widget_dialog_hint">Check the parameters to show. Drag the handle on the right up or down to reorder.</string>
     <string name="trips_custom_widget_drag_handle_a11y">Move row</string>
+    <string name="trips_widget_show_row_dividers_title">Show row dividers</string>
     <string name="dialog_save_trips_downloads">Save all trips to one file in the Downloads folder</string>
     <string name="trips_export_separator">----------------------------------------</string>
     <string name="refuels_empty">No refuels</string>

@@ -47,6 +47,7 @@ enum class ActiveTripCustomWidgetField(
 
 data class ActiveTripCustomWidgetLayout(
     val rows: List<Row>,
+    val showRowDividers: Boolean = true,
 ) {
     data class Row(
         val field: ActiveTripCustomWidgetField,
@@ -121,7 +122,10 @@ data class ActiveTripCustomWidgetLayout(
                         parsed.add(Row(f, enabled = missingFieldEnabled))
                     }
                 }
-                ActiveTripCustomWidgetLayout(parsed)
+                ActiveTripCustomWidgetLayout(
+                    rows = parsed,
+                    showRowDividers = root.optBoolean("showRowDividers", true),
+                )
             } catch (_: Exception) {
                 blankDefault
             }
@@ -136,7 +140,10 @@ data class ActiveTripCustomWidgetLayout(
                         .put("enabled", r.enabled)
                 )
             }
-            return JSONObject().put("rows", arr).toString()
+            return JSONObject()
+                .put("rows", arr)
+                .put("showRowDividers", layout.showRowDividers)
+                .toString()
         }
 
         fun enabledFieldsInOrder(layout: ActiveTripCustomWidgetLayout): List<ActiveTripCustomWidgetField> =

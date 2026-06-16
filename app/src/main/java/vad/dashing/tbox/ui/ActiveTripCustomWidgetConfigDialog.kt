@@ -93,10 +93,12 @@ fun ActiveTripCustomWidgetConfigDialog(
         ActiveTripWidgetLayoutEditorTarget.Simple -> R.string.trips_simple_widget_dialog_hint
     }
     val draftRows = remember { mutableStateListOf<ActiveTripCustomWidgetLayout.Row>() }
+    var draftShowRowDividers by remember { mutableStateOf(true) }
     LaunchedEffect(visible, persisted, target) {
         if (visible) {
             draftRows.clear()
             draftRows.addAll(persisted.rows)
+            draftShowRowDividers = persisted.showRowDividers
         }
     }
 
@@ -128,6 +130,13 @@ fun ActiveTripCustomWidgetConfigDialog(
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 20.sp),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(bottom = 8.dp)
+                )
+                SettingSwitch(
+                    isChecked = draftShowRowDividers,
+                    onCheckedChange = { draftShowRowDividers = it },
+                    text = stringResource(R.string.trips_widget_show_row_dividers_title),
+                    description = "",
+                    enabled = true,
                 )
                 LazyColumn(
                     modifier = Modifier
@@ -241,7 +250,10 @@ fun ActiveTripCustomWidgetConfigDialog(
                     }
                     Button(
                         onClick = rememberWrappedOnClick {
-                            val layout = ActiveTripCustomWidgetLayout(draftRows.toList())
+                            val layout = ActiveTripCustomWidgetLayout(
+                                rows = draftRows.toList(),
+                                showRowDividers = draftShowRowDividers,
+                            )
                             when (target) {
                                 ActiveTripWidgetLayoutEditorTarget.Custom ->
                                     settingsViewModel.saveActiveTripCustomWidgetLayout(layout)

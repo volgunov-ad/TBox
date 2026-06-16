@@ -28,6 +28,7 @@ fun ActiveTripCustomWidgetRows(
     val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(trip)
     val avgM = TripRepository.averageSpeedMovingKmH(trip)
     val noData = stringResource(R.string.value_no_data)
+    val showDivider = layout.showRowDividers
 
     for (row in layout.rows) {
         if (!row.enabled) continue
@@ -38,7 +39,8 @@ fun ActiveTripCustomWidgetRows(
                     value = dateFmt.format(Date(trip.startTimeEpochMs)),
                     unit = "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.END_TIME -> {
@@ -48,7 +50,8 @@ fun ActiveTripCustomWidgetRows(
                     value = dateFmt.format(Date(end)),
                     unit = "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.ODOMETER_START -> {
@@ -57,7 +60,8 @@ fun ActiveTripCustomWidgetRows(
                     value = trip.odometerStartKm?.let { valueToString(it, 0) } ?: noData,
                     unit = if (trip.odometerStartKm != null) stringResource(R.string.unit_km) else "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.DISTANCE -> {
@@ -66,7 +70,8 @@ fun ActiveTripCustomWidgetRows(
                     value = valueToString(trip.distanceKm, 0),
                     unit = stringResource(R.string.unit_km),
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.MOVING_TIME -> {
@@ -75,7 +80,8 @@ fun ActiveTripCustomWidgetRows(
                     value = formatTripDurationHuman(context, trip.movingTimeMs),
                     unit = "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.IDLE_TIME -> {
@@ -84,7 +90,8 @@ fun ActiveTripCustomWidgetRows(
                     value = formatTripDurationHuman(context, trip.idleTimeMs),
                     unit = "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.ENGINE_RUNNING_TIME -> {
@@ -96,7 +103,8 @@ fun ActiveTripCustomWidgetRows(
                     ),
                     unit = "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.PARKING_TIME -> {
@@ -105,7 +113,8 @@ fun ActiveTripCustomWidgetRows(
                     value = formatTripDurationHuman(context, trip.parkingTimeMs),
                     unit = "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.TOTAL_TIME -> {
@@ -117,7 +126,8 @@ fun ActiveTripCustomWidgetRows(
                     ),
                     unit = "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.ENGINE_START_COUNT -> {
@@ -126,7 +136,8 @@ fun ActiveTripCustomWidgetRows(
                     value = valueToString(trip.engineStartCount),
                     unit = "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.MAX_SPEED -> {
@@ -135,7 +146,8 @@ fun ActiveTripCustomWidgetRows(
                     value = valueToString(trip.maxSpeed, 1),
                     unit = stringResource(R.string.unit_kmh),
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.MAX_ENGINE_TEMP -> {
@@ -144,7 +156,8 @@ fun ActiveTripCustomWidgetRows(
                     value = trip.maxEngineTemp?.let { valueToString(it, 1) } ?: noData,
                     unit = if (trip.maxEngineTemp != null) stringResource(R.string.unit_celsius) else "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.MAX_GEARBOX_TEMP -> {
@@ -154,7 +167,8 @@ fun ActiveTripCustomWidgetRows(
                     value = valueToString(gb),
                     unit = stringResource(R.string.unit_celsius),
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.MIN_OUTSIDE_TEMP -> {
@@ -163,7 +177,8 @@ fun ActiveTripCustomWidgetRows(
                     value = trip.minOutsideTemp?.let { valueToString(it, 1) } ?: noData,
                     unit = if (trip.minOutsideTemp != null) stringResource(R.string.unit_celsius) else "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.MAX_OUTSIDE_TEMP -> {
@@ -172,7 +187,8 @@ fun ActiveTripCustomWidgetRows(
                     value = trip.maxOutsideTemp?.let { valueToString(it, 1) } ?: noData,
                     unit = if (trip.maxOutsideTemp != null) stringResource(R.string.unit_celsius) else "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.AVG_SPEED_MOVING -> {
@@ -181,7 +197,8 @@ fun ActiveTripCustomWidgetRows(
                     value = avgM?.let { valueToString(it, 1) } ?: noData,
                     unit = if (avgM != null) stringResource(R.string.unit_kmh) else "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.AVG_SPEED_TRIP -> {
@@ -190,7 +207,8 @@ fun ActiveTripCustomWidgetRows(
                     value = avgT?.let { valueToString(it, 1) } ?: noData,
                     unit = if (avgT != null) stringResource(R.string.unit_kmh) else "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_USED -> {
@@ -199,7 +217,8 @@ fun ActiveTripCustomWidgetRows(
                     value = valueToString(trip.fuelConsumedLiters, 1),
                     unit = stringResource(R.string.unit_liter),
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_CONSUMPTION -> {
@@ -208,7 +227,8 @@ fun ActiveTripCustomWidgetRows(
                     value = avgFuel?.let { valueToString(it, 1) } ?: noData,
                     unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_REFUELED -> {
@@ -217,7 +237,8 @@ fun ActiveTripCustomWidgetRows(
                     value = valueToString(trip.fuelRefueledLiters, 1),
                     unit = stringResource(R.string.unit_liter),
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_REFUELED_COST -> {
@@ -226,7 +247,8 @@ fun ActiveTripCustomWidgetRows(
                     value = valueToString(trip.fuelRefueledCostRub, 2),
                     unit = stringResource(R.string.unit_ruble),
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
             ActiveTripCustomWidgetField.REFUEL_COUNT -> {
@@ -235,7 +257,8 @@ fun ActiveTripCustomWidgetRows(
                     value = valueToString(trip.refuelCount),
                     unit = "",
                     fontSize = rowFont,
-                    color = resolvedTextColor
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
                 )
             }
         }

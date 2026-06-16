@@ -76,6 +76,7 @@ fun StatusRow(
     unit: String = "",
     fontSize: TextUnit = 24.sp,
     color: Color? = null,
+    showDivider: Boolean = true,
 ) {
     val textColor = color ?: MaterialTheme.colorScheme.onSurface
     val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
@@ -111,11 +112,13 @@ fun StatusRow(
             textAlign = TextAlign.Start
         )
     }
-    HorizontalDivider(
-        modifier = Modifier.fillMaxWidth(),
-        thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-    )
+    if (showDivider) {
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+        )
+    }
 }
 
 @Composable
