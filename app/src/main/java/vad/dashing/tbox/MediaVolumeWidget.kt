@@ -6,6 +6,7 @@ const val ENGINE_RPM_WIDGET_DATA_KEY = "engineRPM"
 const val ENGINE_TEMPERATURE_WIDGET_DATA_KEY = "engineTemperature"
 const val CAR_SPEED_WIDGET_DATA_KEY = "carSpeed"
 const val WIPER_MAINTENANCE_WIDGET_DATA_KEY = "wiperMaintenanceWidget"
+const val PARKING_RADAR_WIDGET_DATA_KEY = "parkingRadarWidget"
 
 fun isMediaVolumeWidgetDataKey(dataKey: String): Boolean {
     return dataKey == MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY ||

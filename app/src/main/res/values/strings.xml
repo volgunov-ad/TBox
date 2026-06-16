@@ -634,6 +634,7 @@
     <string name="data_title_air_quality_widget">Виджет качества воздуха</string>
     <string name="data_title_steering_wheel_heat_widget">Виджет обогрева рулевого колеса</string>
     <string name="data_title_wiper_maintenance_widget">Виджет режима обслуживания стеклоочистителей</string>
+    <string name="data_title_parking_radar_widget">Виджет парковочного радара</string>
     <string name="data_title_front_windscreen_heat_widget">Виджет обогрева лобового стекла</string>
     <string name="data_title_rear_window_mirrors_defrost_widget">Виджет обогрева заднего стекла и зеркал</string>
     <string name="data_title_hvac_air_recirculation_widget">Виджет рециркуляции воздуха</string>

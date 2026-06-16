@@ -47,6 +47,7 @@ enum class MbCanSeatSlot {
 internal class MbCanSignalStateEngine(
     private val steeringFlow: MutableStateFlow<MbCanBinaryState>,
     private val wiperMaintenanceFlow: MutableStateFlow<MbCanBinaryState>,
+    private val parkingRadarFlow: MutableStateFlow<MbCanBinaryState>,
     private val windshieldHeatFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacDefrosterFlow: MutableStateFlow<MbCanBinaryState>,
     private val hvacAirRecirculationFlow: MutableStateFlow<MbCanBinaryState>,
@@ -63,6 +64,8 @@ internal class MbCanSignalStateEngine(
     private var steeringUnavailableStreak = 0
     private var wiperMaintenanceUnknownStreak = 0
     private var wiperMaintenanceUnavailableStreak = 0
+    private var parkingRadarUnknownStreak = 0
+    private var parkingRadarUnavailableStreak = 0
     private var windshieldUnknownStreak = 0
     private var windshieldUnavailableStreak = 0
     private var hvacDefrosterUnknownStreak = 0
@@ -142,6 +145,34 @@ internal class MbCanSignalStateEngine(
                 wiperMaintenanceUnknownStreak = 0
                 wiperMaintenanceUnavailableStreak = 0
                 wiperMaintenanceFlow.value = decoded
+            }
+        }
+    }
+
+    suspend fun applyParkingRadarCandidate(decoded: MbCanBinaryState) {
+        val published = parkingRadarFlow.value
+        if (decoded.isProblemState() && !published.isProblemState()) {
+            MbCanJobManager.requestBurst(MbCanSignal.ParkingRadar)
+        }
+        when (decoded) {
+            is MbCanBinaryState.Unknown -> {
+                parkingRadarUnknownStreak += 1
+                parkingRadarUnavailableStreak = 0
+                if (parkingRadarUnknownStreak >= requiredConsecutiveProblems) {
+                    parkingRadarFlow.value = MbCanBinaryState.Unknown
+                }
+            }
+            is MbCanBinaryState.Unavailable -> {
+                parkingRadarUnavailableStreak += 1
+                parkingRadarUnknownStreak = 0
+                if (parkingRadarUnavailableStreak >= requiredConsecutiveProblems) {
+                    parkingRadarFlow.value = decoded
+                }
+            }
+            else -> {
+                parkingRadarUnknownStreak = 0
+                parkingRadarUnavailableStreak = 0
+                parkingRadarFlow.value = decoded
             }
         }
     }

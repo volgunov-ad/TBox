@@ -31,6 +31,8 @@ import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
+import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 
 @Composable
@@ -287,8 +289,22 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        "wiperMaintenanceWidget" -> {
+        WIPER_MAINTENANCE_WIDGET_DATA_KEY -> {
             DashboardWiperMaintenanceWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        PARKING_RADAR_WIDGET_DATA_KEY -> {
+            DashboardParkingRadarWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,

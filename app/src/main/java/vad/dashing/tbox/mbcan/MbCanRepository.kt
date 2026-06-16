@@ -21,6 +21,7 @@ import java.util.concurrent.Executors
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
@@ -28,6 +29,7 @@ import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     SteeringWheelHeat(setOf("eMBCAN_CFG_VEHICLE")),
     WiperMaintenance(setOf("eMBCAN_CFG_VEHICLE")),
+    ParkingRadar(setOf("eMBCAN_CFG_VEHICLE")),
     FrontWindscreenHeat(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefroster(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAirRecirculation(setOf("eMBCAN_CFG_VEHICLE")),
@@ -109,6 +111,7 @@ object MbCanRepository {
     private val widgetSignalRegistry = listOf(
         WidgetSignalBinding("steeringWheelHeatWidget", MbCanSignal.SteeringWheelHeat),
         WidgetSignalBinding(WIPER_MAINTENANCE_WIDGET_DATA_KEY, MbCanSignal.WiperMaintenance),
+        WidgetSignalBinding(PARKING_RADAR_WIDGET_DATA_KEY, MbCanSignal.ParkingRadar),
         WidgetSignalBinding("frontWindscreenHeatWidget", MbCanSignal.FrontWindscreenHeat),
         WidgetSignalBinding("rearWindowMirrorsDefrostWidget", MbCanSignal.HvacDefroster),
         WidgetSignalBinding("hvacAirRecirculationWidget", MbCanSignal.HvacAirRecirculation),
@@ -171,6 +174,8 @@ object MbCanRepository {
     val steeringWheelHeatState: StateFlow<MbCanBinaryState> = _steeringWheelHeatState.asStateFlow()
     private val _wiperMaintenanceState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val wiperMaintenanceState: StateFlow<MbCanBinaryState> = _wiperMaintenanceState.asStateFlow()
+    private val _parkingRadarState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val parkingRadarState: StateFlow<MbCanBinaryState> = _parkingRadarState.asStateFlow()
     private val _frontWindscreenHeatState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val frontWindscreenHeatState: StateFlow<MbCanBinaryState> = _frontWindscreenHeatState.asStateFlow()
     private val _hvacDefrosterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -220,6 +225,7 @@ object MbCanRepository {
     private val stateEngine = MbCanSignalStateEngine(
         steeringFlow = _steeringWheelHeatState,
         wiperMaintenanceFlow = _wiperMaintenanceState,
+        parkingRadarFlow = _parkingRadarState,
         windshieldHeatFlow = _frontWindscreenHeatState,
         hvacDefrosterFlow = _hvacDefrosterState,
         hvacAirRecirculationFlow = _hvacAirRecirculationState,
@@ -306,6 +312,7 @@ object MbCanRepository {
         when (item) {
             MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+            MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
@@ -347,6 +354,10 @@ object MbCanRepository {
                         )
                     MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH ->
                         stateEngine.applyWiperMaintenanceCandidate(
+                            MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH ->
+                        stateEngine.applyParkingRadarCandidate(
                             MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH ->
@@ -695,6 +706,7 @@ object MbCanRepository {
         when (signal) {
             MbCanSignal.SteeringWheelHeat -> refreshSteeringWheelHeat()
             MbCanSignal.WiperMaintenance -> refreshWiperMaintenance()
+            MbCanSignal.ParkingRadar -> refreshParkingRadar()
             MbCanSignal.FrontWindscreenHeat -> refreshFrontWindscreenHeat()
             MbCanSignal.HvacDefroster -> refreshHvacDefroster()
             MbCanSignal.HvacAirRecirculation -> refreshHvacAirRecirculation()
@@ -775,6 +787,39 @@ object MbCanRepository {
             MbCanDiagnostics.log(
                 "DEBUG",
                 "refreshWiperMaintenance raw=$raw state=${_wiperMaintenanceState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshParkingRadar() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyParkingRadarCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshParkingRadar unavailable=$availability")
+                stateEngine.applyParkingRadarCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
+            }
+            stateEngine.applyParkingRadarCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshParkingRadar raw=$raw state=${_parkingRadarState.value}"
             )
         }
     }

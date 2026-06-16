@@ -17,6 +17,9 @@ private var windscreenHeatToggleBlockedUntilMs = 0L
 private val wiperMaintenanceToggleLock = Any()
 private var wiperMaintenanceToggleBlockedUntilMs = 0L
 
+private val parkingRadarToggleLock = Any()
+private var parkingRadarToggleBlockedUntilMs = 0L
+
 private val hvacDefrosterToggleLock = Any()
 private var hvacDefrosterToggleBlockedUntilMs = 0L
 
@@ -152,6 +155,30 @@ internal fun sendToggleWiperMaintenance(context: Context) {
                 putExtra(
                     BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
                     MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleParkingRadar(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(parkingRadarToggleLock) {
+        if (now < parkingRadarToggleBlockedUntilMs) return
+        parkingRadarToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH
                 )
             }
         )
