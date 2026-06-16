@@ -305,6 +305,7 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}fuel_calibration_maturity_threshold_l")
         private val FUEL_PRICE_FUEL_ID_KEY = intPreferencesKey("${KEY_PREFIX}fuel_price_fuel_id")
         private val SPLIT_TRIP_TIME_MINUTES_KEY = intPreferencesKey("${KEY_PREFIX}split_trip_time_minutes")
+        private val TRACK_REFUELS_KEY = booleanPreferencesKey("${KEY_PREFIX}track_refuels")
         private val WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pressure_persist_across_stops")
         private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
@@ -371,6 +372,7 @@ class SettingsManager(private val context: Context) {
         const val FUEL_CALIBRATION_MATURITY_THRESHOLD_MIN = 5
         const val FUEL_CALIBRATION_MATURITY_THRESHOLD_MAX = 500
         private const val DEFAULT_SPLIT_TRIP_TIME_MINUTES = 5
+        private const val DEFAULT_TRACK_REFUELS = true
         const val MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 0
         const val MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 60
         const val DEFAULT_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 2
@@ -735,6 +737,10 @@ class SettingsManager(private val context: Context) {
 
     val splitTripTimeMinutesFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[SPLIT_TRIP_TIME_MINUTES_KEY] ?: DEFAULT_SPLIT_TRIP_TIME_MINUTES }
+        .distinctUntilChanged()
+
+    val trackRefuelsFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[TRACK_REFUELS_KEY] ?: DEFAULT_TRACK_REFUELS }
         .distinctUntilChanged()
 
     val wheelPressurePersistAcrossStopsFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1535,6 +1541,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveSplitTripTimeMinutes(minutes: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[SPLIT_TRIP_TIME_MINUTES_KEY] = minutes.coerceIn(1, 100000)
+        }
+    }
+
+    suspend fun saveTrackRefuelsSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[TRACK_REFUELS_KEY] = enabled
         }
     }
 

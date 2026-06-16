@@ -817,6 +817,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 5
         )
 
+    val trackRefuels = settingsManager.trackRefuelsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     val wheelPressurePersistAcrossStops = settingsManager.wheelPressurePersistAcrossStopsFlow
         .stateIn(
             scope = viewModelScope,
@@ -1773,6 +1780,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveSplitTripTimeMinutes(minutes: Int) {
         viewModelScope.launch {
             settingsManager.saveSplitTripTimeMinutes(minutes)
+        }
+    }
+
+    fun saveTrackRefuels(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveTrackRefuelsSetting(enabled)
         }
     }
 

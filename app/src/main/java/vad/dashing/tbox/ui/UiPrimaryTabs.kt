@@ -275,6 +275,7 @@ fun SettingsTabContent(
         miscTankLitersDraft = fuelTankLiters.toString()
     }
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
+    val trackRefuels by settingsViewModel.trackRefuels.collectAsStateWithLifecycle()
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
 
@@ -591,6 +592,13 @@ fun SettingsTabContent(
             "",
             1,
             100000
+        )
+        SettingSwitch(
+            trackRefuels,
+            { enabled -> settingsViewModel.saveTrackRefuels(enabled) },
+            stringResource(R.string.settings_track_refuels_title),
+            stringResource(R.string.settings_track_refuels_desc),
+            true
         )
         SettingSwitch(
             wheelPressurePersistAcrossStops,

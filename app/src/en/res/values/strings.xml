@@ -523,6 +523,8 @@
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_fuel_price_fuel_type_title">Fuel for price lookup</string>
     <string name="settings_split_trip_time_title">Trip split time, min</string>
+    <string name="settings_track_refuels_title">Track refuels</string>
+    <string name="settings_track_refuels_desc">When off, new refuels are not recorded; previously saved entries remain in the log</string>
     <string name="settings_wheel_pressure_persist_title">Remember tire pressures</string>
     <string name="settings_wheel_pressure_persist_desc">Save when engine RPM is 0 and restore when the service starts</string>
     <string name="settings_ui_click_sounds_title">Tap sounds</string>

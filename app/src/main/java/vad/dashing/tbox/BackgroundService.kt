@@ -112,6 +112,7 @@ class BackgroundService : Service() {
     private lateinit var fuelCalibrationMaturityThresholdSetting: StateFlow<Int>
     private lateinit var fuelPriceFuelIdSetting: StateFlow<Int>
     private lateinit var splitTripTimeMinutesSetting: StateFlow<Int>
+    private lateinit var trackRefuelsSetting: StateFlow<Boolean>
     private lateinit var wheelPressurePersistAcrossStopsSetting: StateFlow<Boolean>
     private val fuelPriceClient by lazy { FuelPriceClient() }
 
@@ -460,6 +461,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.fuelPriceFuelId)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, settingsSnap.splitTripTimeMinutes)
+            trackRefuelsSetting = settingsManager.trackRefuelsFlow
+                .stateIn(scope, eager, true)
             wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
                 .stateIn(scope, eager, settingsSnap.wheelPressurePersistAcrossStops)
         } else {
@@ -517,6 +520,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, FuelTypes.DEFAULT_FUEL_ID)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, 5)
+            trackRefuelsSetting = settingsManager.trackRefuelsFlow
+                .stateIn(scope, eager, true)
             wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
                 .stateIn(scope, eager, false)
         }
@@ -1530,6 +1535,7 @@ class BackgroundService : Service() {
         var refuelTripId: String? = null
         var refueledLiters = 0f
         var percentBefore: Float? = pctNow
+        val trackRefuels = trackRefuelsSetting.value
         TripRepository.updateActiveTrip { cur ->
             val beforePct = tripLastFuelPercent
             if (beforePct != null) {
@@ -1541,17 +1547,19 @@ class BackgroundService : Service() {
                 litersNow = litersNow,
                 baselinePercentNow = pctNow,
                 tankLiters = tankL,
+                detectRefuels = trackRefuels,
             )
             tripLastFuelLitersCalibrated = step.baselineCalibratedLiters
             tripLastFuelPercent = step.baselinePercent
-            if (step.refuelDetected && step.refueledLitersThisStep > 0f) {
+            if (trackRefuels && step.refuelDetected && step.refueledLitersThisStep > 0f) {
                 refuelTripId = cur.id
                 refueledLiters = step.refueledLitersThisStep
             }
             cur.copy(
                 fuelConsumedLiters = step.consumedLiters,
-                refuelCount = cur.refuelCount + if (step.refuelDetected) 1 else 0,
-                fuelRefueledLiters = cur.fuelRefueledLiters + step.refueledLitersThisStep,
+                refuelCount = cur.refuelCount + if (trackRefuels && step.refuelDetected) 1 else 0,
+                fuelRefueledLiters = cur.fuelRefueledLiters +
+                    if (trackRefuels) step.refueledLitersThisStep else 0f,
                 fuelBaselinePercent = step.baselinePercent,
                 fuelBaselineLiters = step.baselineCalibratedLiters,
             )

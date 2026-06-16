@@ -522,6 +522,8 @@
     <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
     <string name="settings_fuel_price_fuel_type_title">Тип топлива для расчёта цены</string>
     <string name="settings_split_trip_time_title">Разделение поездок, мин</string>
+    <string name="settings_track_refuels_title">Учитывать заправки</string>
+    <string name="settings_track_refuels_desc">При выключении новые заправки не фиксируются; ранее сохранённые записи остаются в журнале</string>
     <string name="settings_wheel_pressure_persist_title">Запоминание давления в шинах</string>
     <string name="settings_wheel_pressure_persist_desc">Сохранять при оборотах двигателя 0 и восстанавливать при запуске службы</string>
     <string name="settings_ui_click_sounds_title">Звуки нажатий</string>
