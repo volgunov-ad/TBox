@@ -1917,14 +1917,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    suspend fun computeIsActiveThemeModified(context: Context): Boolean {
-        val uri = settingsManager.activeThemeUriFlow.first().trim()
-        val stored = settingsManager.activeThemeFingerprintFlow.first().trim()
-        val sections = settingsManager.activeThemeSectionsFlow.first()
-        if (uri.isEmpty() || stored.isEmpty() || sections.isEmpty()) return false
-        return ThemeFingerprint.compute(context, settingsManager, sections) != stored
-    }
-
     suspend fun exportThemeBundle(context: Context, sections: Set<ThemeSection>): ByteArray {
         return ThemeBundleExport.exportBundle(context, settingsManager, sections)
     }

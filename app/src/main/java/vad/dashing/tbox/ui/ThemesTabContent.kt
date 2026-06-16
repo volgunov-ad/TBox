@@ -19,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,11 +55,6 @@ fun ThemesTabContent(
 
     val activeThemeUri by settingsViewModel.activeThemeUri.collectAsStateWithLifecycle()
     val driveModeThemePaths by settingsViewModel.driveModeThemePaths.collectAsStateWithLifecycle()
-
-    var isThemeModified by remember { mutableStateOf(false) }
-    LaunchedEffect(activeThemeUri, driveModeThemePaths) {
-        isThemeModified = settingsViewModel.computeIsActiveThemeModified(context)
-    }
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var includeMainScreen by remember { mutableStateOf(true) }
@@ -102,7 +96,6 @@ fun ThemesTabContent(
             }
             withContext(Dispatchers.Main) {
                 if (result.isSuccess) {
-                    isThemeModified = false
                     Toast.makeText(context, R.string.toast_theme_apply_ok, Toast.LENGTH_LONG).show()
                 } else {
                     val msg = result.exceptionOrNull()?.message.orEmpty()
@@ -161,15 +154,7 @@ fun ThemesTabContent(
                 stringResource(R.string.themes_active_file_missing)
             else -> activePath
         }
-        Text(text = activeDisplay, fontSize = 20.sp, modifier = Modifier.padding(bottom = 4.dp))
-        if (isThemeModified && activePath.isNotEmpty()) {
-            Text(
-                text = stringResource(R.string.themes_active_modified),
-                fontSize = 18.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
+        Text(text = activeDisplay, fontSize = 20.sp, modifier = Modifier.padding(bottom = 8.dp))
 
         OutlinedButton(
             onClick = rememberWrappedOnClick {
