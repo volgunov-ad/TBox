@@ -298,6 +298,7 @@ class BackgroundService : Service() {
         /** Source broadcast action that initiated boot-time start (BOOT/LOCKED_BOOT/QUICKBOOT). */
         const val EXTRA_START_SOURCE_ACTION = "vad.dashing.tbox.START_SOURCE_ACTION"
         const val ACTION_STOP = "vad.dashing.tbox.STOP"
+        const val ACTION_RESTART = "vad.dashing.tbox.RESTART"
         const val ACTION_SEND_AT = "vad.dashing.tbox.SEND_AT"
         const val ACTION_MODEM_CHECK = "vad.dashing.tbox.MODEM_CHECK"
         const val ACTION_MODEM_OFF = "vad.dashing.tbox.MODEM_OFF"
@@ -732,64 +733,22 @@ class BackgroundService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 if (!kickoffStart) return
-                val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
-                serviceStartupJob?.cancel()
-                serviceStartupJob = scope.launch(exceptionHandler) {
-                    try {
-                        timingReset()
-                        timingMark("startup_begin")
-                        if (!isRunning) return@launch
-                        servicePhase = ServiceLifecyclePhase.Starting
-                        TripRepository.setTripsProcessingEnabled(false)
-                        reloadTripsFromDataStoreSuspend()
-                        if (!isRunning) return@launch
-                        TboxRepository.updateServiceStartTime()
-                        val splitWindowMs =
-                            splitTripTimeMinutesSetting.value.toLong() * 60_000L
-                        resetTripStateForNewServiceSession(splitWindowMs)
-                        applyTripResumeIfLastTripContinues(splitWindowMs)
-                        if (!isRunning) return@launch
-                        timingMark("startup_trips_ready")
-                        connectTboxClient()
-                        timingMark("startup_tbox_connected")
-                        startSettingsListener()
-                        yield()
-                        startNetUpdater()
-                        yield()
-                        startAPNUpdater()
-                        yield()
-                        startCheckConnection()
-                        yield()
-                        startTboxClientReconnectWatchdog()
-                        yield()
-                        startPeriodicJob()
-                        yield()
-                        ensureFuelEstimatorForReads()
-                        yield()
-                        startDataListener()
-                        startFuelCalibratedLitersWatcher()
-                        timingMark("startup_listeners")
-                        if (startFromBoot) {
-                            maybeOpenMainScreenAfterBootSuspend()
-                        }
-                        TripRepository.setTripsProcessingEnabled(true)
-                        servicePhase = ServiceLifecyclePhase.Running
-                        timingMark("startup_running")
-                        timingLog("Timings.startup")
-                    } catch (e: CancellationException) {
-                        servicePhase = ServiceLifecyclePhase.Idle
-                        TripRepository.setTripsProcessingEnabled(false)
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e("Background Service", "Service startup pipeline failed", e)
-                        TboxRepository.addLog(
-                            "ERROR",
-                            "Service",
-                            "Startup failed: ${e.message}"
-                        )
-                        servicePhase = ServiceLifecyclePhase.Idle
-                        TripRepository.setTripsProcessingEnabled(false)
+                launchServiceStartupPipeline(
+                    startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false),
+                )
+            }
+            ACTION_RESTART -> {
+                if (isRunning) {
+                    performServiceStopIfRunning()
+                }
+                if (!isRunning) {
+                    isRunning = true
+                    val notification = withContext(Dispatchers.Default) {
+                        createNotification("Restart service")
                     }
+                    startForeground(NOTIFICATION_ID, notification)
+                    TboxRepository.addLog("INFO", "Service", "Restart service")
+                    launchServiceStartupPipeline(startFromBoot = false)
                 }
             }
             ACTION_RELOAD_TRIPS_FROM_STORE -> {
@@ -827,37 +786,7 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("WARN", "Fuel calibration", "train: пустой refuel id")
                 }
             }
-            ACTION_STOP -> {
-                if (isRunning) {
-                    servicePhase = ServiceLifecyclePhase.Stopping
-                    TripRepository.setTripsProcessingEnabled(false)
-                    serviceStartupJob?.cancel()
-                    serviceStartupJob = null
-                    tripsFromDiskReady.set(false)
-                    openMainActivityJob?.cancel()
-                    openMainActivityJob = null
-                    isRunning = false
-                    TboxRepository.addLog("INFO", "Service", "Stop service")
-                    stopNetUpdater()
-                    stopAPNUpdater()
-                    stopCheckConnection()
-                    stopTboxClientReconnectWatchdog()
-                    stopPeriodicJob()
-                    stopSettingsListener()
-                    stopDataListener()
-                    stopFuelCalibratedLitersWatcher()
-                    scope.launch { finalizeTripsOnServiceStop() }
-                    stopStateBroadcastListener()
-                    stopReadAllSMS()
-                    disconnectTboxClient()
-                    val notification = withContext(Dispatchers.Default) {
-                        createNotification("Stop service")
-                    }
-                    startForeground(NOTIFICATION_ID, notification)
-                    overlayController.closeAllOverlays()
-                    servicePhase = ServiceLifecyclePhase.Idle
-                }
-            }
+            ACTION_STOP -> performServiceStopIfRunning()
             ACTION_SEND_AT -> {
                 val atCmd = intent.getStringExtra(EXTRA_AT_CMD) ?: "ATI"
                 mdcSendAT((atCmd).toByteArray())
@@ -993,6 +922,98 @@ class BackgroundService : Service() {
                     MbCanDiagnostics.setEnabled(enabled)
                     MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
                 }
+            }
+        }
+    }
+
+    private suspend fun performServiceStopIfRunning() {
+        if (!isRunning) return
+        servicePhase = ServiceLifecyclePhase.Stopping
+        TripRepository.setTripsProcessingEnabled(false)
+        serviceStartupJob?.cancel()
+        serviceStartupJob = null
+        tripsFromDiskReady.set(false)
+        openMainActivityJob?.cancel()
+        openMainActivityJob = null
+        isRunning = false
+        TboxRepository.addLog("INFO", "Service", "Stop service")
+        stopNetUpdater()
+        stopAPNUpdater()
+        stopCheckConnection()
+        stopTboxClientReconnectWatchdog()
+        stopPeriodicJob()
+        stopSettingsListener()
+        stopDataListener()
+        stopFuelCalibratedLitersWatcher()
+        scope.launch { finalizeTripsOnServiceStop() }
+        stopStateBroadcastListener()
+        stopReadAllSMS()
+        disconnectTboxClient()
+        val notification = withContext(Dispatchers.Default) {
+            createNotification("Stop service")
+        }
+        startForeground(NOTIFICATION_ID, notification)
+        overlayController.closeAllOverlays()
+        servicePhase = ServiceLifecyclePhase.Idle
+    }
+
+    private fun launchServiceStartupPipeline(startFromBoot: Boolean) {
+        serviceStartupJob?.cancel()
+        serviceStartupJob = scope.launch(exceptionHandler) {
+            try {
+                timingReset()
+                timingMark("startup_begin")
+                if (!isRunning) return@launch
+                servicePhase = ServiceLifecyclePhase.Starting
+                TripRepository.setTripsProcessingEnabled(false)
+                reloadTripsFromDataStoreSuspend()
+                if (!isRunning) return@launch
+                TboxRepository.updateServiceStartTime()
+                val splitWindowMs =
+                    splitTripTimeMinutesSetting.value.toLong() * 60_000L
+                resetTripStateForNewServiceSession(splitWindowMs)
+                applyTripResumeIfLastTripContinues(splitWindowMs)
+                if (!isRunning) return@launch
+                timingMark("startup_trips_ready")
+                connectTboxClient()
+                timingMark("startup_tbox_connected")
+                startSettingsListener()
+                yield()
+                startNetUpdater()
+                yield()
+                startAPNUpdater()
+                yield()
+                startCheckConnection()
+                yield()
+                startTboxClientReconnectWatchdog()
+                yield()
+                startPeriodicJob()
+                yield()
+                ensureFuelEstimatorForReads()
+                yield()
+                startDataListener()
+                startFuelCalibratedLitersWatcher()
+                timingMark("startup_listeners")
+                if (startFromBoot) {
+                    maybeOpenMainScreenAfterBootSuspend()
+                }
+                TripRepository.setTripsProcessingEnabled(true)
+                servicePhase = ServiceLifecyclePhase.Running
+                timingMark("startup_running")
+                timingLog("Timings.startup")
+            } catch (e: CancellationException) {
+                servicePhase = ServiceLifecyclePhase.Idle
+                TripRepository.setTripsProcessingEnabled(false)
+                throw e
+            } catch (e: Exception) {
+                Log.e("Background Service", "Service startup pipeline failed", e)
+                TboxRepository.addLog(
+                    "ERROR",
+                    "Service",
+                    "Startup failed: ${e.message}"
+                )
+                servicePhase = ServiceLifecyclePhase.Idle
+                TripRepository.setTripsProcessingEnabled(false)
             }
         }
     }

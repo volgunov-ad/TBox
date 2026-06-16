@@ -295,6 +295,8 @@ fun SettingsTabContent(
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
+    var backgroundServiceRestartButtonEnabled by remember { mutableStateOf(true) }
+
     var huRebootButtonEnabled by remember { mutableStateOf(true) }
     val mbCanAvailability by UniversalCanRepository.availability.collectAsStateWithLifecycle()
     val mbCanAvailable = mbCanAvailability is MbCanAvailability.Available
@@ -308,6 +310,13 @@ fun SettingsTabContent(
         if (!restartButtonEnabled) {
             delay(15000)
             restartButtonEnabled = true
+        }
+    }
+
+    LaunchedEffect(backgroundServiceRestartButtonEnabled) {
+        if (!backgroundServiceRestartButtonEnabled) {
+            delay(15000)
+            backgroundServiceRestartButtonEnabled = true
         }
     }
 
@@ -787,10 +796,36 @@ fun SettingsTabContent(
             onDismiss = { showLeftMenuConfigDialog = false },
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        Button(
+            onClick = rememberWrappedOnClick {
+                if (backgroundServiceRestartButtonEnabled) {
+                    backgroundServiceRestartButtonEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_RESTART,
+                        "",
+                        "",
+                    )
+                }
+            },
+            enabled = backgroundServiceRestartButtonEnabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.button_restart_background_service),
+                fontSize = 24.sp,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp),
+                .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
