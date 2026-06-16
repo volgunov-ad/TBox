@@ -68,6 +68,7 @@ import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanFrame
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 
 @Composable
 fun StatusRow(
@@ -77,10 +78,16 @@ fun StatusRow(
     fontSize: TextUnit = 24.sp,
     color: Color? = null,
     showDivider: Boolean = true,
+    labelColumnWidthPercent: Int = ActiveTripCustomWidgetLayout.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
 ) {
     val textColor = color ?: MaterialTheme.colorScheme.onSurface
     val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
     val lineHeight = fontSize * 1.3f
+    val labelPercent = ActiveTripCustomWidgetLayout.normalizeLabelColumnWidthPercent(
+        labelColumnWidthPercent,
+    )
+    val labelWeight = labelPercent / 100f
+    val valueWeight = (100 - labelPercent) / 100f
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -89,7 +96,7 @@ fun StatusRow(
         Text(
             text = label,
             modifier = Modifier
-                .weight(0.6f)
+                .weight(labelWeight)
                 .padding(end = 8.dp),
             fontSize = fontSize,
             lineHeight = lineHeight,
@@ -101,7 +108,7 @@ fun StatusRow(
         Text(
             text = valueWithUnit,
             modifier = Modifier
-                .weight(0.4f)
+                .weight(valueWeight)
                 .padding(start = 8.dp),
             fontSize = fontSize,
             lineHeight = lineHeight,

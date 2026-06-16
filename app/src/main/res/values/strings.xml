@@ -605,6 +605,8 @@
     <string name="trips_simple_widget_dialog_hint">Отметьте параметры для отображения. За значок справа потяните вверх или вниз, чтобы изменить порядок.</string>
     <string name="trips_custom_widget_drag_handle_a11y">Переместить строку</string>
     <string name="trips_widget_show_row_dividers_title">Показывать разделители строк</string>
+    <string name="trips_widget_label_column_width_title">Ширина первого столбца, %</string>
+    <string name="trips_widget_label_column_width_desc">Доля ширины строки для названия параметра</string>
     <string name="dialog_save_trips_downloads">Сохранить все поездки в один файл в папку Загрузки</string>
     <string name="trips_export_separator">----------------------------------------</string>
     <string name="refuels_empty">Нет заправок</string>
