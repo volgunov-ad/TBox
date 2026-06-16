@@ -547,6 +547,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     private var saveCurrentPageJob: Job? = null
     private var pendingCurrentPage: Int? = null
+    private val liveMainScreenCurrentPage = MutableStateFlow(SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
 
     val mainScreenCornerButtonSizeDp = settingsManager.mainScreenCornerButtonSizeDpFlow
         .stateIn(
@@ -921,6 +922,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             settingsManager.dashboardWidgetsFlow.collect { configs ->
                 latestDashboardWidgetsConfig = configs
             }
+        }
+        viewModelScope.launch {
+            mainScreenCurrentPage.collect { liveMainScreenCurrentPage.value = it }
         }
         viewModelScope.launch {
             val storedMain = settingsManager.mainScreenDashboardsFlow.first()
@@ -1459,12 +1463,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun addMainScreenDashboard(defaultName: String) {
+    fun addMainScreenDashboard(defaultName: String, pageNumber: Int? = null) {
         viewModelScope.launch {
             val base = mainScreenDashboards.value.toMutableList()
             val newId = "main-screen-" + java.util.UUID.randomUUID().toString().take(8)
-            val pageNumber = mainScreenCurrentPage.value
-            val newPanel = createDefaultMainScreenPanel(newId, defaultName, pageNumber)
+            val resolvedPage = pageNumber ?: liveMainScreenCurrentPage.value
+            val newPanel = createDefaultMainScreenPanel(newId, defaultName, resolvedPage)
             base.add(newPanel)
             settingsManager.saveMainScreenDashboards(base)
             selectedMainScreenPanelIdState.value = newId
@@ -1869,6 +1873,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun scheduleSaveMainScreenCurrentPage(page: Int) {
+        liveMainScreenCurrentPage.value = page
         pendingCurrentPage = page
         saveCurrentPageJob?.cancel()
         saveCurrentPageJob = viewModelScope.launch {
@@ -1881,6 +1886,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun flushMainScreenCurrentPage() {
         val toSave = pendingCurrentPage ?: return
+        liveMainScreenCurrentPage.value = toSave
         saveCurrentPageJob?.cancel()
         saveCurrentPageJob = null
         viewModelScope.launch {
@@ -1901,8 +1907,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             val pageCount = settingsManager.mainScreenPageCountFlow.first()
             val normalized = PagingStateNormalizer.normalizePanelPageNumber(pageNumber, pageCount)
-            applyMainScreenPanelUpdate(panelId ?: selectedMainScreenPanelIdState.value) {
-                it.copy(pageNumber = normalized)
+            val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+                { it.copy(pageNumber = normalized) }
+            if (panelId != null) {
+                updateMainScreenPanel(panelId, update)
+            } else {
+                updateSelectedMainScreenPanel(update)
             }
         }
     }

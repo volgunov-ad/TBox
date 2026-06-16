@@ -209,7 +209,7 @@ fun MainScreen(
                 settingsViewModel.saveMainScreenAddButton(MainScreenAddButtonPosition(x, y))
             },
             onClick = {
-                settingsViewModel.addMainScreenDashboard(newMainPanelDefaultName)
+                settingsViewModel.addMainScreenDashboard(newMainPanelDefaultName, currentPage)
             },
         )
 

@@ -512,7 +512,8 @@ class SettingsManager(private val context: Context) {
     val mainScreenDashboardsFlow: Flow<List<MainScreenPanelConfig>> = context.settingsDataStore.data
         .map { preferences ->
             val rawJson = preferences[getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)] ?: ""
-            parseMainScreenDashboardsJson(rawJson)
+            val pageCount = preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+            parseMainScreenDashboardsJson(rawJson, pageCount)
         }
         .distinctUntilChanged()
 
@@ -1890,14 +1891,17 @@ class SettingsManager(private val context: Context) {
         return root.toString()
     }
 
-    private fun parseMainScreenDashboardsJson(json: String): List<MainScreenPanelConfig> {
+    private fun parseMainScreenDashboardsJson(
+        json: String,
+        pageCount: Int = DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+    ): List<MainScreenPanelConfig> {
         if (json.isBlank()) return emptyList()
         return try {
             val array = JSONArray(json)
             val configs = mutableListOf<MainScreenPanelConfig>()
             for (i in 0 until array.length()) {
                 val obj = array.optJSONObject(i) ?: continue
-                val config = parseMainScreenPanelConfig(obj) ?: continue
+                val config = parseMainScreenPanelConfig(obj, pageCount) ?: continue
                 configs.add(config)
             }
             configs
@@ -1906,7 +1910,10 @@ class SettingsManager(private val context: Context) {
         }
     }
 
-    private fun parseMainScreenPanelConfig(obj: JSONObject): MainScreenPanelConfig? {
+    private fun parseMainScreenPanelConfig(
+        obj: JSONObject,
+        pageCount: Int = DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+    ): MainScreenPanelConfig? {
         val id = obj.optString("id").trim()
         if (id.isEmpty()) return null
         val name = obj.optString("name").ifBlank { id }
@@ -1935,7 +1942,7 @@ class SettingsManager(private val context: Context) {
             ),
             pageNumber = PagingStateNormalizer.normalizePanelPageNumber(
                 obj.optInt("pageNumber", DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER),
-                DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+                pageCount,
             ),
         )
     }
