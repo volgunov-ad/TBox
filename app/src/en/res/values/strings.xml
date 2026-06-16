@@ -317,7 +317,7 @@
     <string name="settings_main_screen_corner_buttons_icon_dark">Icon color (dark theme)</string>
     <string name="settings_main_screen_corner_buttons_reset">Reset size and colors</string>
     <string name="settings_main_screen_panels_title">Main screen panels</string>
-    <string name="settings_main_screen_page_count_title">Page count: %1$d</string>
+    <string name="settings_main_screen_page_count_title">Page count</string>
     <string name="settings_main_screen_page_count_hint">From 1 to 5. When greater than 1, page navigation buttons appear on the main screen.</string>
     <string name="settings_main_screen_panel_page_title">Panel page</string>
     <string name="settings_main_screen_panel_page_desc">Page number where this panel is shown.</string>

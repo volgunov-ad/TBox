@@ -586,24 +586,13 @@ fun MainScreenSettingsTab(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_panels_title))
-        Text(
-            text = stringResource(R.string.settings_main_screen_page_count_title, mainScreenPageCount),
-            fontSize = 22.sp,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
-        Text(
-            text = stringResource(R.string.settings_main_screen_page_count_hint),
-            fontSize = 18.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-        Slider(
-            value = mainScreenPageCount.toFloat(),
-            onValueChange = { settingsViewModel.saveMainScreenPageCount(it.roundToInt()) },
-            valueRange = SettingsManager.MIN_MAIN_SCREEN_PAGE_COUNT.toFloat()
-                ..SettingsManager.MAX_MAIN_SCREEN_PAGE_COUNT.toFloat(),
-            steps = SettingsManager.MAX_MAIN_SCREEN_PAGE_COUNT - SettingsManager.MIN_MAIN_SCREEN_PAGE_COUNT - 1,
-            modifier = Modifier.fillMaxWidth(),
+        SettingDropdownGeneric(
+            selectedValue = mainScreenPageCount,
+            onValueChange = { settingsViewModel.saveMainScreenPageCount(it) },
+            text = stringResource(R.string.settings_main_screen_page_count_title),
+            description = stringResource(R.string.settings_main_screen_page_count_hint),
+            enabled = true,
+            options = SettingsManager.MAIN_SCREEN_PAGE_COUNT_OPTIONS,
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         if (hasMainScreenPanels) {

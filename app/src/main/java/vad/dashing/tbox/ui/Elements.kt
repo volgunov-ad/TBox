@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -45,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -765,6 +768,46 @@ private data class MainScreenPanelDropdownOption(val id: String, val label: Stri
 }
 
 @Composable
+private fun PanelNameSaveTrailingIcon(
+    visible: Boolean,
+    onSave: () -> Unit,
+) {
+    if (!visible) return
+    SettingsCommitIconButton(
+        onClick = onSave,
+        contentDescription = stringResource(R.string.action_save),
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_refuel_save),
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun SettingsCommitIconButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    content: @Composable () -> Unit,
+) {
+    IconButton(
+        onClick = rememberWrappedOnClick(onClick),
+        modifier = Modifier
+            .size(40.dp)
+            .background(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                shape = CircleShape,
+            ),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            content()
+        }
+    }
+}
+
+@Composable
 fun FloatingDashboardPanelEditor(
     panels: List<FloatingDashboardConfig>,
     selectedPanelId: String,
@@ -821,17 +864,14 @@ fun FloatingDashboardPanelEditor(
                             fontSize = 16.sp
                         )
                     },
-                    textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+                    textStyle = LocalTextStyle.current.copy(fontSize = 22.sp),
+                    trailingIcon = {
+                        PanelNameSaveTrailingIcon(
+                            visible = enabled && nameDirty && trimmedDraft.isNotEmpty(),
+                            onSave = { onRenamePanel(effectiveId, trimmedDraft) },
+                        )
+                    },
                 )
-                Button(
-                    onClick = rememberWrappedOnClick { onRenamePanel(effectiveId, trimmedDraft) },
-                    enabled = enabled && nameDirty
-                ) {
-                    Text(
-                        stringResource(R.string.floating_panel_rename_button),
-                        fontSize = 18.sp
-                    )
-                }
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
                 Text(stringResource(R.string.action_add), fontSize = 20.sp)
@@ -903,17 +943,14 @@ fun MainScreenPanelEditor(
                             fontSize = 16.sp
                         )
                     },
-                    textStyle = LocalTextStyle.current.copy(fontSize = 22.sp)
+                    textStyle = LocalTextStyle.current.copy(fontSize = 22.sp),
+                    trailingIcon = {
+                        PanelNameSaveTrailingIcon(
+                            visible = enabled && nameDirty && trimmedDraft.isNotEmpty(),
+                            onSave = { onRenamePanel(effectiveId, trimmedDraft) },
+                        )
+                    },
                 )
-                Button(
-                    onClick = rememberWrappedOnClick { onRenamePanel(effectiveId, trimmedDraft) },
-                    enabled = enabled && nameDirty
-                ) {
-                    Text(
-                        stringResource(R.string.floating_panel_rename_button),
-                        fontSize = 18.sp
-                    )
-                }
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
                 Text(stringResource(R.string.action_add), fontSize = 20.sp)

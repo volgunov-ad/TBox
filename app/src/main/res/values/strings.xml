@@ -320,7 +320,7 @@
     <string name="settings_main_screen_corner_buttons_icon_dark">Цвет значка (тёмная тема)</string>
     <string name="settings_main_screen_corner_buttons_reset">Сбросить размер и цвета</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
-    <string name="settings_main_screen_page_count_title">Количество страниц: %1$d</string>
+    <string name="settings_main_screen_page_count_title">Количество страниц</string>
     <string name="settings_main_screen_page_count_hint">От 1 до 5. При значении больше 1 на главном экране появляются кнопки перелистывания.</string>
     <string name="settings_main_screen_panel_page_title">Страница панели</string>
     <string name="settings_main_screen_panel_page_desc">Номер страницы, на которой отображается панель.</string>
