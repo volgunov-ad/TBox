@@ -18,6 +18,7 @@ class LeftMenuLayoutTest {
             setOf(
                 LeftMenuTabField.SETTINGS.id,
                 LeftMenuTabField.FLOATING_PANELS_SETTINGS.id,
+                LeftMenuTabField.THEMES.id,
                 LeftMenuTabField.MAIN_SCREEN_SETTINGS.id,
             ),
             enabled,

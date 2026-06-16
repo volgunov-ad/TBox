@@ -36,6 +36,7 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val cols: Int,
     val showTboxDisconnectIndicator: Boolean,
     val clickAction: Boolean,
+    val pageNumber: Int,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -59,7 +60,8 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         rows = w.rows.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         cols = w.cols.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
-        clickAction = w.clickAction
+        clickAction = w.clickAction,
+        pageNumber = w.pageNumber.coerceAtLeast(1),
     )
 }
 
@@ -109,7 +111,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private val DEFAULT_MAIN_SCREEN_PANEL_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
 
-    private fun createDefaultMainScreenPanel(id: String, name: String): MainScreenPanelConfig {
+    private fun createDefaultMainScreenPanel(id: String, name: String, pageNumber: Int): MainScreenPanelConfig {
         return MainScreenPanelConfig(
             id = id,
             name = name,
@@ -123,12 +125,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             relHeight = DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT,
             background = DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND,
             clickAction = DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION,
-            showTboxDisconnectIndicator = DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
+            showTboxDisconnectIndicator = DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT,
+            pageNumber = pageNumber.coerceAtLeast(1),
         )
     }
 
     private fun fallbackMainScreenPanel(id: String): MainScreenPanelConfig {
-        return createDefaultMainScreenPanel(id, id)
+        return createDefaultMainScreenPanel(id, id, SettingsManager.DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER)
     }
 
     private val floatingDashboardConfigStates =
@@ -502,6 +505,49 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = MainScreenAddButtonPosition.Default
         )
 
+    val mainScreenPageCount = settingsManager.mainScreenPageCountFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+        )
+
+    val mainScreenCurrentPage = settingsManager.mainScreenCurrentPageFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+        )
+
+    val mainScreenPagePrevButtonPosition = settingsManager.mainScreenPagePrevButtonFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainScreenPagePrevButtonPosition.Default,
+        )
+
+    val mainScreenPageNextButtonPosition = settingsManager.mainScreenPageNextButtonFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainScreenPageNextButtonPosition.Default,
+        )
+
+    val activeThemeUri = settingsManager.activeThemeUriFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "")
+
+    val activeThemeFingerprint = settingsManager.activeThemeFingerprintFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "")
+
+    val activeThemeSections = settingsManager.activeThemeSectionsFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptySet())
+
+    val driveModeThemePaths = settingsManager.driveModeThemePathsFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyMap())
+
+    private var saveCurrentPageJob: Job? = null
+    private var pendingCurrentPage: Int? = null
+
     val mainScreenCornerButtonSizeDp = settingsManager.mainScreenCornerButtonSizeDpFlow
         .stateIn(
             scope = viewModelScope,
@@ -690,6 +736,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_MAIN_SCREEN_PANEL_COLS
+        )
+
+    val mainScreenPanelPageNumber = activeMainScreenPanelConfig
+        .map { it.pageNumber }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SettingsManager.DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER,
         )
 
     val mainScreenPanelRelXPercent = activeMainScreenPanelConfig
@@ -1409,7 +1463,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             val base = mainScreenDashboards.value.toMutableList()
             val newId = "main-screen-" + java.util.UUID.randomUUID().toString().take(8)
-            val newPanel = createDefaultMainScreenPanel(newId, defaultName)
+            val pageNumber = mainScreenCurrentPage.value
+            val newPanel = createDefaultMainScreenPanel(newId, defaultName, pageNumber)
             base.add(newPanel)
             settingsManager.saveMainScreenDashboards(base)
             selectedMainScreenPanelIdState.value = newId
@@ -1805,6 +1860,83 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.saveHeadUnitCanModeByUser(mode)
         }
+    }
+
+    fun saveMainScreenPageCount(pageCount: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenPageCount(pageCount)
+        }
+    }
+
+    fun scheduleSaveMainScreenCurrentPage(page: Int) {
+        pendingCurrentPage = page
+        saveCurrentPageJob?.cancel()
+        saveCurrentPageJob = viewModelScope.launch {
+            delay(5_000)
+            val toSave = pendingCurrentPage ?: return@launch
+            settingsManager.saveMainScreenCurrentPage(toSave)
+            pendingCurrentPage = null
+        }
+    }
+
+    fun flushMainScreenCurrentPage() {
+        val toSave = pendingCurrentPage ?: return
+        saveCurrentPageJob?.cancel()
+        saveCurrentPageJob = null
+        viewModelScope.launch {
+            settingsManager.saveMainScreenCurrentPage(toSave)
+            pendingCurrentPage = null
+        }
+    }
+
+    fun saveMainScreenPagePrevButton(position: MainScreenPagePrevButtonPosition) {
+        viewModelScope.launch { settingsManager.saveMainScreenPagePrevButton(position) }
+    }
+
+    fun saveMainScreenPageNextButton(position: MainScreenPageNextButtonPosition) {
+        viewModelScope.launch { settingsManager.saveMainScreenPageNextButton(position) }
+    }
+
+    fun saveMainScreenPanelPageNumber(pageNumber: Int, panelId: String? = null) {
+        viewModelScope.launch {
+            val pageCount = settingsManager.mainScreenPageCountFlow.first()
+            val normalized = PagingStateNormalizer.normalizePanelPageNumber(pageNumber, pageCount)
+            applyMainScreenPanelUpdate(panelId ?: selectedMainScreenPanelIdState.value) {
+                it.copy(pageNumber = normalized)
+            }
+        }
+    }
+
+    suspend fun computeIsActiveThemeModified(context: Context): Boolean {
+        val uri = settingsManager.activeThemeUriFlow.first().trim()
+        val stored = settingsManager.activeThemeFingerprintFlow.first().trim()
+        val sections = settingsManager.activeThemeSectionsFlow.first()
+        if (uri.isEmpty() || stored.isEmpty() || sections.isEmpty()) return false
+        return ThemeFingerprint.compute(context, settingsManager, sections) != stored
+    }
+
+    suspend fun exportThemeBundle(context: Context, sections: Set<ThemeSection>): ByteArray {
+        return ThemeBundleExport.exportBundle(context, settingsManager, sections)
+    }
+
+    suspend fun applyThemeFromUri(context: Context, uriString: String): Result<ThemeApply.ApplyResult> {
+        return ThemeApply.applyFromUri(context, settingsManager, this, uriString)
+    }
+
+    suspend fun applyThemeBytes(context: Context, bytes: ByteArray, themeUri: String): Result<ThemeApply.ApplyResult> {
+        return ThemeApply.applyBytes(context, settingsManager, this, bytes, themeUri)
+    }
+
+    fun saveDriveModeThemePath(rawValue: Int, uri: String) {
+        viewModelScope.launch { settingsManager.saveDriveModeThemePath(rawValue, uri) }
+    }
+
+    fun clearDriveModeThemePath(rawValue: Int) {
+        viewModelScope.launch { settingsManager.saveDriveModeThemePath(rawValue, "") }
+    }
+
+    suspend fun validateThemeSettings(context: Context) {
+        ThemeSettingsValidator.validateOnStartup(context, settingsManager)
     }
 }
 

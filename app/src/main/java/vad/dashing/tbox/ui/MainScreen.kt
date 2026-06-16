@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -47,7 +50,8 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
 import kotlin.math.roundToInt
@@ -76,7 +80,12 @@ import vad.dashing.tbox.listSortedWallpaperImagesInFolder
 import vad.dashing.tbox.logicalIndexFromMainScreenWallpaperPagerPage
 import vad.dashing.tbox.mainScreenWallpaperPagerPageCount
 import vad.dashing.tbox.mainScreenWallpaperPagerPageForLogicalIndex
+import vad.dashing.tbox.MainScreenPageNextButtonPosition
+import vad.dashing.tbox.MainScreenPagePrevButtonPosition
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlin.math.abs
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.isVisibleOnMainScreenPage
 import vad.dashing.tbox.loadWidgetsFromConfig
 
 @Composable
@@ -91,8 +100,14 @@ fun MainScreen(
     modifier: Modifier = Modifier,
 ) {
     val mainPanels by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
+    val pageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
+    val savedCurrentPage by settingsViewModel.mainScreenCurrentPage.collectAsStateWithLifecycle()
+    var currentPage by remember { mutableIntStateOf(savedCurrentPage) }
+    LaunchedEffect(savedCurrentPage) { currentPage = savedCurrentPage }
     val settingsBtnPos by settingsViewModel.mainScreenSettingsButtonPosition.collectAsStateWithLifecycle()
     val addBtnPos by settingsViewModel.mainScreenAddButtonPosition.collectAsStateWithLifecycle()
+    val pagePrevBtnPos by settingsViewModel.mainScreenPagePrevButtonPosition.collectAsStateWithLifecycle()
+    val pageNextBtnPos by settingsViewModel.mainScreenPageNextButtonPosition.collectAsStateWithLifecycle()
     val cornerBtnSizeDp by settingsViewModel.mainScreenCornerButtonSizeDp.collectAsStateWithLifecycle()
     val cornerBtnBgLight by settingsViewModel.mainScreenCornerButtonBackgroundLight.collectAsStateWithLifecycle()
     val cornerBtnBgDark by settingsViewModel.mainScreenCornerButtonBackgroundDark.collectAsStateWithLifecycle()
@@ -107,6 +122,25 @@ fun MainScreen(
         if (currentTheme == 2) cornerBtnIconDark else cornerBtnIconLight
     )
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        settingsViewModel.flushMainScreenCurrentPage()
+    }
+
+    fun changePage(delta: Int) {
+        val count = pageCount.coerceAtLeast(1)
+        val next = when {
+            delta < 0 && currentPage <= 1 -> count
+            delta > 0 && currentPage >= count -> 1
+            else -> currentPage + delta
+        }
+        currentPage = next.coerceIn(1, count)
+        settingsViewModel.scheduleSaveMainScreenCurrentPage(currentPage)
+    }
+
+    fun onPageSwipe(direction: Int) {
+        changePage(direction)
+    }
 
     var floatingOverlayEditRequest by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val pendingFloatingTileEdit by FloatingDashboardTileEditRequestBus.pending
@@ -129,7 +163,7 @@ fun MainScreen(
         val maxWpx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val maxHpx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
 
-        mainPanels.filter { it.enabled }.forEach { panel ->
+        mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, currentPage) }.forEach { panel ->
             key(panel.id) {
                 MainScreenDashboardPanel(
                     panel = panel,
@@ -178,6 +212,41 @@ fun MainScreen(
                 settingsViewModel.addMainScreenDashboard(newMainPanelDefaultName)
             },
         )
+
+        if (pageCount > 1) {
+            MainScreenDraggableCornerButton(
+                icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                contentDescription = stringResource(R.string.main_screen_page_prev_cd),
+                iconSize = cornerIconSize,
+                backgroundColor = cornerBackgroundColor,
+                iconTint = cornerIconTint,
+                maxWidthPx = maxWpx,
+                maxHeightPx = maxHpx,
+                normalizedX = pagePrevBtnPos.x,
+                normalizedY = pagePrevBtnPos.y,
+                onSaveNormalized = { x, y ->
+                    settingsViewModel.saveMainScreenPagePrevButton(MainScreenPagePrevButtonPosition(x, y))
+                },
+                onClick = { changePage(-1) },
+                onHorizontalSwipe = ::onPageSwipe,
+            )
+            MainScreenDraggableCornerButton(
+                icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = stringResource(R.string.main_screen_page_next_cd),
+                iconSize = cornerIconSize,
+                backgroundColor = cornerBackgroundColor,
+                iconTint = cornerIconTint,
+                maxWidthPx = maxWpx,
+                maxHeightPx = maxHpx,
+                normalizedX = pageNextBtnPos.x,
+                normalizedY = pageNextBtnPos.y,
+                onSaveNormalized = { x, y ->
+                    settingsViewModel.saveMainScreenPageNextButton(MainScreenPageNextButtonPosition(x, y))
+                },
+                onClick = { changePage(1) },
+                onHorizontalSwipe = ::onPageSwipe,
+            )
+        }
 
         floatingOverlayEditRequest?.let { (panelId, widgetIndex) ->
             val context = LocalContext.current
@@ -573,11 +642,13 @@ private fun MainScreenDraggableCornerButton(
     normalizedY: Float,
     onSaveNormalized: (Float, Float) -> Unit,
     onClick: () -> Unit,
+    onHorizontalSwipe: ((direction: Int) -> Unit)? = null,
 ) {
     val savedState by rememberUpdatedState(Pair(normalizedX, normalizedY))
 
     val density = LocalDensity.current
     val btnPx = with(density) { iconSize.toPx() }
+    val swipeThresholdPx = with(density) { 32.dp.toPx() }
 
     val maxW = maxWidthPx
     val maxH = maxHeightPx
@@ -609,6 +680,25 @@ private fun MainScreenDraggableCornerButton(
                     }
                 )
                 .clickableWithSound(onClick = onClick)
+                .then(
+                    if (onHorizontalSwipe != null) {
+                        Modifier.pointerInput(swipeThresholdPx) {
+                            var totalDx = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { totalDx = 0f },
+                                onHorizontalDrag = { _, dragAmount -> totalDx += dragAmount },
+                                onDragEnd = {
+                                    if (abs(totalDx) >= swipeThresholdPx) {
+                                        onHorizontalSwipe(if (totalDx < 0f) -1 else 1)
+                                    }
+                                },
+                                onDragCancel = { totalDx = 0f },
+                            )
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
                 .pointerInput(maxW, maxH, btnPx) {
                     detectDragGesturesAfterLongPress(
                         onDrag = { change, dragAmount ->

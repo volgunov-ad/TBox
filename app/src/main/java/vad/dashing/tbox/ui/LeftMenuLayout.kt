@@ -23,6 +23,7 @@ enum class LeftMenuTabField(
     REFUELS("refuels", R.string.tab_refuels),
     SETTINGS("settings", R.string.tab_settings, locked = true),
     FLOATING_PANELS_SETTINGS("floating_panels_settings", R.string.tab_floating_panels_settings),
+    THEMES("themes", R.string.tab_themes),
     LOGS("logs", R.string.tab_logs),
     INFO("info", R.string.tab_info),
     CAN("can", R.string.tab_can),
@@ -45,6 +46,7 @@ enum class LeftMenuTabField(
             REFUELS,
             SETTINGS,
             FLOATING_PANELS_SETTINGS,
+            THEMES,
             MAIN_SCREEN_SETTINGS,
             CAR_SETTINGS,
             LOGS,
@@ -65,7 +67,9 @@ data class LeftMenuLayout(
 
     companion object {
         fun defaultEnabled(field: LeftMenuTabField): Boolean =
-            field.locked || field == LeftMenuTabField.FLOATING_PANELS_SETTINGS
+            field.locked ||
+                field == LeftMenuTabField.FLOATING_PANELS_SETTINGS ||
+                field == LeftMenuTabField.THEMES
 
         fun default(): LeftMenuLayout =
             LeftMenuLayout(

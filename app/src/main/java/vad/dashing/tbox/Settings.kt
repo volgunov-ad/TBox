@@ -115,6 +115,26 @@ data class MainScreenAddButtonPosition(
     }
 }
 
+/** Normalized top-left of the MainScreen «previous page» control. */
+data class MainScreenPagePrevButtonPosition(
+    val x: Float,
+    val y: Float,
+) {
+    companion object {
+        val Default = MainScreenPagePrevButtonPosition(0.04f, 0.92f)
+    }
+}
+
+/** Normalized top-left of the MainScreen «next page» control. */
+data class MainScreenPageNextButtonPosition(
+    val x: Float,
+    val y: Float,
+) {
+    companion object {
+        val Default = MainScreenPageNextButtonPosition(0.92f, 0.92f)
+    }
+}
+
 /**
  * Dashboard panel on the in-app MainScreen (not a system overlay).
  * Position uses the same convention as [MainScreenSettingsButtonPosition]: normalized against
@@ -133,7 +153,9 @@ data class MainScreenPanelConfig(
     val relHeight: Float,
     val background: Boolean,
     val clickAction: Boolean,
-    val showTboxDisconnectIndicator: Boolean = false
+    val showTboxDisconnectIndicator: Boolean = false,
+    /** 1-based page index on the main screen (1..[SettingsManager.MAX_MAIN_SCREEN_PAGE_COUNT]). */
+    val pageNumber: Int = SettingsManager.DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER,
 )
 
 data class FloatingDashboardConfig(
@@ -350,6 +372,28 @@ class SettingsManager(private val context: Context) {
         private const val MAIN_SCREEN_DASHBOARDS_LIST_KEY = "main_screen_dashboards"
         private const val MAIN_SCREEN_SETTINGS_BUTTON_KEY = "main_screen_settings_button"
         private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
+        private const val MAIN_SCREEN_PAGE_PREV_BUTTON_KEY = "main_screen_page_prev_button"
+        private const val MAIN_SCREEN_PAGE_NEXT_BUTTON_KEY = "main_screen_page_next_button"
+
+        const val MIN_MAIN_SCREEN_PAGE_COUNT = 1
+        const val MAX_MAIN_SCREEN_PAGE_COUNT = 5
+        const val DEFAULT_MAIN_SCREEN_PAGE_COUNT = 1
+        const val DEFAULT_MAIN_SCREEN_CURRENT_PAGE = 1
+        const val DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER = 1
+        val MAIN_SCREEN_PAGE_COUNT_OPTIONS: List<Int> =
+            (MIN_MAIN_SCREEN_PAGE_COUNT..MAX_MAIN_SCREEN_PAGE_COUNT).toList()
+
+        private val MAIN_SCREEN_PAGE_COUNT_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_page_count")
+        private val MAIN_SCREEN_CURRENT_PAGE_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_current_page")
+        private val ACTIVE_THEME_URI_KEY = stringPreferencesKey("${KEY_PREFIX}active_theme_uri")
+        private val ACTIVE_THEME_FINGERPRINT_KEY =
+            stringPreferencesKey("${KEY_PREFIX}active_theme_fingerprint")
+        private val ACTIVE_THEME_SECTIONS_KEY =
+            stringPreferencesKey("${KEY_PREFIX}active_theme_sections")
+        private val DRIVE_MODE_THEME_PATHS_KEY =
+            stringPreferencesKey("${KEY_PREFIX}drive_mode_theme_paths")
 
         /** Legacy single-file copies (may be migrated to folder URIs on startup). */
         const val MAIN_SCREEN_WALLPAPER_LIGHT_FILE = "main_screen_wallpaper/light"
@@ -583,6 +627,64 @@ class SettingsManager(private val context: Context) {
                 )
             }
             .distinctUntilChanged()
+
+    val mainScreenPageCountFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            PagingStateNormalizer.normalizePageCount(
+                preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+            )
+        }
+        .distinctUntilChanged()
+
+    val mainScreenCurrentPageFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            val pageCount = PagingStateNormalizer.normalizePageCount(
+                preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+            )
+            PagingStateNormalizer.normalizeCurrentPage(
+                preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+                pageCount,
+            )
+        }
+        .distinctUntilChanged()
+
+    val mainScreenPagePrevButtonFlow: Flow<MainScreenPagePrevButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenPagePrevButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_PAGE_PREV_BUTTON_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
+
+    val mainScreenPageNextButtonFlow: Flow<MainScreenPageNextButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenPageNextButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_PAGE_NEXT_BUTTON_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
+
+    val activeThemeUriFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ACTIVE_THEME_URI_KEY] ?: "" }
+        .distinctUntilChanged()
+
+    val activeThemeFingerprintFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ACTIVE_THEME_FINGERPRINT_KEY] ?: "" }
+        .distinctUntilChanged()
+
+    val activeThemeSectionsFlow: Flow<Set<ThemeSection>> = context.settingsDataStore.data
+        .map { preferences ->
+            ThemeSection.parseJsonArray(
+                runCatching { JSONArray(preferences[ACTIVE_THEME_SECTIONS_KEY].orEmpty()) }.getOrNull()
+            )
+        }
+        .distinctUntilChanged()
+
+    val driveModeThemePathsFlow: Flow<Map<Int, String>> = context.settingsDataStore.data
+        .map { preferences -> parseDriveModeThemePathsJson(preferences[DRIVE_MODE_THEME_PATHS_KEY].orEmpty()) }
+        .distinctUntilChanged()
 
     /** After device boot, open [MainActivity] on the main home screen (tab 100) when enabled. */
     val mainScreenOpenOnBootFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1125,6 +1227,90 @@ class SettingsManager(private val context: Context) {
         saveCustomString(MAIN_SCREEN_ADD_BUTTON_KEY, obj.toString())
     }
 
+    suspend fun saveMainScreenPageCount(pageCount: Int) {
+        val normalized = PagingStateNormalizer.normalizePageCount(pageCount)
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_PAGE_COUNT_KEY] = normalized
+            val current = preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE
+            preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] =
+                PagingStateNormalizer.normalizeCurrentPage(current, normalized)
+        }
+        val panels = mainScreenDashboardsFlow.first()
+        val clamped = PagingStateNormalizer.clampPanelsToPageCount(panels, normalized)
+        if (clamped != panels) {
+            saveMainScreenDashboards(clamped)
+        }
+    }
+
+    suspend fun saveMainScreenCurrentPage(page: Int) {
+        val pageCount = PagingStateNormalizer.normalizePageCount(
+            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+        )
+        val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] = normalized
+        }
+    }
+
+    suspend fun saveMainScreenPagePrevButton(position: MainScreenPagePrevButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_PAGE_PREV_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenPageNextButton(position: MainScreenPageNextButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_PAGE_NEXT_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveActiveTheme(uri: String, fingerprint: String, sections: Set<ThemeSection>) {
+        context.settingsDataStore.edit { preferences ->
+            if (uri.isBlank()) {
+                preferences.remove(ACTIVE_THEME_URI_KEY)
+            } else {
+                preferences[ACTIVE_THEME_URI_KEY] = uri
+            }
+            if (fingerprint.isBlank()) {
+                preferences.remove(ACTIVE_THEME_FINGERPRINT_KEY)
+            } else {
+                preferences[ACTIVE_THEME_FINGERPRINT_KEY] = fingerprint
+            }
+            if (sections.isEmpty()) {
+                preferences.remove(ACTIVE_THEME_SECTIONS_KEY)
+            } else {
+                preferences[ACTIVE_THEME_SECTIONS_KEY] = ThemeSection.toJsonArray(sections).toString()
+            }
+        }
+    }
+
+    suspend fun clearActiveTheme() {
+        saveActiveTheme(uri = "", fingerprint = "", sections = emptySet())
+    }
+
+    suspend fun saveDriveModeThemePaths(paths: Map<Int, String>) {
+        context.settingsDataStore.edit { preferences ->
+            if (paths.isEmpty()) {
+                preferences.remove(DRIVE_MODE_THEME_PATHS_KEY)
+            } else {
+                preferences[DRIVE_MODE_THEME_PATHS_KEY] = serializeDriveModeThemePaths(paths)
+            }
+        }
+    }
+
+    suspend fun saveDriveModeThemePath(rawValue: Int, uri: String) {
+        val current = driveModeThemePathsFlow.first().toMutableMap()
+        if (uri.isBlank()) {
+            current.remove(rawValue)
+        } else {
+            current[rawValue] = uri
+        }
+        saveDriveModeThemePaths(current)
+    }
+
     suspend fun saveMainScreenCornerButtonSizeDp(sizeDp: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY] =
@@ -1289,14 +1475,14 @@ class SettingsManager(private val context: Context) {
         }
     }
 
-    private suspend fun bumpLauncherAppIconRevision() {
+    suspend fun bumpLauncherAppIconRevision() {
         context.settingsDataStore.edit { preferences ->
             val cur = preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0
             preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
         }
     }
 
-    private suspend fun bumpTileBackgroundImageRevision() {
+    suspend fun bumpTileBackgroundImageRevision() {
         context.settingsDataStore.edit { preferences ->
             val cur = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
             preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = cur + 1
@@ -1642,6 +1828,68 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    private fun parseMainScreenPagePrevButtonJson(raw: String): MainScreenPagePrevButtonPosition {
+        if (raw.isBlank()) return MainScreenPagePrevButtonPosition.Default
+        return try {
+            val o = JSONObject(raw)
+            MainScreenPagePrevButtonPosition(
+                x = o.optDouble("x", MainScreenPagePrevButtonPosition.Default.x.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+                y = o.optDouble("y", MainScreenPagePrevButtonPosition.Default.y.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+            )
+        } catch (_: Exception) {
+            MainScreenPagePrevButtonPosition.Default
+        }
+    }
+
+    private fun parseMainScreenPageNextButtonJson(raw: String): MainScreenPageNextButtonPosition {
+        if (raw.isBlank()) return MainScreenPageNextButtonPosition.Default
+        return try {
+            val o = JSONObject(raw)
+            MainScreenPageNextButtonPosition(
+                x = o.optDouble("x", MainScreenPageNextButtonPosition.Default.x.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+                y = o.optDouble("y", MainScreenPageNextButtonPosition.Default.y.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+            )
+        } catch (_: Exception) {
+            MainScreenPageNextButtonPosition.Default
+        }
+    }
+
+    private fun parseDriveModeThemePathsJson(raw: String): Map<Int, String> {
+        if (raw.isBlank()) return emptyMap()
+        return try {
+            val root = JSONObject(raw)
+            val out = linkedMapOf<Int, String>()
+            root.keys().forEach { key ->
+                val rawValue = key.toIntOrNull() ?: return@forEach
+                val path = root.optString(key).trim()
+                if (path.isNotEmpty()) {
+                    out[rawValue] = path
+                }
+            }
+            out
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun serializeDriveModeThemePaths(paths: Map<Int, String>): String {
+        val root = JSONObject()
+        paths.toSortedMap().forEach { (rawValue, uri) ->
+            if (uri.isNotBlank()) {
+                root.put(rawValue.toString(), uri)
+            }
+        }
+        return root.toString()
+    }
+
     private fun parseMainScreenDashboardsJson(json: String): List<MainScreenPanelConfig> {
         if (json.isBlank()) return emptyList()
         return try {
@@ -1684,7 +1932,11 @@ class SettingsManager(private val context: Context) {
             showTboxDisconnectIndicator = obj.optBoolean(
                 "showTboxDisconnectIndicator",
                 DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
-            )
+            ),
+            pageNumber = PagingStateNormalizer.normalizePanelPageNumber(
+                obj.optInt("pageNumber", DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER),
+                DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+            ),
         )
     }
 
@@ -1705,6 +1957,7 @@ class SettingsManager(private val context: Context) {
             o.put("background", config.background)
             o.put("clickAction", config.clickAction)
             o.put("showTboxDisconnectIndicator", config.showTboxDisconnectIndicator)
+            o.put("pageNumber", config.pageNumber)
             array.put(o)
         }
         return array.toString()
@@ -1794,6 +2047,7 @@ class SettingsManager(private val context: Context) {
         )
         if (result.isSuccess) {
             clearNonExportedLocalAssetsAfterBackupImport()
+            ThemeSettingsValidator.validateOnStartup(context, this)
         }
         return result
     }

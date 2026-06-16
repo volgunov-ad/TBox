@@ -550,6 +550,10 @@ class BackgroundService : Service() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+        DriveModeThemeWatcher(this, settingsManager, scope).start()
+        scope.launch {
+            ThemeSettingsValidator.validateOnStartup(this@BackgroundService, settingsManager)
+        }
         scope.launch {
             settingsManager.headUnitCanModeFlow.collect { mode ->
                 UniversalCanRepository.setMode(mode)

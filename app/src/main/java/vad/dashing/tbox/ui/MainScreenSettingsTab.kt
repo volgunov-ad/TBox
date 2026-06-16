@@ -90,6 +90,8 @@ fun MainScreenSettingsTab(
         settingsViewModel.mainScreenCornerButtonIconLight.collectAsStateWithLifecycle()
     val mainScreenCornerBtnIconDark by
         settingsViewModel.mainScreenCornerButtonIconDark.collectAsStateWithLifecycle()
+    val mainScreenPageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
+    val mainScreenPanelPageNumber by settingsViewModel.mainScreenPanelPageNumber.collectAsStateWithLifecycle()
     val mainScreenCanvasBgLight by
         settingsViewModel.mainScreenCanvasBackgroundLight.collectAsStateWithLifecycle()
     val mainScreenCanvasBgDark by
@@ -584,6 +586,26 @@ fun MainScreenSettingsTab(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_panels_title))
+        Text(
+            text = stringResource(R.string.settings_main_screen_page_count_title, mainScreenPageCount),
+            fontSize = 22.sp,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Text(
+            text = stringResource(R.string.settings_main_screen_page_count_hint),
+            fontSize = 18.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Slider(
+            value = mainScreenPageCount.toFloat(),
+            onValueChange = { settingsViewModel.saveMainScreenPageCount(it.roundToInt()) },
+            valueRange = SettingsManager.MIN_MAIN_SCREEN_PAGE_COUNT.toFloat()
+                ..SettingsManager.MAX_MAIN_SCREEN_PAGE_COUNT.toFloat(),
+            steps = SettingsManager.MAX_MAIN_SCREEN_PAGE_COUNT - SettingsManager.MIN_MAIN_SCREEN_PAGE_COUNT - 1,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         if (hasMainScreenPanels) {
             MainScreenPanelEditor(
                 panels = mainScreenPanelsList,
@@ -670,6 +692,14 @@ fun MainScreenSettingsTab(
             "",
             hasMainScreenPanels,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
+        )
+        SettingDropdownGeneric(
+            mainScreenPanelPageNumber,
+            { page -> settingsViewModel.saveMainScreenPanelPageNumber(page) },
+            stringResource(R.string.settings_main_screen_panel_page_title),
+            stringResource(R.string.settings_main_screen_panel_page_desc),
+            hasMainScreenPanels,
+            (1..mainScreenPageCount).toList(),
         )
         MainScreenPanelRelativeLayoutSettings(
             settingsViewModel = settingsViewModel,

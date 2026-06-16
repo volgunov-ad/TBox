@@ -152,6 +152,7 @@ internal class WidgetSelectionDialogState(
     var wholePanelShowTboxDisconnect by mutableStateOf(false)
     var wholePanelRows by mutableIntStateOf(2)
     var wholePanelCols by mutableIntStateOf(3)
+    var wholePanelPageNumber by mutableIntStateOf(1)
     /** Main-screen and floating whole-panel draft for clickAction. */
     var wholePanelClickAction by mutableStateOf(false)
     /**
@@ -167,6 +168,7 @@ internal class WidgetSelectionDialogState(
         wholePanelRows = cfg.rows
         wholePanelCols = cfg.cols
         wholePanelClickAction = cfg.clickAction
+        wholePanelPageNumber = cfg.pageNumber
     }
 
     fun syncWholePanelDraftFromFloating(cfg: FloatingDashboardConfig) {
@@ -380,6 +382,7 @@ internal fun WidgetColorThemeSegmentRow(
 @Composable
 private fun MainScreenPanelWholeSettingsSection(
     state: WidgetSelectionDialogState,
+    pageCount: Int,
     enabled: Boolean,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -428,6 +431,14 @@ private fun MainScreenPanelWholeSettingsSection(
             "",
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
+        )
+        SettingDropdownGeneric(
+            state.wholePanelPageNumber,
+            { state.wholePanelPageNumber = it },
+            stringResource(R.string.settings_main_screen_panel_page_title),
+            stringResource(R.string.settings_main_screen_panel_page_desc),
+            enabled,
+            (1..pageCount.coerceAtLeast(1)).toList(),
         )
     }
 }
@@ -502,6 +513,7 @@ internal fun WidgetSelectionDialogForm(
 ) {
     val context = LocalContext.current
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
+    val mainScreenPageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
     val notSelectedLabel = stringResource(R.string.widget_option_not_selected)
     val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets()
         .filter { it.isNotEmpty() && dataKeyFilter(it) }
@@ -529,6 +541,7 @@ internal fun WidgetSelectionDialogForm(
                     ) {
                         MainScreenPanelWholeSettingsSection(
                             state = state,
+                            pageCount = mainScreenPageCount,
                             enabled = true
                         )
                     }
@@ -1194,7 +1207,8 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         rows = state.wholePanelRows,
         cols = state.wholePanelCols,
         showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
-        clickAction = state.wholePanelClickAction
+        clickAction = state.wholePanelClickAction,
+        pageNumber = state.wholePanelPageNumber,
     )
 }
 

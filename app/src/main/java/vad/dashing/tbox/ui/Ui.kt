@@ -82,6 +82,11 @@ fun TboxApp(
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        settingsViewModel.validateThemeSettings(context)
+    }
 
     TboxAppTheme(theme = currentTheme) {
         CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
@@ -356,6 +361,9 @@ fun TboxScreen(
                     LeftMenuTabField.FLOATING_PANELS_SETTINGS.id -> FloatingPanelsSettingsTab(
                         settingsViewModel = settingsViewModel,
                     )
+                    LeftMenuTabField.THEMES.id -> ThemesTab(
+                        settingsViewModel = settingsViewModel,
+                    )
                     LeftMenuTabField.LOGS.id -> LogsTab(viewModel, settingsViewModel, onSaveToFile)
                     LeftMenuTabField.INFO.id -> InfoTab(viewModel, settingsViewModel, onServiceCommand)
                     LeftMenuTabField.CAN.id -> CanTab(viewModel, canViewModel, onSaveToFile)
@@ -401,6 +409,13 @@ fun ModemModeSelector(
         onServiceCommand = onServiceCommand,
         modifier = modifier
     )
+}
+
+@Composable
+fun ThemesTab(
+    settingsViewModel: SettingsViewModel,
+) {
+    ThemesTabContent(settingsViewModel = settingsViewModel)
 }
 
 @Composable

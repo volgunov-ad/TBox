@@ -65,6 +65,7 @@ fun LeftMenuTabField.menuIcon(): ImageVector = when (this) {
     LeftMenuTabField.SETTINGS -> Icons.Filled.Settings
     LeftMenuTabField.FLOATING_PANELS_SETTINGS ->
         ImageVector.vectorResource(R.drawable.ic_tab_floating_panels_settings)
+    LeftMenuTabField.THEMES -> ImageVector.vectorResource(R.drawable.ic_menu_themes)
     LeftMenuTabField.LOGS -> ImageVector.vectorResource(R.drawable.menu_icon_log)
     LeftMenuTabField.INFO -> Icons.Filled.Info
     LeftMenuTabField.CAN -> ImageVector.vectorResource(R.drawable.menu_icon_data)

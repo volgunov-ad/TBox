@@ -18,7 +18,8 @@ class WholePanelWidgetDialogSaveMergeTest {
         relHeight = 0.5f,
         background = false,
         clickAction = false,
-        showTboxDisconnectIndicator = false
+        showTboxDisconnectIndicator = false,
+        pageNumber = 1,
     )
 
     private val baseFloat = FloatingDashboardConfig(
@@ -57,7 +58,8 @@ class WholePanelWidgetDialogSaveMergeTest {
             rows = 99,
             cols = 0,
             showTboxDisconnectIndicator = true,
-            clickAction = true
+            clickAction = true,
+            pageNumber = 2,
         )
         val merged = mergeMainScreenPanelForWidgetDialogSave(baseMain, newWidgets, draft)
         assertEquals(newWidgets, merged.widgetsConfig)
@@ -66,6 +68,7 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(1, merged.cols)
         assertEquals(true, merged.showTboxDisconnectIndicator)
         assertEquals(true, merged.clickAction)
+        assertEquals(2, merged.pageNumber)
         assertEquals(baseMain.relWidth, merged.relWidth, 0f)
     }
 
