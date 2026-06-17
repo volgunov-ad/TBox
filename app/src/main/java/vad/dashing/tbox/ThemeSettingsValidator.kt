@@ -14,8 +14,15 @@ object ThemeSettingsValidator {
     private suspend fun validateActiveTheme(context: Context, settingsManager: SettingsManager) {
         val uri = settingsManager.activeThemeUriFlow.first().trim()
         if (uri.isEmpty()) return
-        if (ThemeFileResolver.isAccessible(context, uri)) return
-        settingsManager.clearActiveTheme()
+        when {
+            ThemeCacheKeys.isLikelyCacheKey(uri) -> {
+                if (!ThemeMaterialization.isMaterialized(context, uri)) {
+                    settingsManager.clearActiveTheme()
+                }
+            }
+            ThemeFileResolver.isAccessible(context, uri) -> Unit
+            else -> settingsManager.clearActiveTheme()
+        }
     }
 
     private suspend fun sanitizeDriveModeThemePaths(context: Context, settingsManager: SettingsManager) {

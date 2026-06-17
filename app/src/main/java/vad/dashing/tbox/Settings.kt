@@ -1317,6 +1317,10 @@ class SettingsManager(private val context: Context) {
         saveDriveModeThemePaths(current)
     }
 
+    suspend fun clearDriveModeThemePaths() {
+        saveDriveModeThemePaths(emptyMap())
+    }
+
     suspend fun saveMainScreenCornerButtonSizeDp(sizeDp: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_CORNER_BUTTON_SIZE_KEY] =

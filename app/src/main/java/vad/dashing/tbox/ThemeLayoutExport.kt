@@ -65,6 +65,11 @@ object ThemeLayoutExport {
         }
     }
 
+    fun parseSectionsFromThemeJson(json: String): Set<ThemeSection> {
+        val root = runCatching { JSONObject(json) }.getOrNull() ?: return emptySet()
+        return ThemeSection.parseJsonArray(root.optJSONArray("sections"))
+    }
+
     fun collectLauncherPackages(widgets: List<FloatingDashboardWidgetConfig>): Set<String> =
         widgets.mapNotNull { widget ->
             widget.launcherAppPackage.trim().takeIf { pkg ->

@@ -28,6 +28,72 @@ object ThemeBundleExport {
         val darkWallpaperDir: File?,
     )
 
+    data class ParsedThemeBundle(
+        val themeJson: String,
+        val icons: Map<String, ByteArray>,
+        val tileBackgrounds: Map<String, ByteArray>,
+        val lightWallpapers: Map<String, ByteArray>,
+        val darkWallpapers: Map<String, ByteArray>,
+    )
+
+    fun parseBundleBytes(bytes: ByteArray): Result<ParsedThemeBundle> {
+        var themeJson: String? = null
+        val icons = linkedMapOf<String, ByteArray>()
+        val tileBackgrounds = linkedMapOf<String, ByteArray>()
+        val lightWallpapers = linkedMapOf<String, ByteArray>()
+        val darkWallpapers = linkedMapOf<String, ByteArray>()
+
+        return runCatching {
+            ZipInputStream(bytes.inputStream()).use { zis ->
+                var entry = zis.nextEntry
+                while (entry != null) {
+                    when {
+                        entry.name == THEME_JSON_ENTRY -> {
+                            themeJson = zis.readBytes().toString(Charsets.UTF_8)
+                        }
+                        entry.name.startsWith(ASSETS_ICONS_DIR) && !entry.isDirectory -> {
+                            val filename = entry.name.removePrefix(ASSETS_ICONS_DIR)
+                            if (filename.isNotBlank()) {
+                                icons[filename] = zis.readBytes()
+                            }
+                        }
+                        entry.name.startsWith(ASSETS_TILE_BG_DIR) && !entry.isDirectory -> {
+                            val rel = entry.name.removePrefix(ASSETS_TILE_BG_DIR)
+                            if (rel.isNotBlank() && TileBackgroundImageStorage.isAllowedStoredRelPath(
+                                    "${TileBackgroundImageStorage.DIR_NAME}/$rel"
+                                )
+                            ) {
+                                tileBackgrounds[rel] = zis.readBytes()
+                            }
+                        }
+                        entry.name.startsWith(ASSETS_WALLPAPER_LIGHT_DIR) && !entry.isDirectory -> {
+                            val filename = entry.name.removePrefix(ASSETS_WALLPAPER_LIGHT_DIR)
+                            if (filename.isNotBlank()) {
+                                lightWallpapers[filename] = zis.readBytes()
+                            }
+                        }
+                        entry.name.startsWith(ASSETS_WALLPAPER_DARK_DIR) && !entry.isDirectory -> {
+                            val filename = entry.name.removePrefix(ASSETS_WALLPAPER_DARK_DIR)
+                            if (filename.isNotBlank()) {
+                                darkWallpapers[filename] = zis.readBytes()
+                            }
+                        }
+                    }
+                    zis.closeEntry()
+                    entry = zis.nextEntry
+                }
+            }
+            val json = themeJson ?: throw IllegalArgumentException("theme.json not found")
+            ParsedThemeBundle(
+                themeJson = json,
+                icons = icons,
+                tileBackgrounds = tileBackgrounds,
+                lightWallpapers = lightWallpapers,
+                darkWallpapers = darkWallpapers,
+            )
+        }
+    }
+
     suspend fun exportBundle(
         context: Context,
         settingsManager: SettingsManager,

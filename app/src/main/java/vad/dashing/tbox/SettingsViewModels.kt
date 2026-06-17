@@ -1933,8 +1933,28 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch { settingsManager.saveDriveModeThemePath(rawValue, uri) }
     }
 
+    suspend fun assignDriveModeTheme(
+        context: Context,
+        rawValue: Int,
+        sourceUri: String,
+    ): Result<Unit> {
+        return runCatching {
+            settingsManager.saveDriveModeThemePath(rawValue, sourceUri)
+            ThemeApply.materializeDriveModeThemeFromUri(context, rawValue, sourceUri).getOrThrow()
+        }
+    }
+
     fun clearDriveModeThemePath(rawValue: Int) {
         viewModelScope.launch { settingsManager.saveDriveModeThemePath(rawValue, "") }
+    }
+
+    suspend fun clearThemeStorage(context: Context) {
+        val activeKey = settingsManager.activeThemeUriFlow.first().trim()
+            .takeIf { ThemeCacheKeys.isLikelyCacheKey(it) && ThemeMaterialization.isMaterialized(context, it) }
+        withContext(Dispatchers.IO) {
+            ThemeMaterialization.clearThemeCachesExcept(context, activeKey)
+        }
+        settingsManager.clearDriveModeThemePaths()
     }
 
     suspend fun validateThemeSettings(context: Context) {

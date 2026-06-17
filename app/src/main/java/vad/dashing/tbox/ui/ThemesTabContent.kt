@@ -40,7 +40,9 @@ import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ThemeBundleExport
+import vad.dashing.tbox.ThemeCacheKeys
 import vad.dashing.tbox.ThemeFileResolver
+import vad.dashing.tbox.ThemeMaterialization
 import vad.dashing.tbox.ThemeSection
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 
@@ -57,6 +59,7 @@ fun ThemesTabContent(
     val driveModeThemePaths by settingsViewModel.driveModeThemePaths.collectAsStateWithLifecycle()
 
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showClearCacheDialog by remember { mutableStateOf(false) }
     var includeMainScreen by remember { mutableStateOf(true) }
     var includeFloatingPanels by remember { mutableStateOf(true) }
     var includeAppIcons by remember { mutableStateOf(false) }
@@ -121,8 +124,18 @@ fun ThemesTabContent(
                     android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 )
             }
-            settingsViewModel.saveDriveModeThemePath(rawValue, uri.toString())
+            val result = settingsViewModel.assignDriveModeTheme(context, rawValue, uri.toString())
             pendingDriveModeRawValue = -1
+            withContext(Dispatchers.Main) {
+                if (result.isFailure) {
+                    val msg = result.exceptionOrNull()?.message.orEmpty()
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_theme_drive_mode_error, msg),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
         }
     }
 
@@ -150,9 +163,17 @@ fun ThemesTabContent(
         val activePath = activeThemeUri.trim()
         val activeDisplay = when {
             activePath.isEmpty() -> stringResource(R.string.themes_active_none)
+            ThemeCacheKeys.isLikelyCacheKey(activePath) -> {
+                if (!ThemeMaterialization.isMaterialized(context, activePath)) {
+                    stringResource(R.string.themes_active_cache_missing)
+                } else {
+                    ThemeMaterialization.readManifest(context, activePath)?.sourceDisplayName
+                        ?: ThemeMaterialization.displayNameForCacheKey(activePath)
+                }
+            }
             !ThemeFileResolver.isAccessible(context, activePath) ->
                 stringResource(R.string.themes_active_file_missing)
-            else -> activePath
+            else -> ThemeFileResolver.displayName(activePath)
         }
         Text(text = activeDisplay, fontSize = 20.sp, modifier = Modifier.padding(bottom = 8.dp))
 
@@ -165,6 +186,15 @@ fun ThemesTabContent(
                 .padding(bottom = 16.dp),
         ) {
             Text(stringResource(R.string.themes_apply), fontSize = 22.sp)
+        }
+
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { showClearCacheDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+        ) {
+            Text(stringResource(R.string.themes_clear_cache), fontSize = 22.sp)
         }
 
         SettingsTitle(stringResource(R.string.themes_drive_mode_section))
@@ -274,6 +304,40 @@ fun ThemesTabContent(
             },
             dismissButton = {
                 OutlinedButton(onClick = rememberWrappedOnClick { showCreateDialog = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (showClearCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheDialog = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.themes_clear_cache_dialog_title)) },
+            text = {
+                AppAlertDialogText(stringResource(R.string.themes_clear_cache_dialog_message))
+            },
+            confirmButton = {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        showClearCacheDialog = false
+                        scope.launch {
+                            settingsViewModel.clearThemeStorage(context)
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    R.string.toast_theme_cache_cleared,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.themes_clear_cache_confirm))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = rememberWrappedOnClick { showClearCacheDialog = false }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },

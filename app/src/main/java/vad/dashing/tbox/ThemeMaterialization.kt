@@ -1,0 +1,284 @@
+package vad.dashing.tbox
+
+import android.content.Context
+import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+
+/**
+ * Per-theme materialized cache under [filesDir]/[THEMES_ROOT_DIR]/{cacheKey}/.
+ * Materialization unpacks zip assets once; activation loads JSON and copies assets into live paths.
+ */
+object ThemeMaterialization {
+
+    const val THEMES_ROOT_DIR = "themes"
+    const val MANIFEST_FILE = "manifest.json"
+    const val THEME_JSON_FILE = "theme.json"
+    const val WALLPAPER_LIGHT_DIR = "wallpaper/light"
+    const val WALLPAPER_DARK_DIR = "wallpaper/dark"
+    const val ICONS_DIR = "icons"
+    const val TILE_BACKGROUNDS_DIR = "tile_backgrounds"
+
+    data class ThemeManifest(
+        val cacheKey: String,
+        val sourceUri: String,
+        val sourceDisplayName: String,
+        val materializedAtMillis: Long,
+        val fingerprint: String,
+        val sections: Set<ThemeSection>,
+    )
+
+    data class MaterializeResult(
+        val manifest: ThemeManifest,
+        val iconsWritten: Int,
+        val tileBackgroundsWritten: Int,
+        val lightWallpaperCount: Int,
+        val darkWallpaperCount: Int,
+    )
+
+    fun themesRootDir(context: Context): File = File(context.filesDir, THEMES_ROOT_DIR)
+
+    fun cacheDir(context: Context, cacheKey: String): File =
+        File(themesRootDir(context), ThemeCacheKeys.sanitizeCacheKey(cacheKey))
+
+    fun isMaterialized(context: Context, cacheKey: String): Boolean {
+        val dir = cacheDir(context, cacheKey)
+        return File(dir, MANIFEST_FILE).isFile && File(dir, THEME_JSON_FILE).isFile
+    }
+
+    fun readManifest(context: Context, cacheKey: String): ThemeManifest? {
+        val file = File(cacheDir(context, cacheKey), MANIFEST_FILE)
+        if (!file.isFile) return null
+        return runCatching { parseManifest(JSONObject(file.readText())) }.getOrNull()
+    }
+
+    fun displayNameForCacheKey(cacheKey: String): String = cacheKey.trim()
+
+    suspend fun materializeFromBytes(
+        context: Context,
+        bytes: ByteArray,
+        cacheKey: String,
+        sourceUri: String,
+        syncExisting: Boolean,
+    ): Result<MaterializeResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val dir = cacheDir(context, cacheKey)
+            dir.mkdirs()
+            val parsed = ThemeBundleExport.parseBundleBytes(bytes).getOrThrow()
+            File(dir, THEME_JSON_FILE).writeText(parsed.themeJson)
+
+            val iconsWritten = syncAssetDirectory(
+                targetDir = File(dir, ICONS_DIR),
+                archiveFiles = parsed.icons,
+                syncExisting = syncExisting,
+            )
+            val tileBackgroundsWritten = syncAssetDirectory(
+                targetDir = File(dir, TILE_BACKGROUNDS_DIR),
+                archiveFiles = parsed.tileBackgrounds,
+                syncExisting = syncExisting,
+            )
+            val lightWallpaperCount = syncAssetDirectory(
+                targetDir = File(dir, WALLPAPER_LIGHT_DIR),
+                archiveFiles = parsed.lightWallpapers,
+                syncExisting = syncExisting,
+            )
+            val darkWallpaperCount = syncAssetDirectory(
+                targetDir = File(dir, WALLPAPER_DARK_DIR),
+                archiveFiles = parsed.darkWallpapers,
+                syncExisting = syncExisting,
+            )
+
+            val sections = ThemeLayoutExport.parseSectionsFromThemeJson(parsed.themeJson)
+            val fingerprint = ThemeFingerprint.sha256(parsed.themeJson)
+            val manifest = ThemeManifest(
+                cacheKey = cacheKey,
+                sourceUri = sourceUri.trim(),
+                sourceDisplayName = ThemeFileResolver.displayName(sourceUri),
+                materializedAtMillis = System.currentTimeMillis(),
+                fingerprint = fingerprint,
+                sections = sections,
+            )
+            writeManifest(dir, manifest)
+            MaterializeResult(
+                manifest = manifest,
+                iconsWritten = iconsWritten,
+                tileBackgroundsWritten = tileBackgroundsWritten,
+                lightWallpaperCount = lightWallpaperCount,
+                darkWallpaperCount = darkWallpaperCount,
+            )
+        }
+    }
+
+    suspend fun activateFromCache(
+        context: Context,
+        settingsManager: SettingsManager,
+        settingsViewModel: SettingsViewModel?,
+        cacheKey: String,
+    ): Result<ThemeApply.ApplyResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val dir = cacheDir(context, cacheKey)
+            val manifest = readManifest(context, cacheKey)
+                ?: throw IllegalArgumentException("theme_cache_missing")
+            val themeJson = File(dir, THEME_JSON_FILE).readText()
+            val importResult = ThemeLayoutExport.importJson(context, settingsManager, themeJson)
+            if (importResult.isFailure) {
+                throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
+            }
+            val sections = importResult.getOrThrow()
+
+            applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir)
+
+            val iconsImported = installIconsFromCache(context, dir)
+            val tileBackgroundsImported = installTileBackgroundsFromCache(context, dir)
+
+            if (iconsImported > 0) {
+                settingsManager.bumpLauncherAppIconRevision()
+            }
+            if (tileBackgroundsImported > 0) {
+                settingsManager.bumpTileBackgroundImageRevision()
+            }
+
+            settingsManager.saveActiveTheme(
+                uri = cacheKey,
+                fingerprint = manifest.fingerprint,
+                sections = sections,
+            )
+
+            ThemeApply.ApplyResult(
+                sections = sections,
+                iconsImported = iconsImported,
+                tileBackgroundsImported = tileBackgroundsImported,
+            )
+        }
+    }
+
+    fun clearThemeCachesExcept(context: Context, keepCacheKey: String?) {
+        val keep = keepCacheKey?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { ThemeCacheKeys.sanitizeCacheKey(it) }
+        val root = themesRootDir(context)
+        if (!root.isDirectory) return
+        root.listFiles()?.forEach { child ->
+            if (!child.isDirectory) return@forEach
+            if (keep != null && child.name == keep) return@forEach
+            child.deleteRecursively()
+        }
+    }
+
+    private suspend fun applyWallpaperDirsFromCache(
+        settingsManager: SettingsManager,
+        settingsViewModel: SettingsViewModel?,
+        cacheDir: File,
+    ) {
+        val lightDir = File(cacheDir, WALLPAPER_LIGHT_DIR)
+        if (lightDir.isDirectory && lightDir.listFiles()?.any { it.isFile } == true) {
+            val uri = Uri.fromFile(lightDir).toString()
+            if (settingsViewModel != null) {
+                settingsViewModel.saveMainScreenWallpaperLightFolderUri(uri)
+            } else {
+                settingsManager.saveMainScreenWallpaperLightFolderUri(uri)
+            }
+        }
+        val darkDir = File(cacheDir, WALLPAPER_DARK_DIR)
+        if (darkDir.isDirectory && darkDir.listFiles()?.any { it.isFile } == true) {
+            val uri = Uri.fromFile(darkDir).toString()
+            if (settingsViewModel != null) {
+                settingsViewModel.saveMainScreenWallpaperDarkFolderUri(uri)
+            } else {
+                settingsManager.saveMainScreenWallpaperDarkFolderUri(uri)
+            }
+        }
+    }
+
+    private fun installIconsFromCache(context: Context, cacheDir: File): Int {
+        val source = File(cacheDir, ICONS_DIR)
+        if (!source.isDirectory) return 0
+        val destRoot = File(context.filesDir, SettingsManager.LAUNCHER_APP_ICONS_DIR)
+        destRoot.mkdirs()
+        var count = 0
+        source.listFiles()?.filter { it.isFile }?.forEach { file ->
+            val dest = File(destRoot, file.name)
+            if (!dest.exists() || dest.length() != file.length()) {
+                file.copyTo(dest, overwrite = true)
+            }
+            count++
+        }
+        return count
+    }
+
+    private fun installTileBackgroundsFromCache(context: Context, cacheDir: File): Int {
+        val source = File(cacheDir, TILE_BACKGROUNDS_DIR)
+        if (!source.isDirectory) return 0
+        var count = 0
+        source.walkTopDown().filter { it.isFile }.forEach { file ->
+            val rel = file.relativeTo(source).path.replace('\\', '/')
+            val storedRel = "${TileBackgroundImageStorage.DIR_NAME}/$rel"
+            if (!TileBackgroundImageStorage.isAllowedStoredRelPath(storedRel)) return@forEach
+            val dest = File(context.filesDir, storedRel)
+            dest.parentFile?.mkdirs()
+            if (!dest.exists() || dest.length() != file.length()) {
+                file.copyTo(dest, overwrite = true)
+            }
+            count++
+        }
+        return count
+    }
+
+    /**
+     * Writes [archiveFiles]; when [syncExisting] is true, keeps existing same-name files and
+     * deletes cache files that are not present in the archive.
+     */
+    private fun syncAssetDirectory(
+        targetDir: File,
+        archiveFiles: Map<String, ByteArray>,
+        syncExisting: Boolean,
+    ): Int {
+        targetDir.mkdirs()
+        if (syncExisting) {
+            val archiveNames = archiveFiles.keys.toSet()
+            if (targetDir.isDirectory) {
+                targetDir.walkTopDown().filter { it.isFile }.forEach { existing ->
+                    val rel = existing.relativeTo(targetDir).path.replace('\\', '/')
+                    if (rel !in archiveNames) {
+                        existing.delete()
+                    }
+                }
+            }
+        }
+        var written = 0
+        archiveFiles.forEach { (name, bytes) ->
+            val dest = File(targetDir, name)
+            if (syncExisting && dest.isFile) {
+                return@forEach
+            }
+            dest.parentFile?.mkdirs()
+            dest.writeBytes(bytes)
+            written++
+        }
+        return written
+    }
+
+    private fun writeManifest(dir: File, manifest: ThemeManifest) {
+        val json = JSONObject()
+        json.put("cacheKey", manifest.cacheKey)
+        json.put("sourceUri", manifest.sourceUri)
+        json.put("sourceDisplayName", manifest.sourceDisplayName)
+        json.put("materializedAtMillis", manifest.materializedAtMillis)
+        json.put("fingerprint", manifest.fingerprint)
+        json.put("sections", ThemeSection.toJsonArray(manifest.sections))
+        File(dir, MANIFEST_FILE).writeText(json.toString(2))
+    }
+
+    private fun parseManifest(obj: JSONObject): ThemeManifest {
+        return ThemeManifest(
+            cacheKey = obj.optString("cacheKey"),
+            sourceUri = obj.optString("sourceUri"),
+            sourceDisplayName = obj.optString("sourceDisplayName"),
+            materializedAtMillis = obj.optLong("materializedAtMillis"),
+            fingerprint = obj.optString("fingerprint"),
+            sections = ThemeSection.parseJsonArray(obj.optJSONArray("sections")),
+        )
+    }
+}

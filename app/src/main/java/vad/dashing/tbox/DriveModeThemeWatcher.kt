@@ -17,7 +17,7 @@ class DriveModeThemeWatcher(
     private val settingsManager: SettingsManager,
     private val scope: CoroutineScope,
 ) {
-    private var lastAppliedUri: String? = null
+    private var lastAppliedCacheKey: String? = null
     private var lastAppliedKey: Int? = null
 
     fun start() {
@@ -40,19 +40,29 @@ class DriveModeThemeWatcher(
                 .collect { (paths, drive, wet) ->
                     if (paths.isEmpty()) return@collect
                     val key = resolveDriveModeThemeKey(drive, wet) ?: return@collect
-                    val uri = paths[key]?.trim().orEmpty()
-                    if (uri.isEmpty()) return@collect
-                    if (uri == lastAppliedUri && key == lastAppliedKey) return@collect
-                    if (!ThemeFileResolver.isAccessible(context, uri)) return@collect
+                    val sourceUri = paths[key]?.trim().orEmpty()
+                    if (sourceUri.isEmpty()) return@collect
+                    val cacheKey = ThemeCacheKeys.driveModeCacheKey(key)
+                    if (cacheKey == lastAppliedCacheKey && key == lastAppliedKey) return@collect
                     withContext(Dispatchers.IO) {
-                        val result = ThemeApply.applyFromUri(
+                        if (!ThemeMaterialization.isMaterialized(context, cacheKey)) {
+                            if (!ThemeFileResolver.isAccessible(context, sourceUri)) return@withContext
+                            val materialized = ThemeApply.materializeDriveModeThemeFromUri(
+                                context = context,
+                                rawValue = key,
+                                sourceUri = sourceUri,
+                            )
+                            if (materialized.isFailure) return@withContext
+                        }
+                        if (!ThemeMaterialization.isMaterialized(context, cacheKey)) return@withContext
+                        val result = ThemeApply.activateFromCache(
                             context = context,
                             settingsManager = settingsManager,
                             settingsViewModel = null,
-                            uriString = uri,
+                            cacheKey = cacheKey,
                         )
                         if (result.isSuccess) {
-                            lastAppliedUri = uri
+                            lastAppliedCacheKey = cacheKey
                             lastAppliedKey = key
                         }
                     }
@@ -68,7 +78,7 @@ class DriveModeThemeWatcher(
             )
         } else {
             UniversalCanRepository.enqueueClearSource(SOURCE_ID)
-            lastAppliedUri = null
+            lastAppliedCacheKey = null
             lastAppliedKey = null
         }
     }

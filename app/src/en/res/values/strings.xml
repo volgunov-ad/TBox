@@ -342,6 +342,13 @@
     <string name="themes_drive_mode_not_assigned">Not assigned</string>
     <string name="themes_drive_mode_pick">Choose file</string>
     <string name="themes_drive_mode_clear">Remove</string>
+    <string name="themes_active_cache_missing">Theme cache not found</string>
+    <string name="themes_clear_cache">Clear theme folder</string>
+    <string name="themes_clear_cache_dialog_title">Clear theme folder?</string>
+    <string name="themes_clear_cache_dialog_message">All materialized themes except the current active one will be deleted. Drive mode theme assignments will also be reset.</string>
+    <string name="themes_clear_cache_confirm">Clear</string>
+    <string name="toast_theme_cache_cleared">Theme folder cleared</string>
+    <string name="toast_theme_drive_mode_error">Failed to prepare drive mode theme: %1$s</string>
     <string name="toast_theme_create_ok">Theme saved</string>
     <string name="toast_theme_apply_ok">Theme applied</string>
     <string name="toast_theme_apply_error">Failed to apply theme: %1$s</string>
