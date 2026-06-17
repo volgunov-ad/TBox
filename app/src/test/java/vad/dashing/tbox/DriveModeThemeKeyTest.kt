@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
@@ -22,6 +23,48 @@ class DriveModeThemeKeyTest {
     @Test
     fun resolveDriveModeThemeKey_returnsNullWhenUnknown() {
         assertNull(DriveModeThemeWatcher.resolveDriveModeThemeKey(drive = 99, wet6dct = 99))
+    }
+
+    @Test
+    fun resolveActivationRequest_returnsNullWhenPathsEmpty() {
+        assertNull(
+            DriveModeThemeWatcher.resolveActivationRequest(
+                paths = emptyMap(),
+                drive = 2,
+                wet6dct = null,
+            ),
+        )
+    }
+
+    @Test
+    fun resolveActivationRequest_mapsCurrentModeToCacheKey() {
+        val request = DriveModeThemeWatcher.resolveActivationRequest(
+            paths = mapOf(2 to "content://theme/eco.tboxtheme"),
+            drive = 2,
+            wet6dct = null,
+        )
+        assertNotNull(request)
+        assertEquals(2, request!!.modeRawValue)
+        assertEquals("content://theme/eco.tboxtheme", request.sourceUri)
+        assertEquals(ThemeCacheKeys.driveModeCacheKey(2), request.cacheKey)
+    }
+
+    @Test
+    fun resolveActivationRequest_ignoresUnrelatedModeAssignments() {
+        val first = DriveModeThemeWatcher.resolveActivationRequest(
+            paths = mapOf(2 to "content://theme/eco.tboxtheme"),
+            drive = 2,
+            wet6dct = null,
+        )
+        val second = DriveModeThemeWatcher.resolveActivationRequest(
+            paths = mapOf(
+                2 to "content://theme/eco.tboxtheme",
+                3 to "content://theme/sport.tboxtheme",
+            ),
+            drive = 2,
+            wet6dct = null,
+        )
+        assertEquals(first, second)
     }
 
     @Test
