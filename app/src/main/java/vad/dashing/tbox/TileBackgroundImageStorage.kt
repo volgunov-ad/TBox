@@ -74,6 +74,26 @@ object TileBackgroundImageStorage {
     fun hasSharedOverride(filesDir: File, relPath: String?): Boolean =
         resolveSharedFile(filesDir, relPath) != null
 
+    fun hasResolvableFile(filesDir: File, relPath: String?, lookup: LauncherAppIconPaths.Lookup): Boolean =
+        resolveFile(filesDir, relPath, lookup) != null
+
+    fun deleteThemeCacheFile(filesDir: File, relPath: String?, cacheKey: String): Boolean {
+        val file = resolveThemeCacheFile(filesDir, relPath, cacheKey) ?: return false
+        return file.delete()
+    }
+
+    fun deleteSharedFile(filesDir: File, relPath: String?): Boolean {
+        val file = resolveSharedFile(filesDir, relPath) ?: return false
+        return file.delete()
+    }
+
+    fun clearSharedDir(filesDir: File) {
+        val dir = sharedDir(filesDir)
+        if (!dir.isDirectory) return
+        dir.deleteRecursively()
+        dir.mkdirs()
+    }
+
     fun countThemeCacheFiles(filesDir: File, cacheKey: String): Int {
         val dir = themeCacheDir(filesDir, cacheKey)
         if (!dir.isDirectory) return 0

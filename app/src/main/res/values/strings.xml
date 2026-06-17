@@ -358,10 +358,16 @@
     <string name="themes_clear_cache_dialog_message">Будут удалены все материализованные темы, кроме текущей активной. Назначения тем по режиму вождения также будут сброшены.</string>
     <string name="themes_clear_cache_confirm">Очистить</string>
     <string name="themes_clear_shared_icons">Очистить общую папку иконок</string>
+    <string name="themes_clear_shared_tile_backgrounds">Очистить общую папку фонов плиток</string>
+    <string name="themes_clear_shared_assets_hint">Удаляет только ручные файлы в общих папках. Кэш активной темы (files/themes/) не затрагивается.</string>
     <string name="themes_clear_shared_icons_hint">Удаляет ручные иконки из launcher_app_icons. Иконки в кэше активной темы не затрагиваются; для пакетов, где есть и тема, и ручной файл, на экране по-прежнему показывается иконка из темы.</string>
     <string name="themes_clear_shared_icons_dialog_title">Очистить общую папку иконок?</string>
     <string name="themes_clear_shared_icons_dialog_message">Будут удалены все иконки из общей папки (ручные замены для виджетов «Ярлык приложения» и музыкального плеера). Иконки, хранящиеся внутри материализованных тем, останутся.</string>
     <string name="themes_clear_shared_icons_confirm">Очистить</string>
+    <string name="themes_clear_shared_tile_backgrounds_dialog_title">Очистить общую папку фонов плиток?</string>
+    <string name="themes_clear_shared_tile_backgrounds_dialog_message">Будут удалены все фоновые картинки из общей папки tile_backgrounds (ручные замены в диалоге плитки). Фоны внутри материализованных тем останутся.</string>
+    <string name="themes_clear_shared_tile_backgrounds_confirm">Очистить</string>
+    <string name="toast_theme_shared_tile_backgrounds_cleared">Общая папка фонов плиток очищена</string>
     <string name="toast_theme_shared_icons_cleared">Общая папка иконок очищена</string>
     <string name="toast_theme_cache_cleared">Папка тем очищена</string>
     <string name="toast_theme_drive_mode_error">Не удалось подготовить тему для режима вождения: %1$s</string>

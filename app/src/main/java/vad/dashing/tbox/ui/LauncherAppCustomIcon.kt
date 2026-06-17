@@ -15,7 +15,7 @@ import java.io.File
 
 /**
  * Decodes a custom icon for app-launcher / music-player widgets.
- * Checks shared overrides first, then the active theme cache when applicable.
+ * Checks the active theme cache first, then shared overrides.
  */
 fun decodeLauncherAppCustomIconIfPresent(
     context: Context,

@@ -355,10 +355,16 @@
     <string name="themes_clear_cache_dialog_message">All materialized themes except the current active one will be deleted. Drive mode theme assignments will also be reset.</string>
     <string name="themes_clear_cache_confirm">Clear</string>
     <string name="themes_clear_shared_icons">Clear shared icon folder</string>
+    <string name="themes_clear_shared_tile_backgrounds">Clear shared tile backgrounds</string>
+    <string name="themes_clear_shared_assets_hint">Deletes manual files in shared folders only. The active theme cache (files/themes/) is not affected.</string>
     <string name="themes_clear_shared_icons_hint">Removes manual icons from launcher_app_icons. Theme cache icons are kept; where both exist, the theme icon is still shown on screen.</string>
     <string name="themes_clear_shared_icons_dialog_title">Clear shared icon folder?</string>
     <string name="themes_clear_shared_icons_dialog_message">All icons in the shared folder (manual overrides for App launcher and music player widgets) will be deleted. Icons stored inside materialized themes will remain.</string>
     <string name="themes_clear_shared_icons_confirm">Clear</string>
+    <string name="themes_clear_shared_tile_backgrounds_dialog_title">Clear shared tile background folder?</string>
+    <string name="themes_clear_shared_tile_backgrounds_dialog_message">All images in the shared tile_backgrounds folder (manual overrides from the tile dialog) will be deleted. Backgrounds inside materialized themes will remain.</string>
+    <string name="themes_clear_shared_tile_backgrounds_confirm">Clear</string>
+    <string name="toast_theme_shared_tile_backgrounds_cleared">Shared tile background folder cleared</string>
     <string name="toast_theme_shared_icons_cleared">Shared icon folder cleared</string>
     <string name="toast_theme_cache_cleared">Theme folder cleared</string>
     <string name="toast_theme_drive_mode_error">Failed to prepare drive mode theme: %1$s</string>

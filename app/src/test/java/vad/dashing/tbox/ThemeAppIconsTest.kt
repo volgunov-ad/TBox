@@ -98,6 +98,24 @@ class ThemeAppIconsTest {
     }
 
     @Test
+    fun clearCustomLauncherAppIcon_deletesThemeCacheBeforeShared() {
+        val root = createTempDir()
+        val shared = LauncherAppIconPaths.sharedIconsDir(root).apply { mkdirs() }
+        val themeIcons = LauncherAppIconPaths.themeIconsDir(root, "my_theme").apply { mkdirs() }
+        File(shared, "com.example.app").writeBytes(byteArrayOf(1))
+        File(themeIcons, "com.example.app").writeBytes(byteArrayOf(2))
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "my_theme",
+            activeThemeSections = setOf(ThemeSection.APP_ICONS),
+        )
+        assertTrue(LauncherAppIconPaths.deleteThemeCacheIcon(root, "com.example.app", lookup))
+        assertArrayEquals(byteArrayOf(1), LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup)!!.readBytes())
+        assertTrue(LauncherAppIconPaths.deleteSharedIcon(root, "com.example.app"))
+        assertNull(LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup))
+        root.deleteRecursively()
+    }
+
+    @Test
     fun hasSharedOverride_onlyChecksSharedFolder() {
         val root = createTempDir()
         val themeIcons = LauncherAppIconPaths.themeIconsDir(root, "my_theme").apply { mkdirs() }

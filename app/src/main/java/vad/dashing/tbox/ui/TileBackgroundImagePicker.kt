@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetTileBackgroundImageResult
 import vad.dashing.tbox.SettingsViewModel
@@ -38,14 +40,20 @@ internal fun TileBackgroundImageSettingsSection(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
+    val tileRevision by settingsViewModel.tileBackgroundImageRevision.collectAsStateWithLifecycle()
     val darkSegment = state.advancedColorThemeSegment == 1
     val currentPath = if (darkSegment) {
         state.tileBackgroundImageRelPathDark
     } else {
         state.tileBackgroundImageRelPathLight
     }
-    val hasImage = !currentPath.isNullOrBlank() &&
-        TileBackgroundImageStorage.isAllowedStoredRelPath(currentPath)
+    var hasImage by remember { mutableStateOf(false) }
+    LaunchedEffect(currentPath, tileRevision, iconLookup, darkSegment) {
+        hasImage = !currentPath.isNullOrBlank() &&
+            TileBackgroundImageStorage.isAllowedStoredRelPath(currentPath) &&
+            TileBackgroundImageStorage.hasResolvableFile(context.filesDir, currentPath, iconLookup)
+    }
     val canPickImage = remember(context) {
         android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
             .resolveActivity(context.packageManager) != null

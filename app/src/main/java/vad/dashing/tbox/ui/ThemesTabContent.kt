@@ -65,6 +65,7 @@ fun ThemesTabContent(
     var showCreateDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showClearSharedIconsDialog by remember { mutableStateOf(false) }
+    var showClearSharedTileBackgroundsDialog by remember { mutableStateOf(false) }
     var includeMainScreen by remember { mutableStateOf(true) }
     var includeFloatingPanels by remember { mutableStateOf(true) }
     var includeAppIcons by remember { mutableStateOf(true) }
@@ -270,13 +271,39 @@ fun ThemesTabContent(
             Text(stringResource(R.string.themes_clear_cache), fontSize = 22.sp)
         }
 
-        OutlinedButton(
-            onClick = rememberWrappedOnClick { showClearSharedIconsDialog = true },
+        Text(
+            text = stringResource(R.string.themes_clear_shared_assets_hint),
+            fontSize = 16.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.themes_clear_shared_icons), fontSize = 22.sp)
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { showClearSharedIconsDialog = true },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    stringResource(R.string.themes_clear_shared_icons),
+                    fontSize = 18.sp,
+                    maxLines = 2,
+                )
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { showClearSharedTileBackgroundsDialog = true },
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    stringResource(R.string.themes_clear_shared_tile_backgrounds),
+                    fontSize = 18.sp,
+                    maxLines = 2,
+                )
+            }
         }
 
         SettingsTitle(stringResource(R.string.themes_drive_mode_section))
@@ -496,6 +523,40 @@ fun ThemesTabContent(
             },
             dismissButton = {
                 OutlinedButton(onClick = rememberWrappedOnClick { showClearSharedIconsDialog = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (showClearSharedTileBackgroundsDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearSharedTileBackgroundsDialog = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.themes_clear_shared_tile_backgrounds_dialog_title)) },
+            text = {
+                AppAlertDialogText(stringResource(R.string.themes_clear_shared_tile_backgrounds_dialog_message))
+            },
+            confirmButton = {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        showClearSharedTileBackgroundsDialog = false
+                        scope.launch {
+                            settingsViewModel.clearSharedTileBackgroundsFolder()
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    R.string.toast_theme_shared_tile_backgrounds_cleared,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.themes_clear_shared_tile_backgrounds_confirm))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = rememberWrappedOnClick { showClearSharedTileBackgroundsDialog = false }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },

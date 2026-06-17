@@ -1420,6 +1420,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         settingsManager.clearSharedLauncherAppIconsFolder()
     }
 
+    suspend fun clearSharedTileBackgroundsFolder() {
+        settingsManager.clearSharedTileBackgroundsFolder()
+    }
+
     fun setTileBackgroundImageFromUri(
         panelStorageId: String,
         widgetIndex: Int,

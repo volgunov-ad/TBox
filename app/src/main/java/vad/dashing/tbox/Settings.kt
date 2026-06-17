@@ -1450,7 +1450,8 @@ class SettingsManager(private val context: Context) {
     suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
         withContext(Dispatchers.IO) {
             if (packageName.isBlank()) return@withContext false
-            LauncherAppIconPaths.hasSharedOverride(context.filesDir, packageName)
+            val lookup = launcherAppIconLookup()
+            LauncherAppIconPaths.hasResolvableIcon(context.filesDir, packageName, lookup)
         }
 
     suspend fun clearSharedLauncherAppIconsFolder() {
@@ -1474,8 +1475,21 @@ class SettingsManager(private val context: Context) {
     suspend fun clearCustomLauncherAppIcon(packageName: String) {
         withContext(Dispatchers.IO) {
             if (packageName.isBlank()) return@withContext
-            launcherAppIconFile(packageName).takeIf { it.exists() }?.delete()
-            bumpLauncherAppIconRevision()
+            val lookup = launcherAppIconLookup()
+            if (LauncherAppIconPaths.deleteThemeCacheIcon(context.filesDir, packageName, lookup)) {
+                bumpLauncherAppIconRevision()
+                return@withContext
+            }
+            if (LauncherAppIconPaths.deleteSharedIcon(context.filesDir, packageName)) {
+                bumpLauncherAppIconRevision()
+            }
+        }
+    }
+
+    suspend fun clearSharedTileBackgroundsFolder() {
+        withContext(Dispatchers.IO) {
+            TileBackgroundImageStorage.clearSharedDir(context.filesDir)
+            bumpTileBackgroundImageRevision()
         }
     }
 
@@ -1532,8 +1546,28 @@ class SettingsManager(private val context: Context) {
             val dest = File(context.filesDir, rel.replace('/', File.separatorChar))
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                dest.takeIf { it.exists() }?.delete()
-                bumpTileBackgroundImageRevision()
+                val lookup = launcherAppIconLookup()
+                if (TileBackgroundImageStorage.themeSectionsIncludeTileBackgrounds(lookup) &&
+                    TileBackgroundImageStorage.deleteThemeCacheFile(
+                        context.filesDir,
+                        rel,
+                        lookup.activeThemeCacheKey,
+                    )
+                ) {
+                    bumpTileBackgroundImageRevision()
+                    val stillVisible = TileBackgroundImageStorage.hasResolvableFile(
+                        context.filesDir,
+                        rel,
+                        lookup,
+                    )
+                    return@withContext Pair(
+                        SetTileBackgroundImageResult.Success,
+                        if (stillVisible) rel else null,
+                    )
+                }
+                if (TileBackgroundImageStorage.deleteSharedFile(context.filesDir, rel)) {
+                    bumpTileBackgroundImageRevision()
+                }
                 return@withContext Pair(SetTileBackgroundImageResult.Success, null)
             }
             val bounds = runCatching {

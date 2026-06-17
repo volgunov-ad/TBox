@@ -64,6 +64,33 @@ object LauncherAppIconPaths {
     fun hasSharedOverride(filesDir: File, packageName: String): Boolean =
         resolveStoredIconFile(sharedIconsDir(filesDir), packageName) != null
 
+    fun hasThemeCacheIcon(filesDir: File, packageName: String, lookup: Lookup): Boolean {
+        if (ThemeSection.APP_ICONS !in lookup.activeThemeSections) return false
+        val cacheKey = lookup.activeThemeCacheKey.trim()
+        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
+        val themeDir = themeIconsDir(filesDir, cacheKey)
+        if (!themeDir.isDirectory) return false
+        return resolveStoredIconFile(themeDir, packageName) != null
+    }
+
+    fun hasResolvableIcon(filesDir: File, packageName: String, lookup: Lookup): Boolean =
+        resolveIconFile(filesDir, packageName, lookup) != null
+
+    fun deleteThemeCacheIcon(filesDir: File, packageName: String, lookup: Lookup): Boolean {
+        if (ThemeSection.APP_ICONS !in lookup.activeThemeSections) return false
+        val cacheKey = lookup.activeThemeCacheKey.trim()
+        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
+        val themeDir = themeIconsDir(filesDir, cacheKey)
+        if (!themeDir.isDirectory) return false
+        val file = resolveStoredIconFile(themeDir, packageName) ?: return false
+        return file.delete()
+    }
+
+    fun deleteSharedIcon(filesDir: File, packageName: String): Boolean {
+        val file = resolveStoredIconFile(sharedIconsDir(filesDir), packageName) ?: return false
+        return file.delete()
+    }
+
     fun listStoredPackageNames(iconsDir: File): Set<String> {
         if (!iconsDir.isDirectory) return emptySet()
         return iconsDir.listFiles()

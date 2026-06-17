@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -85,6 +86,29 @@ class TileBackgroundImageStorageTest {
         val resolved = TileBackgroundImageStorage.resolveFile(root, rel, lookup)
         assertNotNull(resolved)
         assertArrayEquals(byteArrayOf(5), resolved!!.readBytes())
+        root.deleteRecursively()
+    }
+
+    @Test
+    fun deleteTileBackground_deletesThemeCacheBeforeShared() {
+        val root = createTempDir()
+        val rel = TileBackgroundImageStorage.relativePathFor("panel_e", 0, darkTheme = false)
+        val sharedFile = File(root, rel.replace('/', File.separatorChar))
+        sharedFile.parentFile?.mkdirs()
+        sharedFile.writeBytes(byteArrayOf(1))
+        val themeDir = TileBackgroundImageStorage.themeCacheDir(root, "theme_e")
+        File(themeDir, "panel_e/0_light").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(2))
+        }
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "theme_e",
+            activeThemeSections = setOf(ThemeSection.MAIN_SCREEN),
+        )
+        assertTrue(TileBackgroundImageStorage.deleteThemeCacheFile(root, rel, "theme_e"))
+        assertArrayEquals(byteArrayOf(1), TileBackgroundImageStorage.resolveFile(root, rel, lookup)!!.readBytes())
+        assertTrue(TileBackgroundImageStorage.deleteSharedFile(root, rel))
+        assertNull(TileBackgroundImageStorage.resolveFile(root, rel, lookup))
         root.deleteRecursively()
     }
 }
