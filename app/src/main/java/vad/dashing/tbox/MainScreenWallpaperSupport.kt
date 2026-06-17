@@ -133,6 +133,30 @@ internal suspend fun listSortedWallpaperImagesInFolder(
     emptyList()
 }
 
+internal suspend fun listWallpaperImageBytesForThemeExport(
+    context: Context,
+    folderUri: Uri,
+): List<Pair<String, ByteArray>> = withContext(Dispatchers.IO) {
+    listSortedWallpaperImagesInFolder(context, folderUri).mapNotNull { (name, fileUri) ->
+        readWallpaperBytesFromUri(context, fileUri)?.takeIf { it.isNotEmpty() }?.let { name to it }
+    }
+}
+
+private fun readWallpaperBytesFromUri(context: Context, uri: Uri): ByteArray? {
+    return runCatching {
+        when (uri.scheme?.lowercase()) {
+            "file" -> {
+                val file = File(uri.path ?: return null)
+                if (!file.isFile || file.length() > MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES) return null
+                file.readBytes()
+            }
+            else -> context.contentResolver.openInputStream(uri)?.use { input ->
+                input.readBytes()
+            }?.takeIf { it.size <= MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES }
+        }
+    }.getOrNull()
+}
+
 /**
  * User picks one image; we try to use its parent directory as the wallpaper source (carousel).
  * If the parent is not available (typical single-document [content] URIs), falls back to that file only.

@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.content.Context
+import android.net.Uri
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
@@ -134,6 +135,20 @@ object ThemeLayoutExport {
             "wallpaperDarkSelectedFile",
             sm.mainScreenWallpaperDarkSelectedFileFlow.first(),
         )
+        val lightFolderStr = sm.mainScreenWallpaperLightFolderUriFlow.first()
+        if (lightFolderStr.isNotBlank()) {
+            val lightImages = listSortedWallpaperImagesInFolder(context, Uri.parse(lightFolderStr))
+            if (lightImages.isNotEmpty()) {
+                o.put("wallpaperLightFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_LIGHT_DIR)
+            }
+        }
+        val darkFolderStr = sm.mainScreenWallpaperDarkFolderUriFlow.first()
+        if (darkFolderStr.isNotBlank()) {
+            val darkImages = listSortedWallpaperImagesInFolder(context, Uri.parse(darkFolderStr))
+            if (darkImages.isNotEmpty()) {
+                o.put("wallpaperDarkFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_DARK_DIR)
+            }
+        }
         o.put("panels", buildMainScreenPanels(context, sm))
         return o
     }

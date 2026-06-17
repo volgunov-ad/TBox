@@ -14,10 +14,10 @@ object ThemeBundleExport {
 
     const val THEME_FILE_EXTENSION = "tboxtheme"
     private const val THEME_JSON_ENTRY = "theme.json"
+    const val ASSETS_WALLPAPER_LIGHT_DIR = "assets/wallpaper/light/"
+    const val ASSETS_WALLPAPER_DARK_DIR = "assets/wallpaper/dark/"
     private const val ASSETS_ICONS_DIR = "assets/icons/"
     private const val ASSETS_TILE_BG_DIR = "assets/tile_backgrounds/"
-    private const val ASSETS_WALLPAPER_LIGHT_DIR = "assets/wallpaper/light/"
-    private const val ASSETS_WALLPAPER_DARK_DIR = "assets/wallpaper/dark/"
     const val THEME_WALLPAPER_IMPORT_DIR = "themes/imported_wallpaper"
 
     data class ThemeExtractResult(
@@ -185,12 +185,9 @@ object ThemeBundleExport {
         ).forEach { (flow, zipDir) ->
             val folderUriStr = flow.first()
             if (folderUriStr.isBlank()) return@forEach
-            val uri = Uri.parse(folderUriStr)
-            if (uri.scheme == "file") {
-                val dir = File(uri.path ?: return@forEach)
-                dir.listFiles()?.filter { it.isFile }?.forEach { file ->
-                    putStoredEntry(zos, "$zipDir${file.name}", file.readBytes())
-                }
+            val folderUri = Uri.parse(folderUriStr)
+            listWallpaperImageBytesForThemeExport(context, folderUri).forEach { (name, bytes) ->
+                putStoredEntry(zos, "$zipDir$name", bytes)
             }
         }
     }
