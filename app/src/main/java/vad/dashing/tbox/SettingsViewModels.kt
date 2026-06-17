@@ -21,7 +21,6 @@ import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import android.content.Context
-import java.io.File
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
@@ -1926,32 +1925,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         val savedPath: String,
     )
 
-    private suspend fun buildThemeExportWorkFile(
-        context: Context,
-        sections: Set<ThemeSection>,
-    ): File {
-        val workFile = File(context.cacheDir, "theme_export_work.${System.currentTimeMillis()}.tboxtheme")
-        ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, workFile)
-        return workFile
-    }
-
-    suspend fun exportThemeBundleToTree(
-        context: Context,
-        treeUri: Uri,
-        sections: Set<ThemeSection>,
-        baseName: String,
-    ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
-        runCatching {
-            val workFile = buildThemeExportWorkFile(context, sections)
-            try {
-                val savedUri = ThemeBundleExport.createThemeFileInTree(context, treeUri, workFile, baseName)
-                ThemeExportResult(savedPath = savedUri)
-            } finally {
-                workFile.delete()
-            }
-        }
-    }
-
     suspend fun exportThemeBundleToDownloads(
         context: Context,
         sections: Set<ThemeSection>,
@@ -1959,21 +1932,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
         runCatching {
             val dest = ThemeBundleExport.downloadsThemeExportFile(baseName)
-            ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, dest)
-            ThemeExportResult(savedPath = dest.absolutePath)
-        }
-    }
-
-    suspend fun exportThemeBundleToAppFolder(
-        context: Context,
-        sections: Set<ThemeSection>,
-        baseName: String,
-    ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
-        runCatching {
-            val dest = File(
-                ThemeBundleExport.fallbackExportDir(context),
-                ThemeBundleExport.themeFileNameFromBaseName(baseName),
-            )
             ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, dest)
             ThemeExportResult(savedPath = dest.absolutePath)
         }

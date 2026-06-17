@@ -1,6 +1,5 @@
 package vad.dashing.tbox.ui
 
-import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -71,9 +70,6 @@ fun ThemesTabContent(
     var themeExportBaseName by remember { mutableStateOf("") }
 
   var pendingDriveModeRawValue by remember { mutableIntStateOf(-1) }
-    var pendingThemeExport by remember {
-        mutableStateOf<PendingThemeExport?>(null)
-    }
     var showReplaceDownloadsDialog by remember { mutableStateOf(false) }
     var pendingReplaceExport by remember {
         mutableStateOf<PendingThemeExport?>(null)
@@ -83,17 +79,6 @@ fun ThemesTabContent(
         if (showCreateDialog) {
             themeExportBaseName = ThemeBundleExport.defaultThemeExportBaseName()
         }
-    }
-
-    val openDocumentTreeIntent = remember {
-        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        }
-    }
-    val canOpenDocumentTree = remember {
-        openDocumentTreeIntent.resolveActivity(context.packageManager) != null
     }
 
     fun showThemeExportResult(result: Result<SettingsViewModel.ThemeExportResult>) {
@@ -110,29 +95,6 @@ fun ThemesTabContent(
                 context.getString(R.string.toast_theme_create_error, msg),
                 Toast.LENGTH_LONG,
             ).show()
-        }
-    }
-
-    val pickThemeSaveFolderLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree(),
-    ) { treeUri: Uri? ->
-        val pending = pendingThemeExport
-        pendingThemeExport = null
-        if (pending == null || treeUri == null) return@rememberLauncherForActivityResult
-        runCatching {
-            context.contentResolver.takePersistableUriPermission(
-                treeUri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
-            )
-        }
-        scope.launch {
-            val result = settingsViewModel.exportThemeBundleToTree(
-                context,
-                treeUri,
-                pending.sections,
-                pending.baseName,
-            )
-            withContext(Dispatchers.Main) { showThemeExportResult(result) }
         }
     }
 
@@ -176,12 +138,7 @@ fun ThemesTabContent(
         }
         val pending = PendingThemeExport(sections = sections, baseName = baseName)
         showCreateDialog = false
-        if (canOpenDocumentTree) {
-            pendingThemeExport = pending
-            pickThemeSaveFolderLauncher.launch(null)
-        } else {
-            exportThemeToDownloads(pending)
-        }
+        exportThemeToDownloads(pending)
     }
 
     val applyThemeLauncher = rememberLauncherForActivityResult(

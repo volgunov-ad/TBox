@@ -4,8 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.util.Log
-import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.flow.first
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -22,8 +20,6 @@ import java.util.zip.ZipOutputStream
 object ThemeBundleExport {
 
     const val THEME_FILE_EXTENSION = "tboxtheme"
-    const val EXPORT_FALLBACK_DIR = "exported_themes"
-    private const val LOG_TAG = "ThemeExport"
     /** Skip individual zip entries larger than this (same cap as main-screen wallpaper files). */
     private const val MAX_ENTRY_BYTES = MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES
     private const val THEME_JSON_ENTRY = "theme.json"
@@ -169,34 +165,6 @@ object ThemeBundleExport {
 
     fun downloadsThemeExportFile(baseName: String): File =
         File(downloadsDir(), themeFileNameFromBaseName(baseName))
-
-    fun createThemeFileInTree(context: Context, treeUri: Uri, sourceFile: File, baseName: String): String {
-        val tree = DocumentFile.fromTreeUri(context, treeUri)
-            ?: error("document_tree_unavailable")
-        val name = themeFileNameFromBaseName(baseName)
-        val doc = tree.createFile("application/octet-stream", name)
-            ?: error("document_create_failed")
-        copyFileToUri(context, sourceFile, doc.uri)
-        return doc.uri.toString()
-    }
-
-    fun fallbackExportDir(context: Context): File =
-        File(context.getExternalFilesDir(null), EXPORT_FALLBACK_DIR).also { it.mkdirs() }
-
-    fun copyFileToUri(context: Context, file: File, uri: Uri) {
-        var lastError: Throwable? = null
-        for (mode in listOf("wt", "w", "rwt")) {
-            val result = runCatching {
-                context.contentResolver.openOutputStream(uri, mode)?.use { output ->
-                    file.inputStream().buffered().use { input -> input.copyTo(output) }
-                } ?: error("openOutputStream returned null (mode=$mode)")
-            }
-            if (result.isSuccess) return
-            lastError = result.exceptionOrNull()
-            Log.w(LOG_TAG, "copyFileToUri failed for mode=$mode", lastError)
-        }
-        throw lastError ?: IllegalStateException("copyFileToUri failed")
-    }
 
     suspend fun exportBundleToBytes(
         context: Context,
