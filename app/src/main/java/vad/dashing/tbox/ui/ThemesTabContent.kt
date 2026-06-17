@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,7 +40,6 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.ThemeBundleExport
 import vad.dashing.tbox.ThemeCacheKeys
 import vad.dashing.tbox.ThemeFileResolver
 import vad.dashing.tbox.ThemeMaterialization
@@ -49,6 +49,7 @@ import vad.dashing.tbox.resolveDriveModeWidgetOption
 @Composable
 fun ThemesTabContent(
     settingsViewModel: SettingsViewModel,
+    onRequestStorageAccess: ((() -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -66,37 +67,66 @@ fun ThemesTabContent(
     var includeAppIcons by remember { mutableStateOf(true) }
 
   var pendingDriveModeRawValue by remember { mutableIntStateOf(-1) }
+    var pendingExportSections by remember { mutableStateOf<Set<ThemeSection>?>(null) }
 
-    val createThemeLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/zip"),
-    ) { uri: Uri? ->
-        val sections = buildThemeSections(includeMainScreen, includeFloatingPanels, includeAppIcons)
-        if (sections.isEmpty() || uri == null) return@rememberLauncherForActivityResult
+    val openDocumentTreeIntent = remember {
+        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+    }
+    val canOpenDocumentTree = remember {
+        openDocumentTreeIntent.resolveActivity(context.packageManager) != null
+    }
+
+    fun showThemeExportResult(result: Result<SettingsViewModel.ThemeExportResult>) {
+        if (result.isSuccess) {
+            Toast.makeText(
+                context,
+                context.getString(R.string.toast_saved_to, result.getOrNull()?.savedPath.orEmpty()),
+                Toast.LENGTH_LONG,
+            ).show()
+        } else {
+            val msg = result.exceptionOrNull()?.message.orEmpty()
+            Toast.makeText(
+                context,
+                context.getString(R.string.toast_theme_create_error, msg),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    val pickThemeSaveFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
+    ) { treeUri: Uri? ->
+        val sections = pendingExportSections
+        pendingExportSections = null
+        if (sections == null || treeUri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                treeUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        }
         scope.launch {
-            val result = settingsViewModel.exportThemeBundle(context, uri, sections)
-            withContext(Dispatchers.Main) {
-                when {
-                    result.isSuccess && result.getOrNull()?.savedToUri == true -> {
-                        Toast.makeText(context, R.string.toast_theme_create_ok, Toast.LENGTH_LONG).show()
-                    }
-                    result.isSuccess -> {
-                        val path = result.getOrNull()?.fallbackPath.orEmpty()
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.toast_theme_create_ok_fallback, path),
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    }
-                    else -> {
-                        val msg = result.exceptionOrNull()?.message.orEmpty()
-                        Toast.makeText(
-                            context,
-                            context.getString(R.string.toast_theme_create_error, msg),
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    }
-                }
+            val result = settingsViewModel.exportThemeBundleToTree(context, treeUri, sections)
+            withContext(Dispatchers.Main) { showThemeExportResult(result) }
+        }
+    }
+
+    fun exportThemeToDownloads(sections: Set<ThemeSection>) {
+        val export: () -> Unit = {
+            scope.launch {
+                val result = settingsViewModel.exportThemeBundleToDownloads(context, sections)
+                withContext(Dispatchers.Main) { showThemeExportResult(result) }
             }
+            Unit
+        }
+        if (onRequestStorageAccess != null) {
+            onRequestStorageAccess(export)
+        } else {
+            export()
         }
     }
 
@@ -107,40 +137,11 @@ fun ThemesTabContent(
             return
         }
         showCreateDialog = false
-        try {
-            createThemeLauncher.launch("theme.${ThemeBundleExport.THEME_FILE_EXTENSION}")
-        } catch (e: Exception) {
-            android.util.Log.w("ThemeExport", "CreateDocument launch failed, saving to app folder", e)
-            scope.launch {
-                val result = settingsViewModel.exportThemeBundle(context, null, sections)
-                withContext(Dispatchers.Main) {
-                    when {
-                        result.isSuccess -> {
-                            val export = result.getOrNull()
-                            if (export?.savedToUri == true) {
-                                Toast.makeText(context, R.string.toast_theme_create_ok, Toast.LENGTH_LONG).show()
-                            } else {
-                                Toast.makeText(
-                                    context,
-                                    context.getString(
-                                        R.string.toast_theme_create_ok_fallback,
-                                        export?.fallbackPath.orEmpty(),
-                                    ),
-                                    Toast.LENGTH_LONG,
-                                ).show()
-                            }
-                        }
-                        else -> {
-                            val msg = result.exceptionOrNull()?.message.orEmpty()
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.toast_theme_create_error, msg),
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        }
-                    }
-                }
-            }
+        if (canOpenDocumentTree) {
+            pendingExportSections = sections
+            pickThemeSaveFolderLauncher.launch(null)
+        } else {
+            exportThemeToDownloads(sections)
         }
     }
 

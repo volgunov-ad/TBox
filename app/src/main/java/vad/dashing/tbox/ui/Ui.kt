@@ -363,6 +363,7 @@ fun TboxScreen(
                     )
                     LeftMenuTabField.THEMES.id -> ThemesTab(
                         settingsViewModel = settingsViewModel,
+                        onRequestStorageAccess = onRequestWallpaperStorageAccess,
                     )
                     LeftMenuTabField.LOGS.id -> LogsTab(viewModel, settingsViewModel, onSaveToFile)
                     LeftMenuTabField.INFO.id -> InfoTab(viewModel, settingsViewModel, onServiceCommand)
@@ -414,8 +415,12 @@ fun ModemModeSelector(
 @Composable
 fun ThemesTab(
     settingsViewModel: SettingsViewModel,
+    onRequestStorageAccess: ((() -> Unit) -> Unit)? = null,
 ) {
-    ThemesTabContent(settingsViewModel = settingsViewModel)
+    ThemesTabContent(
+        settingsViewModel = settingsViewModel,
+        onRequestStorageAccess = onRequestStorageAccess,
+    )
 }
 
 @Composable

@@ -2,13 +2,19 @@ package vad.dashing.tbox
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.flow.first
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -132,6 +138,31 @@ object ThemeBundleExport {
         file.outputStream().buffered().use { output ->
             exportBundle(context, settingsManager, sections, output)
         }
+    }
+
+    fun themeExportFileName(): String {
+        val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
+        return "theme_$timestamp.$THEME_FILE_EXTENSION"
+    }
+
+    fun downloadsThemeExportFile(): File {
+        val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+        } else {
+            Environment.getExternalStorageDirectory().absolutePath + "/Download"
+        }
+        File(savePath).mkdirs()
+        return File(savePath, themeExportFileName())
+    }
+
+    fun createThemeFileInTree(context: Context, treeUri: Uri, sourceFile: File): String {
+        val tree = DocumentFile.fromTreeUri(context, treeUri)
+            ?: error("document_tree_unavailable")
+        val name = themeExportFileName()
+        val doc = tree.createFile("application/octet-stream", name)
+            ?: error("document_create_failed")
+        copyFileToUri(context, sourceFile, doc.uri)
+        return doc.uri.toString()
     }
 
     fun fallbackExportDir(context: Context): File =

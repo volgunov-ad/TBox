@@ -333,7 +333,7 @@
     <string name="themes_active_none">Тема не назначена</string>
     <string name="themes_active_file_missing">Файл темы не найден</string>
     <string name="themes_create_dialog_title">Создать тему</string>
-    <string name="themes_create_dialog_hint">Выберите, что включить в файл темы (.tboxtheme):</string>
+    <string name="themes_create_dialog_hint">Выберите, что включить в файл темы (.tboxtheme). После нажатия «Создать» откроется файловый менеджер — укажите папку, куда сохранить файл темы.</string>
     <string name="themes_create_section_main_screen">Настройки главного экрана</string>
     <string name="themes_create_section_floating_panels">Настройки плавающих панелей</string>
     <string name="themes_create_section_app_icons">Иконки приложений</string>

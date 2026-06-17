@@ -330,7 +330,7 @@
     <string name="themes_active_none">No theme assigned</string>
     <string name="themes_active_file_missing">Theme file not found</string>
     <string name="themes_create_dialog_title">Create theme</string>
-    <string name="themes_create_dialog_hint">Choose what to include in the theme file (.tboxtheme):</string>
+    <string name="themes_create_dialog_hint">Choose what to include in the theme file (.tboxtheme). After tapping Create, a file manager opens — pick the folder where the theme file should be saved.</string>
     <string name="themes_create_section_main_screen">Main screen settings</string>
     <string name="themes_create_section_floating_panels">Floating panel settings</string>
     <string name="themes_create_section_app_icons">App icons</string>

@@ -1923,41 +1923,56 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     data class ThemeExportResult(
-        val savedToUri: Boolean,
-        val fallbackPath: String? = null,
+        val savedPath: String,
     )
 
-    suspend fun exportThemeBundle(
+    private suspend fun buildThemeExportWorkFile(
         context: Context,
-        destinationUri: Uri?,
+        sections: Set<ThemeSection>,
+    ): File {
+        val workFile = File(context.cacheDir, "theme_export_work.${System.currentTimeMillis()}.tboxtheme")
+        ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, workFile)
+        return workFile
+    }
+
+    suspend fun exportThemeBundleToTree(
+        context: Context,
+        treeUri: Uri,
         sections: Set<ThemeSection>,
     ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val workFile = File(context.cacheDir, "theme_export_work.${System.currentTimeMillis()}.tboxtheme")
+            val workFile = buildThemeExportWorkFile(context, sections)
             try {
-                ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, workFile)
-                if (destinationUri != null) {
-                    val copied = runCatching {
-                        ThemeBundleExport.copyFileToUri(context, workFile, destinationUri)
-                    }
-                    if (copied.isSuccess) {
-                        return@runCatching ThemeExportResult(savedToUri = true)
-                    }
-                    android.util.Log.w(
-                        "ThemeExport",
-                        "SAF copy failed, using fallback directory",
-                        copied.exceptionOrNull(),
-                    )
-                }
-                val fallbackFile = File(
-                    ThemeBundleExport.fallbackExportDir(context),
-                    "theme_${System.currentTimeMillis()}.${ThemeBundleExport.THEME_FILE_EXTENSION}",
-                )
-                workFile.copyTo(fallbackFile, overwrite = true)
-                ThemeExportResult(savedToUri = false, fallbackPath = fallbackFile.absolutePath)
+                val savedUri = ThemeBundleExport.createThemeFileInTree(context, treeUri, workFile)
+                ThemeExportResult(savedPath = savedUri)
             } finally {
                 workFile.delete()
             }
+        }
+    }
+
+    suspend fun exportThemeBundleToDownloads(
+        context: Context,
+        sections: Set<ThemeSection>,
+    ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val dest = ThemeBundleExport.downloadsThemeExportFile()
+            ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, dest)
+            ThemeExportResult(savedPath = dest.absolutePath)
+        }
+    }
+
+    suspend fun exportThemeBundleToAppFolder(
+        context: Context,
+        sections: Set<ThemeSection>,
+    ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val dest = File(
+                ThemeBundleExport.fallbackExportDir(context),
+                ThemeBundleExport.themeExportFileName(),
+            )
+            ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, dest)
+            ThemeExportResult(savedPath = dest.absolutePath)
         }
     }
 
