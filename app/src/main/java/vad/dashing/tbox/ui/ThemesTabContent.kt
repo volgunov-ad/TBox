@@ -18,8 +18,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +42,7 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.ThemeBundleExport
 import vad.dashing.tbox.ThemeCacheKeys
 import vad.dashing.tbox.ThemeFileResolver
 import vad.dashing.tbox.ThemeMaterialization
@@ -65,9 +68,22 @@ fun ThemesTabContent(
     var includeMainScreen by remember { mutableStateOf(true) }
     var includeFloatingPanels by remember { mutableStateOf(true) }
     var includeAppIcons by remember { mutableStateOf(true) }
+    var themeExportBaseName by remember { mutableStateOf("") }
 
   var pendingDriveModeRawValue by remember { mutableIntStateOf(-1) }
-    var pendingExportSections by remember { mutableStateOf<Set<ThemeSection>?>(null) }
+    var pendingThemeExport by remember {
+        mutableStateOf<PendingThemeExport?>(null)
+    }
+    var showReplaceDownloadsDialog by remember { mutableStateOf(false) }
+    var pendingReplaceExport by remember {
+        mutableStateOf<PendingThemeExport?>(null)
+    }
+
+    LaunchedEffect(showCreateDialog) {
+        if (showCreateDialog) {
+            themeExportBaseName = ThemeBundleExport.defaultThemeExportBaseName()
+        }
+    }
 
     val openDocumentTreeIntent = remember {
         Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
@@ -100,9 +116,9 @@ fun ThemesTabContent(
     val pickThemeSaveFolderLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
     ) { treeUri: Uri? ->
-        val sections = pendingExportSections
-        pendingExportSections = null
-        if (sections == null || treeUri == null) return@rememberLauncherForActivityResult
+        val pending = pendingThemeExport
+        pendingThemeExport = null
+        if (pending == null || treeUri == null) return@rememberLauncherForActivityResult
         runCatching {
             context.contentResolver.takePersistableUriPermission(
                 treeUri,
@@ -110,15 +126,32 @@ fun ThemesTabContent(
             )
         }
         scope.launch {
-            val result = settingsViewModel.exportThemeBundleToTree(context, treeUri, sections)
+            val result = settingsViewModel.exportThemeBundleToTree(
+                context,
+                treeUri,
+                pending.sections,
+                pending.baseName,
+            )
             withContext(Dispatchers.Main) { showThemeExportResult(result) }
         }
     }
 
-    fun exportThemeToDownloads(sections: Set<ThemeSection>) {
+    fun exportThemeToDownloads(pending: PendingThemeExport, replaceExisting: Boolean = false) {
+        if (!replaceExisting) {
+            val dest = ThemeBundleExport.downloadsThemeExportFile(pending.baseName)
+            if (dest.exists()) {
+                pendingReplaceExport = pending
+                showReplaceDownloadsDialog = true
+                return
+            }
+        }
         val export: () -> Unit = {
             scope.launch {
-                val result = settingsViewModel.exportThemeBundleToDownloads(context, sections)
+                val result = settingsViewModel.exportThemeBundleToDownloads(
+                    context,
+                    pending.sections,
+                    pending.baseName,
+                )
                 withContext(Dispatchers.Main) { showThemeExportResult(result) }
             }
             Unit
@@ -136,12 +169,18 @@ fun ThemesTabContent(
             Toast.makeText(context, R.string.themes_create_select_section, Toast.LENGTH_SHORT).show()
             return
         }
+        val baseName = ThemeBundleExport.sanitizeThemeExportBaseName(themeExportBaseName)
+        if (baseName == null) {
+            Toast.makeText(context, R.string.themes_create_invalid_name, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val pending = PendingThemeExport(sections = sections, baseName = baseName)
         showCreateDialog = false
         if (canOpenDocumentTree) {
-            pendingExportSections = sections
+            pendingThemeExport = pending
             pickThemeSaveFolderLauncher.launch(null)
         } else {
-            exportThemeToDownloads(sections)
+            exportThemeToDownloads(pending)
         }
     }
 
@@ -334,6 +373,18 @@ fun ThemesTabContent(
             text = {
                 Column {
                     AppAlertDialogText(stringResource(R.string.themes_create_dialog_hint))
+                    OutlinedTextField(
+                        value = themeExportBaseName,
+                        onValueChange = { themeExportBaseName = it },
+                        label = { Text(stringResource(R.string.themes_create_file_name_label)) },
+                        supportingText = {
+                            Text(stringResource(R.string.themes_create_file_name_hint))
+                        },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                    )
                     ThemeSectionCheckboxRow(
                         checked = includeMainScreen,
                         onCheckedChange = { includeMainScreen = it },
@@ -366,6 +417,47 @@ fun ThemesTabContent(
             },
             dismissButton = {
                 OutlinedButton(onClick = rememberWrappedOnClick { showCreateDialog = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (showReplaceDownloadsDialog) {
+        val pending = pendingReplaceExport
+        val fileName = pending?.baseName?.let {
+            ThemeBundleExport.themeFileNameFromBaseName(it)
+        }.orEmpty()
+        AlertDialog(
+            onDismissRequest = {
+                showReplaceDownloadsDialog = false
+                pendingReplaceExport = null
+            },
+            title = { AppAlertDialogTitle(stringResource(R.string.themes_create_replace_downloads_title)) },
+            text = {
+                AppAlertDialogText(
+                    stringResource(R.string.themes_create_replace_downloads_message, fileName),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        val replacePending = pendingReplaceExport ?: return@rememberWrappedOnClick
+                        showReplaceDownloadsDialog = false
+                        pendingReplaceExport = null
+                        exportThemeToDownloads(replacePending, replaceExisting = true)
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_replace))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = rememberWrappedOnClick {
+                        showReplaceDownloadsDialog = false
+                        pendingReplaceExport = null
+                    },
+                ) {
                     AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },
@@ -467,3 +559,8 @@ private fun buildThemeSections(
     if (floatingPanels) add(ThemeSection.FLOATING_PANELS)
     if (appIcons) add(ThemeSection.APP_ICONS)
 }
+
+private data class PendingThemeExport(
+    val sections: Set<ThemeSection>,
+    val baseName: String,
+)

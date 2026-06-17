@@ -1939,11 +1939,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         context: Context,
         treeUri: Uri,
         sections: Set<ThemeSection>,
+        baseName: String,
     ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
         runCatching {
             val workFile = buildThemeExportWorkFile(context, sections)
             try {
-                val savedUri = ThemeBundleExport.createThemeFileInTree(context, treeUri, workFile)
+                val savedUri = ThemeBundleExport.createThemeFileInTree(context, treeUri, workFile, baseName)
                 ThemeExportResult(savedPath = savedUri)
             } finally {
                 workFile.delete()
@@ -1954,9 +1955,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     suspend fun exportThemeBundleToDownloads(
         context: Context,
         sections: Set<ThemeSection>,
+        baseName: String,
     ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
         runCatching {
-            val dest = ThemeBundleExport.downloadsThemeExportFile()
+            val dest = ThemeBundleExport.downloadsThemeExportFile(baseName)
             ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, dest)
             ThemeExportResult(savedPath = dest.absolutePath)
         }
@@ -1965,11 +1967,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     suspend fun exportThemeBundleToAppFolder(
         context: Context,
         sections: Set<ThemeSection>,
+        baseName: String,
     ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
         runCatching {
             val dest = File(
                 ThemeBundleExport.fallbackExportDir(context),
-                ThemeBundleExport.themeExportFileName(),
+                ThemeBundleExport.themeFileNameFromBaseName(baseName),
             )
             ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, dest)
             ThemeExportResult(savedPath = dest.absolutePath)

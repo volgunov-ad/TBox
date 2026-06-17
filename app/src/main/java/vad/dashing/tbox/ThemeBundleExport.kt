@@ -140,25 +140,40 @@ object ThemeBundleExport {
         }
     }
 
-    fun themeExportFileName(): String {
+    fun defaultThemeExportBaseName(): String {
         val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
-        return "theme_$timestamp.$THEME_FILE_EXTENSION"
+        return "theme_$timestamp"
     }
 
-    fun downloadsThemeExportFile(): File {
+    fun sanitizeThemeExportBaseName(input: String): String? {
+        var name = input.trim()
+        if (name.endsWith(".$THEME_FILE_EXTENSION", ignoreCase = true)) {
+            name = name.dropLast(THEME_FILE_EXTENSION.length + 1).trim()
+        }
+        name = name.replace(Regex("""[\\/:*?"<>|]"""), "_").trim('.')
+        if (name.isBlank() || name == "." || name == "..") return null
+        if (name.length > 120) name = name.take(120)
+        return name
+    }
+
+    fun themeFileNameFromBaseName(baseName: String): String = "$baseName.$THEME_FILE_EXTENSION"
+
+    fun downloadsDir(): File {
         val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
         } else {
             Environment.getExternalStorageDirectory().absolutePath + "/Download"
         }
-        File(savePath).mkdirs()
-        return File(savePath, themeExportFileName())
+        return File(savePath).also { it.mkdirs() }
     }
 
-    fun createThemeFileInTree(context: Context, treeUri: Uri, sourceFile: File): String {
+    fun downloadsThemeExportFile(baseName: String): File =
+        File(downloadsDir(), themeFileNameFromBaseName(baseName))
+
+    fun createThemeFileInTree(context: Context, treeUri: Uri, sourceFile: File, baseName: String): String {
         val tree = DocumentFile.fromTreeUri(context, treeUri)
             ?: error("document_tree_unavailable")
-        val name = themeExportFileName()
+        val name = themeFileNameFromBaseName(baseName)
         val doc = tree.createFile("application/octet-stream", name)
             ?: error("document_create_failed")
         copyFileToUri(context, sourceFile, doc.uri)

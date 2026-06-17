@@ -5,6 +5,7 @@
     <string name="loading">Загрузка…</string>
     <string name="action_save">Сохранить</string>
     <string name="action_cancel">Отмена</string>
+    <string name="action_replace">Заменить</string>
     <string name="action_clear">Очистить</string>
     <string name="action_close">Закрыть</string>
     <string name="action_configure">Настроить</string>
@@ -339,6 +340,11 @@
     <string name="themes_create_section_app_icons">Иконки приложений</string>
     <string name="themes_create_section_app_icons_hint">Кастомные иконки для виджетов «Ярлык приложения».</string>
     <string name="themes_create_confirm">Создать</string>
+    <string name="themes_create_file_name_label">Имя файла</string>
+    <string name="themes_create_file_name_hint">Без расширения .tboxtheme</string>
+    <string name="themes_create_invalid_name">Введите корректное имя файла</string>
+    <string name="themes_create_replace_downloads_title">Файл уже существует</string>
+    <string name="themes_create_replace_downloads_message">В папке «Загрузки» уже есть файл %1$s. Заменить его?</string>
     <string name="themes_create_select_section">Выберите хотя бы один раздел темы</string>
     <string name="themes_drive_mode_section">Темы по режиму вождения</string>
     <string name="themes_drive_mode_hint">При смене режима вождения автоматически применяется выбранный файл темы. Приоритет у основного режима (не 6DCT).</string>

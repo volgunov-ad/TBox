@@ -5,6 +5,7 @@
     <string name="loading">Loading…</string>
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_replace">Replace</string>
     <string name="action_clear">Clear</string>
     <string name="action_close">Close</string>
     <string name="action_configure">Configure</string>
@@ -336,6 +337,11 @@
     <string name="themes_create_section_app_icons">App icons</string>
     <string name="themes_create_section_app_icons_hint">Custom icons for App launcher widgets.</string>
     <string name="themes_create_confirm">Create</string>
+    <string name="themes_create_file_name_label">File name</string>
+    <string name="themes_create_file_name_hint">Without the .tboxtheme extension</string>
+    <string name="themes_create_invalid_name">Enter a valid file name</string>
+    <string name="themes_create_replace_downloads_title">File already exists</string>
+    <string name="themes_create_replace_downloads_message">%1$s already exists in Downloads. Replace it?</string>
     <string name="themes_create_select_section">Select at least one theme section</string>
     <string name="themes_drive_mode_section">Themes by drive mode</string>
     <string name="themes_drive_mode_hint">When drive mode changes, the selected theme file is applied automatically. Standard drive mode takes priority over 6DCT.</string>
