@@ -5,7 +5,9 @@ import android.net.Uri
 import kotlinx.coroutines.flow.first
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.zip.CRC32
+import java.io.FileInputStream
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -13,6 +15,8 @@ import java.util.zip.ZipOutputStream
 object ThemeBundleExport {
 
     const val THEME_FILE_EXTENSION = "tboxtheme"
+    /** Skip individual zip entries larger than this (same cap as main-screen wallpaper files). */
+    private const val MAX_ENTRY_BYTES = MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES
     private const val THEME_JSON_ENTRY = "theme.json"
     const val ASSETS_WALLPAPER_LIGHT_DIR = "assets/wallpaper/light/"
     const val ASSETS_WALLPAPER_DARK_DIR = "assets/wallpaper/dark/"
@@ -98,11 +102,11 @@ object ThemeBundleExport {
         context: Context,
         settingsManager: SettingsManager,
         sections: Set<ThemeSection>,
-    ): ByteArray {
+        output: OutputStream,
+    ) {
         val themeJson = ThemeLayoutExport.exportJson(context, settingsManager, sections)
-        val baos = ByteArrayOutputStream()
-        ZipOutputStream(baos).use { zos ->
-            putStoredEntry(zos, THEME_JSON_ENTRY, themeJson.toByteArray(Charsets.UTF_8))
+        ZipOutputStream(output).use { zos ->
+            putBytesEntry(zos, THEME_JSON_ENTRY, themeJson.toByteArray(Charsets.UTF_8))
             if (ThemeSection.APP_ICONS in sections) {
                 addAppIconsToZip(context, settingsManager, sections, zos)
             }
@@ -113,6 +117,15 @@ object ThemeBundleExport {
                 addWallpaperFoldersToZip(context, settingsManager, zos)
             }
         }
+    }
+
+    suspend fun exportBundleToBytes(
+        context: Context,
+        settingsManager: SettingsManager,
+        sections: Set<ThemeSection>,
+    ): ByteArray {
+        val baos = ByteArrayOutputStream()
+        exportBundle(context, settingsManager, sections, baos)
         return baos.toByteArray()
     }
 
@@ -187,17 +200,44 @@ object ThemeBundleExport {
         }
     }
 
-    private fun putStoredEntry(zos: ZipOutputStream, name: String, data: ByteArray) {
-        val entry = ZipEntry(name)
-        entry.method = ZipEntry.STORED
-        entry.size = data.size.toLong()
-        entry.compressedSize = data.size.toLong()
-        val crc = CRC32()
-        crc.update(data)
-        entry.crc = crc.value
-        zos.putNextEntry(entry)
+    private fun putBytesEntry(zos: ZipOutputStream, name: String, data: ByteArray) {
+        zos.putNextEntry(ZipEntry(name))
         zos.write(data)
         zos.closeEntry()
+    }
+
+    private fun putFileEntry(zos: ZipOutputStream, name: String, file: File) {
+        if (!file.isFile) return
+        val size = file.length()
+        if (size <= 0L || size > MAX_ENTRY_BYTES) return
+        zos.putNextEntry(ZipEntry(name))
+        file.inputStream().use { input -> input.copyTo(zos) }
+        zos.closeEntry()
+    }
+
+    private fun putStreamEntry(zos: ZipOutputStream, name: String, input: InputStream) {
+        zos.putNextEntry(ZipEntry(name))
+        input.use { it.copyTo(zos) }
+        zos.closeEntry()
+    }
+
+    private fun putUriEntry(context: Context, zos: ZipOutputStream, name: String, uri: Uri) {
+        when (uri.scheme?.lowercase()) {
+            "file" -> {
+                val path = uri.path ?: return
+                putFileEntry(zos, name, File(path))
+            }
+            else -> {
+                val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return
+                pfd.use {
+                    val size = it.statSize
+                    if (size <= 0L || size > MAX_ENTRY_BYTES) return
+                    FileInputStream(it.fileDescriptor).use { input ->
+                        putStreamEntry(zos, name, input)
+                    }
+                }
+            }
+        }
     }
 
     private suspend fun addAppIconsToZip(
@@ -211,7 +251,7 @@ object ThemeBundleExport {
         val filesDir = context.filesDir
         packages.forEach { pkg ->
             val file = LauncherAppIconPaths.resolveIconFile(filesDir, pkg, lookup) ?: return@forEach
-            putStoredEntry(zos, "$ASSETS_ICONS_DIR$pkg", file.readBytes())
+            putFileEntry(zos, "$ASSETS_ICONS_DIR$pkg", file)
         }
     }
 
@@ -241,7 +281,7 @@ object ThemeBundleExport {
             ) ?: return@forEach
             if (!file.isFile) return@forEach
             val zipRel = relPath.removePrefix("${TileBackgroundImageStorage.DIR_NAME}/")
-            putStoredEntry(zos, "$ASSETS_TILE_BG_DIR$zipRel", file.readBytes())
+            putFileEntry(zos, "$ASSETS_TILE_BG_DIR$zipRel", file)
         }
     }
 
@@ -257,8 +297,8 @@ object ThemeBundleExport {
             val folderUriStr = flow.first()
             if (folderUriStr.isBlank()) return@forEach
             val folderUri = Uri.parse(folderUriStr)
-            listWallpaperImageBytesForThemeExport(context, folderUri).forEach { (name, bytes) ->
-                putStoredEntry(zos, "$zipDir$name", bytes)
+            listSortedWallpaperImagesInFolder(context, folderUri).forEach { (name, fileUri) ->
+                putUriEntry(context, zos, "$zipDir$name", fileUri)
             }
         }
     }

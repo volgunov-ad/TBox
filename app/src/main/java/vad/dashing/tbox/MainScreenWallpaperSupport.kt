@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
+import java.io.FileInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -150,9 +151,14 @@ private fun readWallpaperBytesFromUri(context: Context, uri: Uri): ByteArray? {
                 if (!file.isFile || file.length() > MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES) return null
                 file.readBytes()
             }
-            else -> context.contentResolver.openInputStream(uri)?.use { input ->
-                input.readBytes()
-            }?.takeIf { it.size <= MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES }
+            else -> {
+                val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return null
+                pfd.use {
+                    val size = it.statSize
+                    if (size <= 0L || size > MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES) return null
+                    FileInputStream(it.fileDescriptor).use { input -> input.readBytes() }
+                }
+            }
         }
     }.getOrNull()
 }

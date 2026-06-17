@@ -1921,8 +1921,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    suspend fun exportThemeBundle(context: Context, sections: Set<ThemeSection>): ByteArray {
-        return ThemeBundleExport.exportBundle(context, settingsManager, sections)
+    suspend fun exportThemeBundle(
+        context: Context,
+        output: java.io.OutputStream,
+        sections: Set<ThemeSection>,
+    ) {
+        ThemeBundleExport.exportBundle(context, settingsManager, sections, output)
     }
 
     suspend fun applyThemeFromUri(context: Context, uriString: String): Result<ThemeApply.ApplyResult> {

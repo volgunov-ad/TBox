@@ -68,19 +68,26 @@ fun ThemesTabContent(
   var pendingDriveModeRawValue by remember { mutableIntStateOf(-1) }
 
     val createThemeLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/octet-stream"),
+        ActivityResultContracts.CreateDocument("*/*"),
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         val sections = buildThemeSections(includeMainScreen, includeFloatingPanels, includeAppIcons)
         if (sections.isEmpty()) return@rememberLauncherForActivityResult
         scope.launch {
-            val bytes = withContext(Dispatchers.IO) {
-                settingsViewModel.exportThemeBundle(context, sections)
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { output ->
+                        settingsViewModel.exportThemeBundle(context, output, sections)
+                    } ?: error("theme_export_output_stream_unavailable")
+                }
             }
-            withContext(Dispatchers.IO) {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    if (result.isSuccess) R.string.toast_theme_create_ok else R.string.toast_theme_create_error,
+                    Toast.LENGTH_LONG,
+                ).show()
             }
-            Toast.makeText(context, R.string.toast_theme_create_ok, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -313,7 +320,15 @@ fun ThemesTabContent(
                             return@rememberWrappedOnClick
                         }
                         showCreateDialog = false
-                        createThemeLauncher.launch("theme.${ThemeBundleExport.THEME_FILE_EXTENSION}")
+                        try {
+                            createThemeLauncher.launch("theme.${ThemeBundleExport.THEME_FILE_EXTENSION}")
+                        } catch (_: Exception) {
+                            Toast.makeText(
+                                context,
+                                R.string.toast_theme_create_error,
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
                     },
                 ) {
                     AppAlertDialogButtonLabel(stringResource(R.string.themes_create_confirm))
