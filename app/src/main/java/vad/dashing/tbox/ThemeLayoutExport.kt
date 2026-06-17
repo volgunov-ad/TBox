@@ -93,11 +93,7 @@ object ThemeLayoutExport {
         if (ThemeSection.APP_ICONS !in sections) return emptySet()
         if (sections == setOf(ThemeSection.APP_ICONS)) {
             val iconsDir = java.io.File(context.filesDir, SettingsManager.LAUNCHER_APP_ICONS_DIR)
-            return iconsDir.listFiles()
-                ?.filter { it.isFile && it.extension.equals("png", ignoreCase = true) }
-                ?.mapNotNull { file -> file.nameWithoutExtension.takeIf { it.isNotEmpty() } }
-                ?.toSet()
-                .orEmpty()
+            return LauncherAppIconPaths.listStoredPackageNames(iconsDir)
         }
         val packages = linkedSetOf<String>()
         if (ThemeSection.MAIN_SCREEN in sections) {

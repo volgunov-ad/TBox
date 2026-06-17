@@ -136,7 +136,8 @@ object ThemeBundleExport {
                             val filename = entry.name.removePrefix(ASSETS_ICONS_DIR)
                             if (filename.isNotBlank()) {
                                 iconsDir.mkdirs()
-                                File(iconsDir, filename).writeBytes(zis.readBytes())
+                                val liveName = LauncherAppIconPaths.liveFileNameFromThemeAsset(filename)
+                                File(iconsDir, liveName).writeBytes(zis.readBytes())
                                 iconsImported++
                             }
                         }
@@ -208,10 +209,8 @@ object ThemeBundleExport {
         val packages = ThemeLayoutExport.collectPackagesForSections(context, settingsManager, sections)
         val iconsDir = File(context.filesDir, SettingsManager.LAUNCHER_APP_ICONS_DIR)
         packages.forEach { pkg ->
-            val file = File(iconsDir, "$pkg.png")
-            if (file.isFile) {
-                putStoredEntry(zos, "$ASSETS_ICONS_DIR${file.name}", file.readBytes())
-            }
+            val file = LauncherAppIconPaths.resolveStoredIconFile(iconsDir, pkg) ?: return@forEach
+            putStoredEntry(zos, "$ASSETS_ICONS_DIR${pkg}", file.readBytes())
         }
     }
 

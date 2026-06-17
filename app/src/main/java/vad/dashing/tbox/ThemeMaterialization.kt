@@ -194,18 +194,8 @@ object ThemeMaterialization {
 
     private fun installIconsFromCache(context: Context, cacheDir: File): Int {
         val source = File(cacheDir, ICONS_DIR)
-        if (!source.isDirectory) return 0
         val destRoot = File(context.filesDir, SettingsManager.LAUNCHER_APP_ICONS_DIR)
-        destRoot.mkdirs()
-        var count = 0
-        source.listFiles()?.filter { it.isFile }?.forEach { file ->
-            val dest = File(destRoot, file.name)
-            if (!dest.exists() || dest.length() != file.length()) {
-                file.copyTo(dest, overwrite = true)
-            }
-            count++
-        }
-        return count
+        return LauncherAppIconPaths.installFromThemeCacheDirectory(source, destRoot)
     }
 
     private fun installTileBackgroundsFromCache(context: Context, cacheDir: File): Int {
