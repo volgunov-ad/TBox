@@ -62,7 +62,7 @@ fun ThemesTabContent(
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var includeMainScreen by remember { mutableStateOf(true) }
     var includeFloatingPanels by remember { mutableStateOf(true) }
-    var includeAppIcons by remember { mutableStateOf(false) }
+    var includeAppIcons by remember { mutableStateOf(true) }
 
   var pendingDriveModeRawValue by remember { mutableIntStateOf(-1) }
 
