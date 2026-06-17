@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,7 +72,7 @@ fun ThemesTabContent(
     var includeAppIcons by remember { mutableStateOf(true) }
     var themeExportBaseName by remember { mutableStateOf("") }
 
-  var pendingDriveModeRawValue by remember { mutableIntStateOf(-1) }
+    var pendingDriveModeRawValue by rememberSaveable { mutableIntStateOf(-1) }
     var showReplaceDownloadsDialog by remember { mutableStateOf(false) }
     var pendingReplaceExport by remember {
         mutableStateOf<PendingThemeExport?>(null)
@@ -336,7 +337,12 @@ fun ThemesTabContent(
                         onClick = rememberWrappedOnClick {
                             pendingDriveModeRawValue = option.rawValue
                             driveModeThemeLauncher.launch(
-                                arrayOf("application/octet-stream", "application/*", "*/*"),
+                                arrayOf(
+                                    "application/zip",
+                                    "application/octet-stream",
+                                    "application/*",
+                                    "*/*",
+                                ),
                             )
                         },
                         modifier = Modifier.weight(1f),

@@ -20,6 +20,9 @@ object ThemeApply {
         if (trimmed.isEmpty()) {
             return Result.failure(IllegalArgumentException("theme_uri_empty"))
         }
+        if (!ThemeOpenIntentParser.isTboxThemeUri(trimmed)) {
+            return Result.failure(IllegalArgumentException("not_tboxtheme_file"))
+        }
         if (!ThemeFileResolver.isAccessible(context, trimmed)) {
             return Result.failure(IllegalArgumentException("theme_file_not_found"))
         }
@@ -60,6 +63,9 @@ object ThemeApply {
         val trimmed = sourceUri.trim()
         if (trimmed.isEmpty()) {
             return Result.failure(IllegalArgumentException("theme_uri_empty"))
+        }
+        if (!ThemeOpenIntentParser.isTboxThemeUri(trimmed)) {
+            return Result.failure(IllegalArgumentException("not_tboxtheme_file"))
         }
         if (!ThemeFileResolver.isAccessible(context, trimmed)) {
             return Result.failure(IllegalArgumentException("theme_file_not_found"))

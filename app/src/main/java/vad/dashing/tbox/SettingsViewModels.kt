@@ -1970,8 +1970,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         sourceUri: String,
     ): Result<Unit> {
         return runCatching {
-            settingsManager.saveDriveModeThemePath(rawValue, sourceUri)
             ThemeApply.materializeDriveModeThemeFromUri(context, rawValue, sourceUri).getOrThrow()
+            settingsManager.saveDriveModeThemePath(rawValue, sourceUri)
         }
     }
 
