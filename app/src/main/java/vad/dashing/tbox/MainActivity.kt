@@ -133,6 +133,7 @@ class MainActivity : ComponentActivity() {
         MainActivityLoadTimings.mark("main_after_managers")
 
         consumeFloatingDashboardTileEditIntent(intent)
+        consumeThemeOpenIntent(intent)
         MainActivityLoadTimings.mark("main_after_intent")
 
         MainActivityLoadTimings.mark("main_before_setContent")
@@ -195,6 +196,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeFloatingDashboardTileEditIntent(intent)
+        consumeThemeOpenIntent(intent)
     }
 
     /**
@@ -214,6 +216,20 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
         }
+    }
+
+    private fun consumeThemeOpenIntent(intent: Intent?) {
+        val i = intent ?: return
+        val request = ThemeOpenIntentParser.parse(i) ?: return
+        ThemeOpenRequestBus.post(request)
+        setIntent(
+            Intent(i).apply {
+                action = Intent.ACTION_MAIN
+                data = null
+                clipData = null
+                removeExtra(Intent.EXTRA_STREAM)
+            },
+        )
     }
 
     override fun onRestart() {

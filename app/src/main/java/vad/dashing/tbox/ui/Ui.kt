@@ -49,6 +49,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import java.text.SimpleDateFormat
 import java.util.Locale
+import vad.dashing.tbox.ThemeOpenRequestBus
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
@@ -82,6 +83,7 @@ fun TboxApp(
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
+    val pendingThemeOpen by ThemeOpenRequestBus.pending.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -119,6 +121,13 @@ fun TboxApp(
                 onMockLocationSettingChanged = onMockLocationSettingChanged,
                 onTripFinishAndStart = onTripFinishAndStart,
                 onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
+            )
+        }
+        pendingThemeOpen?.let { request ->
+            ThemeOpenConfirmDialog(
+                request = request,
+                settingsViewModel = settingsViewModel,
+                onDismiss = { ThemeOpenRequestBus.clear() },
             )
         }
         }

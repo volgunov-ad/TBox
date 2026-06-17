@@ -378,6 +378,8 @@
     <string name="toast_theme_create_error">Не удалось сохранить тему: %1$s</string>
     <string name="toast_theme_apply_ok">Тема применена</string>
     <string name="toast_theme_apply_error">Не удалось применить тему: %1$s</string>
+    <string name="theme_open_confirm_title">Тема</string>
+    <string name="theme_open_confirm_message">Применить новую тему «%1$s»?</string>
     <string name="toast_theme_active_cleared">Выбор темы отменён</string>
     <string name="toast_theme_file_not_found">Файл темы не найден</string>
     <string name="settings_main_screen_panel_rows_title">Количество строк плиток панели главного экрана</string>
