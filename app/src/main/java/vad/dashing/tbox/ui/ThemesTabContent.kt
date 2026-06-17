@@ -209,6 +209,7 @@ fun ThemesTabContent(
             text = stringResource(R.string.themes_tab_title),
             fontSize = 26.sp,
             fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 16.dp),
         )
 
@@ -235,7 +236,12 @@ fun ThemesTabContent(
                 stringResource(R.string.themes_active_file_missing)
             else -> ThemeFileResolver.displayName(activePath)
         }
-        Text(text = activeDisplay, fontSize = 20.sp, modifier = Modifier.padding(bottom = 8.dp))
+        Text(
+            text = activeDisplay,
+            fontSize = 16.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
 
         if (activePath.isNotEmpty()) {
             OutlinedButton(
@@ -318,14 +324,20 @@ fun ThemesTabContent(
             val path = driveModeThemePaths[option.rawValue].orEmpty()
             val label = resolveDriveModeWidgetOption(option.rawValue).label
             Column(modifier = Modifier.padding(bottom = 12.dp)) {
-                Text(text = label, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    text = label,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
                 Text(
                     text = if (path.isBlank()) {
                         stringResource(R.string.themes_drive_mode_not_assigned)
                     } else {
                         ThemeFileResolver.displayName(path)
                     },
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 4.dp),
                 )
                 Row(
@@ -370,12 +382,13 @@ fun ThemesTabContent(
                         textStyle = TextStyle(fontSize = 20.sp),
                         onValueChange = { themeExportBaseName = it },
                         label = {
-                            Text(stringResource(R.string.themes_create_file_name_label),
-                                style = TextStyle(fontSize = 18.sp)
-                        )},
+                            Text(stringResource(R.string.themes_create_file_name_label))
+                        },
                         supportingText = {
-                            Text(stringResource(R.string.themes_create_file_name_hint),
-                                style = TextStyle(fontSize = 18.sp))
+                            Text(
+                                stringResource(R.string.themes_create_file_name_hint),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         },
                         singleLine = true,
                         modifier = Modifier
@@ -577,7 +590,11 @@ private fun ThemeSectionCheckboxRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-        Text(text = label, fontSize = 20.sp)
+        Text(
+            text = label,
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
