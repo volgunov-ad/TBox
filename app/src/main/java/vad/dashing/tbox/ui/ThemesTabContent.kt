@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -255,13 +256,6 @@ fun ThemesTabContent(
             Text(stringResource(R.string.themes_clear_cache), fontSize = 22.sp)
         }
 
-        Text(
-            text = stringResource(R.string.themes_clear_shared_icons_hint),
-            fontSize = 16.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-
         OutlinedButton(
             onClick = rememberWrappedOnClick { showClearSharedIconsDialog = true },
             modifier = Modifier
@@ -332,10 +326,15 @@ fun ThemesTabContent(
                     AppAlertDialogText(stringResource(R.string.themes_create_dialog_hint))
                     OutlinedTextField(
                         value = themeExportBaseName,
+                        textStyle = TextStyle(fontSize = 20.sp),
                         onValueChange = { themeExportBaseName = it },
-                        label = { Text(stringResource(R.string.themes_create_file_name_label)) },
+                        label = {
+                            Text(stringResource(R.string.themes_create_file_name_label),
+                                style = TextStyle(fontSize = 18.sp)
+                        )},
                         supportingText = {
-                            Text(stringResource(R.string.themes_create_file_name_hint))
+                            Text(stringResource(R.string.themes_create_file_name_hint),
+                                style = TextStyle(fontSize = 18.sp))
                         },
                         singleLine = true,
                         modifier = Modifier
