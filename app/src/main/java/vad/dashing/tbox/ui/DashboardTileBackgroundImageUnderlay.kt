@@ -41,10 +41,11 @@ internal fun DashboardTileBackgroundImageUnderlay(
 ) {
     val context = LocalContext.current
     val rev by settingsViewModel.tileBackgroundImageRevision.collectAsStateWithLifecycle()
-    var bitmap by remember(relPath, rev) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(relPath, rev) {
+    val themeLookup = rememberLauncherAppIconLookup(settingsViewModel)
+    var bitmap by remember(relPath, rev, themeLookup) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(relPath, rev, themeLookup) {
         bitmap = withContext(Dispatchers.IO) {
-            val f = TileBackgroundImageStorage.resolveFile(context, relPath)
+            val f = TileBackgroundImageStorage.resolveFile(context.filesDir, relPath, themeLookup)
             if (f == null || !f.isFile) return@withContext null
             runCatching {
                 BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()

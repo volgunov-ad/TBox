@@ -232,8 +232,13 @@ object ThemeBundleExport {
                 relPaths.addAll(ThemeLayoutExport.collectTileBackgroundPaths(panel.widgetsConfig))
             }
         }
+        val lookup = settingsManager.launcherAppIconLookup()
         relPaths.forEach { relPath ->
-            val file = TileBackgroundImageStorage.resolveFile(context, relPath) ?: return@forEach
+            val file = TileBackgroundImageStorage.resolveFile(
+                context.filesDir,
+                relPath,
+                lookup,
+            ) ?: return@forEach
             if (!file.isFile) return@forEach
             val zipRel = relPath.removePrefix("${TileBackgroundImageStorage.DIR_NAME}/")
             putStoredEntry(zos, "$ASSETS_TILE_BG_DIR$zipRel", file.readBytes())

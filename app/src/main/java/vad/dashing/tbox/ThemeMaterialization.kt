@@ -10,7 +10,7 @@ import java.io.File
 
 /**
  * Per-theme materialized cache under [filesDir]/[THEMES_ROOT_DIR]/{cacheKey}/.
- * Materialization unpacks zip assets once; activation loads JSON and copies assets into live paths.
+ * Materialization unpacks zip assets once; activation loads JSON and applies asset paths from cache.
  */
 object ThemeMaterialization {
 
@@ -131,15 +131,18 @@ object ThemeMaterialization {
 
             applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir)
 
-            val tileBackgroundsImported = installTileBackgroundsFromCache(context, dir)
-
             settingsManager.bumpLauncherAppIconRevision()
-            if (tileBackgroundsImported > 0) {
-                settingsManager.bumpTileBackgroundImageRevision()
-            }
+            settingsManager.bumpTileBackgroundImageRevision()
 
             val iconsInTheme = if (ThemeSection.APP_ICONS in sections) {
                 LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
+            } else {
+                0
+            }
+            val tileBackgroundsInTheme = if (
+                ThemeSection.MAIN_SCREEN in sections || ThemeSection.FLOATING_PANELS in sections
+            ) {
+                TileBackgroundImageStorage.countThemeCacheFiles(context.filesDir, cacheKey)
             } else {
                 0
             }
@@ -153,7 +156,7 @@ object ThemeMaterialization {
             ThemeApply.ApplyResult(
                 sections = sections,
                 iconsImported = iconsInTheme,
-                tileBackgroundsImported = tileBackgroundsImported,
+                tileBackgroundsImported = tileBackgroundsInTheme,
             )
         }
     }
@@ -193,24 +196,6 @@ object ThemeMaterialization {
                 settingsManager.saveMainScreenWallpaperDarkFolderUri(uri)
             }
         }
-    }
-
-    private fun installTileBackgroundsFromCache(context: Context, cacheDir: File): Int {
-        val source = File(cacheDir, TILE_BACKGROUNDS_DIR)
-        if (!source.isDirectory) return 0
-        var count = 0
-        source.walkTopDown().filter { it.isFile }.forEach { file ->
-            val rel = file.relativeTo(source).path.replace('\\', '/')
-            val storedRel = "${TileBackgroundImageStorage.DIR_NAME}/$rel"
-            if (!TileBackgroundImageStorage.isAllowedStoredRelPath(storedRel)) return@forEach
-            val dest = File(context.filesDir, storedRel)
-            dest.parentFile?.mkdirs()
-            if (!dest.exists() || dest.length() != file.length()) {
-                file.copyTo(dest, overwrite = true)
-            }
-            count++
-        }
-        return count
     }
 
     /**
