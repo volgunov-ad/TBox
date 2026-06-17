@@ -22,4 +22,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "TBox"
 include(":app")
+include(":baselineprofile")
  

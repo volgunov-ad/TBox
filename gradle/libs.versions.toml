@@ -8,15 +8,12 @@ androidxTestCore = "1.7.0"
 espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.12.3"
-# Stay on 2025.10.00 for material3 APIs; ui-text is pinned in app/build.gradle.kts (API 28 fix).
-composeBom = "2025.10.00"
+composeBom = "2026.05.00"
 protoliteWellKnownTypes = "18.0.1"
 datastorePreferencesCoreAndroid = "1.1.7"
 datastoreCore = "1.2.0"
 datastorePreferences = "1.2.0"
 documentfile = "1.1.0"
-material = "1.10.2"
-materialIconsCore = "1.7.8"
 lifecycleViewmodelCompose = "2.10.0"
 lifecycleRuntimeCompose = "2.10.0"
 lifecycleCommon = "2.10.0"
@@ -27,6 +24,9 @@ lifecycleRuntime = "2.10.0"
 lifecycleViewmodelSavedstate = "2.10.0"
 tboxProxy = "1.0.4"
 profileinstaller = "1.4.1"
+baselineprofile = "1.4.1"
+benchmark = "1.4.1"
+uiautomator = "2.3.0"
 robolectric = "4.14.1"
 okhttp = "4.12.0"
 
@@ -50,8 +50,8 @@ protolite-well-known-types = { group = "com.google.firebase", name = "protolite-
 androidx-datastore-core = { group = "androidx.datastore", name = "datastore-core", version.ref = "datastoreCore" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
-androidx-material = { group = "androidx.compose.material", name = "material", version.ref = "material" }
-androidx-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core", version.ref = "materialIconsCore" }
+androidx-material = { group = "androidx.compose.material", name = "material" }
+androidx-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeCompose" }
 androidx-lifecycle-common = { group = "androidx.lifecycle", name = "lifecycle-common", version.ref = "lifecycleCommon" }
@@ -61,11 +61,14 @@ androidx-savedstate = { group = "androidx.savedstate", name = "savedstate", vers
 androidx-lifecycle-runtime = { group = "androidx.lifecycle", name = "lifecycle-runtime", version.ref = "lifecycleRuntime" }
 androidx-lifecycle-viewmodel-savedstate = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-savedstate", version.ref = "lifecycleViewmodelSavedstate" }
 androidx-profileinstaller-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-test = { id = "com.android.test", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-
+baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }

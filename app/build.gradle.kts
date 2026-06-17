@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -64,12 +65,10 @@ android {
     }
 }
 
-// ui-text 1.8+ ships AndroidLayoutApi34 (platform Layout.TextInclusionStrategy, API 34).
-// Jetour head units are API 28 — loading that adapter causes NoClassDefFoundError on first draw.
-configurations.configureEach {
-    resolutionStrategy {
-        force("androidx.compose.ui:ui-text:1.7.8")
-        force("androidx.compose.ui:ui-text-android:1.7.8")
+baselineProfile {
+    mergeIntoMain = true
+    filter {
+        include("vad.dashing.tbox.**")
     }
 }
 
@@ -98,6 +97,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.androidx.profileinstaller.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
     implementation(libs.okhttp)
     implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
     testImplementation(libs.junit)
