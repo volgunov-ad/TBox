@@ -26,16 +26,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
-import java.io.File
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
-import vad.dashing.tbox.SettingsManager
 
 @Composable
 internal fun DashboardAppLauncherWidgetItem(
     widget: DashboardWidget,
     packageName: String,
     customIconRevision: Int,
+    iconLookup: LauncherAppIconPaths.Lookup,
     showTitle: Boolean,
     titleOverride: String = "",
     onClick: () -> Unit,
@@ -46,14 +46,11 @@ internal fun DashboardAppLauncherWidgetItem(
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
-    val imageBitmap = remember(packageName, customIconRevision) {
+    val imageBitmap = remember(packageName, customIconRevision, iconLookup) {
         if (packageName.isBlank()) return@remember null
         val custom: ImageBitmap? = runCatching {
-            val f = File(
-                context.filesDir,
-                "${SettingsManager.LAUNCHER_APP_ICONS_DIR}/$packageName"
-            )
-            if (!f.isFile || f.length() <= 0L) return@runCatching null
+            val f = LauncherAppIconPaths.resolveIconFile(context.filesDir, packageName, iconLookup)
+                ?: return@runCatching null
             BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
         }.getOrNull()
         custom ?: runCatching {

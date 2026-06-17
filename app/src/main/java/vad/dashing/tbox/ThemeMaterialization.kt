@@ -131,14 +131,17 @@ object ThemeMaterialization {
 
             applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir)
 
-            val iconsImported = installIconsFromCache(context, dir)
             val tileBackgroundsImported = installTileBackgroundsFromCache(context, dir)
 
-            if (iconsImported > 0) {
-                settingsManager.bumpLauncherAppIconRevision()
-            }
+            settingsManager.bumpLauncherAppIconRevision()
             if (tileBackgroundsImported > 0) {
                 settingsManager.bumpTileBackgroundImageRevision()
+            }
+
+            val iconsInTheme = if (ThemeSection.APP_ICONS in sections) {
+                LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
+            } else {
+                0
             }
 
             settingsManager.saveActiveTheme(
@@ -149,7 +152,7 @@ object ThemeMaterialization {
 
             ThemeApply.ApplyResult(
                 sections = sections,
-                iconsImported = iconsImported,
+                iconsImported = iconsInTheme,
                 tileBackgroundsImported = tileBackgroundsImported,
             )
         }
@@ -190,12 +193,6 @@ object ThemeMaterialization {
                 settingsManager.saveMainScreenWallpaperDarkFolderUri(uri)
             }
         }
-    }
-
-    private fun installIconsFromCache(context: Context, cacheDir: File): Int {
-        val source = File(cacheDir, ICONS_DIR)
-        val destRoot = File(context.filesDir, SettingsManager.LAUNCHER_APP_ICONS_DIR)
-        return LauncherAppIconPaths.installFromThemeCacheDirectory(source, destRoot)
     }
 
     private fun installTileBackgroundsFromCache(context: Context, cacheDir: File): Int {

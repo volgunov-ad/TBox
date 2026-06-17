@@ -1416,6 +1416,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
         settingsManager.hasCustomLauncherAppIcon(packageName)
 
+    suspend fun clearSharedLauncherAppIconsFolder() {
+        settingsManager.clearSharedLauncherAppIconsFolder()
+    }
+
     fun setTileBackgroundImageFromUri(
         panelStorageId: String,
         widgetIndex: Int,

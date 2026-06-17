@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import android.content.Context
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
 import vad.dashing.tbox.SettingsViewModel
@@ -56,16 +57,19 @@ internal data class LaunchableAppEntry(
 private object LaunchableAppsWithIconsCache {
     private var cachedIconSizePx: Int? = null
     private var cachedIconRevision: Int? = null
+    private var cachedLookup: LauncherAppIconPaths.Lookup? = null
     private var entries: List<LaunchableAppEntry>? = null
 
     fun getOrLoad(
         iconSizePx: Int,
         iconRevision: Int,
+        lookup: LauncherAppIconPaths.Lookup,
         load: () -> List<LaunchableAppEntry>,
     ): List<LaunchableAppEntry> {
         synchronized(this) {
             if (cachedIconSizePx == iconSizePx &&
                 cachedIconRevision == iconRevision &&
+                cachedLookup == lookup &&
                 entries != null
             ) {
                 return entries!!
@@ -73,6 +77,7 @@ private object LaunchableAppsWithIconsCache {
             val list = load()
             cachedIconSizePx = iconSizePx
             cachedIconRevision = iconRevision
+            cachedLookup = lookup
             entries = list
             return list
         }
@@ -82,6 +87,7 @@ private object LaunchableAppsWithIconsCache {
         synchronized(this) {
             cachedIconSizePx = null
             cachedIconRevision = null
+            cachedLookup = null
             entries = null
         }
     }
@@ -95,6 +101,7 @@ internal fun disposeAppLauncherPickerIconCache() {
 private fun loadLaunchableAppEntries(
     appContext: Context,
     iconSizePx: Int,
+    lookup: LauncherAppIconPaths.Lookup,
     @Suppress("UNUSED_PARAMETER") iconRevision: Int,
 ): List<LaunchableAppEntry> {
     val pm = appContext.packageManager
@@ -107,7 +114,7 @@ private fun loadLaunchableAppEntries(
         .map { ri ->
             val pkg = ri.activityInfo.packageName
             val label = ri.loadLabel(pm).toString()
-            val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx)
+            val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx, lookup)
                 ?: runCatching {
                     ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
                 }.getOrNull()
@@ -118,15 +125,19 @@ private fun loadLaunchableAppEntries(
 }
 
 @Composable
-internal fun rememberLaunchableAppEntries(launcherIconRevision: Int = 0): List<LaunchableAppEntry> {
+internal fun rememberLaunchableAppEntries(
+    settingsViewModel: SettingsViewModel,
+    launcherIconRevision: Int = 0,
+): List<LaunchableAppEntry> {
     val context = LocalContext.current
     val appContext = context.applicationContext
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconSizePx = remember(appContext) {
         (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
     }
-    return remember(appContext, iconSizePx, launcherIconRevision) {
-        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx, launcherIconRevision) {
-            loadLaunchableAppEntries(appContext, iconSizePx, launcherIconRevision)
+    return remember(appContext, iconSizePx, launcherIconRevision, iconLookup) {
+        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx, launcherIconRevision, iconLookup) {
+            loadLaunchableAppEntries(appContext, iconSizePx, iconLookup, launcherIconRevision)
         }
     }
 }
@@ -144,7 +155,7 @@ internal fun AppLauncherWidgetSettingsSection(
     if (!state.isAppLauncherWidgetSelected) return
     val context = LocalContext.current
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
-    val apps = rememberLaunchableAppEntries(iconRevision)
+    val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
     val selectedLabel = apps.find { it.packageName == state.launcherAppPackage }?.label
     var filterText by rememberSaveable { mutableStateOf("") }
     val needle = filterText.trim().lowercase()

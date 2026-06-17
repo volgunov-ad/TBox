@@ -3,12 +3,35 @@ package vad.dashing.tbox
 import java.io.File
 
 /**
- * Paths for custom app-launcher widget icons under [SettingsManager.LAUNCHER_APP_ICONS_DIR].
- * Live storage uses the package name as the file name (no extension); theme zips use the same name.
+ * Custom icons for app-launcher and music-player widgets.
+ *
+ * Resolution order when reading:
+ * 1. [SettingsManager.LAUNCHER_APP_ICONS_DIR] — user overrides (not part of theme cache)
+ * 2. Active theme cache `files/themes/{cacheKey}/icons/` when [ThemeSection.APP_ICONS] is in the active theme
+ *
+ * User saves always go to the shared folder only.
  */
 object LauncherAppIconPaths {
 
+    const val ICONS_SUBDIR = ThemeMaterialization.ICONS_DIR
+
     private val NON_ICON_FILE_EXTENSIONS = setOf("txt", "md", "json", "xml", "bak")
+
+    data class Lookup(
+        val activeThemeCacheKey: String = "",
+        val activeThemeSections: Set<ThemeSection> = emptySet(),
+    ) {
+        companion object {
+            val None = Lookup()
+        }
+    }
+
+    fun sharedIconsDir(filesDir: File): File =
+        File(filesDir, SettingsManager.LAUNCHER_APP_ICONS_DIR)
+
+    fun themeIconsDir(filesDir: File, cacheKey: String): File =
+        File(File(filesDir, ThemeMaterialization.THEMES_ROOT_DIR), ThemeCacheKeys.sanitizeCacheKey(cacheKey))
+            .resolve(ICONS_SUBDIR)
 
     fun liveIconFile(iconsDir: File, packageName: String): File =
         File(iconsDir, packageName.trim())
@@ -22,6 +45,19 @@ object LauncherAppIconPaths {
         if (legacyPng.isFile && legacyPng.length() > 0L) return legacyPng
         return null
     }
+
+    fun resolveIconFile(filesDir: File, packageName: String, lookup: Lookup): File? {
+        resolveStoredIconFile(sharedIconsDir(filesDir), packageName)?.let { return it }
+        if (ThemeSection.APP_ICONS !in lookup.activeThemeSections) return null
+        val cacheKey = lookup.activeThemeCacheKey.trim()
+        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return null
+        val themeDir = themeIconsDir(filesDir, cacheKey)
+        if (!themeDir.isDirectory) return null
+        return resolveStoredIconFile(themeDir, packageName)
+    }
+
+    fun hasSharedOverride(filesDir: File, packageName: String): Boolean =
+        resolveStoredIconFile(sharedIconsDir(filesDir), packageName) != null
 
     fun listStoredPackageNames(iconsDir: File): Set<String> {
         if (!iconsDir.isDirectory) return emptySet()
@@ -40,29 +76,26 @@ object LauncherAppIconPaths {
             .orEmpty()
     }
 
-    /** Maps a file name from theme cache/zip to the on-disk live icon file name. */
+    fun listAllResolvablePackageNames(filesDir: File, lookup: Lookup): Set<String> {
+        val names = linkedSetOf<String>()
+        names.addAll(listStoredPackageNames(sharedIconsDir(filesDir)))
+        if (ThemeSection.APP_ICONS in lookup.activeThemeSections) {
+            val cacheKey = lookup.activeThemeCacheKey.trim()
+            if (ThemeCacheKeys.isLikelyCacheKey(cacheKey)) {
+                names.addAll(listStoredPackageNames(themeIconsDir(filesDir, cacheKey)))
+            }
+        }
+        return names
+    }
+
     fun liveFileNameFromThemeAsset(themeAssetFileName: String): String {
         val trimmed = themeAssetFileName.trim()
         return trimmed.removeSuffix(".png").removeSuffix(".PNG")
     }
 
-    /**
-     * Copies icon files from a theme cache/zip icons directory into [liveIconsDir]
-     * using live storage naming (package name, no extension).
-     */
-    fun installFromThemeCacheDirectory(cacheIconsDir: File, liveIconsDir: File): Int {
-        if (!cacheIconsDir.isDirectory) return 0
-        liveIconsDir.mkdirs()
-        var count = 0
-        cacheIconsDir.listFiles()?.filter { it.isFile }?.forEach { file ->
-            val liveName = liveFileNameFromThemeAsset(file.name)
-            if (liveName.isBlank()) return@forEach
-            val dest = liveIconFile(liveIconsDir, liveName)
-            if (!dest.exists() || dest.length() != file.length()) {
-                file.copyTo(dest, overwrite = true)
-            }
-            count++
-        }
-        return count
+    fun countThemeCacheIcons(filesDir: File, cacheKey: String): Int {
+        val dir = themeIconsDir(filesDir, cacheKey)
+        if (!dir.isDirectory) return 0
+        return dir.listFiles()?.count { it.isFile && it.length() > 0L } ?: 0
     }
 }

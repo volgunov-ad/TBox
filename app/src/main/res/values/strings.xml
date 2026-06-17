@@ -350,6 +350,12 @@
     <string name="themes_clear_cache_dialog_title">Очистить папку тем?</string>
     <string name="themes_clear_cache_dialog_message">Будут удалены все материализованные темы, кроме текущей активной. Назначения тем по режиму вождения также будут сброшены.</string>
     <string name="themes_clear_cache_confirm">Очистить</string>
+    <string name="themes_clear_shared_icons">Очистить общую папку иконок</string>
+    <string name="themes_clear_shared_icons_hint">Удаляет пользовательские иконки из launcher_app_icons — тех, что заданы вручную вне тем. Иконки из активной темы (в кэше files/themes/) не затрагиваются.</string>
+    <string name="themes_clear_shared_icons_dialog_title">Очистить общую папку иконок?</string>
+    <string name="themes_clear_shared_icons_dialog_message">Будут удалены все иконки из общей папки (ручные замены для виджетов «Ярлык приложения» и музыкального плеера). Иконки, хранящиеся внутри материализованных тем, останутся.</string>
+    <string name="themes_clear_shared_icons_confirm">Очистить</string>
+    <string name="toast_theme_shared_icons_cleared">Общая папка иконок очищена</string>
     <string name="toast_theme_cache_cleared">Папка тем очищена</string>
     <string name="toast_theme_drive_mode_error">Не удалось подготовить тему для режима вождения: %1$s</string>
     <string name="toast_theme_create_ok">Тема сохранена</string>

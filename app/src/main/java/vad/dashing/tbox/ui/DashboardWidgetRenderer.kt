@@ -65,6 +65,7 @@ fun DashboardWidgetRenderer(
     enableInnerInteractions: Boolean = true
 ) {
     val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val activeTripCustomLayout by settingsViewModel.activeTripCustomWidgetLayout.collectAsStateWithLifecycle()
     val activeTripSimpleLayout by settingsViewModel.activeTripSimpleWidgetLayout.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
@@ -492,6 +493,7 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 packageName = widgetConfig.launcherAppPackage,
                 customIconRevision = launcherAppIconRevision,
+                iconLookup = iconLookup,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,

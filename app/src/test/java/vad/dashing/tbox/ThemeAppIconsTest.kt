@@ -3,13 +3,10 @@ package vad.dashing.tbox
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.zip.CRC32
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 class ThemeAppIconsTest {
 
@@ -37,56 +34,59 @@ class ThemeAppIconsTest {
     }
 
     @Test
-    fun liveFileNameFromThemeAsset_stripsPngSuffix() {
-        assertEquals("com.example.app", LauncherAppIconPaths.liveFileNameFromThemeAsset("com.example.app.png"))
-        assertEquals("com.example.app", LauncherAppIconPaths.liveFileNameFromThemeAsset("com.example.app"))
+    fun resolveIconFile_prefersSharedOverrideOverThemeCache() {
+        val root = createTempDir()
+        val shared = LauncherAppIconPaths.sharedIconsDir(root).apply { mkdirs() }
+        val themeIcons = LauncherAppIconPaths.themeIconsDir(root, "my_theme").apply { mkdirs() }
+        File(shared, "com.example.app").writeBytes(byteArrayOf(1))
+        File(themeIcons, "com.example.app").writeBytes(byteArrayOf(2))
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "my_theme",
+            activeThemeSections = setOf(ThemeSection.APP_ICONS),
+        )
+        val resolved = LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup)
+        assertNotNull(resolved)
+        assertArrayEquals(byteArrayOf(1), resolved!!.readBytes())
+        root.deleteRecursively()
     }
 
     @Test
-    fun parseBundleAndInstall_roundTripUsesLiveIconNames() {
-        val pkg = "com.example.music"
-        val iconBytes = byteArrayOf(1, 2, 3, 4)
-        val zipBytes = buildZip(
-            "theme.json" to """{"formatVersion":1,"type":"tbox_theme","sections":["appIcons"]}""".toByteArray(),
-            "assets/icons/$pkg" to iconBytes,
+    fun resolveIconFile_usesThemeCacheWhenNoSharedOverride() {
+        val root = createTempDir()
+        val themeIcons = LauncherAppIconPaths.themeIconsDir(root, "my_theme").apply { mkdirs() }
+        File(themeIcons, "ru.yandex.music").writeBytes(byteArrayOf(5, 6))
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "my_theme",
+            activeThemeSections = setOf(ThemeSection.APP_ICONS),
         )
-
-        val parsed = ThemeBundleExport.parseBundleBytes(zipBytes).getOrThrow()
-        assertEquals(1, parsed.icons.size)
-        assertArrayEquals(iconBytes, parsed.icons[pkg])
-
-        val cacheDir = createTempDir()
-        val cacheIcons = File(cacheDir, "icons").apply { mkdirs() }
-        parsed.icons.forEach { (name, bytes) -> File(cacheIcons, name).writeBytes(bytes) }
-
-        val liveDir = createTempDir()
-        val installed = LauncherAppIconPaths.installFromThemeCacheDirectory(cacheIcons, liveDir)
-        assertEquals(1, installed)
-
-        val liveFile = File(liveDir, pkg)
-        assertTrue(liveFile.isFile)
-        assertArrayEquals(iconBytes, liveFile.readBytes())
-
-        cacheDir.deleteRecursively()
-        liveDir.deleteRecursively()
+        val resolved = LauncherAppIconPaths.resolveIconFile(root, "ru.yandex.music", lookup)
+        assertNotNull(resolved)
+        assertArrayEquals(byteArrayOf(5, 6), resolved!!.readBytes())
+        root.deleteRecursively()
     }
 
-    private fun buildZip(vararg entries: Pair<String, ByteArray>): ByteArray {
-        val baos = ByteArrayOutputStream()
-        ZipOutputStream(baos).use { zos ->
-            entries.forEach { (name, data) ->
-                val entry = ZipEntry(name)
-                entry.method = ZipEntry.STORED
-                entry.size = data.size.toLong()
-                entry.compressedSize = data.size.toLong()
-                val crc = CRC32()
-                crc.update(data)
-                entry.crc = crc.value
-                zos.putNextEntry(entry)
-                zos.write(data)
-                zos.closeEntry()
-            }
-        }
-        return baos.toByteArray()
+    @Test
+    fun resolveIconFile_skipsThemeCacheWhenSectionNotIncluded() {
+        val root = createTempDir()
+        val themeIcons = LauncherAppIconPaths.themeIconsDir(root, "my_theme").apply { mkdirs() }
+        File(themeIcons, "com.example.app").writeBytes(byteArrayOf(2))
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "my_theme",
+            activeThemeSections = setOf(ThemeSection.MAIN_SCREEN),
+        )
+        assertNull(LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup))
+        root.deleteRecursively()
+    }
+
+    @Test
+    fun hasSharedOverride_onlyChecksSharedFolder() {
+        val root = createTempDir()
+        val themeIcons = LauncherAppIconPaths.themeIconsDir(root, "my_theme").apply { mkdirs() }
+        File(themeIcons, "com.example.app").writeBytes(byteArrayOf(2))
+        assertTrue(!LauncherAppIconPaths.hasSharedOverride(root, "com.example.app"))
+        val shared = LauncherAppIconPaths.sharedIconsDir(root).apply { mkdirs() }
+        File(shared, "com.example.app").writeBytes(byteArrayOf(1))
+        assertTrue(LauncherAppIconPaths.hasSharedOverride(root, "com.example.app"))
+        root.deleteRecursively()
     }
 }

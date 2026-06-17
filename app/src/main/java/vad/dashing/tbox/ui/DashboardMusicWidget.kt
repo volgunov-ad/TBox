@@ -54,6 +54,7 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.SupportedMediaPlayer
@@ -82,6 +83,7 @@ fun DashboardMusicWidgetItem(
 ) {
     val context = LocalContext.current
     val launcherIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val selectedPlayers = remember(widget.dataKey, widgetConfig.mediaPlayers) {
         resolveMediaPlayersForWidget(widgetConfig)
     }
@@ -294,6 +296,7 @@ fun DashboardMusicWidgetItem(
                         MusicWidgetPlayerAvatar(
                             selectedPackage = selectedPackage,
                             launcherIconRevision = launcherIconRevision,
+                            iconLookup = iconLookup,
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
@@ -344,6 +347,7 @@ fun DashboardMusicWidgetItem(
                         MusicWidgetPlayerAvatar(
                             selectedPackage = selectedPackage,
                             launcherIconRevision = launcherIconRevision,
+                            iconLookup = iconLookup,
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
@@ -493,6 +497,7 @@ fun DashboardMusicWidgetItem(
 private fun MusicWidgetPlayerAvatar(
     selectedPackage: String,
     launcherIconRevision: Int,
+    iconLookup: LauncherAppIconPaths.Lookup,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -502,11 +507,11 @@ private fun MusicWidgetPlayerAvatar(
     val enumPlayer = remember(selectedPackage) {
         SupportedMediaPlayer.fromPackage(selectedPackage)
     }
-    val appIcon = remember(selectedPackage, context, launcherIconRevision, iconSizePx) {
+    val appIcon = remember(selectedPackage, context, launcherIconRevision, iconSizePx, iconLookup) {
         if (selectedPackage.isBlank() || enumPlayer != null) {
             null
         } else {
-            decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx)
+            decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx, iconLookup)
                 ?: runCatching {
                     val pm = context.packageManager
                     val info = pm.getApplicationInfo(selectedPackage, 0)

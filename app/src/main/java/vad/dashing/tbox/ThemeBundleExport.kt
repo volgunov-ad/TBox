@@ -206,11 +206,12 @@ object ThemeBundleExport {
         sections: Set<ThemeSection>,
         zos: ZipOutputStream,
     ) {
-        val packages = ThemeLayoutExport.collectPackagesForSections(context, settingsManager, sections)
-        val iconsDir = File(context.filesDir, SettingsManager.LAUNCHER_APP_ICONS_DIR)
+        val lookup = settingsManager.launcherAppIconLookup()
+        val packages = ThemeLayoutExport.collectPackagesForSections(context, settingsManager, sections, lookup)
+        val filesDir = context.filesDir
         packages.forEach { pkg ->
-            val file = LauncherAppIconPaths.resolveStoredIconFile(iconsDir, pkg) ?: return@forEach
-            putStoredEntry(zos, "$ASSETS_ICONS_DIR${pkg}", file.readBytes())
+            val file = LauncherAppIconPaths.resolveIconFile(filesDir, pkg, lookup) ?: return@forEach
+            putStoredEntry(zos, "$ASSETS_ICONS_DIR$pkg", file.readBytes())
         }
     }
 

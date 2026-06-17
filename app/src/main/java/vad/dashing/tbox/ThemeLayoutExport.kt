@@ -89,11 +89,11 @@ object ThemeLayoutExport {
         context: Context,
         settingsManager: SettingsManager,
         sections: Set<ThemeSection>,
+        lookup: LauncherAppIconPaths.Lookup,
     ): Set<String> {
         if (ThemeSection.APP_ICONS !in sections) return emptySet()
         if (sections == setOf(ThemeSection.APP_ICONS)) {
-            val iconsDir = java.io.File(context.filesDir, SettingsManager.LAUNCHER_APP_ICONS_DIR)
-            return LauncherAppIconPaths.listStoredPackageNames(iconsDir)
+            return LauncherAppIconPaths.listAllResolvablePackageNames(context.filesDir, lookup)
         }
         val packages = linkedSetOf<String>()
         if (ThemeSection.MAIN_SCREEN in sections) {
@@ -114,7 +114,8 @@ object ThemeLayoutExport {
         settingsManager: SettingsManager,
         sections: Set<ThemeSection>,
     ): JSONObject {
-        val packages = collectPackagesForSections(context, settingsManager, sections)
+        val lookup = settingsManager.launcherAppIconLookup()
+        val packages = collectPackagesForSections(context, settingsManager, sections, lookup)
         val arr = JSONArray()
         packages.sorted().forEach { arr.put(it) }
         return JSONObject().put("packages", arr)

@@ -1450,9 +1450,26 @@ class SettingsManager(private val context: Context) {
     suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
         withContext(Dispatchers.IO) {
             if (packageName.isBlank()) return@withContext false
-            val f = launcherAppIconFile(packageName)
-            f.isFile && f.length() > 0L
+            LauncherAppIconPaths.hasSharedOverride(context.filesDir, packageName)
         }
+
+    suspend fun clearSharedLauncherAppIconsFolder() {
+        withContext(Dispatchers.IO) {
+            val dir = LauncherAppIconPaths.sharedIconsDir(context.filesDir)
+            if (dir.isDirectory) {
+                dir.listFiles()?.forEach { file ->
+                    if (file.isFile) file.delete()
+                }
+            }
+            bumpLauncherAppIconRevision()
+        }
+    }
+
+    suspend fun launcherAppIconLookup(): LauncherAppIconPaths.Lookup =
+        LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = activeThemeUriFlow.first().trim(),
+            activeThemeSections = activeThemeSectionsFlow.first(),
+        )
 
     suspend fun clearCustomLauncherAppIcon(packageName: String) {
         withContext(Dispatchers.IO) {

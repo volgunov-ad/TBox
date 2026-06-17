@@ -60,6 +60,7 @@ fun ThemesTabContent(
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showClearSharedIconsDialog by remember { mutableStateOf(false) }
     var includeMainScreen by remember { mutableStateOf(true) }
     var includeFloatingPanels by remember { mutableStateOf(true) }
     var includeAppIcons by remember { mutableStateOf(true) }
@@ -192,9 +193,25 @@ fun ThemesTabContent(
             onClick = rememberWrappedOnClick { showClearCacheDialog = true },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = 8.dp),
         ) {
             Text(stringResource(R.string.themes_clear_cache), fontSize = 22.sp)
+        }
+
+        Text(
+            text = stringResource(R.string.themes_clear_shared_icons_hint),
+            fontSize = 16.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { showClearSharedIconsDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+        ) {
+            Text(stringResource(R.string.themes_clear_shared_icons), fontSize = 22.sp)
         }
 
         SettingsTitle(stringResource(R.string.themes_drive_mode_section))
@@ -338,6 +355,40 @@ fun ThemesTabContent(
             },
             dismissButton = {
                 OutlinedButton(onClick = rememberWrappedOnClick { showClearCacheDialog = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (showClearSharedIconsDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearSharedIconsDialog = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.themes_clear_shared_icons_dialog_title)) },
+            text = {
+                AppAlertDialogText(stringResource(R.string.themes_clear_shared_icons_dialog_message))
+            },
+            confirmButton = {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        showClearSharedIconsDialog = false
+                        scope.launch {
+                            settingsViewModel.clearSharedLauncherAppIconsFolder()
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    R.string.toast_theme_shared_icons_cleared,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.themes_clear_shared_icons_confirm))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = rememberWrappedOnClick { showClearSharedIconsDialog = false }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },

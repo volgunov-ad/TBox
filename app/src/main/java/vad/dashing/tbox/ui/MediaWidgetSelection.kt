@@ -62,7 +62,7 @@ fun MediaPlayersInlineSelection(
 ) {
     val context = LocalContext.current
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
-    val apps = rememberLaunchableAppEntries(iconRevision)
+    val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
     var pendingIconPackage by remember { mutableStateOf<String?>(null) }
     val pickCustomIcon = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
