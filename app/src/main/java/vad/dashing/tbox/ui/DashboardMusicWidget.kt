@@ -83,6 +83,7 @@ fun DashboardMusicWidgetItem(
 ) {
     val context = LocalContext.current
     val launcherIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val selectedPlayers = remember(widget.dataKey, widgetConfig.mediaPlayers) {
         resolveMediaPlayersForWidget(widgetConfig)
@@ -297,6 +298,7 @@ fun DashboardMusicWidgetItem(
                             selectedPackage = selectedPackage,
                             launcherIconRevision = launcherIconRevision,
                             iconLookup = iconLookup,
+                            suppressCustomIcon = themeActivating,
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
@@ -348,6 +350,7 @@ fun DashboardMusicWidgetItem(
                             selectedPackage = selectedPackage,
                             launcherIconRevision = launcherIconRevision,
                             iconLookup = iconLookup,
+                            suppressCustomIcon = themeActivating,
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
@@ -498,6 +501,7 @@ private fun MusicWidgetPlayerAvatar(
     selectedPackage: String,
     launcherIconRevision: Int,
     iconLookup: LauncherAppIconPaths.Lookup,
+    suppressCustomIcon: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -507,16 +511,22 @@ private fun MusicWidgetPlayerAvatar(
     val enumPlayer = remember(selectedPackage) {
         SupportedMediaPlayer.fromPackage(selectedPackage)
     }
-    val appIcon = remember(selectedPackage, context, launcherIconRevision, iconSizePx, iconLookup) {
+    val appIcon = remember(selectedPackage, context, launcherIconRevision, iconSizePx, iconLookup, suppressCustomIcon) {
         if (selectedPackage.isBlank() || enumPlayer != null) {
             null
-        } else {
+        } else if (!suppressCustomIcon) {
             decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx, iconLookup)
                 ?: runCatching {
                     val pm = context.packageManager
                     val info = pm.getApplicationInfo(selectedPackage, 0)
                     info.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
                 }.getOrNull()
+        } else {
+            runCatching {
+                val pm = context.packageManager
+                val info = pm.getApplicationInfo(selectedPackage, 0)
+                info.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
+            }.getOrNull()
         }
     }
     val clip = Modifier.clip(RoundedCornerShape(4.dp))

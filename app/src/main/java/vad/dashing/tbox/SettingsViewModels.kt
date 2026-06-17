@@ -542,6 +542,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val activeThemeSections = settingsManager.activeThemeSectionsFlow
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptySet())
 
+    val themeActivationInProgress = settingsManager.themeActivationInProgressFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = false)
+
     val driveModeThemePaths = settingsManager.driveModeThemePathsFlow
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyMap())
 

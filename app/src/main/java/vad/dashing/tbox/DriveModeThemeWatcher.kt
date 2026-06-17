@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
@@ -19,6 +21,7 @@ class DriveModeThemeWatcher(
 ) {
     private var lastAppliedCacheKey: String? = null
     private var lastAppliedKey: Int? = null
+    private val activationMutex = Mutex()
 
     fun start() {
         scope.launch {
@@ -45,25 +48,27 @@ class DriveModeThemeWatcher(
                     val cacheKey = ThemeCacheKeys.driveModeCacheKey(key)
                     if (cacheKey == lastAppliedCacheKey && key == lastAppliedKey) return@collect
                     withContext(Dispatchers.IO) {
-                        if (!ThemeMaterialization.isMaterialized(context, cacheKey)) {
-                            if (!ThemeFileResolver.isAccessible(context, sourceUri)) return@withContext
-                            val materialized = ThemeApply.materializeDriveModeThemeFromUri(
+                        activationMutex.withLock {
+                            if (!ThemeMaterialization.isMaterialized(context, cacheKey)) {
+                                if (!ThemeFileResolver.isAccessible(context, sourceUri)) return@withLock
+                                val materialized = ThemeApply.materializeDriveModeThemeFromUri(
+                                    context = context,
+                                    rawValue = key,
+                                    sourceUri = sourceUri,
+                                )
+                                if (materialized.isFailure) return@withLock
+                            }
+                            if (!ThemeMaterialization.isMaterialized(context, cacheKey)) return@withLock
+                            val result = ThemeApply.activateFromCache(
                                 context = context,
-                                rawValue = key,
-                                sourceUri = sourceUri,
+                                settingsManager = settingsManager,
+                                settingsViewModel = null,
+                                cacheKey = cacheKey,
                             )
-                            if (materialized.isFailure) return@withContext
-                        }
-                        if (!ThemeMaterialization.isMaterialized(context, cacheKey)) return@withContext
-                        val result = ThemeApply.activateFromCache(
-                            context = context,
-                            settingsManager = settingsManager,
-                            settingsViewModel = null,
-                            cacheKey = cacheKey,
-                        )
-                        if (result.isSuccess) {
-                            lastAppliedCacheKey = cacheKey
-                            lastAppliedKey = key
+                            if (result.isSuccess) {
+                                lastAppliedCacheKey = cacheKey
+                                lastAppliedKey = key
+                            }
                         }
                     }
                 }

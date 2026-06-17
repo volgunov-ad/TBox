@@ -36,6 +36,7 @@ internal fun DashboardAppLauncherWidgetItem(
     packageName: String,
     customIconRevision: Int,
     iconLookup: LauncherAppIconPaths.Lookup,
+    suppressCustomIcon: Boolean = false,
     showTitle: Boolean,
     titleOverride: String = "",
     onClick: () -> Unit,
@@ -46,14 +47,17 @@ internal fun DashboardAppLauncherWidgetItem(
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
-    val imageBitmap = remember(packageName, customIconRevision, iconLookup) {
+    val imageBitmap = remember(packageName, customIconRevision, iconLookup, suppressCustomIcon) {
         if (packageName.isBlank()) return@remember null
-        val custom: ImageBitmap? = runCatching {
-            val f = LauncherAppIconPaths.resolveIconFile(context.filesDir, packageName, iconLookup)
-                ?: return@runCatching null
-            BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
-        }.getOrNull()
-        custom ?: runCatching {
+        if (!suppressCustomIcon) {
+            val custom: ImageBitmap? = runCatching {
+                val f = LauncherAppIconPaths.resolveIconFile(context.filesDir, packageName, iconLookup)
+                    ?: return@runCatching null
+                BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
+            }.getOrNull()
+            if (custom != null) return@remember custom
+        }
+        runCatching {
             val pm = context.packageManager
             val info = pm.getApplicationInfo(packageName, 0)
             info.loadIcon(pm).toBitmap().asImageBitmap()

@@ -15,10 +15,14 @@ import androidx.datastore.preferences.preferencesDataStore
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.fuel.FuelTypes
@@ -228,6 +232,25 @@ data class BackgroundServiceSettingsSnapshot(
 )
 
 class SettingsManager(private val context: Context) {
+
+    private val themeActivationDepth = AtomicInteger(0)
+    private val _themeActivationInProgress = MutableStateFlow(false)
+    val themeActivationInProgressFlow: StateFlow<Boolean> = _themeActivationInProgress.asStateFlow()
+
+    /** While true, UI should avoid drawing file-backed bitmaps (theme switch in progress). */
+    suspend fun <T> runWithThemeActivation(block: suspend () -> T): T {
+        val wasIdle = themeActivationDepth.getAndIncrement() == 0
+        if (wasIdle) {
+            _themeActivationInProgress.value = true
+        }
+        try {
+            return block()
+        } finally {
+            if (themeActivationDepth.decrementAndGet() == 0) {
+                _themeActivationInProgress.value = false
+            }
+        }
+    }
 
     companion object {
         /** Tab key for the home [vad.dashing.tbox.ui.MainScreen] (no left sidebar). */

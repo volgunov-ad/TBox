@@ -325,6 +325,7 @@ private fun MainScreenWallpaperBackground(
     val selectedDark by settingsViewModel.mainScreenWallpaperDarkSelectedFile.collectAsStateWithLifecycle()
     val epoch by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
     val wallpaperCrop by settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
+    val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
     val folderUriStr = if (theme == 2) folderDark else folderLight
     val savedSelectedName = if (theme == 2) selectedDark else selectedLight
     val folderUri = remember(folderUriStr) {
@@ -371,26 +372,35 @@ private fun MainScreenWallpaperBackground(
         val wallpaperCount = sortedNames.size
         val pagerPageCount = mainScreenWallpaperPagerPageCount(wallpaperCount)
         val initialPagerPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
-        key(folderUriStr, sortedNames.size) {
+        val wallpaperNamesKey = sortedNames.joinToString("\u0000")
+        key(folderUriStr, wallpaperNamesKey) {
             val pagerState = rememberPagerState(
                 initialPage = initialPagerPage,
                 pageCount = { pagerPageCount },
             )
-            val wallpaperBitmapCache = remember(folderUriStr, sortedNames.size) {
+            val wallpaperBitmapCache = remember(folderUriStr, wallpaperNamesKey) {
                 mutableStateMapOf<String, ImageBitmap>()
             }
-            val wallpaperLoading = remember(folderUriStr, sortedNames.size) {
+            val wallpaperLoading = remember(folderUriStr, wallpaperNamesKey) {
                 mutableStateMapOf<String, Boolean>()
             }
-            val prefetchMutex = remember(folderUriStr, sortedNames.size) { Mutex() }
-            var prefetchGeneration by remember(folderUriStr, sortedNames.size) { mutableIntStateOf(0) }
+            val prefetchMutex = remember(folderUriStr, wallpaperNamesKey) { Mutex() }
+            var prefetchGeneration by remember(folderUriStr, wallpaperNamesKey) { mutableIntStateOf(0) }
+            LaunchedEffect(themeActivating) {
+                if (themeActivating) {
+                    prefetchGeneration += 1
+                    wallpaperBitmapCache.clear()
+                    wallpaperLoading.clear()
+                }
+            }
             LaunchedEffect(targetIdx, folderUriStr, sortedNames) {
                 val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
                 if (pagerState.currentPage != wantPage) {
                     pagerState.scrollToPage(wantPage)
                 }
             }
-            LaunchedEffect(targetIdx, sortedNames, uriByFileName, decodeTargetWidthPx, decodeTargetHeightPx) {
+            LaunchedEffect(targetIdx, sortedNames, uriByFileName, decodeTargetWidthPx, decodeTargetHeightPx, themeActivating) {
+                if (themeActivating) return@LaunchedEffect
                 prefetchGeneration += 1
                 val generation = prefetchGeneration
                 prefetchMainScreenWallpaperWindow(
@@ -408,7 +418,8 @@ private fun MainScreenWallpaperBackground(
                     prefetchMutex = prefetchMutex,
                 )
             }
-            LaunchedEffect(pagerState, sortedNames, wallpaperCount, decodeTargetWidthPx, decodeTargetHeightPx) {
+            LaunchedEffect(pagerState, sortedNames, wallpaperCount, decodeTargetWidthPx, decodeTargetHeightPx, themeActivating) {
+                if (themeActivating) return@LaunchedEffect
                 var previousTarget = pagerState.targetPage
                 var previousSettled = pagerState.settledPage
                 snapshotFlow { Triple(pagerState.targetPage, pagerState.currentPage, pagerState.settledPage) }
@@ -486,6 +497,7 @@ private fun MainScreenWallpaperBackground(
                         sortedNames = sortedNames,
                         bitmapCache = wallpaperBitmapCache,
                         wallpaperCrop = wallpaperCrop,
+                        suppressBitmapDraw = themeActivating,
                     )
                 }
             }
@@ -499,9 +511,10 @@ private fun MainScreenWallpaperPagerPage(
     sortedNames: List<String>,
     bitmapCache: SnapshotStateMap<String, ImageBitmap>,
     wallpaperCrop: Boolean,
+    suppressBitmapDraw: Boolean,
 ) {
     val nameKey = sortedNames[wallpaperIndex]
-    val slideBitmap = bitmapCache[nameKey]
+    val slideBitmap = if (suppressBitmapDraw) null else bitmapCache[nameKey]
     val wallpaperAlpha by animateFloatAsState(
         targetValue = if (slideBitmap != null) 1f else 0f,
         animationSpec = tween(durationMillis = 240),
@@ -546,6 +559,7 @@ private suspend fun prefetchMainScreenWallpaperWindow(
             swipeDirection = swipeDirection,
         )
         for (name in orderedNames) {
+            if (generation != currentGeneration()) return@withLock
             if (bitmapCache.containsKey(name) || loadingState[name] == true) continue
             val uri = uriByFileName[name] ?: continue
             loadingState[name] = true
@@ -556,7 +570,11 @@ private suspend fun prefetchMainScreenWallpaperWindow(
                     targetWidthPx = targetWidthPx,
                     targetHeightPx = targetHeightPx,
                 )
-                if (decoded != null && name in keepNames) {
+                if (
+                    decoded != null &&
+                    name in keepNames &&
+                    generation == currentGeneration()
+                ) {
                     bitmapCache[name] = decoded
                 }
             } finally {

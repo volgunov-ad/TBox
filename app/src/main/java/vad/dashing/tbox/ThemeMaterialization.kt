@@ -118,46 +118,51 @@ object ThemeMaterialization {
         settingsViewModel: SettingsViewModel?,
         cacheKey: String,
     ): Result<ThemeApply.ApplyResult> = withContext(Dispatchers.IO) {
-        runCatching {
-            val dir = cacheDir(context, cacheKey)
-            val manifest = readManifest(context, cacheKey)
-                ?: throw IllegalArgumentException("theme_cache_missing")
-            val themeJson = File(dir, THEME_JSON_FILE).readText()
-            val importResult = ThemeLayoutExport.importJson(context, settingsManager, themeJson)
-            if (importResult.isFailure) {
-                throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
+        settingsManager.runWithThemeActivation {
+            runCatching {
+                val dir = cacheDir(context, cacheKey)
+                val manifest = readManifest(context, cacheKey)
+                    ?: throw IllegalArgumentException("theme_cache_missing")
+                val themeJson = File(dir, THEME_JSON_FILE).readText()
+                val sections = ThemeSection.parseJsonArray(
+                    runCatching { JSONObject(themeJson) }.getOrNull()?.optJSONArray("sections"),
+                )
+
+                settingsManager.saveActiveTheme(
+                    uri = cacheKey,
+                    fingerprint = manifest.fingerprint,
+                    sections = sections,
+                )
+
+                val importResult = ThemeLayoutExport.importJson(context, settingsManager, themeJson)
+                if (importResult.isFailure) {
+                    throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
+                }
+
+                applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir)
+
+                settingsManager.bumpLauncherAppIconRevision()
+                settingsManager.bumpTileBackgroundImageRevision()
+
+                val iconsInTheme = if (ThemeSection.APP_ICONS in sections) {
+                    LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
+                } else {
+                    0
+                }
+                val tileBackgroundsInTheme = if (
+                    ThemeSection.MAIN_SCREEN in sections || ThemeSection.FLOATING_PANELS in sections
+                ) {
+                    TileBackgroundImageStorage.countThemeCacheFiles(context.filesDir, cacheKey)
+                } else {
+                    0
+                }
+
+                ThemeApply.ApplyResult(
+                    sections = sections,
+                    iconsImported = iconsInTheme,
+                    tileBackgroundsImported = tileBackgroundsInTheme,
+                )
             }
-            val sections = importResult.getOrThrow()
-
-            applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir)
-
-            settingsManager.bumpLauncherAppIconRevision()
-            settingsManager.bumpTileBackgroundImageRevision()
-
-            val iconsInTheme = if (ThemeSection.APP_ICONS in sections) {
-                LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
-            } else {
-                0
-            }
-            val tileBackgroundsInTheme = if (
-                ThemeSection.MAIN_SCREEN in sections || ThemeSection.FLOATING_PANELS in sections
-            ) {
-                TileBackgroundImageStorage.countThemeCacheFiles(context.filesDir, cacheKey)
-            } else {
-                0
-            }
-
-            settingsManager.saveActiveTheme(
-                uri = cacheKey,
-                fingerprint = manifest.fingerprint,
-                sections = sections,
-            )
-
-            ThemeApply.ApplyResult(
-                sections = sections,
-                iconsImported = iconsInTheme,
-                tileBackgroundsImported = tileBackgroundsInTheme,
-            )
         }
     }
 

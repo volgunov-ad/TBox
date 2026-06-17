@@ -254,9 +254,19 @@ internal suspend fun decodeImageBitmapFromUri(
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
         context.contentResolver.openInputStream(uri)?.use { input ->
-            BitmapFactory.decodeStream(input, null, decodeOptions)?.asImageBitmap()
+            BitmapFactory.decodeStream(input, null, decodeOptions)?.toOwnedImageBitmap()
         }
     }.getOrNull()
+}
+
+private fun Bitmap.toOwnedImageBitmap(): ImageBitmap {
+    val config = config ?: Bitmap.Config.ARGB_8888
+    val owned = copy(config, false)
+    if (owned != null && owned !== this) {
+        recycle()
+        return owned.asImageBitmap()
+    }
+    return asImageBitmap()
 }
 
 private fun computeInSampleSize(
