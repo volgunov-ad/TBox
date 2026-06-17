@@ -9,7 +9,7 @@ import java.io.File
 class TileBackgroundImageStorageTest {
 
     @Test
-    fun resolveFile_prefersSharedOverrideOverThemeCache() {
+    fun resolveFile_prefersThemeCacheOverSharedOverride() {
         val root = createTempDir()
         val rel = TileBackgroundImageStorage.relativePathFor("panel_a", 0, darkTheme = false)
         val sharedFile = File(root, rel.replace('/', File.separatorChar))
@@ -26,7 +26,7 @@ class TileBackgroundImageStorageTest {
         )
         val resolved = TileBackgroundImageStorage.resolveFile(root, rel, lookup)
         assertNotNull(resolved)
-        assertArrayEquals(byteArrayOf(1), resolved!!.readBytes())
+        assertArrayEquals(byteArrayOf(2), resolved!!.readBytes())
         root.deleteRecursively()
     }
 
@@ -50,6 +50,23 @@ class TileBackgroundImageStorageTest {
     }
 
     @Test
+    fun resolveFile_usesSharedOverrideWhenThemeCacheMissing() {
+        val root = createTempDir()
+        val rel = TileBackgroundImageStorage.relativePathFor("panel_d", 0, darkTheme = false)
+        val sharedFile = File(root, rel.replace('/', File.separatorChar))
+        sharedFile.parentFile?.mkdirs()
+        sharedFile.writeBytes(byteArrayOf(4))
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "theme_d",
+            activeThemeSections = setOf(ThemeSection.MAIN_SCREEN),
+        )
+        val resolved = TileBackgroundImageStorage.resolveFile(root, rel, lookup)
+        assertNotNull(resolved)
+        assertArrayEquals(byteArrayOf(4), resolved!!.readBytes())
+        root.deleteRecursively()
+    }
+
+    @Test
     fun resolveFile_skipsThemeCacheWhenSectionsExcludePanels() {
         val root = createTempDir()
         val rel = TileBackgroundImageStorage.relativePathFor("panel_c", 0, darkTheme = false)
@@ -58,11 +75,16 @@ class TileBackgroundImageStorageTest {
             parentFile?.mkdirs()
             writeBytes(byteArrayOf(3))
         }
+        val sharedFile = File(root, rel.replace('/', File.separatorChar))
+        sharedFile.parentFile?.mkdirs()
+        sharedFile.writeBytes(byteArrayOf(5))
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "theme_c",
             activeThemeSections = setOf(ThemeSection.APP_ICONS),
         )
-        assertNull(TileBackgroundImageStorage.resolveFile(root, rel, lookup))
+        val resolved = TileBackgroundImageStorage.resolveFile(root, rel, lookup)
+        assertNotNull(resolved)
+        assertArrayEquals(byteArrayOf(5), resolved!!.readBytes())
         root.deleteRecursively()
     }
 }

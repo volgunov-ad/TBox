@@ -358,7 +358,7 @@
     <string name="themes_clear_cache_dialog_message">Будут удалены все материализованные темы, кроме текущей активной. Назначения тем по режиму вождения также будут сброшены.</string>
     <string name="themes_clear_cache_confirm">Очистить</string>
     <string name="themes_clear_shared_icons">Очистить общую папку иконок</string>
-    <string name="themes_clear_shared_icons_hint">Удаляет пользовательские иконки из launcher_app_icons — тех, что заданы вручную вне тем. Иконки из активной темы (в кэше files/themes/) не затрагиваются.</string>
+    <string name="themes_clear_shared_icons_hint">Удаляет ручные иконки из launcher_app_icons. Иконки в кэше активной темы не затрагиваются; для пакетов, где есть и тема, и ручной файл, на экране по-прежнему показывается иконка из темы.</string>
     <string name="themes_clear_shared_icons_dialog_title">Очистить общую папку иконок?</string>
     <string name="themes_clear_shared_icons_dialog_message">Будут удалены все иконки из общей папки (ручные замены для виджетов «Ярлык приложения» и музыкального плеера). Иконки, хранящиеся внутри материализованных тем, останутся.</string>
     <string name="themes_clear_shared_icons_confirm">Очистить</string>

@@ -7,8 +7,9 @@ import java.io.File
  * Tile background images stored as paths relative to [Context.filesDir] (e.g. `tile_backgrounds/panel/0_light`).
  *
  * Resolution order when reading:
- * 1. Shared [DIR_NAME]/… — user overrides (written by [SettingsManager.setTileBackgroundImageFromUri])
- * 2. Active theme cache `files/themes/{cacheKey}/tile_backgrounds/…` when main screen or floating panels are in the active theme
+ * 1. Active theme cache `files/themes/{cacheKey}/tile_backgrounds/…` when main screen or floating panels are in the active theme
+ * 2. Shared [DIR_NAME]/… — user overrides (written by [SettingsManager.setTileBackgroundImageFromUri])
+ * 3. Tile background color only (callers when this returns null)
  */
 object TileBackgroundImageStorage {
     const val DIR_NAME = "tile_backgrounds"
@@ -64,9 +65,10 @@ object TileBackgroundImageStorage {
         relPath: String?,
         lookup: LauncherAppIconPaths.Lookup,
     ): File? {
-        resolveSharedFile(filesDir, relPath)?.let { return it }
-        if (!themeSectionsIncludeTileBackgrounds(lookup)) return null
-        return resolveThemeCacheFile(filesDir, relPath, lookup.activeThemeCacheKey)
+        if (themeSectionsIncludeTileBackgrounds(lookup)) {
+            resolveThemeCacheFile(filesDir, relPath, lookup.activeThemeCacheKey)?.let { return it }
+        }
+        return resolveSharedFile(filesDir, relPath)
     }
 
     fun hasSharedOverride(filesDir: File, relPath: String?): Boolean =

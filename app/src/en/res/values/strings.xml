@@ -355,7 +355,7 @@
     <string name="themes_clear_cache_dialog_message">All materialized themes except the current active one will be deleted. Drive mode theme assignments will also be reset.</string>
     <string name="themes_clear_cache_confirm">Clear</string>
     <string name="themes_clear_shared_icons">Clear shared icon folder</string>
-    <string name="themes_clear_shared_icons_hint">Removes user icons from launcher_app_icons — manual overrides outside themes. Icons inside materialized themes (files/themes/) are not affected.</string>
+    <string name="themes_clear_shared_icons_hint">Removes manual icons from launcher_app_icons. Theme cache icons are kept; where both exist, the theme icon is still shown on screen.</string>
     <string name="themes_clear_shared_icons_dialog_title">Clear shared icon folder?</string>
     <string name="themes_clear_shared_icons_dialog_message">All icons in the shared folder (manual overrides for App launcher and music player widgets) will be deleted. Icons stored inside materialized themes will remain.</string>
     <string name="themes_clear_shared_icons_confirm">Clear</string>

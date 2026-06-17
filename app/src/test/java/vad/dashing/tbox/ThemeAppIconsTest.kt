@@ -34,7 +34,7 @@ class ThemeAppIconsTest {
     }
 
     @Test
-    fun resolveIconFile_prefersSharedOverrideOverThemeCache() {
+    fun resolveIconFile_prefersThemeCacheOverSharedOverride() {
         val root = createTempDir()
         val shared = LauncherAppIconPaths.sharedIconsDir(root).apply { mkdirs() }
         val themeIcons = LauncherAppIconPaths.themeIconsDir(root, "my_theme").apply { mkdirs() }
@@ -46,7 +46,7 @@ class ThemeAppIconsTest {
         )
         val resolved = LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup)
         assertNotNull(resolved)
-        assertArrayEquals(byteArrayOf(1), resolved!!.readBytes())
+        assertArrayEquals(byteArrayOf(2), resolved!!.readBytes())
         root.deleteRecursively()
     }
 
@@ -66,15 +66,34 @@ class ThemeAppIconsTest {
     }
 
     @Test
+    fun resolveIconFile_usesSharedOverrideWhenThemeCacheMissing() {
+        val root = createTempDir()
+        val shared = LauncherAppIconPaths.sharedIconsDir(root).apply { mkdirs() }
+        File(shared, "com.example.app").writeBytes(byteArrayOf(9))
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "my_theme",
+            activeThemeSections = setOf(ThemeSection.APP_ICONS),
+        )
+        val resolved = LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup)
+        assertNotNull(resolved)
+        assertArrayEquals(byteArrayOf(9), resolved!!.readBytes())
+        root.deleteRecursively()
+    }
+
+    @Test
     fun resolveIconFile_skipsThemeCacheWhenSectionNotIncluded() {
         val root = createTempDir()
         val themeIcons = LauncherAppIconPaths.themeIconsDir(root, "my_theme").apply { mkdirs() }
         File(themeIcons, "com.example.app").writeBytes(byteArrayOf(2))
+        val shared = LauncherAppIconPaths.sharedIconsDir(root).apply { mkdirs() }
+        File(shared, "com.example.app").writeBytes(byteArrayOf(1))
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "my_theme",
             activeThemeSections = setOf(ThemeSection.MAIN_SCREEN),
         )
-        assertNull(LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup))
+        val resolved = LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup)
+        assertNotNull(resolved)
+        assertArrayEquals(byteArrayOf(1), resolved!!.readBytes())
         root.deleteRecursively()
     }
 

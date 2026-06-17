@@ -6,8 +6,9 @@ import java.io.File
  * Custom icons for app-launcher and music-player widgets.
  *
  * Resolution order when reading:
- * 1. [SettingsManager.LAUNCHER_APP_ICONS_DIR] — user overrides (not part of theme cache)
- * 2. Active theme cache `files/themes/{cacheKey}/icons/` when [ThemeSection.APP_ICONS] is in the active theme
+ * 1. Active theme cache `files/themes/{cacheKey}/icons/` when [ThemeSection.APP_ICONS] is in the active theme
+ * 2. [SettingsManager.LAUNCHER_APP_ICONS_DIR] — user overrides in the shared folder
+ * 3. System icon (resolved by callers when this returns null)
  *
  * User saves always go to the shared folder only.
  */
@@ -47,13 +48,17 @@ object LauncherAppIconPaths {
     }
 
     fun resolveIconFile(filesDir: File, packageName: String, lookup: Lookup): File? {
+        if (ThemeSection.APP_ICONS in lookup.activeThemeSections) {
+            val cacheKey = lookup.activeThemeCacheKey.trim()
+            if (ThemeCacheKeys.isLikelyCacheKey(cacheKey)) {
+                val themeDir = themeIconsDir(filesDir, cacheKey)
+                if (themeDir.isDirectory) {
+                    resolveStoredIconFile(themeDir, packageName)?.let { return it }
+                }
+            }
+        }
         resolveStoredIconFile(sharedIconsDir(filesDir), packageName)?.let { return it }
-        if (ThemeSection.APP_ICONS !in lookup.activeThemeSections) return null
-        val cacheKey = lookup.activeThemeCacheKey.trim()
-        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return null
-        val themeDir = themeIconsDir(filesDir, cacheKey)
-        if (!themeDir.isDirectory) return null
-        return resolveStoredIconFile(themeDir, packageName)
+        return null
     }
 
     fun hasSharedOverride(filesDir: File, packageName: String): Boolean =
