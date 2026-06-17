@@ -21,6 +21,7 @@ import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import android.content.Context
+import java.io.File
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
@@ -1917,6 +1918,45 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 updateMainScreenPanel(panelId, update)
             } else {
                 updateSelectedMainScreenPanel(update)
+            }
+        }
+    }
+
+    data class ThemeExportResult(
+        val savedToUri: Boolean,
+        val fallbackPath: String? = null,
+    )
+
+    suspend fun exportThemeBundle(
+        context: Context,
+        destinationUri: Uri?,
+        sections: Set<ThemeSection>,
+    ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val workFile = File(context.cacheDir, "theme_export_work.${System.currentTimeMillis()}.tboxtheme")
+            try {
+                ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, workFile)
+                if (destinationUri != null) {
+                    val copied = runCatching {
+                        ThemeBundleExport.copyFileToUri(context, workFile, destinationUri)
+                    }
+                    if (copied.isSuccess) {
+                        return@runCatching ThemeExportResult(savedToUri = true)
+                    }
+                    android.util.Log.w(
+                        "ThemeExport",
+                        "SAF copy failed, using fallback directory",
+                        copied.exceptionOrNull(),
+                    )
+                }
+                val fallbackFile = File(
+                    ThemeBundleExport.fallbackExportDir(context),
+                    "theme_${System.currentTimeMillis()}.${ThemeBundleExport.THEME_FILE_EXTENSION}",
+                )
+                workFile.copyTo(fallbackFile, overwrite = true)
+                ThemeExportResult(savedToUri = false, fallbackPath = fallbackFile.absolutePath)
+            } finally {
+                workFile.delete()
             }
         }
     }

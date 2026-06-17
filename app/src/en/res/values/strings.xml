@@ -356,7 +356,8 @@
     <string name="toast_theme_cache_cleared">Theme folder cleared</string>
     <string name="toast_theme_drive_mode_error">Failed to prepare drive mode theme: %1$s</string>
     <string name="toast_theme_create_ok">Theme saved</string>
-    <string name="toast_theme_create_error">Could not save theme</string>
+    <string name="toast_theme_create_ok_fallback">Theme saved to app folder:\n%1$s</string>
+    <string name="toast_theme_create_error">Could not save theme: %1$s</string>
     <string name="toast_theme_apply_ok">Theme applied</string>
     <string name="toast_theme_apply_error">Failed to apply theme: %1$s</string>
     <string name="toast_theme_file_not_found">Theme file not found</string>

@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import kotlinx.coroutines.flow.first
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -15,6 +16,8 @@ import java.util.zip.ZipOutputStream
 object ThemeBundleExport {
 
     const val THEME_FILE_EXTENSION = "tboxtheme"
+    const val EXPORT_FALLBACK_DIR = "exported_themes"
+    private const val LOG_TAG = "ThemeExport"
     /** Skip individual zip entries larger than this (same cap as main-screen wallpaper files). */
     private const val MAX_ENTRY_BYTES = MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES
     private const val THEME_JSON_ENTRY = "theme.json"
@@ -117,6 +120,36 @@ object ThemeBundleExport {
                 addWallpaperFoldersToZip(context, settingsManager, zos)
             }
         }
+    }
+
+    suspend fun exportBundleToFile(
+        context: Context,
+        settingsManager: SettingsManager,
+        sections: Set<ThemeSection>,
+        file: File,
+    ) {
+        file.parentFile?.mkdirs()
+        file.outputStream().buffered().use { output ->
+            exportBundle(context, settingsManager, sections, output)
+        }
+    }
+
+    fun fallbackExportDir(context: Context): File =
+        File(context.getExternalFilesDir(null), EXPORT_FALLBACK_DIR).also { it.mkdirs() }
+
+    fun copyFileToUri(context: Context, file: File, uri: Uri) {
+        var lastError: Throwable? = null
+        for (mode in listOf("wt", "w", "rwt")) {
+            val result = runCatching {
+                context.contentResolver.openOutputStream(uri, mode)?.use { output ->
+                    file.inputStream().buffered().use { input -> input.copyTo(output) }
+                } ?: error("openOutputStream returned null (mode=$mode)")
+            }
+            if (result.isSuccess) return
+            lastError = result.exceptionOrNull()
+            Log.w(LOG_TAG, "copyFileToUri failed for mode=$mode", lastError)
+        }
+        throw lastError ?: IllegalStateException("copyFileToUri failed")
     }
 
     suspend fun exportBundleToBytes(

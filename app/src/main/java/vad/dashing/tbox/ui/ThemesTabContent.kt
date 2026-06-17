@@ -68,25 +68,78 @@ fun ThemesTabContent(
   var pendingDriveModeRawValue by remember { mutableIntStateOf(-1) }
 
     val createThemeLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("*/*"),
+        ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
         val sections = buildThemeSections(includeMainScreen, includeFloatingPanels, includeAppIcons)
-        if (sections.isEmpty()) return@rememberLauncherForActivityResult
+        if (sections.isEmpty() || uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openOutputStream(uri)?.use { output ->
-                        settingsViewModel.exportThemeBundle(context, output, sections)
-                    } ?: error("theme_export_output_stream_unavailable")
+            val result = settingsViewModel.exportThemeBundle(context, uri, sections)
+            withContext(Dispatchers.Main) {
+                when {
+                    result.isSuccess && result.getOrNull()?.savedToUri == true -> {
+                        Toast.makeText(context, R.string.toast_theme_create_ok, Toast.LENGTH_LONG).show()
+                    }
+                    result.isSuccess -> {
+                        val path = result.getOrNull()?.fallbackPath.orEmpty()
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.toast_theme_create_ok_fallback, path),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                    else -> {
+                        val msg = result.exceptionOrNull()?.message.orEmpty()
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.toast_theme_create_error, msg),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
                 }
             }
-            withContext(Dispatchers.Main) {
-                Toast.makeText(
-                    context,
-                    if (result.isSuccess) R.string.toast_theme_create_ok else R.string.toast_theme_create_error,
-                    Toast.LENGTH_LONG,
-                ).show()
+        }
+    }
+
+    fun launchThemeExport() {
+        val sections = buildThemeSections(includeMainScreen, includeFloatingPanels, includeAppIcons)
+        if (sections.isEmpty()) {
+            Toast.makeText(context, R.string.themes_create_select_section, Toast.LENGTH_SHORT).show()
+            return
+        }
+        showCreateDialog = false
+        try {
+            createThemeLauncher.launch("theme.${ThemeBundleExport.THEME_FILE_EXTENSION}")
+        } catch (e: Exception) {
+            android.util.Log.w("ThemeExport", "CreateDocument launch failed, saving to app folder", e)
+            scope.launch {
+                val result = settingsViewModel.exportThemeBundle(context, null, sections)
+                withContext(Dispatchers.Main) {
+                    when {
+                        result.isSuccess -> {
+                            val export = result.getOrNull()
+                            if (export?.savedToUri == true) {
+                                Toast.makeText(context, R.string.toast_theme_create_ok, Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(
+                                    context,
+                                    context.getString(
+                                        R.string.toast_theme_create_ok_fallback,
+                                        export?.fallbackPath.orEmpty(),
+                                    ),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                        else -> {
+                            val msg = result.exceptionOrNull()?.message.orEmpty()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.toast_theme_create_error, msg),
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    }
+                }
             }
         }
     }
@@ -305,31 +358,7 @@ fun ThemesTabContent(
             },
             confirmButton = {
                 Button(
-                    onClick = rememberWrappedOnClick {
-                        val sections = buildThemeSections(
-                            includeMainScreen,
-                            includeFloatingPanels,
-                            includeAppIcons,
-                        )
-                        if (sections.isEmpty()) {
-                            Toast.makeText(
-                                context,
-                                R.string.themes_create_select_section,
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                            return@rememberWrappedOnClick
-                        }
-                        showCreateDialog = false
-                        try {
-                            createThemeLauncher.launch("theme.${ThemeBundleExport.THEME_FILE_EXTENSION}")
-                        } catch (_: Exception) {
-                            Toast.makeText(
-                                context,
-                                R.string.toast_theme_create_error,
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        }
-                    },
+                    onClick = rememberWrappedOnClick { launchThemeExport() },
                 ) {
                     AppAlertDialogButtonLabel(stringResource(R.string.themes_create_confirm))
                 }
