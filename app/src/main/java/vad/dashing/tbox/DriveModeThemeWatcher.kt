@@ -96,7 +96,7 @@ class DriveModeThemeWatcher(
 
     companion object {
         const val SOURCE_ID = "theme_drive_mode"
-        const val DRIVE_MODE_THEME_ACTIVATION_DEBOUNCE_MS = 3_000L
+        const val DRIVE_MODE_THEME_ACTIVATION_DEBOUNCE_MS = 2_000L
 
         internal data class DriveModeThemeActivationRequest(
             val modeRawValue: Int,

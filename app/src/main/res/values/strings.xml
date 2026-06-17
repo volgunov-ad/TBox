@@ -347,7 +347,7 @@
     <string name="themes_create_replace_downloads_message">В папке «Загрузки» уже есть файл %1$s. Заменить его?</string>
     <string name="themes_create_select_section">Выберите хотя бы один раздел темы</string>
     <string name="themes_drive_mode_section">Темы по режиму вождения</string>
-    <string name="themes_drive_mode_hint">При смене режима вождения автоматически применяется выбранный файл темы (через 3 с после остановки на режиме). Приоритет у основного режима (не 6DCT).</string>
+    <string name="themes_drive_mode_hint">При смене режима вождения автоматически применяется выбранный файл темы (через 2 с после остановки на режиме). Приоритет у основного режима (не 6DCT).</string>
     <string name="themes_drive_mode_not_assigned">Не назначена</string>
     <string name="themes_drive_mode_pick">Выбрать файл</string>
     <string name="themes_drive_mode_clear">Удалить</string>

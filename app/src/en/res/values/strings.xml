@@ -344,7 +344,7 @@
     <string name="themes_create_replace_downloads_message">%1$s already exists in Downloads. Replace it?</string>
     <string name="themes_create_select_section">Select at least one theme section</string>
     <string name="themes_drive_mode_section">Themes by drive mode</string>
-    <string name="themes_drive_mode_hint">When drive mode changes, the selected theme file is applied automatically (3 s after the mode stops changing). Standard drive mode takes priority over 6DCT.</string>
+    <string name="themes_drive_mode_hint">When drive mode changes, the selected theme file is applied automatically (2 s after the mode stops changing). Standard drive mode takes priority over 6DCT.</string>
     <string name="themes_drive_mode_not_assigned">Not assigned</string>
     <string name="themes_drive_mode_pick">Choose file</string>
     <string name="themes_drive_mode_clear">Remove</string>
