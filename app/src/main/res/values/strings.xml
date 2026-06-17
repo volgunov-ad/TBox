@@ -295,7 +295,7 @@
     <string name="settings_main_screen_wallpaper_light">Папка с обоями (светлая тема)</string>
     <string name="settings_main_screen_wallpaper_dark">Папка с обоями (тёмная тема)</string>
     <string name="settings_main_screen_wallpaper_pick_source">Выбрать</string>
-    <string name="settings_main_screen_wallpaper_folder_hint">Обои не копируются в приложение. Нажмите «Выбрать» и укажите один файл картинки в нужной папке — тогда для фона используется вся эта папка (все изображения в ней, по имени файла). Если в системе есть выбор папки, можно выбрать сразу папку. На главном экране листайте фон горизонтально; панели и угловые кнопки перехватывают свои жесты.</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Обои не копируются в приложение. Нажмите «Выбрать» и укажите один файл картинки в нужной папке — тогда для фона используется вся эта папка (все изображения в ней, по имени файла). Если в системе есть выбор папки, можно выбрать сразу папку. При одной странице главного экрана листайте обои свайпом по фону; при нескольких страницах свайп меняет страницу, а кнопки со стрелками — обои. Панели и угловые кнопки перехватывают свои жесты.</string>
     <string name="settings_main_screen_wallpaper_all_files_hint">Для надёжного доступа к папке по пути на диске включите «Доступ ко всем файлам» для приложения (Android 11+).</string>
     <string name="settings_main_screen_wallpaper_open_all_files_settings">Открыть настройки доступа к файлам</string>
     <string name="settings_main_screen_wallpaper_path_mode_hint">Указан полный доступ к хранилищу: можно ввести абсолютный путь к папке с обоями и нажать «Применить путь».</string>
@@ -322,11 +322,13 @@
     <string name="settings_main_screen_corner_buttons_reset">Сбросить размер и цвета</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
     <string name="settings_main_screen_page_count_title">Количество страниц</string>
-    <string name="settings_main_screen_page_count_hint">От 1 до 5. При значении больше 1 на главном экране появляются кнопки перелистывания.</string>
+    <string name="settings_main_screen_page_count_hint">От 1 до 5. При значении больше 1 страницы листаются свайпом по экрану; кнопки со стрелками переключают обои (если в папке несколько файлов).</string>
     <string name="settings_main_screen_panel_page_title">Страница панели</string>
     <string name="settings_main_screen_panel_page_desc">Номер страницы, на которой отображается панель.</string>
     <string name="main_screen_page_prev_cd">Предыдущая страница</string>
     <string name="main_screen_page_next_cd">Следующая страница</string>
+    <string name="main_screen_wallpaper_prev_cd">Предыдущие обои</string>
+    <string name="main_screen_wallpaper_next_cd">Следующие обои</string>
     <string name="themes_tab_title">Темы</string>
     <string name="themes_create">Создать тему</string>
     <string name="themes_apply">Применить тему</string>

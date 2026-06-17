@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -55,6 +56,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
@@ -86,8 +88,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.abs
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.isVisibleOnMainScreenPage
+import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.loadWidgetsFromConfig
 
+internal class MainScreenWallpaperController {
+    var stepWallpaper: ((direction: Int) -> Unit)? = null
+
+    fun step(direction: Int) {
+        stepWallpaper?.invoke(direction)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(
     tboxViewModel: TboxViewModel,
@@ -122,24 +134,13 @@ fun MainScreen(
         if (currentTheme == 2) cornerBtnIconDark else cornerBtnIconLight
     )
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
+    val wallpaperController = remember { MainScreenWallpaperController() }
+    var wallpaperCount by remember { mutableIntStateOf(0) }
+    val multiPage = pageCount > 1
+    val showWallpaperNavButtons = multiPage && wallpaperCount > 1
 
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         settingsViewModel.flushMainScreenCurrentPage()
-    }
-
-    fun changePage(delta: Int) {
-        val count = pageCount.coerceAtLeast(1)
-        val next = when {
-            delta < 0 && currentPage <= 1 -> count
-            delta > 0 && currentPage >= count -> 1
-            else -> currentPage + delta
-        }
-        currentPage = next.coerceIn(1, count)
-        settingsViewModel.scheduleSaveMainScreenCurrentPage(currentPage)
-    }
-
-    fun onPageSwipe(direction: Int) {
-        changePage(direction)
     }
 
     var floatingOverlayEditRequest by remember { mutableStateOf<Pair<String, Int>?>(null) }
@@ -158,17 +159,47 @@ fun MainScreen(
         MainScreenWallpaperBackground(
             theme = currentTheme,
             settingsViewModel = settingsViewModel,
+            userScrollEnabled = !multiPage,
+            wallpaperController = wallpaperController,
+            onWallpaperCountChanged = { wallpaperCount = it },
             modifier = Modifier.fillMaxSize()
         )
         val maxWpx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val maxHpx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
 
-        mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, currentPage) }.forEach { panel ->
-            key(panel.id) {
-                MainScreenDashboardPanel(
-                    panel = panel,
-                    containerWidthPx = maxWpx,
-                    containerHeightPx = maxHpx,
+        if (multiPage) {
+            val pagePagerState = rememberPagerState(
+                initialPage = (currentPage - 1).coerceIn(0, pageCount - 1),
+                pageCount = { pageCount },
+            )
+            LaunchedEffect(currentPage, pageCount) {
+                val want = (currentPage - 1).coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+                if (pagePagerState.currentPage != want) {
+                    pagePagerState.animateScrollToPage(want)
+                }
+            }
+            LaunchedEffect(pagePagerState, pageCount) {
+                snapshotFlow { pagePagerState.settledPage }
+                    .distinctUntilChanged()
+                    .collect { settled ->
+                        val page = (settled + 1).coerceIn(1, pageCount)
+                        if (page != currentPage) {
+                            currentPage = page
+                            settingsViewModel.scheduleSaveMainScreenCurrentPage(page)
+                        }
+                    }
+            }
+            HorizontalPager(
+                state = pagePagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1,
+            ) { pageIndex ->
+                MainScreenPagePanels(
+                    pageNumber = pageIndex + 1,
+                    pageCount = pageCount,
+                    mainPanels = mainPanels,
+                    maxWpx = maxWpx,
+                    maxHpx = maxHpx,
                     tboxViewModel = tboxViewModel,
                     canViewModel = canViewModel,
                     appDataViewModel = appDataViewModel,
@@ -177,6 +208,20 @@ fun MainScreen(
                     onTripFinishAndStart = onTripFinishAndStart,
                 )
             }
+        } else {
+            MainScreenPagePanels(
+                pageNumber = currentPage,
+                pageCount = pageCount,
+                mainPanels = mainPanels,
+                maxWpx = maxWpx,
+                maxHpx = maxHpx,
+                tboxViewModel = tboxViewModel,
+                canViewModel = canViewModel,
+                appDataViewModel = appDataViewModel,
+                settingsViewModel = settingsViewModel,
+                onRebootTbox = onTboxRestart,
+                onTripFinishAndStart = onTripFinishAndStart,
+            )
         }
 
         MainScreenDraggableCornerButton(
@@ -213,10 +258,10 @@ fun MainScreen(
             },
         )
 
-        if (pageCount > 1) {
+        if (showWallpaperNavButtons) {
             MainScreenDraggableCornerButton(
                 icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                contentDescription = stringResource(R.string.main_screen_page_prev_cd),
+                contentDescription = stringResource(R.string.main_screen_wallpaper_prev_cd),
                 iconSize = cornerIconSize,
                 backgroundColor = cornerBackgroundColor,
                 iconTint = cornerIconTint,
@@ -227,12 +272,12 @@ fun MainScreen(
                 onSaveNormalized = { x, y ->
                     settingsViewModel.saveMainScreenPagePrevButton(MainScreenPagePrevButtonPosition(x, y))
                 },
-                onClick = { changePage(-1) },
-                onHorizontalSwipe = ::onPageSwipe,
+                onClick = { wallpaperController.step(-1) },
+                onHorizontalSwipe = wallpaperController::step,
             )
             MainScreenDraggableCornerButton(
                 icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.main_screen_page_next_cd),
+                contentDescription = stringResource(R.string.main_screen_wallpaper_next_cd),
                 iconSize = cornerIconSize,
                 backgroundColor = cornerBackgroundColor,
                 iconTint = cornerIconTint,
@@ -243,8 +288,8 @@ fun MainScreen(
                 onSaveNormalized = { x, y ->
                     settingsViewModel.saveMainScreenPageNextButton(MainScreenPageNextButtonPosition(x, y))
                 },
-                onClick = { changePage(1) },
-                onHorizontalSwipe = ::onPageSwipe,
+                onClick = { wallpaperController.step(1) },
+                onHorizontalSwipe = wallpaperController::step,
             )
         }
 
@@ -307,11 +352,45 @@ fun MainScreen(
     }
 }
 
+@Composable
+private fun MainScreenPagePanels(
+    pageNumber: Int,
+    pageCount: Int,
+    mainPanels: List<MainScreenPanelConfig>,
+    maxWpx: Float,
+    maxHpx: Float,
+    tboxViewModel: TboxViewModel,
+    canViewModel: CanDataViewModel,
+    appDataViewModel: AppDataViewModel,
+    settingsViewModel: SettingsViewModel,
+    onRebootTbox: () -> Unit,
+    onTripFinishAndStart: () -> Unit,
+) {
+    mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, pageNumber) }.forEach { panel ->
+        key(panel.id) {
+            MainScreenDashboardPanel(
+                panel = panel,
+                containerWidthPx = maxWpx,
+                containerHeightPx = maxHpx,
+                tboxViewModel = tboxViewModel,
+                canViewModel = canViewModel,
+                appDataViewModel = appDataViewModel,
+                settingsViewModel = settingsViewModel,
+                onRebootTbox = onRebootTbox,
+                onTripFinishAndStart = onTripFinishAndStart,
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MainScreenWallpaperBackground(
     theme: Int,
     settingsViewModel: SettingsViewModel,
+    userScrollEnabled: Boolean,
+    wallpaperController: MainScreenWallpaperController,
+    onWallpaperCountChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -344,6 +423,9 @@ private fun MainScreenWallpaperBackground(
     }
     val sortedNames = remember(sortedPairs) { sortedPairs.map { it.first } }
     val uriByFileName = remember(sortedPairs) { sortedPairs.toMap() }
+    LaunchedEffect(sortedNames.size) {
+        onWallpaperCountChanged(sortedNames.size)
+    }
     val effectiveName = remember(sortedNames, savedSelectedName) {
         effectiveWallpaperFileName(sortedNames, savedSelectedName)
     }
@@ -373,11 +455,36 @@ private fun MainScreenWallpaperBackground(
         val pagerPageCount = mainScreenWallpaperPagerPageCount(wallpaperCount)
         val initialPagerPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
         val wallpaperNamesKey = sortedNames.joinToString("\u0000")
+        val scope = rememberCoroutineScope()
         key(folderUriStr, wallpaperNamesKey) {
             val pagerState = rememberPagerState(
                 initialPage = initialPagerPage,
                 pageCount = { pagerPageCount },
             )
+            DisposableEffect(wallpaperController, wallpaperCount, pagerState) {
+                wallpaperController.stepWallpaper = { direction ->
+                    scope.launch {
+                        if (wallpaperCount <= 1) return@launch
+                        val logical = logicalIndexFromMainScreenWallpaperPagerPage(
+                            pagerState.settledPage,
+                            wallpaperCount,
+                        ) ?: logicalIndexFromMainScreenWallpaperPagerPage(
+                            pagerState.currentPage,
+                            wallpaperCount,
+                        ) ?: return@launch
+                        val newLogical = when {
+                            direction < 0 && logical <= 0 -> wallpaperCount - 1
+                            direction > 0 && logical >= wallpaperCount - 1 -> 0
+                            else -> logical + direction
+                        }
+                        val targetPage = mainScreenWallpaperPagerPageForLogicalIndex(newLogical, wallpaperCount)
+                        pagerState.animateScrollToPage(targetPage)
+                    }
+                }
+                onDispose {
+                    wallpaperController.stepWallpaper = null
+                }
+            }
             val wallpaperBitmapCache = remember(folderUriStr, wallpaperNamesKey) {
                 mutableStateMapOf<String, ImageBitmap>()
             }
@@ -489,6 +596,7 @@ private fun MainScreenWallpaperBackground(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
                 beyondViewportPageCount = 1,
+                userScrollEnabled = userScrollEnabled,
             ) { pagerPage ->
                 val logicalIndex = logicalIndexFromMainScreenWallpaperPagerPage(pagerPage, wallpaperCount)
                 if (logicalIndex != null) {

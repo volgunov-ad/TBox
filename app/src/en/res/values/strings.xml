@@ -292,7 +292,7 @@
     <string name="settings_main_screen_wallpaper_light">Wallpaper folder (light theme)</string>
     <string name="settings_main_screen_wallpaper_dark">Wallpaper folder (dark theme)</string>
     <string name="settings_main_screen_wallpaper_pick_source">Choose</string>
-    <string name="settings_main_screen_wallpaper_folder_hint">Wallpapers are not copied into the app. Tap Choose and pick one image file inside the folder you want—the whole folder is then used for the background (all images in it, sorted by file name). If the system offers a folder picker, you can pick the folder directly. On the main screen, swipe the background horizontally; panels and corner buttons keep their own gestures.</string>
+    <string name="settings_main_screen_wallpaper_folder_hint">Wallpapers are not copied into the app. Tap Choose and pick one image file inside the folder you want—the whole folder is then used for the background (all images in it, sorted by file name). If the system offers a folder picker, you can pick the folder directly. With one main-screen page, swipe the background to change wallpapers; with multiple pages, swipe changes pages and the arrow buttons change wallpapers. Panels and corner buttons keep their own gestures.</string>
     <string name="settings_main_screen_wallpaper_all_files_hint">For reliable access to a folder by disk path, enable All files access for this app (Android 11+).</string>
     <string name="settings_main_screen_wallpaper_open_all_files_settings">Open all files access settings</string>
     <string name="settings_main_screen_wallpaper_path_mode_hint">All files access is on: enter the absolute path to the wallpaper folder and tap Apply path.</string>
@@ -319,11 +319,13 @@
     <string name="settings_main_screen_corner_buttons_reset">Reset size and colors</string>
     <string name="settings_main_screen_panels_title">Main screen panels</string>
     <string name="settings_main_screen_page_count_title">Page count</string>
-    <string name="settings_main_screen_page_count_hint">From 1 to 5. When greater than 1, page navigation buttons appear on the main screen.</string>
+    <string name="settings_main_screen_page_count_hint">From 1 to 5. When greater than 1, swipe the main screen to change pages; arrow buttons change wallpapers (when the folder has multiple images).</string>
     <string name="settings_main_screen_panel_page_title">Panel page</string>
     <string name="settings_main_screen_panel_page_desc">Page number where this panel is shown.</string>
     <string name="main_screen_page_prev_cd">Previous page</string>
     <string name="main_screen_page_next_cd">Next page</string>
+    <string name="main_screen_wallpaper_prev_cd">Previous wallpaper</string>
+    <string name="main_screen_wallpaper_next_cd">Next wallpaper</string>
     <string name="themes_tab_title">Themes</string>
     <string name="themes_create">Create theme</string>
     <string name="themes_apply">Apply theme</string>
