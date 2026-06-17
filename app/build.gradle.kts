@@ -64,6 +64,15 @@ android {
     }
 }
 
+// ui-text 1.8+ ships AndroidLayoutApi34 (platform Layout.TextInclusionStrategy, API 34).
+// Jetour head units are API 28 — loading that adapter causes NoClassDefFoundError on first draw.
+configurations.configureEach {
+    resolutionStrategy {
+        force("androidx.compose.ui:ui-text:1.7.8")
+        force("androidx.compose.ui:ui-text-android:1.7.8")
+    }
+}
+
 dependencies {
 
     implementation(libs.androidx.core.ktx)
