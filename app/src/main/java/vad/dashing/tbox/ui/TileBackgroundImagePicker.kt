@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,10 +50,20 @@ internal fun TileBackgroundImageSettingsSection(
         state.tileBackgroundImageRelPathLight
     }
     var hasImage by remember { mutableStateOf(false) }
+    var removeImageLabel by remember { mutableIntStateOf(R.string.widget_tile_background_image_remove) }
     LaunchedEffect(currentPath, tileRevision, iconLookup, darkSegment) {
         hasImage = !currentPath.isNullOrBlank() &&
             TileBackgroundImageStorage.isAllowedStoredRelPath(currentPath) &&
             TileBackgroundImageStorage.hasResolvableFile(context.filesDir, currentPath, iconLookup)
+        removeImageLabel = if (hasImage) {
+            if (TileBackgroundImageStorage.hasThemeCacheFile(context.filesDir, currentPath, iconLookup)) {
+                R.string.widget_tile_background_image_remove_from_theme
+            } else {
+                R.string.widget_tile_background_image_remove
+            }
+        } else {
+            R.string.widget_tile_background_image_remove
+        }
     }
     val canPickImage = remember(context) {
         android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
@@ -161,7 +172,7 @@ internal fun TileBackgroundImageSettingsSection(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = stringResource(R.string.widget_tile_background_image_remove),
+                    text = stringResource(removeImageLabel),
                     fontSize = 18.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis

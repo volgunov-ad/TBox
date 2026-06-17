@@ -105,6 +105,7 @@ class TileBackgroundImageStorageTest {
             activeThemeCacheKey = "theme_e",
             activeThemeSections = setOf(ThemeSection.MAIN_SCREEN),
         )
+        assertTrue(TileBackgroundImageStorage.hasThemeCacheFile(root, rel, lookup))
         assertTrue(TileBackgroundImageStorage.deleteThemeCacheFile(root, rel, "theme_e"))
         assertArrayEquals(byteArrayOf(1), TileBackgroundImageStorage.resolveFile(root, rel, lookup)!!.readBytes())
         assertTrue(TileBackgroundImageStorage.deleteSharedFile(root, rel))

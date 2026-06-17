@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.LauncherAppIconPaths
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import java.io.File
 
@@ -51,3 +52,14 @@ fun rememberLauncherAppIconLookup(settingsViewModel: SettingsViewModel): Launche
         )
     }
 }
+
+fun launcherAppIconRemoveLabelRes(
+    filesDir: File,
+    packageName: String,
+    lookup: LauncherAppIconPaths.Lookup,
+): Int =
+    if (LauncherAppIconPaths.hasThemeCacheIcon(filesDir, packageName, lookup)) {
+        R.string.widget_app_launcher_remove_icon_from_theme
+    } else {
+        R.string.widget_app_launcher_remove_icon
+    }

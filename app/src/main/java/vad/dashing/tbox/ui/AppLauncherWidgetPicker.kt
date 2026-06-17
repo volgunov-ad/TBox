@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -154,6 +155,7 @@ internal fun AppLauncherWidgetSettingsSection(
 ) {
     if (!state.isAppLauncherWidgetSelected) return
     val context = LocalContext.current
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
     val selectedLabel = apps.find { it.packageName == state.launcherAppPackage }?.label
@@ -170,11 +172,17 @@ internal fun AppLauncherWidgetSettingsSection(
         }
     }
     var selectedHasCustomIcon by remember { mutableStateOf(false) }
-    LaunchedEffect(state.launcherAppPackage, iconRevision) {
+    var selectedRemoveIconLabel by remember { mutableIntStateOf(R.string.widget_app_launcher_remove_icon) }
+    LaunchedEffect(state.launcherAppPackage, iconRevision, iconLookup) {
         selectedHasCustomIcon = if (state.launcherAppPackage.isNotBlank()) {
             settingsViewModel.hasCustomLauncherAppIcon(state.launcherAppPackage)
         } else {
             false
+        }
+        selectedRemoveIconLabel = if (state.launcherAppPackage.isNotBlank()) {
+            launcherAppIconRemoveLabelRes(context.filesDir, state.launcherAppPackage, iconLookup)
+        } else {
+            R.string.widget_app_launcher_remove_icon
         }
     }
     val canPickImage = remember(context) {
@@ -323,7 +331,7 @@ internal fun AppLauncherWidgetSettingsSection(
                                 enabled = state.togglesEnabled && selectedHasCustomIcon
                             ) {
                                 Text(
-                                    text = stringResource(R.string.widget_app_launcher_remove_icon),
+                                    text = stringResource(selectedRemoveIconLabel),
                                     fontSize = 18.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis

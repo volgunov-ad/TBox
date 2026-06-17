@@ -727,6 +727,7 @@
     <string name="widget_app_launcher_no_icon">?</string>
     <string name="widget_app_launcher_change_icon">Изменить иконку</string>
     <string name="widget_app_launcher_remove_icon">Удалить иконку</string>
+    <string name="widget_app_launcher_remove_icon_from_theme">Удалить иконку из темы</string>
     <string name="widget_app_launcher_icon_saved">Иконка сохранена</string>
     <string name="widget_app_launcher_icon_too_large">Изображение слишком большое для иконки (макс. 512×512 px)</string>
     <string name="widget_app_launcher_icon_invalid">Не удалось прочитать изображение</string>
@@ -735,6 +736,7 @@
     <string name="widget_tile_background_image_desc">Поверх цвета фона для выбранной темы (светлая/тёмная — переключатель выше). Картинка вписывается в плитку без обрезки.</string>
     <string name="widget_tile_background_image_pick">Выбрать картинку</string>
     <string name="widget_tile_background_image_remove">Удалить картинку</string>
+    <string name="widget_tile_background_image_remove_from_theme">Удалить картинку из темы</string>
     <string name="widget_tile_background_image_too_large">Изображение слишком большое (макс. 4096×4096 px)</string>
     <string name="widget_tile_background_image_invalid">Не удалось прочитать изображение</string>
     <string name="widget_tile_background_image_copy_failed">Не удалось сохранить изображение</string>

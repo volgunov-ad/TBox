@@ -722,6 +722,7 @@
     <string name="widget_app_launcher_no_icon">?</string>
     <string name="widget_app_launcher_change_icon">Change icon</string>
     <string name="widget_app_launcher_remove_icon">Remove icon</string>
+    <string name="widget_app_launcher_remove_icon_from_theme">Remove icon from theme</string>
     <string name="widget_app_launcher_icon_saved">Icon saved</string>
     <string name="widget_app_launcher_icon_too_large">Image is too large for an icon (max 512×512 px)</string>
     <string name="widget_app_launcher_icon_invalid">Could not read the image</string>
@@ -730,6 +731,7 @@
     <string name="widget_tile_background_image_desc">Drawn on top of the tile background color for the theme selected above (light/dark). The image fits inside the tile without cropping.</string>
     <string name="widget_tile_background_image_pick">Choose image</string>
     <string name="widget_tile_background_image_remove">Remove image</string>
+    <string name="widget_tile_background_image_remove_from_theme">Remove image from theme</string>
     <string name="widget_tile_background_image_too_large">Image is too large (max 4096×4096 px)</string>
     <string name="widget_tile_background_image_invalid">Could not read the image</string>
     <string name="widget_tile_background_image_copy_failed">Could not save the image</string>

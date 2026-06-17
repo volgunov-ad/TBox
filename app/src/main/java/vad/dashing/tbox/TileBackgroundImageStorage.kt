@@ -74,6 +74,11 @@ object TileBackgroundImageStorage {
     fun hasSharedOverride(filesDir: File, relPath: String?): Boolean =
         resolveSharedFile(filesDir, relPath) != null
 
+    fun hasThemeCacheFile(filesDir: File, relPath: String?, lookup: LauncherAppIconPaths.Lookup): Boolean {
+        if (!themeSectionsIncludeTileBackgrounds(lookup)) return false
+        return resolveThemeCacheFile(filesDir, relPath, lookup.activeThemeCacheKey) != null
+    }
+
     fun hasResolvableFile(filesDir: File, relPath: String?, lookup: LauncherAppIconPaths.Lookup): Boolean =
         resolveFile(filesDir, relPath, lookup) != null
 
