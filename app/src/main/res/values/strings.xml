@@ -352,6 +352,7 @@
     <string name="themes_drive_mode_pick">Выбрать файл</string>
     <string name="themes_drive_mode_clear">Удалить</string>
     <string name="themes_active_cache_missing">Кэш темы не найден</string>
+    <string name="themes_clear_active">Отменить выбор текущей темы</string>
     <string name="themes_clear_cache">Очистить папку тем</string>
     <string name="themes_clear_cache_dialog_title">Очистить папку тем?</string>
     <string name="themes_clear_cache_dialog_message">Будут удалены все материализованные темы, кроме текущей активной. Назначения тем по режиму вождения также будут сброшены.</string>
@@ -369,6 +370,7 @@
     <string name="toast_theme_create_error">Не удалось сохранить тему: %1$s</string>
     <string name="toast_theme_apply_ok">Тема применена</string>
     <string name="toast_theme_apply_error">Не удалось применить тему: %1$s</string>
+    <string name="toast_theme_active_cleared">Выбор темы отменён</string>
     <string name="toast_theme_file_not_found">Файл темы не найден</string>
     <string name="settings_main_screen_panel_rows_title">Количество строк плиток панели главного экрана</string>
     <string name="settings_main_screen_panel_cols_title">Количество столбцов плиток панели главного экрана</string>

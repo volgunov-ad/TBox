@@ -236,6 +236,20 @@ fun ThemesTabContent(
         }
         Text(text = activeDisplay, fontSize = 20.sp, modifier = Modifier.padding(bottom = 8.dp))
 
+        if (activePath.isNotEmpty()) {
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    settingsViewModel.clearActiveThemeSelection()
+                    Toast.makeText(context, R.string.toast_theme_active_cleared, Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+            ) {
+                Text(stringResource(R.string.themes_clear_active), fontSize = 22.sp)
+            }
+        }
+
         OutlinedButton(
             onClick = rememberWrappedOnClick {
                 applyThemeLauncher.launch(arrayOf("application/octet-stream", "application/*", "*/*"))

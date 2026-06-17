@@ -1972,6 +1972,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch { settingsManager.saveDriveModeThemePath(rawValue, "") }
     }
 
+    fun clearActiveThemeSelection() {
+        viewModelScope.launch {
+            settingsManager.clearActiveTheme()
+            settingsManager.bumpLauncherAppIconRevision()
+            settingsManager.bumpTileBackgroundImageRevision()
+        }
+    }
+
     suspend fun clearThemeStorage(context: Context) {
         val activeKey = settingsManager.activeThemeUriFlow.first().trim()
             .takeIf { ThemeCacheKeys.isLikelyCacheKey(it) && ThemeMaterialization.isMaterialized(context, it) }
