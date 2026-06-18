@@ -139,7 +139,7 @@ object ThemeMaterialization {
                     throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
                 }
 
-                applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir)
+                applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir, sections)
 
                 settingsManager.bumpLauncherAppIconRevision()
                 settingsManager.bumpTileBackgroundImageRevision()
@@ -178,28 +178,34 @@ object ThemeMaterialization {
         }
     }
 
+    internal fun wallpaperFolderUriFromCacheDir(dir: File): String? {
+        return if (dir.isDirectory && dir.listFiles()?.any { it.isFile } == true) {
+            Uri.fromFile(dir).toString()
+        } else {
+            null
+        }
+    }
+
     private suspend fun applyWallpaperDirsFromCache(
         settingsManager: SettingsManager,
         settingsViewModel: SettingsViewModel?,
         cacheDir: File,
+        sections: Set<ThemeSection>,
     ) {
-        val lightDir = File(cacheDir, WALLPAPER_LIGHT_DIR)
-        if (lightDir.isDirectory && lightDir.listFiles()?.any { it.isFile } == true) {
-            val uri = Uri.fromFile(lightDir).toString()
-            if (settingsViewModel != null) {
-                settingsViewModel.saveMainScreenWallpaperLightFolderUri(uri)
-            } else {
-                settingsManager.saveMainScreenWallpaperLightFolderUri(uri)
-            }
+        if (ThemeSection.MAIN_SCREEN !in sections) return
+
+        val lightUri = wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_LIGHT_DIR))
+        if (settingsViewModel != null) {
+            settingsViewModel.saveMainScreenWallpaperLightFolderUri(lightUri)
+        } else {
+            settingsManager.saveMainScreenWallpaperLightFolderUri(lightUri)
         }
-        val darkDir = File(cacheDir, WALLPAPER_DARK_DIR)
-        if (darkDir.isDirectory && darkDir.listFiles()?.any { it.isFile } == true) {
-            val uri = Uri.fromFile(darkDir).toString()
-            if (settingsViewModel != null) {
-                settingsViewModel.saveMainScreenWallpaperDarkFolderUri(uri)
-            } else {
-                settingsManager.saveMainScreenWallpaperDarkFolderUri(uri)
-            }
+
+        val darkUri = wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_DARK_DIR))
+        if (settingsViewModel != null) {
+            settingsViewModel.saveMainScreenWallpaperDarkFolderUri(darkUri)
+        } else {
+            settingsManager.saveMainScreenWallpaperDarkFolderUri(darkUri)
         }
     }
 
