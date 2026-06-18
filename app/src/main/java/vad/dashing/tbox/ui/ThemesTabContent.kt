@@ -285,13 +285,6 @@ fun ThemesTabContent(
             Text(stringResource(R.string.themes_clear_cache), style = MaterialTheme.typography.tboxButton)
         }
 
-        Text(
-            text = stringResource(R.string.themes_clear_shared_assets_hint),
-            style = MaterialTheme.typography.tboxCaption,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -319,6 +312,13 @@ fun ThemesTabContent(
                 )
             }
         }
+
+        Text(
+            text = stringResource(R.string.themes_clear_shared_assets_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
 
         SettingsTitle(stringResource(R.string.themes_drive_mode_section))
         Text(
