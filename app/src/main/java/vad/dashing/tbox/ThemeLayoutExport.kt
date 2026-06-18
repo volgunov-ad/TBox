@@ -96,6 +96,20 @@ object ThemeLayoutExport {
         }
     }
 
+    /** Updates [currentPage] inside the cached [theme.json] mainScreen section. */
+    fun patchMainScreenCurrentPage(themeJson: String, currentPage: Int): Result<String> =
+        runCatching {
+            val root = JSONObject(themeJson)
+            val sections = ThemeSection.parseJsonArray(root.optJSONArray("sections"))
+            if (ThemeSection.MAIN_SCREEN !in sections) {
+                return@runCatching themeJson
+            }
+            val section = root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey)
+                ?: JSONObject().also { root.put(ThemeSection.MAIN_SCREEN.jsonKey, it) }
+            section.put("currentPage", currentPage)
+            root.toString(2)
+        }
+
     fun collectLauncherPackages(widgets: List<FloatingDashboardWidgetConfig>): Set<String> =
         widgets.mapNotNull { widget ->
             widget.launcherAppPackage.trim().takeIf { pkg ->
@@ -150,6 +164,7 @@ object ThemeLayoutExport {
     private suspend fun buildMainScreenSection(context: Context, sm: SettingsManager): JSONObject {
         val o = JSONObject()
         o.put("pageCount", sm.mainScreenPageCountFlow.first())
+        o.put("currentPage", sm.mainScreenCurrentPageFlow.first())
         o.put("theme", buildVisualTheme(sm))
         o.put("settingsButton", buildNormalizedPosition(sm.mainScreenSettingsButtonFlow.first()))
         o.put("addButton", buildNormalizedPosition(sm.mainScreenAddButtonFlow.first()))
@@ -305,6 +320,11 @@ object ThemeLayoutExport {
         if (section == null) return
         if (section.has("pageCount")) {
             sm.saveMainScreenPageCount(section.optInt("pageCount", SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT))
+        }
+        if (section.has("currentPage")) {
+            sm.saveMainScreenCurrentPage(
+                section.optInt("currentPage", SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE),
+            )
         }
         importVisualTheme(section.optJSONObject("theme"), sm)
         importMainScreenButtons(section, sm)

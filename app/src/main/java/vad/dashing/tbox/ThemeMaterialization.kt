@@ -186,22 +186,45 @@ object ThemeMaterialization {
         darkSelectedFile: String? = null,
     ): Boolean = withContext(Dispatchers.IO) {
         if (lightSelectedFile == null && darkSelectedFile == null) return@withContext false
+        patchActiveThemeMainScreenJson(context, settingsManager) { currentJson ->
+            ThemeLayoutExport.patchMainScreenWallpaperSelection(
+                themeJson = currentJson,
+                lightSelectedFile = lightSelectedFile,
+                darkSelectedFile = darkSelectedFile,
+            )
+        }
+    }
+
+    suspend fun syncCurrentPageToActiveThemeCache(
+        context: Context,
+        settingsManager: SettingsManager,
+        currentPage: Int,
+    ): Boolean = withContext(Dispatchers.IO) {
+        patchActiveThemeMainScreenJson(context, settingsManager) { currentJson ->
+            ThemeLayoutExport.patchMainScreenCurrentPage(
+                themeJson = currentJson,
+                currentPage = currentPage,
+            )
+        }
+    }
+
+    private suspend fun patchActiveThemeMainScreenJson(
+        context: Context,
+        settingsManager: SettingsManager,
+        patch: (String) -> Result<String>,
+    ): Boolean {
         val cacheKey = settingsManager.activeThemeUriFlow.first().trim()
-        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return@withContext false
-        if (!isMaterialized(context, cacheKey)) return@withContext false
+        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
+        if (!isMaterialized(context, cacheKey)) return false
         val sections = settingsManager.activeThemeSectionsFlow.first()
-        if (ThemeSection.MAIN_SCREEN !in sections) return@withContext false
+        if (ThemeSection.MAIN_SCREEN !in sections) return false
         val dir = cacheDir(context, cacheKey)
         val themeJsonFile = File(dir, THEME_JSON_FILE)
         val currentJson = themeJsonFile.readText()
-        val patchedJson = ThemeLayoutExport.patchMainScreenWallpaperSelection(
-            themeJson = currentJson,
-            lightSelectedFile = lightSelectedFile,
-            darkSelectedFile = darkSelectedFile,
-        ).getOrNull() ?: return@withContext false
-        if (patchedJson == currentJson) return@withContext true
+        val patchedJson = patch(currentJson).getOrNull() ?: return false
+        if (patchedJson == currentJson) return true
         themeJsonFile.writeText(patchedJson)
-        val manifest = readManifest(context, cacheKey) ?: return@withContext false
+        val manifest = readManifest(context, cacheKey) ?: return false
         val newFingerprint = ThemeFingerprint.sha256(patchedJson)
         writeManifest(dir, manifest.copy(fingerprint = newFingerprint))
         settingsManager.saveActiveTheme(
@@ -209,7 +232,7 @@ object ThemeMaterialization {
             fingerprint = newFingerprint,
             sections = sections,
         )
-        true
+        return true
     }
 
     private suspend fun applyWallpaperDirsFromCache(

@@ -59,4 +59,33 @@ class ThemeLayoutWallpaperPatchTest {
         assertTrue(result.isSuccess)
         assertEquals(original, result.getOrNull())
     }
+
+    @Test
+    fun patchMainScreenCurrentPage_updatesCurrentPageField() {
+        val original = """
+            {
+              "sections": ["mainScreen"],
+              "mainScreen": {
+                "pageCount": 3,
+                "currentPage": 1
+              }
+            }
+        """.trimIndent()
+        val patched = ThemeLayoutExport.patchMainScreenCurrentPage(
+            themeJson = original,
+            currentPage = 2,
+        ).getOrThrow()
+        assertEquals(2, JSONObject(patched).getJSONObject("mainScreen").getInt("currentPage"))
+        assertEquals(3, JSONObject(patched).getJSONObject("mainScreen").getInt("pageCount"))
+    }
+
+    @Test
+    fun patchMainScreenCurrentPage_noOpWithoutMainScreenSection() {
+        val original = """{"sections":["appIcons"]}"""
+        val patched = ThemeLayoutExport.patchMainScreenCurrentPage(
+            themeJson = original,
+            currentPage = 2,
+        ).getOrThrow()
+        assertEquals(original, patched)
+    }
 }
