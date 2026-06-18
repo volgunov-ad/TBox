@@ -141,6 +141,7 @@ fun MainScreen(
 
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         settingsViewModel.flushMainScreenCurrentPage()
+        settingsViewModel.flushMainScreenWallpaperSelection()
     }
 
     var floatingOverlayEditRequest by remember { mutableStateOf<Pair<String, Int>?>(null) }
@@ -432,11 +433,7 @@ private fun MainScreenWallpaperBackground(
     LaunchedEffect(effectiveName, savedSelectedName, sortedNames, theme) {
         val want = effectiveName ?: return@LaunchedEffect
         if (want != savedSelectedName) {
-            if (theme == 2) {
-                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(want)
-            } else {
-                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(want)
-            }
+            settingsViewModel.scheduleSaveMainScreenWallpaperSelection(theme != 2, want)
         }
     }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -584,11 +581,7 @@ private fun MainScreenWallpaperBackground(
                             ?: return@collectLatest
                         val name = sortedNames[logical]
                         if (name != savedSelectedName) {
-                            if (theme == 2) {
-                                settingsViewModel.saveMainScreenWallpaperDarkSelectedFileName(name)
-                            } else {
-                                settingsViewModel.saveMainScreenWallpaperLightSelectedFileName(name)
-                            }
+                            settingsViewModel.scheduleSaveMainScreenWallpaperSelection(theme != 2, name)
                         }
                     }
             }

@@ -1459,6 +1459,18 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun syncActiveThemeWallpaperSelection(
+        lightSelectedFile: String? = null,
+        darkSelectedFile: String? = null,
+    ): Boolean {
+        return ThemeMaterialization.syncWallpaperSelectionToActiveThemeCache(
+            context = context,
+            settingsManager = this,
+            lightSelectedFile = lightSelectedFile,
+            darkSelectedFile = darkSelectedFile,
+        )
+    }
+
     suspend fun saveMainScreenWallpaperCrop(crop: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_WALLPAPER_CROP_KEY] = crop

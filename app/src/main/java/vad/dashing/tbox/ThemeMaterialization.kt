@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -176,6 +177,39 @@ object ThemeMaterialization {
             if (keep != null && child.name == keep) return@forEach
             child.deleteRecursively()
         }
+    }
+
+    suspend fun syncWallpaperSelectionToActiveThemeCache(
+        context: Context,
+        settingsManager: SettingsManager,
+        lightSelectedFile: String? = null,
+        darkSelectedFile: String? = null,
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (lightSelectedFile == null && darkSelectedFile == null) return@withContext false
+        val cacheKey = settingsManager.activeThemeUriFlow.first().trim()
+        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return@withContext false
+        if (!isMaterialized(context, cacheKey)) return@withContext false
+        val sections = settingsManager.activeThemeSectionsFlow.first()
+        if (ThemeSection.MAIN_SCREEN !in sections) return@withContext false
+        val dir = cacheDir(context, cacheKey)
+        val themeJsonFile = File(dir, THEME_JSON_FILE)
+        val currentJson = themeJsonFile.readText()
+        val patchedJson = ThemeLayoutExport.patchMainScreenWallpaperSelection(
+            themeJson = currentJson,
+            lightSelectedFile = lightSelectedFile,
+            darkSelectedFile = darkSelectedFile,
+        ).getOrNull() ?: return@withContext false
+        if (patchedJson == currentJson) return@withContext true
+        themeJsonFile.writeText(patchedJson)
+        val manifest = readManifest(context, cacheKey) ?: return@withContext false
+        val newFingerprint = ThemeFingerprint.sha256(patchedJson)
+        writeManifest(dir, manifest.copy(fingerprint = newFingerprint))
+        settingsManager.saveActiveTheme(
+            uri = cacheKey,
+            fingerprint = newFingerprint,
+            sections = sections,
+        )
+        true
     }
 
     private suspend fun applyWallpaperDirsFromCache(

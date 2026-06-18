@@ -70,6 +70,32 @@ object ThemeLayoutExport {
         return ThemeSection.parseJsonArray(root.optJSONArray("sections"))
     }
 
+    /**
+     * Updates wallpaper selection fields inside the cached [theme.json] mainScreen section.
+     * Pass only the side(s) that changed; omitted sides are left untouched.
+     */
+    fun patchMainScreenWallpaperSelection(
+        themeJson: String,
+        lightSelectedFile: String? = null,
+        darkSelectedFile: String? = null,
+    ): Result<String> {
+        if (lightSelectedFile == null && darkSelectedFile == null) {
+            return Result.success(themeJson)
+        }
+        return runCatching {
+            val root = JSONObject(themeJson)
+            val sections = ThemeSection.parseJsonArray(root.optJSONArray("sections"))
+            if (ThemeSection.MAIN_SCREEN !in sections) {
+                return@runCatching themeJson
+            }
+            val section = root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey)
+                ?: JSONObject().also { root.put(ThemeSection.MAIN_SCREEN.jsonKey, it) }
+            lightSelectedFile?.let { section.put("wallpaperLightSelectedFile", it) }
+            darkSelectedFile?.let { section.put("wallpaperDarkSelectedFile", it) }
+            root.toString(2)
+        }
+    }
+
     fun collectLauncherPackages(widgets: List<FloatingDashboardWidgetConfig>): Set<String> =
         widgets.mapNotNull { widget ->
             widget.launcherAppPackage.trim().takeIf { pkg ->
