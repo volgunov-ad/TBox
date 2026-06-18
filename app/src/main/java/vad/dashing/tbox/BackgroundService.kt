@@ -562,6 +562,9 @@ class BackgroundService : Service() {
         startLogLevelSync()
         MbCanDiagnostics.setEnabled(false)
         scope.launch {
+            timingMark("universal_can_bind_deferred_wait_start")
+            delay(4_000L)
+            timingMark("universal_can_bind_start")
             UniversalCanRepository.bind(scope)
             UniversalCanRepository.autoResolveModeOnStartup(
                 settingsManager = settingsManager,
