@@ -168,45 +168,47 @@ fun MainScreen(
         val maxHpx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
 
         if (multiPage) {
-            val pagePagerState = rememberPagerState(
-                initialPage = (currentPage - 1).coerceIn(0, pageCount - 1),
-                pageCount = { pageCount },
-            )
-            LaunchedEffect(currentPage, pageCount) {
-                val want = (currentPage - 1).coerceIn(0, (pageCount - 1).coerceAtLeast(0))
-                if (pagePagerState.currentPage != want) {
-                    pagePagerState.animateScrollToPage(want)
-                }
-            }
-            LaunchedEffect(pagePagerState, pageCount) {
-                snapshotFlow { pagePagerState.settledPage }
-                    .distinctUntilChanged()
-                    .collect { settled ->
-                        val page = (settled + 1).coerceIn(1, pageCount)
-                        if (page != currentPage) {
-                            currentPage = page
-                            settingsViewModel.scheduleSaveMainScreenCurrentPage(page)
-                        }
-                    }
-            }
-            HorizontalPager(
-                state = pagePagerState,
-                modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1,
-            ) { pageIndex ->
-                MainScreenPagePanels(
-                    pageNumber = pageIndex + 1,
-                    pageCount = pageCount,
-                    mainPanels = mainPanels,
-                    maxWpx = maxWpx,
-                    maxHpx = maxHpx,
-                    tboxViewModel = tboxViewModel,
-                    canViewModel = canViewModel,
-                    appDataViewModel = appDataViewModel,
-                    settingsViewModel = settingsViewModel,
-                    onRebootTbox = onTboxRestart,
-                    onTripFinishAndStart = onTripFinishAndStart,
+            key(pageCount) {
+                val pagePagerState = rememberPagerState(
+                    initialPage = (currentPage - 1).coerceIn(0, pageCount - 1),
+                    pageCount = { pageCount },
                 )
+                LaunchedEffect(currentPage, pageCount) {
+                    val want = (currentPage - 1).coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+                    if (pagePagerState.currentPage != want) {
+                        pagePagerState.animateScrollToPage(want)
+                    }
+                }
+                LaunchedEffect(pagePagerState, pageCount) {
+                    snapshotFlow { pagePagerState.settledPage }
+                        .distinctUntilChanged()
+                        .collect { settled ->
+                            val page = (settled + 1).coerceIn(1, pageCount)
+                            if (page != currentPage) {
+                                currentPage = page
+                                settingsViewModel.scheduleSaveMainScreenCurrentPage(page)
+                            }
+                        }
+                }
+                HorizontalPager(
+                    state = pagePagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 1,
+                ) { pageIndex ->
+                    MainScreenPagePanels(
+                        pageNumber = pageIndex + 1,
+                        pageCount = pageCount,
+                        mainPanels = mainPanels,
+                        maxWpx = maxWpx,
+                        maxHpx = maxHpx,
+                        tboxViewModel = tboxViewModel,
+                        canViewModel = canViewModel,
+                        appDataViewModel = appDataViewModel,
+                        settingsViewModel = settingsViewModel,
+                        onRebootTbox = onTboxRestart,
+                        onTripFinishAndStart = onTripFinishAndStart,
+                    )
+                }
             }
         } else {
             MainScreenPagePanels(
@@ -366,19 +368,21 @@ private fun MainScreenPagePanels(
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
 ) {
-    mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, pageNumber) }.forEach { panel ->
-        key(panel.id) {
-            MainScreenDashboardPanel(
-                panel = panel,
-                containerWidthPx = maxWpx,
-                containerHeightPx = maxHpx,
-                tboxViewModel = tboxViewModel,
-                canViewModel = canViewModel,
-                appDataViewModel = appDataViewModel,
-                settingsViewModel = settingsViewModel,
-                onRebootTbox = onRebootTbox,
-                onTripFinishAndStart = onTripFinishAndStart,
-            )
+    Box(modifier = Modifier.fillMaxSize()) {
+        mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, pageNumber) }.forEach { panel ->
+            key(panel.id) {
+                MainScreenDashboardPanel(
+                    panel = panel,
+                    containerWidthPx = maxWpx,
+                    containerHeightPx = maxHpx,
+                    tboxViewModel = tboxViewModel,
+                    canViewModel = canViewModel,
+                    appDataViewModel = appDataViewModel,
+                    settingsViewModel = settingsViewModel,
+                    onRebootTbox = onRebootTbox,
+                    onTripFinishAndStart = onTripFinishAndStart,
+                )
+            }
         }
     }
 }

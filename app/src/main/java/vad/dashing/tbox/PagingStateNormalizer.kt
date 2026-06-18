@@ -27,6 +27,24 @@ object PagingStateNormalizer {
             }
         }
     }
+
+    /**
+     * Keeps panel layout stable when the user enables multi-page mode after arranging panels
+     * on a single page, and persists clamped page numbers when the page count shrinks.
+     */
+    fun adjustPanelsForPageCountChange(
+        panels: List<MainScreenPanelConfig>,
+        oldPageCount: Int,
+        newPageCount: Int,
+    ): List<MainScreenPanelConfig> {
+        val oldCount = normalizePageCount(oldPageCount)
+        val newCount = normalizePageCount(newPageCount)
+        return when {
+            oldCount == 1 && newCount > 1 -> panels.map { it.copy(pageNumber = 1) }
+            newCount < oldCount -> clampPanelsToPageCount(panels, newCount)
+            else -> clampPanelsToPageCount(panels, newCount)
+        }
+    }
 }
 
 fun MainScreenPanelConfig.isVisibleOnMainScreenPage(

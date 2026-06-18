@@ -1258,17 +1258,25 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveMainScreenPageCount(pageCount: Int) {
         val normalized = PagingStateNormalizer.normalizePageCount(pageCount)
+        val prefs = context.settingsDataStore.data.first()
+        val oldPageCount = PagingStateNormalizer.normalizePageCount(
+            prefs[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+        )
+        val rawJson = prefs[getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)] ?: ""
+        val parsePageCount = if (oldPageCount == 1 && normalized > 1) 1 else normalized
+        val panels = parseMainScreenDashboardsJson(rawJson, parsePageCount)
+        val adjusted = PagingStateNormalizer.adjustPanelsForPageCountChange(
+            panels = panels,
+            oldPageCount = oldPageCount,
+            newPageCount = normalized,
+        )
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_PAGE_COUNT_KEY] = normalized
             val current = preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE
             preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] =
                 PagingStateNormalizer.normalizeCurrentPage(current, normalized)
         }
-        val panels = mainScreenDashboardsFlow.first()
-        val clamped = PagingStateNormalizer.clampPanelsToPageCount(panels, normalized)
-        if (clamped != panels) {
-            saveMainScreenDashboards(clamped)
-        }
+        saveMainScreenDashboards(adjusted)
     }
 
     suspend fun saveMainScreenCurrentPage(page: Int) {
