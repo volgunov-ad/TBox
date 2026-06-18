@@ -1880,6 +1880,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenPageCount(pageCount: Int) {
         viewModelScope.launch {
             settingsManager.saveMainScreenPageCount(pageCount)
+            val normalized = PagingStateNormalizer.normalizePageCount(pageCount)
+            liveMainScreenCurrentPage.value = PagingStateNormalizer.normalizeCurrentPage(
+                liveMainScreenCurrentPage.value,
+                normalized,
+            )
         }
     }
 
