@@ -113,9 +113,7 @@ fun MainScreen(
 ) {
     val mainPanels by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
     val pageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
-    val savedCurrentPage by settingsViewModel.mainScreenCurrentPage.collectAsStateWithLifecycle()
-    var currentPage by remember { mutableIntStateOf(savedCurrentPage) }
-    LaunchedEffect(savedCurrentPage) { currentPage = savedCurrentPage }
+    val currentPage by settingsViewModel.mainScreenCurrentPage.collectAsStateWithLifecycle()
     val settingsBtnPos by settingsViewModel.mainScreenSettingsButtonPosition.collectAsStateWithLifecycle()
     val addBtnPos by settingsViewModel.mainScreenAddButtonPosition.collectAsStateWithLifecycle()
     val pagePrevBtnPos by settingsViewModel.mainScreenPagePrevButtonPosition.collectAsStateWithLifecycle()
@@ -174,6 +172,7 @@ fun MainScreen(
                     initialPage = (currentPage - 1).coerceIn(0, pageCount - 1),
                     pageCount = { pageCount },
                 )
+                val currentPageState by rememberUpdatedState(currentPage)
                 LaunchedEffect(currentPage, pageCount) {
                     val want = (currentPage - 1).coerceIn(0, (pageCount - 1).coerceAtLeast(0))
                     if (pagePagerState.currentPage != want) {
@@ -185,8 +184,7 @@ fun MainScreen(
                         .distinctUntilChanged()
                         .collect { settled ->
                             val page = (settled + 1).coerceIn(1, pageCount)
-                            if (page != currentPage) {
-                                currentPage = page
+                            if (page != currentPageState) {
                                 settingsViewModel.scheduleSaveMainScreenCurrentPage(page)
                             }
                         }
@@ -411,7 +409,7 @@ private fun MainScreenWallpaperBackground(
     val wallpaperCrop by settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
     val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
     val folderUriStr = if (theme == 2) folderDark else folderLight
-    val savedSelectedName = if (theme == 2) selectedDark else selectedLight
+    val selectedName = if (theme == 2) selectedDark else selectedLight
     val folderUri = remember(folderUriStr) {
         if (folderUriStr.isBlank()) null else Uri.parse(folderUriStr)
     }
@@ -431,12 +429,12 @@ private fun MainScreenWallpaperBackground(
     LaunchedEffect(sortedNames.size) {
         onWallpaperCountChanged(sortedNames.size)
     }
-    val effectiveName = remember(sortedNames, savedSelectedName) {
-        effectiveWallpaperFileName(sortedNames, savedSelectedName)
+    val effectiveName = remember(sortedNames, selectedName) {
+        effectiveWallpaperFileName(sortedNames, selectedName)
     }
-    LaunchedEffect(effectiveName, savedSelectedName, sortedNames, theme) {
+    LaunchedEffect(effectiveName, selectedName, sortedNames, theme) {
         val want = effectiveName ?: return@LaunchedEffect
-        if (want != savedSelectedName) {
+        if (want != selectedName) {
             settingsViewModel.scheduleSaveMainScreenWallpaperSelection(theme != 2, want)
         }
     }
@@ -501,7 +499,7 @@ private fun MainScreenWallpaperBackground(
                     wallpaperLoading.clear()
                 }
             }
-            LaunchedEffect(targetIdx, folderUriStr, sortedNames) {
+            LaunchedEffect(folderUriStr, wallpaperNamesKey, theme) {
                 val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
                 if (pagerState.currentPage != wantPage) {
                     pagerState.scrollToPage(wantPage)
@@ -565,7 +563,8 @@ private fun MainScreenWallpaperBackground(
                         )
                     }
             }
-            LaunchedEffect(pagerState, sortedNames, theme, savedSelectedName, wallpaperCount) {
+            val currentSelectedName by rememberUpdatedState(selectedName)
+            LaunchedEffect(pagerState, sortedNames, theme, wallpaperCount) {
                 snapshotFlow { pagerState.settledPage }
                     .distinctUntilChanged()
                     .collectLatest { page ->
@@ -584,7 +583,7 @@ private fun MainScreenWallpaperBackground(
                         val logical = logicalIndexFromMainScreenWallpaperPagerPage(page, wallpaperCount)
                             ?: return@collectLatest
                         val name = sortedNames[logical]
-                        if (name != savedSelectedName) {
+                        if (name != currentSelectedName) {
                             settingsViewModel.scheduleSaveMainScreenWallpaperSelection(theme != 2, name)
                         }
                     }
