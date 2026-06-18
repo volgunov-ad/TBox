@@ -514,12 +514,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT,
         )
 
-    val mainScreenCurrentPage = settingsManager.mainScreenCurrentPageFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
-        )
+    private val liveMainScreenCurrentPage = MutableStateFlow(SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
+
+    val mainScreenCurrentPage: StateFlow<Int> = liveMainScreenCurrentPage.asStateFlow()
 
     val mainScreenPagePrevButtonPosition = settingsManager.mainScreenPagePrevButtonFlow
         .stateIn(
@@ -552,7 +549,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     private var saveCurrentPageJob: Job? = null
     private var pendingCurrentPage: Int? = null
-    private val liveMainScreenCurrentPage = MutableStateFlow(SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
 
     private var saveWallpaperSelectionJob: Job? = null
     private var pendingWallpaperLightFileName: String? = null
@@ -655,19 +651,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = ""
         )
 
-    val mainScreenWallpaperLightSelectedFile = settingsManager.mainScreenWallpaperLightSelectedFileFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ""
-        )
+    private val liveWallpaperLightSelected = MutableStateFlow("")
+    private val liveWallpaperDarkSelected = MutableStateFlow("")
 
-    val mainScreenWallpaperDarkSelectedFile = settingsManager.mainScreenWallpaperDarkSelectedFileFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ""
-        )
+    val mainScreenWallpaperLightSelectedFile: StateFlow<String> = liveWallpaperLightSelected.asStateFlow()
+
+    val mainScreenWallpaperDarkSelectedFile: StateFlow<String> = liveWallpaperDarkSelected.asStateFlow()
 
     val isMainScreenWallpaperCrop = settingsManager.mainScreenWallpaperCropFlow
         .stateIn(
@@ -933,7 +922,25 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             }
         }
         viewModelScope.launch {
-            mainScreenCurrentPage.collect { liveMainScreenCurrentPage.value = it }
+            settingsManager.mainScreenCurrentPageFlow.collect { stored ->
+                if (pendingCurrentPage == null) {
+                    liveMainScreenCurrentPage.value = stored
+                }
+            }
+        }
+        viewModelScope.launch {
+            settingsManager.mainScreenWallpaperLightSelectedFileFlow.collect { stored ->
+                if (pendingWallpaperLightFileName == null) {
+                    liveWallpaperLightSelected.value = stored
+                }
+            }
+        }
+        viewModelScope.launch {
+            settingsManager.mainScreenWallpaperDarkSelectedFileFlow.collect { stored ->
+                if (pendingWallpaperDarkFileName == null) {
+                    liveWallpaperDarkSelected.value = stored
+                }
+            }
         }
         viewModelScope.launch {
             val storedMain = settingsManager.mainScreenDashboardsFlow.first()
@@ -1388,8 +1395,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun scheduleSaveMainScreenWallpaperSelection(forLightTheme: Boolean, fileName: String) {
         if (forLightTheme) {
             pendingWallpaperLightFileName = fileName
+            liveWallpaperLightSelected.value = fileName
         } else {
             pendingWallpaperDarkFileName = fileName
+            liveWallpaperDarkSelected.value = fileName
         }
         saveWallpaperSelectionJob?.cancel()
         saveWallpaperSelectionJob = viewModelScope.launch {
