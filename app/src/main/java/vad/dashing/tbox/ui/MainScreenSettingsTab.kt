@@ -271,6 +271,16 @@ fun MainScreenSettingsTab(
             maxValue = SettingsManager.MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_main_screen_page_count_title))
+        SettingDropdownGeneric(
+            selectedValue = mainScreenPageCount,
+            onValueChange = { settingsViewModel.saveMainScreenPageCount(it) },
+            text = "",
+            description = stringResource(R.string.settings_main_screen_page_count_hint),
+            enabled = true,
+            options = SettingsManager.MAIN_SCREEN_PAGE_COUNT_OPTIONS,
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_wallpaper_title))
         Text(
             text = stringResource(R.string.settings_main_screen_wallpaper_folder_hint),
@@ -586,15 +596,6 @@ fun MainScreenSettingsTab(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_panels_title))
-        SettingDropdownGeneric(
-            selectedValue = mainScreenPageCount,
-            onValueChange = { settingsViewModel.saveMainScreenPageCount(it) },
-            text = stringResource(R.string.settings_main_screen_page_count_title),
-            description = stringResource(R.string.settings_main_screen_page_count_hint),
-            enabled = true,
-            options = SettingsManager.MAIN_SCREEN_PAGE_COUNT_OPTIONS,
-        )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         if (hasMainScreenPanels) {
             MainScreenPanelEditor(
                 panels = mainScreenPanelsList,

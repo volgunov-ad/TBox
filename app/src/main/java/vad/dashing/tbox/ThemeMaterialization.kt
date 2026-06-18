@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -184,6 +185,62 @@ object ThemeMaterialization {
         } else {
             null
         }
+    }
+
+    suspend fun syncWallpaperSelectionToActiveThemeCache(
+        context: Context,
+        settingsManager: SettingsManager,
+        lightSelectedFile: String? = null,
+        darkSelectedFile: String? = null,
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (lightSelectedFile == null && darkSelectedFile == null) return@withContext false
+        patchActiveThemeMainScreenJson(context, settingsManager) { currentJson ->
+            ThemeLayoutExport.patchMainScreenWallpaperSelection(
+                themeJson = currentJson,
+                lightSelectedFile = lightSelectedFile,
+                darkSelectedFile = darkSelectedFile,
+            )
+        }
+    }
+
+    suspend fun syncCurrentPageToActiveThemeCache(
+        context: Context,
+        settingsManager: SettingsManager,
+        currentPage: Int,
+    ): Boolean = withContext(Dispatchers.IO) {
+        patchActiveThemeMainScreenJson(context, settingsManager) { currentJson ->
+            ThemeLayoutExport.patchMainScreenCurrentPage(
+                themeJson = currentJson,
+                currentPage = currentPage,
+            )
+        }
+    }
+
+    private suspend fun patchActiveThemeMainScreenJson(
+        context: Context,
+        settingsManager: SettingsManager,
+        patch: (String) -> Result<String>,
+    ): Boolean {
+        val cacheKey = settingsManager.activeThemeUriFlow.first().trim()
+        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
+        if (!isMaterialized(context, cacheKey)) return false
+        val sections = settingsManager.activeThemeSectionsFlow.first()
+        if (ThemeSection.MAIN_SCREEN !in sections) return false
+        val dir = cacheDir(context, cacheKey)
+        val themeJsonFile = File(dir, THEME_JSON_FILE)
+        val currentJson = themeJsonFile.readText()
+        val patchedJson = patch(currentJson).getOrNull() ?: return false
+        if (patchedJson == currentJson) return true
+        themeJsonFile.writeText(patchedJson)
+        val manifest = readManifest(context, cacheKey) ?: return false
+        val newFingerprint = ThemeFingerprint.sha256(patchedJson)
+        writeManifest(dir, manifest.copy(fingerprint = newFingerprint))
+        settingsManager.saveActiveTheme(
+            uri = cacheKey,
+            fingerprint = newFingerprint,
+            sections = sections,
+        )
+        return true
     }
 
     private suspend fun applyWallpaperDirsFromCache(

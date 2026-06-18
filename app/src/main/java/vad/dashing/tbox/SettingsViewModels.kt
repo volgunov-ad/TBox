@@ -98,6 +98,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
         private const val DEFAULT_MAIN_SCREEN_PANEL_ID = "main-screen-1"
+        private const val MAIN_SCREEN_WALLPAPER_SELECTION_SAVE_DEBOUNCE_MS = 5_000L
+        private const val MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS = 5_000L
         private const val DEFAULT_MAIN_SCREEN_PANEL_ROWS = 1
         private const val DEFAULT_MAIN_SCREEN_PANEL_COLS = 1
         private const val DEFAULT_MAIN_SCREEN_PANEL_REL_X = 0.05f
@@ -551,6 +553,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     private var saveCurrentPageJob: Job? = null
     private var pendingCurrentPage: Int? = null
     private val liveMainScreenCurrentPage = MutableStateFlow(SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
+
+    private var saveWallpaperSelectionJob: Job? = null
+    private var pendingWallpaperLightFileName: String? = null
+    private var pendingWallpaperDarkFileName: String? = null
 
     val mainScreenCornerButtonSizeDp = settingsManager.mainScreenCornerButtonSizeDpFlow
         .stateIn(
@@ -1379,6 +1385,41 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun scheduleSaveMainScreenWallpaperSelection(forLightTheme: Boolean, fileName: String) {
+        if (forLightTheme) {
+            pendingWallpaperLightFileName = fileName
+        } else {
+            pendingWallpaperDarkFileName = fileName
+        }
+        saveWallpaperSelectionJob?.cancel()
+        saveWallpaperSelectionJob = viewModelScope.launch {
+            delay(MAIN_SCREEN_WALLPAPER_SELECTION_SAVE_DEBOUNCE_MS)
+            flushMainScreenWallpaperSelectionInternal()
+        }
+    }
+
+    fun flushMainScreenWallpaperSelection() {
+        saveWallpaperSelectionJob?.cancel()
+        saveWallpaperSelectionJob = null
+        viewModelScope.launch {
+            flushMainScreenWallpaperSelectionInternal()
+        }
+    }
+
+    private suspend fun flushMainScreenWallpaperSelectionInternal() {
+        val light = pendingWallpaperLightFileName
+        val dark = pendingWallpaperDarkFileName
+        if (light == null && dark == null) return
+        pendingWallpaperLightFileName = null
+        pendingWallpaperDarkFileName = null
+        light?.let { settingsManager.saveMainScreenWallpaperLightSelectedFileName(it) }
+        dark?.let { settingsManager.saveMainScreenWallpaperDarkSelectedFileName(it) }
+        settingsManager.syncActiveThemeWallpaperSelection(
+            lightSelectedFile = light,
+            darkSelectedFile = dark,
+        )
+    }
+
     fun saveMainScreenWallpaperCrop(crop: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperCrop(crop)
@@ -1893,22 +1934,28 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         pendingCurrentPage = page
         saveCurrentPageJob?.cancel()
         saveCurrentPageJob = viewModelScope.launch {
-            delay(5_000)
-            val toSave = pendingCurrentPage ?: return@launch
-            settingsManager.saveMainScreenCurrentPage(toSave)
-            pendingCurrentPage = null
+            delay(MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS)
+            flushMainScreenCurrentPageInternal()
         }
     }
 
     fun flushMainScreenCurrentPage() {
-        val toSave = pendingCurrentPage ?: return
-        liveMainScreenCurrentPage.value = toSave
         saveCurrentPageJob?.cancel()
         saveCurrentPageJob = null
-        viewModelScope.launch {
-            settingsManager.saveMainScreenCurrentPage(toSave)
-            pendingCurrentPage = null
+        val toSave = pendingCurrentPage
+        if (toSave != null) {
+            liveMainScreenCurrentPage.value = toSave
         }
+        viewModelScope.launch {
+            flushMainScreenCurrentPageInternal()
+        }
+    }
+
+    private suspend fun flushMainScreenCurrentPageInternal() {
+        val toSave = pendingCurrentPage ?: return
+        pendingCurrentPage = null
+        settingsManager.saveMainScreenCurrentPage(toSave)
+        settingsManager.syncActiveThemeCurrentPage(toSave)
     }
 
     fun saveMainScreenPagePrevButton(position: MainScreenPagePrevButtonPosition) {
