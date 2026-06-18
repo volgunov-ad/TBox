@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.net.Uri
@@ -222,13 +229,13 @@ internal fun AppLauncherWidgetSettingsSection(
             } else {
                 stringResource(R.string.widget_app_launcher_none_selected)
             },
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.tboxButton,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Text(
             text = stringResource(R.string.widget_app_launcher_pick_title),
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.tboxButton,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 6.dp)
         )
@@ -241,7 +248,7 @@ internal fun AppLauncherWidgetSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.widget_app_launcher_search),
-                    fontSize = 18.sp
+                    style = MaterialTheme.typography.tboxCaption
                 )
             },
             singleLine = true,
@@ -275,7 +282,7 @@ internal fun AppLauncherWidgetSettingsSection(
                 } else {
                     Text(
                         text = stringResource(R.string.widget_app_launcher_no_icon),
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .padding(start = 4.dp)
@@ -291,7 +298,7 @@ internal fun AppLauncherWidgetSettingsSection(
                 ) {
                     Text(
                         text = app.label,
-                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.tboxBody,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -319,7 +326,7 @@ internal fun AppLauncherWidgetSettingsSection(
                             ) {
                                 Text(
                                     text = stringResource(R.string.widget_app_launcher_change_icon),
-                                    fontSize = 18.sp,
+                                    style = MaterialTheme.typography.tboxCaption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -332,7 +339,7 @@ internal fun AppLauncherWidgetSettingsSection(
                             ) {
                                 Text(
                                     text = stringResource(selectedRemoveIconLabel),
-                                    fontSize = 18.sp,
+                                    style = MaterialTheme.typography.tboxCaption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -346,7 +353,7 @@ internal fun AppLauncherWidgetSettingsSection(
             Text(
                 text = stringResource(R.string.widget_app_launcher_required),
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 20.sp,
+                style = MaterialTheme.typography.tboxBody,
                 modifier = Modifier.padding(top = 8.dp)
             )
         }

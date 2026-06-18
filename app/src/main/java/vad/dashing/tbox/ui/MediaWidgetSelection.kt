@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -120,12 +127,12 @@ fun MediaPlayersInlineSelection(
     ) {
         Text(
             text = stringResource(R.string.widget_music_players),
-            fontSize = 24.sp,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
             text = stringResource(R.string.widget_music_players_hint),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         OutlinedTextField(
@@ -137,7 +144,7 @@ fun MediaPlayersInlineSelection(
             label = {
                 Text(
                     text = stringResource(R.string.widget_app_launcher_search),
-                    fontSize = 18.sp
+                    style = MaterialTheme.typography.tboxCaption
                 )
             },
             singleLine = true,
@@ -191,7 +198,7 @@ fun MediaPlayersInlineSelection(
                 ) {
                     Text(
                         text = stringResource(player.titleRes),
-                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.tboxBody,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -211,7 +218,7 @@ fun MediaPlayersInlineSelection(
                             ) {
                                 Text(
                                     stringResource(R.string.widget_app_launcher_change_icon),
-                                    fontSize = 18.sp,
+                                    style = MaterialTheme.typography.tboxCaption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -269,7 +276,7 @@ fun MediaPlayersInlineSelection(
                 } else {
                     Text(
                         text = stringResource(R.string.widget_app_launcher_no_icon),
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .padding(start = 4.dp)
@@ -285,7 +292,7 @@ fun MediaPlayersInlineSelection(
                 ) {
                     Text(
                         text = app.label,
-                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.tboxBody,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -305,7 +312,7 @@ fun MediaPlayersInlineSelection(
                             ) {
                                 Text(
                                     stringResource(R.string.widget_app_launcher_change_icon),
-                                    fontSize = 18.sp,
+                                    style = MaterialTheme.typography.tboxCaption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -344,7 +351,7 @@ private fun MusicPlayerIconDeleteButton(
     ) {
         Text(
             stringResource(removeIconLabel),
-            fontSize = 18.sp,
+            style = MaterialTheme.typography.tboxCaption,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )

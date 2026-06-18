@@ -259,7 +259,6 @@ fun PressureText(
             containerHeight = availableHeight,
             textType = textType
         ),
-        fontWeight = FontWeight.Medium,
         color = if ((value ?: 0f) >= 1.92f) resolvedTextColor else Color(0xD9FF0000),
         textAlign = align,
         maxLines = 1,
@@ -282,7 +281,6 @@ private fun TemperatureText(
             containerHeight = availableHeight,
             textType = TextType.TITLE
         ),
-        fontWeight = FontWeight.Medium,
         color = if ((value ?: 90f) <= 85f) resolvedTextColor else Color(0xD9FF0000),
         textAlign = align,
         maxLines = 1,

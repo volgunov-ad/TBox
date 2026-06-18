@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -164,8 +171,7 @@ fun ModemModeSelectorContent(
     Column(modifier = modifier) {
         Text(
             text = stringResource(R.string.modem_mode_title),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.tboxTitle.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -337,7 +343,7 @@ fun SettingsTabContent(
         SettingsTitle(stringResource(R.string.settings_hu_type_title))
         Text(
             text = stringResource(R.string.settings_hu_type_desc),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -568,7 +574,7 @@ fun SettingsTabContent(
             onClick = rememberWrappedOnClick { showLeftMenuConfigDialog = true },
             modifier = Modifier.padding(bottom = 8.dp),
         ) {
-            Text(stringResource(R.string.settings_left_menu_edit), fontSize = 24.sp)
+            Text(stringResource(R.string.settings_left_menu_edit), style = MaterialTheme.typography.tboxTitle)
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -670,7 +676,7 @@ fun SettingsTabContent(
 //            if (!canUseMockLocation) {
 //                Text(
 //                    text = stringResource(R.string.settings_mock_location_requirements_link),
-//                    fontSize = 20.sp,
+//                    style = MaterialTheme.typography.tboxBody,
 //                    color = MaterialTheme.colorScheme.primary,
 //                    modifier = Modifier
 //                        .clickableWithSound { showLocationRequirementsDialog(context) }
@@ -683,7 +689,7 @@ fun SettingsTabContent(
         SettingsTitle(stringResource(R.string.settings_backup_title))
         Text(
             text = stringResource(R.string.settings_backup_desc),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -698,7 +704,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.settings_backup_export),
-                    fontSize = 22.sp,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -709,7 +715,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.settings_backup_import),
-                    fontSize = 22.sp,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -723,7 +729,7 @@ fun SettingsTabContent(
         ) {
             Text(
                 text = stringResource(R.string.settings_backup_export_without_trips),
-                fontSize = 22.sp,
+                style = MaterialTheme.typography.tboxButton,
                 maxLines = 2,
                 textAlign = TextAlign.Center
             )
@@ -824,7 +830,7 @@ fun SettingsTabContent(
         ) {
             Text(
                 text = stringResource(R.string.button_restart_background_service),
-                fontSize = 24.sp,
+                style = MaterialTheme.typography.tboxTitle,
                 maxLines = 2,
                 textAlign = TextAlign.Center,
             )
@@ -849,7 +855,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_tbox),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -870,7 +876,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_hu),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -935,7 +941,7 @@ fun FloatingPanelsSettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.settings_panels_order_button),
-                    fontSize = 22.sp,
+                    style = MaterialTheme.typography.tboxButton,
                 )
             }
         } else {
@@ -945,7 +951,7 @@ fun FloatingPanelsSettingsTabContent(
                 },
                 modifier = Modifier.padding(bottom = 8.dp),
             ) {
-                Text(stringResource(R.string.action_add), fontSize = 24.sp)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxTitle)
             }
         }
         SettingSwitch(
@@ -1012,14 +1018,13 @@ fun FloatingPanelsSettingsTabContent(
         Text(
             text = stringResource(R.string.settings_floating_usage_stats_hide_title),
             modifier = Modifier.padding(top = 12.dp),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = stringResource(R.string.settings_floating_usage_stats_hide_explanation),
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             lineHeight = 20.sp * 1.35f,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -1031,7 +1036,7 @@ fun FloatingPanelsSettingsTabContent(
         ) {
             Text(
                 text = stringResource(R.string.settings_floating_usage_stats_hide_configure),
-                fontSize = 22.sp,
+                style = MaterialTheme.typography.tboxButton,
             )
         }
     }
@@ -1210,7 +1215,7 @@ fun LocationTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.location_button_resume_loc),
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -1230,7 +1235,7 @@ fun LocationTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.location_button_suspend_loc),
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -1351,7 +1356,7 @@ fun InfoTabContent(
                     ) {
                         Text(
                             text = stringResource(R.string.button_request_tbox_info),
-                            fontSize = 24.sp,
+                            style = MaterialTheme.typography.tboxTitle,
                             maxLines = 2,
                             textAlign = TextAlign.Center
                         )

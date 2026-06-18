@@ -86,7 +86,6 @@ fun DashboardLocWidgetItem(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
                 ),
-                fontWeight = FontWeight.Medium,
                 color = resolvedTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -117,7 +116,6 @@ fun DashboardLocWidgetItem(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
                 ),
-                fontWeight = FontWeight.Medium,
                 color = resolvedTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 2,

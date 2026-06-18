@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -297,7 +304,7 @@ fun LogsTabContent(
         ) {
             OutlinedTextField(
                 value = searchText,
-                textStyle = TextStyle(fontSize = 20.sp),
+                textStyle = MaterialTheme.typography.tboxBody,
                 onValueChange = { newText ->
                     LogsSessionState.setMessageFilter(newText)
                 },
@@ -307,13 +314,13 @@ fun LogsTabContent(
                 label = {
                     Text(
                         text = stringResource(R.string.logs_filter_label),
-                        fontSize = 20.sp
+                        style = MaterialTheme.typography.tboxBody
                     )
                 },
                 placeholder = {
                     Text(
                         text = stringResource(R.string.logs_filter_placeholder),
-                        fontSize = 18.sp
+                        style = MaterialTheme.typography.tboxCaption
                     )
                 },
                 singleLine = true,
@@ -344,8 +351,8 @@ fun LogsTabContent(
                 options = logLevels,
                 onValueChange = { settingsViewModel.saveLogLevel(it) },
                 width = 200.dp,
-                valueFontSize = 20.sp,
-                itemFontSize = 20.sp
+                valueStyle = TboxTextStyles.Body,
+                itemStyle = TboxTextStyles.Body
             )
         }
 
@@ -362,7 +369,7 @@ fun LogsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_save_to_file),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -439,8 +446,7 @@ fun CanTabContent(
         Text(
             text = stringResource(R.string.can_id_last_data, sortedCanEntries.size, formattedTime),
             modifier = Modifier.padding(6.dp),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface
         )
 
@@ -457,7 +463,7 @@ fun CanTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_save_can_to_file),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -554,7 +560,7 @@ fun ATcmdTabContent(
         ) {
             OutlinedTextField(
                 value = atCmdText,
-                textStyle = TextStyle(fontSize = 20.sp),
+                textStyle = MaterialTheme.typography.tboxBody,
                 onValueChange = { newText ->
                     atCmdText = newText
                 },
@@ -564,13 +570,13 @@ fun ATcmdTabContent(
                 label = {
                     Text(
                         text = stringResource(R.string.at_command_label),
-                        fontSize = 20.sp
+                        style = MaterialTheme.typography.tboxBody
                     )
                 },
                 placeholder = {
                     Text(
                         text = stringResource(R.string.at_command_placeholder),
-                        fontSize = 18.sp
+                        style = MaterialTheme.typography.tboxCaption
                     )
                 },
                 singleLine = true,
@@ -619,7 +625,7 @@ fun ATcmdTabContent(
                 ) {
                     Text(
                         text = stringResource(R.string.action_send),
-                        fontSize = 24.sp,
+                        style = MaterialTheme.typography.tboxTitle,
                         maxLines = 2,
                         textAlign = TextAlign.Center
                     )
@@ -638,7 +644,7 @@ fun ATcmdTabContent(
                 ) {
                     Text(
                         text = stringResource(R.string.action_get_all_sms),
-                        fontSize = 24.sp,
+                        style = MaterialTheme.typography.tboxTitle,
                         maxLines = 2,
                         textAlign = TextAlign.Center
                     )

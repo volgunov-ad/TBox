@@ -16,6 +16,7 @@ fun TboxAppTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = TboxMaterialTypography,
         content = content
     )
 }

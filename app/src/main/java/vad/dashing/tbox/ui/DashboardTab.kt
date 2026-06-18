@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -605,7 +612,7 @@ fun MainScreenPanelWidgetSelectionDialog(
                     ) {
                         Text(
                             text = stringResource(R.string.action_delete),
-                            fontSize = 22.sp
+                            style = MaterialTheme.typography.tboxButton
                         )
                     }
                 },

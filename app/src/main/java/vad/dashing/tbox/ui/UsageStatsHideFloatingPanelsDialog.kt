@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
@@ -105,7 +112,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                     Text(
                         text = stringResource(R.string.settings_floating_usage_stats_hide_permission_hint),
                         modifier = Modifier.padding(top = 8.dp),
-                        fontSize = 22.sp,
+                        style = MaterialTheme.typography.tboxButton,
                         lineHeight = 22.sp * 1.3f,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -119,14 +126,14 @@ fun UsageStatsHideFloatingPanelsDialog(
                     ) {
                         Text(
                             text = stringResource(R.string.settings_floating_usage_stats_open_usage_settings),
-                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.tboxBody,
                             maxLines = 2,
                         )
                     }
                 }
                 Text(
                     text = stringResource(R.string.settings_floating_usage_stats_hide_section_title),
-                    fontSize = 22.sp,
+                    style = MaterialTheme.typography.tboxButton,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 12.dp),
                 )
@@ -141,7 +148,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                     label = {
                         Text(
                             stringResource(R.string.settings_floating_usage_stats_hide_filter_apps),
-                            fontSize = 18.sp,
+                            style = MaterialTheme.typography.tboxCaption,
                         )
                     },
                 )
@@ -181,7 +188,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                 Text(
                     text = stringResource(R.string.settings_floating_usage_stats_show_section_title),
-                    fontSize = 22.sp,
+                    style = MaterialTheme.typography.tboxButton,
                     fontWeight = FontWeight.SemiBold,
                 )
                 AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_show_section_body))
@@ -195,7 +202,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                     label = {
                         Text(
                             stringResource(R.string.settings_floating_usage_stats_show_filter_apps),
-                            fontSize = 18.sp,
+                            style = MaterialTheme.typography.tboxCaption,
                         )
                     },
                 )
@@ -285,7 +292,7 @@ private fun UsageStatsAppsColumn(
     ) {
         Text(
             text = columnAppsLabel,
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.tboxButton,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(bottom = 6.dp),
         )
@@ -303,7 +310,7 @@ private fun UsageStatsAppsColumn(
                 )
                 Text(
                     text = app.label,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.tboxBody,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -329,14 +336,14 @@ private fun UsageStatsPanelsColumn(
     ) {
         Text(
             text = columnPanelsLabel,
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.tboxButton,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(bottom = 6.dp),
         )
         if (panels.isEmpty()) {
             Text(
                 text = noPanelsText,
-                fontSize = 20.sp,
+                style = MaterialTheme.typography.tboxBody,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
@@ -354,7 +361,7 @@ private fun UsageStatsPanelsColumn(
                     )
                     Text(
                         text = panel.name.ifBlank { panel.id },
-                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.tboxBody,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),

@@ -95,7 +95,6 @@ fun DashboardDriveModeWidgetItem(
                     .wrapContentHeight(Alignment.CenterVertically),
                 fontSize = modeFont,
                 lineHeight = modeFont * 1.3f,
-                fontWeight = FontWeight.Medium,
                 color = modeTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,

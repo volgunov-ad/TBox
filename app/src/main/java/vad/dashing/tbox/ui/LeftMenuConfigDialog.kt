@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -128,7 +135,7 @@ fun LeftMenuConfigDialog(
                 Spacer(Modifier.height(12.dp))
                 Text(
                     text = stringResource(R.string.left_menu_config_dialog_hint),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 20.sp),
+                    style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(bottom = 8.dp),
                 )
@@ -170,7 +177,7 @@ fun LeftMenuConfigDialog(
                             )
                             Text(
                                 text = stringResource(row.field.labelRes),
-                                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 22.sp),
+                                style = MaterialTheme.typography.tboxButton,
                                 modifier = Modifier.weight(1f),
                                 color = MaterialTheme.colorScheme.onSurface,
                             )

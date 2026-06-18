@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -208,7 +215,7 @@ fun ThemesTabContent(
     ) {
         Text(
             text = stringResource(R.string.themes_tab_title),
-            fontSize = 26.sp,
+            style = MaterialTheme.typography.tboxHeadline,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 16.dp),
@@ -218,7 +225,7 @@ fun ThemesTabContent(
             onClick = rememberWrappedOnClick { showCreateDialog = true },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.themes_create), fontSize = 22.sp)
+            Text(stringResource(R.string.themes_create), style = MaterialTheme.typography.tboxButton)
         }
 
         SettingsTitle(stringResource(R.string.themes_active_title))
@@ -239,7 +246,7 @@ fun ThemesTabContent(
         }
         Text(
             text = activeDisplay,
-            fontSize = 16.sp,
+            style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
         )
@@ -254,7 +261,7 @@ fun ThemesTabContent(
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
             ) {
-                Text(stringResource(R.string.themes_clear_active), fontSize = 22.sp)
+                Text(stringResource(R.string.themes_clear_active), style = MaterialTheme.typography.tboxButton)
             }
         }
 
@@ -266,7 +273,7 @@ fun ThemesTabContent(
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
         ) {
-            Text(stringResource(R.string.themes_apply), fontSize = 22.sp)
+            Text(stringResource(R.string.themes_apply), style = MaterialTheme.typography.tboxButton)
         }
 
         OutlinedButton(
@@ -275,12 +282,12 @@ fun ThemesTabContent(
                 .fillMaxWidth()
                 .padding(bottom = 8.dp),
         ) {
-            Text(stringResource(R.string.themes_clear_cache), fontSize = 22.sp)
+            Text(stringResource(R.string.themes_clear_cache), style = MaterialTheme.typography.tboxButton)
         }
 
         Text(
             text = stringResource(R.string.themes_clear_shared_assets_hint),
-            fontSize = 16.sp,
+            style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
         )
@@ -297,7 +304,7 @@ fun ThemesTabContent(
             ) {
                 Text(
                     stringResource(R.string.themes_clear_shared_icons),
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     maxLines = 2,
                 )
             }
@@ -307,7 +314,7 @@ fun ThemesTabContent(
             ) {
                 Text(
                     stringResource(R.string.themes_clear_shared_tile_backgrounds),
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     maxLines = 2,
                 )
             }
@@ -316,7 +323,7 @@ fun ThemesTabContent(
         SettingsTitle(stringResource(R.string.themes_drive_mode_section))
         Text(
             text = stringResource(R.string.themes_drive_mode_hint),
-            fontSize = 18.sp,
+            style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 12.dp),
         )
@@ -327,9 +334,8 @@ fun ThemesTabContent(
             Column(modifier = Modifier.padding(bottom = 12.dp)) {
                 Text(
                     text = label,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = if (path.isBlank()) {
@@ -337,7 +343,7 @@ fun ThemesTabContent(
                     } else {
                         ThemeFileResolver.displayName(path)
                     },
-                    fontSize = 16.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 4.dp),
                 )
@@ -359,7 +365,7 @@ fun ThemesTabContent(
                         },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(stringResource(R.string.themes_drive_mode_pick), fontSize = 18.sp)
+                        Text(stringResource(R.string.themes_drive_mode_pick), style = MaterialTheme.typography.tboxCaption)
                     }
                     if (path.isNotBlank()) {
                         OutlinedButton(
@@ -368,7 +374,7 @@ fun ThemesTabContent(
                             },
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text(stringResource(R.string.themes_drive_mode_clear), fontSize = 18.sp)
+                            Text(stringResource(R.string.themes_drive_mode_clear), style = MaterialTheme.typography.tboxCaption)
                         }
                     }
                 }
@@ -385,7 +391,7 @@ fun ThemesTabContent(
                     AppAlertDialogText(stringResource(R.string.themes_create_dialog_hint))
                     OutlinedTextField(
                         value = themeExportBaseName,
-                        textStyle = TextStyle(fontSize = 20.sp),
+                        textStyle = MaterialTheme.typography.tboxBody,
                         onValueChange = { themeExportBaseName = it },
                         label = {
                             Text(stringResource(R.string.themes_create_file_name_label))
@@ -418,7 +424,7 @@ fun ThemesTabContent(
                     )
                     Text(
                         text = stringResource(R.string.themes_create_section_app_icons_hint),
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 48.dp, top = 4.dp),
                     )
@@ -598,7 +604,7 @@ private fun ThemeSectionCheckboxRow(
         Checkbox(checked = checked, onCheckedChange = onCheckedChange)
         Text(
             text = label,
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
         )
     }

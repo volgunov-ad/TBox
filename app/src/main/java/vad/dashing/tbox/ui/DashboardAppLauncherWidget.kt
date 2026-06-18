@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import vad.dashing.tbox.decodeFileToOwnedImageBitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -105,7 +112,7 @@ internal fun DashboardAppLauncherWidgetItem(
                 } else {
                     Text(
                         text = stringResource(R.string.widget_app_launcher_no_icon),
-                        fontSize = 18.sp,
+                        style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

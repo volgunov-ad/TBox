@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.ClipData
 import android.content.Context
 import android.widget.Toast
@@ -172,7 +179,7 @@ fun RefuelsTab(
                     enabled = refuels.isNotEmpty(),
                     onClick = rememberWrappedOnClick { showExportDialog = true },
                 ) {
-                    Text(stringResource(R.string.refuels_export), fontSize = 22.sp)
+                    Text(stringResource(R.string.refuels_export), style = MaterialTheme.typography.tboxButton)
                 }
             }
 
@@ -185,7 +192,7 @@ fun RefuelsTab(
                     Text(
                         text = stringResource(R.string.refuels_empty),
                         modifier = Modifier.align(Alignment.Center),
-                        fontSize = 24.sp,
+                        style = MaterialTheme.typography.tboxTitle,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 } else {
@@ -334,11 +341,11 @@ fun RefuelsTab(
                     onClick = rememberWrappedOnClick { pendingCalibrationReset = true },
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
-                    Text(stringResource(R.string.refuels_calibration_reset), fontSize = 20.sp)
+                    Text(stringResource(R.string.refuels_calibration_reset), style = MaterialTheme.typography.tboxBody)
                 }
                 Text(
                     text = stringResource(R.string.refuels_calibration_report_title),
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.tboxBody,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -346,14 +353,14 @@ fun RefuelsTab(
                 if (reportLines == null) {
                     Text(
                         text = stringResource(R.string.value_no_data),
-                        fontSize = 18.sp,
+                        style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
                     reportLines.forEach { line ->
                         Text(
                             text = line,
-                            fontSize = 18.sp,
+                            style = MaterialTheme.typography.tboxCaption,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(vertical = 2.dp),
                         )
@@ -561,7 +568,7 @@ private fun RefuelTableRow(
                 refuel.usedForFuelCalibration -> {
                     Text(
                         text = stringResource(R.string.refuels_calibration_trained),
-                        fontSize = 18.sp,
+                        style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center,
                     )
@@ -572,14 +579,14 @@ private fun RefuelTableRow(
                     OutlinedButton(onClick = rememberWrappedOnClick(onRequestTrainCalibration)) {
                         Text(
                             stringResource(R.string.refuels_calibration_train),
-                            fontSize = 16.sp,
+                            style = MaterialTheme.typography.tboxCaption,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
                 else -> {
-                    Text(text = noData, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = noData, style = MaterialTheme.typography.tboxCaption, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -627,9 +634,7 @@ private fun RefuelFuelTypeCell(
                     )
                     .fillMaxWidth(),
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = 24.sp,
-                    lineHeight = 24.sp * 1.3f,
+                textStyle = MaterialTheme.typography.tboxTitle.copy(
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Left,
                 ),
@@ -663,7 +668,7 @@ private fun RefuelFuelTypeCell(
                         text = {
                             Text(
                                 text = option.label,
-                                fontSize = 24.sp,
+                                style = MaterialTheme.typography.tboxTitle,
                                 color = if (option.id == selected.id) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
@@ -714,10 +719,8 @@ internal fun CalibrationIntCommitField(
                 .align(Alignment.CenterVertically)
                 .width(150.dp),
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                fontSize = 24.sp,
-                lineHeight = 24.sp * 1.3f,
-                color = MaterialTheme.colorScheme.onSurface,
+            textStyle = MaterialTheme.typography.tboxTitle.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
             ),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             colors = OutlinedTextFieldDefaults.colors(
@@ -757,17 +760,15 @@ internal fun CalibrationIntCommitField(
         ) {
             Text(
                 text = title,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.tboxTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(bottom = 0.dp),
             )
             if (description.isNotEmpty()) {
                 Text(
                     text = description,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp,
                 )
             }
         }
@@ -790,9 +791,7 @@ private fun RefuelEditableCell(
             .width(widthDp.dp)
             .padding(end = 8.dp),
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyLarge.copy(
-            fontSize = 24.sp,
-            lineHeight = 24.sp * 1.3f,
+        textStyle = MaterialTheme.typography.tboxTitle.copy(
             color = MaterialTheme.colorScheme.onSurface,
         ),
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
@@ -844,7 +843,7 @@ private fun RefuelHeaderCell(text: String, widthDp: Int) {
         modifier = Modifier
             .width(widthDp.dp)
             .padding(end = 8.dp),
-        fontSize = 24.sp,
+        style = MaterialTheme.typography.tboxTitle,
         lineHeight = 24.sp * 1.3f,
         fontWeight = FontWeight.SemiBold,
         textAlign = TextAlign.Center,
@@ -884,7 +883,7 @@ private fun RefuelCell(text: String, widthDp: Int, modifier: Modifier = Modifier
             .width(widthDp.dp)
             .padding(end = 8.dp)
             .then(modifier),
-        fontSize = 24.sp,
+        style = MaterialTheme.typography.tboxTitle,
         lineHeight = 24.sp * 1.3f,
         maxLines = 2,
         textAlign = TextAlign.Center,

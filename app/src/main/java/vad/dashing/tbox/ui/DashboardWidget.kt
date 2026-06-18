@@ -121,8 +121,7 @@ fun DashboardWidgetItem(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE
                     ),
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
+                        color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     lineHeight = calculateResponsiveFontSize(
@@ -148,7 +147,6 @@ fun DashboardWidgetItem(
                         TextType.VALUE
                     }
                 ),
-                fontWeight = FontWeight.Medium,
                 color = resolvedTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
@@ -207,7 +205,6 @@ fun ColumnScope.DashboardWidgetTitleRowIfVisible(
             .wrapContentHeight(Alignment.CenterVertically),
         fontSize = titleFont,
         lineHeight = titleFont * 1.3f,
-        fontWeight = FontWeight.Medium,
         color = resolvedTextColor,
         textAlign = TextAlign.Center,
         maxLines = 2,

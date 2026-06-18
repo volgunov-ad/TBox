@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
@@ -99,7 +106,7 @@ fun CarSettingsTab(
     ) {
         Text(
             text = stringResource(R.string.car_settings_screen_title),
-            fontSize = 26.sp,
+            style = MaterialTheme.typography.tboxHeadline,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 16.dp)
@@ -175,8 +182,7 @@ private fun CarSettingsModeButtonsRow(
         Text(
             text = text,
             modifier = Modifier.weight(0.35f),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Row(

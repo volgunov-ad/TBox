@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,8 +77,6 @@ import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
-private val WidgetSelectionDialogActionButtonFontSize = 22.sp
-
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
 internal data class ValueAccuracyDropdownEntry(
     private val display: String,
@@ -80,20 +85,11 @@ internal data class ValueAccuracyDropdownEntry(
     override fun toString(): String = display
 }
 
-/** Matches [SettingSwitch] primary row text (24.sp Medium). */
-private val WidgetSelectionDialogFieldInputStyle = TextStyle(
-    fontSize = 24.sp,
-    lineHeight = 24.sp * 1.3f
-)
+private val WidgetSelectionDialogFieldInputStyle = TboxTextStyles.Title
 /** OutlinedTextField labels in this dialog. */
-private val WidgetSelectionDialogFieldLabelStyle = TextStyle(
-    fontSize = 20.sp
-)
+private val WidgetSelectionDialogFieldLabelStyle = TboxTextStyles.Body
 /** Placeholder / secondary — same as [SettingSwitch] description (20.sp). */
-private val WidgetSelectionDialogFieldPlaceholderStyle = TextStyle(
-    fontSize = 20.sp,
-    lineHeight = 20.sp
-)
+private val WidgetSelectionDialogFieldPlaceholderStyle = TboxTextStyles.Body
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
@@ -300,11 +296,11 @@ internal fun ExternalAppWidgetPickerSection(
         SettingsTitle(stringResource(R.string.widget_external_app_title))
         Text(
             text = stringResource(R.string.widget_external_app_selected, label),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         OutlinedButton(onClick = rememberWrappedOnClick(onPickClick)) {
-            Text(text = stringResource(R.string.widget_external_app_pick), fontSize = 22.sp)
+            Text(text = stringResource(R.string.widget_external_app_pick), style = MaterialTheme.typography.tboxButton)
         }
     }
 }
@@ -348,7 +344,7 @@ internal fun WidgetColorThemeSegmentRow(
         ) {
             Text(
                 text = stringResource(R.string.widget_color_theme_segment_light),
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.tboxCaption,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -380,7 +376,7 @@ internal fun WidgetColorThemeSegmentRow(
         ) {
             Text(
                 text = stringResource(R.string.widget_color_theme_segment_dark),
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.tboxCaption,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -586,7 +582,7 @@ internal fun WidgetSelectionDialogForm(
                             Text(
                                 text = stringResource(R.string.widget_music_players_required),
                                 color = MaterialTheme.colorScheme.error,
-                                fontSize = 20.sp
+                                style = MaterialTheme.typography.tboxBody
                             )
                         }
                         SettingSwitch(
@@ -748,12 +744,12 @@ internal fun WidgetSelectionDialogForm(
                     ) {
                         Text(
                             text = stringResource(R.string.widget_scale, state.scale),
-                            fontSize = 24.sp,
+                            style = MaterialTheme.typography.tboxTitle,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = stringResource(R.string.widget_scale_hint),
-                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.tboxBody,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Slider(
@@ -774,12 +770,12 @@ internal fun WidgetSelectionDialogForm(
                     ) {
                         Text(
                             text = stringResource(R.string.widget_shape, state.shape),
-                            fontSize = 24.sp,
+                            style = MaterialTheme.typography.tboxTitle,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = stringResource(R.string.widget_shape_hint),
-                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.tboxBody,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Slider(
@@ -857,7 +853,7 @@ internal fun WidgetSelectionDialogForm(
                     ) {
                         Text(
                             stringResource(R.string.widget_reset_text_background_colors),
-                            fontSize = 20.sp
+                            style = MaterialTheme.typography.tboxBody
                         )
                     }
                 }
@@ -926,7 +922,7 @@ internal fun WidgetSelectionDialogForm(
                                 )
                                 Text(
                                     text = displayName,
-                                    fontSize = 24.sp,
+                                    style = MaterialTheme.typography.tboxTitle,
                                     modifier = Modifier
                                         .padding(start = 8.dp)
                                         .weight(1f),
@@ -998,7 +994,7 @@ internal fun WidgetSelectionDialogActions(
             ) {
                 Text(
                     text = stringResource(R.string.widget_toggle_advanced),
-                    fontSize = WidgetSelectionDialogActionButtonFontSize,
+                    style = TboxTextStyles.Button,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1039,7 +1035,7 @@ internal fun WidgetSelectionDialogActions(
                 ) {
                     Text(
                         text = stringResource(R.string.widget_toggle_whole_panel),
-                        fontSize = WidgetSelectionDialogActionButtonFontSize,
+                        style = TboxTextStyles.Button,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1053,7 +1049,7 @@ internal fun WidgetSelectionDialogActions(
         ) {
             Text(
                 text = stringResource(R.string.action_cancel),
-                fontSize = WidgetSelectionDialogActionButtonFontSize
+                style = TboxTextStyles.Button
             )
         }
         Button(
@@ -1062,7 +1058,7 @@ internal fun WidgetSelectionDialogActions(
         ) {
             Text(
                 text = stringResource(R.string.action_save),
-                fontSize = WidgetSelectionDialogActionButtonFontSize,
+                style = TboxTextStyles.Button,
                 fontWeight = saveTextFontWeight
             )
         }

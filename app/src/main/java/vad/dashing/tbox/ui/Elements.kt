@@ -69,20 +69,29 @@ import vad.dashing.tbox.CanFrame
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
+import vad.dashing.tbox.ui.theme.TboxTextStyles
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxTitle
 
 @Composable
 fun StatusRow(
     label: String,
     value: String,
     unit: String = "",
-    fontSize: TextUnit = 24.sp,
+    style: TextStyle = TboxTextStyles.Title,
+    fontSize: TextUnit? = null,
     color: Color? = null,
     showDivider: Boolean = true,
     labelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
 ) {
     val textColor = color ?: MaterialTheme.colorScheme.onSurface
     val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
-    val lineHeight = fontSize * 1.3f
+    val resolvedStyle = if (fontSize != null) style.copy(fontSize = fontSize) else style
+    val lineHeight = resolvedStyle.lineHeight
     val labelPercent = TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
         labelColumnWidthPercent,
     )
@@ -98,7 +107,7 @@ fun StatusRow(
             modifier = Modifier
                 .weight(labelWeight)
                 .padding(end = 8.dp),
-            fontSize = fontSize,
+            style = resolvedStyle,
             lineHeight = lineHeight,
             color = textColor,
             maxLines = 2,
@@ -110,7 +119,7 @@ fun StatusRow(
             modifier = Modifier
                 .weight(valueWeight)
                 .padding(start = 8.dp),
-            fontSize = fontSize,
+            style = resolvedStyle,
             lineHeight = lineHeight,
             color = textColor,
             maxLines = 2,
@@ -140,7 +149,7 @@ fun StatusHeader(value: String) {
             modifier = Modifier
                 .weight(1f)
                 .padding(top = 10.dp),
-            fontSize = 24.sp,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             lineHeight = 24.sp * 1.3f,
@@ -168,7 +177,7 @@ fun ColoredLogEntry(log: String) {
 
     Text(
         text = log,
-        fontSize = 20.sp,
+        style = MaterialTheme.typography.tboxBody,
         color = color,
         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
     )
@@ -210,7 +219,7 @@ fun ModeButton(
     ) {
         Text(
             text = text,
-            fontSize = 24.sp,
+            style = MaterialTheme.typography.tboxTitle,
             textAlign = TextAlign.Center
         )
     }
@@ -265,8 +274,9 @@ fun TabMenuItem(
                     color = textColor,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Left,
-                    fontSize = 34.sp,
-                    lineHeight = 34.sp * 1.1f,
+                    style = MaterialTheme.typography.tboxTabLabel.copy(
+                        lineHeight = MaterialTheme.typography.tboxTabLabel.fontSize * 1.1f,
+                    ),
                     modifier = Modifier.padding(start = 12.dp)
                 )
             }
@@ -281,10 +291,8 @@ fun SettingsTitle(
     Text(
         modifier = Modifier.padding(top=10.dp),
         text = text,
-        fontSize = 26.sp,
-        fontWeight = FontWeight.Medium,
+        style = MaterialTheme.typography.tboxHeadline,
         maxLines = 2,
-        lineHeight = 26.sp * 1.3f,
         color = MaterialTheme.colorScheme.onSurface,
         textAlign = TextAlign.Left
     )
@@ -295,9 +303,7 @@ fun SettingsTitle(
 fun AppAlertDialogTitle(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.titleLarge.copy(
-            fontSize = 26.sp,
-            lineHeight = 26.sp * 1.3f,
+        style = MaterialTheme.typography.tboxHeadline.copy(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         ),
@@ -309,9 +315,7 @@ fun AppAlertDialogTitle(text: String) {
 fun AppAlertDialogText(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyLarge.copy(
-            fontSize = 24.sp,
-            lineHeight = 24.sp * 1.3f,
+        style = MaterialTheme.typography.tboxTitle.copy(
             color = MaterialTheme.colorScheme.onSurface,
         ),
     )
@@ -322,8 +326,7 @@ fun AppAlertDialogText(text: String) {
 fun AppAlertDialogButtonLabel(text: String) {
     Text(
         text = text,
-        fontSize = 22.sp,
-        lineHeight = 22.sp * 1.3f,
+        style = MaterialTheme.typography.tboxButton,
     )
 }
 
@@ -356,22 +359,18 @@ fun SettingSwitch(
                 .padding(start = 16.dp) // ← Отступ от Switch
                 .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
         ) {
-            // Основной текст
             Text(
                 text = text,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.tboxTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
 
-            // Описание (только под текстом, не под Switch)
             if (description.isNotEmpty()) {
                 Text(
                     text = description,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
                 )
             }
         }
@@ -411,17 +410,15 @@ fun SettingSwitchWithAction(
         ) {
             Text(
                 text = text,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.tboxTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
             if (description.isNotEmpty()) {
                 Text(
                     text = description,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
                 )
             }
         }
@@ -435,7 +432,7 @@ fun SettingSwitchWithAction(
         ) {
             Text(
                 text = actionText,
-                fontSize = 20.sp
+                style = MaterialTheme.typography.tboxBody,
             )
         }
     }
@@ -469,8 +466,8 @@ fun <T> SettingDropdownGeneric(
                 onValueChange = onValueChange,
                 width = selectorWidth,
                 enabled = enabled,
-                valueFontSize = 24.sp,
-                itemFontSize = 24.sp,
+                valueStyle = TboxTextStyles.Title,
+                itemStyle = TboxTextStyles.Title,
                 popupFocusable = popupFocusable
             )
         }
@@ -483,8 +480,7 @@ fun <T> SettingDropdownGeneric(
         ) {
             Text(
                 text = text,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.tboxTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp)
             )
@@ -492,9 +488,8 @@ fun <T> SettingDropdownGeneric(
             if (description.isNotEmpty()) {
                 Text(
                     text = description,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
                 )
             }
         }
@@ -508,8 +503,8 @@ fun <T> GenericDropdownSelector(
     onValueChange: (T) -> Unit,
     width: Dp,
     enabled: Boolean = true,
-    valueFontSize: TextUnit = 24.sp,
-    itemFontSize: TextUnit = 24.sp,
+    valueStyle: TextStyle = TboxTextStyles.Title,
+    itemStyle: TextStyle = TboxTextStyles.Title,
     popupFocusable: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -522,7 +517,7 @@ fun <T> GenericDropdownSelector(
         ) {
             Text(
                 text = selectedValue.toString(),
-                fontSize = valueFontSize,
+                style = valueStyle,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center
             )
@@ -554,7 +549,7 @@ fun <T> GenericDropdownSelector(
                         text = {
                             Text(
                                 text = option.toString(),
-                                fontSize = itemFontSize,
+                                style = itemStyle,
                                 color = if (option == selectedValue) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
@@ -604,17 +599,15 @@ fun SettingInt(
         ) {
             Text(
                 text = text,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.tboxTitle,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(bottom = 0.dp)
             )
             if (description.isNotEmpty()) {
                 Text(
                     text = description,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
                 )
             }
         }
@@ -630,8 +623,7 @@ fun CanIdEntry(
     Column() {
         Text(
             text = stringResource(R.string.can_id_entry, canId),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface
         )
     }
@@ -651,12 +643,12 @@ fun CanIdEntry(
                 }
             Text(
                 text = stringResource(R.string.can_raw_value_entry, rawValueHex, rawValueDec),
-                fontSize = 22.sp,
+                style = MaterialTheme.typography.tboxButton,
                 color = MaterialTheme.colorScheme.onSurface
             )
         } ?: Text(
             text = stringResource(R.string.can_no_data),
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.tboxButton,
             color = MaterialTheme.colorScheme.outline
         )
     }
@@ -760,7 +752,7 @@ fun ATLogsCard(
                     val logEntry = logs[index]
                     Text(
                         text = logEntry,
-                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.tboxBody,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                 }
@@ -871,10 +863,10 @@ fun FloatingDashboardPanelEditor(
                     label = {
                         Text(
                             text = stringResource(R.string.floating_panel_name_label),
-                            fontSize = 16.sp
+                            style = MaterialTheme.typography.tboxCaption,
                         )
                     },
-                    textStyle = LocalTextStyle.current.copy(fontSize = 22.sp),
+                    textStyle = MaterialTheme.typography.tboxButton,
                     trailingIcon = {
                         PanelNameSaveTrailingIcon(
                             visible = enabled && nameDirty && trimmedDraft.isNotEmpty(),
@@ -884,13 +876,13 @@ fun FloatingDashboardPanelEditor(
                 )
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
-                Text(stringResource(R.string.action_add), fontSize = 20.sp)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxBody)
             }
             Button(
                 onClick = rememberWrappedOnClick { onDeletePanel(effectiveId) },
                 enabled = enabled && deleteInProgressPanelId != effectiveId
             ) {
-                Text(stringResource(R.string.action_delete), fontSize = 20.sp)
+                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxBody)
             }
         }
     }
@@ -950,10 +942,10 @@ fun MainScreenPanelEditor(
                     label = {
                         Text(
                             text = stringResource(R.string.floating_panel_name_label),
-                            fontSize = 16.sp
+                            style = MaterialTheme.typography.tboxCaption,
                         )
                     },
-                    textStyle = LocalTextStyle.current.copy(fontSize = 22.sp),
+                    textStyle = MaterialTheme.typography.tboxButton,
                     trailingIcon = {
                         PanelNameSaveTrailingIcon(
                             visible = enabled && nameDirty && trimmedDraft.isNotEmpty(),
@@ -963,13 +955,13 @@ fun MainScreenPanelEditor(
                 )
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
-                Text(stringResource(R.string.action_add), fontSize = 20.sp)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxBody)
             }
             Button(
                 onClick = rememberWrappedOnClick { onDeletePanel(effectiveId) },
                 enabled = enabled && deleteInProgressPanelId != effectiveId
             ) {
-                Text(stringResource(R.string.action_delete), fontSize = 20.sp)
+                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxBody)
             }
         }
     }
@@ -994,7 +986,7 @@ fun MainScreenPanelRelativeLayoutSettings(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.main_screen_panel_rel_width_pct),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -1012,7 +1004,7 @@ fun MainScreenPanelRelativeLayoutSettings(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.main_screen_panel_rel_height_pct),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -1035,7 +1027,7 @@ fun MainScreenPanelRelativeLayoutSettings(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.main_screen_panel_rel_x_pct),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -1053,7 +1045,7 @@ fun MainScreenPanelRelativeLayoutSettings(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.main_screen_panel_rel_y_pct),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -1095,7 +1087,7 @@ fun FloatingDashboardPositionSizeSettings(
             ) {
                 Text(
                     text = stringResource(R.string.floating_panel_width_px),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -1117,7 +1109,7 @@ fun FloatingDashboardPositionSizeSettings(
             ) {
                 Text(
                     text = stringResource(R.string.floating_panel_height_px),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -1145,7 +1137,7 @@ fun FloatingDashboardPositionSizeSettings(
             ) {
                 Text(
                     text = stringResource(R.string.floating_panel_pos_x_px),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -1167,7 +1159,7 @@ fun FloatingDashboardPositionSizeSettings(
             ) {
                 Text(
                     text = stringResource(R.string.floating_panel_pos_y_px),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -1192,7 +1184,7 @@ fun IntInputField(
     value: Int,
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    fontSize: TextUnit = 24.sp,
+    textStyle: TextStyle = TboxTextStyles.Title,
     enabled: Boolean = true
 ) {
     var textValue by remember { mutableStateOf(value.toString()) }
@@ -1223,7 +1215,7 @@ fun IntInputField(
         enabled = enabled,
         singleLine = true,
         isError = isError,
-        textStyle = LocalTextStyle.current.copy(fontSize = fontSize),
+        textStyle = LocalTextStyle.current.merge(textStyle),
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Number,
             imeAction = ImeAction.Done
@@ -1260,8 +1252,7 @@ fun TboxApplicationControls(
 
         Text(
             text = stringResource(R.string.application_label, appName),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.weight(1.5f)
@@ -1283,7 +1274,7 @@ fun TboxApplicationControls(
         ) {
             Text(
                 text = stringResource(R.string.button_suspend),
-                fontSize = 24.sp,
+                style = MaterialTheme.typography.tboxButton,
                 textAlign = TextAlign.Center
             )
         }
@@ -1303,7 +1294,7 @@ fun TboxApplicationControls(
         ) {
             Text(
                 text = stringResource(R.string.button_resume),
-                fontSize = 24.sp,
+                style = MaterialTheme.typography.tboxButton,
                 textAlign = TextAlign.Center
             )
         }
@@ -1323,7 +1314,7 @@ fun TboxApplicationControls(
         ) {
             Text(
                 text = stringResource(R.string.button_stop),
-                fontSize = 24.sp,
+                style = MaterialTheme.typography.tboxButton,
                 textAlign = TextAlign.Center
             )
         }

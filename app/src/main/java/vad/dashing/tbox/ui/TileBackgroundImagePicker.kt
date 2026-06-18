@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -114,13 +121,13 @@ internal fun TileBackgroundImageSettingsSection(
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.widget_tile_background_image_title),
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.tboxButton,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 4.dp)
         )
         Text(
             text = stringResource(R.string.widget_tile_background_image_desc),
-            fontSize = 18.sp,
+            style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -146,7 +153,7 @@ internal fun TileBackgroundImageSettingsSection(
             ) {
                 Text(
                     text = stringResource(R.string.widget_tile_background_image_pick),
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -173,7 +180,7 @@ internal fun TileBackgroundImageSettingsSection(
             ) {
                 Text(
                     text = stringResource(removeImageLabel),
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )

@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -269,8 +276,7 @@ fun TboxScreen(
                             } else {
                                 stringResource(R.string.tbox_disconnected_at, conTime)
                             },
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.tboxCaption.copy(fontWeight = FontWeight.Bold),
                             color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
                             textAlign = TextAlign.Center,
                             modifier = Modifier
@@ -279,8 +285,7 @@ fun TboxScreen(
                         )
                         Text(
                             text = stringResource(R.string.service_started_at, serviceTime),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.tboxCaption.copy(fontWeight = FontWeight.Bold),
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
@@ -290,8 +295,7 @@ fun TboxScreen(
                     } else {
                         Text(
                             text = stringResource(R.string.tbox_short),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.tboxCaption.copy(fontWeight = FontWeight.Bold),
                             color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
                             textAlign = TextAlign.Center,
                             modifier = Modifier
@@ -303,7 +307,7 @@ fun TboxScreen(
                     if (isMenuVisible) {
                         Text(
                             text = stringResource(R.string.program_version, versionName),
-                            fontSize = 16.sp,
+                            style = MaterialTheme.typography.tboxCaption,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
@@ -315,7 +319,7 @@ fun TboxScreen(
                                 R.string.tbox_proxy_version,
                                 BuildConfig.TBOX_PROXY_VERSION
                             ),
-                            fontSize = 16.sp,
+                            style = MaterialTheme.typography.tboxCaption,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
