@@ -140,6 +140,8 @@ object ThemeMaterialization {
                     throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
                 }
 
+                applyRuntimeStateFromCache(settingsManager, dir, sections)
+
                 applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir, sections)
 
                 settingsManager.bumpLauncherAppIconRevision()
@@ -194,13 +196,12 @@ object ThemeMaterialization {
         darkSelectedFile: String? = null,
     ): Boolean = withContext(Dispatchers.IO) {
         if (lightSelectedFile == null && darkSelectedFile == null) return@withContext false
-        patchActiveThemeMainScreenJson(context, settingsManager) { currentJson ->
-            ThemeLayoutExport.patchMainScreenWallpaperSelection(
-                themeJson = currentJson,
-                lightSelectedFile = lightSelectedFile,
-                darkSelectedFile = darkSelectedFile,
-            )
-        }
+        syncRuntimeStateToActiveThemeCache(
+            context = context,
+            settingsManager = settingsManager,
+            lightSelectedFile = lightSelectedFile,
+            darkSelectedFile = darkSelectedFile,
+        )
     }
 
     suspend fun syncCurrentPageToActiveThemeCache(
@@ -208,18 +209,19 @@ object ThemeMaterialization {
         settingsManager: SettingsManager,
         currentPage: Int,
     ): Boolean = withContext(Dispatchers.IO) {
-        patchActiveThemeMainScreenJson(context, settingsManager) { currentJson ->
-            ThemeLayoutExport.patchMainScreenCurrentPage(
-                themeJson = currentJson,
-                currentPage = currentPage,
-            )
-        }
+        syncRuntimeStateToActiveThemeCache(
+            context = context,
+            settingsManager = settingsManager,
+            currentPage = currentPage,
+        )
     }
 
-    private suspend fun patchActiveThemeMainScreenJson(
+    private suspend fun syncRuntimeStateToActiveThemeCache(
         context: Context,
         settingsManager: SettingsManager,
-        patch: (String) -> Result<String>,
+        lightSelectedFile: String? = null,
+        darkSelectedFile: String? = null,
+        currentPage: Int? = null,
     ): Boolean {
         val cacheKey = settingsManager.activeThemeUriFlow.first().trim()
         if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
@@ -227,20 +229,24 @@ object ThemeMaterialization {
         val sections = settingsManager.activeThemeSectionsFlow.first()
         if (ThemeSection.MAIN_SCREEN !in sections) return false
         val dir = cacheDir(context, cacheKey)
-        val themeJsonFile = File(dir, THEME_JSON_FILE)
-        val currentJson = themeJsonFile.readText()
-        val patchedJson = patch(currentJson).getOrNull() ?: return false
-        if (patchedJson == currentJson) return true
-        themeJsonFile.writeText(patchedJson)
-        val manifest = readManifest(context, cacheKey) ?: return false
-        val newFingerprint = ThemeFingerprint.sha256(patchedJson)
-        writeManifest(dir, manifest.copy(fingerprint = newFingerprint))
-        settingsManager.saveActiveTheme(
-            uri = cacheKey,
-            fingerprint = newFingerprint,
-            sections = sections,
+        ThemeRuntimeState.patch(
+            cacheDir = dir,
+            lightSelectedFile = lightSelectedFile,
+            darkSelectedFile = darkSelectedFile,
+            currentPage = currentPage,
         )
         return true
+    }
+
+    private suspend fun applyRuntimeStateFromCache(
+        settingsManager: SettingsManager,
+        cacheDir: File,
+        sections: Set<ThemeSection>,
+    ) {
+        if (ThemeSection.MAIN_SCREEN !in sections) return
+        val runtime = ThemeRuntimeState.read(cacheDir)
+        if (runtime.isEmpty) return
+        ThemeRuntimeState.applyOverrides(settingsManager, runtime)
     }
 
     private suspend fun applyWallpaperDirsFromCache(
