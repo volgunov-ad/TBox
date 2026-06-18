@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -14,6 +16,8 @@ import java.io.File
  * Materialization unpacks zip assets once; activation loads JSON and applies asset paths from cache.
  */
 object ThemeMaterialization {
+
+    private val themeDiskMutex = Mutex()
 
     const val THEMES_ROOT_DIR = "themes"
     const val MANIFEST_FILE = "manifest.json"
@@ -65,52 +69,137 @@ object ThemeMaterialization {
         sourceUri: String,
         syncExisting: Boolean,
     ): Result<MaterializeResult> = withContext(Dispatchers.IO) {
-        runCatching {
-            val dir = cacheDir(context, cacheKey)
-            dir.mkdirs()
-            val parsed = ThemeBundleExport.parseBundleBytes(bytes).getOrThrow()
-            File(dir, THEME_JSON_FILE).writeText(parsed.themeJson)
-
-            val iconsWritten = syncAssetDirectory(
-                targetDir = File(dir, ICONS_DIR),
-                archiveFiles = parsed.icons,
-                syncExisting = syncExisting,
-            )
-            val tileBackgroundsWritten = syncAssetDirectory(
-                targetDir = File(dir, TILE_BACKGROUNDS_DIR),
-                archiveFiles = parsed.tileBackgrounds,
-                syncExisting = syncExisting,
-            )
-            val lightWallpaperCount = syncAssetDirectory(
-                targetDir = File(dir, WALLPAPER_LIGHT_DIR),
-                archiveFiles = parsed.lightWallpapers,
-                syncExisting = syncExisting,
-            )
-            val darkWallpaperCount = syncAssetDirectory(
-                targetDir = File(dir, WALLPAPER_DARK_DIR),
-                archiveFiles = parsed.darkWallpapers,
-                syncExisting = syncExisting,
-            )
-
-            val sections = ThemeLayoutExport.parseSectionsFromThemeJson(parsed.themeJson)
-            val fingerprint = ThemeFingerprint.sha256(parsed.themeJson)
-            val manifest = ThemeManifest(
-                cacheKey = cacheKey,
-                sourceUri = sourceUri.trim(),
-                sourceDisplayName = ThemeFileResolver.displayName(sourceUri),
-                materializedAtMillis = System.currentTimeMillis(),
-                fingerprint = fingerprint,
-                sections = sections,
-            )
-            writeManifest(dir, manifest)
-            MaterializeResult(
-                manifest = manifest,
-                iconsWritten = iconsWritten,
-                tileBackgroundsWritten = tileBackgroundsWritten,
-                lightWallpaperCount = lightWallpaperCount,
-                darkWallpaperCount = darkWallpaperCount,
-            )
+        themeDiskMutex.withLock {
+            runCatching {
+                materializeFromBytesLocked(
+                    context = context,
+                    bytes = bytes,
+                    cacheKey = cacheKey,
+                    sourceUri = sourceUri,
+                    syncExisting = syncExisting,
+                )
+            }
         }
+    }
+
+    suspend fun materializeAndActivateFromCache(
+        context: Context,
+        settingsManager: SettingsManager,
+        settingsViewModel: SettingsViewModel?,
+        bytes: ByteArray,
+        cacheKey: String,
+        sourceUri: String,
+        syncExisting: Boolean,
+    ): Result<ThemeApply.ApplyResult> = settingsManager.runWithThemeActivation {
+        withContext(Dispatchers.IO) {
+            themeDiskMutex.withLock {
+                runCatching {
+                    materializeFromBytesLocked(
+                        context = context,
+                        bytes = bytes,
+                        cacheKey = cacheKey,
+                        sourceUri = sourceUri,
+                        syncExisting = syncExisting,
+                    )
+                    activateFromCacheLocked(
+                        context = context,
+                        settingsManager = settingsManager,
+                        settingsViewModel = settingsViewModel,
+                        cacheKey = cacheKey,
+                    ).getOrThrow()
+                }
+            }
+        }
+    }
+
+    suspend fun materializeAndActivateDriveModeFromCache(
+        context: Context,
+        settingsManager: SettingsManager,
+        cacheKey: String,
+        sourceUri: String,
+    ): Result<ThemeApply.ApplyResult> = settingsManager.runWithThemeActivation {
+        withContext(Dispatchers.IO) {
+            themeDiskMutex.withLock {
+                runCatching {
+                    if (!isMaterialized(context, cacheKey)) {
+                        if (!ThemeFileResolver.isAccessible(context, sourceUri)) {
+                            throw IllegalArgumentException("theme_file_not_found")
+                        }
+                        val bytes = ThemeFileResolver.openBytes(context, sourceUri)
+                            ?: throw IllegalArgumentException("theme_file_not_readable")
+                        materializeFromBytesLocked(
+                            context = context,
+                            bytes = bytes,
+                            cacheKey = cacheKey,
+                            sourceUri = sourceUri,
+                            syncExisting = false,
+                        )
+                    }
+                    if (!isMaterialized(context, cacheKey)) {
+                        throw IllegalArgumentException("theme_cache_missing")
+                    }
+                    activateFromCacheLocked(
+                        context = context,
+                        settingsManager = settingsManager,
+                        settingsViewModel = null,
+                        cacheKey = cacheKey,
+                    ).getOrThrow()
+                }
+            }
+        }
+    }
+
+    private fun materializeFromBytesLocked(
+        context: Context,
+        bytes: ByteArray,
+        cacheKey: String,
+        sourceUri: String,
+        syncExisting: Boolean,
+    ): MaterializeResult {
+        val dir = cacheDir(context, cacheKey)
+        dir.mkdirs()
+        val parsed = ThemeBundleExport.parseBundleBytes(bytes).getOrThrow()
+        File(dir, THEME_JSON_FILE).writeText(parsed.themeJson)
+
+        val iconsWritten = syncAssetDirectory(
+            targetDir = File(dir, ICONS_DIR),
+            archiveFiles = parsed.icons,
+            syncExisting = syncExisting,
+        )
+        val tileBackgroundsWritten = syncAssetDirectory(
+            targetDir = File(dir, TILE_BACKGROUNDS_DIR),
+            archiveFiles = parsed.tileBackgrounds,
+            syncExisting = syncExisting,
+        )
+        val lightWallpaperCount = syncAssetDirectory(
+            targetDir = File(dir, WALLPAPER_LIGHT_DIR),
+            archiveFiles = parsed.lightWallpapers,
+            syncExisting = syncExisting,
+        )
+        val darkWallpaperCount = syncAssetDirectory(
+            targetDir = File(dir, WALLPAPER_DARK_DIR),
+            archiveFiles = parsed.darkWallpapers,
+            syncExisting = syncExisting,
+        )
+
+        val sections = ThemeLayoutExport.parseSectionsFromThemeJson(parsed.themeJson)
+        val fingerprint = ThemeFingerprint.sha256(parsed.themeJson)
+        val manifest = ThemeManifest(
+            cacheKey = cacheKey,
+            sourceUri = sourceUri.trim(),
+            sourceDisplayName = ThemeFileResolver.displayName(sourceUri),
+            materializedAtMillis = System.currentTimeMillis(),
+            fingerprint = fingerprint,
+            sections = sections,
+        )
+        writeManifest(dir, manifest)
+        return MaterializeResult(
+            manifest = manifest,
+            iconsWritten = iconsWritten,
+            tileBackgroundsWritten = tileBackgroundsWritten,
+            lightWallpaperCount = lightWallpaperCount,
+            darkWallpaperCount = darkWallpaperCount,
+        )
     }
 
     suspend fun activateFromCache(
@@ -118,58 +207,86 @@ object ThemeMaterialization {
         settingsManager: SettingsManager,
         settingsViewModel: SettingsViewModel?,
         cacheKey: String,
-    ): Result<ThemeApply.ApplyResult> = withContext(Dispatchers.IO) {
-        settingsManager.runWithThemeActivation {
-            runCatching {
-                val dir = cacheDir(context, cacheKey)
-                val manifest = readManifest(context, cacheKey)
-                    ?: throw IllegalArgumentException("theme_cache_missing")
-                val themeJson = File(dir, THEME_JSON_FILE).readText()
-                val sections = ThemeSection.parseJsonArray(
-                    runCatching { JSONObject(themeJson) }.getOrNull()?.optJSONArray("sections"),
-                )
-
-                settingsManager.saveActiveTheme(
-                    uri = cacheKey,
-                    fingerprint = manifest.fingerprint,
-                    sections = sections,
-                )
-
-                val importResult = ThemeLayoutExport.importJson(context, settingsManager, themeJson)
-                if (importResult.isFailure) {
-                    throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
-                }
-
-                applyRuntimeStateFromCache(settingsManager, dir, sections)
-
-                applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir, sections)
-
-                settingsManager.bumpLauncherAppIconRevision()
-                settingsManager.bumpTileBackgroundImageRevision()
-
-                val iconsInTheme = if (ThemeSection.APP_ICONS in sections) {
-                    LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
-                } else {
-                    0
-                }
-                val tileBackgroundsInTheme = if (
-                    ThemeSection.MAIN_SCREEN in sections || ThemeSection.FLOATING_PANELS in sections
-                ) {
-                    TileBackgroundImageStorage.countThemeCacheFiles(context.filesDir, cacheKey)
-                } else {
-                    0
-                }
-
-                ThemeApply.ApplyResult(
-                    sections = sections,
-                    iconsImported = iconsInTheme,
-                    tileBackgroundsImported = tileBackgroundsInTheme,
+    ): Result<ThemeApply.ApplyResult> = settingsManager.runWithThemeActivation {
+        withContext(Dispatchers.IO) {
+            themeDiskMutex.withLock {
+                activateFromCacheLocked(
+                    context = context,
+                    settingsManager = settingsManager,
+                    settingsViewModel = settingsViewModel,
+                    cacheKey = cacheKey,
                 )
             }
         }
     }
 
-    fun clearThemeCachesExcept(context: Context, keepCacheKey: String?) {
+    private suspend fun activateFromCacheLocked(
+        context: Context,
+        settingsManager: SettingsManager,
+        settingsViewModel: SettingsViewModel?,
+        cacheKey: String,
+    ): Result<ThemeApply.ApplyResult> {
+        return runCatching {
+            val dir = cacheDir(context, cacheKey)
+            val manifest = readManifest(context, cacheKey)
+                ?: throw IllegalArgumentException("theme_cache_missing")
+            val themeJson = File(dir, THEME_JSON_FILE).readText()
+            val sections = ThemeSection.parseJsonArray(
+                runCatching { JSONObject(themeJson) }.getOrNull()?.optJSONArray("sections"),
+            )
+
+            settingsManager.saveActiveTheme(
+                uri = cacheKey,
+                fingerprint = manifest.fingerprint,
+                sections = sections,
+            )
+
+            val importResult = ThemeLayoutExport.importJson(context, settingsManager, themeJson)
+            if (importResult.isFailure) {
+                throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
+            }
+
+            applyRuntimeStateFromCache(settingsManager, dir, sections)
+
+            applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir, sections)
+
+            settingsManager.bumpLauncherAppIconRevision()
+            settingsManager.bumpTileBackgroundImageRevision()
+
+            val iconsInTheme = if (ThemeSection.APP_ICONS in sections) {
+                LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
+            } else {
+                0
+            }
+            val tileBackgroundsInTheme = if (
+                ThemeSection.MAIN_SCREEN in sections || ThemeSection.FLOATING_PANELS in sections
+            ) {
+                TileBackgroundImageStorage.countThemeCacheFiles(context.filesDir, cacheKey)
+            } else {
+                0
+            }
+
+            ThemeApply.ApplyResult(
+                sections = sections,
+                iconsImported = iconsInTheme,
+                tileBackgroundsImported = tileBackgroundsInTheme,
+            )
+        }
+    }
+
+    suspend fun clearThemeCachesExcept(
+        context: Context,
+        settingsManager: SettingsManager,
+        keepCacheKey: String?,
+    ) = withContext(Dispatchers.IO) {
+        settingsManager.runWithThemeActivation {
+            themeDiskMutex.withLock {
+                clearThemeCachesExceptLocked(context, keepCacheKey)
+            }
+        }
+    }
+
+    private fun clearThemeCachesExceptLocked(context: Context, keepCacheKey: String?) {
         val keep = keepCacheKey?.trim()?.takeIf { it.isNotEmpty() }
             ?.let { ThemeCacheKeys.sanitizeCacheKey(it) }
         val root = themesRootDir(context)
@@ -270,6 +387,7 @@ object ThemeMaterialization {
         } else {
             settingsManager.saveMainScreenWallpaperDarkFolderUri(darkUri)
         }
+        settingsManager.bumpMainScreenWallpaperRevision()
     }
 
     /**
@@ -282,6 +400,16 @@ object ThemeMaterialization {
         syncExisting: Boolean,
     ): Int {
         targetDir.mkdirs()
+        var written = 0
+        archiveFiles.forEach { (name, bytes) ->
+            val dest = File(targetDir, name)
+            if (syncExisting && dest.isFile) {
+                return@forEach
+            }
+            dest.parentFile?.mkdirs()
+            dest.writeBytes(bytes)
+            written++
+        }
         if (syncExisting) {
             val archiveNames = archiveFiles.keys.toSet()
             if (targetDir.isDirectory) {
@@ -292,16 +420,6 @@ object ThemeMaterialization {
                     }
                 }
             }
-        }
-        var written = 0
-        archiveFiles.forEach { (name, bytes) ->
-            val dest = File(targetDir, name)
-            if (syncExisting && dest.isFile) {
-                return@forEach
-            }
-            dest.parentFile?.mkdirs()
-            dest.writeBytes(bytes)
-            written++
         }
         return written
     }

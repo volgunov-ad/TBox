@@ -2,14 +2,10 @@ package vad.dashing.tbox
 
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -21,7 +17,6 @@ class DriveModeThemeWatcher(
 ) {
     private var lastAppliedCacheKey: String? = null
     private var lastAppliedKey: Int? = null
-    private val activationMutex = Mutex()
 
     fun start() {
         scope.launch {
@@ -46,11 +41,7 @@ class DriveModeThemeWatcher(
                     if (request.cacheKey == lastAppliedCacheKey && request.modeRawValue == lastAppliedKey) {
                         return@collect
                     }
-                    withContext(Dispatchers.IO) {
-                        activationMutex.withLock {
-                            applyActivationRequest(request)
-                        }
-                    }
+                    applyActivationRequest(request)
                 }
         }
     }
@@ -59,21 +50,11 @@ class DriveModeThemeWatcher(
         val cacheKey = request.cacheKey
         val key = request.modeRawValue
         val sourceUri = request.sourceUri
-        if (!ThemeMaterialization.isMaterialized(context, cacheKey)) {
-            if (!ThemeFileResolver.isAccessible(context, sourceUri)) return
-            val materialized = ThemeApply.materializeDriveModeThemeFromUri(
-                context = context,
-                rawValue = key,
-                sourceUri = sourceUri,
-            )
-            if (materialized.isFailure) return
-        }
-        if (!ThemeMaterialization.isMaterialized(context, cacheKey)) return
-        val result = ThemeApply.activateFromCache(
+        val result = ThemeMaterialization.materializeAndActivateDriveModeFromCache(
             context = context,
             settingsManager = settingsManager,
-            settingsViewModel = null,
             cacheKey = cacheKey,
+            sourceUri = sourceUri,
         )
         if (result.isSuccess) {
             lastAppliedCacheKey = cacheKey

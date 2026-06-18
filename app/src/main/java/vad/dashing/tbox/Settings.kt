@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
@@ -234,20 +236,34 @@ data class BackgroundServiceSettingsSnapshot(
 class SettingsManager(private val context: Context) {
 
     private val themeActivationDepth = AtomicInteger(0)
+    private val themeActivationMutex = Mutex()
     private val _themeActivationInProgress = MutableStateFlow(false)
     val themeActivationInProgressFlow: StateFlow<Boolean> = _themeActivationInProgress.asStateFlow()
 
+    private val _mainScreenWallpaperRevision = MutableStateFlow(0L)
+    val mainScreenWallpaperRevisionFlow: StateFlow<Long> = _mainScreenWallpaperRevision.asStateFlow()
+
+    suspend fun bumpMainScreenWallpaperRevision() {
+        _mainScreenWallpaperRevision.value = _mainScreenWallpaperRevision.value + 1L
+    }
+
     /** While true, UI should avoid drawing file-backed bitmaps (theme switch in progress). */
     suspend fun <T> runWithThemeActivation(block: suspend () -> T): T {
-        val wasIdle = themeActivationDepth.getAndIncrement() == 0
-        if (wasIdle) {
-            _themeActivationInProgress.value = true
-        }
-        try {
-            return block()
-        } finally {
-            if (themeActivationDepth.decrementAndGet() == 0) {
-                _themeActivationInProgress.value = false
+        return themeActivationMutex.withLock {
+            val wasIdle = themeActivationDepth.getAndIncrement() == 0
+            if (wasIdle) {
+                withContext(Dispatchers.Main.immediate) {
+                    _themeActivationInProgress.value = true
+                }
+            }
+            try {
+                block()
+            } finally {
+                if (themeActivationDepth.decrementAndGet() == 0) {
+                    withContext(Dispatchers.Main.immediate) {
+                        _themeActivationInProgress.value = false
+                    }
+                }
             }
         }
     }

@@ -5,7 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import vad.dashing.tbox.toOwnedImageBitmap
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
 import java.io.FileInputStream
@@ -257,16 +257,6 @@ internal suspend fun decodeImageBitmapFromUri(
             BitmapFactory.decodeStream(input, null, decodeOptions)?.toOwnedImageBitmap()
         }
     }.getOrNull()
-}
-
-private fun Bitmap.toOwnedImageBitmap(): ImageBitmap {
-    val config = config ?: Bitmap.Config.ARGB_8888
-    val owned = copy(config, false)
-    if (owned != null && owned !== this) {
-        recycle()
-        return owned.asImageBitmap()
-    }
-    return asImageBitmap()
 }
 
 private fun computeInSampleSize(
