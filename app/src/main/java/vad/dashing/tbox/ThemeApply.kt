@@ -1,6 +1,8 @@
 package vad.dashing.tbox
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object ThemeApply {
 
@@ -57,6 +59,7 @@ object ThemeApply {
 
     suspend fun materializeDriveModeThemeFromUri(
         context: Context,
+        settingsManager: SettingsManager,
         rawValue: Int,
         sourceUri: String,
     ): Result<ThemeMaterialization.MaterializeResult> {
@@ -73,13 +76,17 @@ object ThemeApply {
         val bytes = ThemeFileResolver.openBytes(context, trimmed)
             ?: return Result.failure(IllegalArgumentException("theme_file_not_readable"))
         val cacheKey = ThemeCacheKeys.driveModeCacheKey(rawValue)
-        return ThemeMaterialization.materializeFromBytes(
-            context = context,
-            bytes = bytes,
-            cacheKey = cacheKey,
-            sourceUri = trimmed,
-            syncExisting = ThemeMaterialization.isMaterialized(context, cacheKey),
-        )
+        return settingsManager.runWithThemeActivation {
+            withContext(Dispatchers.IO) {
+                ThemeMaterialization.materializeFromBytes(
+                    context = context,
+                    bytes = bytes,
+                    cacheKey = cacheKey,
+                    sourceUri = trimmed,
+                    syncExisting = ThemeMaterialization.isMaterialized(context, cacheKey),
+                )
+            }
+        }
     }
 
     suspend fun activateFromCache(
@@ -104,18 +111,14 @@ object ThemeApply {
         sourceUri: String,
         cacheKey: String,
     ): Result<ApplyResult> {
-        val materialized = ThemeMaterialization.materializeFromBytes(
+        return ThemeMaterialization.materializeAndActivateFromCache(
             context = context,
+            settingsManager = settingsManager,
+            settingsViewModel = settingsViewModel,
             bytes = bytes,
             cacheKey = cacheKey,
             sourceUri = sourceUri,
             syncExisting = ThemeMaterialization.isMaterialized(context, cacheKey),
         )
-        if (materialized.isFailure) {
-            return Result.failure(
-                materialized.exceptionOrNull() ?: IllegalArgumentException("theme_materialize_failed"),
-            )
-        }
-        return activateFromCache(context, settingsManager, settingsViewModel, cacheKey)
     }
 }

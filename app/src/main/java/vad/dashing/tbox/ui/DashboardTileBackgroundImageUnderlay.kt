@@ -1,6 +1,5 @@
 package vad.dashing.tbox.ui
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -17,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import vad.dashing.tbox.decodeFileToOwnedImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
@@ -53,7 +52,7 @@ internal fun DashboardTileBackgroundImageUnderlay(
             val f = TileBackgroundImageStorage.resolveFile(context.filesDir, relPath, themeLookup)
             if (f == null || !f.isFile) return@withContext null
             runCatching {
-                BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
+                decodeFileToOwnedImageBitmap(f)
             }.getOrNull()
         }
     }

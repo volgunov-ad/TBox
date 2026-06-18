@@ -56,6 +56,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
 import kotlin.math.roundToInt
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
@@ -522,6 +524,7 @@ private fun MainScreenWallpaperBackground(
                     generation = generation,
                     currentGeneration = { prefetchGeneration },
                     prefetchMutex = prefetchMutex,
+                    isThemeActivating = { settingsViewModel.themeActivationInProgress.value },
                 )
             }
             LaunchedEffect(pagerState, sortedNames, wallpaperCount, decodeTargetWidthPx, decodeTargetHeightPx, themeActivating) {
@@ -530,6 +533,7 @@ private fun MainScreenWallpaperBackground(
                 var previousSettled = pagerState.settledPage
                 snapshotFlow { Triple(pagerState.targetPage, pagerState.currentPage, pagerState.settledPage) }
                     .collectLatest { (targetPage, currentPage, settledPage) ->
+                        if (settingsViewModel.themeActivationInProgress.value) return@collectLatest
                         val pageForPrefetch = when {
                             targetPage != previousTarget -> targetPage
                             currentPage != previousTarget -> currentPage
@@ -560,6 +564,7 @@ private fun MainScreenWallpaperBackground(
                             generation = generation,
                             currentGeneration = { prefetchGeneration },
                             prefetchMutex = prefetchMutex,
+                            isThemeActivating = { settingsViewModel.themeActivationInProgress.value },
                         )
                     }
             }
@@ -649,6 +654,7 @@ private suspend fun prefetchMainScreenWallpaperWindow(
     generation: Int,
     currentGeneration: () -> Int,
     prefetchMutex: Mutex,
+    isThemeActivating: suspend () -> Boolean,
 ) {
     if (sortedNames.isEmpty()) {
         bitmapCache.clear()
@@ -664,6 +670,7 @@ private suspend fun prefetchMainScreenWallpaperWindow(
         )
         for (name in orderedNames) {
             if (generation != currentGeneration()) return@withLock
+            if (!coroutineContext.isActive || isThemeActivating()) return@withLock
             if (bitmapCache.containsKey(name) || loadingState[name] == true) continue
             val uri = uriByFileName[name] ?: continue
             loadingState[name] = true
@@ -674,6 +681,7 @@ private suspend fun prefetchMainScreenWallpaperWindow(
                     targetWidthPx = targetWidthPx,
                     targetHeightPx = targetHeightPx,
                 )
+                if (!coroutineContext.isActive || isThemeActivating()) return@withLock
                 if (
                     decoded != null &&
                     name in keepNames &&
@@ -686,8 +694,10 @@ private suspend fun prefetchMainScreenWallpaperWindow(
             }
         }
         if (generation != currentGeneration()) return
+        if (isThemeActivating()) return
         delay(150)
         if (generation != currentGeneration()) return
+        if (isThemeActivating()) return
         bitmapCache.keys.toList().filter { it !in keepNames }.forEach { bitmapCache.remove(it) }
         loadingState.keys.toList().filter { it !in keepNames }.forEach { loadingState.remove(it) }
     }

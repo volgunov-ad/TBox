@@ -1,6 +1,6 @@
 package vad.dashing.tbox.ui
 
-import android.graphics.BitmapFactory
+import vad.dashing.tbox.decodeFileToOwnedImageBitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,7 +53,7 @@ internal fun DashboardAppLauncherWidgetItem(
             val custom: ImageBitmap? = runCatching {
                 val f = LauncherAppIconPaths.resolveIconFile(context.filesDir, packageName, iconLookup)
                     ?: return@runCatching null
-                BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
+                decodeFileToOwnedImageBitmap(f)
             }.getOrNull()
             if (custom != null) return@remember custom
         }

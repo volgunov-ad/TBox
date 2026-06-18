@@ -1,17 +1,15 @@
 package vad.dashing.tbox.ui
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.decodeFileToOwnedScaledImageBitmap
 import java.io.File
 
 /**
@@ -30,16 +28,8 @@ fun decodeLauncherAppCustomIconIfPresent(
     decodeAndScaleIconFile(f, iconSizePx)
 }.getOrNull()
 
-private fun decodeAndScaleIconFile(file: File, iconSizePx: Int): ImageBitmap? {
-    if (!file.isFile || file.length() <= 0L) return null
-    val decoded = BitmapFactory.decodeFile(file.absolutePath) ?: return null
-    if (decoded.width == iconSizePx && decoded.height == iconSizePx) {
-        return decoded.asImageBitmap()
-    }
-    val scaled = Bitmap.createScaledBitmap(decoded, iconSizePx, iconSizePx, true)
-    if (scaled != decoded) decoded.recycle()
-    return scaled.asImageBitmap()
-}
+private fun decodeAndScaleIconFile(file: File, iconSizePx: Int): ImageBitmap? =
+    decodeFileToOwnedScaledImageBitmap(file, iconSizePx)
 
 @Composable
 fun rememberLauncherAppIconLookup(settingsViewModel: SettingsViewModel): LauncherAppIconPaths.Lookup {

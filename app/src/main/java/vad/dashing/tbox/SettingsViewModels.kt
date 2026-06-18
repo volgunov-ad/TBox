@@ -665,8 +665,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
-    private val _mainScreenWallpaperEpoch = MutableStateFlow(0L)
-    val mainScreenWallpaperEpoch: StateFlow<Long> = _mainScreenWallpaperEpoch.asStateFlow()
+    val mainScreenWallpaperEpoch = settingsManager.mainScreenWallpaperRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0L,
+        )
 
     val mainScreenDashboards = settingsManager.mainScreenDashboardsFlow
         .stateIn(
@@ -1325,14 +1329,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenWallpaperLightFolderUri(uriString: String?) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperLightFolderUri(uriString)
-            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+            settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
 
     fun saveMainScreenWallpaperDarkFolderUri(uriString: String?) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperDarkFolderUri(uriString)
-            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+            settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
 
@@ -1363,7 +1367,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                     res.selectedFileName,
                 )
             }
-            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+            settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
 
@@ -1376,7 +1380,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             } else {
                 settingsManager.saveMainScreenWallpaperDarkFolderUri(normalized)
             }
-            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+            settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
 
@@ -2031,7 +2035,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         sourceUri: String,
     ): Result<Unit> {
         return runCatching {
-            ThemeApply.materializeDriveModeThemeFromUri(context, rawValue, sourceUri).getOrThrow()
+            ThemeApply.materializeDriveModeThemeFromUri(
+                context = context,
+                settingsManager = settingsManager,
+                rawValue = rawValue,
+                sourceUri = sourceUri,
+            ).getOrThrow()
             settingsManager.saveDriveModeThemePath(rawValue, sourceUri)
         }
     }
@@ -2051,9 +2060,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     suspend fun clearThemeStorage(context: Context) {
         val activeKey = settingsManager.activeThemeUriFlow.first().trim()
             .takeIf { ThemeCacheKeys.isLikelyCacheKey(it) && ThemeMaterialization.isMaterialized(context, it) }
-        withContext(Dispatchers.IO) {
-            ThemeMaterialization.clearThemeCachesExcept(context, activeKey)
-        }
+        ThemeMaterialization.clearThemeCachesExcept(
+            context = context,
+            settingsManager = settingsManager,
+            keepCacheKey = activeKey,
+        )
         settingsManager.clearDriveModeThemePaths()
     }
 
