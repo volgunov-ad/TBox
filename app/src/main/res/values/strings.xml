@@ -713,6 +713,8 @@
     <string name="data_title_front_windscreen_heat_widget">Виджет обогрева лобового стекла</string>
     <string name="data_title_rear_window_mirrors_defrost_widget">Виджет обогрева заднего стекла и зеркал</string>
     <string name="data_title_hvac_air_recirculation_widget">Виджет рециркуляции воздуха</string>
+    <string name="data_title_hvac_ac_widget">Виджет A/C</string>
+    <string name="data_title_hvac_auto_widget">Виджет AUTO HVAC</string>
     <string name="data_title_hvac_defroster_front_widget">Виджет обдува лобового стекла</string>
     <string name="data_title_wireless_charging_widget">Виджет беспроводной зарядки телефона</string>
     <string name="data_title_front_left_seat_heat_vent_widget">Виджет обогрева и вентиляции левого переднего сиденья (двойная кнопка)</string>

@@ -33,6 +33,8 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     FrontWindscreenHeat(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefroster(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAirRecirculation(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacAcPower(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacAutoState(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefrosterFront(setOf("eMBCAN_CFG_VEHICLE")),
     WirelessChargingSwitch(setOf("eMBCAN_CFG_VEHICLE")),
     /** Vehicle cfg params shown on [vad.dashing.tbox.ui.CarSettingsTab] (poll + push). */
@@ -115,6 +117,8 @@ object MbCanRepository {
         WidgetSignalBinding("frontWindscreenHeatWidget", MbCanSignal.FrontWindscreenHeat),
         WidgetSignalBinding("rearWindowMirrorsDefrostWidget", MbCanSignal.HvacDefroster),
         WidgetSignalBinding("hvacAirRecirculationWidget", MbCanSignal.HvacAirRecirculation),
+        WidgetSignalBinding("hvacAcWidget", MbCanSignal.HvacAcPower),
+        WidgetSignalBinding("hvacAutoWidget", MbCanSignal.HvacAutoState),
         WidgetSignalBinding("hvacDefrosterFrontWidget", MbCanSignal.HvacDefrosterFront),
         WidgetSignalBinding(DRIVE_MODE_WIDGET_DATA_KEY, MbCanSignal.CarSettingsVehicleParams),
         WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
@@ -182,6 +186,10 @@ object MbCanRepository {
     val hvacDefrosterState: StateFlow<MbCanBinaryState> = _hvacDefrosterState.asStateFlow()
     private val _hvacAirRecirculationState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAirRecirculationState: StateFlow<MbCanBinaryState> = _hvacAirRecirculationState.asStateFlow()
+    private val _hvacAcPowerState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAcPowerState: StateFlow<MbCanBinaryState> = _hvacAcPowerState.asStateFlow()
+    private val _hvacAutoState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAutoState: StateFlow<MbCanBinaryState> = _hvacAutoState.asStateFlow()
     private val _hvacDefrosterFrontState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacDefrosterFrontState: StateFlow<MbCanBinaryState> = _hvacDefrosterFrontState.asStateFlow()
     private val _wirelessChargingState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -229,6 +237,8 @@ object MbCanRepository {
         windshieldHeatFlow = _frontWindscreenHeatState,
         hvacDefrosterFlow = _hvacDefrosterState,
         hvacAirRecirculationFlow = _hvacAirRecirculationState,
+        hvacAcPowerFlow = _hvacAcPowerState,
+        hvacAutoStateFlow = _hvacAutoState,
         hvacDefrosterFrontFlow = _hvacDefrosterFrontState,
         wirelessChargingFlow = _wirelessChargingState,
         volumeSpeedFlow = _audioVolumeSpeedState,
@@ -316,7 +326,9 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
-            MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT,
+            MbCanKnownVehiclePropertyId.HVAC_POWER,
+            MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,
             MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH,
             in carSettingsCfgVehicleIds,
             MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
@@ -372,9 +384,17 @@ object MbCanRepository {
                         stateEngine.applyHvacAirRecirculationCandidate(
                             MbCanSignalStateEngine.decodeHvacAirRecirculationRaw(raw)
                         )
-                    MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT ->
+                    MbCanKnownVehiclePropertyId.HVAC_POWER ->
+                        stateEngine.applyHvacAcPowerCandidate(
+                            MbCanSignalStateEngine.decodeHvacAcPowerRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
+                        stateEngine.applyHvacAutoStateCandidate(
+                            MbCanSignalStateEngine.decodeHvacAutoStateRaw(raw)
+                        )
+                    MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION ->
                         stateEngine.applyHvacDefrosterFrontCandidate(
-                            MbCanSignalStateEngine.decodeHvacDefrosterFrontRaw(raw)
+                            MbCanSignalStateEngine.decodeHvacFrontDefrostMbCanRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH ->
                         stateEngine.applyWirelessChargingCandidate(
@@ -598,22 +618,33 @@ object MbCanRepository {
         MbCanDiagnostics.log("DEBUG", "executeToggleProperty propertyId=$propertyId")
         val spec = MbCanCommandRegistry.get(propertyId)
             ?: return MbCanCommandResult(false, "No command policy for propertyId=$propertyId")
-        val policy = spec.policy as? MbCanCommandPolicy.ToggleBinary
-            ?: return MbCanCommandResult(false, "Toggle unsupported by policy for propertyId=$propertyId")
         if (availability.value !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, "mbCAN unavailable")
         }
-        val current = MbCanEngineFacade.canGetVehicleParam(propertyId)
-            ?: return MbCanCommandResult(false, "Pre-read failed")
-                .also {
-                    MbCanDiagnostics.log("ERROR", "toggle pre-read failed propertyId=$propertyId")
+        val target = when (val policy = spec.policy) {
+            is MbCanCommandPolicy.ToggleHvacFrontDefrost -> {
+                val current = MbCanEngineFacade.canGetVehicleParam(propertyId)
+                    ?: return MbCanCommandResult(false, "Pre-read failed")
+                        .also {
+                            MbCanDiagnostics.log("ERROR", "toggle pre-read failed propertyId=$propertyId")
+                        }
+                MbCanSignalStateEngine.resolveHvacFrontDefrostMbCanToggleTarget(current)
+            }
+            is MbCanCommandPolicy.ToggleBinary -> {
+                val current = MbCanEngineFacade.canGetVehicleParam(propertyId)
+                    ?: return MbCanCommandResult(false, "Pre-read failed")
+                        .also {
+                            MbCanDiagnostics.log("ERROR", "toggle pre-read failed propertyId=$propertyId")
+                        }
+                when (current) {
+                    policy.onValue -> policy.offValue
+                    policy.offValue -> policy.onValue
+                    else -> policy.unknownFallbackValue
                 }
-        val target = when (current) {
-            policy.onValue -> policy.offValue
-            policy.offValue -> policy.onValue
-            else -> policy.unknownFallbackValue
+            }
+            else -> return MbCanCommandResult(false, "Toggle unsupported by policy for propertyId=$propertyId")
         }
-        MbCanDiagnostics.log("DEBUG", "toggle pre-read current=$current target=$target propertyId=$propertyId")
+        MbCanDiagnostics.log("DEBUG", "toggle target=$target propertyId=$propertyId")
         return applySetAndVerify(spec, target)
     }
 
@@ -710,6 +741,8 @@ object MbCanRepository {
             MbCanSignal.FrontWindscreenHeat -> refreshFrontWindscreenHeat()
             MbCanSignal.HvacDefroster -> refreshHvacDefroster()
             MbCanSignal.HvacAirRecirculation -> refreshHvacAirRecirculation()
+            MbCanSignal.HvacAcPower -> refreshHvacAcPower()
+            MbCanSignal.HvacAutoState -> refreshHvacAutoState()
             MbCanSignal.HvacDefrosterFront -> refreshHvacDefrosterFront()
             MbCanSignal.WirelessChargingSwitch -> refreshWirelessCharging()
             MbCanSignal.CarSettingsVehicleParams -> refreshCarSettingsVehicleParams()
@@ -923,6 +956,72 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshHvacAcPower() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHvacAcPowerCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshHvacAcPower unavailable=$availability")
+                stateEngine.applyHvacAcPowerCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_POWER)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeHvacAcPowerRaw(raw)
+            }
+            stateEngine.applyHvacAcPowerCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshHvacAcPower raw=$raw state=${_hvacAcPowerState.value}"
+            )
+        }
+    }
+
+    private suspend fun refreshHvacAutoState() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                stateEngine.applyHvacAutoStateCandidate(MbCanBinaryState.Unknown)
+                return@withContext
+            }
+
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                MbCanDiagnostics.log("WARN", "refreshHvacAutoState unavailable=$availability")
+                stateEngine.applyHvacAutoStateCandidate(
+                    MbCanBinaryState.Unavailable(
+                        reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                    )
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE)
+            val decoded = if (raw == null) {
+                MbCanBinaryState.Unknown
+            } else {
+                MbCanSignalStateEngine.decodeHvacAutoStateRaw(raw)
+            }
+            stateEngine.applyHvacAutoStateCandidate(decoded)
+            MbCanDiagnostics.log(
+                "DEBUG",
+                "refreshHvacAutoState raw=$raw state=${_hvacAutoState.value}"
+            )
+        }
+    }
+
     private suspend fun refreshHvacDefrosterFront() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -942,11 +1041,11 @@ object MbCanRepository {
                 )
                 return@withContext
             }
-            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT)
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION)
             val decoded = if (raw == null) {
                 MbCanBinaryState.Unknown
             } else {
-                MbCanSignalStateEngine.decodeHvacDefrosterFrontRaw(raw)
+                MbCanSignalStateEngine.decodeHvacFrontDefrostMbCanRaw(raw)
             }
             stateEngine.applyHvacDefrosterFrontCandidate(decoded)
             MbCanDiagnostics.log(

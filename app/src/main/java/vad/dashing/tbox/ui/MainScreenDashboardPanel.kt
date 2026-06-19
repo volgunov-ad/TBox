@@ -393,6 +393,10 @@ fun MainScreenDashboardPanel(
                     sendToggleRearWindowMirrorsDefrost(context)
                 } else if (cfg?.dataKey == "hvacAirRecirculationWidget") {
                     sendToggleHvacAirRecirculation(context)
+                } else if (cfg?.dataKey == "hvacAcWidget") {
+                    sendToggleHvacAc(context)
+                } else if (cfg?.dataKey == "hvacAutoWidget") {
+                    sendToggleHvacAuto(context)
                 } else if (cfg?.dataKey == "hvacDefrosterFrontWidget") {
                     sendToggleHvacDefrosterFront(context)
                 } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {

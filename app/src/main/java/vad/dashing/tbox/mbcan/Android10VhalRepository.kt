@@ -372,6 +372,10 @@ object Android10VhalRepository {
     val hvacDefrosterState: StateFlow<MbCanBinaryState> = _hvacDefrosterState.asStateFlow()
     private val _hvacAirRecirculationState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacAirRecirculationState: StateFlow<MbCanBinaryState> = _hvacAirRecirculationState.asStateFlow()
+    private val _hvacAcPowerState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAcPowerState: StateFlow<MbCanBinaryState> = _hvacAcPowerState.asStateFlow()
+    private val _hvacAutoState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val hvacAutoState: StateFlow<MbCanBinaryState> = _hvacAutoState.asStateFlow()
     private val _hvacDefrosterFrontState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hvacDefrosterFrontState: StateFlow<MbCanBinaryState> = _hvacDefrosterFrontState.asStateFlow()
     private val _audioVolumeSpeedState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -411,6 +415,8 @@ object Android10VhalRepository {
         windshieldHeatFlow = _frontWindscreenHeatState,
         hvacDefrosterFlow = _hvacDefrosterState,
         hvacAirRecirculationFlow = _hvacAirRecirculationState,
+        hvacAcPowerFlow = _hvacAcPowerState,
+        hvacAutoStateFlow = _hvacAutoState,
         hvacDefrosterFrontFlow = _hvacDefrosterFrontState,
         wirelessChargingFlow = MutableStateFlow(MbCanBinaryState.Unknown),
         volumeSpeedFlow = _audioVolumeSpeedState,
@@ -628,6 +634,8 @@ object Android10VhalRepository {
                 "frontWindscreenHeatWidget" -> MbCanSignal.FrontWindscreenHeat
                 "rearWindowMirrorsDefrostWidget" -> MbCanSignal.HvacDefroster
                 "hvacAirRecirculationWidget" -> MbCanSignal.HvacAirRecirculation
+                "hvacAcWidget" -> MbCanSignal.HvacAcPower
+                "hvacAutoWidget" -> MbCanSignal.HvacAutoState
                 "hvacDefrosterFrontWidget" -> MbCanSignal.HvacDefrosterFront
                 DRIVE_MODE_WIDGET_DATA_KEY -> MbCanSignal.CarSettingsVehicleParams
                 "frontLeftSeatHeatVentWidget" -> MbCanSignal.FrontLeftSeatMode
@@ -680,6 +688,8 @@ object Android10VhalRepository {
                 "frontWindscreenHeatWidget",
                 "rearWindowMirrorsDefrostWidget",
                 "hvacAirRecirculationWidget",
+                "hvacAcWidget",
+                "hvacAutoWidget",
                 "hvacDefrosterFrontWidget",
                 DRIVE_MODE_WIDGET_DATA_KEY,
                 "frontLeftSeatHeatVentWidget",
@@ -725,7 +735,9 @@ object Android10VhalRepository {
             MbCanSignal.FrontWindscreenHeat -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH))
             MbCanSignal.HvacDefroster -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH))
             MbCanSignal.HvacAirRecirculation -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION))
-            MbCanSignal.HvacDefrosterFront -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT))
+            MbCanSignal.HvacAcPower -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_POWER))
+            MbCanSignal.HvacAutoState -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE))
+            MbCanSignal.HvacDefrosterFront -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION))
             MbCanSignal.AudioVolume -> setOf(resolved(MbCanKnownAudioPropertyId.VOLUME))
             MbCanSignal.AudioVolumeSpeed -> setOf(resolved(MbCanKnownAudioPropertyId.VOLUME_SPEED))
             MbCanSignal.CarSettingsVehicleParams -> setOf(
@@ -787,7 +799,8 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
-        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT -> true
+        MbCanKnownVehiclePropertyId.HVAC_POWER,
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE -> true
         else -> false
     }
 
@@ -799,8 +812,11 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
-        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT ->
+        MbCanKnownVehiclePropertyId.HVAC_POWER,
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
             decodeVhalBinaryOneIsOn(raw)
+        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION ->
+            MbCanSignalStateEngine.decodeHvacFrontDefrostVhalRaw(raw)
         else -> MbCanBinaryState.Unknown
     }
 
@@ -813,7 +829,8 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
-        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT ->
+        MbCanKnownVehiclePropertyId.HVAC_POWER,
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
             if (targetOn) 2 else 1
         // Recirculation: 1=inside(recirc on), 2=outside(recirc off).
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
@@ -829,7 +846,9 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH -> _frontWindscreenHeatState.value
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH -> _hvacDefrosterState.value
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION -> _hvacAirRecirculationState.value
-        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT -> _hvacDefrosterFrontState.value
+        MbCanKnownVehiclePropertyId.HVAC_POWER -> _hvacAcPowerState.value
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE -> _hvacAutoState.value
+        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> _hvacDefrosterFrontState.value
         else -> MbCanBinaryState.Unknown
     }
 
@@ -867,9 +886,19 @@ object Android10VhalRepository {
                 raw?.let {
                     stateEngine.applyHvacAirRecirculationCandidate(MbCanSignalStateEngine.decodeHvacAirRecirculationRaw(it))
                 }
-            resolved(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT) ->
+            resolved(MbCanKnownVehiclePropertyId.HVAC_POWER) ->
                 raw?.let {
-                    stateEngine.applyHvacDefrosterFrontCandidate(decodeVhalBinaryOneIsOn(it))
+                    stateEngine.applyHvacAcPowerCandidate(decodeVhalBinaryOneIsOn(it))
+                }
+            resolved(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE) ->
+                raw?.let {
+                    stateEngine.applyHvacAutoStateCandidate(decodeVhalBinaryOneIsOn(it))
+                }
+            resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION) ->
+                raw?.let {
+                    stateEngine.applyHvacDefrosterFrontCandidate(
+                        MbCanSignalStateEngine.decodeHvacFrontDefrostVhalRaw(it)
+                    )
                 }
             resolved(MbCanKnownAudioPropertyId.VOLUME) -> raw?.let {
                 _audioVolumeState.value = it.coerceAtLeast(0)
@@ -982,6 +1011,8 @@ object Android10VhalRepository {
                 MbCanSignal.FrontWindscreenHeat -> stateEngine.applyWindshieldHeatCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacDefroster -> stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacAirRecirculation -> stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.HvacAcPower -> stateEngine.applyHvacAcPowerCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.HvacAutoState -> stateEngine.applyHvacAutoStateCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.AudioVolumeSpeed -> {
                     _audioVolumeSpeedModeState.value = null
@@ -1018,6 +1049,8 @@ object Android10VhalRepository {
                 MbCanSignal.FrontWindscreenHeat -> stateEngine.applyWindshieldHeatCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacDefroster -> stateEngine.applyHvacDefrosterCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacAirRecirculation -> stateEngine.applyHvacAirRecirculationCandidate(MbCanBinaryState.Unavailable(reason))
+                MbCanSignal.HvacAcPower -> stateEngine.applyHvacAcPowerCandidate(MbCanBinaryState.Unavailable(reason))
+                MbCanSignal.HvacAutoState -> stateEngine.applyHvacAutoStateCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.AudioVolumeSpeed -> {
                     _audioVolumeSpeedModeState.value = null
@@ -1100,13 +1133,31 @@ object Android10VhalRepository {
                     raw?.let(MbCanSignalStateEngine::decodeHvacAirRecirculationRaw) ?: MbCanBinaryState.Unknown
                 )
             }
+            MbCanSignal.HvacAcPower -> {
+                val propertyId = FirmwareVehicleJsonMapper
+                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.HVAC_POWER)
+                    ?: MbCanKnownVehiclePropertyId.HVAC_POWER
+                val raw = bridge?.getIntProperty(propertyId)
+                stateEngine.applyHvacAcPowerCandidate(
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+                )
+            }
+            MbCanSignal.HvacAutoState -> {
+                val propertyId = FirmwareVehicleJsonMapper
+                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE)
+                    ?: MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE
+                val raw = bridge?.getIntProperty(propertyId)
+                stateEngine.applyHvacAutoStateCandidate(
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+                )
+            }
             MbCanSignal.HvacDefrosterFront -> {
                 val propertyId = FirmwareVehicleJsonMapper
-                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT)
-                    ?: MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT
+                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION)
+                    ?: MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applyHvacDefrosterFrontCandidate(
-                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+                    raw?.let(MbCanSignalStateEngine::decodeHvacFrontDefrostVhalRaw) ?: MbCanBinaryState.Unknown
                 )
             }
             MbCanSignal.AudioVolume -> {
@@ -1198,33 +1249,40 @@ object Android10VhalRepository {
             is MbCanCommand.ToggleProperty -> {
                 val spec = MbCanCommandRegistry.get(command.propertyId)
                     ?: return MbCanCommandResult(false, "No command policy for propertyId=${command.propertyId}")
-                val policy = spec.policy as? MbCanCommandPolicy.ToggleBinary
-                    ?: return MbCanCommandResult(false, "Toggle unsupported for propertyId=${command.propertyId}")
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
                 logDebug("ToggleProperty request=${command.propertyId} effective=$effectivePropertyId")
-                val target = if (isVhalBinaryToggleProperty(command.propertyId)) {
-                    val readPropertyId = FirmwareVehicleJsonMapper.resolveReadPropertyId(command.propertyId)
-                        ?: command.propertyId
-                    val currentRaw = bridge?.getIntProperty(readPropertyId)
-                    val currentState = currentRaw
-                        ?.let { decodeVhalBinaryReadState(command.propertyId, it) }
-                        ?: latestBinaryState(command.propertyId)
-                    val targetOn = when (currentState) {
-                        MbCanBinaryState.On -> false
-                        MbCanBinaryState.Off -> true
-                        else -> true
+                val target = when (spec.policy) {
+                    is MbCanCommandPolicy.ToggleHvacFrontDefrost -> {
+                        val readPropertyId = FirmwareVehicleJsonMapper.resolveReadPropertyId(command.propertyId)
+                            ?: command.propertyId
+                        val currentRaw = bridge?.getIntProperty(readPropertyId) ?: -1
+                        MbCanSignalStateEngine.resolveHvacFrontDefrostVhalToggleTarget(currentRaw)
                     }
-                    encodeVhalBinaryWriteValue(command.propertyId, targetOn)
-                        ?: return MbCanCommandResult(false, "No VHAL write mapping for propertyId=${command.propertyId}")
-                } else {
-                    val current = bridge?.getIntProperty(effectivePropertyId)
-                        ?: return MbCanCommandResult(false, "Property read failed")
-                    when (current) {
-                        policy.onValue -> policy.offValue
-                        policy.offValue -> policy.onValue
-                        else -> policy.unknownFallbackValue
+                    is MbCanCommandPolicy.ToggleBinary -> if (isVhalBinaryToggleProperty(command.propertyId)) {
+                        val readPropertyId = FirmwareVehicleJsonMapper.resolveReadPropertyId(command.propertyId)
+                            ?: command.propertyId
+                        val currentRaw = bridge?.getIntProperty(readPropertyId)
+                        val currentState = currentRaw
+                            ?.let { decodeVhalBinaryReadState(command.propertyId, it) }
+                            ?: latestBinaryState(command.propertyId)
+                        val targetOn = when (currentState) {
+                            MbCanBinaryState.On -> false
+                            MbCanBinaryState.Off -> true
+                            else -> true
+                        }
+                        encodeVhalBinaryWriteValue(command.propertyId, targetOn)
+                            ?: return MbCanCommandResult(false, "No VHAL write mapping for propertyId=${command.propertyId}")
+                    } else {
+                        val current = bridge?.getIntProperty(effectivePropertyId)
+                            ?: return MbCanCommandResult(false, "Property read failed")
+                        when (current) {
+                            spec.policy.onValue -> spec.policy.offValue
+                            spec.policy.offValue -> spec.policy.onValue
+                            else -> spec.policy.unknownFallbackValue
+                        }
                     }
+                    else -> return MbCanCommandResult(false, "Toggle unsupported for propertyId=${command.propertyId}")
                 }
                 val ok = bridge?.setIntProperty(effectivePropertyId, target) == true
                 logDebug("ToggleProperty result=$ok propertyId=$effectivePropertyId target=$target")

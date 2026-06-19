@@ -30,6 +30,9 @@ sealed class MbCanCommandPolicy {
         val unknownFallbackValue: Int = onValue
     ) : MbCanCommandPolicy()
 
+    /** Front windscreen blow (not heated glass) — [MBFrontDefrostingView] / [AcFragment] ib_front_defrosting. */
+    data object ToggleHvacFrontDefrost : MbCanCommandPolicy()
+
     data class SetExact(
         val allowedValues: Set<Int>
     ) : MbCanCommandPolicy()
@@ -95,7 +98,7 @@ object MbCanCatalog {
         MbCanControlParam("Climate", "PM25 display source", "eVEHICLE_PM25_DISPLAY_TOGGLE", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "UV lamp request", "eVEHICLE_UV_LAMP_REQ", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "Sterilize strength request", "eVEHICLE_STERILIZE_STRENGTH_REQ", MbCanConfidence.DECLARED_IN_API),
-        MbCanControlParam("Climate", "HVAC front defroster", "eHVAC_DEFROSTER_FRONT", MbCanConfidence.DECLARED_IN_API),
+        MbCanControlParam("Climate", "HVAC front defrost blow", "eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC temperature", "eVEHICLE_PROPERTY_HVAC_TEMPERATURE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "Fragrance switch", "eVEHICLE_PROPERTY_FRAGRANCE_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "FCW switch", "eFCW_SWTICH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -130,8 +133,22 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_AIR_RECIRCULATION_VALUE_ON = 1
     /** Same property: recirculation off. */
     const val HVAC_AIR_RECIRCULATION_VALUE_OFF = 2
-    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_DEFROSTER_FRONT] — 1 off, 2 on. */
-    const val HVAC_DEFROSTER_FRONT = 122
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER] — AC compressor; 1 off, 2 on. */
+    const val HVAC_POWER = 36
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_AUTO_STATE] — AUTO mode; 1 off, 2 on. */
+    const val HVAC_AUTO_STATE = 110
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION] — blow mode. */
+    const val HVAC_FAN_DIRECTION = 40
+    /** mbCAN blow modes (Android 9 [MBFrontDefrostingView]). */
+    const val HVAC_FAN_DIRECTION_FACE = 1
+    const val HVAC_FAN_DIRECTION_FOOT = 2
+    const val HVAC_FAN_DIRECTION_FACE_FOOT = 3
+    const val HVAC_FAN_DIRECTION_DEFROST = 4
+    const val HVAC_FAN_DIRECTION_DEFROST_FOOT = 5
+    /** VHAL blow modes (Android 10 [AcFragment.mWindModeIds]). */
+    const val HVAC_FAN_DIRECTION_VHAL_FACE = 0
+    const val HVAC_FAN_DIRECTION_VHAL_DEFROST_FOOT = 3
+    const val HVAC_FAN_DIRECTION_VHAL_DEFROST = 4
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_CHG_WIRELESS_SWITCH] — 1 off, 2 on. */
     const val CHG_WIRELESS_SWITCH = 264
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_STEERING_MODE] — 0–6. */
@@ -253,12 +270,26 @@ object MbCanCommandRegistry {
             refreshSignal = MbCanSignal.HvacAirRecirculation
         ),
         MbCanCommandSpec(
-            propertyId = MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT,
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_POWER,
             policy = MbCanCommandPolicy.ToggleBinary(
                 offValue = 1,
                 onValue = 2,
                 unknownFallbackValue = 2
             ),
+            refreshSignal = MbCanSignal.HvacAcPower
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.HvacAutoState
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,
+            policy = MbCanCommandPolicy.ToggleHvacFrontDefrost,
             refreshSignal = MbCanSignal.HvacDefrosterFront
         ),
         MbCanCommandSpec(

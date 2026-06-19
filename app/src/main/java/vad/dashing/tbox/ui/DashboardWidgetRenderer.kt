@@ -361,6 +361,34 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "hvacAcWidget" -> {
+            DashboardHvacAcWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        "hvacAutoWidget" -> {
+            DashboardHvacAutoWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
         "hvacDefrosterFrontWidget" -> {
             DashboardHvacDefrosterFrontWidgetItem(
                 onClick = onClick,

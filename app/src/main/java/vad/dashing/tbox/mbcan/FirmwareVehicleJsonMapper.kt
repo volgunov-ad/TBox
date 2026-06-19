@@ -49,12 +49,16 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH to 289415942, // T_0B01_SET_PAS_Switch
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289415309, // T_0201_SET_FrontWindscreenHeatiReq
-        // MBVehicleProperty.eHVAC_DEFROSTER_FRONT
-        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT to 289415309, // T_0201_SET_FrontWindscreenHeatiReq
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION
+        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION to 289415298, // T_0201_IHU_5_ModeAdjust_Req
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER (rear window + mirrors)
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH to 289415299, // T_0201_IHU_5_RearDefrostSwitch_Req
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION to 289415302, // T_0201_IHU_5_CirculationMode_Req
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER
+        MbCanKnownVehiclePropertyId.HVAC_POWER to 289415300, // T_0201_IHU_5_ACRequestCommand
+        // MBVehicleProperty.eHVAC_AUTO_STATE
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415311, // T_0201_IHU_5_AutoState
         // Seat controls
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415316, // T_0201_SET_FLSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415315, // T_0201_SET_FRSeatHeatVentSwReq
@@ -78,12 +82,16 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH to 289412233, // R_0400_CEM_RAD1_Pas_Switch
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289412114, // R_0400_RBCM_FGHeat_Request_CommandFeedb
-        // MBVehicleProperty.eHVAC_DEFROSTER_FRONT
-        MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT to 289412114, // R_0400_RBCM_FGHeat_Request_CommandFeedb
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION
+        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION to 289415174, // R_0200_CEM_IPM_FrontBlowModeSts
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER (rear window + mirrors)
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH to 289415177, // R_0200_CEM_IPM_RearDefrosts
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION to 289415172, // R_0200_CEM_IPM_RecyMode
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER
+        MbCanKnownVehiclePropertyId.HVAC_POWER to 289415180, // R_0200_CEM_IPM_AC_DisplaySts
+        // MBVehicleProperty.eHVAC_AUTO_STATE
+        MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415182, // R_0200_CEM_IPM_FrontAutoACSts
         // Seat states
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415193, // R_0200_CEM_IPM_FLSeatHeatVentSwSts
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415192, // R_0200_CEM_IPM_FRSeatHeatVentSwSts
