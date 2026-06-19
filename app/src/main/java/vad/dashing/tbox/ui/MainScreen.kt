@@ -409,6 +409,7 @@ private fun MainScreenWallpaperBackground(
     val folderLight by settingsViewModel.mainScreenWallpaperLightFolderUri.collectAsStateWithLifecycle()
     val folderDark by settingsViewModel.mainScreenWallpaperDarkFolderUri.collectAsStateWithLifecycle()
     val wallpaperSelections by settingsViewModel.mainScreenWallpaperSelectionsByPage.collectAsStateWithLifecycle()
+    val activeThemeUri by settingsViewModel.activeThemeUri.collectAsStateWithLifecycle()
     val epoch by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
     val wallpaperCrop by settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
     val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
@@ -417,7 +418,9 @@ private fun MainScreenWallpaperBackground(
     val folderUri = remember(folderUriStr) {
         if (folderUriStr.isBlank()) null else Uri.parse(folderUriStr)
     }
-    var displayedFileName by remember(folderUriStr) { mutableStateOf<String?>(null) }
+    var displayedFileName by remember(folderUriStr, forLightTheme, epoch, activeThemeUri) {
+        mutableStateOf<String?>(null)
+    }
     // Keyed by folder so on theme switch we never keep the previous folder's listing for one frame
     // (that paired the wrong sortedNames with the new theme's saved selection and could persist
     // a bogus filename into DataStore via LaunchedEffect below).
@@ -435,7 +438,7 @@ private fun MainScreenWallpaperBackground(
         onWallpaperCountChanged(sortedNames.size)
     }
     val savedForPage = wallpaperSelections.fileNameFor(currentMainScreenPage, forLightTheme)
-    val effectiveName = remember(sortedNames, displayedFileName, savedForPage) {
+    val effectiveName = remember(sortedNames, displayedFileName, savedForPage, forLightTheme) {
         if (sortedNames.isEmpty()) {
             null
         } else {
@@ -474,7 +477,7 @@ private fun MainScreenWallpaperBackground(
         val initialPagerPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
         val wallpaperNamesKey = sortedNames.joinToString("\u0000")
         val scope = rememberCoroutineScope()
-        key(folderUriStr, wallpaperNamesKey) {
+        key(folderUriStr, wallpaperNamesKey, epoch, activeThemeUri) {
             val pagerState = rememberPagerState(
                 initialPage = initialPagerPage,
                 pageCount = { pagerPageCount },
@@ -518,7 +521,8 @@ private fun MainScreenWallpaperBackground(
                     wallpaperLoading.clear()
                 }
             }
-            LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey) {
+            LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey, forLightTheme, themeActivating) {
+                if (themeActivating) return@LaunchedEffect
                 val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
                 if (pagerState.currentPage != wantPage) {
                     pagerState.scrollToPage(wantPage)

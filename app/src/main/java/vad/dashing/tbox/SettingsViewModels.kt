@@ -946,6 +946,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             }
         }
         viewModelScope.launch {
+            settingsManager.themeActivationInProgressFlow.collect { activating ->
+                if (activating) return@collect
+                saveWallpaperSelectionJob?.cancel()
+                saveWallpaperSelectionJob = null
+                pendingWallpaperPatches.clear()
+                liveWallpaperSelections.value =
+                    settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
+            }
+        }
+        viewModelScope.launch {
             val storedMain = settingsManager.mainScreenDashboardsFlow.first()
             selectedMainScreenPanelIdState.value =
                 storedMain.firstOrNull()?.id ?: DEFAULT_MAIN_SCREEN_PANEL_ID

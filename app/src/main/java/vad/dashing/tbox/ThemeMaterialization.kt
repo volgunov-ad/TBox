@@ -248,7 +248,7 @@ object ThemeMaterialization {
 
             applyRuntimeStateFromCache(settingsManager, dir, sections)
 
-            applyWallpaperDirsFromCache(settingsManager, settingsViewModel, dir, sections)
+            applyWallpaperDirsFromCache(settingsManager, dir, sections)
 
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
@@ -364,23 +364,18 @@ object ThemeMaterialization {
 
     private suspend fun applyWallpaperDirsFromCache(
         settingsManager: SettingsManager,
-        settingsViewModel: SettingsViewModel?,
         cacheDir: File,
         sections: Set<ThemeSection>,
     ) {
         if (ThemeSection.MAIN_SCREEN !in sections) return
 
         val lightUri = wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_LIGHT_DIR))
-        if (settingsViewModel != null) {
-            settingsViewModel.saveMainScreenWallpaperLightFolderUri(lightUri)
-        } else {
+        if (lightUri != null) {
             settingsManager.saveMainScreenWallpaperLightFolderUri(lightUri)
         }
 
         val darkUri = wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_DARK_DIR))
-        if (settingsViewModel != null) {
-            settingsViewModel.saveMainScreenWallpaperDarkFolderUri(darkUri)
-        } else {
+        if (darkUri != null) {
             settingsManager.saveMainScreenWallpaperDarkFolderUri(darkUri)
         }
         settingsManager.bumpMainScreenWallpaperRevision()
