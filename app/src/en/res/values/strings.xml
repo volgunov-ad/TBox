@@ -328,7 +328,7 @@
     <string name="main_screen_wallpaper_next_cd">Next wallpaper</string>
     <string name="themes_tab_title">Themes</string>
     <string name="themes_create">Create theme</string>
-    <string name="themes_apply">Apply theme</string>
+    <string name="themes_apply">Load new theme</string>
     <string name="themes_active_title">Active theme</string>
     <string name="themes_active_none">No theme assigned</string>
     <string name="themes_active_file_missing">Theme file not found</string>

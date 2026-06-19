@@ -331,7 +331,7 @@
     <string name="main_screen_wallpaper_next_cd">Следующие обои</string>
     <string name="themes_tab_title">Темы</string>
     <string name="themes_create">Создать тему</string>
-    <string name="themes_apply">Применить тему</string>
+    <string name="themes_apply">Загрузить новую тему</string>
     <string name="themes_active_title">Текущая тема</string>
     <string name="themes_active_none">Тема не назначена</string>
     <string name="themes_active_file_missing">Файл темы не найден</string>

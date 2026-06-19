@@ -99,4 +99,29 @@ class MainScreenWallpaperSelectionsTest {
         assertTrue(clearedLight.lightByPage.isEmpty())
         assertEquals("b.jpg", clearedLight.fileNameFor(1, forLightTheme = false))
     }
+
+    @Test
+    fun driveModeThemes_samePage_differentWallpapers_remainIndependent() {
+        val eco = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "eco.jpg")
+        val nor = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "nor.jpg")
+        val spt = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 2, forLightTheme = true, fileName = "spt.jpg")
+
+        assertEquals("eco.jpg", eco.fileNameFor(1, forLightTheme = true))
+        assertEquals("nor.jpg", nor.fileNameFor(1, forLightTheme = true))
+        assertEquals("spt.jpg", spt.fileNameFor(2, forLightTheme = true))
+        assertNotEquals(eco.fileNameFor(1, true), nor.fileNameFor(1, true))
+    }
+
+    @Test
+    fun huColorTheme_lightAndDarkSelections_areIndependentOnSamePage() {
+        val selections = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "day.jpg")
+            .withFileName(page = 1, forLightTheme = false, fileName = "night.jpg")
+
+        assertEquals("day.jpg", selections.fileNameFor(1, forLightTheme = true))
+        assertEquals("night.jpg", selections.fileNameFor(1, forLightTheme = false))
+    }
 }

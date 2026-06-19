@@ -468,7 +468,8 @@ private fun MainScreenWallpaperBackground(
             }
         }
     }
-    LaunchedEffect(effectiveName, savedForPage, sortedNames, currentMainScreenPage, forLightTheme) {
+    LaunchedEffect(effectiveName, savedForPage, sortedNames, currentMainScreenPage, forLightTheme, themeActivating) {
+        if (themeActivating) return@LaunchedEffect
         if (savedForPage == null) return@LaunchedEffect
         val want = effectiveName ?: return@LaunchedEffect
         if (want != savedForPage) {

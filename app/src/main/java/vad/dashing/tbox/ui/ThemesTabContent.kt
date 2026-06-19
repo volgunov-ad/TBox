@@ -250,26 +250,49 @@ fun ThemesTabContent(
         )
 
         if (activePath.isNotEmpty()) {
-            OutlinedButton(
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        settingsViewModel.clearActiveThemeSelection()
+                        Toast.makeText(context, R.string.toast_theme_active_cleared, Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        stringResource(R.string.themes_clear_active),
+                        style = MaterialTheme.typography.tboxTitle,
+                        maxLines = 2,
+                    )
+                }
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        applyThemeLauncher.launch(arrayOf("application/octet-stream", "application/*", "*/*"))
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        stringResource(R.string.themes_apply),
+                        style = MaterialTheme.typography.tboxTitle,
+                        maxLines = 2,
+                    )
+                }
+            }
+        } else {
+            Button(
                 onClick = rememberWrappedOnClick {
-                    settingsViewModel.clearActiveThemeSelection()
-                    Toast.makeText(context, R.string.toast_theme_active_cleared, Toast.LENGTH_SHORT).show()
+                    applyThemeLauncher.launch(arrayOf("application/octet-stream", "application/*", "*/*"))
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                    .padding(bottom = 16.dp),
             ) {
-                Text(stringResource(R.string.themes_clear_active), style = MaterialTheme.typography.tboxButton)
+                Text(stringResource(R.string.themes_apply), style = MaterialTheme.typography.tboxTitle)
             }
-        }
-
-        Button(
-            onClick = rememberWrappedOnClick {
-                applyThemeLauncher.launch(arrayOf("application/octet-stream", "application/*", "*/*"))
-            },
-            modifier = Modifier.padding(bottom = 16.dp),
-        ) {
-            Text(stringResource(R.string.themes_apply), style = MaterialTheme.typography.tboxTitle)
         }
 
         OutlinedButton(
