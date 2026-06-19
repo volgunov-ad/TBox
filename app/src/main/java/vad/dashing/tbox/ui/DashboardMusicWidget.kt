@@ -39,7 +39,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -411,7 +410,7 @@ fun DashboardMusicWidgetItem(
                         style = calculateResponsiveTextStyle(
                             containerHeight = availableHeight,
                             textType = TextType.TITLE
-                        ).copy(fontWeight = FontWeight.SemiBold),
+                        ),
                         maxLines = if (mediaState.notificationAccessGranted) 2 else 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center

@@ -26,7 +26,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -106,7 +105,7 @@ fun CarSettingsTab(
     ) {
         Text(
             text = stringResource(R.string.car_settings_screen_title),
-            style = MaterialTheme.typography.tboxHeadline.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.tboxHeadline,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 16.dp)
         )

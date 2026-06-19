@@ -121,9 +121,11 @@ fun WidgetColorSetting(
     presetSlots: List<Int>,
     onPresetSlotColorSave: (slotIndex: Int, color: Int) -> Unit,
     /** Optional override for the hex input (e.g. widget dialog uses larger type). */
-    valueTextStyle: TextStyle = TboxTextStyles.Body,
-    valueLabelStyle: TextStyle = TboxTextStyles.Body,
+    valueTextStyle: TextStyle? = null,
+    valueLabelStyle: TextStyle? = null,
 ) {
+    val resolvedValueTextStyle = valueTextStyle ?: MaterialTheme.typography.tboxBody
+    val resolvedValueLabelStyle = valueLabelStyle ?: MaterialTheme.typography.tboxBody
     val slots = remember(presetSlots) { normalizeWidgetColorPresetSlots(presetSlots) }
     var selectedSlot by remember { mutableStateOf<Int?>(null) }
     var localColorValue by remember { mutableIntStateOf(colorValue) }
@@ -187,7 +189,7 @@ fun WidgetColorSetting(
 
             OutlinedTextField(
                 value = textValue,
-                textStyle = valueTextStyle,
+                textStyle = resolvedValueTextStyle,
                 onValueChange = { newText ->
                     textValue = newText
                     if (newText.isBlank()) {
@@ -208,7 +210,7 @@ fun WidgetColorSetting(
                 label = {
                     Text(
                         stringResource(R.string.widget_color_value_label),
-                        style = valueLabelStyle
+                        style = resolvedValueLabelStyle
                     )
                 }
             )

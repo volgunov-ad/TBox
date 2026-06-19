@@ -6,7 +6,6 @@ import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
-import vad.dashing.tbox.ui.theme.TboxTextStyles
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,7 +40,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,11 +83,6 @@ internal data class ValueAccuracyDropdownEntry(
     override fun toString(): String = display
 }
 
-private val WidgetSelectionDialogFieldInputStyle = TboxTextStyles.Title
-/** OutlinedTextField labels in this dialog. */
-private val WidgetSelectionDialogFieldLabelStyle = TboxTextStyles.Body
-/** Placeholder / secondary — same as [SettingSwitch] description (20.sp). */
-private val WidgetSelectionDialogFieldPlaceholderStyle = TboxTextStyles.Body
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
@@ -402,10 +395,10 @@ private fun MainScreenPanelWholeSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.floating_panel_name_label),
-                    style = WidgetSelectionDialogFieldLabelStyle
+                    style = MaterialTheme.typography.tboxBody
                 )
             },
-            textStyle = WidgetSelectionDialogFieldInputStyle
+            textStyle = MaterialTheme.typography.tboxTitle
         )
         SettingSwitch(
             state.wholePanelClickAction,
@@ -465,10 +458,10 @@ private fun FloatingDashboardWholeSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.floating_panel_name_label),
-                    style = WidgetSelectionDialogFieldLabelStyle
+                    style = MaterialTheme.typography.tboxBody
                 )
             },
-            textStyle = WidgetSelectionDialogFieldInputStyle
+            textStyle = MaterialTheme.typography.tboxTitle
         )
         SettingSwitch(
             state.wholePanelClickAction,
@@ -629,17 +622,17 @@ internal fun WidgetSelectionDialogForm(
                         value = state.customTitle,
                         onValueChange = { state.customTitle = it },
                         enabled = state.togglesEnabled,
-                        textStyle = WidgetSelectionDialogFieldInputStyle,
+                        textStyle = MaterialTheme.typography.tboxTitle,
                         label = {
                             Text(
                                 stringResource(R.string.widget_custom_title_label),
-                                style = WidgetSelectionDialogFieldLabelStyle
+                                style = MaterialTheme.typography.tboxBody
                             )
                         },
                         placeholder = {
                             Text(
                                 stringResource(R.string.widget_custom_title_hint),
-                                style = WidgetSelectionDialogFieldPlaceholderStyle,
+                                style = MaterialTheme.typography.tboxBody,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
@@ -802,8 +795,8 @@ internal fun WidgetSelectionDialogForm(
                             onColorChange = { state.textColorLight = it },
                             presetSlots = widgetColorPresetSlots,
                             onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
-                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
                         )
                         WidgetColorSetting(
                             title = stringResource(R.string.widget_background_color_light),
@@ -812,8 +805,8 @@ internal fun WidgetSelectionDialogForm(
                             onColorChange = { state.backgroundColorLight = it },
                             presetSlots = widgetColorPresetSlots,
                             onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
-                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
                         )
                     } else {
                         WidgetColorSetting(
@@ -823,8 +816,8 @@ internal fun WidgetSelectionDialogForm(
                             onColorChange = { state.textColorDark = it },
                             presetSlots = widgetColorPresetSlots,
                             onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
-                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
                         )
                         WidgetColorSetting(
                             title = stringResource(R.string.widget_background_color_dark),
@@ -833,8 +826,8 @@ internal fun WidgetSelectionDialogForm(
                             onColorChange = { state.backgroundColorDark = it },
                             presetSlots = widgetColorPresetSlots,
                             onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
-                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
                         )
                     }
                     TileBackgroundImageSettingsSection(
@@ -895,11 +888,11 @@ internal fun WidgetSelectionDialogForm(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
-                        textStyle = WidgetSelectionDialogFieldInputStyle,
+                        textStyle = MaterialTheme.typography.tboxTitle,
                         label = {
                             Text(
                                 text = stringResource(R.string.widget_app_launcher_search),
-                                style = WidgetSelectionDialogFieldLabelStyle
+                                style = MaterialTheme.typography.tboxBody
                             )
                         },
                         singleLine = true,
@@ -946,7 +939,6 @@ internal fun WidgetSelectionDialogActions(
     onDismiss: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
-    saveTextFontWeight: FontWeight = FontWeight.Normal,
     showWholePanelButton: Boolean = false,
     deleteAfterWholePanel: (@Composable RowScope.() -> Unit)? = null,
     /** Load whole-panel draft from persisted config once when user opens «Вся панель». */
@@ -994,7 +986,7 @@ internal fun WidgetSelectionDialogActions(
             ) {
                 Text(
                     text = stringResource(R.string.widget_toggle_advanced),
-                    style = TboxTextStyles.Button,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1035,7 +1027,7 @@ internal fun WidgetSelectionDialogActions(
                 ) {
                     Text(
                         text = stringResource(R.string.widget_toggle_whole_panel),
-                        style = TboxTextStyles.Button,
+                        style = MaterialTheme.typography.tboxButton,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1049,7 +1041,7 @@ internal fun WidgetSelectionDialogActions(
         ) {
             Text(
                 text = stringResource(R.string.action_cancel),
-                style = TboxTextStyles.Button
+                style = MaterialTheme.typography.tboxButton,
             )
         }
         Button(
@@ -1058,7 +1050,7 @@ internal fun WidgetSelectionDialogActions(
         ) {
             Text(
                 text = stringResource(R.string.action_save),
-                style = TboxTextStyles.Button.copy(fontWeight = saveTextFontWeight),
+                style = MaterialTheme.typography.tboxButton,
             )
         }
     }

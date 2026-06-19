@@ -45,7 +45,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -351,8 +350,8 @@ fun LogsTabContent(
                 options = logLevels,
                 onValueChange = { settingsViewModel.saveLogLevel(it) },
                 width = 200.dp,
-                valueStyle = TboxTextStyles.Body,
-                itemStyle = TboxTextStyles.Body
+                valueStyle = MaterialTheme.typography.tboxBody,
+                itemStyle = MaterialTheme.typography.tboxBody,
             )
         }
 
