@@ -233,7 +233,7 @@ object ThemeMaterialization {
             val themeJson = File(dir, THEME_JSON_FILE).readText()
             val sections = ThemeSection.parseJsonArray(
                 runCatching { JSONObject(themeJson) }.getOrNull()?.optJSONArray("sections"),
-            )
+            ).ifEmpty { manifest.sections }
 
             settingsManager.saveActiveTheme(
                 uri = cacheKey,
@@ -246,16 +246,14 @@ object ThemeMaterialization {
                 throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
             }
 
-            applyMainScreenWallpaperSelectionsFromThemeCache(
+            ThemeRuntimeState.applyActivationOverrides(
                 settingsManager = settingsManager,
                 cacheDir = dir,
                 themeJson = themeJson,
-                sections = sections,
             )
 
-            applyRuntimeStateFromCache(settingsManager, dir, sections)
-
             applyWallpaperDirsFromCache(settingsManager, dir, sections)
+            settingsManager.bumpMainScreenWallpaperRevision()
 
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
@@ -359,9 +357,9 @@ object ThemeMaterialization {
         wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
     ): Boolean = withContext(Dispatchers.IO) {
         if (wallpaperSelections == null) return@withContext false
-        syncRuntimeStateToActiveThemeCache(
+        syncRuntimeStateToThemeCache(
             context = context,
-            settingsManager = settingsManager,
+            cacheKey = settingsManager.activeThemeUriFlow.first().trim(),
             wallpaperSelections = wallpaperSelections,
         )
     }
@@ -371,56 +369,29 @@ object ThemeMaterialization {
         settingsManager: SettingsManager,
         currentPage: Int,
     ): Boolean = withContext(Dispatchers.IO) {
-        syncRuntimeStateToActiveThemeCache(
+        syncRuntimeStateToThemeCache(
             context = context,
-            settingsManager = settingsManager,
+            cacheKey = settingsManager.activeThemeUriFlow.first().trim(),
             currentPage = currentPage,
         )
     }
 
-    private suspend fun syncRuntimeStateToActiveThemeCache(
+    suspend fun syncRuntimeStateToThemeCache(
         context: Context,
-        settingsManager: SettingsManager,
+        cacheKey: String,
         wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
         currentPage: Int? = null,
-    ): Boolean {
-        val cacheKey = settingsManager.activeThemeUriFlow.first().trim()
-        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
-        if (!isMaterialized(context, cacheKey)) return false
-        val sections = settingsManager.activeThemeSectionsFlow.first()
-        if (ThemeSection.MAIN_SCREEN !in sections) return false
-        val dir = cacheDir(context, cacheKey)
+    ): Boolean = withContext(Dispatchers.IO) {
+        val normalizedKey = cacheKey.trim()
+        if (!ThemeCacheKeys.isLikelyCacheKey(normalizedKey)) return@withContext false
+        if (!isMaterialized(context, normalizedKey)) return@withContext false
+        val dir = cacheDir(context, normalizedKey)
         ThemeRuntimeState.patch(
             cacheDir = dir,
             wallpaperSelections = wallpaperSelections,
             currentPage = currentPage,
         )
-        return true
-    }
-
-    private suspend fun applyRuntimeStateFromCache(
-        settingsManager: SettingsManager,
-        cacheDir: File,
-        sections: Set<ThemeSection>,
-    ) {
-        if (ThemeSection.MAIN_SCREEN !in sections) return
-        val runtime = ThemeRuntimeState.read(cacheDir)
-        if (runtime.hasCurrentPage) {
-            settingsManager.saveMainScreenCurrentPage(
-                runtime.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
-            )
-        }
-    }
-
-    private suspend fun applyMainScreenWallpaperSelectionsFromThemeCache(
-        settingsManager: SettingsManager,
-        cacheDir: File,
-        themeJson: String,
-        sections: Set<ThemeSection>,
-    ) {
-        if (ThemeSection.MAIN_SCREEN !in sections) return
-        val selections = ThemeRuntimeState.resolveWallpaperSelectionsForActivation(cacheDir, themeJson)
-        settingsManager.saveMainScreenWallpaperSelectionsByPage(selections)
+        true
     }
 
     private suspend fun applyWallpaperDirsFromCache(

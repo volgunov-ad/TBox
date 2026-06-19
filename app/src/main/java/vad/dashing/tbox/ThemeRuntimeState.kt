@@ -104,6 +104,26 @@ object ThemeRuntimeState {
     }
 
     /**
+     * Applies incoming theme cache state to global DataStore on activation.
+     * Wallpaper selections are always resolved from [cacheDir] so stale DataStore values
+     * from the previously active theme are replaced before the main screen is shown.
+     */
+    suspend fun applyActivationOverrides(
+        settingsManager: SettingsManager,
+        cacheDir: File,
+        themeJson: String,
+    ) {
+        val selections = resolveWallpaperSelectionsForActivation(cacheDir, themeJson)
+        settingsManager.saveMainScreenWallpaperSelectionsByPage(selections)
+        val runtime = read(cacheDir)
+        if (runtime.hasCurrentPage) {
+            settingsManager.saveMainScreenCurrentPage(
+                runtime.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+            )
+        }
+    }
+
+    /**
      * Resolves wallpaper file choices when activating a materialized theme cache.
      * [runtime.json] overrides [theme.json]; if neither defines wallpapers, returns empty
      * so stale DataStore values from the previous active theme are not kept.

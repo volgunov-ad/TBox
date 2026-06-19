@@ -568,13 +568,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     private val pendingWallpaperPatchesFlow = MutableStateFlow<Map<Pair<Int, Boolean>, String>>(emptyMap())
 
     private val preThemeActivationFlushHook: suspend () -> Unit = {
+        val outgoingCacheKey = settingsManager.activeThemeUriFlow.first().trim()
         saveWallpaperSelectionJob?.cancel()
         saveWallpaperSelectionJob = null
         saveCurrentPageJob?.cancel()
         saveCurrentPageJob = null
         flushMainScreenWallpaperSelectionInternal()
         flushMainScreenCurrentPageInternal()
-        syncActiveMainScreenRuntimeStateToActiveThemeCache()
+        if (ThemeCacheKeys.isLikelyCacheKey(outgoingCacheKey)) {
+            settingsManager.snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)
+        }
     }
 
     val mainScreenWallpaperSelectionsByPage: StateFlow<MainScreenWallpaperSelectionsByPage> =
@@ -1470,10 +1473,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         settingsManager.syncActiveThemeWallpaperSelection(current)
     }
 
-    private suspend fun syncActiveMainScreenRuntimeStateToActiveThemeCache() {
-        settingsManager.snapshotMainScreenRuntimeToActiveThemeCache()
-    }
-
     fun saveMainScreenWallpaperCrop(crop: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperCrop(crop)
@@ -2119,7 +2118,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         return ThemeMaterialization.formatRuntimeJsonDebugText(
             context = context,
             cacheKeyRaw = settingsManager.activeThemeUriFlow.first(),
-            dataStoreSelections = settingsManager.mainScreenWallpaperSelectionByPageFlow.first(),
+            dataStoreSelections = settingsManager.mainScreenWallpaperSelectionsSnapshot(),
         )
     }
 

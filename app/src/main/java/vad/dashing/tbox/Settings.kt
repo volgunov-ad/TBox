@@ -261,11 +261,12 @@ class SettingsManager(private val context: Context) {
         return themeActivationMutex.withLock {
             val wasIdle = themeActivationDepth.getAndIncrement() == 0
             if (wasIdle) {
-                val flush = preThemeActivationFlush
-                if (flush != null) {
-                    flush.invoke()
-                } else {
-                    snapshotMainScreenRuntimeToActiveThemeCache()
+                val outgoingCacheKey = activeThemeUriFlow.first().trim()
+                preThemeActivationFlush?.invoke()
+                if (preThemeActivationFlush == null &&
+                    ThemeCacheKeys.isLikelyCacheKey(outgoingCacheKey)
+                ) {
+                    snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)
                 }
                 withContext(Dispatchers.Main.immediate) {
                     _themeActivationInProgress.value = true
@@ -1573,6 +1574,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun mainScreenWallpaperSelectionsSnapshot(): MainScreenWallpaperSelectionsByPage {
+        return MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
+            context.settingsDataStore.data.first()[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
+        )
+    }
+
     suspend fun syncActiveThemeWallpaperSelection(
         selections: MainScreenWallpaperSelectionsByPage? = null,
     ): Boolean {
@@ -1583,10 +1590,21 @@ class SettingsManager(private val context: Context) {
         )
     }
 
-    /** Writes current main-screen page/wallpaper choices into the active theme runtime.json. */
+    /** Writes current main-screen page/wallpaper choices into [cacheKey] runtime.json. */
+    suspend fun snapshotMainScreenRuntimeToThemeCache(cacheKey: String) {
+        val selections = mainScreenWallpaperSelectionByPageFlow.first()
+        val page = mainScreenCurrentPageFlow.first()
+        ThemeMaterialization.syncRuntimeStateToThemeCache(
+            context = context,
+            cacheKey = cacheKey,
+            wallpaperSelections = selections,
+            currentPage = page,
+        )
+    }
+
+    /** @deprecated Use [snapshotMainScreenRuntimeToThemeCache] with explicit outgoing cache key. */
     suspend fun snapshotMainScreenRuntimeToActiveThemeCache() {
-        syncActiveThemeWallpaperSelection(mainScreenWallpaperSelectionByPageFlow.first())
-        syncActiveThemeCurrentPage(mainScreenCurrentPageFlow.first())
+        snapshotMainScreenRuntimeToThemeCache(activeThemeUriFlow.first())
     }
 
     suspend fun syncActiveThemeCurrentPage(currentPage: Int): Boolean {

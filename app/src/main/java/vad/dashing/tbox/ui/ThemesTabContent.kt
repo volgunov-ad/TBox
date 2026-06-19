@@ -69,6 +69,7 @@ fun ThemesTabContent(
 
     val activeThemeUri by settingsViewModel.activeThemeUri.collectAsStateWithLifecycle()
     val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
+    val wallpaperRevision by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
     val driveModeThemePaths by settingsViewModel.driveModeThemePaths.collectAsStateWithLifecycle()
 
     var runtimeJsonDebugText by remember { mutableStateOf("") }
@@ -78,7 +79,7 @@ fun ThemesTabContent(
         runtimeJsonDebugText = settingsViewModel.formatActiveThemeRuntimeJsonDebugText(context)
     }
 
-    LaunchedEffect(activeThemeUri, themeActivating, runtimeJsonRefreshToken) {
+    LaunchedEffect(activeThemeUri, themeActivating, wallpaperRevision, runtimeJsonRefreshToken) {
         if (themeActivating) return@LaunchedEffect
         refreshRuntimeJsonDebugText()
     }
