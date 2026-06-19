@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.TboxFontFamily
 import android.content.Context
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
@@ -893,6 +894,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
+        )
+
+    val appFontFamilyId = settingsManager.appFontFamilyIdFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TboxFontFamily.Default.id
         )
 
     val headUnitCanMode = settingsManager.headUnitCanModeFlow
@@ -1922,6 +1930,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveUiClickSoundsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveUiClickSoundsSetting(enabled)
+        }
+    }
+
+    fun saveAppFontFamilyId(fontFamilyId: Int) {
+        viewModelScope.launch {
+            settingsManager.saveAppFontFamilyId(fontFamilyId)
         }
     }
 

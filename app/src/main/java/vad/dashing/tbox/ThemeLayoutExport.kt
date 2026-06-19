@@ -5,6 +5,7 @@ import android.net.Uri
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.ui.theme.TboxFontFamily
 
 /**
  * Export/import of theme JSON sections for [.tboxtheme] archives.
@@ -183,6 +184,9 @@ object ThemeLayoutExport {
         val presetsArr = JSONArray()
         sm.widgetColorPresetSlotsFlow.first().forEach { presetsArr.put(colorIntToHex(it)) }
         o.put("colorPresets", presetsArr)
+        val typography = JSONObject()
+        typography.put("fontFamily", TboxFontFamily.fromId(sm.appFontFamilyIdFlow.first()).slug)
+        o.put("typography", typography)
         return o
     }
 
@@ -321,6 +325,9 @@ object ThemeLayoutExport {
         }
         if (theme.has("wallpaperCrop")) {
             sm.saveMainScreenWallpaperCrop(theme.optBoolean("wallpaperCrop"))
+        }
+        theme.optJSONObject("typography")?.optString("fontFamily")?.let { slug ->
+            TboxFontFamily.fromSlug(slug)?.let { sm.saveAppFontFamilyId(it.id) }
         }
         theme.optJSONArray("colorPresets")?.let { presets ->
             for (i in 0 until presets.length()) {

@@ -70,7 +70,6 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -345,7 +344,7 @@ fun RefuelsTab(
                 }
                 Text(
                     text = stringResource(R.string.refuels_calibration_report_title),
-                    style = MaterialTheme.typography.tboxBody.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.tboxBody,
                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -842,7 +841,7 @@ private fun RefuelHeaderCell(text: String, widthDp: Int) {
         modifier = Modifier
             .width(widthDp.dp)
             .padding(end = 8.dp),
-        style = MaterialTheme.typography.tboxTitle.copy(fontWeight = FontWeight.SemiBold),
+        style = MaterialTheme.typography.tboxTitle,
         textAlign = TextAlign.Center,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,

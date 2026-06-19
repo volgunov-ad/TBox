@@ -37,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -171,7 +170,7 @@ fun ModemModeSelectorContent(
     Column(modifier = modifier) {
         Text(
             text = stringResource(R.string.modem_mode_title),
-            style = MaterialTheme.typography.tboxTitle.copy(fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -284,6 +283,7 @@ fun SettingsTabContent(
     val trackRefuels by settingsViewModel.trackRefuels.collectAsStateWithLifecycle()
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
+    val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
@@ -576,6 +576,13 @@ fun SettingsTabContent(
         ) {
             Text(stringResource(R.string.settings_left_menu_edit), style = MaterialTheme.typography.tboxTitle)
         }
+        SettingAppFontFamily(
+            selectedFontFamilyId = appFontFamilyId,
+            onFontFamilyIdChange = { settingsViewModel.saveAppFontFamilyId(it) },
+            text = stringResource(R.string.settings_app_font_family_title),
+            description = stringResource(R.string.settings_app_font_family_desc),
+            enabled = true,
+        )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_misc_title))

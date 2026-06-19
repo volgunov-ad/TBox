@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
+import vad.dashing.tbox.ui.theme.TboxFontFamily
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
@@ -375,6 +376,7 @@ class SettingsManager(private val context: Context) {
         private val WHEEL_PRESSURE_PERSIST_ACROSS_STOPS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pressure_persist_across_stops")
         private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
+        private val APP_FONT_FAMILY_ID_KEY = intPreferencesKey("${KEY_PREFIX}app_font_family_id")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
@@ -896,6 +898,12 @@ class SettingsManager(private val context: Context) {
 
     val uiClickSoundsFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[UI_CLICK_SOUNDS_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val appFontFamilyIdFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            TboxFontFamily.fromId(preferences[APP_FONT_FAMILY_ID_KEY] ?: TboxFontFamily.Default.id).id
+        }
         .distinctUntilChanged()
 
     val headUnitCanModeFlow: Flow<HeadUnitCanMode> = context.settingsDataStore.data
@@ -1873,6 +1881,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveUiClickSoundsSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[UI_CLICK_SOUNDS_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAppFontFamilyId(fontFamilyId: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[APP_FONT_FAMILY_ID_KEY] = TboxFontFamily.fromId(fontFamilyId).id
         }
     }
 

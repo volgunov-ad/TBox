@@ -7,65 +7,61 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
-/** Fixed app text sizes; wired into [TboxMaterialTypography] and [TboxAppTheme]. */
+private fun tboxTextStyle(
+    fontFamily: FontFamily,
+    fontSize: TextUnit,
+    lineHeight: TextUnit,
+): TextStyle = TextStyle(
+    fontFamily = fontFamily,
+    fontWeight = FontWeight.Normal,
+    fontSize = fontSize,
+    lineHeight = lineHeight,
+)
+
+/** Fixed app text sizes for a given [fontFamily]. */
+class TboxTextStyleSet internal constructor(
+    val Caption: TextStyle,
+    val Body: TextStyle,
+    val Button: TextStyle,
+    val Title: TextStyle,
+    val Headline: TextStyle,
+    val TabLabel: TextStyle,
+)
+
+fun tboxTextStyles(fontFamily: FontFamily = FontFamily.Default): TboxTextStyleSet =
+    TboxTextStyleSet(
+        Caption = tboxTextStyle(fontFamily, 18.sp, 23.4.sp),
+        Body = tboxTextStyle(fontFamily, 20.sp, 26.sp),
+        Button = tboxTextStyle(fontFamily, 22.sp, 28.6.sp),
+        Title = tboxTextStyle(fontFamily, 24.sp, 31.2.sp),
+        Headline = tboxTextStyle(fontFamily, 26.sp, 33.8.sp),
+        TabLabel = tboxTextStyle(fontFamily, 34.sp, 44.2.sp),
+    )
+
+/** Default-family styles for non-Compose callers and legacy defaults. */
 object TboxTextStyles {
-    val Caption = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 18.sp,
-        lineHeight = 23.4.sp,
-    )
-    val Body = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 20.sp,
-        lineHeight = 26.sp,
-    )
-    val Button = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 22.sp,
-        lineHeight = 28.6.sp,
-    )
-    val Title = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 24.sp,
-        lineHeight = 31.2.sp,
-    )
-    val Headline = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 26.sp,
-        lineHeight = 33.8.sp,
-    )
-    val TabLabel = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 34.sp,
-        lineHeight = 44.2.sp,
-    )
+    private val defaults = tboxTextStyles(FontFamily.Default)
+    val Caption = defaults.Caption
+    val Body = defaults.Body
+    val Button = defaults.Button
+    val Title = defaults.Title
+    val Headline = defaults.Headline
+    val TabLabel = defaults.TabLabel
 }
 
-/** Dashboard tile text roles: family/weight from [TboxTextStyles], size adapts to tile height. */
+/** Dashboard tile text roles: family from [MaterialTheme.typography], size adapts to tile height. */
 enum class TboxWidgetTextRole {
     TITLE, VALUE, UNIT,
 }
 
 /**
  * Height-adaptive widget typography. Size steps match the legacy [calculateResponsiveFontSize]
- * tables; font family and weight come from the corresponding [TboxTextStyles] entry.
+ * tables; font family and weight come from the corresponding typography slot.
  */
 object TboxWidgetTypography {
     private val titleSizesSp = floatArrayOf(8f, 10f, 12f, 16f, 20f, 24f, 28f, 32f)
     private val valueSizesSp = floatArrayOf(10f, 14f, 18f, 24f, 30f, 36f, 42f, 48f)
     private val unitSizesSp = floatArrayOf(6f, 8f, 10f, 14f, 18f, 22f, 26f, 30f)
-
-    fun baseStyle(role: TboxWidgetTextRole): TextStyle = when (role) {
-        TboxWidgetTextRole.TITLE -> TboxTextStyles.Title
-        TboxWidgetTextRole.VALUE -> TboxTextStyles.Body
-        TboxWidgetTextRole.UNIT -> TboxTextStyles.Caption
-    }
 
     fun fontSizeSpForHeight(containerHeightDp: Float, role: TboxWidgetTextRole): Float {
         val sizes = when (role) {
@@ -88,11 +84,12 @@ object TboxWidgetTypography {
     fun textStyleForHeight(
         containerHeightDp: Float,
         role: TboxWidgetTextRole,
+        baseStyle: TextStyle,
         textScale: Float = 1f,
     ): TextStyle {
         val fontSize = fontSizeSpForHeight(containerHeightDp, role) * textScale
         val size = fontSize.sp
-        return baseStyle(role).copy(
+        return baseStyle.copy(
             fontSize = size,
             lineHeight = size * 1.3f,
         )
@@ -101,8 +98,9 @@ object TboxWidgetTypography {
     fun fontSizeForHeight(
         containerHeightDp: Float,
         role: TboxWidgetTextRole,
+        baseStyle: TextStyle,
         textScale: Float = 1f,
-    ): TextUnit = textStyleForHeight(containerHeightDp, role, textScale).fontSize
+    ): TextUnit = textStyleForHeight(containerHeightDp, role, baseStyle, textScale).fontSize
 }
 
 /** Scales widget tile text while keeping the 1.3 line-height ratio. */
@@ -111,16 +109,21 @@ fun TextStyle.scaledWidgetText(factor: Float): TextStyle {
     return copy(fontSize = size, lineHeight = size * 1.3f)
 }
 
-val TboxMaterialTypography = Typography(
-    displaySmall = TboxTextStyles.TabLabel,
-    headlineSmall = TboxTextStyles.Headline,
-    titleLarge = TboxTextStyles.Title,
-    labelLarge = TboxTextStyles.Button,
-    bodyLarge = TboxTextStyles.Body,
-    bodySmall = TboxTextStyles.Caption,
-    bodyMedium = TboxTextStyles.Caption,
-    titleMedium = TboxTextStyles.Button,
-)
+fun tboxMaterialTypography(fontFamily: FontFamily = FontFamily.Default): Typography {
+    val styles = tboxTextStyles(fontFamily)
+    return Typography(
+        displaySmall = styles.TabLabel,
+        headlineSmall = styles.Headline,
+        titleLarge = styles.Title,
+        labelLarge = styles.Button,
+        bodyLarge = styles.Body,
+        bodySmall = styles.Caption,
+        bodyMedium = styles.Caption,
+        titleMedium = styles.Button,
+    )
+}
+
+val TboxMaterialTypography: Typography = tboxMaterialTypography()
 
 val Typography.tboxCaption: TextStyle get() = bodySmall
 val Typography.tboxBody: TextStyle get() = bodyLarge

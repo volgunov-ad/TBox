@@ -7,16 +7,18 @@ import androidx.compose.ui.graphics.Color
 @Composable
 fun TboxAppTheme(
     theme: Int = 1, // 1 - светлая, 2 - темная
+    fontFamilyId: Int = TboxFontFamily.Default.id,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when (theme) {
         2 -> darkColorScheme()
         else -> lightColorScheme()
     }
+    val typography = tboxMaterialTypography(resolveFontFamily(fontFamilyId))
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = TboxMaterialTypography,
+        typography = typography,
         content = content
     )
 }

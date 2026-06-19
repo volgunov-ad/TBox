@@ -50,7 +50,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -69,7 +68,7 @@ import vad.dashing.tbox.CanFrame
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
-import vad.dashing.tbox.ui.theme.TboxTextStyles
+import vad.dashing.tbox.ui.theme.TboxFontFamily
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -82,7 +81,7 @@ fun StatusRow(
     label: String,
     value: String,
     unit: String = "",
-    style: TextStyle = TboxTextStyles.Title,
+    style: TextStyle? = null,
     fontSize: TextUnit? = null,
     color: Color? = null,
     showDivider: Boolean = true,
@@ -90,7 +89,8 @@ fun StatusRow(
 ) {
     val textColor = color ?: MaterialTheme.colorScheme.onSurface
     val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
-    val resolvedStyle = if (fontSize != null) style.copy(fontSize = fontSize) else style
+    val baseStyle = style ?: MaterialTheme.typography.tboxTitle
+    val resolvedStyle = if (fontSize != null) baseStyle.copy(fontSize = fontSize) else baseStyle
     val lineHeight = resolvedStyle.lineHeight
     val labelPercent = TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
         labelColumnWidthPercent,
@@ -273,7 +273,6 @@ fun TabMenuItem(
                     color = textColor,
                     textAlign = TextAlign.Left,
                     style = MaterialTheme.typography.tboxTabLabel.copy(
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                         lineHeight = MaterialTheme.typography.tboxTabLabel.fontSize * 1.1f,
                     ),
                     modifier = Modifier.padding(start = 12.dp)
@@ -303,7 +302,6 @@ fun AppAlertDialogTitle(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.tboxHeadline.copy(
-            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         ),
     )
@@ -448,6 +446,8 @@ fun <T> SettingDropdownGeneric(
     popupFocusable: Boolean = true,
     selectorWidth: Dp = 140.dp
 ) {
+    val dropdownValueStyle = MaterialTheme.typography.tboxTitle
+    val dropdownItemStyle = MaterialTheme.typography.tboxTitle
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -465,8 +465,8 @@ fun <T> SettingDropdownGeneric(
                 onValueChange = onValueChange,
                 width = selectorWidth,
                 enabled = enabled,
-                valueStyle = TboxTextStyles.Title,
-                itemStyle = TboxTextStyles.Title,
+                valueStyle = dropdownValueStyle,
+                itemStyle = dropdownItemStyle,
                 popupFocusable = popupFocusable
             )
         }
@@ -496,16 +496,137 @@ fun <T> SettingDropdownGeneric(
 }
 
 @Composable
+fun appFontFamilyLabel(fontFamily: TboxFontFamily): String = stringResource(
+    when (fontFamily) {
+        TboxFontFamily.Default -> R.string.settings_app_font_family_default
+        TboxFontFamily.SansSerif -> R.string.settings_app_font_family_sans_serif
+        TboxFontFamily.Serif -> R.string.settings_app_font_family_serif
+        TboxFontFamily.Monospace -> R.string.settings_app_font_family_monospace
+        TboxFontFamily.Roboto -> R.string.settings_app_font_family_roboto
+        TboxFontFamily.Inter -> R.string.settings_app_font_family_inter
+        TboxFontFamily.Montserrat -> R.string.settings_app_font_family_montserrat
+        TboxFontFamily.CrimsonText -> R.string.settings_app_font_family_crimson_text
+        TboxFontFamily.Cabin -> R.string.settings_app_font_family_cabin
+        TboxFontFamily.Nunito -> R.string.settings_app_font_family_nunito
+    }
+)
+
+@Composable
+fun SettingAppFontFamily(
+    selectedFontFamilyId: Int,
+    onFontFamilyIdChange: (Int) -> Unit,
+    text: String,
+    description: String = "",
+    enabled: Boolean = true,
+    selectorWidth: Dp = 200.dp,
+) {
+    val selected = TboxFontFamily.fromId(selectedFontFamilyId)
+    var expanded by remember { mutableStateOf(false) }
+    val previewStyle = MaterialTheme.typography.tboxTitle.copy(fontFamily = selected.toComposeFontFamily())
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically)
+                .wrapContentWidth(),
+        ) {
+            Box(modifier = Modifier.wrapContentSize()) {
+                OutlinedButton(
+                    onClick = rememberWrappedOnClick { expanded = true },
+                    enabled = enabled,
+                    modifier = Modifier.width(selectorWidth),
+                ) {
+                    Text(
+                        text = appFontFamilyLabel(selected),
+                        style = previewStyle,
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = if (expanded) {
+                            stringResource(R.string.dropdown_collapse)
+                        } else {
+                            stringResource(R.string.dropdown_expand)
+                        },
+                    )
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.width(selectorWidth),
+                ) {
+                    TboxFontFamily.all.forEach { option ->
+                        key(option) {
+                            val menuItemClick = rememberWrappedOnClick {
+                                onFontFamilyIdChange(option.id)
+                                expanded = false
+                            }
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = appFontFamilyLabel(option),
+                                        style = MaterialTheme.typography.tboxTitle.copy(
+                                            fontFamily = option.toComposeFontFamily(),
+                                        ),
+                                        color = if (option == selected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                    )
+                                },
+                                onClick = menuItemClick,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 16.dp)
+                .align(if (description.isNotEmpty()) Alignment.Top else Alignment.CenterVertically),
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.tboxTitle,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = if (description.isNotEmpty()) 4.dp else 0.dp),
+            )
+            if (description.isNotEmpty()) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun <T> GenericDropdownSelector(
     selectedValue: T,
     options: List<T>,
     onValueChange: (T) -> Unit,
     width: Dp,
     enabled: Boolean = true,
-    valueStyle: TextStyle = TboxTextStyles.Title,
-    itemStyle: TextStyle = TboxTextStyles.Title,
+    valueStyle: TextStyle? = null,
+    itemStyle: TextStyle? = null,
     popupFocusable: Boolean = true,
 ) {
+    val resolvedValueStyle = valueStyle ?: MaterialTheme.typography.tboxTitle
+    val resolvedItemStyle = itemStyle ?: MaterialTheme.typography.tboxTitle
     var expanded by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.wrapContentSize()) {
@@ -516,7 +637,7 @@ fun <T> GenericDropdownSelector(
         ) {
             Text(
                 text = selectedValue.toString(),
-                style = valueStyle,
+                style = resolvedValueStyle,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center
             )
@@ -548,7 +669,7 @@ fun <T> GenericDropdownSelector(
                         text = {
                             Text(
                                 text = option.toString(),
-                                style = itemStyle,
+                                style = resolvedItemStyle,
                                 color = if (option == selectedValue) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
@@ -1183,9 +1304,10 @@ fun IntInputField(
     value: Int,
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    textStyle: TextStyle = TboxTextStyles.Title,
+    textStyle: TextStyle? = null,
     enabled: Boolean = true
 ) {
+    val resolvedTextStyle = textStyle ?: MaterialTheme.typography.tboxTitle
     var textValue by remember { mutableStateOf(value.toString()) }
     var isError by remember { mutableStateOf(false) }
 
@@ -1214,7 +1336,7 @@ fun IntInputField(
         enabled = enabled,
         singleLine = true,
         isError = isError,
-        textStyle = LocalTextStyle.current.merge(textStyle),
+        textStyle = LocalTextStyle.current.merge(resolvedTextStyle),
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Number,
             imeAction = ImeAction.Done

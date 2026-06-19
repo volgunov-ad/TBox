@@ -36,7 +36,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,6 +86,7 @@ fun TboxApp(
     )
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
+    val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
@@ -97,7 +97,7 @@ fun TboxApp(
         settingsViewModel.validateThemeSettings(context)
     }
 
-    TboxAppTheme(theme = currentTheme) {
+    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
         CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
         if (selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY) {
             MainScreen(
@@ -276,7 +276,7 @@ fun TboxScreen(
                             } else {
                                 stringResource(R.string.tbox_disconnected_at, conTime)
                             },
-                            style = MaterialTheme.typography.tboxCaption.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.tboxCaption,
                             color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
                             textAlign = TextAlign.Center,
                             modifier = Modifier
@@ -285,7 +285,7 @@ fun TboxScreen(
                         )
                         Text(
                             text = stringResource(R.string.service_started_at, serviceTime),
-                            style = MaterialTheme.typography.tboxCaption.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.tboxCaption,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
@@ -295,7 +295,7 @@ fun TboxScreen(
                     } else {
                         Text(
                             text = stringResource(R.string.tbox_short),
-                            style = MaterialTheme.typography.tboxCaption.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.tboxCaption,
                             color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
                             textAlign = TextAlign.Center,
                             modifier = Modifier

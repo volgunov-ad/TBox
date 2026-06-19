@@ -41,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -132,7 +131,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                 }
                 Text(
                     text = stringResource(R.string.settings_floating_usage_stats_hide_section_title),
-                    style = MaterialTheme.typography.tboxButton.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.tboxButton,
                     modifier = Modifier.padding(top = 12.dp),
                 )
                 AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_hide_section_body))
@@ -186,7 +185,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                 Text(
                     text = stringResource(R.string.settings_floating_usage_stats_show_section_title),
-                    style = MaterialTheme.typography.tboxButton.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.tboxButton,
                 )
                 AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_show_section_body))
                 OutlinedTextField(
@@ -289,7 +288,7 @@ private fun UsageStatsAppsColumn(
     ) {
         Text(
             text = columnAppsLabel,
-            style = MaterialTheme.typography.tboxButton.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.tboxButton,
             modifier = Modifier.padding(bottom = 6.dp),
         )
         apps.forEach { app ->
@@ -332,7 +331,7 @@ private fun UsageStatsPanelsColumn(
     ) {
         Text(
             text = columnPanelsLabel,
-            style = MaterialTheme.typography.tboxButton.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.tboxButton,
             modifier = Modifier.padding(bottom = 6.dp),
         )
         if (panels.isEmpty()) {

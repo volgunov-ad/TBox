@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -41,6 +40,9 @@ import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.ui.theme.TboxWidgetTextRole
 import vad.dashing.tbox.ui.theme.TboxWidgetTypography
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxTitle
 import kotlin.math.abs
 
 val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
@@ -216,9 +218,16 @@ fun calculateResponsiveTextStyle(
     textType: TextType = TextType.VALUE,
 ): TextStyle {
     val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
+    val role = textType.toWidgetRole()
+    val baseStyle = when (role) {
+        TboxWidgetTextRole.TITLE -> MaterialTheme.typography.tboxTitle
+        TboxWidgetTextRole.VALUE -> MaterialTheme.typography.tboxBody
+        TboxWidgetTextRole.UNIT -> MaterialTheme.typography.tboxCaption
+    }
     return TboxWidgetTypography.textStyleForHeight(
         containerHeightDp = containerHeight.value,
-        role = textType.toWidgetRole(),
+        role = role,
+        baseStyle = baseStyle,
         textScale = textScale,
     )
 }
