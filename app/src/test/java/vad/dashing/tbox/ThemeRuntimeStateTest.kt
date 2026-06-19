@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -93,5 +94,48 @@ class ThemeRuntimeStateTest {
         val resolved = ThemeRuntimeState.resolveWallpaperSelectionsForActivation(dir, themeJson)
 
         assertTrue(resolved.isEmpty())
+    }
+
+    @Test
+    fun patch_persistsWallpaperFolderUris() {
+        val dir = createTempDir(prefix = "runtime_folders_")
+        ThemeRuntimeState.patch(
+            cacheDir = dir,
+            wallpaperLightFolderUri = "file:///eco/light",
+            wallpaperDarkFolderUri = "file:///eco/dark",
+            patchWallpaperLightFolderUri = true,
+            patchWallpaperDarkFolderUri = true,
+        )
+
+        val state = ThemeRuntimeState.read(dir)
+        assertTrue(state.hasWallpaperLightFolderUri)
+        assertEquals("file:///eco/light", state.wallpaperLightFolderUri)
+        assertTrue(state.hasWallpaperDarkFolderUri)
+        assertEquals("file:///eco/dark", state.wallpaperDarkFolderUri)
+    }
+
+    @Test
+    fun resolveWallpaperFolderUriForActivation_returnsNullWhenRuntimeOmitsFolder() {
+        val dir = createTempDir(prefix = "runtime_folder_missing_")
+        ThemeRuntimeState.patch(
+            dir,
+            wallpaperSelections = MainScreenWallpaperSelectionsByPage.empty()
+                .withFileName(page = 1, forLightTheme = true, fileName = "a.jpg"),
+        )
+
+        assertNull(ThemeRuntimeState.resolveWallpaperLightFolderUriForActivation(dir))
+        assertNull(ThemeRuntimeState.resolveWallpaperDarkFolderUriForActivation(dir))
+    }
+
+    @Test
+    fun resolveWallpaperFolderUriForActivation_returnsBlankWhenRuntimeClearsFolder() {
+        val dir = createTempDir(prefix = "runtime_folder_clear_")
+        ThemeRuntimeState.patch(
+            cacheDir = dir,
+            wallpaperLightFolderUri = "",
+            patchWallpaperLightFolderUri = true,
+        )
+
+        assertEquals("", ThemeRuntimeState.resolveWallpaperLightFolderUriForActivation(dir))
     }
 }

@@ -261,12 +261,8 @@ class SettingsManager(private val context: Context) {
         return themeActivationMutex.withLock {
             val wasIdle = themeActivationDepth.getAndIncrement() == 0
             if (wasIdle) {
-                val flush = preThemeActivationFlush
-                if (flush != null) {
-                    flush.invoke()
-                } else {
-                    snapshotMainScreenRuntimeToActiveThemeCache()
-                }
+                preThemeActivationFlush?.invoke()
+                snapshotMainScreenRuntimeToActiveThemeCache()
                 withContext(Dispatchers.Main.immediate) {
                     _themeActivationInProgress.value = true
                 }
@@ -1583,9 +1579,19 @@ class SettingsManager(private val context: Context) {
         )
     }
 
+    suspend fun syncActiveThemeMainScreenWallpaperState(): Boolean {
+        return ThemeMaterialization.syncMainScreenWallpaperStateToActiveThemeCache(
+            context = context,
+            settingsManager = this,
+            wallpaperSelections = mainScreenWallpaperSelectionByPageFlow.first(),
+            lightFolderUri = mainScreenWallpaperLightFolderUriFlow.first(),
+            darkFolderUri = mainScreenWallpaperDarkFolderUriFlow.first(),
+        )
+    }
+
     /** Writes current main-screen page/wallpaper choices into the active theme runtime.json. */
     suspend fun snapshotMainScreenRuntimeToActiveThemeCache() {
-        syncActiveThemeWallpaperSelection(mainScreenWallpaperSelectionByPageFlow.first())
+        syncActiveThemeMainScreenWallpaperState()
         syncActiveThemeCurrentPage(mainScreenCurrentPageFlow.first())
     }
 
