@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
@@ -64,7 +65,7 @@ private val gearboxModeOptions = listOf(
     CarSettingsModeOption(2, "NOR"),
 )
 
-private val speedVolumeModeOptions = listOf(
+private val speedVolumeModeOptionsAll = listOf(
     CarSettingsModeOption(1, "Выкл"),
     CarSettingsModeOption(2, "Низкий"),
     CarSettingsModeOption(3, "Средний"),
@@ -78,8 +79,14 @@ fun CarSettingsTab(
     val coroutineScope = rememberCoroutineScope()
     val availability by UniversalCanRepository.availability.collectAsStateWithLifecycle()
     val mbCanOk = availability is MbCanAvailability.Available
+    val headUnitCanMode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
 
     val speedVolumeMode by UniversalCanRepository.audioVolumeSpeedModeState.collectAsStateWithLifecycle()
+    val speedVolumeModeOptions = if (headUnitCanMode == HeadUnitCanMode.Android10Vhal) {
+        speedVolumeModeOptionsAll
+    } else {
+        speedVolumeModeOptionsAll.take(3)
+    }
 
     val epsMode by UniversalCanRepository.carSettingsEpsMode.collectAsStateWithLifecycle()
     val driveMode by UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
