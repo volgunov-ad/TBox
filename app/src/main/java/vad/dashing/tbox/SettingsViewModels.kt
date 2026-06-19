@@ -1362,7 +1362,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenWallpaperLightFolderUri(uriString: String?) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperLightFolderUri(uriString)
-            settingsManager.syncActiveThemeMainScreenWallpaperState()
             settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
@@ -1370,7 +1369,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenWallpaperDarkFolderUri(uriString: String?) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperDarkFolderUri(uriString)
-            settingsManager.syncActiveThemeMainScreenWallpaperState()
             settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
@@ -1406,7 +1404,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 )
             }
             liveWallpaperSelections.value = settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
-            settingsManager.syncActiveThemeMainScreenWallpaperState()
             settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
@@ -1420,7 +1417,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             } else {
                 settingsManager.saveMainScreenWallpaperDarkFolderUri(normalized)
             }
-            settingsManager.syncActiveThemeMainScreenWallpaperState()
             settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
@@ -1456,7 +1452,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             current = current.withFileName(key.first, key.second, fileName)
         }
         settingsManager.saveMainScreenWallpaperSelectionsByPage(current)
-        settingsManager.syncActiveThemeMainScreenWallpaperState()
+        settingsManager.syncActiveThemeWallpaperSelection(current)
         liveWallpaperSelections.value = current
     }
 

@@ -246,7 +246,7 @@ object ThemeMaterialization {
                 throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
             }
 
-            applyMainScreenWallpaperFromThemeCache(
+            applyMainScreenWallpaperSelectionsFromThemeCache(
                 settingsManager = settingsManager,
                 cacheDir = dir,
                 themeJson = themeJson,
@@ -254,6 +254,8 @@ object ThemeMaterialization {
             )
 
             applyRuntimeStateFromCache(settingsManager, dir, sections)
+
+            applyWallpaperDirsFromCache(settingsManager, dir, sections)
 
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
@@ -324,24 +326,6 @@ object ThemeMaterialization {
         )
     }
 
-    suspend fun syncMainScreenWallpaperStateToActiveThemeCache(
-        context: Context,
-        settingsManager: SettingsManager,
-        wallpaperSelections: MainScreenWallpaperSelectionsByPage,
-        lightFolderUri: String,
-        darkFolderUri: String,
-    ): Boolean = withContext(Dispatchers.IO) {
-        syncRuntimeStateToActiveThemeCache(
-            context = context,
-            settingsManager = settingsManager,
-            wallpaperSelections = wallpaperSelections,
-            wallpaperLightFolderUri = lightFolderUri,
-            wallpaperDarkFolderUri = darkFolderUri,
-            patchWallpaperLightFolderUri = true,
-            patchWallpaperDarkFolderUri = true,
-        )
-    }
-
     suspend fun syncCurrentPageToActiveThemeCache(
         context: Context,
         settingsManager: SettingsManager,
@@ -358,10 +342,6 @@ object ThemeMaterialization {
         context: Context,
         settingsManager: SettingsManager,
         wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
-        wallpaperLightFolderUri: String? = null,
-        wallpaperDarkFolderUri: String? = null,
-        patchWallpaperLightFolderUri: Boolean = false,
-        patchWallpaperDarkFolderUri: Boolean = false,
         currentPage: Int? = null,
     ): Boolean {
         val cacheKey = settingsManager.activeThemeUriFlow.first().trim()
@@ -373,10 +353,6 @@ object ThemeMaterialization {
         ThemeRuntimeState.patch(
             cacheDir = dir,
             wallpaperSelections = wallpaperSelections,
-            wallpaperLightFolderUri = wallpaperLightFolderUri,
-            wallpaperDarkFolderUri = wallpaperDarkFolderUri,
-            patchWallpaperLightFolderUri = patchWallpaperLightFolderUri,
-            patchWallpaperDarkFolderUri = patchWallpaperDarkFolderUri,
             currentPage = currentPage,
         )
         return true
@@ -396,31 +372,33 @@ object ThemeMaterialization {
         }
     }
 
-    private suspend fun applyMainScreenWallpaperFromThemeCache(
+    private suspend fun applyMainScreenWallpaperSelectionsFromThemeCache(
         settingsManager: SettingsManager,
         cacheDir: File,
         themeJson: String,
         sections: Set<ThemeSection>,
     ) {
         if (ThemeSection.MAIN_SCREEN !in sections) return
-
         val selections = ThemeRuntimeState.resolveWallpaperSelectionsForActivation(cacheDir, themeJson)
         settingsManager.saveMainScreenWallpaperSelectionsByPage(selections)
+    }
 
-        val runtimeLightUri = ThemeRuntimeState.resolveWallpaperLightFolderUriForActivation(cacheDir)
-        val lightUri = when {
-            runtimeLightUri != null -> runtimeLightUri.takeIf { it.isNotBlank() }
-            else -> wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_LIGHT_DIR))
+    private suspend fun applyWallpaperDirsFromCache(
+        settingsManager: SettingsManager,
+        cacheDir: File,
+        sections: Set<ThemeSection>,
+    ) {
+        if (ThemeSection.MAIN_SCREEN !in sections) return
+
+        val lightUri = wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_LIGHT_DIR))
+        if (lightUri != null) {
+            settingsManager.saveMainScreenWallpaperLightFolderUri(lightUri)
         }
-        settingsManager.saveMainScreenWallpaperLightFolderUri(lightUri)
 
-        val runtimeDarkUri = ThemeRuntimeState.resolveWallpaperDarkFolderUriForActivation(cacheDir)
-        val darkUri = when {
-            runtimeDarkUri != null -> runtimeDarkUri.takeIf { it.isNotBlank() }
-            else -> wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_DARK_DIR))
+        val darkUri = wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_DARK_DIR))
+        if (darkUri != null) {
+            settingsManager.saveMainScreenWallpaperDarkFolderUri(darkUri)
         }
-        settingsManager.saveMainScreenWallpaperDarkFolderUri(darkUri)
-
         settingsManager.bumpMainScreenWallpaperRevision()
     }
 
