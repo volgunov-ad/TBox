@@ -871,7 +871,9 @@ fun SettingsTabContent(
                         )
                     }
                 },
-                enabled = huRebootButtonEnabled && mbCanAvailable,
+                enabled = huRebootButtonEnabled &&
+                    mbCanAvailable &&
+                    headUnitCanMode == HeadUnitCanMode.Android9MbCan,
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
