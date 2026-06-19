@@ -99,8 +99,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
         private const val DEFAULT_MAIN_SCREEN_PANEL_ID = "main-screen-1"
-        private const val MAIN_SCREEN_WALLPAPER_SELECTION_SAVE_DEBOUNCE_MS = 5_000L
-        private const val MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS = 5_000L
+        private const val MAIN_SCREEN_WALLPAPER_SELECTION_SAVE_DEBOUNCE_MS = 500L
+        private const val MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS = 500L
         private const val DEFAULT_MAIN_SCREEN_PANEL_ROWS = 1
         private const val DEFAULT_MAIN_SCREEN_PANEL_COLS = 1
         private const val DEFAULT_MAIN_SCREEN_PANEL_REL_X = 0.05f
