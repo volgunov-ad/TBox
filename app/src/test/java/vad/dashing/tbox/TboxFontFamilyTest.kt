@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import vad.dashing.tbox.ui.theme.TboxFontFamily
@@ -16,12 +17,16 @@ class TboxFontFamilyTest {
     @Test
     fun fromId_returnsMatchingPresetOrDefault() {
         assertEquals(TboxFontFamily.Serif, TboxFontFamily.fromId(2))
+        assertEquals(TboxFontFamily.Roboto, TboxFontFamily.fromId(4))
+        assertEquals(TboxFontFamily.Nunito, TboxFontFamily.fromId(9))
         assertEquals(TboxFontFamily.Default, TboxFontFamily.fromId(99))
     }
 
     @Test
     fun fromSlug_roundTripsSlug() {
         assertEquals(TboxFontFamily.Monospace, TboxFontFamily.fromSlug("monospace"))
+        assertEquals(TboxFontFamily.Montserrat, TboxFontFamily.fromSlug("montserrat"))
+        assertEquals(TboxFontFamily.CrimsonText, TboxFontFamily.fromSlug("crimson_text"))
         assertNull(TboxFontFamily.fromSlug("unknown"))
         assertNull(TboxFontFamily.fromSlug(""))
     }
@@ -37,5 +42,17 @@ class TboxFontFamilyTest {
     @Test
     fun resolveFontFamily_mapsStoredId() {
         assertEquals(FontFamily.Monospace, resolveFontFamily(TboxFontFamily.Monospace.id))
+    }
+
+    @Test
+    fun bundledRoboto_differsFromDefault() {
+        val roboto = TboxFontFamily.Roboto.toComposeFontFamily()
+        assertNotEquals(FontFamily.Default, roboto)
+        assertEquals(roboto, resolveFontFamily(TboxFontFamily.Roboto.id))
+    }
+
+    @Test
+    fun arialUsesSystemSansSerif() {
+        assertEquals(FontFamily.SansSerif, TboxFontFamily.Arial.toComposeFontFamily())
     }
 }

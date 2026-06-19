@@ -7,35 +7,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
-/** System font presets selectable in app settings and stored in theme JSON. */
-enum class TboxFontFamily(val id: Int, val slug: String) {
-    Default(0, "default"),
-    SansSerif(1, "sans_serif"),
-    Serif(2, "serif"),
-    Monospace(3, "monospace"),
-    ;
-
-    fun toComposeFontFamily(): FontFamily = when (this) {
-        Default -> FontFamily.Default
-        SansSerif -> FontFamily.SansSerif
-        Serif -> FontFamily.Serif
-        Monospace -> FontFamily.Monospace
-    }
-
-    companion object {
-        val all: List<TboxFontFamily> = entries
-
-        fun fromId(id: Int): TboxFontFamily =
-            all.firstOrNull { it.id == id } ?: Default
-
-        fun fromSlug(slug: String?): TboxFontFamily? =
-            slug?.takeIf { it.isNotBlank() }?.let { s -> all.firstOrNull { it.slug == s } }
-    }
-}
-
-fun resolveFontFamily(fontFamilyId: Int): FontFamily =
-    TboxFontFamily.fromId(fontFamilyId).toComposeFontFamily()
-
 private fun tboxTextStyle(
     fontFamily: FontFamily,
     fontSize: TextUnit,

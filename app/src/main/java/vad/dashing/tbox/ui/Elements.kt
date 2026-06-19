@@ -502,6 +502,13 @@ fun appFontFamilyLabel(fontFamily: TboxFontFamily): String = stringResource(
         TboxFontFamily.SansSerif -> R.string.settings_app_font_family_sans_serif
         TboxFontFamily.Serif -> R.string.settings_app_font_family_serif
         TboxFontFamily.Monospace -> R.string.settings_app_font_family_monospace
+        TboxFontFamily.Roboto -> R.string.settings_app_font_family_roboto
+        TboxFontFamily.Inter -> R.string.settings_app_font_family_inter
+        TboxFontFamily.Montserrat -> R.string.settings_app_font_family_montserrat
+        TboxFontFamily.CrimsonText -> R.string.settings_app_font_family_crimson_text
+        TboxFontFamily.Cabin -> R.string.settings_app_font_family_cabin
+        TboxFontFamily.Nunito -> R.string.settings_app_font_family_nunito
+        TboxFontFamily.Arial -> R.string.settings_app_font_family_arial
     }
 )
 
@@ -512,7 +519,7 @@ fun SettingAppFontFamily(
     text: String,
     description: String = "",
     enabled: Boolean = true,
-    selectorWidth: Dp = 180.dp,
+    selectorWidth: Dp = 200.dp,
 ) {
     val selected = TboxFontFamily.fromId(selectedFontFamilyId)
     var expanded by remember { mutableStateOf(false) }
