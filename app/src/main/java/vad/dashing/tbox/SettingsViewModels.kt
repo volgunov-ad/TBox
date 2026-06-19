@@ -951,7 +951,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
         viewModelScope.launch {
             settingsManager.mainScreenWallpaperSelectionByPageFlow.collect { stored ->
-                if (pendingWallpaperPatches.isEmpty()) {
+                if (
+                    pendingWallpaperPatches.isEmpty() ||
+                    settingsManager.themeActivationInProgressFlow.value
+                ) {
                     liveWallpaperSelections.value = stored
                 }
             }

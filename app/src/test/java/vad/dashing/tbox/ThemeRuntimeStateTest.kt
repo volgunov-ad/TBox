@@ -60,4 +60,38 @@ class ThemeRuntimeStateTest {
         ThemeRuntimeState.write(dir, ThemeRuntimeState.State())
         assertFalse(File(dir, ThemeRuntimeState.RUNTIME_JSON_FILE).exists())
     }
+
+    @Test
+    fun resolveWallpaperSelectionsForActivation_prefersRuntimeOverThemeJson() {
+        val dir = createTempDir(prefix = "runtime_resolve_")
+        ThemeRuntimeState.patch(
+            dir,
+            wallpaperSelections = MainScreenWallpaperSelectionsByPage.empty()
+                .withFileName(page = 1, forLightTheme = true, fileName = "eco.jpg"),
+        )
+        val themeJson = """
+            {
+              "mainScreen": {
+                "wallpaperSelectionByPage": {
+                  "light": { "1": "nor.jpg" }
+                }
+              }
+            }
+        """.trimIndent()
+
+        val resolved = ThemeRuntimeState.resolveWallpaperSelectionsForActivation(dir, themeJson)
+
+        assertEquals("eco.jpg", resolved.fileNameFor(1, forLightTheme = true))
+    }
+
+    @Test
+    fun resolveWallpaperSelectionsForActivation_returnsEmptyWhenNeitherSourceDefinesWallpaper() {
+        val dir = createTempDir(prefix = "runtime_resolve_empty_")
+        ThemeRuntimeState.patch(dir, currentPage = 2)
+        val themeJson = """{"mainScreen":{"currentPage":2}}"""
+
+        val resolved = ThemeRuntimeState.resolveWallpaperSelectionsForActivation(dir, themeJson)
+
+        assertTrue(resolved.isEmpty())
+    }
 }

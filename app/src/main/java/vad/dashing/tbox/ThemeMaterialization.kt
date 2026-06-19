@@ -246,6 +246,13 @@ object ThemeMaterialization {
                 throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
             }
 
+            applyMainScreenWallpaperSelectionsFromThemeCache(
+                settingsManager = settingsManager,
+                cacheDir = dir,
+                themeJson = themeJson,
+                sections = sections,
+            )
+
             applyRuntimeStateFromCache(settingsManager, dir, sections)
 
             applyWallpaperDirsFromCache(settingsManager, dir, sections)
@@ -358,8 +365,22 @@ object ThemeMaterialization {
     ) {
         if (ThemeSection.MAIN_SCREEN !in sections) return
         val runtime = ThemeRuntimeState.read(cacheDir)
-        if (runtime.isEmpty) return
-        ThemeRuntimeState.applyOverrides(settingsManager, runtime)
+        if (runtime.hasCurrentPage) {
+            settingsManager.saveMainScreenCurrentPage(
+                runtime.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+            )
+        }
+    }
+
+    private suspend fun applyMainScreenWallpaperSelectionsFromThemeCache(
+        settingsManager: SettingsManager,
+        cacheDir: File,
+        themeJson: String,
+        sections: Set<ThemeSection>,
+    ) {
+        if (ThemeSection.MAIN_SCREEN !in sections) return
+        val selections = ThemeRuntimeState.resolveWallpaperSelectionsForActivation(cacheDir, themeJson)
+        settingsManager.saveMainScreenWallpaperSelectionsByPage(selections)
     }
 
     private suspend fun applyWallpaperDirsFromCache(

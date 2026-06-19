@@ -468,18 +468,6 @@ private fun MainScreenWallpaperBackground(
             }
         }
     }
-    LaunchedEffect(effectiveName, savedForPage, sortedNames, currentMainScreenPage, forLightTheme, themeActivating) {
-        if (themeActivating) return@LaunchedEffect
-        if (savedForPage == null) return@LaunchedEffect
-        val want = effectiveName ?: return@LaunchedEffect
-        if (want != savedForPage) {
-            settingsViewModel.scheduleSaveMainScreenWallpaperSelection(
-                forLightTheme = forLightTheme,
-                fileName = want,
-                page = currentMainScreenPage,
-            )
-        }
-    }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val decodeTargetWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
         val decodeTargetHeightPx = with(density) { maxHeight.roundToPx().coerceAtLeast(1) }

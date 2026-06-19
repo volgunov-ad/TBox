@@ -288,13 +288,6 @@ object ThemeLayoutExport {
         }
         importVisualTheme(section.optJSONObject("theme"), sm)
         importMainScreenButtons(section, sm)
-        if (section.has(MainScreenWallpaperSelectionsByPage.JSON_KEY)) {
-            sm.saveMainScreenWallpaperSelectionsByPage(
-                MainScreenWallpaperSelectionsByPage.fromJson(
-                    section.optJSONObject(MainScreenWallpaperSelectionsByPage.JSON_KEY),
-                ),
-            )
-        }
         importMainScreenPanels(section.optJSONArray("panels"), sm)
     }
 

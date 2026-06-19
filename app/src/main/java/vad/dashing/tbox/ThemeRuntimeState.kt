@@ -97,4 +97,28 @@ object ThemeRuntimeState {
             )
         }
     }
+
+    /**
+     * Resolves wallpaper file choices when activating a materialized theme cache.
+     * [runtime.json] overrides [theme.json]; if neither defines wallpapers, returns empty
+     * so stale DataStore values from the previous active theme are not kept.
+     */
+    fun resolveWallpaperSelectionsForActivation(
+        cacheDir: File,
+        themeJson: String,
+    ): MainScreenWallpaperSelectionsByPage {
+        val runtime = read(cacheDir)
+        if (runtime.hasWallpaperSelections) {
+            return runtime.wallpaperSelections ?: MainScreenWallpaperSelectionsByPage.empty()
+        }
+        val root = runCatching { JSONObject(themeJson) }.getOrNull() ?: return MainScreenWallpaperSelectionsByPage.empty()
+        val mainScreen = root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey)
+            ?: return MainScreenWallpaperSelectionsByPage.empty()
+        if (!mainScreen.has(KEY_WALLPAPER_SELECTION_BY_PAGE)) {
+            return MainScreenWallpaperSelectionsByPage.empty()
+        }
+        return MainScreenWallpaperSelectionsByPage.fromJson(
+            mainScreen.optJSONObject(KEY_WALLPAPER_SELECTION_BY_PAGE),
+        )
+    }
 }
