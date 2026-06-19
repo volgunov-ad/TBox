@@ -947,7 +947,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
         viewModelScope.launch {
             settingsManager.themeActivationInProgressFlow.collect { activating ->
-                if (activating) return@collect
+                if (activating) {
+                    saveWallpaperSelectionJob?.cancel()
+                    saveWallpaperSelectionJob = null
+                    pendingWallpaperPatches.clear()
+                    return@collect
+                }
                 saveWallpaperSelectionJob?.cancel()
                 saveWallpaperSelectionJob = null
                 pendingWallpaperPatches.clear()

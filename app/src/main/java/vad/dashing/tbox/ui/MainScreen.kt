@@ -13,8 +13,12 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -89,10 +93,14 @@ import vad.dashing.tbox.MainScreenPageNextButtonPosition
 import vad.dashing.tbox.MainScreenPagePrevButtonPosition
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.abs
+import kotlin.math.absoluteValue
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.isVisibleOnMainScreenPage
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.loadWidgetsFromConfig
+
+private const val MAIN_SCREEN_WALLPAPER_CROSSFADE_MS = 400
+private const val MAIN_SCREEN_PANEL_FADE_MS = 300
 
 internal class MainScreenWallpaperController {
     var stepWallpaper: ((direction: Int) -> Unit)? = null
@@ -198,6 +206,14 @@ fun MainScreen(
                     modifier = Modifier.fillMaxSize(),
                     beyondViewportPageCount = 1,
                 ) { pageIndex ->
+                    val pageOffset = (
+                        (pagePagerState.currentPage - pageIndex) + pagePagerState.currentPageOffsetFraction
+                        ).absoluteValue
+                    val panelAlpha by animateFloatAsState(
+                        targetValue = (1f - pageOffset.coerceIn(0f, 1f) * 0.9f).coerceIn(0.1f, 1f),
+                        animationSpec = tween(MAIN_SCREEN_PANEL_FADE_MS),
+                        label = "main_screen_page_panels_fade",
+                    )
                     MainScreenPagePanels(
                         pageNumber = pageIndex + 1,
                         pageCount = pageCount,
@@ -210,6 +226,7 @@ fun MainScreen(
                         settingsViewModel = settingsViewModel,
                         onRebootTbox = onTboxRestart,
                         onTripFinishAndStart = onTripFinishAndStart,
+                        modifier = Modifier.graphicsLayer { alpha = panelAlpha },
                     )
                 }
             }
@@ -371,8 +388,9 @@ private fun MainScreenPagePanels(
     settingsViewModel: SettingsViewModel,
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         mainPanels.filter { it.isVisibleOnMainScreenPage(pageCount, pageNumber) }.forEach { panel ->
             key(panel.id) {
                 MainScreenDashboardPanel(
@@ -482,34 +500,6 @@ private fun MainScreenWallpaperBackground(
         val wallpaperNamesKey = sortedNames.joinToString("\u0000")
         val scope = rememberCoroutineScope()
         key(folderUriStr, wallpaperNamesKey, epoch, activeThemeUri) {
-            val pagerState = rememberPagerState(
-                initialPage = initialPagerPage,
-                pageCount = { pagerPageCount },
-            )
-            DisposableEffect(wallpaperController, wallpaperCount, pagerState) {
-                wallpaperController.stepWallpaper = { direction ->
-                    scope.launch {
-                        if (wallpaperCount <= 1) return@launch
-                        val logical = logicalIndexFromMainScreenWallpaperPagerPage(
-                            pagerState.settledPage,
-                            wallpaperCount,
-                        ) ?: logicalIndexFromMainScreenWallpaperPagerPage(
-                            pagerState.currentPage,
-                            wallpaperCount,
-                        ) ?: return@launch
-                        val newLogical = when {
-                            direction < 0 && logical <= 0 -> wallpaperCount - 1
-                            direction > 0 && logical >= wallpaperCount - 1 -> 0
-                            else -> logical + direction
-                        }
-                        val targetPage = mainScreenWallpaperPagerPageForLogicalIndex(newLogical, wallpaperCount)
-                        pagerState.animateScrollToPage(targetPage)
-                    }
-                }
-                onDispose {
-                    wallpaperController.stepWallpaper = null
-                }
-            }
             val wallpaperBitmapCache = remember(folderUriStr, wallpaperNamesKey) {
                 mutableStateMapOf<String, ImageBitmap>()
             }
@@ -518,19 +508,14 @@ private fun MainScreenWallpaperBackground(
             }
             val prefetchMutex = remember(folderUriStr, wallpaperNamesKey) { Mutex() }
             var prefetchGeneration by remember(folderUriStr, wallpaperNamesKey) { mutableIntStateOf(0) }
+            val currentMainScreenPageState by rememberUpdatedState(currentMainScreenPage)
+            val effectiveNameState by rememberUpdatedState(effectiveName)
+            val targetIdxState by rememberUpdatedState(targetIdx)
             LaunchedEffect(themeActivating) {
                 if (themeActivating) {
                     prefetchGeneration += 1
                     wallpaperBitmapCache.clear()
                     wallpaperLoading.clear()
-                }
-            }
-            LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey, forLightTheme, themeActivating) {
-                if (themeActivating || wallpaperCount <= 0) return@LaunchedEffect
-                val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
-                if (wantPage !in 0 until pagerPageCount) return@LaunchedEffect
-                if (pagerState.currentPage != wantPage) {
-                    runCatching { pagerState.scrollToPage(wantPage) }
                 }
             }
             LaunchedEffect(targetIdx, sortedNames, uriByFileName, decodeTargetWidthPx, decodeTargetHeightPx, themeActivating) {
@@ -553,94 +538,220 @@ private fun MainScreenWallpaperBackground(
                     isThemeActivating = { settingsViewModel.themeActivationInProgress.value },
                 )
             }
-            LaunchedEffect(pagerState, sortedNames, wallpaperCount, decodeTargetWidthPx, decodeTargetHeightPx, themeActivating) {
-                if (themeActivating) return@LaunchedEffect
-                var previousTarget = pagerState.targetPage
-                var previousSettled = pagerState.settledPage
-                snapshotFlow { Triple(pagerState.targetPage, pagerState.currentPage, pagerState.settledPage) }
-                    .collectLatest { (targetPage, currentPage, settledPage) ->
-                        if (settingsViewModel.themeActivationInProgress.value) return@collectLatest
-                        val pageForPrefetch = when {
-                            targetPage != previousTarget -> targetPage
-                            currentPage != previousTarget -> currentPage
-                            settledPage != previousSettled -> settledPage
-                            else -> return@collectLatest
+            if (!userScrollEnabled) {
+                DisposableEffect(wallpaperController, wallpaperCount, forLightTheme, currentMainScreenPage) {
+                    wallpaperController.stepWallpaper = { direction ->
+                        scope.launch {
+                            if (wallpaperCount <= 1) return@launch
+                            val currentName = effectiveNameState ?: return@launch
+                            val logical = sortedNames.indexOf(currentName)
+                            if (logical < 0) return@launch
+                            val newLogical = when {
+                                direction < 0 && logical <= 0 -> wallpaperCount - 1
+                                direction > 0 && logical >= wallpaperCount - 1 -> 0
+                                else -> logical + direction
+                            }
+                            val newName = sortedNames[newLogical]
+                            settingsViewModel.scheduleSaveMainScreenWallpaperSelection(
+                                forLightTheme = forLightTheme,
+                                fileName = newName,
+                                page = currentMainScreenPageState,
+                            )
                         }
-                        val swipeDirection = when {
-                            pageForPrefetch > previousTarget -> 1
-                            pageForPrefetch < previousTarget -> -1
-                            else -> 0
-                        }
-                        val logical = logicalIndexFromMainScreenWallpaperPagerPage(pageForPrefetch, wallpaperCount)
-                            ?: return@collectLatest
-                        previousTarget = targetPage
-                        previousSettled = settledPage
-                        prefetchGeneration += 1
-                        val generation = prefetchGeneration
-                        prefetchMainScreenWallpaperWindow(
-                            context = context,
-                            logicalIndex = logical,
-                            sortedNames = sortedNames,
-                            uriByFileName = uriByFileName,
-                            targetWidthPx = decodeTargetWidthPx,
-                            targetHeightPx = decodeTargetHeightPx,
-                            bitmapCache = wallpaperBitmapCache,
-                            loadingState = wallpaperLoading,
-                            swipeDirection = swipeDirection,
-                            generation = generation,
-                            currentGeneration = { prefetchGeneration },
-                            prefetchMutex = prefetchMutex,
-                            isThemeActivating = { settingsViewModel.themeActivationInProgress.value },
-                        )
                     }
-            }
-            val currentMainScreenPageState by rememberUpdatedState(currentMainScreenPage)
-            LaunchedEffect(pagerState, sortedNames, theme, wallpaperCount, themeActivating) {
-                snapshotFlow { pagerState.settledPage }
-                    .distinctUntilChanged()
-                    .collectLatest { page ->
-                        if (themeActivating) return@collectLatest
-                        if (wallpaperCount > 1) {
-                            when (page) {
-                                0 -> {
-                                    pagerState.scrollToPage(wallpaperCount)
-                                    return@collectLatest
-                                }
-                                wallpaperCount + 1 -> {
-                                    pagerState.scrollToPage(1)
-                                    return@collectLatest
+                    onDispose {
+                        wallpaperController.stepWallpaper = null
+                    }
+                }
+                MainScreenWallpaperCrossfade(
+                    effectiveName = effectiveName,
+                    sortedNames = sortedNames,
+                    bitmapCache = wallpaperBitmapCache,
+                    wallpaperCrop = wallpaperCrop,
+                    suppressBitmapDraw = themeActivating,
+                    forLightTheme = forLightTheme,
+                    folderUriStr = folderUriStr,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                val pagerState = rememberPagerState(
+                    initialPage = initialPagerPage,
+                    pageCount = { pagerPageCount },
+                )
+                var suppressWallpaperSave by remember { mutableStateOf(true) }
+                var saveWallpaperOnNextSettle by remember { mutableStateOf(false) }
+                DisposableEffect(wallpaperController, wallpaperCount, pagerState) {
+                    wallpaperController.stepWallpaper = { direction ->
+                        scope.launch {
+                            if (wallpaperCount <= 1) return@launch
+                            val logical = logicalIndexFromMainScreenWallpaperPagerPage(
+                                pagerState.settledPage,
+                                wallpaperCount,
+                            ) ?: logicalIndexFromMainScreenWallpaperPagerPage(
+                                pagerState.currentPage,
+                                wallpaperCount,
+                            ) ?: return@launch
+                            val newLogical = when {
+                                direction < 0 && logical <= 0 -> wallpaperCount - 1
+                                direction > 0 && logical >= wallpaperCount - 1 -> 0
+                                else -> logical + direction
+                            }
+                            val targetPage = mainScreenWallpaperPagerPageForLogicalIndex(newLogical, wallpaperCount)
+                            saveWallpaperOnNextSettle = true
+                            pagerState.animateScrollToPage(targetPage)
+                        }
+                    }
+                    onDispose {
+                        wallpaperController.stepWallpaper = null
+                    }
+                }
+                LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey, forLightTheme, themeActivating) {
+                    if (themeActivating || wallpaperCount <= 0) return@LaunchedEffect
+                    val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
+                    if (wantPage !in 0 until pagerPageCount) return@LaunchedEffect
+                    if (pagerState.currentPage != wantPage) {
+                        suppressWallpaperSave = true
+                        runCatching { pagerState.scrollToPage(wantPage) }
+                    } else {
+                        suppressWallpaperSave = false
+                    }
+                }
+                LaunchedEffect(pagerState, sortedNames, wallpaperCount, decodeTargetWidthPx, decodeTargetHeightPx, themeActivating) {
+                    if (themeActivating) return@LaunchedEffect
+                    var previousTarget = pagerState.targetPage
+                    var previousSettled = pagerState.settledPage
+                    snapshotFlow { Triple(pagerState.targetPage, pagerState.currentPage, pagerState.settledPage) }
+                        .collectLatest { (targetPage, currentPage, settledPage) ->
+                            if (settingsViewModel.themeActivationInProgress.value) return@collectLatest
+                            val pageForPrefetch = when {
+                                targetPage != previousTarget -> targetPage
+                                currentPage != previousTarget -> currentPage
+                                settledPage != previousSettled -> settledPage
+                                else -> return@collectLatest
+                            }
+                            val swipeDirection = when {
+                                pageForPrefetch > previousTarget -> 1
+                                pageForPrefetch < previousTarget -> -1
+                                else -> 0
+                            }
+                            val logical = logicalIndexFromMainScreenWallpaperPagerPage(pageForPrefetch, wallpaperCount)
+                                ?: return@collectLatest
+                            previousTarget = targetPage
+                            previousSettled = settledPage
+                            prefetchGeneration += 1
+                            val generation = prefetchGeneration
+                            prefetchMainScreenWallpaperWindow(
+                                context = context,
+                                logicalIndex = logical,
+                                sortedNames = sortedNames,
+                                uriByFileName = uriByFileName,
+                                targetWidthPx = decodeTargetWidthPx,
+                                targetHeightPx = decodeTargetHeightPx,
+                                bitmapCache = wallpaperBitmapCache,
+                                loadingState = wallpaperLoading,
+                                swipeDirection = swipeDirection,
+                                generation = generation,
+                                currentGeneration = { prefetchGeneration },
+                                prefetchMutex = prefetchMutex,
+                                isThemeActivating = { settingsViewModel.themeActivationInProgress.value },
+                            )
+                        }
+                }
+                LaunchedEffect(pagerState, sortedNames, theme, wallpaperCount, themeActivating) {
+                    snapshotFlow { pagerState.settledPage }
+                        .distinctUntilChanged()
+                        .collectLatest { page ->
+                            if (themeActivating) return@collectLatest
+                            if (wallpaperCount > 1) {
+                                when (page) {
+                                    0 -> {
+                                        pagerState.scrollToPage(wallpaperCount)
+                                        return@collectLatest
+                                    }
+                                    wallpaperCount + 1 -> {
+                                        pagerState.scrollToPage(1)
+                                        return@collectLatest
+                                    }
                                 }
                             }
+                            val logical = logicalIndexFromMainScreenWallpaperPagerPage(page, wallpaperCount)
+                                ?: return@collectLatest
+                            if (logical !in sortedNames.indices) return@collectLatest
+                            val name = sortedNames[logical]
+                            displayedFileName = name
+                            if (suppressWallpaperSave) {
+                                if (logical == targetIdxState) {
+                                    suppressWallpaperSave = false
+                                }
+                                return@collectLatest
+                            }
+                            val shouldSave = saveWallpaperOnNextSettle || userScrollEnabled
+                            if (!shouldSave) return@collectLatest
+                            saveWallpaperOnNextSettle = false
+                            settingsViewModel.scheduleSaveMainScreenWallpaperSelection(
+                                forLightTheme = forLightTheme,
+                                fileName = name,
+                                page = currentMainScreenPageState,
+                            )
                         }
-                        val logical = logicalIndexFromMainScreenWallpaperPagerPage(page, wallpaperCount)
-                            ?: return@collectLatest
-                        if (logical !in sortedNames.indices) return@collectLatest
-                        val name = sortedNames[logical]
-                        displayedFileName = name
-                        settingsViewModel.scheduleSaveMainScreenWallpaperSelection(
-                            forLightTheme = forLightTheme,
-                            fileName = name,
-                            page = currentMainScreenPageState,
+                }
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 1,
+                    userScrollEnabled = userScrollEnabled,
+                ) { pagerPage ->
+                    val logicalIndex = logicalIndexFromMainScreenWallpaperPagerPage(pagerPage, wallpaperCount)
+                    if (logicalIndex != null) {
+                        MainScreenWallpaperPagerPage(
+                            wallpaperIndex = logicalIndex,
+                            sortedNames = sortedNames,
+                            bitmapCache = wallpaperBitmapCache,
+                            wallpaperCrop = wallpaperCrop,
+                            suppressBitmapDraw = themeActivating,
                         )
                     }
-            }
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1,
-                userScrollEnabled = userScrollEnabled,
-            ) { pagerPage ->
-                val logicalIndex = logicalIndexFromMainScreenWallpaperPagerPage(pagerPage, wallpaperCount)
-                if (logicalIndex != null) {
-                    MainScreenWallpaperPagerPage(
-                        wallpaperIndex = logicalIndex,
-                        sortedNames = sortedNames,
-                        bitmapCache = wallpaperBitmapCache,
-                        wallpaperCrop = wallpaperCrop,
-                        suppressBitmapDraw = themeActivating,
-                    )
                 }
             }
+        }
+    }
+}
+
+private data class MainScreenWallpaperCrossfadeKey(
+    val folderUriStr: String,
+    val forLightTheme: Boolean,
+    val fileName: String,
+)
+
+@Composable
+private fun MainScreenWallpaperCrossfade(
+    effectiveName: String,
+    sortedNames: List<String>,
+    bitmapCache: SnapshotStateMap<String, ImageBitmap>,
+    wallpaperCrop: Boolean,
+    suppressBitmapDraw: Boolean,
+    forLightTheme: Boolean,
+    folderUriStr: String,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedContent(
+        targetState = MainScreenWallpaperCrossfadeKey(folderUriStr, forLightTheme, effectiveName),
+        modifier = modifier,
+        transitionSpec = {
+            fadeIn(tween(MAIN_SCREEN_WALLPAPER_CROSSFADE_MS)) togetherWith
+                fadeOut(tween(MAIN_SCREEN_WALLPAPER_CROSSFADE_MS))
+        },
+        label = "main_screen_wallpaper_crossfade",
+    ) { key ->
+        val idx = sortedNames.indexOf(key.fileName)
+        if (idx >= 0) {
+            MainScreenWallpaperPagerPage(
+                wallpaperIndex = idx,
+                sortedNames = sortedNames,
+                bitmapCache = bitmapCache,
+                wallpaperCrop = wallpaperCrop,
+                suppressBitmapDraw = suppressBitmapDraw,
+            )
         }
     }
 }

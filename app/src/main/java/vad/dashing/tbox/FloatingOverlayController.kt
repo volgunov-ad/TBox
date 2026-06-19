@@ -95,6 +95,7 @@ internal class FloatingOverlayController(
         private const val TAG = "Floating Dashboard"
         private const val MAX_OVERLAY_RETRIES = 3
         private const val MIN_OVERLAY_SIZE = 50
+        private const val OVERLAY_FADE_MS = 300L
     }
 
     fun suspendOverlays() {
@@ -323,9 +324,14 @@ internal class FloatingOverlayController(
         }
 
         try {
+            newComposeView.alpha = 0f
             windowManager?.addView(newComposeView, layoutParams)
             overlayViews[config.id] = newComposeView
             overlayParams[config.id] = layoutParams
+            newComposeView.animate()
+                .alpha(1f)
+                .setDuration(OVERLAY_FADE_MS)
+                .start()
 
             if (!lifecycleOwner.isInitialized || lifecycleOwner.lifecycle.currentState.isAtLeast(
                     Lifecycle.State.DESTROYED
@@ -344,9 +350,12 @@ internal class FloatingOverlayController(
     }
 
     private fun closeOverlay(panelId: String) {
-        val view = overlayViews.remove(panelId)
+        val view = overlayViews.remove(panelId) ?: return
         overlayParams.remove(panelId)
-        if (view != null) {
+        overlayRetryCounts.remove(panelId)
+        overlayOffIds.remove(panelId)
+
+        fun finishClose() {
             try {
                 if (view.isAttachedToWindow) {
                     windowManager?.removeView(view)
@@ -355,11 +364,18 @@ internal class FloatingOverlayController(
                 TboxRepository.addLog("ERROR", TAG, "Error removing view")
                 Log.e(TAG, "Error removing view", e)
             }
+            TboxRepository.addLog("DEBUG", TAG, "Closed: $panelId")
         }
 
-        overlayRetryCounts.remove(panelId)
-        overlayOffIds.remove(panelId)
-        TboxRepository.addLog("DEBUG", TAG, "Closed: $panelId")
+        if (view.isAttachedToWindow && view.alpha > 0f) {
+            view.animate()
+                .alpha(0f)
+                .setDuration(OVERLAY_FADE_MS)
+                .withEndAction { finishClose() }
+                .start()
+        } else {
+            finishClose()
+        }
     }
 
     private fun updateWindowPosition(panelId: String, x: Int, y: Int) {
