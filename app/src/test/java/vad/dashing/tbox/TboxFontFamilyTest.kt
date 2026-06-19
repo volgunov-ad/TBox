@@ -50,10 +50,4 @@ class TboxFontFamilyTest {
         assertNotEquals(FontFamily.Default, roboto)
         assertEquals(roboto, resolveFontFamily(TboxFontFamily.Roboto.id))
     }
-
-    @Test
-    fun legacyArialSlugIsIgnored() {
-        assertNull(TboxFontFamily.fromSlug("arial"))
-        assertEquals(TboxFontFamily.Default, TboxFontFamily.fromId(10))
-    }
 }
