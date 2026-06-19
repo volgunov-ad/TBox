@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -22,6 +23,7 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
@@ -181,7 +183,10 @@ internal fun DashboardPanelGridAndFrames(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text(stringResource(R.string.loading))
+                Text(
+                    text = stringResource(R.string.loading),
+                    style = MaterialTheme.typography.tboxBody,
+                )
             }
         } else {
             for (row in 0 until dashboardRows) {

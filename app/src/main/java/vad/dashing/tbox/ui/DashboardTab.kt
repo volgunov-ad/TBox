@@ -274,7 +274,10 @@ fun MainDashboardTab(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text(stringResource(R.string.loading))
+                Text(
+                    text = stringResource(R.string.loading),
+                    style = MaterialTheme.typography.tboxBody,
+                )
             }
         } else {
             Column(

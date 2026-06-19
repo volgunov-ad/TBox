@@ -152,7 +152,6 @@ fun StatusHeader(value: String) {
             style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
-            lineHeight = 24.sp * 1.3f,
             softWrap = true,
             overflow = TextOverflow.Visible,
             textAlign = TextAlign.Center
@@ -272,9 +271,9 @@ fun TabMenuItem(
                 Text(
                     text = title,
                     color = textColor,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Left,
                     style = MaterialTheme.typography.tboxTabLabel.copy(
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                         lineHeight = MaterialTheme.typography.tboxTabLabel.fontSize * 1.1f,
                     ),
                     modifier = Modifier.padding(start = 12.dp)
