@@ -136,6 +136,10 @@ object ThemeRuntimeState {
         if (runtime.hasWallpaperSelections) {
             return runtime.wallpaperSelections ?: MainScreenWallpaperSelectionsByPage.empty()
         }
+        return wallpaperSelectionsFromThemeJson(themeJson)
+    }
+
+    fun wallpaperSelectionsFromThemeJson(themeJson: String): MainScreenWallpaperSelectionsByPage {
         val root = runCatching { JSONObject(themeJson) }.getOrNull() ?: return MainScreenWallpaperSelectionsByPage.empty()
         val mainScreen = root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey)
             ?: return MainScreenWallpaperSelectionsByPage.empty()
@@ -144,6 +148,38 @@ object ThemeRuntimeState {
         }
         return MainScreenWallpaperSelectionsByPage.fromJson(
             mainScreen.optJSONObject(KEY_WALLPAPER_SELECTION_BY_PAGE),
+        )
+    }
+
+    /**
+     * Seeds [RUNTIME_JSON_FILE] from [theme.json] mainScreen section when the cache has no runtime
+     * state yet (first materialization or legacy cache). Existing runtime.json is never overwritten.
+     */
+    fun seedFromThemeJsonIfMissing(cacheDir: File, themeJson: String) {
+        if (File(cacheDir, RUNTIME_JSON_FILE).isFile) return
+        val root = runCatching { JSONObject(themeJson) }.getOrNull() ?: return
+        val mainScreen = root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey) ?: return
+        val hasWallpaperSelections = mainScreen.has(KEY_WALLPAPER_SELECTION_BY_PAGE)
+        val hasCurrentPage = mainScreen.has(KEY_CURRENT_PAGE)
+        if (!hasWallpaperSelections && !hasCurrentPage) return
+        write(
+            cacheDir,
+            State(
+                wallpaperSelections = if (hasWallpaperSelections) {
+                    MainScreenWallpaperSelectionsByPage.fromJson(
+                        mainScreen.optJSONObject(KEY_WALLPAPER_SELECTION_BY_PAGE),
+                    )
+                } else {
+                    null
+                },
+                hasWallpaperSelections = hasWallpaperSelections,
+                currentPage = if (hasCurrentPage) {
+                    mainScreen.optInt(KEY_CURRENT_PAGE, SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
+                } else {
+                    null
+                },
+                hasCurrentPage = hasCurrentPage,
+            ),
         )
     }
 }

@@ -193,6 +193,7 @@ object ThemeMaterialization {
             sections = sections,
         )
         writeManifest(dir, manifest)
+        ThemeRuntimeState.seedFromThemeJsonIfMissing(dir, parsed.themeJson)
         return MaterializeResult(
             manifest = manifest,
             iconsWritten = iconsWritten,
@@ -231,6 +232,7 @@ object ThemeMaterialization {
             val manifest = readManifest(context, cacheKey)
                 ?: throw IllegalArgumentException("theme_cache_missing")
             val themeJson = File(dir, THEME_JSON_FILE).readText()
+            ThemeRuntimeState.seedFromThemeJsonIfMissing(dir, themeJson)
             val sections = ThemeSection.parseJsonArray(
                 runCatching { JSONObject(themeJson) }.getOrNull()?.optJSONArray("sections"),
             ).ifEmpty { manifest.sections }

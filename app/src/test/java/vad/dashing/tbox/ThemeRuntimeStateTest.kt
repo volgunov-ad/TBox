@@ -94,4 +94,65 @@ class ThemeRuntimeStateTest {
 
         assertTrue(resolved.isEmpty())
     }
+
+    @Test
+    fun seedFromThemeJsonIfMissing_writesRuntimeJsonFromMainScreenSection() {
+        val dir = createTempDir(prefix = "runtime_seed_")
+        val themeJson = """
+            {
+              "mainScreen": {
+                "currentPage": 3,
+                "wallpaperSelectionByPage": {
+                  "light": { "1": "eco.jpg" },
+                  "dark": { "1": "eco_night.jpg" }
+                }
+              }
+            }
+        """.trimIndent()
+
+        ThemeRuntimeState.seedFromThemeJsonIfMissing(dir, themeJson)
+
+        val state = ThemeRuntimeState.read(dir)
+        assertEquals(3, state.currentPage)
+        assertTrue(state.hasCurrentPage)
+        assertTrue(state.hasWallpaperSelections)
+        assertEquals("eco.jpg", state.wallpaperSelections?.fileNameFor(1, forLightTheme = true))
+        assertEquals("eco_night.jpg", state.wallpaperSelections?.fileNameFor(1, forLightTheme = false))
+    }
+
+    @Test
+    fun seedFromThemeJsonIfMissing_doesNotOverwriteExistingRuntimeJson() {
+        val dir = createTempDir(prefix = "runtime_seed_keep_")
+        ThemeRuntimeState.patch(
+            dir,
+            wallpaperSelections = MainScreenWallpaperSelectionsByPage.empty()
+                .withFileName(page = 1, forLightTheme = true, fileName = "nor.jpg"),
+        )
+        val themeJson = """
+            {
+              "mainScreen": {
+                "wallpaperSelectionByPage": {
+                  "light": { "1": "spt.jpg" }
+                }
+              }
+            }
+        """.trimIndent()
+
+        ThemeRuntimeState.seedFromThemeJsonIfMissing(dir, themeJson)
+
+        assertEquals(
+            "nor.jpg",
+            ThemeRuntimeState.read(dir).wallpaperSelections?.fileNameFor(1, forLightTheme = true),
+        )
+    }
+
+    @Test
+    fun seedFromThemeJsonIfMissing_skipsWhenMainScreenHasNoRuntimeFields() {
+        val dir = createTempDir(prefix = "runtime_seed_skip_")
+        val themeJson = """{"mainScreen":{"pageCount":2}}"""
+
+        ThemeRuntimeState.seedFromThemeJsonIfMissing(dir, themeJson)
+
+        assertFalse(File(dir, ThemeRuntimeState.RUNTIME_JSON_FILE).exists())
+    }
 }
