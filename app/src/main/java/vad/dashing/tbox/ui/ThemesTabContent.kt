@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -67,7 +68,22 @@ fun ThemesTabContent(
     val scrollState = rememberScrollState()
 
     val activeThemeUri by settingsViewModel.activeThemeUri.collectAsStateWithLifecycle()
+    val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
     val driveModeThemePaths by settingsViewModel.driveModeThemePaths.collectAsStateWithLifecycle()
+
+    var runtimeJsonDebugText by remember { mutableStateOf("") }
+    var runtimeJsonRefreshToken by remember { mutableIntStateOf(0) }
+
+    suspend fun refreshRuntimeJsonDebugText() {
+        runtimeJsonDebugText = withContext(Dispatchers.IO) {
+            ThemeMaterialization.formatRuntimeJsonDebugText(context, activeThemeUri)
+        }
+    }
+
+    LaunchedEffect(activeThemeUri, themeActivating, runtimeJsonRefreshToken) {
+        if (themeActivating) return@LaunchedEffect
+        refreshRuntimeJsonDebugText()
+    }
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
@@ -338,6 +354,35 @@ fun ThemesTabContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
         )
+
+        SettingsTitle(stringResource(R.string.themes_runtime_debug_title))
+        Text(
+            text = stringResource(R.string.themes_runtime_debug_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { runtimeJsonRefreshToken += 1 },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(stringResource(R.string.themes_runtime_debug_refresh), style = MaterialTheme.typography.tboxButton)
+        }
+        SelectionContainer {
+            OutlinedTextField(
+                value = runtimeJsonDebugText,
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                textStyle = MaterialTheme.typography.tboxCaption,
+                minLines = 6,
+                maxLines = 24,
+            )
+        }
 
         SettingsTitle(stringResource(R.string.themes_drive_mode_section))
         Text(

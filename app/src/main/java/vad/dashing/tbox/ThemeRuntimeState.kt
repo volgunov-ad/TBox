@@ -25,6 +25,11 @@ object ThemeRuntimeState {
             get() = !hasWallpaperSelections && !hasCurrentPage
     }
 
+    fun readRawText(cacheDir: File): String? {
+        val file = File(cacheDir, RUNTIME_JSON_FILE)
+        return if (file.isFile) file.readText() else null
+    }
+
     fun read(cacheDir: File): State {
         val file = File(cacheDir, RUNTIME_JSON_FILE)
         if (!file.isFile) return State()

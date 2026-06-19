@@ -369,6 +369,15 @@
     <string name="themes_clear_shared_tile_backgrounds_dialog_title">Очистить общую папку фонов плиток?</string>
     <string name="themes_clear_shared_tile_backgrounds_dialog_message">Будут удалены все фоновые картинки из общей папки tile_backgrounds (ручные замены в диалоге плитки). Фоны внутри материализованных тем останутся.</string>
     <string name="themes_clear_shared_tile_backgrounds_confirm">Очистить</string>
+    <string name="themes_runtime_debug_title">Отладка runtime.json</string>
+    <string name="themes_runtime_debug_hint">Содержимое runtime.json активной темы (выбор обоев по страницам, текущая страница). Обновляется при смене темы; можно выделить и скопировать текст.</string>
+    <string name="themes_runtime_debug_refresh">Обновить</string>
+    <string name="themes_runtime_debug_no_active_theme">Активная тема не назначена.</string>
+    <string name="themes_runtime_debug_not_cache_key">Текущая тема не в кэше приложения: %1$s</string>
+    <string name="themes_runtime_debug_cache_missing">Кэш темы не найден: %1$s</string>
+    <string name="themes_runtime_debug_cache_key_label">Ключ кэша</string>
+    <string name="themes_runtime_debug_file_path_label">Путь к файлу</string>
+    <string name="themes_runtime_debug_file_missing">(файл runtime.json отсутствует)</string>
     <string name="toast_theme_shared_tile_backgrounds_cleared">Общая папка фонов плиток очищена</string>
     <string name="toast_theme_shared_icons_cleared">Общая папка иконок очищена</string>
     <string name="toast_theme_cache_cleared">Папка тем очищена</string>

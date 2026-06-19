@@ -313,6 +313,36 @@ object ThemeMaterialization {
         }
     }
 
+    fun formatRuntimeJsonDebugText(context: Context, cacheKeyRaw: String): String {
+        val cacheKey = cacheKeyRaw.trim()
+        if (cacheKey.isEmpty()) {
+            return context.getString(R.string.themes_runtime_debug_no_active_theme)
+        }
+        if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) {
+            return context.getString(R.string.themes_runtime_debug_not_cache_key, cacheKey)
+        }
+        if (!isMaterialized(context, cacheKey)) {
+            return context.getString(R.string.themes_runtime_debug_cache_missing, cacheKey)
+        }
+        val dir = cacheDir(context, cacheKey)
+        val runtimeFile = File(dir, ThemeRuntimeState.RUNTIME_JSON_FILE)
+        val raw = ThemeRuntimeState.readRawText(dir)
+        return buildString {
+            append(context.getString(R.string.themes_runtime_debug_cache_key_label))
+            append(": ")
+            appendLine(cacheKey)
+            append(context.getString(R.string.themes_runtime_debug_file_path_label))
+            append(": ")
+            appendLine(runtimeFile.absolutePath)
+            appendLine()
+            if (raw == null) {
+                append(context.getString(R.string.themes_runtime_debug_file_missing))
+            } else {
+                append(raw)
+            }
+        }
+    }
+
     suspend fun syncWallpaperSelectionToActiveThemeCache(
         context: Context,
         settingsManager: SettingsManager,

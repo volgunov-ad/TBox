@@ -366,6 +366,15 @@
     <string name="themes_clear_shared_tile_backgrounds_dialog_title">Clear shared tile background folder?</string>
     <string name="themes_clear_shared_tile_backgrounds_dialog_message">All images in the shared tile_backgrounds folder (manual overrides from the tile dialog) will be deleted. Backgrounds inside materialized themes will remain.</string>
     <string name="themes_clear_shared_tile_backgrounds_confirm">Clear</string>
+    <string name="themes_runtime_debug_title">runtime.json debug</string>
+    <string name="themes_runtime_debug_hint">Contents of the active theme runtime.json (per-page wallpaper choices, current page). Updates when the theme changes; you can select and copy the text.</string>
+    <string name="themes_runtime_debug_refresh">Refresh</string>
+    <string name="themes_runtime_debug_no_active_theme">No active theme assigned.</string>
+    <string name="themes_runtime_debug_not_cache_key">Current theme is not in the app cache: %1$s</string>
+    <string name="themes_runtime_debug_cache_missing">Theme cache not found: %1$s</string>
+    <string name="themes_runtime_debug_cache_key_label">Cache key</string>
+    <string name="themes_runtime_debug_file_path_label">File path</string>
+    <string name="themes_runtime_debug_file_missing">(runtime.json file is missing)</string>
     <string name="toast_theme_shared_tile_backgrounds_cleared">Shared tile background folder cleared</string>
     <string name="toast_theme_shared_icons_cleared">Shared icon folder cleared</string>
     <string name="toast_theme_cache_cleared">Theme folder cleared</string>
