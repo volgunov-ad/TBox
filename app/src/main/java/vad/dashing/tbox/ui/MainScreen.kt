@@ -348,6 +348,7 @@ fun MainScreen(
                     widgetIndex = widgetIndex,
                     currentWidgets = dashboardState.widgets,
                     currentWidgetConfigs = widgetConfigs,
+                    currentTheme = currentTheme,
                     onDismiss = { floatingOverlayEditRequest = null },
                 )
             }

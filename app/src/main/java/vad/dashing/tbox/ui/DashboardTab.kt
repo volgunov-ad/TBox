@@ -414,6 +414,7 @@ fun MainDashboardTab(
                 widgetIndex = index,
                 currentWidgets = dashboardState.widgets,
                 currentWidgetConfigs = widgetConfigs,
+                currentTheme = currentTheme,
                 onDismiss = { showDialogForIndex = null }
             )
         }
@@ -427,6 +428,7 @@ fun WidgetSelectionDialog(
     widgetIndex: Int,
     currentWidgets: List<DashboardWidget>,
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    currentTheme: Int,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -435,7 +437,8 @@ fun WidgetSelectionDialog(
         currentWidgets = currentWidgets,
         currentWidgetConfigs = currentWidgetConfigs,
         defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_MAIN,
-        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN
+        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN,
+        currentTheme = currentTheme,
     )
 
     AlertDialog(
@@ -531,6 +534,7 @@ fun MainScreenPanelWidgetSelectionDialog(
     widgetIndex: Int,
     currentWidgets: List<DashboardWidget>,
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    currentTheme: Int,
     onDismiss: () -> Unit,
     onDeletePanel: () -> Unit,
 ) {
@@ -542,7 +546,8 @@ fun MainScreenPanelWidgetSelectionDialog(
         currentWidgets = currentWidgets,
         currentWidgetConfigs = currentWidgetConfigs,
         defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
-        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING,
+        currentTheme = currentTheme,
     )
 
     AlertDialog(
@@ -676,6 +681,7 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
     widgetIndex: Int,
     currentWidgets: List<DashboardWidget>,
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    currentTheme: Int,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -686,7 +692,8 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
         currentWidgets = currentWidgets,
         currentWidgetConfigs = currentWidgetConfigs,
         defaultBackgroundLight = DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING,
-        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
+        defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING,
+        currentTheme = currentTheme,
     )
 
     AlertDialog(

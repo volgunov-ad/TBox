@@ -61,6 +61,7 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 @Composable
 fun MainScreenSettingsTab(
     settingsViewModel: SettingsViewModel,
+    currentTheme: Int,
     onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -106,6 +107,11 @@ fun MainScreenSettingsTab(
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
     var cornerColorSegment by remember { mutableIntStateOf(0) }
     var mainScreenBgSegment by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        val segment = colorThemeSegmentFor(currentTheme)
+        cornerColorSegment = segment
+        mainScreenBgSegment = segment
+    }
     var lightFolderPathInput by remember { mutableStateOf("") }
     var darkFolderPathInput by remember { mutableStateOf("") }
     var showMainScreenPanelOrderDialog by remember { mutableStateOf(false) }

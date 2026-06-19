@@ -67,6 +67,9 @@ fun DashboardWidget.resolveTextColorForTheme(currentTheme: Int): Color {
     return Color(if (currentTheme == 2) textColorDark else textColorLight)
 }
 
+/** 0 = light theme color settings, 1 = dark (same convention as [resolveTextColorForTheme]). */
+fun colorThemeSegmentFor(theme: Int): Int = if (theme == 2) 1 else 0
+
 fun DashboardWidget.resolveBackgroundColorForTheme(currentTheme: Int): Color {
     return Color(if (currentTheme == 2) backgroundColorDark else backgroundColorLight)
 }

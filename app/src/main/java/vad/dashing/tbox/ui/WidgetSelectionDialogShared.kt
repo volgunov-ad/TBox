@@ -89,6 +89,7 @@ internal class WidgetSelectionDialogState(
     initialConfig: FloatingDashboardWidgetConfig,
     private val panelDefaultBackgroundLight: Int,
     private val panelDefaultBackgroundDark: Int,
+    initialColorThemeSegment: Int = 0,
 ) {
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
@@ -137,7 +138,7 @@ internal class WidgetSelectionDialogState(
     var showAdvancedSettings by mutableStateOf(false)
     var showWholePanelSettings by mutableStateOf(false)
     /** 0 = light theme colors, 1 = dark theme colors (advanced settings only). */
-    var advancedColorThemeSegment by mutableIntStateOf(0)
+    var advancedColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
     /** Draft for «Вся панель»; persisted only on dialog Save. */
     var wholePanelNameDraft by mutableStateOf("")
     var wholePanelShowTboxDisconnect by mutableStateOf(false)
@@ -247,6 +248,7 @@ internal fun rememberWidgetSelectionDialogState(
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     defaultBackgroundLight: Int,
     defaultBackgroundDark: Int,
+    currentTheme: Int,
 ): WidgetSelectionDialogState {
     val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
         ?: FloatingDashboardWidgetConfig(dataKey = "")
@@ -256,13 +258,15 @@ internal fun rememberWidgetSelectionDialogState(
         currentWidgets,
         currentWidgetConfigs,
         defaultBackgroundLight,
-        defaultBackgroundDark
+        defaultBackgroundDark,
+        currentTheme,
     ) {
         WidgetSelectionDialogState(
             initialDataKey = initialDataKey,
             initialConfig = initialConfig,
             panelDefaultBackgroundLight = defaultBackgroundLight,
-            panelDefaultBackgroundDark = defaultBackgroundDark
+            panelDefaultBackgroundDark = defaultBackgroundDark,
+            initialColorThemeSegment = colorThemeSegmentFor(currentTheme),
         )
     }
 }

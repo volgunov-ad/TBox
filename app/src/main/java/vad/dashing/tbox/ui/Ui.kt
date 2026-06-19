@@ -164,6 +164,7 @@ fun TboxScreen(
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+    val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
     val isMenuVisible by settingsViewModel.isLeftMenuVisible.collectAsStateWithLifecycle()
@@ -391,6 +392,7 @@ fun TboxScreen(
                     )
                     LeftMenuTabField.MAIN_SCREEN_SETTINGS.id -> MainScreenSettingsTab(
                         settingsViewModel = settingsViewModel,
+                        currentTheme = currentTheme,
                         onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
                     )
                     LeftMenuTabField.CAR_SETTINGS.id -> CarSettingsTab()

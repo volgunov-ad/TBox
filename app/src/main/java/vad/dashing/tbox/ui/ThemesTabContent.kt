@@ -219,11 +219,11 @@ fun ThemesTabContent(
             modifier = Modifier.padding(bottom = 16.dp),
         )
 
-        OutlinedButton(
+        Button(
             onClick = rememberWrappedOnClick { showCreateDialog = true },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.padding(bottom = 8.dp),
         ) {
-            Text(stringResource(R.string.themes_create), style = MaterialTheme.typography.tboxButton)
+            Text(stringResource(R.string.themes_create), style = MaterialTheme.typography.tboxTitle)
         }
 
         SettingsTitle(stringResource(R.string.themes_active_title))
@@ -263,15 +263,13 @@ fun ThemesTabContent(
             }
         }
 
-        OutlinedButton(
+        Button(
             onClick = rememberWrappedOnClick {
                 applyThemeLauncher.launch(arrayOf("application/octet-stream", "application/*", "*/*"))
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
+            modifier = Modifier.padding(bottom = 16.dp),
         ) {
-            Text(stringResource(R.string.themes_apply), style = MaterialTheme.typography.tboxButton)
+            Text(stringResource(R.string.themes_apply), style = MaterialTheme.typography.tboxTitle)
         }
 
         OutlinedButton(

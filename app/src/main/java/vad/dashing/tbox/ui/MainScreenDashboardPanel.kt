@@ -480,6 +480,7 @@ fun MainScreenDashboardPanel(
             widgetIndex = index,
             currentWidgets = dashboardState.widgets,
             currentWidgetConfigs = widgetConfigs,
+            currentTheme = currentTheme,
             onDismiss = { showDialogForIndex = null },
             onDeletePanel = { settingsViewModel.deleteMainScreenDashboard(panel.id) }
         )
