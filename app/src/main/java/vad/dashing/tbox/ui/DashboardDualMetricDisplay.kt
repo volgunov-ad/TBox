@@ -30,7 +30,7 @@ internal fun DashboardDualMetricRows(
     resolvedTextColor: Color,
     modifier: Modifier = Modifier
 ) {
-    val valueFont = calculateResponsiveFontSize(
+    val valueStyle = calculateResponsiveTextStyle(
         containerHeight = availableHeight,
         textType = TextType.VALUE
     )
@@ -47,7 +47,7 @@ internal fun DashboardDualMetricRows(
             Text(
                 text = "$firstLine$DUAL_METRIC_INLINE_SEPARATOR$secondLine",
                 modifier = rowModifier.weight(1f),
-                fontSize = valueFont,
+                style = valueStyle,
                 color = resolvedTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -57,7 +57,7 @@ internal fun DashboardDualMetricRows(
             Text(
                 text = firstLine,
                 modifier = rowModifier.weight(1f),
-                fontSize = valueFont,
+                style = valueStyle,
                 color = resolvedTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -66,7 +66,7 @@ internal fun DashboardDualMetricRows(
             Text(
                 text = secondLine,
                 modifier = rowModifier.weight(1f),
-                fontSize = valueFont,
+                style = valueStyle,
                 color = resolvedTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,

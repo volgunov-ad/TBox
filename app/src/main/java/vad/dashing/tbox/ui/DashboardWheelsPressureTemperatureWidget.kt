@@ -167,17 +167,13 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                     ) {
                         Text(
                             text = widget.unit,
-                            fontSize = calculateResponsiveFontSize(
+                            style = calculateResponsiveTextStyle(
                                 containerHeight = availableHeight,
                                 textType = TextType.UNIT
                             ),
                             color = resolvedTextColor,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
-                            lineHeight = calculateResponsiveFontSize(
-                                containerHeight = availableHeight,
-                                textType = TextType.UNIT
-                            ) * 1.3f,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -255,7 +251,7 @@ fun PressureText(
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     Text(
         text = displayText.ifBlank { "-" },
-        fontSize = calculateResponsiveFontSize(
+        style = calculateResponsiveTextStyle(
             containerHeight = availableHeight,
             textType = textType
         ),
@@ -277,7 +273,7 @@ private fun TemperatureText(
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     Text(
         text = displayText.ifBlank { "-" },
-        fontSize = calculateResponsiveFontSize(
+        style = calculateResponsiveTextStyle(
             containerHeight = availableHeight,
             textType = TextType.TITLE
         ),

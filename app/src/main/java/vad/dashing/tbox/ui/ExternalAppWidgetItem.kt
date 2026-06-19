@@ -160,7 +160,7 @@ fun ExternalAppWidgetItem(
                 val containerHeightForTitle = maxHeight
                 Column(modifier = Modifier.fillMaxSize()) {
                     if (showTitle) {
-                        val titleFont = calculateResponsiveFontSize(
+                        val titleStyle = calculateResponsiveTextStyle(
                             containerHeight = containerHeightForTitle,
                             textType = TextType.TITLE
                         )
@@ -169,8 +169,8 @@ fun ExternalAppWidgetItem(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(start = 4.dp, top = 4.dp, end = 4.dp),
-                            fontSize = titleFont,
-                            lineHeight = titleFont * 1.3f,
+                            style = titleStyle,
+
                                         color = resolvedColor,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
@@ -193,18 +193,17 @@ fun ExternalAppWidgetItem(
                 // No AppWidget host view: LongPressInterceptLayout is absent, so long-press would
                 // not reach the panel's edit handler unless we capture it here.
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val titleFont = calculateResponsiveFontSize(
+                    val titleStyle = calculateResponsiveTextStyle(
                         containerHeight = maxHeight,
                         textType = TextType.TITLE
                     )
                     val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
                     Text(
                         text = placeholder,
-                        fontSize = titleFont,
-                                color = resolvedColor,
+                        style = titleStyle,
+                        color = resolvedColor,
                         textAlign = TextAlign.Center,
                         maxLines = 3,
-                        lineHeight = titleFont * 1.3f,
                         softWrap = true,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.align(Alignment.Center)

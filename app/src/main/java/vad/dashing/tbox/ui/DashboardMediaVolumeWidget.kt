@@ -216,7 +216,7 @@ fun DashboardMediaVolumeWidgetItem(
                 Text(
                     text = volumeTitleText,
                     color = resolvedTextColor,
-                    fontSize = calculateResponsiveFontSize(
+                    style = calculateResponsiveTextStyle(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE
                     ),
@@ -378,11 +378,10 @@ private fun MediaVolumeCenterButton(
                 Text(
                     text = currentVolume.toString(),
                     color = textColor,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = calculateResponsiveFontSize(
+                    style = calculateResponsiveTextStyle(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE
-                    )
+                    ).copy(fontWeight = FontWeight.SemiBold),
                 )
             }
         },

@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.ui.theme.scaledWidgetText
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -306,10 +307,10 @@ fun DashboardMusicWidgetItem(
                         Text(
                             text = musicHeaderLabel,
                             color = resolvedTextColor,
-                            fontSize = calculateResponsiveFontSize(
+                            style = calculateResponsiveTextStyle(
                                 containerHeight = availableHeight,
                                 textType = TextType.UNIT
-                            ) * 0.8f,
+                            ).scaledWidgetText(0.8f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
@@ -320,10 +321,10 @@ fun DashboardMusicWidgetItem(
                             Text(
                                 text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
                                 color = resolvedTextColor,
-                                fontSize = calculateResponsiveFontSize(
+                                style = calculateResponsiveTextStyle(
                                     containerHeight = availableHeight,
                                     textType = TextType.UNIT
-                                ) * 0.8f
+                                ).scaledWidgetText(0.8f)
                             )
                         }
                     }
@@ -363,7 +364,7 @@ fun DashboardMusicWidgetItem(
                         } else {
                             MaterialTheme.colorScheme.error
                         },
-                        fontSize = calculateResponsiveFontSize(
+                        style = calculateResponsiveTextStyle(
                             containerHeight = availableHeight,
                             textType = TextType.TITLE
                         ),
@@ -407,7 +408,7 @@ fun DashboardMusicWidgetItem(
                         text = line3Text,
                         color = resolvedTextColor,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = calculateResponsiveFontSize(
+                        style = calculateResponsiveTextStyle(
                             containerHeight = availableHeight,
                             textType = TextType.TITLE
                         ),

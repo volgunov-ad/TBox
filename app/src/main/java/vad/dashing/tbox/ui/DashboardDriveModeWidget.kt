@@ -83,18 +83,18 @@ fun DashboardDriveModeWidgetItem(
                 availableHeight = availableHeight,
                 resolvedTextColor = resolvedTextColor
             )
-            val modeFont = calculateResponsiveFontSize(
+            val modeStyle = calculateResponsiveTextStyle(
                 containerHeight = availableHeight,
                 textType = TextType.VALUE
-            ) * 1.3f
+            )
             Text(
                 text = selectedMode.widgetLabel,
                 modifier = Modifier
                     .weight(if (showTitle) 2f else 1f)
                     .fillMaxWidth()
                     .wrapContentHeight(Alignment.CenterVertically),
-                fontSize = modeFont,
-                lineHeight = modeFont * 1.3f,
+                style = modeStyle,
+
                 color = modeTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,

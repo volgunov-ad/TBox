@@ -119,14 +119,13 @@ internal fun DashboardAppLauncherWidgetItem(
             }
             val titleLine = titleOverride.trim().ifBlank { appLabel }
             if (showTitle && titleLine.isNotEmpty()) {
-                val titleFontSize = calculateResponsiveFontSize(
+                val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
                 )
                 Text(
                     text = titleLine,
-                    fontSize = titleFontSize,
-                    fontWeight = FontWeight.Medium,
+                    style = titleStyle,
                     color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
