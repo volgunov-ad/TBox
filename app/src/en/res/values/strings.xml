@@ -375,6 +375,8 @@
     <string name="themes_runtime_debug_cache_key_label">Cache key</string>
     <string name="themes_runtime_debug_file_path_label">File path</string>
     <string name="themes_runtime_debug_file_missing">(runtime.json file is missing)</string>
+    <string name="themes_runtime_debug_datastore_label">DataStore (global settings):</string>
+    <string name="themes_runtime_debug_runtime_label">runtime.json (theme cache):</string>
     <string name="toast_theme_shared_tile_backgrounds_cleared">Shared tile background folder cleared</string>
     <string name="toast_theme_shared_icons_cleared">Shared icon folder cleared</string>
     <string name="toast_theme_cache_cleared">Theme folder cleared</string>

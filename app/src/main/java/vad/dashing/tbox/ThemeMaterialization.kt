@@ -313,7 +313,11 @@ object ThemeMaterialization {
         }
     }
 
-    fun formatRuntimeJsonDebugText(context: Context, cacheKeyRaw: String): String {
+    fun formatRuntimeJsonDebugText(
+        context: Context,
+        cacheKeyRaw: String,
+        dataStoreSelections: MainScreenWallpaperSelectionsByPage,
+    ): String {
         val cacheKey = cacheKeyRaw.trim()
         if (cacheKey.isEmpty()) {
             return context.getString(R.string.themes_runtime_debug_no_active_theme)
@@ -334,6 +338,12 @@ object ThemeMaterialization {
             append(context.getString(R.string.themes_runtime_debug_file_path_label))
             append(": ")
             appendLine(runtimeFile.absolutePath)
+            appendLine()
+            append(context.getString(R.string.themes_runtime_debug_datastore_label))
+            appendLine()
+            appendLine(dataStoreSelections.toJson().toString(2))
+            appendLine()
+            append(context.getString(R.string.themes_runtime_debug_runtime_label))
             appendLine()
             if (raw == null) {
                 append(context.getString(R.string.themes_runtime_debug_file_missing))

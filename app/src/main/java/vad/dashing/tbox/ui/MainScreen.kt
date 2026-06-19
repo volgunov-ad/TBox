@@ -567,8 +567,28 @@ private fun MainScreenWallpaperBackground(
                     initialPage = initialPagerPage,
                     pageCount = { pagerPageCount },
                 )
-                var suppressWallpaperSave by remember { mutableStateOf(true) }
-                var saveWallpaperOnNextSettle by remember { mutableStateOf(false) }
+                var suppressWallpaperSave by remember(activeThemeUri, epoch) { mutableStateOf(true) }
+                var saveWallpaperOnNextSettle by remember(activeThemeUri, epoch) { mutableStateOf(false) }
+                var wallpaperScrollIsProgrammatic by remember { mutableStateOf(false) }
+                var userDraggedWallpaper by remember { mutableStateOf(false) }
+                LaunchedEffect(themeActivating) {
+                    if (themeActivating) {
+                        suppressWallpaperSave = true
+                        saveWallpaperOnNextSettle = false
+                        userDraggedWallpaper = false
+                        wallpaperScrollIsProgrammatic = false
+                    }
+                }
+                LaunchedEffect(pagerState, themeActivating) {
+                    if (themeActivating) return@LaunchedEffect
+                    var wasScrolling = false
+                    snapshotFlow { pagerState.isScrollInProgress }.collect { scrolling ->
+                        if (wasScrolling && !scrolling && !wallpaperScrollIsProgrammatic) {
+                            userDraggedWallpaper = true
+                        }
+                        wasScrolling = scrolling
+                    }
+                }
                 DisposableEffect(wallpaperController, wallpaperCount, pagerState) {
                     wallpaperController.stepWallpaper = { direction ->
                         scope.launch {
@@ -594,14 +614,18 @@ private fun MainScreenWallpaperBackground(
                         wallpaperController.stepWallpaper = null
                     }
                 }
-                LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey, forLightTheme, themeActivating) {
+                LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey, forLightTheme, themeActivating, activeThemeUri) {
                     if (themeActivating || wallpaperCount <= 0) return@LaunchedEffect
                     val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
                     if (wantPage !in 0 until pagerPageCount) return@LaunchedEffect
+                    suppressWallpaperSave = true
+                    userDraggedWallpaper = false
                     if (pagerState.currentPage != wantPage) {
-                        suppressWallpaperSave = true
+                        wallpaperScrollIsProgrammatic = true
                         runCatching { pagerState.scrollToPage(wantPage) }
-                    } else {
+                        wallpaperScrollIsProgrammatic = false
+                    }
+                    if (logicalIndexFromMainScreenWallpaperPagerPage(pagerState.settledPage, wallpaperCount) == targetIdx) {
                         suppressWallpaperSave = false
                     }
                 }
@@ -674,9 +698,10 @@ private fun MainScreenWallpaperBackground(
                                 }
                                 return@collectLatest
                             }
-                            val shouldSave = saveWallpaperOnNextSettle || userScrollEnabled
+                            val shouldSave = saveWallpaperOnNextSettle || userDraggedWallpaper
                             if (!shouldSave) return@collectLatest
                             saveWallpaperOnNextSettle = false
+                            userDraggedWallpaper = false
                             settingsViewModel.scheduleSaveMainScreenWallpaperSelection(
                                 forLightTheme = forLightTheme,
                                 fileName = name,

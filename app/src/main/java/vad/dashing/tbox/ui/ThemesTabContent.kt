@@ -75,9 +75,7 @@ fun ThemesTabContent(
     var runtimeJsonRefreshToken by remember { mutableIntStateOf(0) }
 
     suspend fun refreshRuntimeJsonDebugText() {
-        runtimeJsonDebugText = withContext(Dispatchers.IO) {
-            ThemeMaterialization.formatRuntimeJsonDebugText(context, activeThemeUri)
-        }
+        runtimeJsonDebugText = settingsViewModel.formatActiveThemeRuntimeJsonDebugText(context)
     }
 
     LaunchedEffect(activeThemeUri, themeActivating, runtimeJsonRefreshToken) {

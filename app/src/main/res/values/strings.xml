@@ -378,6 +378,8 @@
     <string name="themes_runtime_debug_cache_key_label">Ключ кэша</string>
     <string name="themes_runtime_debug_file_path_label">Путь к файлу</string>
     <string name="themes_runtime_debug_file_missing">(файл runtime.json отсутствует)</string>
+    <string name="themes_runtime_debug_datastore_label">DataStore (глобальные настройки):</string>
+    <string name="themes_runtime_debug_runtime_label">runtime.json (кэш темы):</string>
     <string name="toast_theme_shared_tile_backgrounds_cleared">Общая папка фонов плиток очищена</string>
     <string name="toast_theme_shared_icons_cleared">Общая папка иконок очищена</string>
     <string name="toast_theme_cache_cleared">Папка тем очищена</string>
