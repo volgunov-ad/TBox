@@ -242,6 +242,13 @@ class SettingsManager(private val context: Context) {
     private val _themeActivationInProgress = MutableStateFlow(false)
     val themeActivationInProgressFlow: StateFlow<Boolean> = _themeActivationInProgress.asStateFlow()
 
+    /**
+     * Invoked synchronously before [themeActivationInProgressFlow] becomes true so pending
+     * main-screen page/wallpaper edits flush into the outgoing theme's runtime.json.
+     */
+    @Volatile
+    var preThemeActivationFlush: (suspend () -> Unit)? = null
+
     private val _mainScreenWallpaperRevision = MutableStateFlow(0L)
     val mainScreenWallpaperRevisionFlow: StateFlow<Long> = _mainScreenWallpaperRevision.asStateFlow()
 
@@ -254,6 +261,12 @@ class SettingsManager(private val context: Context) {
         return themeActivationMutex.withLock {
             val wasIdle = themeActivationDepth.getAndIncrement() == 0
             if (wasIdle) {
+                val flush = preThemeActivationFlush
+                if (flush != null) {
+                    flush.invoke()
+                } else {
+                    snapshotMainScreenRuntimeToActiveThemeCache()
+                }
                 withContext(Dispatchers.Main.immediate) {
                     _themeActivationInProgress.value = true
                 }
@@ -1568,6 +1581,12 @@ class SettingsManager(private val context: Context) {
             settingsManager = this,
             wallpaperSelections = selections,
         )
+    }
+
+    /** Writes current main-screen page/wallpaper choices into the active theme runtime.json. */
+    suspend fun snapshotMainScreenRuntimeToActiveThemeCache() {
+        syncActiveThemeWallpaperSelection(mainScreenWallpaperSelectionByPageFlow.first())
+        syncActiveThemeCurrentPage(mainScreenCurrentPageFlow.first())
     }
 
     suspend fun syncActiveThemeCurrentPage(currentPage: Int): Boolean {
