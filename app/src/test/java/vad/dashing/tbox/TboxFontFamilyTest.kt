@@ -3,7 +3,11 @@ package vad.dashing.tbox
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import vad.dashing.tbox.ui.theme.TboxFontFamily
 import vad.dashing.tbox.ui.theme.resolveFontFamily
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -17,15 +21,15 @@ class TboxFontFamilyTest {
     @Test
     fun fromId_returnsMatchingPresetOrDefault() {
         assertEquals(TboxFontFamily.Serif, TboxFontFamily.fromId(2))
-        assertEquals(TboxFontFamily.Roboto, TboxFontFamily.fromId(4))
-        assertEquals(TboxFontFamily.Nunito, TboxFontFamily.fromId(9))
+        assertEquals(TboxFontFamily.CrimsonText, TboxFontFamily.fromId(4))
+        assertEquals(TboxFontFamily.Nunito, TboxFontFamily.fromId(6))
         assertEquals(TboxFontFamily.Default, TboxFontFamily.fromId(99))
     }
 
     @Test
     fun fromSlug_roundTripsSlug() {
         assertEquals(TboxFontFamily.Monospace, TboxFontFamily.fromSlug("monospace"))
-        assertEquals(TboxFontFamily.Montserrat, TboxFontFamily.fromSlug("montserrat"))
+        assertEquals(TboxFontFamily.Cabin, TboxFontFamily.fromSlug("cabin"))
         assertEquals(TboxFontFamily.CrimsonText, TboxFontFamily.fromSlug("crimson_text"))
         assertNull(TboxFontFamily.fromSlug("unknown"))
         assertNull(TboxFontFamily.fromSlug(""))
@@ -45,9 +49,54 @@ class TboxFontFamilyTest {
     }
 
     @Test
-    fun bundledRoboto_differsFromDefault() {
-        val roboto = TboxFontFamily.Roboto.toComposeFontFamily()
-        assertNotEquals(FontFamily.Default, roboto)
-        assertEquals(roboto, resolveFontFamily(TboxFontFamily.Roboto.id))
+    fun bundledCrimsonText_differsFromDefault() {
+        val crimson = TboxFontFamily.CrimsonText.toComposeFontFamily()
+        assertNotEquals(FontFamily.Default, crimson)
+        assertEquals(crimson, resolveFontFamily(TboxFontFamily.CrimsonText.id))
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+class MainScreenWallpaperSelectionsTest {
+
+    @Test
+    fun withFileName_storesPerPageAndTheme() {
+        val selections = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "a.jpg")
+            .withFileName(page = 2, forLightTheme = true, fileName = "b.jpg")
+            .withFileName(page = 1, forLightTheme = false, fileName = "night.jpg")
+
+        assertEquals("a.jpg", selections.fileNameFor(1, forLightTheme = true))
+        assertEquals("b.jpg", selections.fileNameFor(2, forLightTheme = true))
+        assertEquals("night.jpg", selections.fileNameFor(1, forLightTheme = false))
+        assertNull(selections.fileNameFor(2, forLightTheme = false))
+    }
+
+    @Test
+    fun json_roundTrip() {
+        val original = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(1, forLightTheme = true, fileName = "light.jpg")
+            .withFileName(2, forLightTheme = false, fileName = "dark.png")
+
+        val restored = MainScreenWallpaperSelectionsByPage.fromJson(original.toJson())
+        assertEquals(original, restored)
+    }
+
+    @Test
+    fun fromDataStoreJson_handlesBlank() {
+        assertEquals(MainScreenWallpaperSelectionsByPage.empty(), MainScreenWallpaperSelectionsByPage.fromDataStoreJson(""))
+        assertEquals(MainScreenWallpaperSelectionsByPage.empty(), MainScreenWallpaperSelectionsByPage.fromDataStoreJson(null))
+    }
+
+    @Test
+    fun clearedForTheme_removesOnlyMatchingSide() {
+        val selections = MainScreenWallpaperSelectionsByPage(
+            lightByPage = mapOf(1 to "a.jpg"),
+            darkByPage = mapOf(1 to "b.jpg"),
+        )
+        val clearedLight = selections.clearedForTheme(forLightTheme = true)
+        assertTrue(clearedLight.lightByPage.isEmpty())
+        assertEquals("b.jpg", clearedLight.fileNameFor(1, forLightTheme = false))
     }
 }

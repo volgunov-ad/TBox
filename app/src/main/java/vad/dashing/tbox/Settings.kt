@@ -323,10 +323,8 @@ class SettingsManager(private val context: Context) {
             stringPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_light_folder_uri")
         private val MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY =
             stringPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_dark_folder_uri")
-        private val MAIN_SCREEN_WALLPAPER_LIGHT_SELECTED_FILE_KEY =
-            stringPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_light_selected_file")
-        private val MAIN_SCREEN_WALLPAPER_DARK_SELECTED_FILE_KEY =
-            stringPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_dark_selected_file")
+        private val MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_selection_by_page")
         private val MAIN_SCREEN_WALLPAPER_CROP_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_wallpaper_crop")
 
@@ -760,13 +758,14 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY] ?: "" }
         .distinctUntilChanged()
 
-    val mainScreenWallpaperLightSelectedFileFlow: Flow<String> = context.settingsDataStore.data
-        .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_LIGHT_SELECTED_FILE_KEY] ?: "" }
-        .distinctUntilChanged()
-
-    val mainScreenWallpaperDarkSelectedFileFlow: Flow<String> = context.settingsDataStore.data
-        .map { preferences -> preferences[MAIN_SCREEN_WALLPAPER_DARK_SELECTED_FILE_KEY] ?: "" }
-        .distinctUntilChanged()
+    val mainScreenWallpaperSelectionByPageFlow: Flow<MainScreenWallpaperSelectionsByPage> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
+                    preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
+                )
+            }
+            .distinctUntilChanged()
 
     /** `true`: fill screen with Crop; `false`: Fit (whole image, possible side bars). */
     val mainScreenWallpaperCropFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1208,7 +1207,7 @@ class SettingsManager(private val context: Context) {
                 legacyFile: File,
                 dirRel: String,
                 folderUriKey: Preferences.Key<String>,
-                selectedFileKey: Preferences.Key<String>,
+                forLightTheme: Boolean,
             ): Boolean {
                 val snapshot = context.settingsDataStore.data.first()
                 if (snapshot[folderUriKey].orEmpty().isNotEmpty()) return false
@@ -1242,7 +1241,15 @@ class SettingsManager(private val context: Context) {
                 val folderUri = Uri.fromFile(dir).toString()
                 context.settingsDataStore.edit { e ->
                     e[folderUriKey] = folderUri
-                    e[selectedFileKey] = dest.name
+                    val existing = MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
+                        e[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
+                    )
+                    val updated = existing.withFileName(
+                        page = DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+                        forLightTheme = forLightTheme,
+                        fileName = dest.name,
+                    )
+                    e[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = updated.toJson().toString()
                     e[legacyBooleanKey] = false
                 }
                 return true
@@ -1252,13 +1259,13 @@ class SettingsManager(private val context: Context) {
                 File(context.filesDir, MAIN_SCREEN_WALLPAPER_LIGHT_FILE),
                 "$MAIN_SCREEN_WALLPAPER_MIGRATED_DIR/light",
                 MAIN_SCREEN_WALLPAPER_LIGHT_FOLDER_URI_KEY,
-                MAIN_SCREEN_WALLPAPER_LIGHT_SELECTED_FILE_KEY,
+                forLightTheme = true,
             ) || tryMigrate(
                 MAIN_SCREEN_WALLPAPER_DARK_SET_LEGACY_KEY,
                 File(context.filesDir, MAIN_SCREEN_WALLPAPER_DARK_FILE),
                 "$MAIN_SCREEN_WALLPAPER_MIGRATED_DIR/dark",
                 MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY,
-                MAIN_SCREEN_WALLPAPER_DARK_SELECTED_FILE_KEY,
+                forLightTheme = false,
             )
             if (migrated) {
                 bumpLauncherAppIconRevision()
@@ -1446,7 +1453,14 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             if (uriString.isNullOrBlank()) {
                 preferences.remove(MAIN_SCREEN_WALLPAPER_LIGHT_FOLDER_URI_KEY)
-                preferences.remove(MAIN_SCREEN_WALLPAPER_LIGHT_SELECTED_FILE_KEY)
+                val cleared = MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
+                    preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
+                ).clearedForTheme(forLightTheme = true)
+                if (cleared.isEmpty()) {
+                    preferences.remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
+                } else {
+                    preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = cleared.toJson().toString()
+                }
             } else {
                 preferences[MAIN_SCREEN_WALLPAPER_LIGHT_FOLDER_URI_KEY] = uriString
             }
@@ -1457,49 +1471,100 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             if (uriString.isNullOrBlank()) {
                 preferences.remove(MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY)
-                preferences.remove(MAIN_SCREEN_WALLPAPER_DARK_SELECTED_FILE_KEY)
+                val cleared = MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
+                    preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
+                ).clearedForTheme(forLightTheme = false)
+                if (cleared.isEmpty()) {
+                    preferences.remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
+                } else {
+                    preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = cleared.toJson().toString()
+                }
             } else {
                 preferences[MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY] = uriString
             }
         }
     }
 
-    suspend fun saveMainScreenWallpaperLightSelectedFileName(fileName: String) {
+    suspend fun saveMainScreenWallpaperSelectionsByPage(selections: MainScreenWallpaperSelectionsByPage) {
         context.settingsDataStore.edit { preferences ->
-            preferences[MAIN_SCREEN_WALLPAPER_LIGHT_SELECTED_FILE_KEY] = fileName
+            if (selections.isEmpty()) {
+                preferences.remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
+            } else {
+                preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = selections.toJson().toString()
+            }
         }
     }
 
-    suspend fun saveMainScreenWallpaperDarkSelectedFileName(fileName: String) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[MAIN_SCREEN_WALLPAPER_DARK_SELECTED_FILE_KEY] = fileName
-        }
+    suspend fun saveMainScreenWallpaperSelectionForPage(
+        page: Int,
+        forLightTheme: Boolean,
+        fileName: String,
+    ) {
+        val pageCount = PagingStateNormalizer.normalizePageCount(
+            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+        )
+        val normalizedPage = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+        val current = mainScreenWallpaperSelectionByPageFlow.first()
+        saveMainScreenWallpaperSelectionsByPage(
+            current.withFileName(normalizedPage, forLightTheme, fileName),
+        )
     }
 
-    /** Single DataStore write when picking wallpaper (folder URI + selected file name). */
-    suspend fun saveMainScreenWallpaperLightFolderAndSelection(folderUriString: String, selectedFileName: String) {
+    /** Single DataStore write when picking wallpaper (folder URI + selected file name for [page]). */
+    suspend fun saveMainScreenWallpaperLightFolderAndSelection(
+        folderUriString: String,
+        selectedFileName: String,
+        page: Int,
+    ) {
+        val pageCount = PagingStateNormalizer.normalizePageCount(
+            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+        )
+        val normalizedPage = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+        val selections = MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
+            context.settingsDataStore.data.first()[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
+        ).withFileName(normalizedPage, forLightTheme = true, selectedFileName)
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_WALLPAPER_LIGHT_FOLDER_URI_KEY] = folderUriString
-            preferences[MAIN_SCREEN_WALLPAPER_LIGHT_SELECTED_FILE_KEY] = selectedFileName
+            if (selections.isEmpty()) {
+                preferences.remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
+            } else {
+                preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = selections.toJson().toString()
+            }
         }
     }
 
-    suspend fun saveMainScreenWallpaperDarkFolderAndSelection(folderUriString: String, selectedFileName: String) {
+    suspend fun saveMainScreenWallpaperDarkFolderAndSelection(
+        folderUriString: String,
+        selectedFileName: String,
+        page: Int,
+    ) {
+        val pageCount = PagingStateNormalizer.normalizePageCount(
+            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+        )
+        val normalizedPage = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+        val selections = MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
+            context.settingsDataStore.data.first()[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
+        ).withFileName(normalizedPage, forLightTheme = false, selectedFileName)
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY] = folderUriString
-            preferences[MAIN_SCREEN_WALLPAPER_DARK_SELECTED_FILE_KEY] = selectedFileName
+            if (selections.isEmpty()) {
+                preferences.remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
+            } else {
+                preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = selections.toJson().toString()
+            }
         }
     }
 
     suspend fun syncActiveThemeWallpaperSelection(
-        lightSelectedFile: String? = null,
-        darkSelectedFile: String? = null,
+        selections: MainScreenWallpaperSelectionsByPage? = null,
     ): Boolean {
         return ThemeMaterialization.syncWallpaperSelectionToActiveThemeCache(
             context = context,
             settingsManager = this,
-            lightSelectedFile = lightSelectedFile,
-            darkSelectedFile = darkSelectedFile,
+            wallpaperSelections = selections,
         )
     }
 

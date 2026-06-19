@@ -132,12 +132,8 @@ object ThemeLayoutExport {
         o.put("pagePrevButton", buildNormalizedPosition(sm.mainScreenPagePrevButtonFlow.first()))
         o.put("pageNextButton", buildNormalizedPosition(sm.mainScreenPageNextButtonFlow.first()))
         o.put(
-            "wallpaperLightSelectedFile",
-            sm.mainScreenWallpaperLightSelectedFileFlow.first(),
-        )
-        o.put(
-            "wallpaperDarkSelectedFile",
-            sm.mainScreenWallpaperDarkSelectedFileFlow.first(),
+            MainScreenWallpaperSelectionsByPage.JSON_KEY,
+            sm.mainScreenWallpaperSelectionByPageFlow.first().toJson(),
         )
         val lightFolderStr = sm.mainScreenWallpaperLightFolderUriFlow.first()
         if (lightFolderStr.isNotBlank()) {
@@ -292,14 +288,11 @@ object ThemeLayoutExport {
         }
         importVisualTheme(section.optJSONObject("theme"), sm)
         importMainScreenButtons(section, sm)
-        if (section.has("wallpaperLightSelectedFile")) {
-            sm.saveMainScreenWallpaperLightSelectedFileName(
-                section.optString("wallpaperLightSelectedFile", ""),
-            )
-        }
-        if (section.has("wallpaperDarkSelectedFile")) {
-            sm.saveMainScreenWallpaperDarkSelectedFileName(
-                section.optString("wallpaperDarkSelectedFile", ""),
+        if (section.has(MainScreenWallpaperSelectionsByPage.JSON_KEY)) {
+            sm.saveMainScreenWallpaperSelectionsByPage(
+                MainScreenWallpaperSelectionsByPage.fromJson(
+                    section.optJSONObject(MainScreenWallpaperSelectionsByPage.JSON_KEY),
+                ),
             )
         }
         importMainScreenPanels(section.optJSONArray("panels"), sm)

@@ -12,20 +12,17 @@ object ThemeRuntimeState {
 
     const val RUNTIME_JSON_FILE = "runtime.json"
 
-    const val KEY_WALLPAPER_LIGHT_SELECTED_FILE = "wallpaperLightSelectedFile"
-    const val KEY_WALLPAPER_DARK_SELECTED_FILE = "wallpaperDarkSelectedFile"
+    const val KEY_WALLPAPER_SELECTION_BY_PAGE = MainScreenWallpaperSelectionsByPage.JSON_KEY
     const val KEY_CURRENT_PAGE = "currentPage"
 
     data class State(
-        val wallpaperLightSelectedFile: String? = null,
-        val hasWallpaperLightSelectedFile: Boolean = false,
-        val wallpaperDarkSelectedFile: String? = null,
-        val hasWallpaperDarkSelectedFile: Boolean = false,
+        val wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
+        val hasWallpaperSelections: Boolean = false,
         val currentPage: Int? = null,
         val hasCurrentPage: Boolean = false,
     ) {
         val isEmpty: Boolean
-            get() = !hasWallpaperLightSelectedFile && !hasWallpaperDarkSelectedFile && !hasCurrentPage
+            get() = !hasWallpaperSelections && !hasCurrentPage
     }
 
     fun read(cacheDir: File): State {
@@ -33,18 +30,12 @@ object ThemeRuntimeState {
         if (!file.isFile) return State()
         val obj = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return State()
         return State(
-            wallpaperLightSelectedFile = if (obj.has(KEY_WALLPAPER_LIGHT_SELECTED_FILE)) {
-                obj.optString(KEY_WALLPAPER_LIGHT_SELECTED_FILE, "")
+            wallpaperSelections = if (obj.has(KEY_WALLPAPER_SELECTION_BY_PAGE)) {
+                MainScreenWallpaperSelectionsByPage.fromJson(obj.optJSONObject(KEY_WALLPAPER_SELECTION_BY_PAGE))
             } else {
                 null
             },
-            hasWallpaperLightSelectedFile = obj.has(KEY_WALLPAPER_LIGHT_SELECTED_FILE),
-            wallpaperDarkSelectedFile = if (obj.has(KEY_WALLPAPER_DARK_SELECTED_FILE)) {
-                obj.optString(KEY_WALLPAPER_DARK_SELECTED_FILE, "")
-            } else {
-                null
-            },
-            hasWallpaperDarkSelectedFile = obj.has(KEY_WALLPAPER_DARK_SELECTED_FILE),
+            hasWallpaperSelections = obj.has(KEY_WALLPAPER_SELECTION_BY_PAGE),
             currentPage = if (obj.has(KEY_CURRENT_PAGE)) {
                 obj.optInt(KEY_CURRENT_PAGE, SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
             } else {
@@ -61,11 +52,11 @@ object ThemeRuntimeState {
             return
         }
         val json = JSONObject()
-        if (state.hasWallpaperLightSelectedFile) {
-            json.put(KEY_WALLPAPER_LIGHT_SELECTED_FILE, state.wallpaperLightSelectedFile.orEmpty())
-        }
-        if (state.hasWallpaperDarkSelectedFile) {
-            json.put(KEY_WALLPAPER_DARK_SELECTED_FILE, state.wallpaperDarkSelectedFile.orEmpty())
+        if (state.hasWallpaperSelections) {
+            json.put(
+                KEY_WALLPAPER_SELECTION_BY_PAGE,
+                state.wallpaperSelections?.toJson() ?: JSONObject(),
+            )
         }
         if (state.hasCurrentPage) {
             json.put(KEY_CURRENT_PAGE, state.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
@@ -75,16 +66,18 @@ object ThemeRuntimeState {
 
     fun patch(
         cacheDir: File,
-        lightSelectedFile: String? = null,
-        darkSelectedFile: String? = null,
+        wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
         currentPage: Int? = null,
     ): State {
         val existing = read(cacheDir)
+        val mergedSelections = when {
+            wallpaperSelections != null -> wallpaperSelections
+            existing.hasWallpaperSelections -> existing.wallpaperSelections
+            else -> null
+        }
         val merged = State(
-            wallpaperLightSelectedFile = lightSelectedFile ?: existing.wallpaperLightSelectedFile,
-            hasWallpaperLightSelectedFile = lightSelectedFile != null || existing.hasWallpaperLightSelectedFile,
-            wallpaperDarkSelectedFile = darkSelectedFile ?: existing.wallpaperDarkSelectedFile,
-            hasWallpaperDarkSelectedFile = darkSelectedFile != null || existing.hasWallpaperDarkSelectedFile,
+            wallpaperSelections = mergedSelections,
+            hasWallpaperSelections = wallpaperSelections != null || existing.hasWallpaperSelections,
             currentPage = currentPage ?: existing.currentPage,
             hasCurrentPage = currentPage != null || existing.hasCurrentPage,
         )
@@ -93,14 +86,9 @@ object ThemeRuntimeState {
     }
 
     suspend fun applyOverrides(settingsManager: SettingsManager, state: State) {
-        if (state.hasWallpaperLightSelectedFile) {
-            settingsManager.saveMainScreenWallpaperLightSelectedFileName(
-                state.wallpaperLightSelectedFile.orEmpty(),
-            )
-        }
-        if (state.hasWallpaperDarkSelectedFile) {
-            settingsManager.saveMainScreenWallpaperDarkSelectedFileName(
-                state.wallpaperDarkSelectedFile.orEmpty(),
+        if (state.hasWallpaperSelections) {
+            settingsManager.saveMainScreenWallpaperSelectionsByPage(
+                state.wallpaperSelections ?: MainScreenWallpaperSelectionsByPage.empty(),
             )
         }
         if (state.hasCurrentPage) {

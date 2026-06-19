@@ -10,12 +10,9 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
     SansSerif(1, "sans_serif"),
     Serif(2, "serif"),
     Monospace(3, "monospace"),
-    Roboto(4, "roboto"),
-    Inter(5, "inter"),
-    Montserrat(6, "montserrat"),
-    CrimsonText(7, "crimson_text"),
-    Cabin(8, "cabin"),
-    Nunito(9, "nunito"),
+    CrimsonText(4, "crimson_text"),
+    Cabin(5, "cabin"),
+    Nunito(6, "nunito"),
     ;
 
     fun toComposeFontFamily(): FontFamily = when (this) {
@@ -23,9 +20,6 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
         SansSerif -> FontFamily.SansSerif
         Serif -> FontFamily.Serif
         Monospace -> FontFamily.Monospace
-        Roboto -> Bundled.roboto
-        Inter -> Bundled.inter
-        Montserrat -> Bundled.montserrat
         CrimsonText -> Bundled.crimsonText
         Cabin -> Bundled.cabin
         Nunito -> Bundled.nunito
@@ -42,9 +36,6 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
     }
 
     private object Bundled {
-        val roboto = FontFamily(Font(R.font.roboto_regular))
-        val inter = FontFamily(Font(R.font.inter_regular))
-        val montserrat = FontFamily(Font(R.font.montserrat_regular))
         val crimsonText = FontFamily(Font(R.font.crimson_text_regular))
         val cabin = FontFamily(Font(R.font.cabin_regular))
         val nunito = FontFamily(Font(R.font.nunito_regular))

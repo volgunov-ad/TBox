@@ -160,6 +160,7 @@ fun MainScreen(
         MainScreenWallpaperBackground(
             theme = currentTheme,
             settingsViewModel = settingsViewModel,
+            currentMainScreenPage = currentPage,
             userScrollEnabled = !multiPage,
             wallpaperController = wallpaperController,
             onWallpaperCountChanged = { wallpaperCount = it },
@@ -394,6 +395,7 @@ private fun MainScreenPagePanels(
 private fun MainScreenWallpaperBackground(
     theme: Int,
     settingsViewModel: SettingsViewModel,
+    currentMainScreenPage: Int,
     userScrollEnabled: Boolean,
     wallpaperController: MainScreenWallpaperController,
     onWallpaperCountChanged: (Int) -> Unit,
@@ -406,18 +408,18 @@ private fun MainScreenWallpaperBackground(
     val canvasColor = Color(if (theme == 2) canvasBgDark else canvasBgLight)
     val folderLight by settingsViewModel.mainScreenWallpaperLightFolderUri.collectAsStateWithLifecycle()
     val folderDark by settingsViewModel.mainScreenWallpaperDarkFolderUri.collectAsStateWithLifecycle()
-    val selectedLight by settingsViewModel.mainScreenWallpaperLightSelectedFile.collectAsStateWithLifecycle()
-    val selectedDark by settingsViewModel.mainScreenWallpaperDarkSelectedFile.collectAsStateWithLifecycle()
+    val wallpaperSelections by settingsViewModel.mainScreenWallpaperSelectionsByPage.collectAsStateWithLifecycle()
     val epoch by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
     val wallpaperCrop by settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
     val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
-    val folderUriStr = if (theme == 2) folderDark else folderLight
-    val selectedName = if (theme == 2) selectedDark else selectedLight
+    val forLightTheme = theme != 2
+    val folderUriStr = if (forLightTheme) folderLight else folderDark
     val folderUri = remember(folderUriStr) {
         if (folderUriStr.isBlank()) null else Uri.parse(folderUriStr)
     }
+    var displayedFileName by remember(folderUriStr) { mutableStateOf<String?>(null) }
     // Keyed by folder so on theme switch we never keep the previous folder's listing for one frame
-    // (that paired the wrong sortedNames with the new theme's savedSelectedName and could persist
+    // (that paired the wrong sortedNames with the new theme's saved selection and could persist
     // a bogus filename into DataStore via LaunchedEffect below).
     var sortedPairs by remember(folderUriStr) { mutableStateOf<List<Pair<String, Uri>>>(emptyList()) }
     LaunchedEffect(folderUriStr, epoch) {
@@ -432,13 +434,32 @@ private fun MainScreenWallpaperBackground(
     LaunchedEffect(sortedNames.size) {
         onWallpaperCountChanged(sortedNames.size)
     }
-    val effectiveName = remember(sortedNames, selectedName) {
-        effectiveWallpaperFileName(sortedNames, selectedName)
+    LaunchedEffect(currentMainScreenPage, wallpaperSelections, forLightTheme, sortedNames, folderUriStr) {
+        val saved = wallpaperSelections.fileNameFor(currentMainScreenPage, forLightTheme)
+        if (saved != null) {
+            val effective = effectiveWallpaperFileName(sortedNames, saved)
+            if (effective != null) {
+                displayedFileName = effective
+            }
+        } else if (displayedFileName == null && sortedNames.isNotEmpty()) {
+            displayedFileName = effectiveWallpaperFileName(sortedNames, "")
+        }
     }
-    LaunchedEffect(effectiveName, selectedName, sortedNames, theme) {
+    val effectiveName = remember(sortedNames, displayedFileName) {
+        displayedFileName?.let { effectiveWallpaperFileName(sortedNames, it) }
+            ?: effectiveWallpaperFileName(sortedNames, "")
+    }
+    LaunchedEffect(effectiveName, wallpaperSelections, sortedNames, currentMainScreenPage, forLightTheme) {
+        if (!wallpaperSelections.hasSelectionFor(currentMainScreenPage, forLightTheme)) return@LaunchedEffect
+        val saved = wallpaperSelections.fileNameFor(currentMainScreenPage, forLightTheme) ?: return@LaunchedEffect
         val want = effectiveName ?: return@LaunchedEffect
-        if (want != selectedName) {
-            settingsViewModel.scheduleSaveMainScreenWallpaperSelection(theme != 2, want)
+        if (want != saved) {
+            settingsViewModel.scheduleSaveMainScreenWallpaperSelection(
+                forLightTheme = forLightTheme,
+                fileName = want,
+                page = currentMainScreenPage,
+            )
+            displayedFileName = want
         }
     }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -569,7 +590,7 @@ private fun MainScreenWallpaperBackground(
                         )
                     }
             }
-            val currentSelectedName by rememberUpdatedState(selectedName)
+            val currentMainScreenPageState by rememberUpdatedState(currentMainScreenPage)
             LaunchedEffect(pagerState, sortedNames, theme, wallpaperCount) {
                 snapshotFlow { pagerState.settledPage }
                     .distinctUntilChanged()
@@ -589,9 +610,12 @@ private fun MainScreenWallpaperBackground(
                         val logical = logicalIndexFromMainScreenWallpaperPagerPage(page, wallpaperCount)
                             ?: return@collectLatest
                         val name = sortedNames[logical]
-                        if (name != currentSelectedName) {
-                            settingsViewModel.scheduleSaveMainScreenWallpaperSelection(theme != 2, name)
-                        }
+                        displayedFileName = name
+                        settingsViewModel.scheduleSaveMainScreenWallpaperSelection(
+                            forLightTheme = forLightTheme,
+                            fileName = name,
+                            page = currentMainScreenPageState,
+                        )
                     }
             }
             HorizontalPager(

@@ -309,15 +309,13 @@ object ThemeMaterialization {
     suspend fun syncWallpaperSelectionToActiveThemeCache(
         context: Context,
         settingsManager: SettingsManager,
-        lightSelectedFile: String? = null,
-        darkSelectedFile: String? = null,
+        wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
     ): Boolean = withContext(Dispatchers.IO) {
-        if (lightSelectedFile == null && darkSelectedFile == null) return@withContext false
+        if (wallpaperSelections == null) return@withContext false
         syncRuntimeStateToActiveThemeCache(
             context = context,
             settingsManager = settingsManager,
-            lightSelectedFile = lightSelectedFile,
-            darkSelectedFile = darkSelectedFile,
+            wallpaperSelections = wallpaperSelections,
         )
     }
 
@@ -336,8 +334,7 @@ object ThemeMaterialization {
     private suspend fun syncRuntimeStateToActiveThemeCache(
         context: Context,
         settingsManager: SettingsManager,
-        lightSelectedFile: String? = null,
-        darkSelectedFile: String? = null,
+        wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
         currentPage: Int? = null,
     ): Boolean {
         val cacheKey = settingsManager.activeThemeUriFlow.first().trim()
@@ -348,8 +345,7 @@ object ThemeMaterialization {
         val dir = cacheDir(context, cacheKey)
         ThemeRuntimeState.patch(
             cacheDir = dir,
-            lightSelectedFile = lightSelectedFile,
-            darkSelectedFile = darkSelectedFile,
+            wallpaperSelections = wallpaperSelections,
             currentPage = currentPage,
         )
         return true

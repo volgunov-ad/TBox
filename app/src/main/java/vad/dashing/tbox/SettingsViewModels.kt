@@ -552,8 +552,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     private var pendingCurrentPage: Int? = null
 
     private var saveWallpaperSelectionJob: Job? = null
-    private var pendingWallpaperLightFileName: String? = null
-    private var pendingWallpaperDarkFileName: String? = null
+    private val pendingWallpaperPatches = mutableMapOf<Pair<Int, Boolean>, String>()
+
+    private val liveWallpaperSelections =
+        MutableStateFlow(MainScreenWallpaperSelectionsByPage.empty())
+
+    val mainScreenWallpaperSelectionsByPage: StateFlow<MainScreenWallpaperSelectionsByPage> =
+        liveWallpaperSelections.asStateFlow()
 
     val mainScreenCornerButtonSizeDp = settingsManager.mainScreenCornerButtonSizeDpFlow
         .stateIn(
@@ -651,13 +656,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ""
         )
-
-    private val liveWallpaperLightSelected = MutableStateFlow("")
-    private val liveWallpaperDarkSelected = MutableStateFlow("")
-
-    val mainScreenWallpaperLightSelectedFile: StateFlow<String> = liveWallpaperLightSelected.asStateFlow()
-
-    val mainScreenWallpaperDarkSelectedFile: StateFlow<String> = liveWallpaperDarkSelected.asStateFlow()
 
     val isMainScreenWallpaperCrop = settingsManager.mainScreenWallpaperCropFlow
         .stateIn(
@@ -941,16 +939,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             }
         }
         viewModelScope.launch {
-            settingsManager.mainScreenWallpaperLightSelectedFileFlow.collect { stored ->
-                if (pendingWallpaperLightFileName == null) {
-                    liveWallpaperLightSelected.value = stored
-                }
-            }
-        }
-        viewModelScope.launch {
-            settingsManager.mainScreenWallpaperDarkSelectedFileFlow.collect { stored ->
-                if (pendingWallpaperDarkFileName == null) {
-                    liveWallpaperDarkSelected.value = stored
+            settingsManager.mainScreenWallpaperSelectionByPageFlow.collect { stored ->
+                if (pendingWallpaperPatches.isEmpty()) {
+                    liveWallpaperSelections.value = stored
                 }
             }
         }
@@ -1364,17 +1355,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 }
                 return@launch
             }
+            val page = liveMainScreenCurrentPage.value
             if (forLightTheme) {
                 settingsManager.saveMainScreenWallpaperLightFolderAndSelection(
                     res.folderUriString,
                     res.selectedFileName,
+                    page,
                 )
             } else {
                 settingsManager.saveMainScreenWallpaperDarkFolderAndSelection(
                     res.folderUriString,
                     res.selectedFileName,
+                    page,
                 )
             }
+            liveWallpaperSelections.value = settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
             settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
@@ -1392,26 +1387,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun saveMainScreenWallpaperLightSelectedFileName(fileName: String) {
-        viewModelScope.launch {
-            settingsManager.saveMainScreenWallpaperLightSelectedFileName(fileName)
-        }
-    }
-
-    fun saveMainScreenWallpaperDarkSelectedFileName(fileName: String) {
-        viewModelScope.launch {
-            settingsManager.saveMainScreenWallpaperDarkSelectedFileName(fileName)
-        }
-    }
-
-    fun scheduleSaveMainScreenWallpaperSelection(forLightTheme: Boolean, fileName: String) {
-        if (forLightTheme) {
-            pendingWallpaperLightFileName = fileName
-            liveWallpaperLightSelected.value = fileName
-        } else {
-            pendingWallpaperDarkFileName = fileName
-            liveWallpaperDarkSelected.value = fileName
-        }
+    fun scheduleSaveMainScreenWallpaperSelection(forLightTheme: Boolean, fileName: String, page: Int) {
+        pendingWallpaperPatches[page to forLightTheme] = fileName
+        liveWallpaperSelections.value = liveWallpaperSelections.value.withFileName(
+            page = page,
+            forLightTheme = forLightTheme,
+            fileName = fileName,
+        )
         saveWallpaperSelectionJob?.cancel()
         saveWallpaperSelectionJob = viewModelScope.launch {
             delay(MAIN_SCREEN_WALLPAPER_SELECTION_SAVE_DEBOUNCE_MS)
@@ -1428,17 +1410,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     private suspend fun flushMainScreenWallpaperSelectionInternal() {
-        val light = pendingWallpaperLightFileName
-        val dark = pendingWallpaperDarkFileName
-        if (light == null && dark == null) return
-        pendingWallpaperLightFileName = null
-        pendingWallpaperDarkFileName = null
-        light?.let { settingsManager.saveMainScreenWallpaperLightSelectedFileName(it) }
-        dark?.let { settingsManager.saveMainScreenWallpaperDarkSelectedFileName(it) }
-        settingsManager.syncActiveThemeWallpaperSelection(
-            lightSelectedFile = light,
-            darkSelectedFile = dark,
-        )
+        if (pendingWallpaperPatches.isEmpty()) return
+        val patches = pendingWallpaperPatches.toMap()
+        pendingWallpaperPatches.clear()
+        var current = settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
+        patches.forEach { (key, fileName) ->
+            current = current.withFileName(key.first, key.second, fileName)
+        }
+        settingsManager.saveMainScreenWallpaperSelectionsByPage(current)
+        settingsManager.syncActiveThemeWallpaperSelection(current)
+        liveWallpaperSelections.value = current
     }
 
     fun saveMainScreenWallpaperCrop(crop: Boolean) {

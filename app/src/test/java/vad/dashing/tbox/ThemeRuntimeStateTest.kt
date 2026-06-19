@@ -24,26 +24,30 @@ class ThemeRuntimeStateTest {
     @Test
     fun patch_mergesFieldsIntoRuntimeJson() {
         val dir = createTempDir(prefix = "runtime_patch_")
-        ThemeRuntimeState.patch(dir, lightSelectedFile = "light.jpg")
+        val selections = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "light.jpg")
+        ThemeRuntimeState.patch(dir, wallpaperSelections = selections)
         ThemeRuntimeState.patch(dir, currentPage = 3)
 
         val file = File(dir, ThemeRuntimeState.RUNTIME_JSON_FILE)
         assertTrue(file.isFile)
         val json = JSONObject(file.readText())
-        assertEquals("light.jpg", json.getString(ThemeRuntimeState.KEY_WALLPAPER_LIGHT_SELECTED_FILE))
+        val byPage = json.getJSONObject(ThemeRuntimeState.KEY_WALLPAPER_SELECTION_BY_PAGE)
+        assertEquals("light.jpg", byPage.getJSONObject("light").getString("1"))
         assertEquals(3, json.getInt(ThemeRuntimeState.KEY_CURRENT_PAGE))
-        assertFalse(json.has(ThemeRuntimeState.KEY_WALLPAPER_DARK_SELECTED_FILE))
+        assertFalse(byPage.getJSONObject("light").has("2"))
     }
 
     @Test
     fun read_preservesFieldPresenceFlags() {
         val dir = createTempDir(prefix = "runtime_read_")
-        ThemeRuntimeState.patch(dir, darkSelectedFile = "night.png")
+        val selections = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 2, forLightTheme = false, fileName = "night.png")
+        ThemeRuntimeState.patch(dir, wallpaperSelections = selections)
 
         val state = ThemeRuntimeState.read(dir)
-        assertFalse(state.hasWallpaperLightSelectedFile)
-        assertTrue(state.hasWallpaperDarkSelectedFile)
-        assertEquals("night.png", state.wallpaperDarkSelectedFile)
+        assertTrue(state.hasWallpaperSelections)
+        assertEquals("night.png", state.wallpaperSelections?.fileNameFor(2, forLightTheme = false))
         assertFalse(state.hasCurrentPage)
     }
 
