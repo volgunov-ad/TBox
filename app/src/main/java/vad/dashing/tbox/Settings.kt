@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.sync.Mutex
 import vad.dashing.tbox.ui.theme.TboxFontFamily
 import kotlinx.coroutines.sync.withLock
@@ -262,6 +263,7 @@ class SettingsManager(private val context: Context) {
             } finally {
                 if (themeActivationDepth.decrementAndGet() == 0) {
                     withContext(Dispatchers.Main.immediate) {
+                        yield()
                         _themeActivationInProgress.value = false
                     }
                 }

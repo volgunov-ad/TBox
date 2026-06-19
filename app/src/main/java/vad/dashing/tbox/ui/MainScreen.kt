@@ -55,6 +55,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.net.Uri
+import java.io.File
 import kotlin.math.roundToInt
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.isActive
@@ -468,10 +469,13 @@ private fun MainScreenWallpaperBackground(
                 .fillMaxSize()
                 .background(canvasColor)
         )
-        if (sortedNames.isEmpty() || effectiveName == null) {
+        if (sortedNames.isEmpty() || effectiveName == null || themeActivating) {
             return@BoxWithConstraints
         }
-        val targetIdx = sortedNames.indexOf(effectiveName).coerceIn(0, sortedNames.lastIndex)
+        val targetIdx = sortedNames.indexOf(effectiveName)
+        if (targetIdx < 0) {
+            return@BoxWithConstraints
+        }
         val wallpaperCount = sortedNames.size
         val pagerPageCount = mainScreenWallpaperPagerPageCount(wallpaperCount)
         val initialPagerPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
@@ -522,10 +526,11 @@ private fun MainScreenWallpaperBackground(
                 }
             }
             LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey, forLightTheme, themeActivating) {
-                if (themeActivating) return@LaunchedEffect
+                if (themeActivating || wallpaperCount <= 0) return@LaunchedEffect
                 val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
+                if (wantPage !in 0 until pagerPageCount) return@LaunchedEffect
                 if (pagerState.currentPage != wantPage) {
-                    pagerState.scrollToPage(wantPage)
+                    runCatching { pagerState.scrollToPage(wantPage) }
                 }
             }
             LaunchedEffect(targetIdx, sortedNames, uriByFileName, decodeTargetWidthPx, decodeTargetHeightPx, themeActivating) {
@@ -590,10 +595,11 @@ private fun MainScreenWallpaperBackground(
                     }
             }
             val currentMainScreenPageState by rememberUpdatedState(currentMainScreenPage)
-            LaunchedEffect(pagerState, sortedNames, theme, wallpaperCount) {
+            LaunchedEffect(pagerState, sortedNames, theme, wallpaperCount, themeActivating) {
                 snapshotFlow { pagerState.settledPage }
                     .distinctUntilChanged()
                     .collectLatest { page ->
+                        if (themeActivating) return@collectLatest
                         if (wallpaperCount > 1) {
                             when (page) {
                                 0 -> {
@@ -608,6 +614,7 @@ private fun MainScreenWallpaperBackground(
                         }
                         val logical = logicalIndexFromMainScreenWallpaperPagerPage(page, wallpaperCount)
                             ?: return@collectLatest
+                        if (logical !in sortedNames.indices) return@collectLatest
                         val name = sortedNames[logical]
                         displayedFileName = name
                         settingsViewModel.scheduleSaveMainScreenWallpaperSelection(
@@ -646,6 +653,7 @@ private fun MainScreenWallpaperPagerPage(
     wallpaperCrop: Boolean,
     suppressBitmapDraw: Boolean,
 ) {
+    if (wallpaperIndex !in sortedNames.indices) return
     val nameKey = sortedNames[wallpaperIndex]
     val slideBitmap = if (suppressBitmapDraw) null else bitmapCache[nameKey]
     val wallpaperAlpha by animateFloatAsState(
@@ -697,6 +705,10 @@ private suspend fun prefetchMainScreenWallpaperWindow(
             if (!coroutineContext.isActive || isThemeActivating()) return@withLock
             if (bitmapCache.containsKey(name) || loadingState[name] == true) continue
             val uri = uriByFileName[name] ?: continue
+            if (uri.scheme.equals("file", ignoreCase = true)) {
+                val path = uri.path
+                if (path.isNullOrBlank() || !File(path).isFile) continue
+            }
             loadingState[name] = true
             try {
                 val decoded = decodeImageBitmapFromUri(

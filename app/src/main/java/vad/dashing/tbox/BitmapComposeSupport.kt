@@ -7,14 +7,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
 
 /** Copies pixels so Compose does not hold a live reference to a recycled file-backed [Bitmap]. */
-internal fun Bitmap.toOwnedImageBitmap(): ImageBitmap {
+internal fun Bitmap.toOwnedImageBitmap(): ImageBitmap? {
+    if (isRecycled) return null
     val config = config ?: Bitmap.Config.ARGB_8888
-    val owned = copy(config, false)
-    if (owned != null && owned !== this) {
+    val owned = copy(config, false) ?: return null
+    if (owned !== this) {
         recycle()
-        return owned.asImageBitmap()
     }
-    return asImageBitmap()
+    return owned.asImageBitmap()
 }
 
 internal fun decodeFileToOwnedImageBitmap(file: File): ImageBitmap? {

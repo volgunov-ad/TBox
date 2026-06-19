@@ -228,6 +228,12 @@ internal suspend fun decodeImageBitmapFromUri(
     if (isWallpaperFileOverSizeLimit(context, uri)) {
         return@withContext null
     }
+    if (uri.scheme.equals("file", ignoreCase = true)) {
+        val path = uri.path
+        if (path.isNullOrBlank() || !File(path).isFile) {
+            return@withContext null
+        }
+    }
     val srcBounds = runCatching {
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { input ->
