@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
+// import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -68,9 +68,11 @@ fun ThemesTabContent(
     val scrollState = rememberScrollState()
 
     val activeThemeUri by settingsViewModel.activeThemeUri.collectAsStateWithLifecycle()
+    val driveModeThemePaths by settingsViewModel.driveModeThemePaths.collectAsStateWithLifecycle()
+
+    /* Runtime debug panel — uncomment for wallpaper/theme diagnostics
     val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
     val wallpaperRevision by settingsViewModel.mainScreenWallpaperEpoch.collectAsStateWithLifecycle()
-    val driveModeThemePaths by settingsViewModel.driveModeThemePaths.collectAsStateWithLifecycle()
 
     var runtimeJsonDebugText by remember { mutableStateOf("") }
     var runtimeJsonRefreshToken by remember { mutableIntStateOf(0) }
@@ -83,6 +85,7 @@ fun ThemesTabContent(
         if (themeActivating) return@LaunchedEffect
         refreshRuntimeJsonDebugText()
     }
+    */
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
@@ -354,6 +357,7 @@ fun ThemesTabContent(
             modifier = Modifier.padding(bottom = 8.dp),
         )
 
+        /* Runtime debug panel — uncomment for wallpaper/theme diagnostics
         SettingsTitle(stringResource(R.string.themes_runtime_debug_title))
         Text(
             text = stringResource(R.string.themes_runtime_debug_hint),
@@ -382,6 +386,7 @@ fun ThemesTabContent(
                 maxLines = 24,
             )
         }
+        */
 
         SettingsTitle(stringResource(R.string.themes_drive_mode_section))
         Text(
