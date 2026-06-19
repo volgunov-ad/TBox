@@ -508,7 +508,6 @@ fun appFontFamilyLabel(fontFamily: TboxFontFamily): String = stringResource(
         TboxFontFamily.CrimsonText -> R.string.settings_app_font_family_crimson_text
         TboxFontFamily.Cabin -> R.string.settings_app_font_family_cabin
         TboxFontFamily.Nunito -> R.string.settings_app_font_family_nunito
-        TboxFontFamily.Arial -> R.string.settings_app_font_family_arial
     }
 )
 

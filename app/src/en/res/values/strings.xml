@@ -416,7 +416,6 @@
     <string name="settings_app_font_family_crimson_text">Crimson Text</string>
     <string name="settings_app_font_family_cabin">Cabin</string>
     <string name="settings_app_font_family_nunito">Nunito</string>
-    <string name="settings_app_font_family_arial">Arial (system)</string>
     <string name="left_menu_config_dialog_title">Menu items</string>
     <string name="left_menu_config_dialog_hint">Check the items to show and drag the list icon to reorder. Settings and Main screen settings are always enabled.</string>
     <string name="left_menu_config_drag_handle_a11y">Drag menu item</string>

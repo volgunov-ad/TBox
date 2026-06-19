@@ -419,7 +419,6 @@
     <string name="settings_app_font_family_crimson_text">Crimson Text</string>
     <string name="settings_app_font_family_cabin">Cabin</string>
     <string name="settings_app_font_family_nunito">Nunito</string>
-    <string name="settings_app_font_family_arial">Arial (системный)</string>
     <string name="left_menu_config_dialog_title">Пункты меню</string>
     <string name="left_menu_config_dialog_hint">Отметьте нужные пункты и перетащите за значок списка, чтобы изменить порядок. «Настройки» и «Настройки главного экрана» всегда включены.</string>
     <string name="left_menu_config_drag_handle_a11y">Перетащить пункт меню</string>

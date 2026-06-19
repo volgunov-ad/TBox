@@ -4,7 +4,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import vad.dashing.tbox.R
 
-/** App font presets: system families and bundled Google Fonts (plus Arial via system sans-serif). */
+/** App font presets: system families and bundled Google Fonts. */
 enum class TboxFontFamily(val id: Int, val slug: String) {
     Default(0, "default"),
     SansSerif(1, "sans_serif"),
@@ -16,7 +16,6 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
     CrimsonText(7, "crimson_text"),
     Cabin(8, "cabin"),
     Nunito(9, "nunito"),
-    Arial(10, "arial"),
     ;
 
     fun toComposeFontFamily(): FontFamily = when (this) {
@@ -30,7 +29,6 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
         CrimsonText -> Bundled.crimsonText
         Cabin -> Bundled.cabin
         Nunito -> Bundled.nunito
-        Arial -> FontFamily.SansSerif
     }
 
     companion object {

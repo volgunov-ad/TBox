@@ -52,7 +52,8 @@ class TboxFontFamilyTest {
     }
 
     @Test
-    fun arialUsesSystemSansSerif() {
-        assertEquals(FontFamily.SansSerif, TboxFontFamily.Arial.toComposeFontFamily())
+    fun legacyArialSlugIsIgnored() {
+        assertNull(TboxFontFamily.fromSlug("arial"))
+        assertEquals(TboxFontFamily.Default, TboxFontFamily.fromId(10))
     }
 }
