@@ -363,7 +363,12 @@ fun MainScreenSettingsTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
-                label = { Text(stringResource(R.string.settings_main_screen_wallpaper_path_label)) },
+                label = {
+                    Text(
+                        stringResource(R.string.settings_main_screen_wallpaper_path_label),
+                        style = MaterialTheme.typography.tboxCaption,
+                    )
+                },
                 singleLine = true,
             )
             OutlinedButton(
@@ -432,7 +437,12 @@ fun MainScreenSettingsTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
-                label = { Text(stringResource(R.string.settings_main_screen_wallpaper_path_label)) },
+                label = {
+                    Text(
+                        stringResource(R.string.settings_main_screen_wallpaper_path_label),
+                        style = MaterialTheme.typography.tboxCaption,
+                    )
+                },
                 singleLine = true,
             )
             OutlinedButton(

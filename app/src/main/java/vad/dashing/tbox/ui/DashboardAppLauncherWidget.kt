@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -125,8 +124,10 @@ internal fun DashboardAppLauncherWidgetItem(
                 )
                 Text(
                     text = titleLine,
-                    fontSize = titleFontSize,
-                    fontWeight = FontWeight.Medium,
+                    style = TboxTextStyles.Title.copy(
+                        fontSize = titleFontSize,
+                        lineHeight = titleFontSize * 1.3f,
+                    ),
                     color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,

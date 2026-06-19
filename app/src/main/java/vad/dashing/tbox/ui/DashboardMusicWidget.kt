@@ -52,6 +52,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.LauncherAppIconPaths
@@ -403,13 +404,17 @@ fun DashboardMusicWidgetItem(
                         .padding(horizontal = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
+                    val line3Font = calculateResponsiveFontSize(
+                        containerHeight = availableHeight,
+                        textType = TextType.TITLE,
+                    )
                     Text(
                         text = line3Text,
                         color = resolvedTextColor,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = calculateResponsiveFontSize(
-                            containerHeight = availableHeight,
-                            textType = TextType.TITLE
+                        style = TboxTextStyles.Title.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = line3Font,
+                            lineHeight = line3Font * 1.3f,
                         ),
                         maxLines = if (mediaState.notificationAccessGranted) 2 else 1,
                         overflow = TextOverflow.Ellipsis,

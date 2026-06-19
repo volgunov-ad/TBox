@@ -1024,8 +1024,9 @@ fun FloatingPanelsSettingsTabContent(
         Text(
             text = stringResource(R.string.settings_floating_usage_stats_hide_explanation),
             modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-            style = MaterialTheme.typography.tboxBody,
-            lineHeight = 20.sp * 1.35f,
+            style = MaterialTheme.typography.tboxBody.copy(
+                lineHeight = MaterialTheme.typography.tboxBody.fontSize * 1.35f,
+            ),
             color = MaterialTheme.colorScheme.onSurface,
         )
         OutlinedButton(

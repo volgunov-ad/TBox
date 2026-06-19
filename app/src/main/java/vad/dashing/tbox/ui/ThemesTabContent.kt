@@ -215,8 +215,7 @@ fun ThemesTabContent(
     ) {
         Text(
             text = stringResource(R.string.themes_tab_title),
-            style = MaterialTheme.typography.tboxHeadline,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.tboxHeadline.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 16.dp),
         )
@@ -394,11 +393,15 @@ fun ThemesTabContent(
                         textStyle = MaterialTheme.typography.tboxBody,
                         onValueChange = { themeExportBaseName = it },
                         label = {
-                            Text(stringResource(R.string.themes_create_file_name_label))
+                            Text(
+                                stringResource(R.string.themes_create_file_name_label),
+                                style = MaterialTheme.typography.tboxCaption,
+                            )
                         },
                         supportingText = {
                             Text(
                                 stringResource(R.string.themes_create_file_name_hint),
+                                style = MaterialTheme.typography.tboxCaption,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         },

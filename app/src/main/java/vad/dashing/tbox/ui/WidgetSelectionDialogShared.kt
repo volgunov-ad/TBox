@@ -1058,8 +1058,7 @@ internal fun WidgetSelectionDialogActions(
         ) {
             Text(
                 text = stringResource(R.string.action_save),
-                style = TboxTextStyles.Button,
-                fontWeight = saveTextFontWeight
+                style = TboxTextStyles.Button.copy(fontWeight = saveTextFontWeight),
             )
         }
     }

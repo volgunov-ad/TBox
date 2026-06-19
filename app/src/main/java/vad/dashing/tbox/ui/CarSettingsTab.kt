@@ -106,8 +106,7 @@ fun CarSettingsTab(
     ) {
         Text(
             text = stringResource(R.string.car_settings_screen_title),
-            style = MaterialTheme.typography.tboxHeadline,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.tboxHeadline.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 16.dp)
         )

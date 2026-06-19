@@ -345,8 +345,7 @@ fun RefuelsTab(
                 }
                 Text(
                     text = stringResource(R.string.refuels_calibration_report_title),
-                    style = MaterialTheme.typography.tboxBody,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.tboxBody.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -843,9 +842,7 @@ private fun RefuelHeaderCell(text: String, widthDp: Int) {
         modifier = Modifier
             .width(widthDp.dp)
             .padding(end = 8.dp),
-        style = MaterialTheme.typography.tboxTitle,
-        lineHeight = 24.sp * 1.3f,
-        fontWeight = FontWeight.SemiBold,
+        style = MaterialTheme.typography.tboxTitle.copy(fontWeight = FontWeight.SemiBold),
         textAlign = TextAlign.Center,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
@@ -884,7 +881,6 @@ private fun RefuelCell(text: String, widthDp: Int, modifier: Modifier = Modifier
             .padding(end = 8.dp)
             .then(modifier),
         style = MaterialTheme.typography.tboxTitle,
-        lineHeight = 24.sp * 1.3f,
         maxLines = 2,
         textAlign = TextAlign.Center,
         overflow = TextOverflow.Ellipsis,

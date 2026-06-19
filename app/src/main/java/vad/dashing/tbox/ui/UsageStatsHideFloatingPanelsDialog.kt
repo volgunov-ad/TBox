@@ -113,7 +113,6 @@ fun UsageStatsHideFloatingPanelsDialog(
                         text = stringResource(R.string.settings_floating_usage_stats_hide_permission_hint),
                         modifier = Modifier.padding(top = 8.dp),
                         style = MaterialTheme.typography.tboxButton,
-                        lineHeight = 22.sp * 1.3f,
                         color = MaterialTheme.colorScheme.error,
                     )
                     OutlinedButton(
@@ -133,8 +132,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                 }
                 Text(
                     text = stringResource(R.string.settings_floating_usage_stats_hide_section_title),
-                    style = MaterialTheme.typography.tboxButton,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.tboxButton.copy(fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.padding(top = 12.dp),
                 )
                 AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_hide_section_body))
@@ -188,8 +186,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                 Text(
                     text = stringResource(R.string.settings_floating_usage_stats_show_section_title),
-                    style = MaterialTheme.typography.tboxButton,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.tboxButton.copy(fontWeight = FontWeight.SemiBold),
                 )
                 AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_show_section_body))
                 OutlinedTextField(
@@ -292,8 +289,7 @@ private fun UsageStatsAppsColumn(
     ) {
         Text(
             text = columnAppsLabel,
-            style = MaterialTheme.typography.tboxButton,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.tboxButton.copy(fontWeight = FontWeight.SemiBold),
             modifier = Modifier.padding(bottom = 6.dp),
         )
         apps.forEach { app ->
@@ -336,8 +332,7 @@ private fun UsageStatsPanelsColumn(
     ) {
         Text(
             text = columnPanelsLabel,
-            style = MaterialTheme.typography.tboxButton,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.tboxButton.copy(fontWeight = FontWeight.SemiBold),
             modifier = Modifier.padding(bottom = 6.dp),
         )
         if (panels.isEmpty()) {

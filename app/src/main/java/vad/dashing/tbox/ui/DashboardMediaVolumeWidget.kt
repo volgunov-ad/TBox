@@ -44,6 +44,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 private const val MEDIA_VOLUME_SWIPE_STEP_PX = 58f
@@ -375,14 +376,18 @@ private fun MediaVolumeCenterButton(
                         .fillMaxHeight(0.48f)
                         .aspectRatio(1f)
                 )
+                val volumeFont = calculateResponsiveFontSize(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE,
+                )
                 Text(
                     text = currentVolume.toString(),
                     color = textColor,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    )
+                    style = TboxTextStyles.Title.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = volumeFont,
+                        lineHeight = volumeFont * 1.3f,
+                    ),
                 )
             }
         },
