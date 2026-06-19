@@ -434,32 +434,27 @@ private fun MainScreenWallpaperBackground(
     LaunchedEffect(sortedNames.size) {
         onWallpaperCountChanged(sortedNames.size)
     }
-    LaunchedEffect(currentMainScreenPage, wallpaperSelections, forLightTheme, sortedNames, folderUriStr) {
-        val saved = wallpaperSelections.fileNameFor(currentMainScreenPage, forLightTheme)
-        if (saved != null) {
-            val effective = effectiveWallpaperFileName(sortedNames, saved)
-            if (effective != null) {
-                displayedFileName = effective
+    val savedForPage = wallpaperSelections.fileNameFor(currentMainScreenPage, forLightTheme)
+    val effectiveName = remember(sortedNames, displayedFileName, savedForPage) {
+        if (sortedNames.isEmpty()) {
+            null
+        } else {
+            when {
+                savedForPage != null -> effectiveWallpaperFileName(sortedNames, savedForPage)
+                displayedFileName != null -> effectiveWallpaperFileName(sortedNames, displayedFileName!!)
+                else -> effectiveWallpaperFileName(sortedNames, "")
             }
-        } else if (displayedFileName == null && sortedNames.isNotEmpty()) {
-            displayedFileName = effectiveWallpaperFileName(sortedNames, "")
         }
     }
-    val effectiveName = remember(sortedNames, displayedFileName) {
-        displayedFileName?.let { effectiveWallpaperFileName(sortedNames, it) }
-            ?: effectiveWallpaperFileName(sortedNames, "")
-    }
-    LaunchedEffect(effectiveName, wallpaperSelections, sortedNames, currentMainScreenPage, forLightTheme) {
-        if (!wallpaperSelections.hasSelectionFor(currentMainScreenPage, forLightTheme)) return@LaunchedEffect
-        val saved = wallpaperSelections.fileNameFor(currentMainScreenPage, forLightTheme) ?: return@LaunchedEffect
+    LaunchedEffect(effectiveName, savedForPage, sortedNames, currentMainScreenPage, forLightTheme) {
+        if (savedForPage == null) return@LaunchedEffect
         val want = effectiveName ?: return@LaunchedEffect
-        if (want != saved) {
+        if (want != savedForPage) {
             settingsViewModel.scheduleSaveMainScreenWallpaperSelection(
                 forLightTheme = forLightTheme,
                 fileName = want,
                 page = currentMainScreenPage,
             )
-            displayedFileName = want
         }
     }
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
@@ -523,7 +518,7 @@ private fun MainScreenWallpaperBackground(
                     wallpaperLoading.clear()
                 }
             }
-            LaunchedEffect(folderUriStr, wallpaperNamesKey, theme) {
+            LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey) {
                 val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
                 if (pagerState.currentPage != wantPage) {
                     pagerState.scrollToPage(wantPage)
