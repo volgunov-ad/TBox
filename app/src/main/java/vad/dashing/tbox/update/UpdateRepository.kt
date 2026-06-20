@@ -103,6 +103,7 @@ class UpdateRepository(
             val publicKey = publicKeyForChannel(channel)
             val destination = apkDestinationFile(info)
             withContext(Dispatchers.IO) {
+                clearCachedApk()
                 yandexDiskClient.downloadToFile(
                     publicKey = publicKey,
                     path = "/${info.apkFileName}",
@@ -140,7 +141,6 @@ class UpdateRepository(
             else -> preparedApkFile
         } ?: return
         ApkInstaller.install(context, apkFile)
-        resetUpdateCacheAndState()
     }
 
     fun resetAfterChannelChange() {
