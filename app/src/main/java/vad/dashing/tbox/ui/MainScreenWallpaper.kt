@@ -354,7 +354,7 @@ private fun MainScreenWallpaperFolderContent(
                             )
                         }
                 }
-                LaunchedEffect(pagerState, sortedNames, theme, wallpaperCount, themeActivating) {
+                LaunchedEffect(pagerState, sortedNames, wallpaperCount, themeActivating) {
                     snapshotFlow { pagerState.settledPage }
                         .distinctUntilChanged()
                         .collectLatest { page ->
