@@ -369,3 +369,9 @@ Polling остаётся fallback-механизмом: даже при push-с�
 Если 1-2 есть, но пункт 4 не выполняется:
 
 - проблема в правах на property или в маппинге id.
+
+---
+
+## 10) План рефакторинга (CanBackend, Gradle-модули)
+
+Поэтапный план перехода к интерфейсу `CanBackend`, реестру backend'ов и опциональному разнесению по Gradle-модулям: [CAN_BACKEND_REFACTOR_PLAN.md](CAN_BACKEND_REFACTOR_PLAN.md).

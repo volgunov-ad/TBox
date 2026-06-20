@@ -11,7 +11,7 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v0.16.0). T
 | **Trips** | `trip/` (`TripRepository`, `TripRules`, `TripFuelAccounting`), `BackgroundService`, `UiTripsTab` | [docs/Trips.md](docs/Trips.md) |
 | **Refuels & fuel calibration** | `fuel/`, `fuellevelcalibration/`, `utils/CanFramesProcess.kt` | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) |
 | **Themes** (`.tboxtheme`) | `Theme*.kt`, `DriveModeThemeWatcher`, `ui/ThemesTabContent.kt` | [docs/Themes.md](docs/Themes.md) |
-| **CAN backends** | `mbcan/UniversalCanRepository.kt`, `HeadUnitCanMode.kt` | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) |
+| **CAN backends** | `mbcan/UniversalCanRepository.kt`, `HeadUnitCanMode.kt` | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md), [docs/CAN_BACKEND_REFACTOR_PLAN.md](docs/CAN_BACKEND_REFACTOR_PLAN.md) |
 | **TBox / network** | `TboxRepository`, `BackgroundService`, `TboxProtocol` | [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) |
 | **Dashboard / widgets** | `ui/Dashboard*.kt`, `WidgetConfigCodec.kt` | [README.md](README.md) |
 
