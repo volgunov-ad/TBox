@@ -1,6 +1,8 @@
 # Темы: как это работает
 
-Документ описывает вкладку **«Темы»** в левом меню, формат файла `.tboxtheme`, материализованный кэш на диске и автоматическое переключение тем по **режиму вождения**.
+Документ описывает вкладку **«Темы»** в левом меню, формат файла `.tboxtheme`, материализованный кэш на диске, **runtime-состояние** (`runtime.json`), глобальные настройки в DataStore и автоматическое переключение тем по **режиму вождения**.
+
+Для разработчиков в конце — цепочки вызовов, классы и известные ограничения.
 
 ---
 
@@ -16,6 +18,67 @@
 
 ---
 
+## Два независимых слоя «темы»
+
+В приложении не смешивать два разных понятия:
+
+| Слой | Что переключается | Откуда сигнал | Где хранится |
+|------|-------------------|---------------|--------------|
+| **Светлая/тёмная тема ГУ** | Палитра Material, какая папка обоев light/dark, цвета кнопок на главном экране | `ThemeObserver` в `BackgroundService` → `TboxRepository.currentTheme` (1 = light, 2 = dark) | Только в памяти (не в `.tboxtheme`) |
+| **TBox theme bundle** (`.tboxtheme`) | Панели, плитки, обои, иконки, число страниц, позиции кнопок | Ручное применение, intent, `DriveModeThemeWatcher` по CAN | DataStore + `files/themes/{cacheKey}/` |
+
+Переключение ECO/NOR/SPT — это **второй** слой. Переключение день/ночь на головном устройстве — **первый**; оно влияет на то, из какой подпапки `wallpaper/light` или `wallpaper/dark` читаются обои и какие цвета берутся из настроек темы.
+
+---
+
+## Архитектура хранения состояния
+
+У каждой материализованной темы три уровня данных:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  DataStore (глобально, одно на всё приложение)                  │
+│  • active_theme_uri          → cacheKey активной темы           │
+│  • main_screen_wallpaper_*   → URI папок обоев light/dark       │
+│  • main_screen_wallpaper_selection_by_page                      │
+│  • main_screen_current_page, main_screen_page_count, panels…    │
+│  • drive_mode_theme_paths    → { rawValue → URI .tboxtheme }    │
+└─────────────────────────────────────────────────────────────────┘
+         ▲ записывается при активации и при правках UI
+         │ читается главным экраном напрямую
+         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  files/themes/{cacheKey}/  (per-theme кэш на диске)            │
+│  • manifest.json     — метаданные materialize                     │
+│  • theme.json        — снимок при экспорте / первой распаковке   │
+│  • runtime.json      — живое состояние темы (обои, страница)    │
+│  • wallpaper/light|dark/, icons/, tile_backgrounds/             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### `theme.json` vs `runtime.json`
+
+| Файл | Когда создаётся | Когда меняется | Роль при активации |
+|------|-----------------|----------------|-------------------|
+| **`theme.json`** | Materialize (распаковка ZIP) | Повторный apply/sync того же ключа | Импорт панелей, цветов, pageCount; дефолтные обои, если нет runtime |
+| **`runtime.json`** | Первый materialize (`seedFromThemeJsonIfMissing`) или первая запись UI | Свайп обоев, смена страницы, snapshot при смене темы | **Приоритет** над `theme.json` для обоев и `currentPage` |
+
+**Важно:** существующий `runtime.json` при повторной materialize **не перезаписывается** целиком — только точечно через `ThemeRuntimeState.patch` (merge).
+
+Схема `runtime.json`:
+
+```json
+{
+  "wallpaperSelectionByPage": {
+    "light": { "1": "wallpaper_a.jpg" },
+    "dark":  { "1": "wallpaper_b.jpg" }
+  },
+  "currentPage": 1
+}
+```
+
+---
+
 ## Где в интерфейсе
 
 Вкладка **«Темы»** (`themes`) в левом меню — по умолчанию включена. Расположена после **«Настройки плавающих панелей»** и перед **«Настройки главного экрана»**.
@@ -27,27 +90,25 @@
 | **Создать тему** | Экспорт выбранных разделов в файл `.tboxtheme` |
 | **Текущая тема** | Имя активной темы (из кэша) |
 | **Применить тему** | Выбор файла `.tboxtheme` → материализация и активация |
-| **Открыть из файлового менеджера** | Файл `.tboxtheme` можно открыть через «Открыть с помощью» → TBox Monitor; появится диалог «Применить новую тему …?» (да / нет) |
-| **Очистить папку тем** | Удаление кэшей, кроме текущей активной темы; сброс назначений по режимам вождения |
+| **Открыть из файлового менеджера** | Файл `.tboxtheme` через «Открыть с помощью» → диалог подтверждения |
+| **Очистить папку тем** | Удаление кэшей, кроме текущей активной темы; сброс назначений по режимам |
 | **Темы по режиму вождения** | Назначение файла темы на каждый режим |
 
 ---
 
 ## Файл `.tboxtheme`
 
-Расширение: **`tboxtheme`**. По сути это ZIP-архив со структурой:
+Расширение: **`tboxtheme`**. По сути это ZIP-архив:
 
 ```
 theme.json
-assets/wallpaper/light/     ← изображения обоев (светлая тема)
-assets/wallpaper/dark/      ← изображения обоев (тёмная тема)
-assets/icons/               ← PNG-иконки для виджетов «Ярлык приложения»
-assets/tile_backgrounds/    ← фоновые картинки плиток
+assets/wallpaper/light/
+assets/wallpaper/dark/
+assets/icons/
+assets/tile_backgrounds/
 ```
 
 ### `theme.json`
-
-Корневой JSON с полями:
 
 | Поле | Значение |
 |------|----------|
@@ -56,104 +117,229 @@ assets/tile_backgrounds/    ← фоновые картинки плиток
 | `exportedAtMillis` | время экспорта |
 | `sections` | массив включённых разделов |
 | `mainScreen` | настройки главного экрана (если раздел включён) |
-| `floatingPanels` | настройки плавающих панелей (если раздел включён) |
-| `appIcons` | список пакетов приложений с кастомными иконками (если раздел включён) |
+| `floatingPanels` | плавающие панели |
+| `appIcons` | пакеты с кастомными иконками |
+
+В `mainScreen` могут быть `wallpaperSelectionByPage` и `currentPage` — они попадают в `runtime.json` при первой materialize (seed), если файла runtime ещё нет.
 
 ### Разделы темы (`sections`)
 
-При **создании** темы можно включить один или несколько разделов:
+#### 1. `mainScreen`
 
-#### 1. Настройки главного экрана (`mainScreen`)
+Страницы, визуальная тема (фон холста, угловые кнопки, обрезка обоев), позиции кнопок, **все панели главного экрана** с плитками, выбранные файлы обоев.
 
-Включает:
+#### 2. `floatingPanels`
 
-- число **страниц** панели;
-- **визуальную тему**: фон холста, угловые кнопки (размер, цвета), обрезка обоев, пресеты цветов плиток;
-- позиции кнопок **настроек**, **добавления панели**, **листания страниц**;
-- выбранные файлы обоев (светлая/тёмная тема);
-- **все панели главного экрана**: сетка, позиция, размер, фон, действие по клику, индикатор TBox, номер страницы, **конфигурация всех плиток** (включая расширенные параметры: цвета, фоны плиток, настройки виджета поездки и т.д.).
+Все плавающие панели: сетка, размер, позиция, плитки.
 
-Если задана папка обоев (в т.ч. через SAF `content://`), при экспорте в архив копируются **все изображения** из этой папки. В JSON записывается `wallpaperLightFolderBundledPath` / `wallpaperDarkFolderBundledPath`.
+#### 3. `appIcons`
 
-#### 2. Настройки плавающих панелей (`floatingPanels`)
+PNG для виджетов «Ярлык приложения». В кэше: `files/themes/{cacheKey}/icons/{packageName}`.
 
-Включает **все плавающие панели**: сетка, размер, позиция на экране, фон, индикатор TBox, конфигурация плиток.
+### Иконки и фоны плиток (два уровня путей)
 
-#### 3. Иконки приложений (`appIcons`)
+**Иконки** — приоритет: кэш активной темы → `files/launcher_app_icons/` → системная.
 
-Включает PNG-файлы из `files/launcher_app_icons/` для пакетов, которые используются виджетами **«Ярлык приложения»** на главном экране и/или в плавающих панелях (в зависимости от того, какие разделы выбраны при экспорте).
+**Фоны плиток** — приоритет: `files/themes/{cacheKey}/tile_backgrounds/` → `files/tile_backgrounds/` → только цвет.
 
-На диске иконка в **общей папке** хранится как `launcher_app_icons/{packageName}` **без расширения**. В архиве и в кэше темы — `assets/icons/{packageName}` / `files/themes/{cacheKey}/icons/{packageName}`.
-
-Если экспортируются **только** иконки (без панелей), в архив попадают иконки из **общей папки** и из **кэша активной темы** (если раздел `appIcons` в ней включён).
-
-### Два источника иконок (подмена пути, без копирования)
-
-| Папка | Назначение |
-|-------|------------|
-| `files/launcher_app_icons/` | **Общая папка** — ручные замены пользователя (используются, если в активной теме нет иконки для пакета). |
-| `files/themes/{cacheKey}/icons/` | Иконки **внутри материализованной темы** — **приоритет** при отображении, если активная тема включает раздел `appIcons`. |
-
-**Порядок поиска** при отображении (виджет «Ярлык приложения», музыкальный плеер, списки в диалогах):
-
-1. `files/themes/{активная_тема}/icons/{packageName}` — если в активной теме есть раздел `appIcons`;
-2. `launcher_app_icons/{packageName}` — ручная иконка;
-3. системная иконка приложения.
-
-При **активации темы** иконки в общую папку **не копируются**. Если для пакета есть и иконка в теме, и ручная в общей папке, **показывается иконка из темы**. Ручная в общей папке видна только когда в активной теме для этого пакета файла нет (или раздел `appIcons` не включён).
-
-**Сохранение иконки пользователем** (в диалоге плитки) всегда пишет в **общую папку** `launcher_app_icons/`, не в кэш темы.
-
-### Фоны плиток (подмена пути, без копирования)
-
-В конфиге плитки хранится относительный путь, например `tile_backgrounds/my_panel/0_light`.
-
-| Папка | Назначение |
-|-------|------------|
-| `files/tile_backgrounds/` | **Общая папка** — ручные фоны из диалога плитки (если в активной теме нет файла по этому пути). |
-| `files/themes/{cacheKey}/tile_backgrounds/` | Фоны **внутри материализованной темы** — **приоритет**, если активная тема включает `mainScreen` и/или `floatingPanels`. |
-
-**Порядок поиска** при отрисовке плитки:
-
-1. `files/themes/{активная_тема}/tile_backgrounds/…` — из кэша темы;
-2. `files/tile_backgrounds/…` — ручной override;
-3. только цвет фона плитки (без картинки).
-
-При активации темы файлы в общую папку **не копируются**. Ручная установка фона в диалоге плитки пишет только в `files/tile_backgrounds/`.
+При активации темы файлы **не копируются** в общие папки — виджеты читают пути из кэша активной темы.
 
 ---
 
-## Создание темы
+## Materialize и Activate — два этапа
 
-1. Откройте **«Темы»** → **«Создать тему»**.
-2. Отметьте нужные разделы (хотя бы один).
-3. Укажите **имя файла** (без расширения `.tboxtheme`).
-4. Подтвердите → файл сохраняется в папку **«Загрузки»** (`имя.tboxtheme`). Если файл с таким именем уже есть, приложение предложит **заменить** его.
+| Этап | Скорость | Что делает |
+|------|----------|------------|
+| **Materialize** | Медленно (IO, ZIP) | Распаковка в `files/themes/{cacheKey}/`, запись `theme.json`, `manifest.json`, assets; seed `runtime.json` если его ещё нет |
+| **Activate** | Быстро | Импорт `theme.json` в DataStore, `applyActivationOverrides` из `runtime.json`, URI папок обоев, bump ревизий UI |
 
-**Совет:** для полного переноса оформления обычно включают **главный экран** и **плавающие панели**; **иконки** — по необходимости.
+### Когда происходит materialize (распаковка ZIP)
+
+| Триггер | Materialize | Activate |
+|---------|-------------|----------|
+| **«Выбрать файл»** для режима вождения (`assignDriveModeTheme`) | **Да** (при первом назначении; при повторном — sync) | Нет |
+| **«Применить тему»** вручную (`ThemeApply.applyFromUri`) | **Да** (sync, если кэш уже есть) | Да |
+| **Drive-mode watcher** при смене CAN | **Нет** | Да, только если кэш уже materialized |
+| **Холодный старт приложения** | **Нет** | Только если watcher сработал по CAN |
+
+**Контракт:** ZIP распаковывается при **выборе/применении файла**. При последующих запусках и при переключении режима на машине используется **готовый кэш**. Если папки `files/themes/drive_mode_*` нет (удалили вручную, импортировали backup без кэша), watcher **не** распаковывает архив сам — нужно снова **«Выбрать файл»** для режима на вкладке «Темы».
+
+Повторное ручное применение того же `.tboxtheme` — это **sync-materialize**: `theme.json` и `manifest.json` обновляются; файлы с тем же именем в assets не перезаписываются; лишние в кэше удаляются.
 
 ---
 
-## Применение темы
+## Цепочка активации темы
 
-1. **«Темы»** → **«Применить тему»** → выберите `.tboxtheme`.
-2. Приложение запрашивает постоянное разрешение на чтение файла (SAF).
-3. Выполняются два этапа:
-   - **Материализация** (медленно): распаковка архива в кэш на диске;
-   - **Активация** (быстро): импорт `theme.json`, установка URI обоев; иконки и фоны плиток **не копируются** — виджеты читают их из кэша активной темы (см. ниже).
+Все пути активации проходят через `ThemeActivationCoordinator.runWithThemeActivation` (process-wide mutex и флаг).
 
-После успешного применения в блоке **«Текущая тема»** отображается имя файла-источника (из манифеста кэша).
+```mermaid
+sequenceDiagram
+    participant UI as MainScreen / Themes tab
+    participant VM as SettingsViewModel
+    participant Coord as ThemeActivationCoordinator
+    participant SM as SettingsManager
+    participant TM as ThemeMaterialization
+    participant DS as DataStore
+    participant RT as runtime.json
+
+    Note over UI,RT: Перед сменой темы
+    Coord->>VM: preThemeActivationFlush
+    VM->>VM: flush pending wallpaper/page
+    VM->>RT: snapshot outgoing theme cache
+
+    Note over Coord,RT: Активация
+    Coord->>Coord: themeActivationInProgress = true
+    TM->>DS: saveActiveTheme(cacheKey)
+    TM->>DS: importJson(theme.json)
+    TM->>RT: applyActivationOverrides
+  Note right of RT: обои из runtime.json,<br/>иначе theme.json,<br/>иначе пусто
+    TM->>DS: wallpaper folder URIs
+    Coord->>Coord: themeActivationInProgress = false
+```
+
+### Порядок в `activateFromCacheLocked`
+
+1. `seedFromThemeJsonIfMissing` — создать `runtime.json` из `theme.json`, если файла нет.
+2. `saveActiveTheme` — записать `active_theme_uri` (cache key) в DataStore.
+3. `ThemeLayoutExport.importJson` — панели, pageCount, цвета, кнопки; `currentPage` из `theme.json`.
+4. **`ThemeRuntimeState.applyActivationOverrides`** — **всегда** перезаписать `main_screen_wallpaper_selection_by_page` в DataStore:
+   - из `runtime.json`, если есть секция обоев;
+   - иначе из `theme.json` `mainScreen.wallpaperSelectionByPage`;
+   - иначе **пусто** (старые обои предыдущей темы в DataStore **не** сохраняются).
+5. При наличии `currentPage` в `runtime.json` — переопределить страницу в DataStore.
+6. `applyWallpaperDirsFromCache` — `file://…/wallpaper/light|dark`.
+7. Bump ревизий обоев, иконок, фонов плиток.
+
+### `ThemeActivationCoordinator`
+
+Синглтон на весь процесс (важно: `SettingsManager` создаётся отдельно в `MainActivity` и `BackgroundService`, но координатор **общий**):
+
+| Поле / метод | Назначение |
+|--------------|------------|
+| `themeActivationInProgressFlow` | UI не рисует file-backed обои/иконки/фоны во время смены темы |
+| `preThemeActivationFlush` | Регистрируется в `SettingsViewModel.init`; сбрасывает pending-правки в outgoing `runtime.json` |
+| `mainScreenWallpaperRevisionFlow` | Epoch для перезагрузки списка обоев (общий для UI и сервиса) |
+| `markMainScreenUiReady` / `awaitMainScreenUiReady` | Watcher ждёт готовности UI перед первой активацией |
+
+Пока `themeActivationInProgress == true`:
+
+- `MainScreen` не рисует обои, очищает bitmap cache;
+- виджеты: `suppressCustomIcon` / не рисуют фоны плиток;
+- `scheduleSaveMainScreenWallpaperSelection` не принимает новые правки.
 
 ---
 
-## Кэш тем на диске (материализация)
+## Обои на главном экране: UI → DataStore → runtime.json
 
-Чтобы не распаковывать ZIP при каждом переключении (особенно по режиму вождения), приложение хранит **материализованную** копию каждой темы:
+### Отображение
+
+```
+effectiveSelection = combine(
+  DataStore.main_screen_wallpaper_selection_by_page,
+  pendingWallpaperPatches   // оптимистичный overlay в ViewModel
+)
+```
+
+Свайп обоев сразу меняет UI через pending; запись на диск — с debounce **500 ms**.
+
+### Сохранение
+
+1. `scheduleSaveMainScreenWallpaperSelection` — добавить patch, запустить debounce.
+2. `flushMainScreenWallpaperSelectionInternal`:
+   - собрать merged из DataStore + patches;
+   - записать в DataStore;
+   - `syncActiveThemeWallpaperSelectionReliable` → `runtime.json` (с одной повторной попыткой);
+   - дождаться подтверждения из DataStore flow;
+   - только then очистить pending (иначе мигание после свайпа).
+
+### Когда вызывается flush
+
+| Событие | Flush обоев и страницы |
+|---------|------------------------|
+| Debounce 500 ms после свайпа | Да |
+| `Lifecycle.Event.ON_STOP` Activity (уход в фон) | Да |
+| **`DisposableEffect.onDispose`** при уходе с вкладки главного экрана | Да |
+| `preThemeActivationFlush` перед сменой темы | Да |
+| Переход на вкладку консоли **без** dispose (не применимо — MainScreen снимается с дерева) | Через `onDispose` |
+
+При уходе в консоль/настройки **внутри приложения** срабатывает `onDispose` у `MainScreen`, а не только `ON_STOP` Activity — это гарантирует запись даже если debounce не успел.
+
+### Синхронизация в кэш при смене темы
+
+Перед активацией **новой** темы `preThemeActivationFlush`:
+
+1. Отменяет debounce-задачи.
+2. Flush pending → DataStore + `runtime.json` **исходящей** темы.
+3. `snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)` — явный ключ уходящей темы (не путать с уже записанным `active_theme_uri`).
+
+---
+
+## Холодный старт приложения
+
+```mermaid
+sequenceDiagram
+    participant Boot as Boot / MainActivity
+    participant BS as BackgroundService
+    participant Watcher as DriveModeThemeWatcher
+    participant Val as ThemeSettingsValidator
+    participant UI as MainScreen
+
+    BS->>Watcher: start() сразу в onCreate
+    BS->>Val: validateOnStartup (async)
+    Boot->>UI: setContent, SettingsViewModel.init
+    UI->>UI: markMainScreenUiReady
+    Note over UI: UI рисует из DataStore прошлой сессии
+    Watcher->>Watcher: awaitMainScreenUiReady
+    Watcher->>Watcher: debounce CAN 2s
+    alt кэш materialized
+        Watcher->>Watcher: activateFromCache only
+    else кэш отсутствует
+        Watcher->>Watcher: пропуск (нужно заново выбрать файл)
+    end
+```
+
+**На старте нет автоматической реактивации** сохранённой темы «для красоты» — главный экран показывает то, что уже в DataStore. Полная цепочка activate запускается при смене режима CAN (после UI ready) или при ручном применении.
+
+`ThemeSettingsValidator` при старте (из сервиса и из `TboxApp`):
+
+- сбрасывает `active_theme_uri`, если cache key есть, а папки кэша нет;
+- удаляет недоступные URI из `drive_mode_theme_paths`;
+- нормализует pageCount / currentPage / панели.
+
+---
+
+## Темы по режиму вождения
+
+Для каждого режима (ECO, NOR, SPT, …) можно назначить отдельный `.tboxtheme`.
+
+### Назначение файла
+
+1. **«Темы»** → режим → **«Выбрать файл»**.
+2. URI сохраняется в `drive_mode_theme_paths`.
+3. **`materializeDriveModeThemeFromUri`** — распаковка в `drive_mode_{rawValue}_{slug}` (единственный штатный момент создания кэша для режима).
+
+### Автопереключение (`DriveModeThemeWatcher`)
+
+- CAN: `VEHICLE_DRIVEMODE`, fallback `VEHICLE_DRIVEMODE_6DCT_WET`.
+- **Debounce 2 с** — тема применяется после стабилизации режима.
+- Dedup: тот же `cacheKey` + `modeRawValue` не активируется повторно.
+- Ждёт `awaitMainScreenUiReady()` перед активацией.
+- **Только `activateFromCache`** — без распаковки ZIP.
+- Активации сериализуются; UI видит `themeActivationInProgress` через координатор.
+
+### Удаление назначения
+
+**«Удалить»** у режима убирает URI; папка кэша остаётся до **«Очистить папку тем»**.
+
+---
+
+## Кэш на диске
 
 ```
 files/themes/{cacheKey}/
   manifest.json
   theme.json
+  runtime.json          ← per-theme живое состояние (может отсутствовать до первого seed)
   wallpaper/light/
   wallpaper/dark/
   icons/
@@ -162,162 +348,66 @@ files/themes/{cacheKey}/
 
 ### Ключ кэша (`cacheKey`)
 
-| Источник | Как формируется ключ | Пример |
-|----------|----------------------|--------|
-| Ручное применение | Имя файла без `.tboxtheme`, с санитизацией; при коллизии — суффикс `_2`, `_3`… | `MyTheme`, `MyTheme_2` |
+| Источник | Формат | Пример |
+|----------|--------|--------|
+| Ручное применение | имя файла, санитизация, суффикс `_2` при коллизии | `MyTheme` |
 | Режим вождения | `drive_mode_{rawValue}_{slug}` | `drive_mode_2_eco` |
 
-В настройках (`DataStore`) поле **активной темы** (`active_theme_uri`) хранит **ключ кэша**, а не URI zip-файла. Исходный URI файла сохраняется в `manifest.json` внутри папки кэша.
-
-### `manifest.json`
-
-Содержит метаданные материализации:
-
-- `cacheKey` — имя папки;
-- `sourceUri` — URI исходного `.tboxtheme`;
-- `sourceDisplayName` — отображаемое имя файла;
-- `materializedAtMillis` — время последней материализации;
-- `fingerprint` — SHA-256 от `theme.json`;
-- `sections` — включённые разделы.
-
-### Повторная материализация (sync)
-
-Если тема с тем же ключом применяется снова:
-
-- `theme.json` и `manifest.json` **всегда перезаписываются**;
-- файлы с **тем же именем** в каталогах assets **не перезаписываются** (ускорение повторного применения);
-- файлы в кэше, которых **нет** в новом архиве, **удаляются**.
-
-### Активация из кэша
-
-При активации:
-
-1. Импортируется `theme.json` → настройки панелей и оформления в `DataStore`.
-2. Папки обоев из кэша назначаются как URI рабочих каталогов (`file://…/wallpaper/light` и т.д.).
-3. Иконки **не копируются** — виджеты переключаются на чтение из `files/themes/{cacheKey}/icons/` (при наличии раздела `appIcons`).
-4. Фоны плиток **не копируются** — отрисовка читает из `files/themes/{cacheKey}/tile_backgrounds/` (при `mainScreen` / `floatingPanels` в активной теме).
-5. Обновляются счётчики ревизий иконок и фонов плиток (UI перерисовывается).
+В DataStore `active_theme_uri` хранит **cache key**, не URI zip. Исходный URI — в `manifest.json`.
 
 ---
 
-## Темы по режиму вождения
+## Создание и применение темы (кратко)
 
-Для каждого режима из списка (ECO, NOR, SPT, SAND, MUD, SNOW и варианты 6DCT) можно назначить отдельный файл `.tboxtheme`.
+**Создать:** «Темы» → «Создать тему» → разделы → имя файла → «Загрузки».
 
-### Назначение
+**Применить:** «Применить тему» → SAF → materialize + activate.
 
-1. **«Темы»** → у нужного режима → **«Выбрать файл»**.
-2. Файл сохраняется в настройках (`drive_mode_theme_paths` — URI источника).
-3. Тема **сразу материализуется** в кэш с фиксированным ключом (`drive_mode_2_eco` и т.д.).
-
-### Автоматическое переключение
-
-Служба `DriveModeThemeWatcher` отслеживает CAN-сигналы режима вождения:
-
-- приоритет у **основного** режима (`VEHICLE_DRIVEMODE`), затем **6DCT** (`VEHICLE_DRIVEMODE_6DCT_WET`);
-- при смене режима выполняется только **активация из кэша** (без повторной распаковки ZIP);
-- если кэш по какой-то причине отсутствует, но URI источника доступен — выполняется одноразовая материализация, затем активация;
-- **задержка 2 с** после последнего изменения режима: при быстром переключении ECO → SPORT → … тема применяется только когда режим стабилизировался (не на каждом промежуточном значении);
-- активации сериализуются (mutex); на время переключения UI не рисует файловые обои/фоны плиток/кастомные иконки, чтобы избежать гонок при отрисовке.
-
-### Удаление назначения
-
-Кнопка **«Удалить»** у режима убирает только привязку URI; папка кэша остаётся до **«Очистить папку тем»**.
+**Открыть из файлового менеджера:** intent → диалог подтверждения → тот же путь.
 
 ---
 
 ## Очистить папку тем
 
-Кнопка **«Очистить папку тем»** на вкладке «Темы»:
+1. Удаляет все `files/themes/*`, **кроме** кэша текущей активной темы.
+2. Сбрасывает `drive_mode_theme_paths`.
 
-1. Удаляет **все** каталоги в `files/themes/`, **кроме** кэша текущей активной темы (если она материализована).
-2. **Сбрасывает** все назначения тем по режимам вождения.
-
-Текущие **настройки интерфейса** (уже применённые) **не откатываются** — очищается только кэш и привязки файлов к режимам.
-
----
-
-## Очистить общие папки иконок и фонов плиток
-
-Рядом с кнопкой очистки кэша тем — две кнопки (с пояснением):
-
-### Очистить общую папку иконок
-
-- удаляет **только** файлы из `files/launcher_app_icons/` (ручные замены);
-- **не** затрагивает иконки внутри `files/themes/` (материализованные темы);
-- после очистки виджеты снова показывают иконки из **активной темы** (если есть) или системные.
-
-### Очистить общую папку фонов плиток
-
-- удаляет **только** файлы из `files/tile_backgrounds/` (ручные замены);
-- **не** затрагивает фоны внутри `files/themes/{cacheKey}/tile_backgrounds/`;
-- после очистки плитки снова показывают фоны из **активной темы** (если есть) или только цвет.
-
-### Удалить в диалоге настройки плитки
-
-Кнопки **«Удалить иконку из темы»** / **«Удалить картинку из темы»** (или **«Удалить иконку»** / **«Удалить картинку»**, если ресурс только в общей папке) работают в два шага, если один и тот же ресурс есть и в кэше активной темы, и в общей папке:
-
-1. **Первое нажатие** — удаляет файл из кэша активной темы (`files/themes/{cacheKey}/icons/` или `tile_backgrounds/`). Если копия остаётся в общей папке, картинка на плитке **ещё видна**.
-2. **Второе нажатие** — удаляет файл из общей папки (`launcher_app_icons/` или `tile_backgrounds/`).
-
-Кнопка «Удалить» активна, пока ресурс можно разрешить по цепочке приоритетов (кэш темы → общая папка).
+Уже применённые настройки интерфейса в DataStore **не откатываются**.
 
 ---
 
 ## Связь с резервной копией JSON
 
-| Что | В JSON backup | В `.tboxtheme` | В кэше `files/themes/` |
-|-----|---------------|----------------|------------------------|
-| Раскладка панелей и плиток | да (как часть общих настроек) | да | да (`theme.json`) |
-| Активная тема (ключ кэша) | да (`active_theme_uri`) | — | — |
-| Назначения по режимам (URI файлов) | да (`drive_mode_theme_paths`) | — | — |
-| Обои (бинарные файлы) | **нет** | да | да |
-| Иконки приложений | **нет** (только файлы на диске) | да (опционально) | да (`icons/`) |
-| Ручные иконки (override) | **нет** | — | — (`launcher_app_icons/`) |
-| Фоны плиток | **нет** (только файлы на диске) | да | да (`tile_backgrounds/`) |
-| Ручные фоны плиток (override) | **нет** | — | — (`tile_backgrounds/`) |
+| Что | JSON backup | `.tboxtheme` | Кэш `files/themes/` |
+|-----|-------------|--------------|---------------------|
+| Раскладка панелей | да | да | `theme.json` |
+| `active_theme_uri` | да | — | — |
+| `drive_mode_theme_paths` | да | — | — |
+| Обои (файлы) | нет | да | да |
+| Иконки / фоны плиток | нет (только файлы на диске) | да | да |
+| **`runtime.json`** (текущий выбор обоев/страница per-theme) | **нет** | seed из `theme.json` при первом materialize | да |
 
-**Импорт JSON** восстанавливает ключ активной темы и URI назначений по режимам, но **не** восстанавливает материализованный кэш. После переноса backup на новое ГУ:
-
-- примените тему заново вручную, **или**
-- заново назначьте файлы по режимам вождения.
-
-Обои из backup по-прежнему нужно задавать отдельно (как указано в руководстве пользователя) — **если** они не входили в применённую тему с разделом `mainScreen`.
-
----
-
-## Проверка при запуске
-
-При старте приложения `ThemeSettingsValidator`:
-
-- если `active_theme_uri` — ключ кэша, но папка кэша **отсутствует** → активная тема **сбрасывается**;
-- если значение — **старый URI файла** (`content://` / `file://`) и файл **доступен** → оставляется (совместимость со старыми настройками);
-- если URI **недоступен** → активная тема сбрасывается;
-- недоступные URI в `drive_mode_theme_paths` **удаляются** из карты назначений.
+После импорта backup на новое ГУ: назначить/применить `.tboxtheme` заново или выбрать файлы по режимам — кэш и `runtime.json` в backup **не** переносятся.
 
 ---
 
 ## Типовые сценарии
 
-### Перенос оформления на другое ГУ
+### Перенос на другое ГУ
 
-1. На исходном ГУ: **Создать тему** (главный экран + плавающие панели + при необходимости иконки).
-2. Скопировать `.tboxtheme` на новое ГУ.
-3. **Применить тему**.
+Создать `.tboxtheme` → скопировать → «Применить тему».
 
-### Несколько тем для разных режимов
+### Несколько тем под режимы
 
-1. Подготовьте отдельные `.tboxtheme` (например, «eco.tboxtheme», «sport.tboxtheme»).
-2. Назначьте каждый файл соответствующему режиму на вкладке «Темы».
-3. При вождении тема переключится автоматически при смене режима на CAN.
-
-### Освободить место на диске
-
-**«Очистить папку тем»** — удалит неактивные кэши. Если нужна только одна тема, сначала **примените** её, затем очистите папку.
+Назначить файл каждому режиму → при вождении CAN переключает activate из кэша.
 
 ### Обновить тему из изменённого файла
 
-Повторно **примените** тот же или обновлённый `.tboxtheme`. При совпадении ключа выполнится sync: JSON обновится, новые файлы добавятся, устаревшие в кэше удалятся.
+Повторно применить `.tboxtheme` с тем же ключом — sync-materialize.
+
+### Свайп обоев в одном режиме
+
+Выбор пишется в DataStore и `runtime.json` активной темы; при смене ECO→NOR→ECO для ECO восстановится последний выбор из `runtime.json` этой темы.
 
 ---
 
@@ -327,39 +417,60 @@ files/themes/{cacheKey}/
 
 | Класс | Назначение |
 |-------|------------|
-| `LauncherAppIconPaths` | Резолв пути иконок, список пакетов |
-| `TileBackgroundImageStorage` | Резолв пути фонов плиток |
-| `ThemeBundleExport` | ZIP: экспорт, `parseBundleBytes()` |
-| `ThemeLayoutExport` | JSON: `exportJson` / `importJson`, разделы панелей |
-| `ThemeCacheKeys` | Генерация и санитизация ключей кэша |
-| `ThemeMaterialization` | Материализация, активация, очистка кэша |
-| `ThemeApply` | Публичный API: `applyFromUri`, `activateFromCache`, `materializeDriveModeThemeFromUri` |
-| `DriveModeThemeWatcher` | Автопереключение по CAN |
-| `ThemeSettingsValidator` | Проверка при старте |
+| `ThemeActivationCoordinator` | Process-wide: mutex активации, `themeActivationInProgress`, flush-hook, UI-ready gate, wallpaper epoch |
+| `ThemeMaterialization` | Materialize, `activateFromCacheLocked`, sync в `runtime.json` |
+| `ThemeRuntimeState` | Чтение/запись/patch `runtime.json`, `applyActivationOverrides`, seed |
+| `ThemeLayoutExport` | `importJson` / `exportJson` для `theme.json` |
+| `ThemeApply` | `applyFromUri`, `materializeDriveModeThemeFromUri`, `activateFromCache` |
+| `DriveModeThemeWatcher` | CAN → activate из кэша |
+| `ThemeSettingsValidator` | Санация при старте |
+| `SettingsViewModel` | Pending patches обоев, debounce, `preThemeActivationFlushHook` |
+| `SettingsManager` | DataStore; делегирует активацию координатору |
 | `ThemesTabContent` | UI вкладки «Темы» |
 
-### Ключи DataStore
+### Ключи DataStore (темы и главный экран)
 
-- `active_theme_uri` — ключ кэша активной темы;
-- `active_theme_fingerprint` — SHA-256 `theme.json`;
-- `active_theme_sections` — JSON-массив разделов;
-- `drive_mode_theme_paths` — JSON-объект `{ "rawValue": "sourceUri", … }`.
+| Ключ | Содержимое |
+|------|------------|
+| `active_theme_uri` | cache key активной темы |
+| `active_theme_fingerprint` | SHA-256 `theme.json` |
+| `active_theme_sections` | JSON-массив разделов |
+| `drive_mode_theme_paths` | `{ "rawValue": "sourceUri" }` |
+| `main_screen_wallpaper_light_folder_uri` | `file://…/wallpaper/light` |
+| `main_screen_wallpaper_dark_folder_uri` | `file://…/wallpaper/dark` |
+| `main_screen_wallpaper_selection_by_page` | JSON: выбор файла обоев per page / light|dark |
+| `main_screen_current_page` | Текущая страница (1-based) |
 
-### Рабочие каталоги (помимо кэша)
+Ревизия обоев `mainScreenWallpaperRevisionFlow` — **в памяти** (координатор), не в DataStore; bump при смене папок/активации.
 
-- `files/launcher_app_icons/` — **общая папка**, ручные overrides (если нет файла в активной теме);
-- `files/themes/{cacheKey}/icons/` — иконки внутри материализованной темы (**приоритет** при активной теме с разделом `appIcons`);
-- `files/tile_backgrounds/` — **общая папка**, ручные overrides фонов плиток (если нет файла в активной теме);
-- `files/themes/{cacheKey}/tile_backgrounds/` — фоны плиток внутри материализованной темы (**приоритет** при активной теме с панелями);
-- `files/themes/imported_wallpaper/` — устаревший путь импорта обоев (legacy `extractBundle`); при активации из кэша обои берутся из `files/themes/{cacheKey}/wallpaper/`.
+### Точки входа активации
+
+| Вызов | Откуда |
+|-------|--------|
+| `ThemeApply.applyFromUri` / `applyBytes` | Вкладка «Темы», intent |
+| `ThemeMaterialization.activateFromCache` | Явная реактивация |
+| `materializeAndActivateDriveModeFromCache` | `DriveModeThemeWatcher` (только activate, без ZIP) |
+| `materializeAndActivateFromCache` | Ручной apply (materialize + activate) |
 
 ### Тесты
 
-- `ThemeCacheKeysTest` — санитизация ключей, формат `drive_mode_*`, отличие ключа от URI.
+| Файл | Что проверяет |
+|------|----------------|
+| `ThemeCacheKeysTest` | Формат ключей, `drive_mode_*` |
+| `ThemeRuntimeStateTest` | Seed, `resolveWallpaperSelectionsForActivation` |
+| `MainScreenWallpaperSelectionsMergeTest` | `applyPendingWallpaperPatches` |
+| `ThemeActivationCoordinatorTest` | UI-ready, начальное состояние флага |
+| `DriveModeThemeKeyTest` | Резолв режима CAN → cache key |
+
+### Известные ограничения / возможные доработки
+
+- **Импорт JSON backup** с `drive_mode_theme_paths` без кэша: watcher не materialize — нужно вручную «Выбрать файл» (можно добавить materialize при импорте).
+- **`ThemeSettingsValidator`** и активация не под одним mutex — теоретическая гонка `clearActiveTheme` vs activate.
+- **Debug-панель** `runtime.json` на вкладке «Темы» закомментирована в коде; можно включить для диагностики рассинхрона DataStore/runtime.
 
 ---
 
 ## См. также
 
-- [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — пошаговая работа с интерфейсом, главный экран, плавающие панели, резервная копия;
-- [Trips.md](Trips.md) — виджеты поездки на плитках (параметры строк/колонок входят в конфиг плитки внутри темы).
+- [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — пошаговая работа с интерфейсом;
+- [Trips.md](Trips.md) — виджеты поездки в конфиге плиток темы.
