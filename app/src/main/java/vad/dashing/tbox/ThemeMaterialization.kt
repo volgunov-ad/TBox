@@ -117,36 +117,16 @@ object ThemeMaterialization {
         settingsManager: SettingsManager,
         cacheKey: String,
         sourceUri: String,
-    ): Result<ThemeApply.ApplyResult> = settingsManager.runWithThemeActivation {
-        withContext(Dispatchers.IO) {
-            themeDiskMutex.withLock {
-                runCatching {
-                    if (!isMaterialized(context, cacheKey)) {
-                        if (!ThemeFileResolver.isAccessible(context, sourceUri)) {
-                            throw IllegalArgumentException("theme_file_not_found")
-                        }
-                        val bytes = ThemeFileResolver.openBytes(context, sourceUri)
-                            ?: throw IllegalArgumentException("theme_file_not_readable")
-                        materializeFromBytesLocked(
-                            context = context,
-                            bytes = bytes,
-                            cacheKey = cacheKey,
-                            sourceUri = sourceUri,
-                            syncExisting = false,
-                        )
-                    }
-                    if (!isMaterialized(context, cacheKey)) {
-                        throw IllegalArgumentException("theme_cache_missing")
-                    }
-                    activateFromCacheLocked(
-                        context = context,
-                        settingsManager = settingsManager,
-                        settingsViewModel = null,
-                        cacheKey = cacheKey,
-                    ).getOrThrow()
-                }
-            }
+    ): Result<ThemeApply.ApplyResult> {
+        if (!isMaterialized(context, cacheKey)) {
+            return Result.failure(IllegalArgumentException("theme_cache_missing"))
         }
+        return activateFromCache(
+            context = context,
+            settingsManager = settingsManager,
+            settingsViewModel = null,
+            cacheKey = cacheKey,
+        )
     }
 
     private fun materializeFromBytesLocked(

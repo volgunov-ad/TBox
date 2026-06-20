@@ -153,6 +153,13 @@ fun MainScreen(
         settingsViewModel.flushMainScreenWallpaperSelection()
     }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            settingsViewModel.flushMainScreenCurrentPage()
+            settingsViewModel.flushMainScreenWallpaperSelection()
+        }
+    }
+
     var floatingOverlayEditRequest by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val pendingFloatingTileEdit by FloatingDashboardTileEditRequestBus.pending
         .collectAsStateWithLifecycle()

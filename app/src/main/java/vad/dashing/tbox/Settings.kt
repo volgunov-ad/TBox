@@ -22,11 +22,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.yield
-import kotlinx.coroutines.sync.Mutex
 import vad.dashing.tbox.ui.theme.TboxFontFamily
-import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.atomic.AtomicInteger
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.fuel.FuelTypes
@@ -237,52 +233,40 @@ data class BackgroundServiceSettingsSnapshot(
 
 class SettingsManager(private val context: Context) {
 
-    private val themeActivationDepth = AtomicInteger(0)
-    private val themeActivationMutex = Mutex()
-    private val _themeActivationInProgress = MutableStateFlow(false)
-    val themeActivationInProgressFlow: StateFlow<Boolean> = _themeActivationInProgress.asStateFlow()
+    val themeActivationInProgressFlow: StateFlow<Boolean> =
+        ThemeActivationCoordinator.themeActivationInProgressFlow
 
     /**
      * Invoked synchronously before [themeActivationInProgressFlow] becomes true so pending
      * main-screen page/wallpaper edits flush into the outgoing theme's runtime.json.
      */
-    @Volatile
-    var preThemeActivationFlush: (suspend () -> Unit)? = null
+    var preThemeActivationFlush: (suspend () -> Unit)?
+        get() = ThemeActivationCoordinator.preThemeActivationFlush
+        set(value) {
+            ThemeActivationCoordinator.preThemeActivationFlush = value
+        }
 
-    private val _mainScreenWallpaperRevision = MutableStateFlow(0L)
-    val mainScreenWallpaperRevisionFlow: StateFlow<Long> = _mainScreenWallpaperRevision.asStateFlow()
+    val mainScreenWallpaperRevisionFlow: StateFlow<Long> =
+        ThemeActivationCoordinator.mainScreenWallpaperRevisionFlow
 
     suspend fun bumpMainScreenWallpaperRevision() {
-        _mainScreenWallpaperRevision.value = _mainScreenWallpaperRevision.value + 1L
+        ThemeActivationCoordinator.bumpMainScreenWallpaperRevision()
     }
 
     /** While true, UI should avoid drawing file-backed bitmaps (theme switch in progress). */
     suspend fun <T> runWithThemeActivation(block: suspend () -> T): T {
-        return themeActivationMutex.withLock {
-            val wasIdle = themeActivationDepth.getAndIncrement() == 0
-            if (wasIdle) {
-                val outgoingCacheKey = activeThemeUriFlow.first().trim()
-                preThemeActivationFlush?.invoke()
-                if (preThemeActivationFlush == null &&
-                    ThemeCacheKeys.isLikelyCacheKey(outgoingCacheKey)
-                ) {
-                    snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)
-                }
-                withContext(Dispatchers.Main.immediate) {
-                    _themeActivationInProgress.value = true
-                }
-            }
-            try {
-                block()
-            } finally {
-                if (themeActivationDepth.decrementAndGet() == 0) {
-                    withContext(Dispatchers.Main.immediate) {
-                        yield()
-                        _themeActivationInProgress.value = false
-                    }
-                }
-            }
-        }
+        return ThemeActivationCoordinator.runWithThemeActivation(this, block)
+    }
+
+    /**
+     * Persists [selections] to the active theme [runtime.json], retrying once on failure.
+     * @return true when the cache file was updated.
+     */
+    suspend fun syncActiveThemeWallpaperSelectionReliable(
+        selections: MainScreenWallpaperSelectionsByPage,
+    ): Boolean {
+        if (syncActiveThemeWallpaperSelection(selections)) return true
+        return syncActiveThemeWallpaperSelection(selections)
     }
 
     companion object {

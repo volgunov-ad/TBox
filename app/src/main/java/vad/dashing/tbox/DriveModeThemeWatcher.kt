@@ -41,6 +41,10 @@ class DriveModeThemeWatcher(
                     if (request.cacheKey == lastAppliedCacheKey && request.modeRawValue == lastAppliedKey) {
                         return@collect
                     }
+                    ThemeActivationCoordinator.awaitMainScreenUiReady()
+                    if (!ThemeMaterialization.isMaterialized(context, request.cacheKey)) {
+                        return@collect
+                    }
                     applyActivationRequest(request)
                 }
         }
