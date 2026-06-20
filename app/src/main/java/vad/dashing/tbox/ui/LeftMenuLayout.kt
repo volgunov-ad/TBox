@@ -132,16 +132,20 @@ data class LeftMenuLayout(
         fun parseSelectedTabKey(raw: String?): String {
             if (raw.isNullOrBlank()) return SettingsManager.MAIN_SCREEN_TAB_KEY
             if (raw == SettingsManager.MAIN_SCREEN_TAB_KEY) return raw
+            if (raw == SettingsManager.UPDATE_TAB_KEY) return raw
             return if (LeftMenuTabField.fromId(raw) != null) raw else SettingsManager.MAIN_SCREEN_TAB_KEY
         }
 
         fun resolveSelectedTab(rawKey: String, layout: LeftMenuLayout): String {
             val key = parseSelectedTabKey(rawKey)
-            if (key == SettingsManager.MAIN_SCREEN_TAB_KEY) return key
+            if (key == SettingsManager.MAIN_SCREEN_TAB_KEY || key == SettingsManager.UPDATE_TAB_KEY) {
+                return key
+            }
             return if (key in enabledTabKeys(layout)) key else firstVisibleTabKey(layout)
         }
 
         fun isSidebarTabEnabled(tabKey: String, layout: LeftMenuLayout): Boolean =
-            tabKey != SettingsManager.MAIN_SCREEN_TAB_KEY && tabKey in enabledTabKeys(layout)
+            tabKey == SettingsManager.UPDATE_TAB_KEY ||
+                (tabKey != SettingsManager.MAIN_SCREEN_TAB_KEY && tabKey in enabledTabKeys(layout))
     }
 }

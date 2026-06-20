@@ -53,6 +53,10 @@ import vad.dashing.tbox.CycleDataViewModel
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
+import vad.dashing.tbox.update.UpdateSessionGate
+import vad.dashing.tbox.update.UpdateUiState
+import vad.dashing.tbox.update.UpdateViewModel
+import vad.dashing.tbox.update.UpdateViewModelFactory
 import java.text.SimpleDateFormat
 import java.util.Locale
 import vad.dashing.tbox.ThemeOpenRequestBus
@@ -71,9 +75,11 @@ fun TboxApp(
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onTripFinishAndStart: () -> Unit,
     onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
+    onOpenInstallPermissionSettings: () -> Unit = {},
 ) {
     val viewModel: TboxViewModel = viewModel()
     val canViewModel: CanDataViewModel = viewModel()
+    val context = LocalContext.current
 
     val settingsViewModel: SettingsViewModel = viewModel(factory = SettingsViewModelFactory(
         settingsManager
@@ -84,6 +90,12 @@ fun TboxApp(
         settingsManager,
     )
     )
+    val updateViewModel: UpdateViewModel = viewModel(
+        factory = UpdateViewModelFactory(
+            application = context.applicationContext as android.app.Application,
+            settingsManager = settingsManager,
+        ),
+    )
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
@@ -91,10 +103,15 @@ fun TboxApp(
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val pendingThemeOpen by ThemeOpenRequestBus.pending.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         settingsViewModel.validateThemeSettings(context)
+    }
+
+    LaunchedEffect(Unit) {
+        if (UpdateSessionGate.tryBeginSessionCheck()) {
+            updateViewModel.checkForUpdate(force = false)
+        }
     }
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
@@ -128,6 +145,8 @@ fun TboxApp(
                 onMockLocationSettingChanged = onMockLocationSettingChanged,
                 onTripFinishAndStart = onTripFinishAndStart,
                 onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
+                updateViewModel = updateViewModel,
+                onOpenInstallPermissionSettings = onOpenInstallPermissionSettings,
             )
         }
         pendingThemeOpen?.let { request ->
@@ -156,6 +175,8 @@ fun TboxScreen(
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onTripFinishAndStart: () -> Unit,
     onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
+    updateViewModel: UpdateViewModel,
+    onOpenInstallPermissionSettings: () -> Unit,
 ) {
     val canViewModel: CanDataViewModel = viewModel()
     val cycleViewModel: CycleDataViewModel = viewModel()
@@ -168,6 +189,15 @@ fun TboxScreen(
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
     val isMenuVisible by settingsViewModel.isLeftMenuVisible.collectAsStateWithLifecycle()
+    val updateUiState by updateViewModel.uiState.collectAsStateWithLifecycle()
+    val showUpdateMenuEntry = when (val state = updateUiState) {
+        is UpdateUiState.Available,
+        is UpdateUiState.Downloading,
+        is UpdateUiState.Verifying,
+        is UpdateUiState.ReadyToInstall -> true
+        is UpdateUiState.Error -> state.cachedInfo != null
+        else -> false
+    }
 
     // Используем remember для форматтеров даты
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -270,6 +300,18 @@ fun TboxScreen(
                         }
                     }
 
+                    if (showUpdateMenuEntry) {
+                        TabMenuItem(
+                            title = stringResource(R.string.update_menu_available),
+                            icon = ImageVector.vectorResource(R.drawable.ic_menu_update),
+                            selected = selectedTab == SettingsManager.UPDATE_TAB_KEY,
+                            showText = isMenuVisible,
+                            onClick = {
+                                settingsViewModel.saveSelectedTab(SettingsManager.UPDATE_TAB_KEY)
+                            },
+                        )
+                    }
+
                     if (isMenuVisible) {
                         Text(
                             text = if (tboxConnected) {
@@ -365,6 +407,7 @@ fun TboxScreen(
                         viewModel,
                         settingsViewModel,
                         appDataViewModel,
+                        updateViewModel,
                         onTboxRestart,
                         onMockLocationSettingChanged,
                         onServiceCommand,
@@ -396,6 +439,10 @@ fun TboxScreen(
                         onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
                     )
                     LeftMenuTabField.CAR_SETTINGS.id -> CarSettingsTab()
+                    SettingsManager.UPDATE_TAB_KEY -> UpdateTab(
+                        updateViewModel = updateViewModel,
+                        onOpenInstallPermissionSettings = onOpenInstallPermissionSettings,
+                    )
                     else -> ModemTab(viewModel, onServiceCommand)
                 }
             }
@@ -450,6 +497,7 @@ fun SettingsTab(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
+    updateViewModel: UpdateViewModel,
     onTboxRestartClick: () -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -461,6 +509,7 @@ fun SettingsTab(
         viewModel = viewModel,
         settingsViewModel = settingsViewModel,
         appDataViewModel = appDataViewModel,
+        updateViewModel = updateViewModel,
         onTboxRestartClick = onTboxRestartClick,
         onMockLocationSettingChanged = onMockLocationSettingChanged,
         onServiceCommand = onServiceCommand,

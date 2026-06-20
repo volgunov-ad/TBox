@@ -21,6 +21,21 @@ android {
             "TBOX_PROXY_VERSION",
             "\"${libs.versions.tboxProxy.get()}\""
         )
+        buildConfigField(
+            "String",
+            "UPDATE_RELEASE_PUBLIC_KEY",
+            "\"https://disk.yandex.ru/d/REPLACE_WITH_RELEASE_FOLDER\""
+        )
+        buildConfigField(
+            "String",
+            "UPDATE_DEV_PUBLIC_KEY",
+            "\"https://disk.yandex.ru/d/REPLACE_WITH_DEV_FOLDER\""
+        )
+        buildConfigField(
+            "String",
+            "UPDATE_SIGNING_CERT_SHA256",
+            "\"\""
+        )
     }
     flavorDimensions += "language"
     productFlavors {

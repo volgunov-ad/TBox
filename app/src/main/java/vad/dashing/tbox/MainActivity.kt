@@ -25,6 +25,7 @@ import java.io.FileWriter
 import androidx.core.net.toUri
 import vad.dashing.tbox.ui.TboxApp
 import vad.dashing.tbox.ui.disposeAppLauncherPickerIconCache
+import vad.dashing.tbox.update.InstallPermissionHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -61,6 +62,10 @@ class MainActivity : ComponentActivity() {
             onStoragePermissionsDenied()
         }
     }
+
+    private val installPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { /* permission state refreshed from UpdateTab on resume */ }
 
     // Переменные для хранения данных/тега, которые нужно сохранить после получения разрешений
     private var pendingSaveTag: String? = null
@@ -170,6 +175,7 @@ class MainActivity : ComponentActivity() {
                     onRequestWallpaperStorageAccess = { afterGranted ->
                         runWallpaperPickerWithStorageIfNeeded(afterGranted)
                     },
+                    onOpenInstallPermissionSettings = { openInstallPermissionSettings() },
                 )
             }
         }
@@ -673,5 +679,11 @@ class MainActivity : ComponentActivity() {
     private fun hasLocationPermissions(): Boolean {
         return (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+    }
+
+    private fun openInstallPermissionSettings() {
+        installPermissionLauncher.launch(
+            InstallPermissionHelper.createUnknownSourcesSettingsIntent(this)
+        )
     }
 }

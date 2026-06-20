@@ -933,6 +933,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = TboxFontFamily.Default.id
         )
 
+    val updateChannel = settingsManager.updateChannelFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.update.UpdateChannel.RELEASE,
+        )
+
     val headUnitCanMode = settingsManager.headUnitCanModeFlow
         .stateIn(
             scope = viewModelScope,
@@ -1974,6 +1981,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveAppFontFamilyId(fontFamilyId: Int) {
         viewModelScope.launch {
             settingsManager.saveAppFontFamilyId(fontFamilyId)
+        }
+    }
+
+    fun saveUpdateChannel(channel: vad.dashing.tbox.update.UpdateChannel) {
+        viewModelScope.launch {
+            settingsManager.saveUpdateChannel(channel)
         }
     }
 

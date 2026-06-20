@@ -91,6 +91,7 @@ class LeftMenuLayoutTest {
     fun parseSelectedTabKey_acceptsValidKeys() {
         assertEquals(LeftMenuTabField.TRIPS.id, LeftMenuLayout.parseSelectedTabKey("trips"))
         assertEquals(SettingsManager.MAIN_SCREEN_TAB_KEY, LeftMenuLayout.parseSelectedTabKey(SettingsManager.MAIN_SCREEN_TAB_KEY))
+        assertEquals(SettingsManager.UPDATE_TAB_KEY, LeftMenuLayout.parseSelectedTabKey(SettingsManager.UPDATE_TAB_KEY))
     }
 
     @Test
@@ -99,5 +100,15 @@ class LeftMenuLayoutTest {
         assertFalse(LeftMenuLayout.isSidebarTabEnabled(LeftMenuTabField.TRIPS.id, layout))
         assertTrue(LeftMenuLayout.isSidebarTabEnabled(LeftMenuTabField.SETTINGS.id, layout))
         assertFalse(LeftMenuLayout.isSidebarTabEnabled(SettingsManager.MAIN_SCREEN_TAB_KEY, layout))
+        assertTrue(LeftMenuLayout.isSidebarTabEnabled(SettingsManager.UPDATE_TAB_KEY, layout))
+    }
+
+    @Test
+    fun resolveSelectedTab_updateTab_unchanged() {
+        val layout = LeftMenuLayout.default()
+        assertEquals(
+            SettingsManager.UPDATE_TAB_KEY,
+            LeftMenuLayout.resolveSelectedTab(SettingsManager.UPDATE_TAB_KEY, layout),
+        )
     }
 }

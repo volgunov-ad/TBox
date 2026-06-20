@@ -276,6 +276,9 @@ class SettingsManager(private val context: Context) {
         /** Left menu tab key for the Trips section. */
         const val TRIPS_TAB_KEY = "trips"
 
+        /** Dedicated update screen opened from the left menu button. */
+        const val UPDATE_TAB_KEY = "update"
+
         /** Max tile rows/columns for main-screen embedded panels and floating overlay dashboards. */
         const val DASHBOARD_PANEL_MAX_GRID_DIMENSION = 10
 
@@ -375,6 +378,7 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}wheel_pressure_persist_across_stops")
         private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
         private val APP_FONT_FAMILY_ID_KEY = intPreferencesKey("${KEY_PREFIX}app_font_family_id")
+        private val UPDATE_CHANNEL_KEY = stringPreferencesKey("${KEY_PREFIX}update_channel")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
@@ -902,6 +906,12 @@ class SettingsManager(private val context: Context) {
     val appFontFamilyIdFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
             TboxFontFamily.fromId(preferences[APP_FONT_FAMILY_ID_KEY] ?: TboxFontFamily.Default.id).id
+        }
+        .distinctUntilChanged()
+
+    val updateChannelFlow: Flow<vad.dashing.tbox.update.UpdateChannel> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.update.UpdateChannel.fromStorageValue(preferences[UPDATE_CHANNEL_KEY])
         }
         .distinctUntilChanged()
 
@@ -1975,6 +1985,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveAppFontFamilyId(fontFamilyId: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[APP_FONT_FAMILY_ID_KEY] = TboxFontFamily.fromId(fontFamilyId).id
+        }
+    }
+
+    suspend fun saveUpdateChannel(channel: vad.dashing.tbox.update.UpdateChannel) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[UPDATE_CHANNEL_KEY] = channel.storageValue
         }
     }
 

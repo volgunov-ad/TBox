@@ -50,6 +50,8 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.update.UpdateChannel
+import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
@@ -243,6 +245,7 @@ fun SettingsTabContent(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
+    updateViewModel: UpdateViewModel,
     onTboxRestartClick: () -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -284,6 +287,7 @@ fun SettingsTabContent(
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
@@ -690,6 +694,42 @@ fun SettingsTabContent(
 //                        .padding(top = 4.dp)
 //                )
 //            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_update_title))
+        val releaseChannelLabel = stringResource(R.string.update_channel_release)
+        val developmentChannelLabel = stringResource(R.string.update_channel_development)
+        val updateChannelOptions = remember(releaseChannelLabel, developmentChannelLabel) {
+            listOf(
+                UpdateChannelDropdownOption(UpdateChannel.RELEASE, releaseChannelLabel),
+                UpdateChannelDropdownOption(UpdateChannel.DEVELOPMENT, developmentChannelLabel),
+            )
+        }
+        val selectedUpdateChannelOption = remember(updateChannel, updateChannelOptions) {
+            updateChannelOptions.first { it.channel == updateChannel }
+        }
+        SettingDropdownGeneric(
+            selectedValue = selectedUpdateChannelOption,
+            onValueChange = { option ->
+                settingsViewModel.saveUpdateChannel(option.channel)
+            },
+            text = stringResource(R.string.settings_update_channel_title),
+            description = stringResource(R.string.settings_update_channel_desc),
+            enabled = true,
+            options = updateChannelOptions,
+            selectorWidth = 180.dp,
+        )
+        Button(
+            onClick = rememberWrappedOnClick { updateViewModel.checkForUpdate(force = true) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_update_check_button),
+                style = MaterialTheme.typography.tboxButton,
+            )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -1375,4 +1415,11 @@ fun InfoTabContent(
             }
         }
     }
+}
+
+private data class UpdateChannelDropdownOption(
+    val channel: UpdateChannel,
+    val label: String,
+) {
+    override fun toString(): String = label
 }
