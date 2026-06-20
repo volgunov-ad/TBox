@@ -83,6 +83,7 @@ fun UpdateTab(
         Text(
             text = stringResource(R.string.update_tab_title),
             style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Text(
@@ -92,6 +93,7 @@ fun UpdateTab(
                 currentVersionCode,
             ),
             style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(
             text = stringResource(
@@ -99,6 +101,7 @@ fun UpdateTab(
                 updateChannelLabel(updateChannel),
             ),
             style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         HorizontalDivider()
@@ -108,6 +111,7 @@ fun UpdateTab(
                 Text(
                     text = stringResource(R.string.update_idle_hint),
                     style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             UpdateUiState.Checking -> {
@@ -115,12 +119,14 @@ fun UpdateTab(
                 Text(
                     text = stringResource(R.string.update_checking),
                     style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             UpdateUiState.UpToDate -> {
                 Text(
                     text = stringResource(R.string.update_up_to_date),
                     style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             is UpdateUiState.Available -> {
@@ -144,12 +150,14 @@ fun UpdateTab(
                     Text(
                         text = stringResource(R.string.update_downloading, state.percent),
                         style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 } else {
                     CircularProgressIndicator()
                     Text(
                         text = stringResource(R.string.update_downloading_unknown),
                         style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -158,6 +166,7 @@ fun UpdateTab(
                 Text(
                     text = stringResource(R.string.update_verifying),
                     style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             is UpdateUiState.ReadyToInstall -> {
@@ -166,6 +175,7 @@ fun UpdateTab(
                     Text(
                         text = stringResource(R.string.update_install_permission_hint),
                         style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Button(
                         onClick = rememberWrappedOnClick(onOpenInstallPermissionSettings),
@@ -229,21 +239,25 @@ private fun UpdateReleaseDetails(info: vad.dashing.tbox.update.UpdateReleaseInfo
             info.versionCode,
         ),
         style = MaterialTheme.typography.tboxTitle,
+        color = MaterialTheme.colorScheme.onSurface
     )
     if (info.publishedAt.isNotBlank()) {
         Text(
             text = stringResource(R.string.update_published_at, info.publishedAt),
             style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
     if (info.changelog.isNotBlank()) {
         Text(
             text = stringResource(R.string.update_changelog),
             style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface
         )
         Text(
             text = info.changelog,
             style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

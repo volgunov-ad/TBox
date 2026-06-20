@@ -24,12 +24,12 @@ android {
         buildConfigField(
             "String",
             "UPDATE_RELEASE_PUBLIC_KEY",
-            "\"https://disk.yandex.ru/d/REPLACE_WITH_RELEASE_FOLDER\""
+            "\"https://disk.yandex.ru/d/v-6n17wSRbVQsw\""
         )
         buildConfigField(
             "String",
             "UPDATE_DEV_PUBLIC_KEY",
-            "\"https://disk.yandex.ru/d/REPLACE_WITH_DEV_FOLDER\""
+            "\"https://disk.yandex.ru/d/yuvH_9cdzyOoBg\""
         )
         buildConfigField(
             "String",
