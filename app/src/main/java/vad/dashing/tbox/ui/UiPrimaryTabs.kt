@@ -586,6 +586,7 @@ fun SettingsTabContent(
             text = stringResource(R.string.settings_app_font_family_title),
             description = stringResource(R.string.settings_app_font_family_desc),
             enabled = true,
+            selectorWidth = 250.dp
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -718,7 +719,7 @@ fun SettingsTabContent(
             description = stringResource(R.string.settings_update_channel_desc),
             enabled = true,
             options = updateChannelOptions,
-            selectorWidth = 180.dp,
+            selectorWidth = 250.dp,
         )
         Button(
             onClick = rememberWrappedOnClick { updateViewModel.checkForUpdate(force = true) },
