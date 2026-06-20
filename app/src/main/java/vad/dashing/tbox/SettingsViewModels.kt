@@ -1463,14 +1463,19 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         if (pendingWallpaperPatches.isEmpty()) return
         if (settingsManager.themeActivationInProgressFlow.value) return
         val patches = pendingWallpaperPatches.toMap()
-        pendingWallpaperPatches.clear()
-        pendingWallpaperPatchesFlow.value = emptyMap()
-        var current = settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
+        var merged = settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
         patches.forEach { (key, fileName) ->
-            current = current.withFileName(key.first, key.second, fileName)
+            merged = merged.withFileName(key.first, key.second, fileName)
         }
-        settingsManager.saveMainScreenWallpaperSelectionsByPage(current)
-        settingsManager.syncActiveThemeWallpaperSelection(current)
+        settingsManager.saveMainScreenWallpaperSelectionsByPage(merged)
+        settingsManager.syncActiveThemeWallpaperSelection(merged)
+        settingsManager.mainScreenWallpaperSelectionByPageFlow.first { stored ->
+            patches.all { (key, fileName) ->
+                stored.fileNameFor(key.first, key.second) == fileName
+            }
+        }
+        patches.keys.forEach { pendingWallpaperPatches.remove(it) }
+        pendingWallpaperPatchesFlow.value = pendingWallpaperPatches.toMap()
     }
 
     fun saveMainScreenWallpaperCrop(crop: Boolean) {
