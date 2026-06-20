@@ -713,7 +713,7 @@ fun SettingsTabContent(
         SettingDropdownGeneric(
             selectedValue = selectedUpdateChannelOption,
             onValueChange = { option ->
-                settingsViewModel.saveUpdateChannel(option.channel)
+                updateViewModel.saveUpdateChannel(option.channel)
             },
             text = stringResource(R.string.settings_update_channel_title),
             description = stringResource(R.string.settings_update_channel_desc),

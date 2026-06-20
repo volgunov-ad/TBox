@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.SettingsManager
@@ -40,7 +41,11 @@ class UpdateViewModel(
 
     fun saveUpdateChannel(channel: UpdateChannel) {
         viewModelScope.launch {
+            val current = settingsManager.updateChannelFlow.first()
+            if (current == channel) return@launch
             settingsManager.saveUpdateChannel(channel)
+            repository.resetAfterChannelChange()
+            repository.checkForUpdate(force = true)
         }
     }
 }

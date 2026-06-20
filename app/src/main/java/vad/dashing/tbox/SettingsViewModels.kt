@@ -1984,12 +1984,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun saveUpdateChannel(channel: vad.dashing.tbox.update.UpdateChannel) {
-        viewModelScope.launch {
-            settingsManager.saveUpdateChannel(channel)
-        }
-    }
-
     fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
         viewModelScope.launch {
             settingsManager.saveHeadUnitCanModeByUser(mode)

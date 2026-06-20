@@ -64,9 +64,7 @@ class UpdateRepository(
                 ?: throw IOException("No update entry for flavor $flavor")
             val currentVersionCode = currentVersionCode()
             if (!isUpdateNewer(release.versionCode, currentVersionCode)) {
-                lastAvailableInfo = null
-                preparedApkFile = null
-                clearCachedApk()
+                resetUpdateCacheAndState()
                 _uiState.value = UpdateUiState.UpToDate
                 return
             }
@@ -142,6 +140,11 @@ class UpdateRepository(
             else -> preparedApkFile
         } ?: return
         ApkInstaller.install(context, apkFile)
+        resetUpdateCacheAndState()
+    }
+
+    fun resetAfterChannelChange() {
+        resetUpdateCacheAndState()
     }
 
     fun canInstallPackages(): Boolean = InstallPermissionHelper.canInstallPackages(context)
@@ -235,10 +238,20 @@ class UpdateRepository(
             .joinToString("") { byte -> "%02x".format(byte) }
     }
 
+    private fun resetUpdateCacheAndState() {
+        clearCachedApk()
+        lastAvailableInfo = null
+        preparedApkFile = null
+        if (_uiState.value !is UpdateUiState.Checking) {
+            _uiState.value = UpdateUiState.Idle
+        }
+    }
+
     private fun clearCachedApk() {
         val dir = File(context.cacheDir, "updates")
-        if (dir.exists()) {
-            dir.listFiles()?.forEach { it.delete() }
+        if (!dir.exists()) return
+        dir.listFiles()?.forEach { file ->
+            file.delete()
         }
     }
 
