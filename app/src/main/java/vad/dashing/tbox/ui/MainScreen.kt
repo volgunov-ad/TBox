@@ -88,6 +88,7 @@ fun MainScreen(
     val wallpaperController = remember { MainScreenWallpaperController() }
     var wallpaperCount by remember { mutableIntStateOf(0) }
     var wallpaperWorkEnabled by remember { mutableStateOf(false) }
+    var themeActivationReadyMarked by remember { mutableStateOf(false) }
     val multiPage = pageCount > 1
     val showWallpaperNavButtons = multiPage && wallpaperCount > 1
 
@@ -117,6 +118,10 @@ fun MainScreen(
         modifier = modifier
             .fillMaxSize()
             .onGloballyPositioned {
+                if (!themeActivationReadyMarked) {
+                    themeActivationReadyMarked = true
+                    settingsViewModel.markMainScreenUiReadyForThemeActivation()
+                }
                 if (!wallpaperWorkEnabled) {
                     wallpaperWorkEnabled = true
                 }

@@ -68,6 +68,40 @@ class DriveModeThemeKeyTest {
     }
 
     @Test
+    fun isDriveModeThemeAlreadyApplied_requiresMatchingCacheKeyAndFingerprint() {
+        val request = DriveModeThemeWatcher.resolveActivationRequest(
+            paths = mapOf(2 to "content://theme/eco.tboxtheme"),
+            drive = 2,
+            wet6dct = null,
+        )!!
+        val manifest = ThemeMaterialization.ThemeManifest(
+            cacheKey = request.cacheKey,
+            sourceUri = request.sourceUri,
+            sourceDisplayName = "eco.tboxtheme",
+            materializedAtMillis = 0L,
+            fingerprint = "abc123",
+            sections = emptySet(),
+        )
+
+        assertTrue(
+            DriveModeThemeWatcher.isDriveModeThemeAlreadyApplied(
+                request = request,
+                activeThemeUri = " ${request.cacheKey} ",
+                activeThemeFingerprint = " abc123 ",
+                manifest = manifest,
+            ),
+        )
+        assertFalse(
+            DriveModeThemeWatcher.isDriveModeThemeAlreadyApplied(
+                request = request,
+                activeThemeUri = request.cacheKey,
+                activeThemeFingerprint = "different",
+                manifest = manifest,
+            ),
+        )
+    }
+
+    @Test
     fun panelVisibility_ignoresPageAboveCount() {
         val panel = MainScreenPanelConfig(
             id = "p",
