@@ -6,6 +6,7 @@ import android.content.Intent
 
 class BootCompleteReceiver : BroadcastReceiver() {
     companion object {
+        const val ACTION_DEBUG_BOOT_COMPLETED = "vad.dashing.tbox.DEBUG_BOOT_COMPLETED"
         private const val QUICKBOOT_POWERON_ACTION = "android.intent.action.QUICKBOOT_POWERON"
     }
 
@@ -13,6 +14,9 @@ class BootCompleteReceiver : BroadcastReceiver() {
         when (intent?.action) {
             Intent.ACTION_BOOT_COMPLETED -> {
                 startService(context, Intent.ACTION_BOOT_COMPLETED)
+            }
+            ACTION_DEBUG_BOOT_COMPLETED -> {
+                startService(context, ACTION_DEBUG_BOOT_COMPLETED)
             }
             /*Intent.ACTION_LOCKED_BOOT_COMPLETED -> {
                 startService(context, Intent.ACTION_LOCKED_BOOT_COMPLETED)
