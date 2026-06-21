@@ -1,6 +1,9 @@
 package vad.dashing.tbox
 
 import android.os.SystemClock
+import android.util.Log
+
+private const val TIMING_LOGCAT_TAG = "TboxTimings"
 
 private data class UiTimingMark(val label: String, val elapsedMs: Long)
 
@@ -32,6 +35,7 @@ private class ElapsedTimingBuffer {
                 prev = m.elapsedMs
             }
             TboxRepository.addLog("DEBUG", tag, sb.toString())
+            Log.d(TIMING_LOGCAT_TAG, "$tag: $sb")
             marks.clear()
         }
     }
@@ -39,6 +43,17 @@ private class ElapsedTimingBuffer {
 
 /** Cold path for [MainActivity] (onCreate → first layout). */
 object MainActivityLoadTimings {
+    private val buffer = ElapsedTimingBuffer()
+
+    fun reset() = buffer.reset()
+
+    fun mark(label: String) = buffer.mark(label)
+
+    fun log(tag: String) = buffer.log(tag)
+}
+
+/** App-data bootstrap in [StartupRepositoryLoader] and deferred refuels (temporary debug). */
+object StartupLoadTimings {
     private val buffer = ElapsedTimingBuffer()
 
     fun reset() = buffer.reset()

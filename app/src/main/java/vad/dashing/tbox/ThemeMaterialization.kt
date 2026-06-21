@@ -217,12 +217,6 @@ object ThemeMaterialization {
                 runCatching { JSONObject(themeJson) }.getOrNull()?.optJSONArray("sections"),
             ).ifEmpty { manifest.sections }
 
-            settingsManager.saveActiveTheme(
-                uri = cacheKey,
-                fingerprint = manifest.fingerprint,
-                sections = sections,
-            )
-
             val importResult = ThemeLayoutExport.importJson(context, settingsManager, themeJson)
             if (importResult.isFailure) {
                 throw importResult.exceptionOrNull() ?: IllegalArgumentException("theme_import_failed")
@@ -236,6 +230,12 @@ object ThemeMaterialization {
 
             applyWallpaperDirsFromCache(settingsManager, dir, sections)
             settingsManager.bumpMainScreenWallpaperRevision()
+
+            settingsManager.saveActiveTheme(
+                uri = cacheKey,
+                fingerprint = manifest.fingerprint,
+                sections = sections,
+            )
 
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()

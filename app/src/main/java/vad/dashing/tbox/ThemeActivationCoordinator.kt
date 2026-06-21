@@ -48,6 +48,11 @@ object ThemeActivationCoordinator {
         _mainScreenUiReady.value = true
     }
 
+    internal fun resetMainScreenUiReadyForTests() {
+        _mainScreenUiReady.value = false
+        preThemeActivationFlush = null
+    }
+
     suspend fun awaitMainScreenUiReady() {
         if (_mainScreenUiReady.value) return
         mainScreenUiReadyFlow.first { it }

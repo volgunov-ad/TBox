@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
@@ -45,6 +46,17 @@ class DriveModeThemeWatcher(
                     if (!ThemeMaterialization.isMaterialized(context, request.cacheKey)) {
                         return@collect
                     }
+                    val manifest = ThemeMaterialization.readManifest(context, request.cacheKey)
+                    if (isDriveModeThemeAlreadyApplied(
+                            request = request,
+                            activeThemeUri = settingsManager.activeThemeUriFlow.first(),
+                            activeThemeFingerprint = settingsManager.activeThemeFingerprintFlow.first(),
+                            manifest = manifest,
+                        )
+                    ) {
+                        rememberApplied(request)
+                        return@collect
+                    }
                     applyActivationRequest(request)
                 }
         }
@@ -52,7 +64,6 @@ class DriveModeThemeWatcher(
 
     private suspend fun applyActivationRequest(request: DriveModeThemeActivationRequest) {
         val cacheKey = request.cacheKey
-        val key = request.modeRawValue
         val sourceUri = request.sourceUri
         val result = ThemeMaterialization.materializeAndActivateDriveModeFromCache(
             context = context,
@@ -61,9 +72,13 @@ class DriveModeThemeWatcher(
             sourceUri = sourceUri,
         )
         if (result.isSuccess) {
-            lastAppliedCacheKey = cacheKey
-            lastAppliedKey = key
+            rememberApplied(request)
         }
+    }
+
+    private fun rememberApplied(request: DriveModeThemeActivationRequest) {
+        lastAppliedCacheKey = request.cacheKey
+        lastAppliedKey = request.modeRawValue
     }
 
     private suspend fun updateCanInterest(paths: Map<Int, String>) {
@@ -88,6 +103,23 @@ class DriveModeThemeWatcher(
             val sourceUri: String,
             val cacheKey: String,
         )
+
+        internal fun isDriveModeThemeAlreadyApplied(
+            request: DriveModeThemeActivationRequest,
+            activeThemeUri: String,
+            activeThemeFingerprint: String,
+            manifest: ThemeMaterialization.ThemeManifest?,
+        ): Boolean {
+            val activeCacheKey = activeThemeUri.trim()
+            val activeFingerprint = activeThemeFingerprint.trim()
+            val manifestCacheKey = manifest?.cacheKey?.trim().orEmpty()
+            val manifestFingerprint = manifest?.fingerprint?.trim().orEmpty()
+            return activeCacheKey == request.cacheKey &&
+                manifestCacheKey == request.cacheKey &&
+                activeFingerprint.isNotEmpty() &&
+                manifestFingerprint.isNotEmpty() &&
+                activeFingerprint == manifestFingerprint
+        }
 
         internal fun resolveActivationRequest(
             paths: Map<Int, String>,

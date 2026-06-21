@@ -193,6 +193,7 @@ class BackgroundService : Service() {
             prev = m.elapsedMs
         }
         TboxRepository.addLog("DEBUG", tag, sb.toString())
+        Log.d("TboxTimings", "$tag: $sb")
         timingMarks.clear()
     }
 
@@ -593,24 +594,9 @@ class BackgroundService : Service() {
                 }
                 bindSettingsStateFlows(settingsSnap)
                 try {
-                    coroutineScope {
-                        val tripsJsonDeferred = async(Dispatchers.IO) {
-                            appDataManager.tripsJsonFlow.first()
-                        }
-                        val favoritesJsonDeferred = async(Dispatchers.IO) {
-                            appDataManager.tripFavoritesJsonFlow.first()
-                        }
-                        val refuelsJsonDeferred = async(Dispatchers.IO) {
-                            appDataManager.refuelsJsonFlow.first()
-                        }
-                        tripsFromDiskReady.set(false)
-                        TripRepository.setTripsFromStore(
-                            tripsListFromJson(tripsJsonDeferred.await()),
-                            favoritesSetFromJson(favoritesJsonDeferred.await())
-                        )
-                        RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJsonDeferred.await()))
-                        tripsFromDiskReady.set(true)
-                    }
+                    tripsFromDiskReady.set(false)
+                    StartupRepositoryLoader.ensureCriticalLoaded(appDataManager)
+                    tripsFromDiskReady.set(true)
                 } catch (e: Exception) {
                     Log.e("Background Service", "Initial trips load failed", e)
                     TboxRepository.addLog("ERROR", "Background Service", "Initial trips: ${e.message}")
@@ -764,7 +750,7 @@ class BackgroundService : Service() {
                 if (isRunning) {
                     TripRepository.setTripsProcessingEnabled(false)
                     try {
-                        reloadTripsFromDataStoreSuspend()
+                        reloadTripsFromDataStoreSuspend(forceReload = true)
                         if (!isRunning) return
                         val splitWindowMs =
                             splitTripTimeMinutesSetting.value.toLong() * 60_000L
@@ -975,7 +961,7 @@ class BackgroundService : Service() {
                 if (!isRunning) return@launch
                 servicePhase = ServiceLifecyclePhase.Starting
                 TripRepository.setTripsProcessingEnabled(false)
-                reloadTripsFromDataStoreSuspend()
+                applyCriticalSnapshotForServiceStartup(forceReload = false)
                 if (!isRunning) return@launch
                 TboxRepository.updateServiceStartTime()
                 val splitWindowMs =
@@ -984,6 +970,7 @@ class BackgroundService : Service() {
                 applyTripResumeIfLastTripContinues(splitWindowMs)
                 if (!isRunning) return@launch
                 timingMark("startup_trips_ready")
+                launch { loadRefuelsDeferred() }
                 connectTboxClient()
                 timingMark("startup_tbox_connected")
                 startSettingsListener()
@@ -1942,28 +1929,53 @@ class BackgroundService : Service() {
     }
 
     /**
-     * Loads trips, favorites and refuels from disk in parallel. Clears [tripsFromDiskReady] until
-     * repositories have the new snapshot so [responseWork] does not run CAN side effects mid-load.
+     * Ensures trips/favorites are in memory for service startup. Re-reads disk only when
+     * [forceReload] or when [StartupRepositoryLoader] has no cached snapshot yet.
      */
-    private suspend fun reloadTripsFromDataStoreSuspend() {
+    private suspend fun applyCriticalSnapshotForServiceStartup(forceReload: Boolean) {
         tripsFromDiskReady.set(false)
         try {
-            coroutineScope {
-                val tripsJsonDeferred = async(Dispatchers.IO) {
-                    appDataManager.tripsJsonFlow.first()
-                }
-                val favoritesJsonDeferred = async(Dispatchers.IO) {
-                    appDataManager.tripFavoritesJsonFlow.first()
-                }
-                val refuelsJsonDeferred = async(Dispatchers.IO) {
-                    appDataManager.refuelsJsonFlow.first()
-                }
-                TripRepository.setTripsFromStore(
-                    tripsListFromJson(tripsJsonDeferred.await()),
-                    favoritesSetFromJson(favoritesJsonDeferred.await())
-                )
-                RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJsonDeferred.await()))
+            if (forceReload) {
+                StartupRepositoryLoader.reloadAllFromStore(appDataManager)
+            } else {
+                StartupRepositoryLoader.ensureCriticalLoaded(appDataManager)
             }
+            StartupLoadTimings.log("Timings.startup_data")
+            tripsFromDiskReady.set(true)
+        } catch (e: CancellationException) {
+            tripsFromDiskReady.set(false)
+            throw e
+        } catch (e: Exception) {
+            tripsFromDiskReady.set(false)
+            throw e
+        }
+    }
+
+    private suspend fun loadRefuelsDeferred() {
+        try {
+            StartupRepositoryLoader.ensureRefuelsLoaded(appDataManager)
+            StartupLoadTimings.log("Timings.startup_refuels")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Background Service", "Deferred refuels load failed", e)
+            TboxRepository.addLog("ERROR", "Background Service", "Deferred refuels: ${e.message}")
+        }
+    }
+
+    /**
+     * Loads trips, favorites and refuels from disk. Clears [tripsFromDiskReady] until
+     * repositories have the new snapshot so [responseWork] does not run CAN side effects mid-load.
+     */
+    private suspend fun reloadTripsFromDataStoreSuspend(forceReload: Boolean = true) {
+        tripsFromDiskReady.set(false)
+        try {
+            if (forceReload) {
+                StartupRepositoryLoader.reloadAllFromStore(appDataManager)
+            } else {
+                applyCriticalSnapshotForServiceStartup(forceReload = false)
+            }
+            StartupLoadTimings.log("Timings.startup_data")
             tripsFromDiskReady.set(true)
         } catch (e: CancellationException) {
             tripsFromDiskReady.set(false)
