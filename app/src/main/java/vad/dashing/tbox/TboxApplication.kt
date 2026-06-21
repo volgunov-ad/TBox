@@ -33,7 +33,7 @@ class TboxApplication : Application() {
             }
             try {
                 StartupRepositoryLoader.ensureCriticalLoaded(appDataManager)
-                StartupLoadTimings.log("Timings.startup_data")
+                StartupLoadTimings.log("Timings.application_startup_data")
             } catch (_: Exception) {
                 // [BackgroundService.onCreate] reloads trips; motor hours stay at default until service.
             }

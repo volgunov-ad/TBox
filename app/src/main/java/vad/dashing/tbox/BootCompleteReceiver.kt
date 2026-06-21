@@ -28,6 +28,7 @@ class BootCompleteReceiver : BroadcastReceiver() {
     }
 
     private fun startService(context: Context, bootAction: String) {
+        TboxRepository.addLog("INFO", "Boot receiver", "Received: $bootAction")
         val intent = Intent(context, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_START
             putExtra(BackgroundService.EXTRA_START_FROM_BOOT, true)
