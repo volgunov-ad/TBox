@@ -8,6 +8,9 @@
   3. Копирует APK в папку загрузки на Яндекс.Диск
   4. Создаёт version.json с sha256 и размером файлов
 
+Имена APK в папке назначения:
+  tbox_monitor-v.0.16.0-ru.apk, tbox_monitor-v.0.16.0-en.apk
+
 Папки по умолчанию (Windows):
   Разработка -> C:\\Users\\volgu\\AndroidStudioProjects\\TBM\\dev
   Релиз      -> C:\\Users\\volgu\\AndroidStudioProjects\\TBM\\release
@@ -100,6 +103,10 @@ def gradle_wrapper(project_dir: Path) -> Path:
     return wrapper
 
 
+def ota_apk_file_name(version_name: str, flavor: str) -> str:
+    return f"tbox_monitor-v.{version_name}-{flavor}.apk"
+
+
 def read_app_version(gradle_path: Path) -> AppVersion:
     text = gradle_path.read_text(encoding="utf-8")
     code_match = re.search(r"versionCode\s*=\s*(\d+)", text)
@@ -174,20 +181,26 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def build_apk_metadata(project_dir: Path, flavor: str, build_type: str) -> BuiltApk:
+def build_apk_metadata(
+    project_dir: Path,
+    flavor: str,
+    build_type: str,
+    version_name: str,
+) -> BuiltApk:
     source = find_apk(project_dir, flavor, build_type)
+    file_name = ota_apk_file_name(version_name, flavor)
     return BuiltApk(
         flavor=flavor,
         source_path=source,
-        file_name=source.name,
+        file_name=file_name,
         sha256=sha256_file(source),
         size_bytes=source.stat().st_size,
     )
 
 
-def copy_apk(source: Path, destination_dir: Path) -> Path:
+def copy_apk(source: Path, destination_dir: Path, destination_name: str) -> Path:
     destination_dir.mkdir(parents=True, exist_ok=True)
-    destination = destination_dir / source.name
+    destination = destination_dir / destination_name
     shutil.copy2(source, destination)
     return destination
 
@@ -300,9 +313,9 @@ def main() -> int:
 
         apks: list[BuiltApk] = []
         for flavor in FLAVORS:
-            metadata = build_apk_metadata(root, flavor, channel.build_type)
-            copied = copy_apk(metadata.source_path, output_dir)
-            print(f"Copied {metadata.file_name} -> {copied}")
+            metadata = build_apk_metadata(root, flavor, channel.build_type, version.version_name)
+            copied = copy_apk(metadata.source_path, output_dir, metadata.file_name)
+            print(f"Copied {metadata.source_path.name} -> {copied}")
             apks.append(metadata)
 
         manifest = build_version_json(
