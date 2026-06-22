@@ -57,6 +57,7 @@ import vad.dashing.tbox.update.UpdateSessionGate
 import vad.dashing.tbox.update.UpdateUiState
 import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.update.UpdateViewModelFactory
+import vad.dashing.tbox.update.formatApkSizeMegabytes
 import java.text.SimpleDateFormat
 import java.util.Locale
 import vad.dashing.tbox.ThemeOpenRequestBus
@@ -301,8 +302,21 @@ fun TboxScreen(
                     }
 
                     if (showUpdateMenuEntry) {
+                        val updateMenuInfo = when (val state = updateUiState) {
+                            is UpdateUiState.Available -> state.info
+                            is UpdateUiState.ReadyToInstall -> state.info
+                            is UpdateUiState.Error -> state.cachedInfo
+                            else -> updateViewModel.peekUpdateInfo()
+                        }
+                        val updateMenuSubtitle = updateMenuInfo?.apkSizeBytes?.let { bytes ->
+                            stringResource(
+                                R.string.update_menu_apk_size_mb,
+                                formatApkSizeMegabytes(bytes),
+                            )
+                        }
                         TabMenuItem(
                             title = stringResource(R.string.update_menu_available),
+                            subtitle = updateMenuSubtitle,
                             icon = ImageVector.vectorResource(R.drawable.ic_menu_update),
                             selected = selectedTab == SettingsManager.UPDATE_TAB_KEY,
                             showText = isMenuVisible,

@@ -71,13 +71,18 @@ class UpdateRepository(
             if (currentVersionCode < release.minSupportedVersionCode) {
                 throw IOException("Current version is below minSupportedVersionCode")
             }
-            lastAvailableInfo = release
-            val cached = findCachedVerifiedApk(release)
+            val releaseWithSize = withContext(Dispatchers.IO) {
+                resolveReleaseInfoSize(release, publicKey)
+            }
+            lastAvailableInfo = releaseWithSize
+            val cached = findCachedVerifiedApk(releaseWithSize)
             if (cached != null) {
+                val info = releaseWithSize.withLocalApkSize(cached)
+                lastAvailableInfo = info
                 preparedApkFile = cached
-                _uiState.value = UpdateUiState.ReadyToInstall(cached, release)
+                _uiState.value = UpdateUiState.ReadyToInstall(cached, info)
             } else {
-                _uiState.value = UpdateUiState.Available(release)
+                _uiState.value = UpdateUiState.Available(releaseWithSize)
             }
         } catch (error: Exception) {
             _uiState.value = UpdateUiState.Error(
@@ -123,7 +128,9 @@ class UpdateRepository(
                 verifyDownloadedApk(destination, info)
             }
             preparedApkFile = destination
-            _uiState.value = UpdateUiState.ReadyToInstall(destination, info)
+            val infoWithSize = info.withLocalApkSize(destination)
+            lastAvailableInfo = infoWithSize
+            _uiState.value = UpdateUiState.ReadyToInstall(destination, infoWithSize)
         } catch (error: Exception) {
             preparedApkFile?.takeIf { it.exists() }?.delete()
             preparedApkFile = null
@@ -146,6 +153,14 @@ class UpdateRepository(
     fun resetAfterChannelChange() {
         resetUpdateCacheAndState()
     }
+
+    fun peekUpdateInfo(): UpdateReleaseInfo? = lastAvailableInfo
+        ?: when (val state = _uiState.value) {
+            is UpdateUiState.Available -> state.info
+            is UpdateUiState.ReadyToInstall -> state.info
+            is UpdateUiState.Error -> state.cachedInfo
+            else -> null
+        }
 
     fun canInstallPackages(): Boolean = InstallPermissionHelper.canInstallPackages(context)
 
@@ -192,6 +207,21 @@ class UpdateRepository(
             verifyDownloadedApk(file, info)
             file
         }.getOrNull()
+    }
+
+    private fun resolveReleaseInfoSize(release: UpdateReleaseInfo, publicKey: String): UpdateReleaseInfo {
+        if (release.apkSizeBytes != null && release.apkSizeBytes > 0L) {
+            return release
+        }
+        return runCatching {
+            yandexDiskClient.fetchPublicResourceSize(publicKey, "/${release.apkFileName}")
+        }.getOrNull()?.let { release.copy(apkSizeBytes = it) } ?: release
+    }
+
+    private fun UpdateReleaseInfo.withLocalApkSize(file: File): UpdateReleaseInfo {
+        if (apkSizeBytes != null && apkSizeBytes > 0L) return this
+        val size = file.length().takeIf { it > 0L } ?: return this
+        return copy(apkSizeBytes = size)
     }
 
     private fun verifyDownloadedApk(file: File, info: UpdateReleaseInfo) {

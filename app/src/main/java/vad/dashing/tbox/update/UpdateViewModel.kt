@@ -39,6 +39,8 @@ class UpdateViewModel(
 
     fun shouldShowMenuEntry(): Boolean = repository.shouldShowMenuEntry()
 
+    fun peekUpdateInfo(): UpdateReleaseInfo? = repository.peekUpdateInfo()
+
     fun saveUpdateChannel(channel: UpdateChannel) {
         viewModelScope.launch {
             val current = settingsManager.updateChannelFlow.first()

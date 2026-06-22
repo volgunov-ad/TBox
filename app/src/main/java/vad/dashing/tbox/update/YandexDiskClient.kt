@@ -64,6 +64,28 @@ class YandexDiskClient(
         }
     }
 
+    fun fetchPublicResourceSize(publicKey: String, path: String): Long {
+        if (publicKey.isBlank()) {
+            throw IOException("Update source URL is not configured")
+        }
+        val encodedKey = URLEncoder.encode(publicKey, Charsets.UTF_8.name())
+        val encodedPath = URLEncoder.encode(path, Charsets.UTF_8.name())
+        val apiUrl =
+            "https://cloud-api.yandex.net/v1/disk/public/resources" +
+                "?public_key=$encodedKey&path=$encodedPath"
+        val request = Request.Builder().url(apiUrl).get().build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("Yandex Disk metadata failed: HTTP ${response.code}")
+            }
+            val size = JSONObject(response.body?.string().orEmpty()).optLong("size", -1L)
+            if (size <= 0L) {
+                throw IOException("Yandex Disk metadata returned empty file size")
+            }
+            return size
+        }
+    }
+
     private fun resolveDownloadHref(publicKey: String, path: String): String {
         if (publicKey.isBlank()) {
             throw IOException("Update source URL is not configured")

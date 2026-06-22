@@ -9,6 +9,7 @@ data class UpdateReleaseInfo(
     val flavor: String,
     val apkFileName: String,
     val sha256: String,
+    val apkSizeBytes: Long? = null,
     val minSupportedVersionCode: Long = 0L,
     val changelog: String = "",
     val publishedAt: String = "",
@@ -34,6 +35,7 @@ data class UpdateManifest(
                     val flavor = item.optString("flavor")
                     val apkFileName = item.optString("apkFileName")
                     val sha256 = item.optString("sha256").lowercase()
+                    val apkSizeBytes = item.optLong("apkSizeBytes", -1L).takeIf { it > 0L }
                     if (versionCode < 0L || versionName.isBlank() || flavor.isBlank() ||
                         apkFileName.isBlank() || sha256.isBlank()
                     ) {
@@ -46,6 +48,7 @@ data class UpdateManifest(
                             flavor = flavor,
                             apkFileName = apkFileName,
                             sha256 = sha256,
+                            apkSizeBytes = apkSizeBytes,
                             minSupportedVersionCode = item.optLong("minSupportedVersionCode", 0L),
                             changelog = item.optString("changelog"),
                             publishedAt = item.optString("publishedAt"),

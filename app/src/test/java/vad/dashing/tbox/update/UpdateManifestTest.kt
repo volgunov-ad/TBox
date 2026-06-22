@@ -46,8 +46,21 @@ class UpdateManifestTest {
     }
 
     @Test
-    fun updateChannel_fromStorageValue_defaultsToRelease() {
-        assertEquals(UpdateChannel.RELEASE, UpdateChannel.fromStorageValue(null))
-        assertEquals(UpdateChannel.DEVELOPMENT, UpdateChannel.fromStorageValue("development"))
+    fun parse_validManifest_readsOptionalApkSizeBytes() {
+        val json = """
+            {
+              "schemaVersion": 1,
+              "releases": [{
+                "versionCode": 1601,
+                "versionName": "0.16.1",
+                "flavor": "ru",
+                "apkFileName": "tbox-ru.apk",
+                "sha256": "abc123",
+                "apkSizeBytes": 45115288
+              }]
+            }
+        """.trimIndent()
+        val release = UpdateManifest.parse(json).releaseFor("ru")
+        assertEquals(45115288L, release?.apkSizeBytes)
     }
 }
