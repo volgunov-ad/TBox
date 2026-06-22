@@ -945,6 +945,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = vad.dashing.tbox.update.UpdateChannel.RELEASE,
         )
 
+    val updateCheckEnabled = settingsManager.updateCheckEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
     val headUnitCanMode = settingsManager.headUnitCanModeFlow
         .stateIn(
             scope = viewModelScope,
@@ -1978,6 +1985,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveUiClickSoundsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveUiClickSoundsSetting(enabled)
+        }
+    }
+
+    fun saveUpdateCheckEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUpdateCheckEnabledSetting(enabled)
         }
     }
 

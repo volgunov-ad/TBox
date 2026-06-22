@@ -433,6 +433,8 @@
 
     <string name="settings_misc_title">Прочее</string>
     <string name="settings_update_title">Обновление</string>
+    <string name="settings_update_check_enabled_title">Проверять обновления</string>
+    <string name="settings_update_check_enabled_desc">Автоматическая проверка при запуске приложения. Ручная проверка кнопкой ниже остаётся доступной.</string>
     <string name="settings_update_channel_title">Ветка обновлений</string>
     <string name="settings_update_channel_desc">Релиз — стабильные версии. Разработка — предварительные сборки.</string>
     <string name="settings_update_check_button">Проверить обновления</string>
@@ -449,6 +451,7 @@
     <string name="update_checking">Проверка обновлений…</string>
     <string name="update_up_to_date">Установлена актуальная версия</string>
     <string name="update_idle_hint">Нажмите «Проверить обновления» в настройках или дождитесь автоматической проверки при запуске.</string>
+    <string name="update_idle_hint_manual_only">Нажмите «Проверить обновления» в настройках.</string>
     <string name="update_download">Скачать</string>
     <string name="update_downloading">Загрузка %1$d%%</string>
     <string name="update_downloading_unknown">Загрузка…</string>

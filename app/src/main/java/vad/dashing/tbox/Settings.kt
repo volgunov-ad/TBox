@@ -379,6 +379,7 @@ class SettingsManager(private val context: Context) {
         private val UI_CLICK_SOUNDS_KEY = booleanPreferencesKey("${KEY_PREFIX}ui_click_sounds")
         private val APP_FONT_FAMILY_ID_KEY = intPreferencesKey("${KEY_PREFIX}app_font_family_id")
         private val UPDATE_CHANNEL_KEY = stringPreferencesKey("${KEY_PREFIX}update_channel")
+        private val UPDATE_CHECK_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}update_check_enabled")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
@@ -913,6 +914,10 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             vad.dashing.tbox.update.UpdateChannel.fromStorageValue(preferences[UPDATE_CHANNEL_KEY])
         }
+        .distinctUntilChanged()
+
+    val updateCheckEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[UPDATE_CHECK_ENABLED_KEY] ?: true }
         .distinctUntilChanged()
 
     val headUnitCanModeFlow: Flow<HeadUnitCanMode> = context.settingsDataStore.data
@@ -1991,6 +1996,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveUpdateChannel(channel: vad.dashing.tbox.update.UpdateChannel) {
         context.settingsDataStore.edit { preferences ->
             preferences[UPDATE_CHANNEL_KEY] = channel.storageValue
+        }
+    }
+
+    suspend fun saveUpdateCheckEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[UPDATE_CHECK_ENABLED_KEY] = enabled
         }
     }
 

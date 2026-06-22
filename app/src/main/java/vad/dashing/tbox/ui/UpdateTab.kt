@@ -44,6 +44,7 @@ fun UpdateTab(
 ) {
     val uiState by updateViewModel.uiState.collectAsStateWithLifecycle()
     val updateChannel by updateViewModel.updateChannel.collectAsStateWithLifecycle()
+    val updateCheckEnabled by updateViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = LocalActivity.current
     var canInstall by remember { mutableStateOf(updateViewModel.canInstallPackages()) }
@@ -110,7 +111,13 @@ fun UpdateTab(
         when (val state = uiState) {
             UpdateUiState.Idle -> {
                 Text(
-                    text = stringResource(R.string.update_idle_hint),
+                    text = stringResource(
+                        if (updateCheckEnabled) {
+                            R.string.update_idle_hint
+                        } else {
+                            R.string.update_idle_hint_manual_only
+                        },
+                    ),
                     style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurface
                 )

@@ -430,6 +430,8 @@
 
     <string name="settings_misc_title">Misc</string>
     <string name="settings_update_title">Updates</string>
+    <string name="settings_update_check_enabled_title">Check for updates</string>
+    <string name="settings_update_check_enabled_desc">Automatic check on app startup. Manual check with the button below remains available.</string>
     <string name="settings_update_channel_title">Update branch</string>
     <string name="settings_update_channel_desc">Release — stable builds. Development — preview builds.</string>
     <string name="settings_update_check_button">Check for updates</string>
@@ -446,6 +448,7 @@
     <string name="update_checking">Checking for updates…</string>
     <string name="update_up_to_date">You are on the latest version</string>
     <string name="update_idle_hint">Tap Check for updates in Settings or wait for the automatic check on startup.</string>
+    <string name="update_idle_hint_manual_only">Tap Check for updates in Settings.</string>
     <string name="update_download">Download</string>
     <string name="update_downloading">Downloading %1$d%%</string>
     <string name="update_downloading_unknown">Downloading…</string>

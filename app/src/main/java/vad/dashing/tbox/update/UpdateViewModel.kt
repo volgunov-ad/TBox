@@ -18,10 +18,21 @@ class UpdateViewModel(
     val uiState = repository.uiState
     val updateChannel = settingsManager.updateChannelFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UpdateChannel.RELEASE)
+    val updateCheckEnabled = settingsManager.updateCheckEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     fun checkForUpdate(force: Boolean = false) {
         viewModelScope.launch {
             repository.checkForUpdate(force = force)
+        }
+    }
+
+    fun checkForUpdateOnStartupIfEnabled() {
+        viewModelScope.launch {
+            if (!settingsManager.updateCheckEnabledFlow.first()) return@launch
+            if (UpdateSessionGate.tryBeginSessionCheck()) {
+                repository.checkForUpdate(force = false)
+            }
         }
     }
 

@@ -53,7 +53,6 @@ import vad.dashing.tbox.CycleDataViewModel
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
-import vad.dashing.tbox.update.UpdateSessionGate
 import vad.dashing.tbox.update.UpdateUiState
 import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.update.UpdateViewModelFactory
@@ -110,9 +109,7 @@ fun TboxApp(
     }
 
     LaunchedEffect(Unit) {
-        if (UpdateSessionGate.tryBeginSessionCheck()) {
-            updateViewModel.checkForUpdate(force = false)
-        }
+        updateViewModel.checkForUpdateOnStartupIfEnabled()
     }
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {

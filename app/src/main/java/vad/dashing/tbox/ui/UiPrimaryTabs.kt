@@ -288,6 +288,7 @@ fun SettingsTabContent(
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
     val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
+    val updateCheckEnabled by settingsViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
@@ -699,6 +700,15 @@ fun SettingsTabContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_update_title))
+        SettingSwitch(
+            updateCheckEnabled,
+            { enabled ->
+                settingsViewModel.saveUpdateCheckEnabled(enabled)
+            },
+            stringResource(R.string.settings_update_check_enabled_title),
+            stringResource(R.string.settings_update_check_enabled_desc),
+            true,
+        )
         val releaseChannelLabel = stringResource(R.string.update_channel_release)
         val developmentChannelLabel = stringResource(R.string.update_channel_development)
         val updateChannelOptions = remember(releaseChannelLabel, developmentChannelLabel) {
