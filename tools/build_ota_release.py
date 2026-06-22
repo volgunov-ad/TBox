@@ -3,7 +3,7 @@
 Сборка APK для OTA-обновлений TBox Monitor и подготовка version.json.
 
 Скрипт:
-  1. Спрашивает канал: Релиз или Разработка
+  1. Спрашивает канал: Разработка (debug/release) или Релиз
   2. Собирает ru/en APK через Gradle
   3. Копирует APK в папку загрузки на Яндекс.Диск
   4. Создаёт version.json с sha256 и размером файлов
@@ -17,6 +17,7 @@
 
 Или с аргументами:
   python tools/build_ota_release.py --channel dev
+  python tools/build_ota_release.py --channel dev-release
   python tools/build_ota_release.py --channel release --changelog "Исправления"
 """
 
@@ -51,14 +52,21 @@ class ChannelConfig:
 CHANNELS: dict[str, ChannelConfig] = {
     "dev": ChannelConfig(
         key="dev",
-        label="Разработка",
+        label="Разработка (debug APK -> dev)",
         build_type="debug",
         output_dir_name="dev",
         gradle_tasks=("assembleRuDebug", "assembleEnDebug"),
     ),
+    "dev_release": ChannelConfig(
+        key="dev_release",
+        label="Разработка (release APK -> dev)",
+        build_type="release",
+        output_dir_name="dev",
+        gradle_tasks=("assembleRuRelease", "assembleEnRelease"),
+    ),
     "release": ChannelConfig(
         key="release",
-        label="Релиз",
+        label="Релиз (release APK -> release)",
         build_type="release",
         output_dir_name="release",
         gradle_tasks=("assembleRuRelease", "assembleEnRelease"),
@@ -107,19 +115,22 @@ def read_app_version(gradle_path: Path) -> AppVersion:
 def choose_channel_interactive() -> ChannelConfig:
     print("Выберите канал обновлений:")
     print("  1 — Разработка (debug APK -> dev)")
-    print("  2 — Релиз (release APK -> release)")
+    print("  2 — Разработка (release APK -> dev)")
+    print("  3 — Релиз (release APK -> release)")
     while True:
-        choice = input("Введите 1 или 2: ").strip()
+        choice = input("Введите 1, 2 или 3: ").strip()
         if choice == "1":
             return CHANNELS["dev"]
         if choice == "2":
+            return CHANNELS["dev_release"]
+        if choice == "3":
             return CHANNELS["release"]
         print("Неверный ввод, попробуйте снова.")
 
 
 def resolve_channel(args: argparse.Namespace) -> ChannelConfig:
     if args.channel:
-        key = args.channel.lower()
+        key = args.channel.lower().replace("-", "_")
         if key in ("development", "debug"):
             key = "dev"
         if key not in CHANNELS:
@@ -227,8 +238,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build OTA APKs and generate version.json")
     parser.add_argument(
         "--channel",
-        choices=["dev", "development", "debug", "release"],
-        help="Канал: dev (Разработка) или release (Релиз). Без аргумента — интерактивный выбор.",
+        choices=["dev", "development", "debug", "dev-release", "dev_release", "release"],
+        help=(
+            "Канал: dev (debug -> dev), dev-release (release -> dev), "
+            "release (release -> release). Без аргумента — интерактивный выбор."
+        ),
     )
     parser.add_argument(
         "--output-base",
