@@ -231,7 +231,6 @@ fun TabMenuItem(
     selected: Boolean,
     showText: Boolean,
     onClick: () -> Unit,
-    subtitle: String? = null,
 ) {
     val backgroundColor = if (selected) {
         MaterialTheme.colorScheme.primary
@@ -269,24 +268,15 @@ fun TabMenuItem(
                 modifier = Modifier.size(iconSize)
             )
             if (showText) {
-                Column(modifier = Modifier.padding(start = 12.dp)) {
-                    Text(
-                        text = title,
-                        color = textColor,
-                        textAlign = TextAlign.Left,
-                        style = MaterialTheme.typography.tboxTabLabel.copy(
-                            lineHeight = MaterialTheme.typography.tboxTabLabel.fontSize * 1.1f,
-                        ),
-                    )
-                    if (!subtitle.isNullOrBlank()) {
-                        Text(
-                            text = subtitle,
-                            color = textColor,
-                            textAlign = TextAlign.Left,
-                            style = MaterialTheme.typography.tboxCaption,
-                        )
-                    }
-                }
+                Text(
+                    text = title,
+                    color = textColor,
+                    textAlign = TextAlign.Left,
+                    modifier = Modifier.padding(start = 12.dp),
+                    style = MaterialTheme.typography.tboxTabLabel.copy(
+                        lineHeight = MaterialTheme.typography.tboxTabLabel.fontSize * 1.1f,
+                    ),
+                )
             }
         }
     }

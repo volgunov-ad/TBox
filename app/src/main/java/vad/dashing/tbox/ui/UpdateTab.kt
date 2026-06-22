@@ -33,6 +33,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.update.UpdateChannel
 import vad.dashing.tbox.update.UpdateUiState
 import vad.dashing.tbox.update.UpdateViewModel
+import vad.dashing.tbox.update.formatApkSizeMegabytes
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxTitle
@@ -45,6 +46,7 @@ fun UpdateTab(
     val uiState by updateViewModel.uiState.collectAsStateWithLifecycle()
     val updateChannel by updateViewModel.updateChannel.collectAsStateWithLifecycle()
     val updateCheckEnabled by updateViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
+    val pendingUpdateInfo = updateViewModel.peekUpdateInfo()
     val context = LocalContext.current
     val activity = LocalActivity.current
     var canInstall by remember { mutableStateOf(updateViewModel.canInstallPackages()) }
@@ -150,6 +152,7 @@ fun UpdateTab(
                 }
             }
             is UpdateUiState.Downloading -> {
+                pendingUpdateInfo?.let { UpdateReleaseDetails(it) }
                 if (state.percent != null) {
                     LinearProgressIndicator(
                         progress = { state.percent / 100f },
@@ -170,6 +173,7 @@ fun UpdateTab(
                 }
             }
             UpdateUiState.Verifying -> {
+                pendingUpdateInfo?.let { UpdateReleaseDetails(it) }
                 CircularProgressIndicator()
                 Text(
                     text = stringResource(R.string.update_verifying),
@@ -249,6 +253,16 @@ private fun UpdateReleaseDetails(info: vad.dashing.tbox.update.UpdateReleaseInfo
         style = MaterialTheme.typography.tboxTitle,
         color = MaterialTheme.colorScheme.onSurface
     )
+    if (info.apkSizeBytes != null && info.apkSizeBytes > 0L) {
+        Text(
+            text = stringResource(
+                R.string.update_apk_size_mb,
+                formatApkSizeMegabytes(info.apkSizeBytes),
+            ),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
     if (info.publishedAt.isNotBlank()) {
         Text(
             text = stringResource(R.string.update_published_at, info.publishedAt),
