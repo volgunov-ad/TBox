@@ -1512,9 +1512,10 @@ class BackgroundService : Service() {
         // Проверяем, не изменился ли объем бака или сетка калибровки в RAM-буфере.
         tripLastFuelLitersCalibrated?.let { lastLiters ->
             tripLastFuelPercent?.let { lastPercent ->
-                val expectedLitersForCurrentTank = (lastPercent / 100f) * tankL
-                // Если литры в буфере не бьются с текущим объемом бака (дельта > 0.5 л),
-                // значит пользователь изменил настройки или сбросил калибровку.
+                val expectedLitersForCurrentTank =
+                    baselineCalibratedStandardLitersFromPercent(lastPercent, tankL)
+                // Если калиброванные литры в буфере не бьются с пересчётом под текущий бак
+                // (дельта > 0.5 л), значит пользователь изменил настройки или сбросил калибровку.
                 if (kotlin.math.abs(lastLiters - expectedLitersForCurrentTank) > 0.5f) {
                     // Мягко обновляем буфер под новые настройки и выходим, блокируя ложный триггер заправки
                     tripLastFuelLitersCalibrated = litersNow
