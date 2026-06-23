@@ -75,6 +75,8 @@
     <string name="car_settings_source_station_mode_desc">eSOURCE_STATION_MODE</string>
     <string name="car_settings_vehwash_mode_title">Режим мойки автомобиля</string>
     <string name="car_settings_vehwash_mode_desc">eVEHICLE_VEHWASH_MODESET</string>
+    <string name="car_settings_test_remote_power_title">eTBOX_REMOTEPOWER_ONOFFREQ (324)</string>
+    <string name="car_settings_test_remote_power_input_label">Значение</string>
     <string name="menu_hide">Скрыть меню</string>
     <string name="menu_show">Показать меню</string>
     <string name="menu_navigate_home">Главная</string>

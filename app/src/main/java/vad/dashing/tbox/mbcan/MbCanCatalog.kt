@@ -185,6 +185,8 @@ object MbCanKnownVehiclePropertyId {
     const val REAR_LEFT_SEAT_HEAT_SWITCH = 318
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_RR_HEATVENTSW] — rear heat only (values 1–4). */
     const val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eTBOX_REMOTEPOWER_ONOFFREQ] — test-only in Car Settings. */
+    const val TBOX_REMOTEPOWER_ONOFFREQ = 324
 }
 
 /** [com.mengbo.mbCan.defines.MBAudioProperty] integer ids for [com.mengbo.mbCan.MBCanEngine.canGetAudioParam]. */

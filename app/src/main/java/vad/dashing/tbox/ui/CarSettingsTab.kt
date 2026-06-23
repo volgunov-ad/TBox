@@ -14,15 +14,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -90,6 +97,8 @@ fun CarSettingsTab(
     val epsMode by UniversalCanRepository.carSettingsEpsMode.collectAsStateWithLifecycle()
     val driveMode by UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     val driveMode6dctWet by UniversalCanRepository.carSettingsDriveMode6dctWet.collectAsStateWithLifecycle()
+    val remotePowerValue by UniversalCanRepository.carSettingsTestRemotePowerValue.collectAsStateWithLifecycle()
+    var remotePowerInput by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         UniversalCanRepository.setSourceSignals(
@@ -167,6 +176,67 @@ fun CarSettingsTab(
                 }
             }
         )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+        CarSettingsTestRemotePowerRow(
+            currentValue = remotePowerValue,
+            inputValue = remotePowerInput,
+            onInputChange = { remotePowerInput = it },
+            enabled = mbCanOk,
+            onSend = { value ->
+                coroutineScope.launch {
+                    UniversalCanRepository.execute(
+                        MbCanCommand.SetTestVehicleProperty(
+                            MbCanKnownVehiclePropertyId.TBOX_REMOTEPOWER_ONOFFREQ,
+                            value,
+                        )
+                    )
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun CarSettingsTestRemotePowerRow(
+    currentValue: Int?,
+    inputValue: String,
+    onInputChange: (String) -> Unit,
+    enabled: Boolean,
+    onSend: (Int) -> Unit,
+) {
+    val parsedInput = inputValue.trim().toIntOrNull()
+    StatusRow(
+        label = stringResource(R.string.car_settings_test_remote_power_title),
+        value = currentValue?.toString() ?: stringResource(R.string.value_no_data),
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedTextField(
+            value = inputValue,
+            onValueChange = onInputChange,
+            modifier = Modifier.weight(1f),
+            enabled = enabled,
+            label = {
+                Text(
+                    stringResource(R.string.car_settings_test_remote_power_input_label),
+                    style = MaterialTheme.typography.tboxCaption,
+                )
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        OutlinedButton(
+            onClick = { parsedInput?.let(onSend) },
+            enabled = enabled && parsedInput != null,
+        ) {
+            Text(stringResource(R.string.action_send), style = MaterialTheme.typography.tboxButton)
+        }
     }
 }
 
