@@ -1419,7 +1419,7 @@ class BackgroundService : Service() {
                             if (wheelPressurePersistAcrossStopsSetting.value) {
                                 persistLastKnownWheelPressuresOnEngineStop()
                             }
-                            persistLastKnownFuelLevelOnEngineStop()
+                            persistLastKnownFuelLevel()
                         }
                         onTripPeriodicSample(now)
                         prevRpmForEngineStop = rpm
@@ -1997,6 +1997,7 @@ class BackgroundService : Service() {
                 appDataManager.saveTripFavoritesJson(favJson)
                 TripRepository.markPersisted(tripsJson, favJson)
             }
+            persistLastKnownFuelLevel()
         }
     }
 
@@ -2144,7 +2145,7 @@ class BackgroundService : Service() {
         appDataManager.saveLastKnownNonZeroWheelPressuresPartial(CanDataRepository.wheelsPressure.value)
     }
 
-    private suspend fun persistLastKnownFuelLevelOnEngineStop() {
+    private suspend fun persistLastKnownFuelLevel() {
         appDataManager.saveLastKnownFuelLevelPartial(
             percentFiltered = CanDataRepository.fuelLevelPercentageFiltered.value,
             calibratedStandardLiters = CanDataRepository.fuelLevelCalibratedLiters.value,
