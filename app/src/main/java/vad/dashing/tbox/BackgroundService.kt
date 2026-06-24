@@ -1419,7 +1419,10 @@ class BackgroundService : Service() {
                             if (wheelPressurePersistAcrossStopsSetting.value) {
                                 persistLastKnownWheelPressuresOnEngineStop()
                             }
-                            persistLastKnownFuelLevel()
+                            // Active trip fuel level is saved via maybePersistTrips on the same tick.
+                            if (TripRepository.activeTrip.value == null) {
+                                persistLastKnownFuelLevel()
+                            }
                         }
                         onTripPeriodicSample(now)
                         prevRpmForEngineStop = rpm
