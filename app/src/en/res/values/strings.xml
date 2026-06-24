@@ -75,8 +75,6 @@
     <string name="car_settings_source_station_mode_desc">eSOURCE_STATION_MODE</string>
     <string name="car_settings_vehwash_mode_title">Car wash mode</string>
     <string name="car_settings_vehwash_mode_desc">eVEHICLE_VEHWASH_MODESET</string>
-    <string name="car_settings_test_remote_power_title">eTBOX_REMOTEPOWER_ONOFFREQ (324)</string>
-    <string name="car_settings_test_remote_power_input_label">Value</string>
     <string name="menu_hide">Hide menu</string>
     <string name="menu_show">Show menu</string>
     <string name="menu_navigate_home">Home</string>

@@ -237,16 +237,6 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    val carSettingsTestRemotePowerValue: StateFlow<Int?> = mode
-        .flatMapLatest { activeMode ->
-            if (activeMode == HeadUnitCanMode.Android9MbCan) {
-                MbCanRepository.carSettingsTestRemotePowerValue
-            } else {
-                Android10VhalRepository.carSettingsTestRemotePowerValue
-            }
-        }
-        .stateIn(scope, SharingStarted.Eagerly, null)
-
     val engineRpmState: StateFlow<Float?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

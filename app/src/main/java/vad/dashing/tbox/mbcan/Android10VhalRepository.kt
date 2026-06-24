@@ -407,8 +407,6 @@ object Android10VhalRepository {
     val carSettingsDriveMode: StateFlow<Int?> = _carSettingsDriveMode.asStateFlow()
     private val _carSettingsDriveMode6dctWet = MutableStateFlow<Int?>(null)
     val carSettingsDriveMode6dctWet: StateFlow<Int?> = _carSettingsDriveMode6dctWet.asStateFlow()
-    private val _carSettingsTestRemotePowerValue = MutableStateFlow<Int?>(null)
-    val carSettingsTestRemotePowerValue: StateFlow<Int?> = _carSettingsTestRemotePowerValue.asStateFlow()
 
     private val stateEngine = MbCanSignalStateEngine(
         steeringFlow = _steeringWheelHeatState,
@@ -745,8 +743,7 @@ object Android10VhalRepository {
             MbCanSignal.CarSettingsVehicleParams -> setOf(
                 resolved(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE),
                 resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE),
-                resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET),
-                resolved(MbCanKnownVehiclePropertyId.TBOX_REMOTEPOWER_ONOFFREQ),
+                resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
             )
             MbCanSignal.FrontLeftSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH))
             MbCanSignal.FrontRightSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH))
@@ -918,8 +915,6 @@ object Android10VhalRepository {
                 _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(raw)
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET) ->
                 _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(raw)
-            resolved(MbCanKnownVehiclePropertyId.TBOX_REMOTEPOWER_ONOFFREQ) ->
-                _carSettingsTestRemotePowerValue.value = raw
             resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) ->
                 raw?.let {
                     stateEngine.applySeatCandidate(MbCanSeatSlot.FrontLeft, MbCanSignalStateEngine.decodeSeatModeRaw(it))
@@ -1039,7 +1034,6 @@ object Android10VhalRepository {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
                     _carSettingsDriveMode6dctWet.value = null
-                    _carSettingsTestRemotePowerValue.value = null
                 }
                 MbCanSignal.WirelessChargingSwitch -> Unit
             }
@@ -1078,7 +1072,6 @@ object Android10VhalRepository {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
                     _carSettingsDriveMode6dctWet.value = null
-                    _carSettingsTestRemotePowerValue.value = null
                 }
                 MbCanSignal.WirelessChargingSwitch -> Unit
             }
@@ -1195,13 +1188,9 @@ object Android10VhalRepository {
                 val driveWetId = FirmwareVehicleJsonMapper
                     .resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
                     ?: MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET
-                val remotePowerId = FirmwareVehicleJsonMapper
-                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.TBOX_REMOTEPOWER_ONOFFREQ)
-                    ?: MbCanKnownVehiclePropertyId.TBOX_REMOTEPOWER_ONOFFREQ
                 _carSettingsEpsMode.value = decodeCarSettingsIntZeroToSix(bridge?.getIntProperty(epsId))
                 _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(bridge?.getIntProperty(driveId))
                 _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(bridge?.getIntProperty(driveWetId))
-                _carSettingsTestRemotePowerValue.value = bridge?.getIntProperty(remotePowerId)
             }
             MbCanSignal.FrontLeftSeatMode -> {
                 val propertyId = FirmwareVehicleJsonMapper
@@ -1366,21 +1355,6 @@ object Android10VhalRepository {
                 logDebug("RefreshSignal ${command.signal}")
                 refreshSignal(command.signal)
                 MbCanCommandResult(true, "Refresh requested")
-            }
-            is MbCanCommand.SetTestVehicleProperty -> {
-                val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
-                    ?: command.propertyId
-                logDebug(
-                    "SetTestVehicleProperty request=${command.propertyId} effective=$effectivePropertyId " +
-                        "value=${command.value}"
-                )
-                val ok = bridge?.setIntProperty(effectivePropertyId, command.value) == true
-                logDebug("SetTestVehicleProperty result=$ok propertyId=$effectivePropertyId value=${command.value}")
-                if (ok) {
-                    requestBurstPolling()
-                    refreshSignal(MbCanSignal.CarSettingsVehicleParams)
-                }
-                MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
             }
         }
     }

@@ -75,8 +75,6 @@ sealed class MbCanCommand {
     data class SetProperty(val propertyId: Int, val value: Int) : MbCanCommand()
     data class ToggleAudioProperty(val propertyId: Int) : MbCanCommand()
     data class SetAudioProperty(val propertyId: Int, val value: Int) : MbCanCommand()
-    /** TEST ONLY — arbitrary vehicle param write from Car Settings debug UI. */
-    data class SetTestVehicleProperty(val propertyId: Int, val value: Int) : MbCanCommand()
     data class RefreshSignal(val signal: MbCanSignal) : MbCanCommand()
 }
 
@@ -225,14 +223,11 @@ object MbCanRepository {
     val carSettingsDriveMode: StateFlow<Int?> = _carSettingsDriveMode.asStateFlow()
     private val _carSettingsDriveMode6dctWet = MutableStateFlow<Int?>(null)
     val carSettingsDriveMode6dctWet: StateFlow<Int?> = _carSettingsDriveMode6dctWet.asStateFlow()
-    private val _carSettingsTestRemotePowerValue = MutableStateFlow<Int?>(null)
-    val carSettingsTestRemotePowerValue: StateFlow<Int?> = _carSettingsTestRemotePowerValue.asStateFlow()
 
     private val carSettingsCfgVehicleIds: Set<Int> = setOf(
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE,
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET,
-        MbCanKnownVehiclePropertyId.TBOX_REMOTEPOWER_ONOFFREQ,
     )
 
     private val stateEngine = MbCanSignalStateEngine(
@@ -612,10 +607,6 @@ object MbCanRepository {
             is MbCanCommand.SetProperty -> executeSetViaRegistry(command.propertyId, command.value)
             is MbCanCommand.ToggleAudioProperty -> executeToggleAudioViaRegistry(command.propertyId)
             is MbCanCommand.SetAudioProperty -> executeSetAudioViaRegistry(command.propertyId, command.value)
-            is MbCanCommand.SetTestVehicleProperty -> executeTestSetVehicleProperty(
-                command.propertyId,
-                command.value,
-            )
             is MbCanCommand.RefreshSignal -> {
                 refreshSignal(command.signal)
                 MbCanCommandResult(true, "Refresh requested")
@@ -655,25 +646,6 @@ object MbCanRepository {
         }
         MbCanDiagnostics.log("DEBUG", "toggle target=$target propertyId=$propertyId")
         return applySetAndVerify(spec, target)
-    }
-
-    private suspend fun executeTestSetVehicleProperty(propertyId: Int, value: Int): MbCanCommandResult {
-        MbCanDiagnostics.log("DEBUG", "executeTestSetVehicleProperty propertyId=$propertyId value=$value")
-        if (availability.value !is MbCanAvailability.Available) {
-            return MbCanCommandResult(false, "mbCAN unavailable")
-        }
-        val setResult = MbCanEngineFacade.canSetVehicleParam(propertyId, value)
-            ?: return MbCanCommandResult(false, "Set command failed")
-                .also {
-                    MbCanDiagnostics.log("ERROR", "test set failed propertyId=$propertyId value=$value")
-                }
-        MbCanDiagnostics.log("DEBUG", "test set result=$setResult propertyId=$propertyId value=$value")
-        if (setResult >= 0) {
-            MbCanJobManager.requestBurst(MbCanSignal.CarSettingsVehicleParams)
-            delay(POST_COMMAND_VERIFY_DELAY_MS)
-            refreshCarSettingsVehicleParams()
-        }
-        return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
     }
 
     private suspend fun executeSetViaRegistry(propertyId: Int, value: Int): MbCanCommandResult {
@@ -1377,8 +1349,6 @@ object MbCanRepository {
                 _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(raw)
             MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET ->
                 _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(raw)
-            MbCanKnownVehiclePropertyId.TBOX_REMOTEPOWER_ONOFFREQ ->
-                _carSettingsTestRemotePowerValue.value = raw
         }
     }
 
@@ -1386,7 +1356,6 @@ object MbCanRepository {
         _carSettingsEpsMode.value = null
         _carSettingsDriveMode.value = null
         _carSettingsDriveMode6dctWet.value = null
-        _carSettingsTestRemotePowerValue.value = null
     }
 
     private suspend fun refreshCarSettingsVehicleParams() {
@@ -1411,8 +1380,6 @@ object MbCanRepository {
             _carSettingsEpsMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE)
             _carSettingsDriveMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE)
             _carSettingsDriveMode6dctWet.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
-            _carSettingsTestRemotePowerValue.value =
-                MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.TBOX_REMOTEPOWER_ONOFFREQ)
             MbCanDiagnostics.log("DEBUG", "refreshCarSettingsVehicleParams refreshed")
         }
     }
