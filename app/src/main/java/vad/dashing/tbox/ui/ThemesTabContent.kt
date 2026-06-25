@@ -90,6 +90,7 @@ fun ThemesTabContent(
     var showCreateDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showClearSharedIconsDialog by remember { mutableStateOf(false) }
+    var showClearSharedHttpRequestIconsDialog by remember { mutableStateOf(false) }
     var showClearSharedTileBackgroundsDialog by remember { mutableStateOf(false) }
     var includeMainScreen by remember { mutableStateOf(true) }
     var includeFloatingPanels by remember { mutableStateOf(true) }
@@ -348,6 +349,19 @@ fun ThemesTabContent(
                     maxLines = 2,
                 )
             }
+        }
+
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { showClearSharedHttpRequestIconsDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.themes_clear_shared_http_request_icons),
+                style = MaterialTheme.typography.tboxCaption,
+                maxLines = 2,
+            )
         }
 
         Text(
@@ -620,6 +634,40 @@ fun ThemesTabContent(
             },
             dismissButton = {
                 OutlinedButton(onClick = rememberWrappedOnClick { showClearSharedIconsDialog = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (showClearSharedHttpRequestIconsDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearSharedHttpRequestIconsDialog = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.themes_clear_shared_http_request_icons_dialog_title)) },
+            text = {
+                AppAlertDialogText(stringResource(R.string.themes_clear_shared_http_request_icons_dialog_message))
+            },
+            confirmButton = {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        showClearSharedHttpRequestIconsDialog = false
+                        scope.launch {
+                            settingsViewModel.clearSharedHttpRequestIconsFolder()
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    R.string.toast_theme_shared_http_request_icons_cleared,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.themes_clear_shared_http_request_icons_confirm))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = rememberWrappedOnClick { showClearSharedHttpRequestIconsDialog = false }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                 }
             },

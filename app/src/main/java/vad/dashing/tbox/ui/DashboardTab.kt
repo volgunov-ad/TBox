@@ -398,6 +398,7 @@ fun MainDashboardTab(
                                         isEditMode = false,
                                         elevation = MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
                                         shape = shapeDp,
+                                        panelStorageId = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
                                     )
                                 }
                             }

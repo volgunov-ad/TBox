@@ -10,6 +10,7 @@ object ThemeApply {
         val sections: Set<ThemeSection>,
         val iconsImported: Int,
         val tileBackgroundsImported: Int,
+        val httpRequestIconsImported: Int = 0,
     )
 
     suspend fun applyFromUri(

@@ -440,6 +440,7 @@ object WidgetsRepository {
             R.string.data_title_media_volume_widget_vertical
         ),
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
+        HTTP_REQUEST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_http_request_widget),
         EMPTY_TILE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_empty_tile_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
@@ -514,6 +515,7 @@ object WidgetsRepository {
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
+            HTTP_REQUEST_WIDGET_DATA_KEY,
             "timeWidget",
             "dateWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
@@ -547,6 +549,7 @@ object WidgetsRepository {
             EXTERNAL_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,
+            HTTP_REQUEST_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,

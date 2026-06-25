@@ -368,6 +368,7 @@ fun FloatingDashboard(
                     dashboardChart = false,
                     tboxConnected = tboxConnected,
                     currentTheme = currentTheme,
+                    panelStorageId = panelId,
                     restartEnabled = restartEnabled,
                     onTripFinishAndStart = onTripFinishAndStart,
                     isEditMode = isEditMode,

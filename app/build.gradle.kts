@@ -105,6 +105,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.androidx.profileinstaller.profileinstaller)
     implementation(libs.okhttp)
+    implementation(libs.snakeyaml.engine)
     implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

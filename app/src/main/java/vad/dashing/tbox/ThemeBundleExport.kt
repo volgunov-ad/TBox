@@ -26,12 +26,14 @@ object ThemeBundleExport {
     const val ASSETS_WALLPAPER_LIGHT_DIR = "assets/wallpaper/light/"
     const val ASSETS_WALLPAPER_DARK_DIR = "assets/wallpaper/dark/"
     private const val ASSETS_ICONS_DIR = "assets/icons/"
+    private const val ASSETS_HTTP_REQUEST_ICONS_DIR = "assets/http_request_icons/"
     private const val ASSETS_TILE_BG_DIR = "assets/tile_backgrounds/"
     const val THEME_WALLPAPER_IMPORT_DIR = "themes/imported_wallpaper"
 
     data class ThemeExtractResult(
         val themeJson: String,
         val iconsImported: Int,
+        val httpRequestIconsImported: Int,
         val tileBackgroundsImported: Int,
         val lightWallpaperDir: File?,
         val darkWallpaperDir: File?,
@@ -40,6 +42,7 @@ object ThemeBundleExport {
     data class ParsedThemeBundle(
         val themeJson: String,
         val icons: Map<String, ByteArray>,
+        val httpRequestIcons: Map<String, ByteArray>,
         val tileBackgrounds: Map<String, ByteArray>,
         val lightWallpapers: Map<String, ByteArray>,
         val darkWallpapers: Map<String, ByteArray>,
@@ -63,6 +66,7 @@ object ThemeBundleExport {
             ParsedThemeBundle(
                 themeJson = json,
                 icons = state.icons,
+                httpRequestIcons = state.httpRequestIcons,
                 tileBackgrounds = state.tileBackgrounds,
                 lightWallpapers = state.lightWallpapers,
                 darkWallpapers = state.darkWallpapers,
@@ -96,6 +100,7 @@ object ThemeBundleExport {
         var themeJson: String? = null,
         var themeJsonPriority: Int = Int.MAX_VALUE,
         val icons: MutableMap<String, ByteArray> = linkedMapOf(),
+        val httpRequestIcons: MutableMap<String, ByteArray> = linkedMapOf(),
         val tileBackgrounds: MutableMap<String, ByteArray> = linkedMapOf(),
         val lightWallpapers: MutableMap<String, ByteArray> = linkedMapOf(),
         val darkWallpapers: MutableMap<String, ByteArray> = linkedMapOf(),
@@ -120,6 +125,10 @@ object ThemeBundleExport {
         }
         zipAssetSuffix(normalized, ASSETS_ICONS_DIR)?.let { filename ->
             state.icons[filename] = zis.readBytes()
+            return
+        }
+        zipAssetSuffix(normalized, ASSETS_HTTP_REQUEST_ICONS_DIR)?.let { filename ->
+            state.httpRequestIcons[filename] = zis.readBytes()
             return
         }
         zipAssetSuffix(normalized, ASSETS_TILE_BG_DIR)?.let { rel ->
@@ -151,6 +160,7 @@ object ThemeBundleExport {
             putBytesEntry(zos, THEME_JSON_ENTRY, themeJson.toByteArray(Charsets.UTF_8))
             if (ThemeSection.APP_ICONS in sections) {
                 addAppIconsToZip(context, settingsManager, sections, zos)
+                addHttpRequestIconsToZip(context, settingsManager, sections, zos)
             }
             if (ThemeSection.MAIN_SCREEN in sections || ThemeSection.FLOATING_PANELS in sections) {
                 addTileBackgroundsToZip(context, settingsManager, sections, zos)
@@ -215,7 +225,9 @@ object ThemeBundleExport {
 
     fun extractBundle(context: Context, bytes: ByteArray): Result<ThemeExtractResult> {
         val iconsDir = File(context.filesDir, SettingsManager.LAUNCHER_APP_ICONS_DIR)
+        val httpRequestIconsDir = File(context.filesDir, SettingsManager.HTTP_REQUEST_ICONS_DIR)
         var iconsImported = 0
+        var httpRequestIconsImported = 0
         var tileBackgroundsImported = 0
         var lightDir: File? = null
         var darkDir: File? = null
@@ -239,6 +251,11 @@ object ThemeBundleExport {
                 File(iconsDir, liveName).writeBytes(data)
                 iconsImported++
             }
+            state.httpRequestIcons.forEach { (filename, data) ->
+                httpRequestIconsDir.mkdirs()
+                File(httpRequestIconsDir, filename).writeBytes(data)
+                httpRequestIconsImported++
+            }
             state.tileBackgrounds.forEach { (rel, data) ->
                 val dest = File(context.filesDir, "${TileBackgroundImageStorage.DIR_NAME}/$rel")
                 dest.parentFile?.mkdirs()
@@ -261,6 +278,7 @@ object ThemeBundleExport {
             ThemeExtractResult(
                 themeJson = json,
                 iconsImported = iconsImported,
+                httpRequestIconsImported = httpRequestIconsImported,
                 tileBackgroundsImported = tileBackgroundsImported,
                 lightWallpaperDir = lightDir,
                 darkWallpaperDir = darkDir,
@@ -320,6 +338,31 @@ object ThemeBundleExport {
         packages.forEach { pkg ->
             val file = LauncherAppIconPaths.resolveIconFile(filesDir, pkg, lookup) ?: return@forEach
             putFileEntry(zos, "$ASSETS_ICONS_DIR$pkg", file)
+        }
+    }
+
+    private suspend fun addHttpRequestIconsToZip(
+        context: Context,
+        settingsManager: SettingsManager,
+        sections: Set<ThemeSection>,
+        zos: ZipOutputStream,
+    ) {
+        val lookup = settingsManager.launcherAppIconLookup()
+        val keys = linkedSetOf<String>()
+        if (ThemeSection.MAIN_SCREEN in sections) {
+            settingsManager.mainScreenDashboardsFlow.first().forEach { panel ->
+                keys.addAll(ThemeLayoutExport.collectHttpRequestIconKeys(panel.id, panel.widgetsConfig))
+            }
+        }
+        if (ThemeSection.FLOATING_PANELS in sections) {
+            settingsManager.floatingDashboardsFlow.first().forEach { panel ->
+                keys.addAll(ThemeLayoutExport.collectHttpRequestIconKeys(panel.id, panel.widgetsConfig))
+            }
+        }
+        val filesDir = context.filesDir
+        keys.forEach { key ->
+            val file = HttpRequestIconPaths.resolveIconFile(filesDir, key, lookup) ?: return@forEach
+            putFileEntry(zos, "$ASSETS_HTTP_REQUEST_ICONS_DIR$key", file)
         }
     }
 
