@@ -1419,7 +1419,10 @@ class BackgroundService : Service() {
                             if (wheelPressurePersistAcrossStopsSetting.value) {
                                 persistLastKnownWheelPressuresOnEngineStop()
                             }
-                            persistLastKnownFuelLevelOnEngineStop()
+                            // Active trip fuel level is saved via maybePersistTrips on the same tick.
+                            if (TripRepository.activeTrip.value == null) {
+                                persistLastKnownFuelLevel()
+                            }
                         }
                         onTripPeriodicSample(now)
                         prevRpmForEngineStop = rpm
@@ -1512,9 +1515,10 @@ class BackgroundService : Service() {
         // Проверяем, не изменился ли объем бака или сетка калибровки в RAM-буфере.
         tripLastFuelLitersCalibrated?.let { lastLiters ->
             tripLastFuelPercent?.let { lastPercent ->
-                val expectedLitersForCurrentTank = (lastPercent / 100f) * tankL
-                // Если литры в буфере не бьются с текущим объемом бака (дельта > 0.5 л),
-                // значит пользователь изменил настройки или сбросил калибровку.
+                val expectedLitersForCurrentTank =
+                    baselineCalibratedStandardLitersFromPercent(lastPercent, tankL)
+                // Если калиброванные литры в буфере не бьются с пересчётом под текущий бак
+                // (дельта > 0.5 л), значит пользователь изменил настройки или сбросил калибровку.
                 if (kotlin.math.abs(lastLiters - expectedLitersForCurrentTank) > 0.5f) {
                     // Мягко обновляем буфер под новые настройки и выходим, блокируя ложный триггер заправки
                     tripLastFuelLitersCalibrated = litersNow
@@ -1996,6 +2000,7 @@ class BackgroundService : Service() {
                 appDataManager.saveTripFavoritesJson(favJson)
                 TripRepository.markPersisted(tripsJson, favJson)
             }
+            persistLastKnownFuelLevel()
         }
     }
 
@@ -2143,7 +2148,7 @@ class BackgroundService : Service() {
         appDataManager.saveLastKnownNonZeroWheelPressuresPartial(CanDataRepository.wheelsPressure.value)
     }
 
-    private suspend fun persistLastKnownFuelLevelOnEngineStop() {
+    private suspend fun persistLastKnownFuelLevel() {
         appDataManager.saveLastKnownFuelLevelPartial(
             percentFiltered = CanDataRepository.fuelLevelPercentageFiltered.value,
             calibratedStandardLiters = CanDataRepository.fuelLevelCalibratedLiters.value,
