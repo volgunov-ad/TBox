@@ -34,6 +34,8 @@ import vad.dashing.tbox.update.UpdateChannel
 import vad.dashing.tbox.update.UpdateUiState
 import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.update.formatApkSizeMegabytes
+import vad.dashing.tbox.update.formatDownloadEta
+import vad.dashing.tbox.update.formatDownloadSpeed
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxTitle
@@ -153,13 +155,15 @@ fun UpdateTab(
             }
             is UpdateUiState.Downloading -> {
                 pendingUpdateInfo?.let { UpdateReleaseDetails(it) }
-                if (state.percent != null) {
+                val progress = state.progress
+                val percent = progress.percent
+                if (percent != null) {
                     LinearProgressIndicator(
-                        progress = { state.percent / 100f },
+                        progress = { percent / 100f },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        text = stringResource(R.string.update_downloading, state.percent),
+                        text = stringResource(R.string.update_downloading, percent),
                         style = MaterialTheme.typography.tboxBody,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -169,6 +173,26 @@ fun UpdateTab(
                         text = stringResource(R.string.update_downloading_unknown),
                         style = MaterialTheme.typography.tboxBody,
                         color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                progress.speedBytesPerSecond?.takeIf { it > 0L }?.let { speed ->
+                    Text(
+                        text = stringResource(
+                            R.string.update_download_speed,
+                            formatDownloadSpeed(speed),
+                        ),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                progress.remainingSeconds?.let { seconds ->
+                    Text(
+                        text = stringResource(
+                            R.string.update_download_eta,
+                            formatDownloadEta(seconds),
+                        ),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }

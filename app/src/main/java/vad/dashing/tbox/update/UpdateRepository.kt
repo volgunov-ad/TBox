@@ -25,10 +25,24 @@ sealed interface UpdateUiState {
     data object Checking : UpdateUiState
     data object UpToDate : UpdateUiState
     data class Available(val info: UpdateReleaseInfo) : UpdateUiState
-    data class Downloading(val percent: Int?) : UpdateUiState
+    data class Downloading(val progress: UpdateDownloadProgress) : UpdateUiState
     data object Verifying : UpdateUiState
     data class ReadyToInstall(val apkFile: File, val info: UpdateReleaseInfo) : UpdateUiState
     data class Error(val message: String, val cachedInfo: UpdateReleaseInfo? = null) : UpdateUiState
+}
+
+data class UpdateDownloadProgress(
+    val downloadedBytes: Long = 0L,
+    val totalBytes: Long? = null,
+    val speedBytesPerSecond: Long? = null,
+    val remainingSeconds: Long? = null,
+) {
+    val percent: Int?
+        get() = if (totalBytes != null && totalBytes > 0L) {
+            ((downloadedBytes * 100L) / totalBytes).toInt().coerceIn(0, 100)
+        } else {
+            null
+        }
 }
 
 class UpdateRepository(
@@ -102,24 +116,38 @@ class UpdateRepository(
             return
         }
         lastAvailableInfo = info
-        _uiState.value = UpdateUiState.Downloading(percent = null)
+        _uiState.value = UpdateUiState.Downloading(UpdateDownloadProgress())
         try {
             val channel = settingsManager.updateChannelFlow.first()
             val publicKey = publicKeyForChannel(channel)
             val destination = apkDestinationFile(info)
             withContext(Dispatchers.IO) {
                 clearCachedApk()
+                val startedAtNanos = System.nanoTime()
                 yandexDiskClient.downloadToFile(
                     publicKey = publicKey,
                     path = "/${info.apkFileName}",
                     destination = destination,
                     onProgress = { downloaded, total ->
-                        val percent = if (total != null && total > 0L) {
-                            ((downloaded * 100L) / total).toInt().coerceIn(0, 100)
+                        val elapsedSeconds = (System.nanoTime() - startedAtNanos) / 1_000_000_000.0
+                        val speed = if (elapsedSeconds >= 0.5) {
+                            (downloaded / elapsedSeconds).toLong().takeIf { it > 0L }
                         } else {
                             null
                         }
-                        _uiState.value = UpdateUiState.Downloading(percent)
+                        val remainingSeconds = if (total != null && total > downloaded && speed != null) {
+                            ((total - downloaded) / speed.toDouble()).toLong().coerceAtLeast(1L)
+                        } else {
+                            null
+                        }
+                        _uiState.value = UpdateUiState.Downloading(
+                            UpdateDownloadProgress(
+                                downloadedBytes = downloaded,
+                                totalBytes = total,
+                                speedBytesPerSecond = speed,
+                                remainingSeconds = remainingSeconds,
+                            ),
+                        )
                     },
                 )
             }
