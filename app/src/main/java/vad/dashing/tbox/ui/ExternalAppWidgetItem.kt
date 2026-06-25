@@ -272,7 +272,6 @@ fun ExternalAppWidgetItem(
                                 val minHeight = with(density) { size.height.toDp().value }.roundToInt()
                                 if (minWidth <= 0 || minHeight <= 0) return@onSizeChanged
                                 val forceRefresh = forceSizeOptionsRefresh
-                                forceSizeOptionsRefresh = false
                                 applySizeOptionsJob?.cancel()
                                 applySizeOptionsJob = applySizeOptionsScope.launch {
                                     if (!forceRefresh) {
@@ -288,6 +287,9 @@ fun ExternalAppWidgetItem(
                                         val existing = appWidgetManager.getAppWidgetOptions(appWidgetId)
                                         if (forceRefresh || !embeddedWidgetSizeHintsMatch(existing, merged)) {
                                             appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
+                                        }
+                                        if (forceRefresh) {
+                                            forceSizeOptionsRefresh = false
                                         }
                                     }
                                 }
