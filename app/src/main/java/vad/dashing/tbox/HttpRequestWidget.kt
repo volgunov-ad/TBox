@@ -5,15 +5,20 @@ import android.content.Intent
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.Authenticator
 import okhttp3.ConnectionSpec
 import okhttp3.Credentials
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.Route
 import okhttp3.TlsVersion
 import org.snakeyaml.engine.v2.api.Load
 import org.snakeyaml.engine.v2.api.LoadSettings
+import java.math.BigInteger
+import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.Locale
@@ -174,6 +179,12 @@ private fun httpRequestClient(config: HttpRequestWidgetConfig): OkHttpClient {
         .callTimeout(config.timeoutSeconds.toLong(), TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
+    if (config.authentication == "digest" &&
+        !config.username.isNullOrBlank() &&
+        config.password != null
+    ) {
+        builder.authenticator(DigestRequestAuthenticator(config.username.orEmpty(), config.password.orEmpty()))
+    }
     if (!config.verifySsl) {
         builder.trustAllSsl()
     }
@@ -203,6 +214,94 @@ private fun OkHttpClient.Builder.trustAllSsl(): OkHttpClient.Builder {
     hostnameVerifier { _, _ -> true }
     return this
 }
+
+private class DigestRequestAuthenticator(
+    private val username: String,
+    private val password: String,
+) : Authenticator {
+    override fun authenticate(route: Route?, response: Response): Request? {
+        if (responseCount(response) >= 2) return null
+        val challenge = response.headers("WWW-Authenticate")
+            .firstOrNull { it.trimStart().startsWith("Digest", ignoreCase = true) }
+            ?: return null
+        val values = parseDigestChallenge(challenge)
+        val realm = values["realm"] ?: return null
+        val nonce = values["nonce"] ?: return null
+        val algorithm = values["algorithm"]?.uppercase(Locale.ROOT) ?: "MD5"
+        if (algorithm != "MD5") return null
+        val qop = values["qop"]
+            ?.split(',')
+            ?.map { it.trim() }
+            ?.firstOrNull { it.equals("auth", ignoreCase = true) }
+        val uri = response.request.url.encodedPath.let { path ->
+            val query = response.request.url.encodedQuery
+            if (query == null) path else "$path?$query"
+        }
+        val nc = "00000001"
+        val cnonce = BigInteger(64, SecureRandom()).toString(16)
+        val ha1 = md5Hex("$username:$realm:$password")
+        val ha2 = md5Hex("${response.request.method}:$uri")
+        val digestResponse = if (qop != null) {
+            md5Hex("$ha1:$nonce:$nc:$cnonce:$qop:$ha2")
+        } else {
+            md5Hex("$ha1:$nonce:$ha2")
+        }
+        val header = buildString {
+            append("""Digest username="$username", realm="$realm", nonce="$nonce", uri="$uri", response="$digestResponse"""")
+            values["opaque"]?.let { append(""", opaque="$it"""") }
+            append(", algorithm=MD5")
+            if (qop != null) {
+                append(""", qop=$qop, nc=$nc, cnonce="$cnonce"""")
+            }
+        }
+        return response.request.newBuilder()
+            .header("Authorization", header)
+            .build()
+    }
+}
+
+private fun responseCount(response: Response): Int {
+    var result = 1
+    var prior = response.priorResponse
+    while (prior != null) {
+        result++
+        prior = prior.priorResponse
+    }
+    return result
+}
+
+private fun parseDigestChallenge(header: String): Map<String, String> {
+    val raw = header.substringAfter("Digest", "").trim()
+    val out = linkedMapOf<String, String>()
+    var idx = 0
+    while (idx < raw.length) {
+        while (idx < raw.length && (raw[idx] == ',' || raw[idx].isWhitespace())) idx++
+        val keyStart = idx
+        while (idx < raw.length && raw[idx] != '=' && raw[idx] != ',') idx++
+        if (idx >= raw.length || raw[idx] != '=') break
+        val key = raw.substring(keyStart, idx).trim().lowercase(Locale.ROOT)
+        idx++
+        val value = if (idx < raw.length && raw[idx] == '"') {
+            idx++
+            val valueStart = idx
+            while (idx < raw.length && raw[idx] != '"') idx++
+            raw.substring(valueStart, idx).also {
+                if (idx < raw.length && raw[idx] == '"') idx++
+            }
+        } else {
+            val valueStart = idx
+            while (idx < raw.length && raw[idx] != ',') idx++
+            raw.substring(valueStart, idx).trim()
+        }
+        if (key.isNotBlank()) out[key] = value
+    }
+    return out
+}
+
+private fun md5Hex(value: String): String =
+    MessageDigest.getInstance("MD5")
+        .digest(value.toByteArray(Charsets.ISO_8859_1))
+        .joinToString("") { "%02x".format(it) }
 
 private fun Map<*, *>.stringValue(key: String): String? =
     this[key]?.let { value ->
