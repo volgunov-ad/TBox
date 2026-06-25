@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
@@ -123,6 +124,14 @@ internal fun HttpRequestWidgetSettingsSection(
         state.httpRequestYaml = newText
         return true
     }
+    fun resetYamlToDefault() {
+        val updated = TextFieldValue(
+            text = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
+            selection = TextRange(DEFAULT_HTTP_REQUEST_WIDGET_YAML.length)
+        )
+        yamlFieldValue = updated
+        state.httpRequestYaml = DEFAULT_HTTP_REQUEST_WIDGET_YAML
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -136,6 +145,15 @@ internal fun HttpRequestWidgetSettingsSection(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
             )
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { resetYamlToDefault() },
+                enabled = state.togglesEnabled,
+            ) {
+                Text(
+                    text = stringResource(R.string.widget_http_request_reset_yaml),
+                    style = MaterialTheme.typography.tboxCaption
+                )
+            }
             OutlinedButton(
                 onClick = rememberWrappedOnClick { insertYamlNewLine() },
                 enabled = state.togglesEnabled,
