@@ -195,6 +195,15 @@ fun UpdateTab(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
+                Button(
+                    onClick = rememberWrappedOnClick { updateViewModel.cancelDownload() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = stringResource(R.string.update_cancel_download),
+                        style = MaterialTheme.typography.tboxTitle,
+                    )
+                }
             }
             UpdateUiState.Verifying -> {
                 pendingUpdateInfo?.let { UpdateReleaseDetails(it) }

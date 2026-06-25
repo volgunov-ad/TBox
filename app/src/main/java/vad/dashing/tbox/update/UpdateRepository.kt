@@ -11,6 +11,7 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,6 +56,7 @@ class UpdateRepository(
 
     private var lastAvailableInfo: UpdateReleaseInfo? = null
     private var preparedApkFile: File? = null
+    private var downloadInProgress: Boolean = false
 
     suspend fun checkForUpdate(force: Boolean = false) {
         if (!force && _uiState.value is UpdateUiState.Checking) return
@@ -107,6 +109,11 @@ class UpdateRepository(
     }
 
     suspend fun downloadAndVerify() {
+        if (downloadInProgress || _uiState.value is UpdateUiState.Downloading ||
+            _uiState.value is UpdateUiState.Verifying
+        ) {
+            return
+        }
         val info = lastAvailableInfo
             ?: (_uiState.value as? UpdateUiState.Available)?.info
             ?: (_uiState.value as? UpdateUiState.Error)?.cachedInfo
@@ -115,6 +122,7 @@ class UpdateRepository(
             _uiState.value = UpdateUiState.Error("network_unavailable", info)
             return
         }
+        downloadInProgress = true
         lastAvailableInfo = info
         _uiState.value = UpdateUiState.Downloading(UpdateDownloadProgress())
         try {
@@ -159,6 +167,10 @@ class UpdateRepository(
             val infoWithSize = info.withLocalApkSize(destination)
             lastAvailableInfo = infoWithSize
             _uiState.value = UpdateUiState.ReadyToInstall(destination, infoWithSize)
+        } catch (error: CancellationException) {
+            preparedApkFile = null
+            clearCachedApk()
+            _uiState.value = UpdateUiState.Available(info)
         } catch (error: Exception) {
             preparedApkFile?.takeIf { it.exists() }?.delete()
             preparedApkFile = null
@@ -166,6 +178,20 @@ class UpdateRepository(
                 message = error.message ?: error.javaClass.simpleName,
                 cachedInfo = info,
             )
+        } finally {
+            downloadInProgress = false
+        }
+    }
+
+    fun cancelDownload() {
+        if (_uiState.value !is UpdateUiState.Downloading) return
+        val info = lastAvailableInfo
+        preparedApkFile = null
+        clearCachedApk()
+        _uiState.value = if (info != null) {
+            UpdateUiState.Available(info)
+        } else {
+            UpdateUiState.Idle
         }
     }
 

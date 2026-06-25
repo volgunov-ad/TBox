@@ -457,6 +457,7 @@
     <string name="update_downloading_unknown">Загрузка…</string>
     <string name="update_download_speed">Скорость: %1$s</string>
     <string name="update_download_eta">Осталось: %1$s</string>
+    <string name="update_cancel_download">Отменить загрузку</string>
     <string name="update_verifying">Проверка файла…</string>
     <string name="update_install">Установить</string>
     <string name="update_grant_install_permission">Разрешить установку из других источников</string>
