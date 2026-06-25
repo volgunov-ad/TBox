@@ -27,7 +27,7 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-const val DEFAULT_HTTP_REQUEST_WIDGET_YAML = "url: 'http://'"
+const val DEFAULT_HTTP_REQUEST_WIDGET_YAML = "url: \"http://\""
 const val DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS = 10
 const val HTTP_REQUEST_POST_ACTION_BLOCK_MS = 500L
 
