@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -22,8 +23,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -83,6 +93,35 @@ internal fun HttpRequestWidgetSettingsSection(
     val parseError = remember(state.httpRequestYaml) {
         parseHttpRequestWidgetYaml(state.httpRequestYaml).exceptionOrNull()?.message.orEmpty()
     }
+    var yamlFieldValue by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(
+            TextFieldValue(
+                text = state.httpRequestYaml,
+                selection = TextRange(state.httpRequestYaml.length)
+            )
+        )
+    }
+    LaunchedEffect(state.httpRequestYaml) {
+        if (state.httpRequestYaml != yamlFieldValue.text) {
+            yamlFieldValue = TextFieldValue(
+                text = state.httpRequestYaml,
+                selection = TextRange(state.httpRequestYaml.length)
+            )
+        }
+    }
+    fun insertYamlNewLine(): Boolean {
+        val current = yamlFieldValue
+        val start = minOf(current.selection.start, current.selection.end).coerceIn(0, current.text.length)
+        val end = maxOf(current.selection.start, current.selection.end).coerceIn(0, current.text.length)
+        val newText = current.text.replaceRange(start, end, "\n")
+        val updated = TextFieldValue(
+            text = newText,
+            selection = TextRange(start + 1)
+        )
+        yamlFieldValue = updated
+        state.httpRequestYaml = newText
+        return true
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.widget_http_request_settings_title),
@@ -91,10 +130,18 @@ internal fun HttpRequestWidgetSettingsSection(
             modifier = Modifier.padding(bottom = 6.dp)
         )
         OutlinedTextField(
-            value = state.httpRequestYaml,
-            onValueChange = { state.httpRequestYaml = it },
+            value = yamlFieldValue,
+            onValueChange = {
+                yamlFieldValue = it
+                state.httpRequestYaml = it.text
+            },
             enabled = state.togglesEnabled,
             textStyle = MaterialTheme.typography.tboxBody,
+            singleLine = false,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                imeAction = ImeAction.Default
+            ),
             label = {
                 Text(
                     stringResource(R.string.widget_http_request_yaml_label),
@@ -115,6 +162,16 @@ internal fun HttpRequestWidgetSettingsSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 6.dp)
+                .onPreviewKeyEvent { event ->
+                    if (
+                        event.type == KeyEventType.KeyDown &&
+                        (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                    ) {
+                        insertYamlNewLine()
+                    } else {
+                        false
+                    }
+                }
         )
         SettingSwitch(
             state.httpOpenBrowser,
