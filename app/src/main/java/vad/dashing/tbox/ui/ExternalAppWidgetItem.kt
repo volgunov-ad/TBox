@@ -131,6 +131,7 @@ fun ExternalAppWidgetItem(
             }
         }
     }
+    var forceSizeOptionsRefresh by remember(appWidgetId, hostView) { mutableStateOf(true) }
 
     val clickModifier = if (!isEditMode && handleClick) {
         Modifier.clickableWithSound(onClick = onClick)
@@ -270,9 +271,13 @@ fun ExternalAppWidgetItem(
                                 val minWidth = with(density) { size.width.toDp().value }.roundToInt()
                                 val minHeight = with(density) { size.height.toDp().value }.roundToInt()
                                 if (minWidth <= 0 || minHeight <= 0) return@onSizeChanged
+                                val forceRefresh = forceSizeOptionsRefresh
+                                forceSizeOptionsRefresh = false
                                 applySizeOptionsJob?.cancel()
                                 applySizeOptionsJob = applySizeOptionsScope.launch {
-                                    delay(EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS)
+                                    if (!forceRefresh) {
+                                        delay(EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS)
+                                    }
                                     withContext(Dispatchers.Main) {
                                         val merged = mergeAppWidgetSizeOptions(
                                             appWidgetManager,
@@ -281,7 +286,7 @@ fun ExternalAppWidgetItem(
                                             minHeight
                                         )
                                         val existing = appWidgetManager.getAppWidgetOptions(appWidgetId)
-                                        if (!embeddedWidgetSizeHintsMatch(existing, merged)) {
+                                        if (forceRefresh || !embeddedWidgetSizeHintsMatch(existing, merged)) {
                                             appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
                                         }
                                     }
