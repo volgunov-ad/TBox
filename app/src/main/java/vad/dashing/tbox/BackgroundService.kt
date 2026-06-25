@@ -34,6 +34,7 @@ import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationJson
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
 import vad.dashing.tbox.fuellevelcalibration.FuelEntry
 import vad.dashing.tbox.fuellevelcalibration.FuelFilter
+import vad.dashing.tbox.fuellevelcalibration.FuelLevelMath
 import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -985,7 +986,7 @@ class BackgroundService : Service() {
                 yield()
                 startPeriodicJob()
                 yield()
-                ensureFuelEstimatorForReads()
+                refreshFuelCalibrationRepositoryOutputs()
                 yield()
                 startDataListener()
                 startFuelCalibratedLitersWatcher()
@@ -1454,13 +1455,22 @@ class BackgroundService : Service() {
         }
     }
 
-    /** Текущий уровень для учёта поездки: калиброванные стандартные л с CAN, иначе линейно из %. */
-    private fun currentFuelAccountingLiters(tankL: Float): Float? =
-        CanDataRepository.fuelLevelCalibratedLiters.value
-            ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()?.let { it / 100f * tankL }
+    /** Текущий уровень для учёта поездки: калиброванные или линейные л с CAN. */
+    private fun currentFuelAccountingLiters(tankL: Float): Float? {
+        val pct = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return null
+        return if (trackRefuelsSetting.value) {
+            CanDataRepository.fuelLevelCalibratedLiters.value
+                ?: FuelLevelMath.linearLitersFromFilteredPercent(pct, tankL)
+        } else {
+            FuelLevelMath.linearLitersFromFilteredPercent(pct, tankL)
+        }
+    }
 
     private fun baselineCalibratedStandardLitersFromPercent(percent: Float, tankL: Float): Float {
-        val est = ensureFuelEstimatorForReads() ?: return percent / 100f * tankL
+        if (!trackRefuelsSetting.value) {
+            return FuelLevelMath.linearLitersFromFilteredPercent(percent, tankL)
+        }
+        val est = ensureFuelEstimatorForReads() ?: return FuelLevelMath.linearLitersFromFilteredPercent(percent, tankL)
         val sensorLiters = percent / 100f * tankL
         val temp = (CanDataRepository.outsideTemperature.value ?: 15f).toDouble()
         return est.getCorrectedLiters(sensorLiters.toDouble(), temp).litersStandard.toFloat()
@@ -1484,8 +1494,30 @@ class BackgroundService : Service() {
     }
 
     private fun refreshFuelCalibrationRepositoryOutputs() {
-        ensureFuelEstimatorForReads()
+        FuelCalibrationLive.configure(
+            trackRefuels = trackRefuelsSetting.value,
+            tankLiters = fuelTankLitersSetting.value,
+        )
+        if (trackRefuelsSetting.value) {
+            ensureFuelEstimatorForReads()
+        }
         FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
+    }
+
+    private fun syncActiveTripFuelBaselineAfterTrackRefuelsChange() {
+        val active = TripRepository.activeTrip.value ?: return
+        val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+        val pct = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
+        val liters = baselineCalibratedStandardLitersFromPercent(pct, tankL)
+        tripLastFuelPercent = pct
+        tripLastFuelLitersCalibrated = liters
+        TripRepository.updateActiveTrip { cur ->
+            if (cur.id != active.id) return@updateActiveTrip cur
+            cur.copy(
+                fuelBaselinePercent = pct,
+                fuelBaselineLiters = liters,
+            )
+        }
     }
 
     /**
@@ -2157,7 +2189,7 @@ class BackgroundService : Service() {
 
     /**
      * Восстанавливает последний уровень топлива с диска до прихода CAN (уровень по шине только при работающем двигателе).
-     * Вызывать после [ensureFuelEstimatorForReads] в пайплайне старта службы.
+     * Вызывать после [refreshFuelCalibrationRepositoryOutputs] в пайплайне старта службы.
      */
     private suspend fun restoreLastKnownFuelLevelFromAppData() {
         val (pct, liters) = withContext(Dispatchers.IO) {
@@ -2309,13 +2341,21 @@ class BackgroundService : Service() {
                     fuelCalibrationZoneCountSetting,
                     fuelCalibrationJsonSetting,
                     fuelCalibrationMaturityThresholdSetting,
-                ) { _: Int, _: Int, _: String, _: Int ->
+                    trackRefuelsSetting,
+                ) { _: Int, _: Int, _: String, _: Int, _: Boolean ->
                     refreshFuelCalibrationRepositoryOutputs()
                 }.collect { }
             }
             launch {
+                trackRefuelsSetting.drop(1).collect {
+                    syncActiveTripFuelBaselineAfterTrackRefuelsChange()
+                }
+            }
+            launch {
                 CanDataRepository.outsideTemperature.collect {
-                    FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
+                    if (trackRefuelsSetting.value) {
+                        FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
+                    }
                 }
             }
         }
