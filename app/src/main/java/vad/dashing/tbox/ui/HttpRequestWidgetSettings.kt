@@ -124,12 +124,28 @@ internal fun HttpRequestWidgetSettingsSection(
         return true
     }
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.widget_http_request_settings_title),
-            style = MaterialTheme.typography.tboxButton,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 6.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.widget_http_request_settings_title),
+                style = MaterialTheme.typography.tboxButton,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { insertYamlNewLine() },
+                enabled = state.togglesEnabled,
+            ) {
+                Text(
+                    text = stringResource(R.string.widget_http_request_insert_new_line),
+                    style = MaterialTheme.typography.tboxCaption
+                )
+            }
+        }
         OutlinedTextField(
             value = yamlFieldValue,
             onValueChange = {
@@ -182,18 +198,6 @@ internal fun HttpRequestWidgetSettingsSection(
                     }
                 }
         )
-        OutlinedButton(
-            onClick = rememberWrappedOnClick { insertYamlNewLine() },
-            enabled = state.togglesEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.widget_http_request_insert_new_line),
-                style = MaterialTheme.typography.tboxCaption
-            )
-        }
         SettingSwitch(
             state.httpOpenBrowser,
             { state.httpOpenBrowser = it },
