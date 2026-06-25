@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -140,7 +141,15 @@ internal fun HttpRequestWidgetSettingsSection(
             singleLine = false,
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Text,
-                imeAction = ImeAction.Default
+                imeAction = ImeAction.None
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { insertYamlNewLine() },
+                onGo = { insertYamlNewLine() },
+                onNext = { insertYamlNewLine() },
+                onPrevious = { insertYamlNewLine() },
+                onSearch = { insertYamlNewLine() },
+                onSend = { insertYamlNewLine() },
             ),
             label = {
                 Text(
