@@ -4,6 +4,11 @@ import java.io.File
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -26,7 +31,7 @@ class YandexDiskClient(
         }
     }
 
-    fun downloadToFile(
+    suspend fun downloadToFile(
         publicKey: String,
         path: String,
         destination: File,
@@ -34,33 +39,60 @@ class YandexDiskClient(
     ) {
         val href = resolveDownloadHref(publicKey, path)
         val request = Request.Builder().url(href).get().build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("Yandex Disk download failed: HTTP ${response.code}")
+        val coroutineContext = currentCoroutineContext()
+        val call = client.newCall(request)
+        val cancelHandle = coroutineContext.job.invokeOnCompletion { cause ->
+            if (cause is CancellationException) {
+                call.cancel()
             }
-            val body = response.body ?: throw IOException("Yandex Disk download body is empty")
-            val totalBytes = body.contentLength().takeIf { it >= 0L }
-            destination.parentFile?.mkdirs()
-            val tempFile = File(destination.parentFile, "${destination.name}.part")
-            tempFile.outputStream().use { output ->
-                body.byteStream().use { input ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var downloaded = 0L
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read <= 0) break
-                        output.write(buffer, 0, read)
-                        downloaded += read
-                        onProgress(downloaded, totalBytes)
+        }
+        try {
+            coroutineContext.ensureActive()
+            call.execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("Yandex Disk download failed: HTTP ${response.code}")
+                }
+                val body = response.body ?: throw IOException("Yandex Disk download body is empty")
+                val totalBytes = body.contentLength().takeIf { it >= 0L }
+                destination.parentFile?.mkdirs()
+                val tempFile = File(destination.parentFile, "${destination.name}.part")
+                var completed = false
+                try {
+                    tempFile.outputStream().use { output ->
+                        body.byteStream().use { input ->
+                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                            var downloaded = 0L
+                            while (true) {
+                                coroutineContext.ensureActive()
+                                val read = input.read(buffer)
+                                coroutineContext.ensureActive()
+                                if (read <= 0) break
+                                output.write(buffer, 0, read)
+                                downloaded += read
+                                onProgress(downloaded, totalBytes)
+                            }
+                        }
+                    }
+                    if (destination.exists()) {
+                        destination.delete()
+                    }
+                    if (!tempFile.renameTo(destination)) {
+                        throw IOException("Failed to finalize download file")
+                    }
+                    completed = true
+                } finally {
+                    if (!completed) {
+                        tempFile.delete()
                     }
                 }
             }
-            if (destination.exists()) {
-                destination.delete()
+        } catch (error: IOException) {
+            if (!coroutineContext.isActive) {
+                throw CancellationException("Update download canceled", error)
             }
-            if (!tempFile.renameTo(destination)) {
-                throw IOException("Failed to finalize download file")
-            }
+            throw error
+        } finally {
+            cancelHandle.dispose()
         }
     }
 
