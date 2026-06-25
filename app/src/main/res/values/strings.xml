@@ -801,6 +801,7 @@
     <string name="widget_http_request_settings_title">HTTP-запрос</string>
     <string name="widget_http_request_yaml_label">YAML запроса</string>
     <string name="widget_http_request_yaml_hint">Поддерживаются: url, method, headers, payload, authentication, username, password, timeout, content_type, verify_ssl, insecure_cipher, skip_url_encoding.</string>
+    <string name="widget_http_request_insert_new_line">Вставить перенос строки</string>
     <string name="widget_http_request_open_browser">Открыть браузер</string>
     <string name="widget_http_request_open_browser_desc">Если включено, плитка открывает url в браузере, не выполняет HTTP-запрос и не показывает цветовую анимацию.</string>
     <string name="widget_http_request_secret_warning">Внимание: токены, пароли и headers из YAML сохраняются в настройках и попадут в файл темы при экспорте панели.</string>

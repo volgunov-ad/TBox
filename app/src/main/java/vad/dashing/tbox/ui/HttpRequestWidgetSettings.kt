@@ -182,6 +182,18 @@ internal fun HttpRequestWidgetSettingsSection(
                     }
                 }
         )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { insertYamlNewLine() },
+            enabled = state.togglesEnabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.widget_http_request_insert_new_line),
+                style = MaterialTheme.typography.tboxCaption
+            )
+        }
         SettingSwitch(
             state.httpOpenBrowser,
             { state.httpOpenBrowser = it },
