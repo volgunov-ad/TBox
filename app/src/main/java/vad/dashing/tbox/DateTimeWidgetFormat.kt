@@ -106,8 +106,9 @@ private fun normalizeRussianDateTimePattern(input: String, dataKey: String): Str
                     continue
                 }
             }
-            russianPatternChar(ch, dataKey)?.let {
-                out.append(it)
+            val mapped = russianPatternChar(ch, dataKey)
+            if (mapped != null) {
+                out.append(mapped)
                 i++
                 continue
             }
