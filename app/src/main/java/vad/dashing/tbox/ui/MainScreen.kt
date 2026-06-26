@@ -142,14 +142,6 @@ fun MainScreen(
         val maxWpx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val maxHpx = constraints.maxHeight.toFloat().coerceAtLeast(1f)
 
-        val mainScreenMapWindow by settingsViewModel.mainScreenMapWindowConfig.collectAsStateWithLifecycle()
-        MainScreenMapWindowOverlay(
-            config = mainScreenMapWindow,
-            containerWidthPx = maxWpx,
-            containerHeightPx = maxHpx,
-            settingsViewModel = settingsViewModel,
-        )
-
         if (multiPage) {
             key(pageCount) {
                 val pagePagerState = rememberPagerState(

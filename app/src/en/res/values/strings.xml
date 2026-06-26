@@ -322,9 +322,6 @@
     <string name="settings_main_screen_corner_buttons_icon_dark">Icon color (dark theme)</string>
     <string name="settings_main_screen_corner_buttons_reset">Reset size and colors</string>
     <string name="settings_main_screen_panels_title">Main screen panels</string>
-    <string name="settings_main_screen_mapkit_window_title">Yandex Maps window (MapKit)</string>
-    <string name="settings_main_screen_mapkit_window_desc">Show a movable map window on the main screen. Long-press the bottom-left corner to enter layout mode (move: top-right handle, resize: bottom-right). Single tap on the map outside the handles exits layout mode; also exits after 5 minutes idle. Requires MAPKIT_API_KEY in local.properties.</string>
-    <string name="main_screen_map_window_missing_key">Set MAPKIT_API_KEY in local.properties and rebuild the app.</string>
     <string name="settings_main_screen_page_count_title">Page count</string>
     <string name="settings_main_screen_page_count_hint">From 1 to 5. When greater than 1, swipe the main screen to change pages; arrow buttons change wallpapers (when the folder has multiple images).</string>
     <string name="settings_main_screen_panel_page_title">Panel page</string>
@@ -751,6 +748,8 @@
     <string name="data_title_net_widget_new">Network signal widget (new)</string>
     <string name="data_title_net_widget_colored">Network signal widget (colored)</string>
     <string name="data_title_loc_widget">Navigation widget</string>
+    <string name="data_title_map_kit_widget">Yandex Maps (MapKit)</string>
+    <string name="map_kit_widget_missing_key">Set MAPKIT_API_KEY in local.properties and rebuild the app.</string>
     <string name="data_title_voltage_engine_temperature_widget">Voltage and engine temperature widget</string>
     <string name="data_title_gearbox_widget">Gearbox mode widget with current gear and temperature</string>
     <string name="data_title_drive_mode_widget">Drive mode widget</string>

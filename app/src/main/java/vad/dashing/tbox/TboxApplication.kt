@@ -14,8 +14,10 @@ class TboxApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        MapKitFactory.setApiKey(BuildConfig.MAPKIT_API_KEY)
-        MapKitFactory.initialize(this)
+        if (BuildConfig.MAPKIT_API_KEY.isNotBlank()) {
+            MapKitFactory.setApiKey(BuildConfig.MAPKIT_API_KEY)
+            MapKitFactory.initialize(this)
+        }
         AppContextHolder.init(this)
         MainActivityForegroundTracker.register(this)
         val appDataManager = AppDataManager(this)

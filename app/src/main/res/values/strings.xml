@@ -325,9 +325,6 @@
     <string name="settings_main_screen_corner_buttons_icon_dark">Цвет значка (тёмная тема)</string>
     <string name="settings_main_screen_corner_buttons_reset">Сбросить размер и цвета</string>
     <string name="settings_main_screen_panels_title">Панели главного экрана</string>
-    <string name="settings_main_screen_mapkit_window_title">Окно Яндекс.Карт (MapKit)</string>
-    <string name="settings_main_screen_mapkit_window_desc">Показывать на главном экране перемещаемое окно с картой. Долгий тап в левом нижнем углу окна — режим настройки (перемещение: правый верхний угол, размер: правый нижний). Одиночное касание по карте вне ручек — выход из режима; также выход через 5 мин бездействия. Нужен ключ API в local.properties (MAPKIT_API_KEY).</string>
-    <string name="main_screen_map_window_missing_key">Укажите MAPKIT_API_KEY в local.properties и пересоберите приложение.</string>
     <string name="settings_main_screen_page_count_title">Количество страниц</string>
     <string name="settings_main_screen_page_count_hint">От 1 до 5. При значении больше 1 страницы листаются свайпом по экрану; кнопки со стрелками переключают обои (если в папке несколько файлов).</string>
     <string name="settings_main_screen_panel_page_title">Страница панели</string>
@@ -758,6 +755,8 @@
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>
     <string name="data_title_net_widget_colored">Виджет сигнала сети (цветной)</string>
     <string name="data_title_loc_widget">Виджет навигации</string>
+    <string name="data_title_map_kit_widget">Яндекс.Карты (MapKit)</string>
+    <string name="map_kit_widget_missing_key">Укажите MAPKIT_API_KEY в local.properties и пересоберите приложение.</string>
     <string name="data_title_voltage_engine_temperature_widget">Виджет напряжения и температуры двигателя</string>
     <string name="data_title_gearbox_widget">Виджет режима КПП с текущей передачей и температурой</string>
     <string name="data_title_drive_mode_widget">Виджет режима вождения</string>
