@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.app.Application
+import com.yandex.mapkit.MapKitFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,6 +14,8 @@ class TboxApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        MapKitFactory.setApiKey(BuildConfig.MAPKIT_API_KEY)
+        MapKitFactory.initialize(this)
         AppContextHolder.init(this)
         MainActivityForegroundTracker.register(this)
         val appDataManager = AppDataManager(this)

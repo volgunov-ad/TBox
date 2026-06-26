@@ -88,6 +88,8 @@ fun MainScreenSettingsTab(
         settingsViewModel.mainScreenWallpaperDarkFolderUri.collectAsStateWithLifecycle()
     val isMainScreenWallpaperCrop by
         settingsViewModel.isMainScreenWallpaperCrop.collectAsStateWithLifecycle()
+    val isMainScreenMapWindowEnabled by
+        settingsViewModel.isMainScreenMapWindowEnabled.collectAsStateWithLifecycle()
     val mainScreenCornerButtonSizeDp by
         settingsViewModel.mainScreenCornerButtonSizeDp.collectAsStateWithLifecycle()
     val mainScreenCornerBtnBgLight by
@@ -718,6 +720,18 @@ fun MainScreenSettingsTab(
             settingsViewModel = settingsViewModel,
             modifier = Modifier.padding(top = 8.dp),
             enabled = hasMainScreenPanels
+        )
+        SettingSwitch(
+            isMainScreenMapWindowEnabled,
+            { enabled -> settingsViewModel.saveMainScreenMapWindowEnabled(enabled) },
+            stringResource(R.string.settings_main_screen_mapkit_window_title),
+            stringResource(R.string.settings_main_screen_mapkit_window_desc),
+            true
+        )
+        MainScreenMapWindowRelativeLayoutSettings(
+            settingsViewModel = settingsViewModel,
+            modifier = Modifier.padding(top = 8.dp),
+            enabled = isMainScreenMapWindowEnabled
         )
         if (showMainScreenPanelOrderDialog) {
             PanelOrderConfigDialog(
