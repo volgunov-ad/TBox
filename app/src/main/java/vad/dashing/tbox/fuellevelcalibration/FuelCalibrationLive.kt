@@ -3,9 +3,11 @@ package vad.dashing.tbox.fuellevelcalibration
 import vad.dashing.tbox.CanDataRepository
 
 /**
- * Единственный живой [FuelSmartEstimator] и синхронное обновление откалиброванных литров из
+ * Единственный живой [FuelSmartEstimator] и синхронное обновление литров из
  * стабильного отфильтрованного % с CAN ([CanDataRepository.fuelLevelPercentageFiltered] записывается
  * уже после этого). Пересборка экземпляра — при смене настроек в [vad.dashing.tbox.BackgroundService].
+ *
+ * При выключенном «Учитывать заправки» литры считаются линейно, без [FuelSmartEstimator].
  */
 object FuelCalibrationLive {
 
@@ -19,8 +21,17 @@ object FuelCalibrationLive {
     private val lock = Any()
     private var cachedKey: EstimatorSettingsKey? = null
     private var estimator: FuelSmartEstimator? = null
+    private var useCalibratedEstimator: Boolean = true
+    private var linearTankLiters: Int = 50
 
     fun currentEstimator(): FuelSmartEstimator? = synchronized(lock) { estimator }
+
+    fun configure(trackRefuels: Boolean, tankLiters: Int) {
+        synchronized(lock) {
+            useCalibratedEstimator = trackRefuels
+            linearTankLiters = tankLiters.coerceAtLeast(1)
+        }
+    }
 
     /**
      * Пересоздаёт оценщик при изменении настроечного ключа; при совпадающем ключе возвращает текущий.
@@ -49,18 +60,26 @@ object FuelCalibrationLive {
      * выдал очередное стабильное значение %.
      */
     fun applyFromStableFilteredPercent(percent: UInt) {
+        if (!useCalibratedEstimator) {
+            applyLinear(percent)
+            return
+        }
         val est = synchronized(lock) { estimator } ?: return
         applyWithEstimator(est, percent)
     }
 
     /**
-     * После смены настроек калибровки или температуры окружения — пересчитать литры по текущему
-     * сохранённому отфильтрованному %.
+     * После смены настроек калибровки, температуры или режима учёта заправок — пересчитать литры
+     * по текущему сохранённому отфильтрованному %.
      */
     fun reapplyFromRepositoryFilteredPercentOrClear() {
         val p = CanDataRepository.fuelLevelPercentageFiltered.value
         if (p == null) {
             clearCalibratedOutputs()
+            return
+        }
+        if (!useCalibratedEstimator) {
+            applyLinear(p)
             return
         }
         val est = synchronized(lock) { estimator }
@@ -69,6 +88,14 @@ object FuelCalibrationLive {
             return
         }
         applyWithEstimator(est, p)
+    }
+
+    private fun applyLinear(percent: UInt) {
+        val tankL = synchronized(lock) { linearTankLiters }.toFloat()
+        val liters = FuelLevelMath.linearLitersFromFilteredPercent(percent.toFloat(), tankL)
+        CanDataRepository.updateFuelLevelCalibratedLiters(liters)
+        CanDataRepository.updateFuelLevelCalibratedLitersActual(liters)
+        CanDataRepository.updateFuelCalibrationConfidence(null)
     }
 
     private fun applyWithEstimator(est: FuelSmartEstimator, percent: UInt) {

@@ -3,6 +3,7 @@ package vad.dashing.tbox.update
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -14,6 +15,7 @@ class UpdateViewModel(
     private val settingsManager: SettingsManager,
 ) : AndroidViewModel(application) {
     private val repository = UpdateRepository(application, settingsManager)
+    private var downloadJob: Job? = null
 
     val uiState = repository.uiState
     val updateChannel = settingsManager.updateChannelFlow
@@ -37,9 +39,20 @@ class UpdateViewModel(
     }
 
     fun downloadAndVerify() {
-        viewModelScope.launch {
-            repository.downloadAndVerify()
+        if (downloadJob?.isActive == true) return
+        downloadJob = viewModelScope.launch {
+            try {
+                repository.downloadAndVerify()
+            } finally {
+                downloadJob = null
+            }
         }
+    }
+
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        downloadJob = null
+        repository.cancelDownload()
     }
 
     fun installPreparedApk() {

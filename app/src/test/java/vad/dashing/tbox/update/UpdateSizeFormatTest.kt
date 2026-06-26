@@ -16,4 +16,24 @@ class UpdateSizeFormatTest {
         val bytes = 45L * 1024 * 1024
         assertEquals("45", formatApkSizeMegabytes(bytes))
     }
+
+    @Test
+    fun formatDownloadSpeed_formatsKilobytesPerSecond() {
+        assertEquals("512 КБ/с", formatDownloadSpeed(512L * 1024L))
+    }
+
+    @Test
+    fun formatDownloadSpeed_formatsMegabytesPerSecond() {
+        assertEquals("1.5 МБ/с", formatDownloadSpeed((1.5 * 1024 * 1024).toLong()))
+    }
+
+    @Test
+    fun formatDownloadEta_formatsMinutesAndSeconds() {
+        assertEquals("01:05", formatDownloadEta(65L))
+    }
+
+    @Test
+    fun formatDownloadEta_formatsHoursMinutesAndSeconds() {
+        assertEquals("1:01:05", formatDownloadEta(3665L))
+    }
 }
