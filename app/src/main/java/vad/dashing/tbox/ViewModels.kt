@@ -579,6 +579,8 @@ object WidgetsRepository {
         }
     }
 
+    fun supportsDateTimeFormat(dataKey: String): Boolean = isDateTimeWidgetDataKey(dataKey)
+
     /**
      * Widget types where [FloatingDashboardWidgetConfig.useMbCanVhal] is available in widget settings.
      */

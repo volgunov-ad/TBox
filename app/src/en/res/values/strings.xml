@@ -100,6 +100,10 @@
     <string name="widget_value_accuracy_0">0</string>
     <string name="widget_value_accuracy_1">1</string>
     <string name="widget_value_accuracy_2">2</string>
+    <string name="widget_datetime_format_label">Date/time format</string>
+    <string name="widget_datetime_format_hint">Empty — system format. Examples: дд.ММ.гггг, dd.MM.yyyy (EEE), чч:мм, HH:mm:ss, дд.ММ.гггг (день)</string>
+    <string name="widget_datetime_format_preview">Preview: %1$s</string>
+    <string name="widget_datetime_format_error">Invalid format</string>
     <string name="widget_title_gear_box_mode_temp">Transmission mode and temperature</string>
     <string name="widget_title_motor_hours_total_trip">Engine hours (total and trip)</string>
     <string name="widget_title_temp_outside_inside">Outside and inside temperature</string>

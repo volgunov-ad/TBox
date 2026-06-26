@@ -61,6 +61,7 @@ fun DashboardWidgetItem(
     title: Boolean = true,
     titleOverride: String = "",
     units: Boolean = true,
+    dateTimeFormat: String = "",
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
@@ -68,8 +69,12 @@ fun DashboardWidgetItem(
 
     val widgetHistory by dashboardManager.getWidgetHistoryFlow(widget.id).collectAsState()
 
-    val valueFlow = remember(widget.dataKey, widget.valueAccuracy) {
-        dataProvider.getValueFlow(widget.dataKey, widget.valueAccuracy)
+    val valueFlow = remember(widget.dataKey, widget.valueAccuracy, dateTimeFormat) {
+        dataProvider.getValueFlow(
+            key = widget.dataKey,
+            accuracy = widget.valueAccuracy,
+            dateTimeFormat = dateTimeFormat,
+        )
     }
     val valueString by valueFlow.collectAsStateWithLifecycle()
 

@@ -56,10 +56,14 @@ import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.isValidDateTimeWidgetFormat
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.normalizeDateTimeWidgetFormat
+import vad.dashing.tbox.previewDateTimeWidgetFormat
 import vad.dashing.tbox.R
+import vad.dashing.tbox.sanitizeDateTimeWidgetFormat
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.WidgetPickerActivity
@@ -199,6 +203,9 @@ internal class WidgetSelectionDialogState(
 
     /** `null` = default decimals per data key in provider; otherwise 0..2 fractional digits. */
     var valueAccuracy by mutableStateOf(initialConfig.valueAccuracy?.takeIf { it in 0..2 })
+    var dateTimeFormat by mutableStateOf(
+        normalizeDateTimeWidgetFormat(initialConfig.dataKey, initialConfig.dateTimeFormat)
+    )
 
     var tripWidgetShowRowDividers by mutableStateOf(initialConfig.tripWidgetShowRowDividers)
     var tripWidgetLabelColumnWidthPercent by mutableIntStateOf(
@@ -214,6 +221,9 @@ internal class WidgetSelectionDialogState(
         }
         if (!WidgetsRepository.supportsUseMbCanVhal(key)) {
             useMbCanVhal = false
+        }
+        if (!WidgetsRepository.supportsDateTimeFormat(key)) {
+            dateTimeFormat = ""
         }
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
@@ -237,6 +247,8 @@ internal class WidgetSelectionDialogState(
             selectedDataKey.isEmpty() -> true
             isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
             isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
+            WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
+                isValidDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)
             else -> true
         }
 }
@@ -692,6 +704,53 @@ internal fun WidgetSelectionDialogForm(
                             enabled = state.togglesEnabled,
                             options = accuracyEntries,
                             selectorWidth = 300.dp
+                        )
+                    }
+                    if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
+                        val dateTimeFormatError = !isValidDateTimeWidgetFormat(
+                            state.selectedDataKey,
+                            state.dateTimeFormat,
+                        )
+                        val dateTimeFormatPreview = previewDateTimeWidgetFormat(
+                            state.selectedDataKey,
+                            state.dateTimeFormat,
+                        ).orEmpty()
+                        OutlinedTextField(
+                            value = state.dateTimeFormat,
+                            onValueChange = { state.dateTimeFormat = it },
+                            enabled = state.togglesEnabled,
+                            isError = dateTimeFormatError,
+                            textStyle = MaterialTheme.typography.tboxTitle,
+                            label = {
+                                Text(
+                                    stringResource(R.string.widget_datetime_format_label),
+                                    style = MaterialTheme.typography.tboxBody,
+                                )
+                            },
+                            placeholder = {
+                                Text(
+                                    stringResource(R.string.widget_datetime_format_hint),
+                                    style = MaterialTheme.typography.tboxBody,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            supportingText = {
+                                Text(
+                                    text = if (dateTimeFormatError) {
+                                        stringResource(R.string.widget_datetime_format_error)
+                                    } else {
+                                        stringResource(
+                                            R.string.widget_datetime_format_preview,
+                                            dateTimeFormatPreview,
+                                        )
+                                    },
+                                    style = MaterialTheme.typography.tboxCaption,
+                                )
+                            },
+                            singleLine = false,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp, bottom = 4.dp),
                         )
                     }
                     if (WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey)) {
@@ -1175,6 +1234,11 @@ internal fun applyWidgetSelectionChanges(
                 null
             },
             valueAccuracy = storedValueAccuracy,
+            dateTimeFormat = if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
+                sanitizeDateTimeWidgetFormat(state.selectedDataKey, state.dateTimeFormat)
+            } else {
+                ""
+            },
             selectedVariant = when {
                 !isSeatHeatVentSingleWidgetDataKey(state.selectedDataKey) -> 0
                 else -> {

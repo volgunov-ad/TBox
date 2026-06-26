@@ -102,6 +102,10 @@ fun serializeWidgetConfigsToJsonArray(
         if (acc != null && acc in 0..2) {
             obj.put("valueAccuracy", acc)
         }
+        val dateTimeFormat = sanitizeDateTimeWidgetFormat(config.dataKey, config.dateTimeFormat)
+        if (dateTimeFormat.isNotBlank()) {
+            obj.put("dateTimeFormat", dateTimeFormat)
+        }
         if (config.selectedVariant != 0) {
             obj.put("selectedVariant", config.selectedVariant)
         }
@@ -270,6 +274,10 @@ private fun parseWidgetConfigsFromJsonArray(
                         },
                         customTitle = item.optString("customTitle", "").trim(),
                         valueAccuracy = valueAccuracy,
+                        dateTimeFormat = sanitizeDateTimeWidgetFormat(
+                            dataKey,
+                            item.optString("dateTimeFormat", ""),
+                        ),
                         selectedVariant = item.optInt("selectedVariant", 0),
                         selectedDriveMode = normalizeDriveModeWidgetRawValue(
                             item.optInt("selectedDriveMode", DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE)

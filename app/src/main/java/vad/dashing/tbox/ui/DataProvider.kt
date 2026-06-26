@@ -17,6 +17,7 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.createDateTimeWidgetDateFormat
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.seatModeToString
 import vad.dashing.tbox.valueToString
@@ -26,7 +27,11 @@ import java.util.Date
 import java.util.Locale
 
 interface DataProvider {
-    fun getValueFlow(key: String, accuracy: Int? = null): StateFlow<String>
+    fun getValueFlow(
+        key: String,
+        accuracy: Int? = null,
+        dateTimeFormat: String = "",
+    ): StateFlow<String>
 }
 
 /** Keys for composite tiles only — same CAN data as public keys, different default decimal places. */
@@ -43,7 +48,11 @@ const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
 const val ENGINE_TEMPERATURE_CAN_FLOW_KEY = "engineTemperature_can"
 const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
 
-private data class ValueFlowCacheKey(val key: String, val accuracy: Int?)
+private data class ValueFlowCacheKey(
+    val key: String,
+    val accuracy: Int?,
+    val dateTimeFormat: String,
+)
 
 class TboxDataProvider(
     private val viewModel: TboxViewModel,
@@ -84,17 +93,21 @@ class TboxDataProvider(
         initialValue = DateFormat.getDateInstance(DateFormat.SHORT, Locale.getDefault()).format(Date())
     )
 
-    override fun getValueFlow(key: String, accuracy: Int?): StateFlow<String> {
-        val cacheKey = ValueFlowCacheKey(key, accuracy)
+    override fun getValueFlow(
+        key: String,
+        accuracy: Int?,
+        dateTimeFormat: String,
+    ): StateFlow<String> {
+        val cacheKey = ValueFlowCacheKey(key, accuracy, dateTimeFormat.trim())
         return flowCache.getOrPut(cacheKey) {
-            createFlowForKey(key, accuracy)
+            createFlowForKey(key, accuracy, dateTimeFormat)
         }
     }
 
     private fun effectiveDecimalPlaces(defaultDigits: Int, accuracy: Int?): Int =
         if (accuracy != null && accuracy >= 0) accuracy else defaultDigits
 
-    private fun createFlowForKey(key: String, accuracy: Int?): StateFlow<String> {
+    private fun createFlowForKey(key: String, accuracy: Int?, dateTimeFormat: String): StateFlow<String> {
         fun eff(defaultDigits: Int) = effectiveDecimalPlaces(defaultDigits, accuracy)
         return when (key) {
             "voltage" -> canViewModel.voltage.mapState { valueToString(it, eff(1)) }
@@ -214,11 +227,33 @@ class TboxDataProvider(
             }
             "motorHours" -> appDataViewModel.motorHours.mapState { valueToString(it, eff(1)) }
             "motorHoursTrip" -> canViewModel.motorHoursTrip.mapState { valueToString(it, eff(1)) }
-            "timeWidget" -> localTimeFlow
-            "dateWidget" -> localDateFlow
+            "timeWidget" -> if (dateTimeFormat.isBlank()) {
+                localTimeFlow
+            } else {
+                createDateTimeFlow(key, dateTimeFormat)
+            }
+            "dateWidget" -> if (dateTimeFormat.isBlank()) {
+                localDateFlow
+            } else {
+                createDateTimeFlow(key, dateTimeFormat)
+            }
             "restartTbox" -> restartFlow
             else -> emptyFlow
         }
+    }
+
+    private fun createDateTimeFlow(key: String, dateTimeFormat: String): StateFlow<String> {
+        val formatter = createDateTimeWidgetDateFormat(key, dateTimeFormat, Locale.getDefault())
+        return flow {
+            while (true) {
+                emit(formatter.format(Date()))
+                delay(1000)
+            }
+        }.distinctUntilChanged().stateIn(
+            scope = viewModel.viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = formatter.format(Date()),
+        )
     }
 
     private fun <T> Flow<T>.mapState(transform: (T) -> String): StateFlow<String> {

@@ -83,6 +83,8 @@ data class FloatingDashboardWidgetConfig(
      * `null` — built-in default per data key; `0`..`2` — fixed fraction digits where applicable.
      */
     val valueAccuracy: Int? = null,
+    /** Optional SimpleDateFormat-compatible pattern for date/time tiles; blank keeps system default. */
+    val dateTimeFormat: String = "",
     /** Per-tile UI variant for widgets that support multiple modes (e.g. single seat heat vs vent). */
     val selectedVariant: Int = 0,
     /** Fixed target value for [DRIVE_MODE_WIDGET_DATA_KEY] tile. */

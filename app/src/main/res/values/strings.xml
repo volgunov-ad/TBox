@@ -100,6 +100,10 @@
     <string name="widget_value_accuracy_0">0</string>
     <string name="widget_value_accuracy_1">1</string>
     <string name="widget_value_accuracy_2">2</string>
+    <string name="widget_datetime_format_label">Формат даты/времени</string>
+    <string name="widget_datetime_format_hint">Пусто — системный формат. Примеры: дд.ММ.гггг, dd.MM.yyyy (EEE), чч:мм, HH:mm:ss, дд.ММ.гггг (день)</string>
+    <string name="widget_datetime_format_preview">Пример: %1$s</string>
+    <string name="widget_datetime_format_error">Некорректный формат</string>
     <string name="widget_title_gear_box_mode_temp">Режим и температура КПП</string>
     <string name="widget_title_motor_hours_total_trip">Моточасы (общ. и за поездку)</string>
     <string name="widget_title_temp_outside_inside">Темп. снаружи и внутри</string>
