@@ -147,7 +147,6 @@ fun DashboardWidgetRenderer(
         MAP_KIT_WIDGET_DATA_KEY -> {
             DashboardMapKitWidgetItem(
                 widget = widget,
-                viewModel = tboxViewModel,
                 mapZoom = widgetConfig.mapKitZoom,
                 onMapZoomChange = onMapKitZoomChange,
                 onClick = onClick,

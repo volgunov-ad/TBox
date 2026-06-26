@@ -1,6 +1,7 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,10 +17,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -29,19 +35,20 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
+import com.yandex.mapkit.map.CameraListener
 import com.yandex.mapkit.map.CameraPosition
+import com.yandex.mapkit.map.CameraUpdateReason
 import com.yandex.mapkit.map.PlacemarkMapObject
 import com.yandex.mapkit.mapview.MapView
 import com.yandex.runtime.image.ImageProvider
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
-import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.MAX_MAP_KIT_ZOOM
 import vad.dashing.tbox.MIN_MAP_KIT_ZOOM
+import vad.dashing.tbox.mapkit.rememberSystemLocationState
 import vad.dashing.tbox.normalizeMapKitZoom
 
 private val DefaultMapCenter = Point(55.751225, 37.62954)
@@ -49,7 +56,6 @@ private val DefaultMapCenter = Point(55.751225, 37.62954)
 @Composable
 fun DashboardMapKitWidgetItem(
     widget: DashboardWidget,
-    viewModel: TboxViewModel,
     mapZoom: Float,
     onMapZoomChange: (Float) -> Unit,
     onClick: () -> Unit = {},
@@ -63,13 +69,15 @@ fun DashboardMapKitWidgetItem(
     isEditMode: Boolean = false,
     enableInnerInteractions: Boolean = true,
 ) {
-    val locValues by viewModel.locValues.collectAsStateWithLifecycle()
+    val systemLocation = rememberSystemLocationState()
     val defaultTitle = stringResource(R.string.data_title_map_kit_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
     val gesturesEnabled = !isEditMode && enableInnerInteractions
-    val hasFix = locValues.locateStatus &&
-        (locValues.latitude != 0.0 || locValues.longitude != 0.0)
+    val hasFix = systemLocation.hasFix &&
+        systemLocation.hasPermission &&
+        (systemLocation.latitude != 0.0 || systemLocation.longitude != 0.0)
     val zoom = normalizeMapKitZoom(mapZoom)
+    var followCenterActive by remember { mutableStateOf(false) }
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -97,54 +105,116 @@ fun DashboardMapKitWidgetItem(
                     .weight(if (showTitle) 0.9f else 1f),
                 contentAlignment = Alignment.Center,
             ) {
-                if (BuildConfig.MAPKIT_API_KEY.isBlank()) {
-                    Text(
-                        text = stringResource(R.string.map_kit_widget_missing_key),
-                        color = resolvedTextColor,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                    )
-                } else {
-                    MapKitTileView(
-                        latitude = locValues.latitude,
-                        longitude = locValues.longitude,
-                        trueDirection = locValues.trueDirection,
-                        hasFix = hasFix,
-                        zoom = zoom,
-                        gesturesEnabled = gesturesEnabled,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    if (gesturesEnabled) {
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(2.dp),
-                        ) {
-                            MapKitZoomButton(
-                                enabled = zoom > MIN_MAP_KIT_ZOOM,
-                                onClick = { onMapZoomChange(normalizeMapKitZoom(zoom - 1f)) },
+                when {
+                    BuildConfig.MAPKIT_API_KEY.isBlank() -> {
+                        Text(
+                            text = stringResource(R.string.map_kit_widget_missing_key),
+                            color = resolvedTextColor,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
+                    !systemLocation.hasPermission -> {
+                        Text(
+                            text = stringResource(R.string.map_kit_widget_no_location_permission),
+                            color = resolvedTextColor,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                    }
+                    else -> {
+                        MapKitTileView(
+                            latitude = systemLocation.latitude,
+                            longitude = systemLocation.longitude,
+                            bearing = systemLocation.bearing,
+                            hasFix = hasFix,
+                            zoom = zoom,
+                            followCenterActive = followCenterActive,
+                            onUserMapGesture = { followCenterActive = false },
+                            gesturesEnabled = gesturesEnabled,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        if (gesturesEnabled) {
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(2.dp),
                             ) {
-                                Text(
-                                    text = "−",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
+                                MapKitZoomButton(
+                                    enabled = zoom > MIN_MAP_KIT_ZOOM,
+                                    onClick = { onMapZoomChange(normalizeMapKitZoom(zoom - 1f)) },
+                                ) {
+                                    Text(
+                                        text = "−",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                                MapKitZoomButton(
+                                    enabled = zoom < MAX_MAP_KIT_ZOOM,
+                                    onClick = { onMapZoomChange(normalizeMapKitZoom(zoom + 1f)) },
+                                ) {
+                                    Text(
+                                        text = "+",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
                             }
-                            MapKitZoomButton(
-                                enabled = zoom < MAX_MAP_KIT_ZOOM,
-                                onClick = { onMapZoomChange(normalizeMapKitZoom(zoom + 1f)) },
-                            ) {
-                                Text(
-                                    text = "+",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
+                            MapKitFollowCenterButton(
+                                active = followCenterActive,
+                                enabled = hasFix,
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(2.dp),
+                                onFollowActiveChange = { followCenterActive = it },
+                            )
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MapKitFollowCenterButton(
+    active: Boolean,
+    enabled: Boolean,
+    onFollowActiveChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val followCenterCd = stringResource(R.string.map_kit_widget_follow_center_cd)
+    val activeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+    val idleColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+    Box(
+        modifier = modifier
+            .semantics { contentDescription = followCenterCd }
+            .size(36.dp)
+            .background(
+                color = if (active) activeColor else idleColor,
+                shape = CircleShape,
+            )
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                detectTapGestures(
+                    onPress = {
+                        onFollowActiveChange(true)
+                        try {
+                            awaitRelease()
+                        } finally {
+                            onFollowActiveChange(false)
+                        }
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "◎",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -172,9 +242,11 @@ private fun MapKitZoomButton(
 private fun MapKitTileView(
     latitude: Double,
     longitude: Double,
-    trueDirection: Float,
+    bearing: Float,
     hasFix: Boolean,
     zoom: Float,
+    followCenterActive: Boolean,
+    onUserMapGesture: () -> Unit,
     gesturesEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -188,6 +260,7 @@ private fun MapKitTileView(
         }
     }
     val placemarkHolder = remember { PlacemarkHolder() }
+    val cameraListenerHolder = remember { CameraListenerHolder() }
 
     DisposableEffect(mapView) {
         val mapObjects = mapView.mapWindow.map.mapObjects
@@ -201,15 +274,46 @@ private fun MapKitTileView(
         }
     }
 
-    LaunchedEffect(latitude, longitude, trueDirection, hasFix, zoom) {
+    DisposableEffect(mapView, onUserMapGesture) {
+        val listener = CameraListener { _, _, reason, _ ->
+            if (reason == CameraUpdateReason.GESTURES) {
+                onUserMapGesture()
+            }
+        }
+        cameraListenerHolder.listener = listener
+        mapView.mapWindow.map.addCameraListener(listener)
+        onDispose {
+            mapView.mapWindow.map.removeCameraListener(listener)
+            cameraListenerHolder.listener = null
+        }
+    }
+
+    LaunchedEffect(latitude, longitude, bearing, hasFix) {
         val target = if (hasFix) Point(latitude, longitude) else DefaultMapCenter
         placemarkHolder.placemark?.let { placemark ->
             placemark.geometry = target
-            placemark.direction = trueDirection
+            placemark.direction = bearing
             placemark.isVisible = hasFix
         }
+    }
+
+    LaunchedEffect(latitude, longitude, hasFix, zoom, followCenterActive) {
+        if (!followCenterActive || !hasFix) return@LaunchedEffect
+        val target = Point(latitude, longitude)
         mapView.mapWindow.map.move(
             CameraPosition(target, zoom, 0f, 0f),
+        )
+    }
+
+    LaunchedEffect(zoom, followCenterActive, hasFix, latitude, longitude) {
+        if (followCenterActive && hasFix) return@LaunchedEffect
+        mapView.mapWindow.map.move(
+            CameraPosition(
+                mapView.mapWindow.map.cameraPosition.target,
+                zoom,
+                mapView.mapWindow.map.cameraPosition.azimuth,
+                mapView.mapWindow.map.cameraPosition.tilt,
+            ),
         )
     }
 
@@ -255,4 +359,8 @@ private fun MapKitTileView(
 
 private class PlacemarkHolder {
     var placemark: PlacemarkMapObject? = null
+}
+
+private class CameraListenerHolder {
+    var listener: CameraListener? = null
 }
