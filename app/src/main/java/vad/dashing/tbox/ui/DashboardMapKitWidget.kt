@@ -89,11 +89,12 @@ fun DashboardMapKitWidgetItem(
                 titleText = titleText,
                 availableHeight = availableHeight,
                 resolvedTextColor = resolvedTextColor,
+                layoutWeight = 0.1f,
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(if (showTitle) 0.9f else 1f),
                 contentAlignment = Alignment.Center,
             ) {
                 if (BuildConfig.MAPKIT_API_KEY.isBlank()) {
