@@ -750,6 +750,10 @@
     <string name="data_title_loc_widget">Navigation widget</string>
     <string name="data_title_map_kit_widget">Yandex Maps (MapKit)</string>
     <string name="map_kit_widget_missing_key">Set MAPKIT_API_KEY in local.properties and rebuild the app.</string>
+    <string name="map_kit_widget_zoom_title">Map zoom</string>
+    <string name="map_kit_widget_zoom_desc">MapKit zoom level (5–19). You can also pinch-zoom or use +/- on the tile.</string>
+    <string name="map_kit_widget_zoom_in_cd">Zoom in</string>
+    <string name="map_kit_widget_zoom_out_cd">Zoom out</string>
     <string name="data_title_voltage_engine_temperature_widget">Voltage and engine temperature widget</string>
     <string name="data_title_gearbox_widget">Gearbox mode widget with current gear and temperature</string>
     <string name="data_title_drive_mode_widget">Drive mode widget</string>

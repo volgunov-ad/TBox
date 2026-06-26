@@ -1,10 +1,16 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -27,19 +33,25 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
 import com.yandex.mapkit.map.CameraPosition
+import com.yandex.mapkit.map.PlacemarkMapObject
 import com.yandex.mapkit.mapview.MapView
+import com.yandex.runtime.image.ImageProvider
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.MAX_MAP_KIT_ZOOM
+import vad.dashing.tbox.MIN_MAP_KIT_ZOOM
+import vad.dashing.tbox.normalizeMapKitZoom
 
 private val DefaultMapCenter = Point(55.751225, 37.62954)
-private const val DefaultMapZoom = 12f
 
 @Composable
 fun DashboardMapKitWidgetItem(
     widget: DashboardWidget,
     viewModel: TboxViewModel,
+    mapZoom: Float,
+    onMapZoomChange: (Float) -> Unit,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     elevation: Dp = 4.dp,
@@ -55,6 +67,9 @@ fun DashboardMapKitWidgetItem(
     val defaultTitle = stringResource(R.string.data_title_map_kit_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
     val gesturesEnabled = !isEditMode && enableInnerInteractions
+    val hasFix = locValues.locateStatus &&
+        (locValues.latitude != 0.0 || locValues.longitude != 0.0)
+    val zoom = normalizeMapKitZoom(mapZoom)
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -92,11 +107,40 @@ fun DashboardMapKitWidgetItem(
                     MapKitTileView(
                         latitude = locValues.latitude,
                         longitude = locValues.longitude,
-                        hasFix = locValues.locateStatus &&
-                            (locValues.latitude != 0.0 || locValues.longitude != 0.0),
+                        trueDirection = locValues.trueDirection,
+                        hasFix = hasFix,
+                        zoom = zoom,
                         gesturesEnabled = gesturesEnabled,
                         modifier = Modifier.fillMaxSize(),
                     )
+                    if (gesturesEnabled) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(2.dp),
+                        ) {
+                            MapKitZoomButton(
+                                enabled = zoom > MIN_MAP_KIT_ZOOM,
+                                onClick = { onMapZoomChange(normalizeMapKitZoom(zoom - 1f)) },
+                            ) {
+                                Text(
+                                    text = "−",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                            MapKitZoomButton(
+                                enabled = zoom < MAX_MAP_KIT_ZOOM,
+                                onClick = { onMapZoomChange(normalizeMapKitZoom(zoom + 1f)) },
+                            ) {
+                                Text(
+                                    text = "+",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -104,10 +148,32 @@ fun DashboardMapKitWidgetItem(
 }
 
 @Composable
+private fun MapKitZoomButton(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .size(32.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                shape = CircleShape,
+            ),
+    ) {
+        content()
+    }
+}
+
+@Composable
 private fun MapKitTileView(
     latitude: Double,
     longitude: Double,
+    trueDirection: Float,
     hasFix: Boolean,
+    zoom: Float,
     gesturesEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -116,15 +182,33 @@ private fun MapKitTileView(
     val mapView = remember(context) {
         MapView(context).apply {
             mapWindow.map.move(
-                CameraPosition(DefaultMapCenter, DefaultMapZoom, 0f, 0f),
+                CameraPosition(DefaultMapCenter, zoom, 0f, 0f),
             )
         }
     }
+    val placemarkHolder = remember { PlacemarkHolder() }
 
-    LaunchedEffect(latitude, longitude, hasFix) {
+    DisposableEffect(mapView) {
+        val mapObjects = mapView.mapWindow.map.mapObjects
+        placemarkHolder.placemark = mapObjects.addPlacemark(DefaultMapCenter).apply {
+            setIcon(ImageProvider.fromResource(context, R.drawable.loc_0_ok))
+            isVisible = false
+        }
+        onDispose {
+            placemarkHolder.placemark?.let { mapObjects.remove(it) }
+            placemarkHolder.placemark = null
+        }
+    }
+
+    LaunchedEffect(latitude, longitude, trueDirection, hasFix, zoom) {
         val target = if (hasFix) Point(latitude, longitude) else DefaultMapCenter
+        placemarkHolder.placemark?.let { placemark ->
+            placemark.geometry = target
+            placemark.direction = trueDirection
+            placemark.isVisible = hasFix
+        }
         mapView.mapWindow.map.move(
-            CameraPosition(target, DefaultMapZoom, 0f, 0f),
+            CameraPosition(target, zoom, 0f, 0f),
         )
     }
 
@@ -166,4 +250,8 @@ private fun MapKitTileView(
             view.mapWindow.map.isScrollGesturesEnabled = gesturesEnabled
         },
     )
+}
+
+private class PlacemarkHolder {
+    var placemark: PlacemarkMapObject? = null
 }

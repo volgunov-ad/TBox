@@ -68,6 +68,11 @@ import vad.dashing.tbox.sanitizeDateTimeWidgetFormat
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.MAP_KIT_WIDGET_DATA_KEY
+import vad.dashing.tbox.DEFAULT_MAP_KIT_ZOOM
+import vad.dashing.tbox.MAX_MAP_KIT_ZOOM
+import vad.dashing.tbox.MIN_MAP_KIT_ZOOM
+import vad.dashing.tbox.normalizeMapKitZoom
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
@@ -206,6 +211,13 @@ internal class WidgetSelectionDialogState(
             false
         }
     )
+    var mapKitZoom by mutableFloatStateOf(
+        if (initialConfig.dataKey == MAP_KIT_WIDGET_DATA_KEY) {
+            normalizeMapKitZoom(initialConfig.mapKitZoom)
+        } else {
+            DEFAULT_MAP_KIT_ZOOM
+        }
+    )
 
     var tileBackgroundImageRelPathLight by mutableStateOf(
         initialConfig.tileBackgroundImageRelPathLight?.takeIf {
@@ -255,6 +267,9 @@ internal class WidgetSelectionDialogState(
 
     val isHttpRequestWidgetSelected: Boolean
         get() = selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY
+
+    val isMapKitWidgetSelected: Boolean
+        get() = selectedDataKey == MAP_KIT_WIDGET_DATA_KEY
 
     val isExternalAppWidgetSelected: Boolean
         get() = selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
@@ -655,6 +670,16 @@ internal fun WidgetSelectionDialogForm(
                         widgetIndex = widgetIndex,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
+                    if (state.isMapKitWidgetSelected) {
+                        SettingInt(
+                            value = state.mapKitZoom.toInt(),
+                            onValueChange = { state.mapKitZoom = normalizeMapKitZoom(it.toFloat()) },
+                            text = stringResource(R.string.map_kit_widget_zoom_title),
+                            description = stringResource(R.string.map_kit_widget_zoom_desc),
+                            minValue = MIN_MAP_KIT_ZOOM.toInt(),
+                            maxValue = MAX_MAP_KIT_ZOOM.toInt(),
+                        )
+                    }
                     SettingSwitch(
                         state.showTitle,
                         { state.showTitle = it },
@@ -821,31 +846,33 @@ internal fun WidgetSelectionDialogForm(
                             maxValue = TripWidgetTileDisplay.MAX_LABEL_COLUMN_WIDTH_PERCENT,
                         )
                     }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_scale, state.scale),
-                            style = MaterialTheme.typography.tboxTitle,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_scale_hint),
-                            style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = state.scale,
-                            onValueChange = { newValue ->
-                                state.scale = normalizeWidgetScale(newValue)
-                            },
-                            valueRange = 0.1f..2.0f,
-                            steps = 18,
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
+                    if (!state.isMapKitWidgetSelected) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.widget_scale, state.scale),
+                                style = MaterialTheme.typography.tboxTitle,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = stringResource(R.string.widget_scale_hint),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Slider(
+                                value = state.scale,
+                                onValueChange = { newValue ->
+                                    state.scale = normalizeWidgetScale(newValue)
+                                },
+                                valueRange = 0.1f..2.0f,
+                                steps = 18,
+                                enabled = state.togglesEnabled,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
                     }
                     Column(
                         modifier = Modifier
@@ -1312,6 +1339,11 @@ internal fun applyWidgetSelectionChanges(
                 )
             } else {
                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
+            },
+            mapKitZoom = if (state.selectedDataKey == MAP_KIT_WIDGET_DATA_KEY) {
+                normalizeMapKitZoom(state.mapKitZoom)
+            } else {
+                DEFAULT_MAP_KIT_ZOOM
             },
         )
     } else {

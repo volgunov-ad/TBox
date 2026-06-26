@@ -428,6 +428,16 @@ fun MainScreenDashboardPanel(
             onMusicSelectedPlayerChange = { index, selectedPackage ->
                 pendingMusicSelection = index to selectedPackage
             },
+            onMapKitZoomChange = { index, zoom ->
+                persistDashboardPanelMapKitZoom(
+                    currentWidgetConfigs = latestWidgetConfigs,
+                    widgetIndex = index,
+                    zoom = zoom,
+                    saveConfigs = { configs ->
+                        settingsViewModel.saveMainScreenDashboardWidgets(panel.id, configs)
+                    },
+                )
+            },
             onSeatHeatVentSelectedVariantChange = { index, variant ->
                 pendingSeatHeatVentVariant = index to variant
             },

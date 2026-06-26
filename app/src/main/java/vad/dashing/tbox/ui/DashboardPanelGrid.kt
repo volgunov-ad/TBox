@@ -32,7 +32,9 @@ import vad.dashing.tbox.DashboardState
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
+import vad.dashing.tbox.MAP_KIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.normalizeMapKitZoom
 import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
@@ -74,6 +76,7 @@ internal fun DashboardPanelGridAndFrames(
     onWidgetClick: (widgetIndex: Int) -> Unit,
     onWidgetLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (widgetIndex: Int, selectedPackage: String) -> Unit,
+    onMapKitZoomChange: (widgetIndex: Int, zoom: Float) -> Unit = { _, _ -> },
     onSeatHeatVentSelectedVariantChange: (widgetIndex: Int, variant: Int) -> Unit,
     onHideFloatingPanelsDoubleClick: (widgetIndex: Int) -> Unit = {},
     onToggleFloatingPanelsEnabledDoubleClick: (widgetIndex: Int) -> Unit = {},
@@ -264,6 +267,9 @@ internal fun DashboardPanelGridAndFrames(
                                     onMusicSelectedPlayerChange = { selectedPackage ->
                                         onMusicSelectedPlayerChange(index, selectedPackage)
                                     },
+                                    onMapKitZoomChange = { zoom ->
+                                        onMapKitZoomChange(index, zoom)
+                                    },
                                     onSeatHeatVentSelectedVariantChange = { variant ->
                                         onSeatHeatVentSelectedVariantChange(index, variant)
                                     },
@@ -376,6 +382,25 @@ fun persistDashboardPanelMediaSelectedPlayer(
     normalizedConfigs[widgetIndex] = currentConfig.copy(
         mediaSelectedPlayer = selectedPackage
     )
+    saveConfigs(normalizedConfigs)
+}
+
+fun persistDashboardPanelMapKitZoom(
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    widgetIndex: Int,
+    zoom: Float,
+    saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit,
+) {
+    val normalizedConfigs = normalizeWidgetConfigs(
+        configs = currentWidgetConfigs,
+        widgetCount = currentWidgetConfigs.size,
+    ).toMutableList()
+    val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
+    if (currentConfig.dataKey != MAP_KIT_WIDGET_DATA_KEY) return
+    val normalizedZoom = normalizeMapKitZoom(zoom)
+    if (currentConfig.mapKitZoom == normalizedZoom) return
+
+    normalizedConfigs[widgetIndex] = currentConfig.copy(mapKitZoom = normalizedZoom)
     saveConfigs(normalizedConfigs)
 }
 

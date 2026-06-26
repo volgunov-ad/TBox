@@ -57,6 +57,7 @@ fun DashboardWidgetRenderer(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onMusicSelectedPlayerChange: (String) -> Unit,
+    onMapKitZoomChange: (Float) -> Unit = {},
     onSeatHeatVentSelectedVariantChange: (Int) -> Unit = {},
     onHideFloatingPanelsDoubleClick: () -> Unit = {},
     onToggleFloatingPanelsEnabledDoubleClick: () -> Unit = {},
@@ -147,6 +148,8 @@ fun DashboardWidgetRenderer(
             DashboardMapKitWidgetItem(
                 widget = widget,
                 viewModel = tboxViewModel,
+                mapZoom = widgetConfig.mapKitZoom,
+                onMapZoomChange = onMapKitZoomChange,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
