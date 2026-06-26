@@ -766,7 +766,6 @@ fun DashboardWidgetRenderer(
                 title = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 units = widgetConfig.showUnit,
-                dateTimeFormat = widgetConfig.dateTimeFormat,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor
             )
@@ -812,6 +811,7 @@ fun DashboardWidgetRenderer(
                 title = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 units = widgetConfig.showUnit,
+                dateTimeFormat = widgetConfig.dateTimeFormat,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor
             )
