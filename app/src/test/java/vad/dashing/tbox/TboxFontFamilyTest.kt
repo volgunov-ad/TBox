@@ -8,6 +8,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import vad.dashing.tbox.ui.theme.TboxFontFamily
 import vad.dashing.tbox.ui.theme.resolveFontFamily
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -53,6 +55,31 @@ class TboxFontFamilyTest {
         val crimson = TboxFontFamily.CrimsonText.toComposeFontFamily()
         assertNotEquals(FontFamily.Default, crimson)
         assertEquals(crimson, resolveFontFamily(TboxFontFamily.CrimsonText.id))
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+class BundledFontWeightResourcesTest {
+
+    @Test
+    fun bundledWeightFontResources_exist() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val fontIds = listOf(
+            R.font.nunito_medium,
+            R.font.nunito_semibold,
+            R.font.nunito_bold,
+            R.font.cabin_medium,
+            R.font.cabin_semibold,
+            R.font.cabin_bold,
+            R.font.crimson_text_semibold,
+            R.font.crimson_text_bold,
+        )
+        fontIds.forEach { fontId ->
+            context.resources.openRawResource(fontId).use { input ->
+                assertTrue(input.available() > 0)
+            }
+        }
     }
 }
 

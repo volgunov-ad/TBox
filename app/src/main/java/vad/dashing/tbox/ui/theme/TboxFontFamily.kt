@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui.theme
 
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import vad.dashing.tbox.R
 
 /** App font presets: system families and bundled Google Fonts. */
@@ -36,11 +37,37 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
     }
 
     private object Bundled {
-        val crimsonText = FontFamily(Font(R.font.crimson_text_regular))
-        val cabin = FontFamily(Font(R.font.cabin_regular))
-        val nunito = FontFamily(Font(R.font.nunito_regular))
+        val crimsonText = FontFamily(
+            Font(R.font.crimson_text_regular, FontWeight.Normal),
+            Font(R.font.crimson_text_semibold, FontWeight.SemiBold),
+            Font(R.font.crimson_text_bold, FontWeight.Bold),
+        )
+        val cabin = fontFamilyWithMedium(
+            regular = R.font.cabin_regular,
+            medium = R.font.cabin_medium,
+            semiBold = R.font.cabin_semibold,
+            bold = R.font.cabin_bold,
+        )
+        val nunito = fontFamilyWithMedium(
+            regular = R.font.nunito_regular,
+            medium = R.font.nunito_medium,
+            semiBold = R.font.nunito_semibold,
+            bold = R.font.nunito_bold,
+        )
     }
 }
+
+private fun fontFamilyWithMedium(
+    regular: Int,
+    medium: Int,
+    semiBold: Int,
+    bold: Int,
+): FontFamily = FontFamily(
+    Font(regular, FontWeight.Normal),
+    Font(medium, FontWeight.Medium),
+    Font(semiBold, FontWeight.SemiBold),
+    Font(bold, FontWeight.Bold),
+)
 
 fun resolveFontFamily(fontFamilyId: Int): FontFamily =
     TboxFontFamily.fromId(fontFamilyId).toComposeFontFamily()
