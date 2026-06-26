@@ -39,13 +39,27 @@ fun Context.hasFineLocationPermission(): Boolean =
 fun rememberSystemLocationState(): SystemLocationState {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val hasPermission = remember(context) { context.hasFineLocationPermission() }
+    var permissionGranted by remember {
+        mutableStateOf(context.hasFineLocationPermission())
+    }
     var state by remember {
-        mutableStateOf(SystemLocationState(hasPermission = hasPermission))
+        mutableStateOf(SystemLocationState(hasPermission = permissionGranted))
     }
 
-    DisposableEffect(lifecycleOwner, hasPermission) {
-        if (!hasPermission) {
+    DisposableEffect(lifecycleOwner) {
+        val permissionObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                permissionGranted = context.hasFineLocationPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(permissionObserver)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(permissionObserver)
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, permissionGranted) {
+        if (!permissionGranted) {
             state = SystemLocationState(hasPermission = false)
             return@DisposableEffect onDispose {}
         }
@@ -123,5 +137,5 @@ fun rememberSystemLocationState(): SystemLocationState {
         }
     }
 
-    return state
+    return state.copy(hasPermission = permissionGranted)
 }

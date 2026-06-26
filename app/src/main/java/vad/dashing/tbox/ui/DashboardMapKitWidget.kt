@@ -1,7 +1,12 @@
 package vad.dashing.tbox.ui
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -69,6 +74,7 @@ fun DashboardMapKitWidgetItem(
     isEditMode: Boolean = false,
     enableInnerInteractions: Boolean = true,
 ) {
+    val context = LocalContext.current
     val systemLocation = rememberSystemLocationState()
     val defaultTitle = stringResource(R.string.data_title_map_kit_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
@@ -115,12 +121,36 @@ fun DashboardMapKitWidgetItem(
                         )
                     }
                     !systemLocation.hasPermission -> {
-                        Text(
-                            text = stringResource(R.string.map_kit_widget_no_location_permission),
-                            color = resolvedTextColor,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.map_kit_widget_no_location_permission),
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 8.dp)
+                                    .combinedClickableWithSound(
+                                        enabled = gesturesEnabled,
+                                        onClick = { openAppLocationSettings(context) },
+                                        onLongClick = onLongClick,
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.widget_music_open_access_settings),
+                                    color = resolvedTextColor,
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
+                        }
                     }
                     else -> {
                         MapKitTileView(
@@ -355,6 +385,16 @@ private fun MapKitTileView(
             view.mapWindow.map.isScrollGesturesEnabled = gesturesEnabled
         },
     )
+}
+
+private fun openAppLocationSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.fromParts("package", context.packageName, null)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching {
+        context.startActivity(intent)
+    }
 }
 
 private class PlacemarkHolder {
