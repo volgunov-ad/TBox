@@ -433,7 +433,6 @@
     <string name="settings_app_font_family_sans_serif">Без засечек</string>
     <string name="settings_app_font_family_serif">С засечками</string>
     <string name="settings_app_font_family_monospace">Моноширинный</string>
-    <string name="settings_app_font_family_crimson_text">Crimson Text</string>
     <string name="settings_app_font_family_cabin">Cabin</string>
     <string name="settings_app_font_family_nunito">Nunito</string>
     <string name="left_menu_config_dialog_title">Пункты меню</string>

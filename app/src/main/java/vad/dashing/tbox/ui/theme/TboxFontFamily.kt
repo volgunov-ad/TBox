@@ -11,7 +11,6 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
     SansSerif(1, "sans_serif"),
     Serif(2, "serif"),
     Monospace(3, "monospace"),
-    CrimsonText(4, "crimson_text"),
     Cabin(5, "cabin"),
     Nunito(6, "nunito"),
     ;
@@ -21,7 +20,6 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
         SansSerif -> FontFamily.SansSerif
         Serif -> FontFamily.Serif
         Monospace -> FontFamily.Monospace
-        CrimsonText -> Bundled.crimsonText
         Cabin -> Bundled.cabin
         Nunito -> Bundled.nunito
     }
@@ -37,11 +35,6 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
     }
 
     private object Bundled {
-        val crimsonText = FontFamily(
-            Font(R.font.crimson_text_regular, FontWeight.Normal),
-            Font(R.font.crimson_text_semibold, FontWeight.SemiBold),
-            Font(R.font.crimson_text_bold, FontWeight.Bold),
-        )
         val cabin = fontFamilyWithMedium(
             regular = R.font.cabin_regular,
             medium = R.font.cabin_medium,
