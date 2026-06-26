@@ -1516,6 +1516,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 0
         )
 
+    val httpRequestIconRevision = settingsManager.httpRequestIconRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
     fun setCustomLauncherAppIconFromUri(
         packageName: String,
         sourceUri: Uri?,
@@ -1538,6 +1545,30 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     suspend fun clearSharedLauncherAppIconsFolder() {
         settingsManager.clearSharedLauncherAppIconsFolder()
+    }
+
+    fun setCustomHttpRequestIconFromUri(
+        iconKey: String,
+        sourceUri: Uri?,
+        onResult: (SetLauncherAppCustomIconResult) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val r = settingsManager.setCustomHttpRequestIconFromUri(iconKey, sourceUri)
+            onResult(r)
+        }
+    }
+
+    fun clearCustomHttpRequestIcon(iconKey: String) {
+        viewModelScope.launch {
+            settingsManager.clearCustomHttpRequestIcon(iconKey)
+        }
+    }
+
+    suspend fun hasCustomHttpRequestIcon(iconKey: String): Boolean =
+        settingsManager.hasCustomHttpRequestIcon(iconKey)
+
+    suspend fun clearSharedHttpRequestIconsFolder() {
+        settingsManager.clearSharedHttpRequestIconsFolder()
     }
 
     suspend fun clearSharedTileBackgroundsFolder() {

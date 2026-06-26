@@ -371,6 +371,7 @@ fun MainScreenDashboardPanel(
             dashboardChart = false,
             tboxConnected = tboxConnected,
             currentTheme = currentTheme,
+            panelStorageId = panel.id,
             restartEnabled = restartEnabled,
             onTripFinishAndStart = onTripFinishAndStart,
             isEditMode = isEditMode,

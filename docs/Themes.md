@@ -118,7 +118,7 @@ assets/tile_backgrounds/
 | `sections` | массив включённых разделов |
 | `mainScreen` | настройки главного экрана (если раздел включён) |
 | `floatingPanels` | плавающие панели |
-| `appIcons` | пакеты с кастомными иконками |
+| `appIcons` | пакеты с кастомными иконками приложений и ключи иконок HTTP-запросов |
 
 В `mainScreen` могут быть `wallpaperSelectionByPage` и `currentPage` — они попадают в `runtime.json` при первой materialize (seed), если файла runtime ещё нет.
 
@@ -134,11 +134,18 @@ assets/tile_backgrounds/
 
 #### 3. `appIcons`
 
-PNG для виджетов «Ярлык приложения». В кэше: `files/themes/{cacheKey}/icons/{packageName}`.
+PNG для виджетов «Ярлык приложения» и «HTTP-запрос».
+
+- Ярлыки приложений: `packages[]`, zip-папка `assets/icons/`, кэш `files/themes/{cacheKey}/icons/{packageName}`.
+- HTTP-запросы: `httpRequestIconKeys[]`, zip-папка `assets/http_request_icons/`, кэш `files/themes/{cacheKey}/http_request_icons/{panelId}-{widgetIndex}`.
+
+Иконки HTTP-запросов привязаны не к URL, а к конкретной плитке конкретной панели. Поэтому при экспорте темы собираются только ключи реально используемых виджетов «HTTP-запрос» из выбранных разделов `mainScreen` и/или `floatingPanels`.
 
 ### Иконки и фоны плиток (два уровня путей)
 
-**Иконки** — приоритет: кэш активной темы → `files/launcher_app_icons/` → системная.
+**Иконки приложений** — приоритет: кэш активной темы → `files/launcher_app_icons/` → системная.
+
+**Иконки HTTP-запросов** — приоритет: кэш активной темы → `files/http_request_icons/` → заглушка `?`.
 
 **Фоны плиток** — приоритет: `files/themes/{cacheKey}/tile_backgrounds/` → `files/tile_backgrounds/` → только цвет.
 
@@ -208,7 +215,7 @@ sequenceDiagram
    - иначе **пусто** (старые обои предыдущей темы в DataStore **не** сохраняются).
 5. При наличии `currentPage` в `runtime.json` — переопределить страницу в DataStore.
 6. `applyWallpaperDirsFromCache` — `file://…/wallpaper/light|dark`.
-7. Bump ревизий обоев, иконок, фонов плиток.
+7. Bump ревизий обоев, иконок приложений, иконок HTTP-запросов, фонов плиток.
 
 ### `ThemeActivationCoordinator`
 

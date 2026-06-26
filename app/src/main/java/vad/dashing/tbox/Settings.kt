@@ -71,6 +71,10 @@ data class FloatingDashboardWidgetConfig(
     val mediaKeepPlayerForeground: Boolean = false,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
+    /** YAML request config for `httpRequestWidget`. */
+    val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
+    /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
+    val httpOpenBrowser: Boolean = false,
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
     val appWidgetId: Int? = null,
     /**
@@ -337,6 +341,10 @@ class SettingsManager(private val context: Context) {
         private val LAUNCHER_APP_ICON_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}launcher_app_icon_revision")
 
+        /** Bumped when HTTP request widget custom icons change. */
+        private val HTTP_REQUEST_ICON_REVISION_KEY =
+            intPreferencesKey("${KEY_PREFIX}http_request_icon_revision")
+
         /** Bumped when per-tile background image files change (save / clear / backup import). */
         private val TILE_BACKGROUND_IMAGE_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}tile_background_image_revision")
@@ -453,6 +461,8 @@ class SettingsManager(private val context: Context) {
         private const val MAIN_SCREEN_WALLPAPER_MIGRATED_DIR = "main_screen_wallpaper_migrated"
         /** Per-package custom icons for the app-launcher widget (files only; not in JSON backup). */
         const val LAUNCHER_APP_ICONS_DIR = "launcher_app_icons"
+        /** Per-tile custom icons for HTTP request widgets (files only; not in JSON backup). */
+        const val HTTP_REQUEST_ICONS_DIR = "http_request_icons"
         private const val MAX_LAUNCHER_APP_ICON_EDGE_PX = 512
         private const val MAX_LAUNCHER_APP_ICON_BYTES = 512 * 1024L
         private const val MAX_TILE_BACKGROUND_EDGE_PX = 4096
@@ -781,6 +791,10 @@ class SettingsManager(private val context: Context) {
 
     val launcherAppIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0 }
+        .distinctUntilChanged()
+
+    val httpRequestIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[HTTP_REQUEST_ICON_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
 
     val tileBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
@@ -1627,6 +1641,11 @@ class SettingsManager(private val context: Context) {
         return File(dir, packageName)
     }
 
+    private fun httpRequestIconFile(iconKey: String): File {
+        val dir = File(context.filesDir, HTTP_REQUEST_ICONS_DIR)
+        return File(dir, iconKey)
+    }
+
     suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
         withContext(Dispatchers.IO) {
             if (packageName.isBlank()) return@withContext false
@@ -1646,6 +1665,18 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun clearSharedHttpRequestIconsFolder() {
+        withContext(Dispatchers.IO) {
+            val dir = HttpRequestIconPaths.sharedIconsDir(context.filesDir)
+            if (dir.isDirectory) {
+                dir.listFiles()?.forEach { file ->
+                    if (file.isFile) file.delete()
+                }
+            }
+            bumpHttpRequestIconRevision()
+        }
+    }
+
     suspend fun launcherAppIconLookup(): LauncherAppIconPaths.Lookup =
         LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = activeThemeUriFlow.first().trim(),
@@ -1662,6 +1693,27 @@ class SettingsManager(private val context: Context) {
             }
             if (LauncherAppIconPaths.deleteSharedIcon(context.filesDir, packageName)) {
                 bumpLauncherAppIconRevision()
+            }
+        }
+    }
+
+    suspend fun hasCustomHttpRequestIcon(iconKey: String): Boolean =
+        withContext(Dispatchers.IO) {
+            if (iconKey.isBlank()) return@withContext false
+            val lookup = launcherAppIconLookup()
+            HttpRequestIconPaths.hasResolvableIcon(context.filesDir, iconKey, lookup)
+        }
+
+    suspend fun clearCustomHttpRequestIcon(iconKey: String) {
+        withContext(Dispatchers.IO) {
+            if (iconKey.isBlank()) return@withContext
+            val lookup = launcherAppIconLookup()
+            if (HttpRequestIconPaths.deleteThemeCacheIcon(context.filesDir, iconKey, lookup)) {
+                bumpHttpRequestIconRevision()
+                return@withContext
+            }
+            if (HttpRequestIconPaths.deleteSharedIcon(context.filesDir, iconKey)) {
+                bumpHttpRequestIconRevision()
             }
         }
     }
@@ -1690,6 +1742,8 @@ class SettingsManager(private val context: Context) {
                 preferences[MAIN_SCREEN_WALLPAPER_DARK_SET_LEGACY_KEY] = false
                 val cur = preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0
                 preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
+                val curHttp = preferences[HTTP_REQUEST_ICON_REVISION_KEY] ?: 0
+                preferences[HTTP_REQUEST_ICON_REVISION_KEY] = curHttp + 1
                 val curTile = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
                 preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = curTile + 1
             }
@@ -1700,6 +1754,13 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             val cur = preferences[LAUNCHER_APP_ICON_REVISION_KEY] ?: 0
             preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
+        }
+    }
+
+    suspend fun bumpHttpRequestIconRevision() {
+        context.settingsDataStore.edit { preferences ->
+            val cur = preferences[HTTP_REQUEST_ICON_REVISION_KEY] ?: 0
+            preferences[HTTP_REQUEST_ICON_REVISION_KEY] = cur + 1
         }
     }
 
@@ -1836,6 +1897,58 @@ class SettingsManager(private val context: Context) {
             }
             decoded.recycle()
             bumpLauncherAppIconRevision()
+            SetLauncherAppCustomIconResult.Success
+        }
+    }
+
+    suspend fun setCustomHttpRequestIconFromUri(
+        iconKey: String,
+        sourceUri: Uri?,
+    ): SetLauncherAppCustomIconResult {
+        if (iconKey.isBlank()) return SetLauncherAppCustomIconResult.InvalidPackage
+        return withContext(Dispatchers.IO) {
+            val dest = httpRequestIconFile(iconKey)
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                if (dest.exists()) dest.delete()
+                bumpHttpRequestIconRevision()
+                return@withContext SetLauncherAppCustomIconResult.Success
+            }
+            val bounds = runCatching {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, opts)
+                }
+                opts
+            }.getOrNull() ?: return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            if (bounds.outWidth > MAX_LAUNCHER_APP_ICON_EDGE_PX ||
+                bounds.outHeight > MAX_LAUNCHER_APP_ICON_EDGE_PX
+            ) {
+                return@withContext SetLauncherAppCustomIconResult.DimensionsTooLarge
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L && dest.length() <= MAX_LAUNCHER_APP_ICON_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.CopyFailed
+            }
+            val decoded = BitmapFactory.decodeFile(dest.absolutePath)
+            if (decoded == null) {
+                dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            decoded.recycle()
+            bumpHttpRequestIconRevision()
             SetLauncherAppCustomIconResult.Success
         }
     }

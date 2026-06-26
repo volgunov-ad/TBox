@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
@@ -66,6 +67,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.sanitizeDateTimeWidgetFormat
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
@@ -77,6 +79,7 @@ import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
+import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
@@ -189,6 +192,20 @@ internal class WidgetSelectionDialogState(
             ""
         }
     )
+    var httpRequestYaml by mutableStateOf(
+        if (initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+            initialConfig.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
+        } else {
+            DEFAULT_HTTP_REQUEST_WIDGET_YAML
+        }
+    )
+    var httpOpenBrowser by mutableStateOf(
+        if (initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+            initialConfig.httpOpenBrowser
+        } else {
+            false
+        }
+    )
 
     var tileBackgroundImageRelPathLight by mutableStateOf(
         initialConfig.tileBackgroundImageRelPathLight?.takeIf {
@@ -236,6 +253,9 @@ internal class WidgetSelectionDialogState(
     val isAppLauncherWidgetSelected: Boolean
         get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
 
+    val isHttpRequestWidgetSelected: Boolean
+        get() = selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY
+
     val isExternalAppWidgetSelected: Boolean
         get() = selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
 
@@ -247,6 +267,7 @@ internal class WidgetSelectionDialogState(
             selectedDataKey.isEmpty() -> true
             isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
             isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
+            isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
             WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
                 isValidDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)
             else -> true
@@ -625,6 +646,13 @@ internal fun WidgetSelectionDialogForm(
                     AppLauncherWidgetSettingsSection(
                         state = state,
                         settingsViewModel = settingsViewModel,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
+                    HttpRequestWidgetSettingsSection(
+                        state = state,
+                        settingsViewModel = settingsViewModel,
+                        panelStorageId = tileBackgroundPanelStorageId,
+                        widgetIndex = widgetIndex,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
                     SettingSwitch(
@@ -1227,6 +1255,16 @@ internal fun applyWidgetSelectionChanges(
                 state.launcherAppPackage.trim()
             } else {
                 ""
+            },
+            httpRequestYaml = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                state.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
+            } else {
+                DEFAULT_HTTP_REQUEST_WIDGET_YAML
+            },
+            httpOpenBrowser = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                state.httpOpenBrowser
+            } else {
+                false
             },
             appWidgetId = if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 externalAppWidgetId

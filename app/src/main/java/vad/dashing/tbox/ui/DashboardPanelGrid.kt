@@ -82,6 +82,7 @@ internal fun DashboardPanelGridAndFrames(
     enableInnerInteractions: Boolean,
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 0.dp,
+    panelStorageId: String = mbCanInterestSourceId,
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
@@ -281,7 +282,8 @@ internal fun DashboardPanelGridAndFrames(
                                     isEditMode = isEditMode,
                                     elevation = widgetCardElevation,
                                     shape = shapeDp,
-                                    enableInnerInteractions = enableInnerInteractions
+                                    enableInnerInteractions = enableInnerInteractions,
+                                    panelStorageId = panelStorageId,
                                 )
                             }
                         }

@@ -86,6 +86,18 @@ object ThemeLayoutExport {
             }
         }
 
+    fun collectHttpRequestIconKeys(
+        panelStorageId: String,
+        widgets: List<FloatingDashboardWidgetConfig>,
+    ): Set<String> =
+        buildSet {
+            widgets.forEachIndexed { index, widget ->
+                if (widget.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                    add(HttpRequestIconPaths.iconKey(panelStorageId, index))
+                }
+            }
+        }
+
     suspend fun collectPackagesForSections(
         context: Context,
         settingsManager: SettingsManager,
@@ -117,9 +129,33 @@ object ThemeLayoutExport {
     ): JSONObject {
         val lookup = settingsManager.launcherAppIconLookup()
         val packages = collectPackagesForSections(context, settingsManager, sections, lookup)
+        val httpIconKeys = collectHttpRequestIconKeysForSections(settingsManager, sections)
         val arr = JSONArray()
         packages.sorted().forEach { arr.put(it) }
-        return JSONObject().put("packages", arr)
+        val httpArr = JSONArray()
+        httpIconKeys.sorted().forEach { httpArr.put(it) }
+        return JSONObject()
+            .put("packages", arr)
+            .put("httpRequestIconKeys", httpArr)
+    }
+
+    private suspend fun collectHttpRequestIconKeysForSections(
+        settingsManager: SettingsManager,
+        sections: Set<ThemeSection>,
+    ): Set<String> {
+        if (ThemeSection.APP_ICONS !in sections) return emptySet()
+        val keys = linkedSetOf<String>()
+        if (ThemeSection.MAIN_SCREEN in sections) {
+            settingsManager.mainScreenDashboardsFlow.first().forEach { panel ->
+                keys.addAll(collectHttpRequestIconKeys(panel.id, panel.widgetsConfig))
+            }
+        }
+        if (ThemeSection.FLOATING_PANELS in sections) {
+            settingsManager.floatingDashboardsFlow.first().forEach { panel ->
+                keys.addAll(collectHttpRequestIconKeys(panel.id, panel.widgetsConfig))
+            }
+        }
+        return keys
     }
 
     private suspend fun buildMainScreenSection(context: Context, sm: SettingsManager): JSONObject {

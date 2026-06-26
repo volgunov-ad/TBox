@@ -25,6 +25,7 @@ object ThemeMaterialization {
     const val WALLPAPER_LIGHT_DIR = "wallpaper/light"
     const val WALLPAPER_DARK_DIR = "wallpaper/dark"
     const val ICONS_DIR = "icons"
+    const val HTTP_REQUEST_ICONS_DIR = "http_request_icons"
     const val TILE_BACKGROUNDS_DIR = "tile_backgrounds"
 
     data class ThemeManifest(
@@ -39,6 +40,7 @@ object ThemeMaterialization {
     data class MaterializeResult(
         val manifest: ThemeManifest,
         val iconsWritten: Int,
+        val httpRequestIconsWritten: Int,
         val tileBackgroundsWritten: Int,
         val lightWallpaperCount: Int,
         val darkWallpaperCount: Int,
@@ -151,6 +153,11 @@ object ThemeMaterialization {
             archiveFiles = parsed.tileBackgrounds,
             syncExisting = syncExisting,
         )
+        val httpRequestIconsWritten = syncAssetDirectory(
+            targetDir = File(dir, HTTP_REQUEST_ICONS_DIR),
+            archiveFiles = parsed.httpRequestIcons,
+            syncExisting = syncExisting,
+        )
         val lightWallpaperCount = syncAssetDirectory(
             targetDir = File(dir, WALLPAPER_LIGHT_DIR),
             archiveFiles = parsed.lightWallpapers,
@@ -177,6 +184,7 @@ object ThemeMaterialization {
         return MaterializeResult(
             manifest = manifest,
             iconsWritten = iconsWritten,
+            httpRequestIconsWritten = httpRequestIconsWritten,
             tileBackgroundsWritten = tileBackgroundsWritten,
             lightWallpaperCount = lightWallpaperCount,
             darkWallpaperCount = darkWallpaperCount,
@@ -238,10 +246,16 @@ object ThemeMaterialization {
             )
 
             settingsManager.bumpLauncherAppIconRevision()
+            settingsManager.bumpHttpRequestIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
 
             val iconsInTheme = if (ThemeSection.APP_ICONS in sections) {
                 LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
+            } else {
+                0
+            }
+            val httpRequestIconsInTheme = if (ThemeSection.APP_ICONS in sections) {
+                HttpRequestIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
             } else {
                 0
             }
@@ -256,6 +270,7 @@ object ThemeMaterialization {
             ThemeApply.ApplyResult(
                 sections = sections,
                 iconsImported = iconsInTheme,
+                httpRequestIconsImported = httpRequestIconsInTheme,
                 tileBackgroundsImported = tileBackgroundsInTheme,
             )
         }

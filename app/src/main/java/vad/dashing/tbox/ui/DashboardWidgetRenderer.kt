@@ -22,6 +22,8 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -62,9 +64,11 @@ fun DashboardWidgetRenderer(
     isEditMode: Boolean = false,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    enableInnerInteractions: Boolean = true
+    enableInnerInteractions: Boolean = true,
+    panelStorageId: String = "",
 ) {
     val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val httpRequestIconRevision by settingsViewModel.httpRequestIconRevision.collectAsStateWithLifecycle()
     val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val activeTripCustomLayout by settingsViewModel.activeTripCustomWidgetLayout.collectAsStateWithLifecycle()
@@ -527,6 +531,27 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        HTTP_REQUEST_WIDGET_DATA_KEY -> {
+            DashboardHttpRequestWidgetItem(
+                widget = widget,
+                iconKey = HttpRequestIconPaths.iconKey(panelStorageId, widget.id),
+                requestYaml = widgetConfig.httpRequestYaml,
+                openBrowser = widgetConfig.httpOpenBrowser,
+                customIconRevision = httpRequestIconRevision,
+                iconLookup = iconLookup,
+                suppressCustomIcon = themeActivating,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                isEditMode = isEditMode,
+                onEditClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
                 shape = shape,
