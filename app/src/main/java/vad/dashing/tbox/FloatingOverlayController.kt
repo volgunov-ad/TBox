@@ -23,6 +23,7 @@ import vad.dashing.tbox.ui.MyLifecycleOwner
 internal data class UsageStatsOverlayRulesState(
     val foregroundPackage: String?,
     val isMainActivityVisible: Boolean,
+    val suppressFloatingPanelUsageStatsHide: Boolean,
     val watchHidePackages: Set<String>,
     val hidePanelIds: Set<String>,
     val watchShowPackages: Set<String>,
@@ -33,6 +34,7 @@ internal data class UsageStatsOverlayRulesState(
     }
 
     fun isUsageStatsForceHidden(panelId: String, myPackageName: String): Boolean {
+        if (suppressFloatingPanelUsageStatsHide) return false
         val fg = foregroundPackage ?: return false
         if (shouldIgnoreOwnPackageForeground(myPackageName, fg)) return false
         if (watchHidePackages.isEmpty() || hidePanelIds.isEmpty()) return false
@@ -55,6 +57,7 @@ internal data class UsageStatsOverlayRulesState(
         val EMPTY = UsageStatsOverlayRulesState(
             foregroundPackage = null,
             isMainActivityVisible = false,
+            suppressFloatingPanelUsageStatsHide = false,
             watchHidePackages = emptySet(),
             hidePanelIds = emptySet(),
             watchShowPackages = emptySet(),
@@ -92,6 +95,7 @@ internal class FloatingOverlayController(
         private const val TAG = "Floating Dashboard"
         private const val MAX_OVERLAY_RETRIES = 3
         private const val MIN_OVERLAY_SIZE = 50
+        private const val OVERLAY_FADE_MS = 300L
     }
 
     fun suspendOverlays() {
@@ -192,7 +196,9 @@ internal class FloatingOverlayController(
                 overlayOffIds.remove(id)
                 hiddenFloatingPanelIds.remove(id)
             }
-            reorderVisibleOverlays(visibleConfigs.map { it.id })
+            if (!FloatingPanelEditModeTracker.shouldSuppressUsageStatsHide()) {
+                reorderVisibleOverlays(visibleConfigs.map { it.id })
+            }
             FloatingOverlayLoadTimings.mark("float_sync_done")
             FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
         }
@@ -318,9 +324,14 @@ internal class FloatingOverlayController(
         }
 
         try {
+            newComposeView.alpha = 0f
             windowManager?.addView(newComposeView, layoutParams)
             overlayViews[config.id] = newComposeView
             overlayParams[config.id] = layoutParams
+            newComposeView.animate()
+                .alpha(1f)
+                .setDuration(OVERLAY_FADE_MS)
+                .start()
 
             if (!lifecycleOwner.isInitialized || lifecycleOwner.lifecycle.currentState.isAtLeast(
                     Lifecycle.State.DESTROYED
@@ -339,20 +350,32 @@ internal class FloatingOverlayController(
     }
 
     private fun closeOverlay(panelId: String) {
-        val view = overlayViews.remove(panelId)
+        val view = overlayViews.remove(panelId) ?: return
         overlayParams.remove(panelId)
-        if (view != null) {
+        overlayRetryCounts.remove(panelId)
+        overlayOffIds.remove(panelId)
+
+        fun finishClose() {
             try {
-                windowManager?.removeView(view)
+                if (view.isAttachedToWindow) {
+                    windowManager?.removeView(view)
+                }
             } catch (e: Exception) {
                 TboxRepository.addLog("ERROR", TAG, "Error removing view")
                 Log.e(TAG, "Error removing view", e)
             }
+            TboxRepository.addLog("DEBUG", TAG, "Closed: $panelId")
         }
 
-        overlayRetryCounts.remove(panelId)
-        overlayOffIds.remove(panelId)
-        TboxRepository.addLog("DEBUG", TAG, "Closed: $panelId")
+        if (view.isAttachedToWindow && view.alpha > 0f) {
+            view.animate()
+                .alpha(0f)
+                .setDuration(OVERLAY_FADE_MS)
+                .withEndAction { finishClose() }
+                .start()
+        } else {
+            finishClose()
+        }
     }
 
     private fun updateWindowPosition(panelId: String, x: Int, y: Int) {

@@ -121,7 +121,7 @@ data class ActiveTripCustomWidgetLayout(
                         parsed.add(Row(f, enabled = missingFieldEnabled))
                     }
                 }
-                ActiveTripCustomWidgetLayout(parsed)
+                ActiveTripCustomWidgetLayout(rows = parsed)
             } catch (_: Exception) {
                 blankDefault
             }
@@ -136,7 +136,9 @@ data class ActiveTripCustomWidgetLayout(
                         .put("enabled", r.enabled)
                 )
             }
-            return JSONObject().put("rows", arr).toString()
+            return JSONObject()
+                .put("rows", arr)
+                .toString()
         }
 
         fun enabledFieldsInOrder(layout: ActiveTripCustomWidgetLayout): List<ActiveTripCustomWidgetField> =

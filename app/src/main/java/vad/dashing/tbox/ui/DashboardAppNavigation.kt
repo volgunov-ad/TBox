@@ -14,11 +14,23 @@ private const val STEERING_HEAT_TOGGLE_LOCKOUT_MS = 500L
 private val windscreenHeatToggleLock = Any()
 private var windscreenHeatToggleBlockedUntilMs = 0L
 
+private val wiperMaintenanceToggleLock = Any()
+private var wiperMaintenanceToggleBlockedUntilMs = 0L
+
+private val parkingRadarToggleLock = Any()
+private var parkingRadarToggleBlockedUntilMs = 0L
+
 private val hvacDefrosterToggleLock = Any()
 private var hvacDefrosterToggleBlockedUntilMs = 0L
 
 private val hvacAirRecirculationToggleLock = Any()
 private var hvacAirRecirculationToggleBlockedUntilMs = 0L
+
+private val hvacAcToggleLock = Any()
+private var hvacAcToggleBlockedUntilMs = 0L
+
+private val hvacAutoToggleLock = Any()
+private var hvacAutoToggleBlockedUntilMs = 0L
 
 private val hvacDefrosterFrontToggleLock = Any()
 private var hvacDefrosterFrontToggleBlockedUntilMs = 0L
@@ -132,6 +144,54 @@ internal fun sendToggleFrontWindscreenHeat(context: Context) {
     }
 }
 
+internal fun sendToggleWiperMaintenance(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(wiperMaintenanceToggleLock) {
+        if (now < wiperMaintenanceToggleBlockedUntilMs) return
+        wiperMaintenanceToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleParkingRadar(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(parkingRadarToggleLock) {
+        if (now < parkingRadarToggleBlockedUntilMs) return
+        parkingRadarToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
 internal fun sendToggleRearWindowMirrorsDefrost(context: Context) {
     val now = SystemClock.uptimeMillis()
     synchronized(hvacDefrosterToggleLock) {
@@ -180,6 +240,54 @@ internal fun sendToggleHvacAirRecirculation(context: Context) {
     }
 }
 
+internal fun sendToggleHvacAc(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacAcToggleLock) {
+        if (now < hvacAcToggleBlockedUntilMs) return
+        hvacAcToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_POWER
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleHvacAuto(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacAutoToggleLock) {
+        if (now < hvacAutoToggleBlockedUntilMs) return
+        hvacAutoToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
 internal fun sendToggleHvacDefrosterFront(context: Context) {
     val now = SystemClock.uptimeMillis()
     synchronized(hvacDefrosterFrontToggleLock) {
@@ -196,7 +304,7 @@ internal fun sendToggleHvacDefrosterFront(context: Context) {
                 )
                 putExtra(
                     BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
-                    MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_FRONT
+                    MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION
                 )
             }
         )

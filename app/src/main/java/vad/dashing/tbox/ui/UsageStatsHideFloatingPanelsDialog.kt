@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
@@ -34,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,7 +63,7 @@ fun UsageStatsHideFloatingPanelsDialog(
     val savedWatchShow by settingsViewModel.usageStatsForceShowFloatingWatchPackages.collectAsStateWithLifecycle()
     val savedPanelsShow by settingsViewModel.usageStatsForceShowFloatingPanelIds.collectAsStateWithLifecycle()
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
-    val apps = rememberLaunchableAppEntries(iconRevision)
+    val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
 
     // Key by saved sets so when DataStore emits after first frame (flows start empty), drafts refresh.
     var draftWatchHide by remember(savedWatchHide) { mutableStateOf(savedWatchHide) }
@@ -105,8 +111,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                     Text(
                         text = stringResource(R.string.settings_floating_usage_stats_hide_permission_hint),
                         modifier = Modifier.padding(top = 8.dp),
-                        fontSize = 22.sp,
-                        lineHeight = 22.sp * 1.3f,
+                        style = MaterialTheme.typography.tboxButton,
                         color = MaterialTheme.colorScheme.error,
                     )
                     OutlinedButton(
@@ -119,15 +124,14 @@ fun UsageStatsHideFloatingPanelsDialog(
                     ) {
                         Text(
                             text = stringResource(R.string.settings_floating_usage_stats_open_usage_settings),
-                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.tboxBody,
                             maxLines = 2,
                         )
                     }
                 }
                 Text(
                     text = stringResource(R.string.settings_floating_usage_stats_hide_section_title),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.tboxButton,
                     modifier = Modifier.padding(top = 12.dp),
                 )
                 AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_hide_section_body))
@@ -141,7 +145,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                     label = {
                         Text(
                             stringResource(R.string.settings_floating_usage_stats_hide_filter_apps),
-                            fontSize = 18.sp,
+                            style = MaterialTheme.typography.tboxCaption,
                         )
                     },
                 )
@@ -181,8 +185,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                 Text(
                     text = stringResource(R.string.settings_floating_usage_stats_show_section_title),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.tboxButton,
                 )
                 AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_show_section_body))
                 OutlinedTextField(
@@ -195,7 +198,7 @@ fun UsageStatsHideFloatingPanelsDialog(
                     label = {
                         Text(
                             stringResource(R.string.settings_floating_usage_stats_show_filter_apps),
-                            fontSize = 18.sp,
+                            style = MaterialTheme.typography.tboxCaption,
                         )
                     },
                 )
@@ -285,8 +288,7 @@ private fun UsageStatsAppsColumn(
     ) {
         Text(
             text = columnAppsLabel,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.tboxButton,
             modifier = Modifier.padding(bottom = 6.dp),
         )
         apps.forEach { app ->
@@ -303,7 +305,7 @@ private fun UsageStatsAppsColumn(
                 )
                 Text(
                     text = app.label,
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.tboxBody,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -329,14 +331,13 @@ private fun UsageStatsPanelsColumn(
     ) {
         Text(
             text = columnPanelsLabel,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.tboxButton,
             modifier = Modifier.padding(bottom = 6.dp),
         )
         if (panels.isEmpty()) {
             Text(
                 text = noPanelsText,
-                fontSize = 20.sp,
+                style = MaterialTheme.typography.tboxBody,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
@@ -354,7 +355,7 @@ private fun UsageStatsPanelsColumn(
                     )
                     Text(
                         text = panel.name.ifBlank { panel.id },
-                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.tboxBody,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),

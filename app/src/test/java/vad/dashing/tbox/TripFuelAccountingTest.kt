@@ -46,6 +46,25 @@ class TripFuelAccountingTest {
     }
 
     @Test
+    fun refuel_largeRise_detectRefuelsFalse_notFlagged() {
+        val lastL = 30f / 100f * tank
+        val nowL = 80f / 100f * tank
+        val r = TripFuelAccounting.applyFuelCalibratedLitersStep(
+            currentConsumedLiters = 1f,
+            lastCalibratedLiters = lastL,
+            litersNow = nowL,
+            baselinePercentNow = 80f,
+            tankLiters = tank,
+            detectRefuels = false,
+        )
+        assertEquals(1f, r.consumedLiters, 1e-4f)
+        assertEquals(nowL, r.baselineCalibratedLiters, 1e-3f)
+        assertEquals(80f, r.baselinePercent, 1e-4f)
+        assertFalse(r.refuelDetected)
+        assertEquals(0f, r.refueledLitersThisStep, 1e-4f)
+    }
+
+    @Test
     fun consume_dropAccumulates() {
         val lastL = 50f / 100f * tank
         val nowL = 45f / 100f * tank

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -22,7 +23,8 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardManager
@@ -35,7 +37,10 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.isMbCanMediaVolumeEnabled
+import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
+import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
+import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
+import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -77,13 +82,23 @@ internal fun DashboardPanelGridAndFrames(
     enableInnerInteractions: Boolean,
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 0.dp,
+    panelStorageId: String = mbCanInterestSourceId,
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
-        MbCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
+        UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
-    val panelNeedsMbCanMediaVolume = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanMediaVolumeEnabled() }
+    val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
+    }
+    val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
+    }
+    val panelNeedsMbCanVhalEngineTemperature = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalEngineTemperatureEnabled() }
+    }
+    val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
@@ -91,24 +106,63 @@ internal fun DashboardPanelGridAndFrames(
                 .map { it.dataKey.trim() }
                 .filter { it.isNotBlank() && it != "null" }
                 .toSet()
-            MbCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
+            UniversalCanRepository.setSourceWidgetKeys(mbCanInterestSourceId, activeKeys)
         }
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
-                MbCanRepository.enqueueClearSource(mbCanInterestSourceId)
+                UniversalCanRepository.enqueueClearSource(mbCanInterestSourceId)
             }
         }
     }
-    if (panelNeedsMbCanMediaVolume) {
+    if (panelNeedsMbCanVhalMediaVolume) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
-            MbCanRepository.setSourceSignals(
+            UniversalCanRepository.setSourceSignals(
                 "$mbCanInterestSourceId-media-volume",
                 setOf(MbCanSignal.AudioVolume)
             )
         }
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
-                MbCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-media-volume")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineRpm) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-engine-rpm",
+                setOf(MbCanSignal.EngineRpm)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-engine-rpm")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalEngineTemperature) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-engine-temperature",
+                setOf(MbCanSignal.EngineTemperature)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-engine-temperature")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalCarSpeed) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-car-speed",
+                setOf(MbCanSignal.CarSpeed)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-car-speed")
             }
         }
     }
@@ -130,7 +184,10 @@ internal fun DashboardPanelGridAndFrames(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text(stringResource(R.string.loading))
+                Text(
+                    text = stringResource(R.string.loading),
+                    style = MaterialTheme.typography.tboxBody,
+                )
             }
         } else {
             for (row in 0 until dashboardRows) {
@@ -225,7 +282,8 @@ internal fun DashboardPanelGridAndFrames(
                                     isEditMode = isEditMode,
                                     elevation = widgetCardElevation,
                                     shape = shapeDp,
-                                    enableInnerInteractions = enableInnerInteractions
+                                    enableInnerInteractions = enableInnerInteractions,
+                                    panelStorageId = panelStorageId,
                                 )
                             }
                         }

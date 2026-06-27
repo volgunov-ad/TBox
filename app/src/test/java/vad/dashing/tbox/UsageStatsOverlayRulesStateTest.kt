@@ -17,6 +17,7 @@ class UsageStatsOverlayRulesStateTest {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "com.show.app",
             isMainActivityVisible = false,
+            suppressFloatingPanelUsageStatsHide = false,
             watchHidePackages = setOf("com.hide.app"),
             hidePanelIds = setOf("panel_a"),
             watchShowPackages = setOf("com.show.app"),
@@ -31,6 +32,7 @@ class UsageStatsOverlayRulesStateTest {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "com.other.app",
             isMainActivityVisible = false,
+            suppressFloatingPanelUsageStatsHide = false,
             watchHidePackages = setOf("com.other.app"),
             hidePanelIds = setOf("panel_a"),
             watchShowPackages = setOf("com.other.app"),
@@ -45,6 +47,7 @@ class UsageStatsOverlayRulesStateTest {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "com.other.app",
             isMainActivityVisible = false,
+            suppressFloatingPanelUsageStatsHide = false,
             watchHidePackages = setOf("com.other.app"),
             hidePanelIds = setOf("panel_b"),
             watchShowPackages = setOf("com.other.app"),
@@ -59,6 +62,7 @@ class UsageStatsOverlayRulesStateTest {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "vad.dashing.tbox",
             isMainActivityVisible = true,
+            suppressFloatingPanelUsageStatsHide = false,
             watchHidePackages = setOf("vad.dashing.tbox"),
             hidePanelIds = setOf("panel_main"),
             watchShowPackages = emptySet(),
@@ -72,6 +76,35 @@ class UsageStatsOverlayRulesStateTest {
         val state = UsageStatsOverlayRulesState(
             foregroundPackage = "vad.dashing.tbox",
             isMainActivityVisible = false,
+            suppressFloatingPanelUsageStatsHide = false,
+            watchHidePackages = setOf("vad.dashing.tbox"),
+            hidePanelIds = setOf("panel_main"),
+            watchShowPackages = emptySet(),
+            showPanelIds = emptySet(),
+        )
+        assertFalse(state.isUsageStatsForceHidden("panel_main", "vad.dashing.tbox"))
+    }
+
+    @Test
+    fun forceHide_suppressed_for_any_foreground_when_floating_edit_session_active() {
+        val state = UsageStatsOverlayRulesState(
+            foregroundPackage = "com.other.app",
+            isMainActivityVisible = false,
+            suppressFloatingPanelUsageStatsHide = true,
+            watchHidePackages = setOf("com.other.app"),
+            hidePanelIds = setOf("panel_b"),
+            watchShowPackages = emptySet(),
+            showPanelIds = emptySet(),
+        )
+        assertFalse(state.isUsageStatsForceHidden("panel_b", "vad.dashing.tbox"))
+    }
+
+    @Test
+    fun forceHide_suppressed_for_own_package_and_main_visible_during_floating_edit_session() {
+        val state = UsageStatsOverlayRulesState(
+            foregroundPackage = "vad.dashing.tbox",
+            isMainActivityVisible = true,
+            suppressFloatingPanelUsageStatsHide = true,
             watchHidePackages = setOf("vad.dashing.tbox"),
             hidePanelIds = setOf("panel_main"),
             watchShowPackages = emptySet(),

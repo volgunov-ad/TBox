@@ -5,9 +5,10 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import vad.dashing.tbox.toOwnedImageBitmap
 import androidx.documentfile.provider.DocumentFile
 import java.io.File
+import java.io.FileInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -133,6 +134,35 @@ internal suspend fun listSortedWallpaperImagesInFolder(
     emptyList()
 }
 
+internal suspend fun listWallpaperImageBytesForThemeExport(
+    context: Context,
+    folderUri: Uri,
+): List<Pair<String, ByteArray>> = withContext(Dispatchers.IO) {
+    listSortedWallpaperImagesInFolder(context, folderUri).mapNotNull { (name, fileUri) ->
+        readWallpaperBytesFromUri(context, fileUri)?.takeIf { it.isNotEmpty() }?.let { name to it }
+    }
+}
+
+private fun readWallpaperBytesFromUri(context: Context, uri: Uri): ByteArray? {
+    return runCatching {
+        when (uri.scheme?.lowercase()) {
+            "file" -> {
+                val file = File(uri.path ?: return null)
+                if (!file.isFile || file.length() > MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES) return null
+                file.readBytes()
+            }
+            else -> {
+                val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return null
+                pfd.use {
+                    val size = it.statSize
+                    if (size <= 0L || size > MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES) return null
+                    FileInputStream(it.fileDescriptor).use { input -> input.readBytes() }
+                }
+            }
+        }
+    }.getOrNull()
+}
+
 /**
  * User picks one image; we try to use its parent directory as the wallpaper source (carousel).
  * If the parent is not available (typical single-document [content] URIs), falls back to that file only.
@@ -198,6 +228,12 @@ internal suspend fun decodeImageBitmapFromUri(
     if (isWallpaperFileOverSizeLimit(context, uri)) {
         return@withContext null
     }
+    if (uri.scheme.equals("file", ignoreCase = true)) {
+        val path = uri.path
+        if (path.isNullOrBlank() || !File(path).isFile) {
+            return@withContext null
+        }
+    }
     val srcBounds = runCatching {
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { input ->
@@ -224,7 +260,7 @@ internal suspend fun decodeImageBitmapFromUri(
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
         context.contentResolver.openInputStream(uri)?.use { input ->
-            BitmapFactory.decodeStream(input, null, decodeOptions)?.asImageBitmap()
+            BitmapFactory.decodeStream(input, null, decodeOptions)?.toOwnedImageBitmap()
         }
     }.getOrNull()
 }

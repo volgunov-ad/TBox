@@ -73,7 +73,7 @@ fun DashboardMotorHoursWidgetItem(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (showTitle) {
-                val titleFont = calculateResponsiveFontSize(
+                val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
                 )
@@ -83,10 +83,9 @@ fun DashboardMotorHoursWidgetItem(
                         .weight(1f)
                         .fillMaxWidth()
                         .wrapContentHeight(Alignment.CenterVertically),
-                    fontSize = titleFont,
-                    lineHeight = titleFont * 1.3f,
-                    fontWeight = FontWeight.Medium,
-                    color = resolvedTextColor,
+                    style = titleStyle,
+
+                        color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     softWrap = true,

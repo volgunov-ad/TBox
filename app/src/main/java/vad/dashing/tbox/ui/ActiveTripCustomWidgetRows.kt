@@ -4,12 +4,13 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.text.TextStyle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetField
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.trip.formatTripDurationHuman
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
@@ -19,15 +20,19 @@ import java.util.Date
 fun ActiveTripCustomWidgetRows(
     trip: TripRecord,
     layout: ActiveTripCustomWidgetLayout,
-    rowFont: TextUnit,
+    rowStyle: TextStyle,
     resolvedTextColor: Color,
     dateFmt: SimpleDateFormat,
     context: Context,
+    showRowDividers: Boolean = TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
+    labelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
 ) {
     val avgT = TripRepository.averageSpeedTripKmH(trip)
     val avgFuel = TripRepository.averageFuelConsumptionLitersPer100Km(trip)
     val avgM = TripRepository.averageSpeedMovingKmH(trip)
     val noData = stringResource(R.string.value_no_data)
+    val showDivider = showRowDividers
+    val labelColWidth = labelColumnWidthPercent
 
     for (row in layout.rows) {
         if (!row.enabled) continue
@@ -37,8 +42,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_start_time),
                     value = dateFmt.format(Date(trip.startTimeEpochMs)),
                     unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.END_TIME -> {
@@ -47,8 +54,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_end_time),
                     value = dateFmt.format(Date(end)),
                     unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.ODOMETER_START -> {
@@ -56,8 +65,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_odometer_start),
                     value = trip.odometerStartKm?.let { valueToString(it, 0) } ?: noData,
                     unit = if (trip.odometerStartKm != null) stringResource(R.string.unit_km) else "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.DISTANCE -> {
@@ -65,8 +76,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_distance),
                     value = valueToString(trip.distanceKm, 0),
                     unit = stringResource(R.string.unit_km),
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MOVING_TIME -> {
@@ -74,8 +87,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_moving_time),
                     value = formatTripDurationHuman(context, trip.movingTimeMs),
                     unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.IDLE_TIME -> {
@@ -83,8 +98,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_idle_time),
                     value = formatTripDurationHuman(context, trip.idleTimeMs),
                     unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.ENGINE_RUNNING_TIME -> {
@@ -95,8 +112,10 @@ fun ActiveTripCustomWidgetRows(
                         trip.movingTimeMs + trip.idleTimeMs
                     ),
                     unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.PARKING_TIME -> {
@@ -104,8 +123,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_parking_time),
                     value = formatTripDurationHuman(context, trip.parkingTimeMs),
                     unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.TOTAL_TIME -> {
@@ -116,8 +137,10 @@ fun ActiveTripCustomWidgetRows(
                         trip.movingTimeMs + trip.idleTimeMs + trip.parkingTimeMs
                     ),
                     unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.ENGINE_START_COUNT -> {
@@ -125,8 +148,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_engine_start_count),
                     value = valueToString(trip.engineStartCount),
                     unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MAX_SPEED -> {
@@ -134,8 +159,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_max_speed),
                     value = valueToString(trip.maxSpeed, 1),
                     unit = stringResource(R.string.unit_kmh),
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MAX_ENGINE_TEMP -> {
@@ -143,8 +170,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_max_engine_temp),
                     value = trip.maxEngineTemp?.let { valueToString(it, 1) } ?: noData,
                     unit = if (trip.maxEngineTemp != null) stringResource(R.string.unit_celsius) else "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MAX_GEARBOX_TEMP -> {
@@ -153,8 +182,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_max_gearbox_temp),
                     value = valueToString(gb),
                     unit = stringResource(R.string.unit_celsius),
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MIN_OUTSIDE_TEMP -> {
@@ -162,8 +193,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_min_outside_temp),
                     value = trip.minOutsideTemp?.let { valueToString(it, 1) } ?: noData,
                     unit = if (trip.minOutsideTemp != null) stringResource(R.string.unit_celsius) else "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.MAX_OUTSIDE_TEMP -> {
@@ -171,8 +204,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_max_outside_temp),
                     value = trip.maxOutsideTemp?.let { valueToString(it, 1) } ?: noData,
                     unit = if (trip.maxOutsideTemp != null) stringResource(R.string.unit_celsius) else "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.AVG_SPEED_MOVING -> {
@@ -180,8 +215,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_avg_speed_moving),
                     value = avgM?.let { valueToString(it, 1) } ?: noData,
                     unit = if (avgM != null) stringResource(R.string.unit_kmh) else "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.AVG_SPEED_TRIP -> {
@@ -189,8 +226,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_avg_speed_trip),
                     value = avgT?.let { valueToString(it, 1) } ?: noData,
                     unit = if (avgT != null) stringResource(R.string.unit_kmh) else "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_USED -> {
@@ -198,8 +237,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_fuel_used),
                     value = valueToString(trip.fuelConsumedLiters, 1),
                     unit = stringResource(R.string.unit_liter),
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_CONSUMPTION -> {
@@ -207,8 +248,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_fuel_consumption_l_100km),
                     value = avgFuel?.let { valueToString(it, 1) } ?: noData,
                     unit = if (avgFuel != null) stringResource(R.string.unit_l_100km) else "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_REFUELED -> {
@@ -216,8 +259,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_fuel_refueled),
                     value = valueToString(trip.fuelRefueledLiters, 1),
                     unit = stringResource(R.string.unit_liter),
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.FUEL_REFUELED_COST -> {
@@ -225,8 +270,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_fuel_refueled_cost),
                     value = valueToString(trip.fuelRefueledCostRub, 2),
                     unit = stringResource(R.string.unit_ruble),
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
             ActiveTripCustomWidgetField.REFUEL_COUNT -> {
@@ -234,8 +281,10 @@ fun ActiveTripCustomWidgetRows(
                     label = stringResource(R.string.trips_refuel_count),
                     value = valueToString(trip.refuelCount),
                     unit = "",
-                    fontSize = rowFont,
-                    color = resolvedTextColor
+                    style = rowStyle,
+                    color = resolvedTextColor,
+                    showDivider = showDivider,
+                    labelColumnWidthPercent = labelColWidth,
                 )
             }
         }

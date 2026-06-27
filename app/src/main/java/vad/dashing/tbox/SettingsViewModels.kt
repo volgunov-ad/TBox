@@ -20,10 +20,12 @@ import kotlinx.coroutines.withContext
 import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.TboxFontFamily
 import android.content.Context
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
+import vad.dashing.tbox.ui.LeftMenuLayout
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -35,6 +37,7 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val cols: Int,
     val showTboxDisconnectIndicator: Boolean,
     val clickAction: Boolean,
+    val pageNumber: Int,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -58,7 +61,8 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         rows = w.rows.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         cols = w.cols.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
-        clickAction = w.clickAction
+        clickAction = w.clickAction,
+        pageNumber = w.pageNumber.coerceAtLeast(1),
     )
 }
 
@@ -78,6 +82,18 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
     )
 }
 
+internal fun applyPendingWallpaperPatches(
+    base: MainScreenWallpaperSelectionsByPage,
+    patches: Map<Pair<Int, Boolean>, String>,
+): MainScreenWallpaperSelectionsByPage {
+    if (patches.isEmpty()) return base
+    var current = base
+    patches.forEach { (key, fileName) ->
+        current = current.withFileName(key.first, key.second, fileName)
+    }
+    return current
+}
+
 class SettingsViewModel(private val settingsManager: SettingsManager) : ViewModel() {
 
     companion object {
@@ -95,6 +111,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private const val DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR = true
         private val DEFAULT_FLOATING_DASHBOARD_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
         private const val DEFAULT_MAIN_SCREEN_PANEL_ID = "main-screen-1"
+        private const val MAIN_SCREEN_WALLPAPER_SELECTION_SAVE_DEBOUNCE_MS = 500L
+        private const val MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS = 500L
         private const val DEFAULT_MAIN_SCREEN_PANEL_ROWS = 1
         private const val DEFAULT_MAIN_SCREEN_PANEL_COLS = 1
         private const val DEFAULT_MAIN_SCREEN_PANEL_REL_X = 0.05f
@@ -108,7 +126,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         private val DEFAULT_MAIN_SCREEN_PANEL_WIDGETS = emptyList<FloatingDashboardWidgetConfig>()
     }
 
-    private fun createDefaultMainScreenPanel(id: String, name: String): MainScreenPanelConfig {
+    private fun createDefaultMainScreenPanel(id: String, name: String, pageNumber: Int): MainScreenPanelConfig {
         return MainScreenPanelConfig(
             id = id,
             name = name,
@@ -122,12 +140,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             relHeight = DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT,
             background = DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND,
             clickAction = DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION,
-            showTboxDisconnectIndicator = DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT
+            showTboxDisconnectIndicator = DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT,
+            pageNumber = pageNumber.coerceAtLeast(1),
         )
     }
 
     private fun fallbackMainScreenPanel(id: String): MainScreenPanelConfig {
-        return createDefaultMainScreenPanel(id, id)
+        return createDefaultMainScreenPanel(id, id, SettingsManager.DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER)
     }
 
     private val floatingDashboardConfigStates =
@@ -476,7 +495,15 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX
+            initialValue = SettingsManager.MAIN_SCREEN_TAB_KEY
+        )
+
+    val leftMenuLayout = settingsManager.leftMenuLayoutJsonFlow
+        .map { LeftMenuLayout.parse(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = LeftMenuLayout.default(),
         )
 
     val mainScreenSettingsButtonPosition = settingsManager.mainScreenSettingsButtonFlow
@@ -492,6 +519,83 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = MainScreenAddButtonPosition.Default
         )
+
+    val mainScreenPageCount = settingsManager.mainScreenPageCountFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+        )
+
+    private val liveMainScreenCurrentPage = MutableStateFlow(SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
+
+    val mainScreenCurrentPage: StateFlow<Int> = liveMainScreenCurrentPage.asStateFlow()
+
+    val mainScreenPagePrevButtonPosition = settingsManager.mainScreenPagePrevButtonFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainScreenPagePrevButtonPosition.Default,
+        )
+
+    val mainScreenPageNextButtonPosition = settingsManager.mainScreenPageNextButtonFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainScreenPageNextButtonPosition.Default,
+        )
+
+    val activeThemeUri = settingsManager.activeThemeUriFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "")
+
+    val activeThemeFingerprint = settingsManager.activeThemeFingerprintFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "")
+
+    val activeThemeSections = settingsManager.activeThemeSectionsFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptySet())
+
+    val themeActivationInProgress = settingsManager.themeActivationInProgressFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = false)
+
+    val driveModeThemePaths = settingsManager.driveModeThemePathsFlow
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyMap())
+
+    private var saveCurrentPageJob: Job? = null
+    private var pendingCurrentPage: Int? = null
+
+    private var saveWallpaperSelectionJob: Job? = null
+    private val pendingWallpaperPatches = mutableMapOf<Pair<Int, Boolean>, String>()
+    private val pendingWallpaperPatchesFlow = MutableStateFlow<Map<Pair<Int, Boolean>, String>>(emptyMap())
+
+    private val preThemeActivationFlushHook: suspend () -> Unit = {
+        val outgoingCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+        saveWallpaperSelectionJob?.cancel()
+        saveWallpaperSelectionJob = null
+        saveCurrentPageJob?.cancel()
+        saveCurrentPageJob = null
+        flushMainScreenWallpaperSelectionInternal()
+        flushMainScreenCurrentPageInternal()
+        if (ThemeCacheKeys.isLikelyCacheKey(outgoingCacheKey)) {
+            settingsManager.snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)
+        }
+    }
+
+    val mainScreenWallpaperSelectionsByPage: StateFlow<MainScreenWallpaperSelectionsByPage> =
+        combine(
+            settingsManager.mainScreenWallpaperSelectionByPageFlow,
+            pendingWallpaperPatchesFlow,
+        ) { stored, patches ->
+            applyPendingWallpaperPatches(stored, patches)
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainScreenWallpaperSelectionsByPage.empty(),
+        )
+
+    fun markMainScreenUiReadyForThemeActivation() {
+        settingsManager.preThemeActivationFlush = preThemeActivationFlushHook
+        ThemeActivationCoordinator.markMainScreenUiReady()
+    }
 
     val mainScreenCornerButtonSizeDp = settingsManager.mainScreenCornerButtonSizeDpFlow
         .stateIn(
@@ -590,20 +694,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = ""
         )
 
-    val mainScreenWallpaperLightSelectedFile = settingsManager.mainScreenWallpaperLightSelectedFileFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ""
-        )
-
-    val mainScreenWallpaperDarkSelectedFile = settingsManager.mainScreenWallpaperDarkSelectedFileFlow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ""
-        )
-
     val isMainScreenWallpaperCrop = settingsManager.mainScreenWallpaperCropFlow
         .stateIn(
             scope = viewModelScope,
@@ -611,8 +701,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
-    private val _mainScreenWallpaperEpoch = MutableStateFlow(0L)
-    val mainScreenWallpaperEpoch: StateFlow<Long> = _mainScreenWallpaperEpoch.asStateFlow()
+    val mainScreenWallpaperEpoch = settingsManager.mainScreenWallpaperRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0L,
+        )
 
     val mainScreenDashboards = settingsManager.mainScreenDashboardsFlow
         .stateIn(
@@ -681,6 +775,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_MAIN_SCREEN_PANEL_COLS
+        )
+
+    val mainScreenPanelPageNumber = activeMainScreenPanelConfig
+        .map { it.pageNumber }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SettingsManager.DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER,
         )
 
     val mainScreenPanelRelXPercent = activeMainScreenPanelConfig
@@ -808,6 +910,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 5
         )
 
+    val trackRefuels = settingsManager.trackRefuelsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     val wheelPressurePersistAcrossStops = settingsManager.wheelPressurePersistAcrossStopsFlow
         .stateIn(
             scope = viewModelScope,
@@ -820,6 +929,34 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
+        )
+
+    val appFontFamilyId = settingsManager.appFontFamilyIdFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TboxFontFamily.Default.id
+        )
+
+    val updateChannel = settingsManager.updateChannelFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.update.UpdateChannel.RELEASE,
+        )
+
+    val updateCheckEnabled = settingsManager.updateCheckEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
+    val headUnitCanMode = settingsManager.headUnitCanModeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = HeadUnitCanMode.Android9MbCan
         )
 
     init {
@@ -843,6 +980,34 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.dashboardWidgetsFlow.collect { configs ->
                 latestDashboardWidgetsConfig = configs
+            }
+        }
+        viewModelScope.launch {
+            settingsManager.mainScreenCurrentPageFlow.collect { stored ->
+                if (pendingCurrentPage == null) {
+                    liveMainScreenCurrentPage.value = stored
+                }
+            }
+        }
+        viewModelScope.launch {
+            settingsManager.themeActivationInProgressFlow.collect { activating ->
+                if (activating) {
+                    saveWallpaperSelectionJob?.cancel()
+                    saveWallpaperSelectionJob = null
+                    saveCurrentPageJob?.cancel()
+                    saveCurrentPageJob = null
+                    pendingWallpaperPatches.clear()
+                    pendingWallpaperPatchesFlow.value = emptyMap()
+                    return@collect
+                }
+                saveWallpaperSelectionJob?.cancel()
+                saveWallpaperSelectionJob = null
+                saveCurrentPageJob?.cancel()
+                saveCurrentPageJob = null
+                pendingWallpaperPatches.clear()
+                pendingWallpaperPatchesFlow.value = emptyMap()
+                pendingCurrentPage = null
+                liveMainScreenCurrentPage.value = settingsManager.mainScreenCurrentPageFlow.first()
             }
         }
         viewModelScope.launch {
@@ -1141,9 +1306,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         selectedMainScreenPanelIdState.value = list.first().id
     }
 
-    fun saveSelectedTab(tabIndex: Int) {
+    fun saveSelectedTab(tabKey: String) {
         viewModelScope.launch {
-            settingsManager.saveSelectedTab(tabIndex)
+            settingsManager.saveSelectedTab(tabKey)
+        }
+    }
+
+    fun saveLeftMenuLayout(layout: LeftMenuLayout) {
+        viewModelScope.launch {
+            settingsManager.saveLeftMenuLayoutJson(LeftMenuLayout.serialize(layout))
+            val currentTab = settingsManager.selectedTabFlow.first()
+            if (!LeftMenuLayout.isSidebarTabEnabled(currentTab, layout) &&
+                currentTab != SettingsManager.MAIN_SCREEN_TAB_KEY
+            ) {
+                settingsManager.saveSelectedTab(LeftMenuLayout.firstVisibleTabKey(layout))
+            }
         }
     }
 
@@ -1216,14 +1393,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenWallpaperLightFolderUri(uriString: String?) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperLightFolderUri(uriString)
-            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+            settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
 
     fun saveMainScreenWallpaperDarkFolderUri(uriString: String?) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWallpaperDarkFolderUri(uriString)
-            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+            settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
 
@@ -1243,18 +1420,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 }
                 return@launch
             }
+            val page = liveMainScreenCurrentPage.value
             if (forLightTheme) {
                 settingsManager.saveMainScreenWallpaperLightFolderAndSelection(
                     res.folderUriString,
                     res.selectedFileName,
+                    page,
                 )
             } else {
                 settingsManager.saveMainScreenWallpaperDarkFolderAndSelection(
                     res.folderUriString,
                     res.selectedFileName,
+                    page,
                 )
             }
-            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+            settingsManager.syncActiveThemeWallpaperSelection(
+                settingsManager.mainScreenWallpaperSelectionByPageFlow.first(),
+            )
+            settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
 
@@ -1267,20 +1450,50 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             } else {
                 settingsManager.saveMainScreenWallpaperDarkFolderUri(normalized)
             }
-            _mainScreenWallpaperEpoch.value = _mainScreenWallpaperEpoch.value + 1L
+            settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
 
-    fun saveMainScreenWallpaperLightSelectedFileName(fileName: String) {
+    fun scheduleSaveMainScreenWallpaperSelection(forLightTheme: Boolean, fileName: String, page: Int) {
+        if (settingsManager.themeActivationInProgressFlow.value) return
         viewModelScope.launch {
-            settingsManager.saveMainScreenWallpaperLightSelectedFileName(fileName)
+            val stored = settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
+            if (stored.fileNameFor(page, forLightTheme) == fileName) return@launch
+            pendingWallpaperPatches[page to forLightTheme] = fileName
+            pendingWallpaperPatchesFlow.value = pendingWallpaperPatches.toMap()
+            saveWallpaperSelectionJob?.cancel()
+            saveWallpaperSelectionJob = launch {
+                delay(MAIN_SCREEN_WALLPAPER_SELECTION_SAVE_DEBOUNCE_MS)
+                flushMainScreenWallpaperSelectionInternal()
+            }
         }
     }
 
-    fun saveMainScreenWallpaperDarkSelectedFileName(fileName: String) {
+    fun flushMainScreenWallpaperSelection() {
+        saveWallpaperSelectionJob?.cancel()
+        saveWallpaperSelectionJob = null
         viewModelScope.launch {
-            settingsManager.saveMainScreenWallpaperDarkSelectedFileName(fileName)
+            flushMainScreenWallpaperSelectionInternal()
         }
+    }
+
+    private suspend fun flushMainScreenWallpaperSelectionInternal() {
+        if (pendingWallpaperPatches.isEmpty()) return
+        if (settingsManager.themeActivationInProgressFlow.value) return
+        val patches = pendingWallpaperPatches.toMap()
+        var merged = settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
+        patches.forEach { (key, fileName) ->
+            merged = merged.withFileName(key.first, key.second, fileName)
+        }
+        settingsManager.saveMainScreenWallpaperSelectionsByPage(merged)
+        settingsManager.syncActiveThemeWallpaperSelectionReliable(merged)
+        settingsManager.mainScreenWallpaperSelectionByPageFlow.first { stored ->
+            patches.all { (key, fileName) ->
+                stored.fileNameFor(key.first, key.second) == fileName
+            }
+        }
+        patches.keys.forEach { pendingWallpaperPatches.remove(it) }
+        pendingWallpaperPatchesFlow.value = pendingWallpaperPatches.toMap()
     }
 
     fun saveMainScreenWallpaperCrop(crop: Boolean) {
@@ -1297,6 +1510,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val tileBackgroundImageRevision = settingsManager.tileBackgroundImageRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
+    val httpRequestIconRevision = settingsManager.httpRequestIconRevisionFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -1322,6 +1542,38 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     suspend fun hasCustomLauncherAppIcon(packageName: String): Boolean =
         settingsManager.hasCustomLauncherAppIcon(packageName)
+
+    suspend fun clearSharedLauncherAppIconsFolder() {
+        settingsManager.clearSharedLauncherAppIconsFolder()
+    }
+
+    fun setCustomHttpRequestIconFromUri(
+        iconKey: String,
+        sourceUri: Uri?,
+        onResult: (SetLauncherAppCustomIconResult) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val r = settingsManager.setCustomHttpRequestIconFromUri(iconKey, sourceUri)
+            onResult(r)
+        }
+    }
+
+    fun clearCustomHttpRequestIcon(iconKey: String) {
+        viewModelScope.launch {
+            settingsManager.clearCustomHttpRequestIcon(iconKey)
+        }
+    }
+
+    suspend fun hasCustomHttpRequestIcon(iconKey: String): Boolean =
+        settingsManager.hasCustomHttpRequestIcon(iconKey)
+
+    suspend fun clearSharedHttpRequestIconsFolder() {
+        settingsManager.clearSharedHttpRequestIconsFolder()
+    }
+
+    suspend fun clearSharedTileBackgroundsFolder() {
+        settingsManager.clearSharedTileBackgroundsFolder()
+    }
 
     fun setTileBackgroundImageFromUri(
         panelStorageId: String,
@@ -1370,11 +1622,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun addMainScreenDashboard(defaultName: String) {
+    fun addMainScreenDashboard(defaultName: String, pageNumber: Int? = null) {
         viewModelScope.launch {
             val base = mainScreenDashboards.value.toMutableList()
             val newId = "main-screen-" + java.util.UUID.randomUUID().toString().take(8)
-            val newPanel = createDefaultMainScreenPanel(newId, defaultName)
+            val resolvedPage = pageNumber ?: liveMainScreenCurrentPage.value
+            val newPanel = createDefaultMainScreenPanel(newId, defaultName, resolvedPage)
             base.add(newPanel)
             settingsManager.saveMainScreenDashboards(base)
             selectedMainScreenPanelIdState.value = newId
@@ -1748,6 +2001,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveTrackRefuels(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveTrackRefuelsSetting(enabled)
+        }
+    }
+
     fun saveWheelPressurePersistAcrossStops(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveWheelPressurePersistAcrossStopsSetting(enabled)
@@ -1758,6 +2017,180 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.saveUiClickSoundsSetting(enabled)
         }
+    }
+
+    fun saveUpdateCheckEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveUpdateCheckEnabledSetting(enabled)
+        }
+    }
+
+    fun saveAppFontFamilyId(fontFamilyId: Int) {
+        viewModelScope.launch {
+            settingsManager.saveAppFontFamilyId(fontFamilyId)
+        }
+    }
+
+    fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
+        viewModelScope.launch {
+            settingsManager.saveHeadUnitCanModeByUser(mode)
+        }
+    }
+
+    fun saveMainScreenPageCount(pageCount: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenPageCount(pageCount)
+            val normalized = PagingStateNormalizer.normalizePageCount(pageCount)
+            liveMainScreenCurrentPage.value = PagingStateNormalizer.normalizeCurrentPage(
+                liveMainScreenCurrentPage.value,
+                normalized,
+            )
+        }
+    }
+
+    fun scheduleSaveMainScreenCurrentPage(page: Int) {
+        liveMainScreenCurrentPage.value = page
+        pendingCurrentPage = page
+        saveCurrentPageJob?.cancel()
+        saveCurrentPageJob = viewModelScope.launch {
+            delay(MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS)
+            flushMainScreenCurrentPageInternal()
+        }
+    }
+
+    fun flushMainScreenCurrentPage() {
+        saveCurrentPageJob?.cancel()
+        saveCurrentPageJob = null
+        val toSave = pendingCurrentPage
+        if (toSave != null) {
+            liveMainScreenCurrentPage.value = toSave
+        }
+        viewModelScope.launch {
+            flushMainScreenCurrentPageInternal()
+        }
+    }
+
+    private suspend fun flushMainScreenCurrentPageInternal() {
+        val toSave = pendingCurrentPage ?: return
+        pendingCurrentPage = null
+        settingsManager.saveMainScreenCurrentPage(toSave)
+        settingsManager.syncActiveThemeCurrentPage(toSave)
+    }
+
+    fun saveMainScreenPagePrevButton(position: MainScreenPagePrevButtonPosition) {
+        viewModelScope.launch { settingsManager.saveMainScreenPagePrevButton(position) }
+    }
+
+    fun saveMainScreenPageNextButton(position: MainScreenPageNextButtonPosition) {
+        viewModelScope.launch { settingsManager.saveMainScreenPageNextButton(position) }
+    }
+
+    fun saveMainScreenPanelPageNumber(pageNumber: Int, panelId: String? = null) {
+        viewModelScope.launch {
+            val pageCount = settingsManager.mainScreenPageCountFlow.first()
+            val normalized = PagingStateNormalizer.normalizePanelPageNumber(pageNumber, pageCount)
+            val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+                { it.copy(pageNumber = normalized) }
+            if (panelId != null) {
+                updateMainScreenPanel(panelId, update)
+            } else {
+                updateSelectedMainScreenPanel(update)
+            }
+        }
+    }
+
+    data class ThemeExportResult(
+        val savedPath: String,
+    )
+
+    suspend fun exportThemeBundleToDownloads(
+        context: Context,
+        sections: Set<ThemeSection>,
+        baseName: String,
+    ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val dest = ThemeBundleExport.downloadsThemeExportFile(baseName)
+            ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, dest)
+            ThemeExportResult(savedPath = dest.absolutePath)
+        }
+    }
+
+    suspend fun exportThemeBundle(
+        context: Context,
+        output: java.io.OutputStream,
+        sections: Set<ThemeSection>,
+    ) {
+        ThemeBundleExport.exportBundle(context, settingsManager, sections, output)
+    }
+
+    suspend fun applyThemeFromUri(context: Context, uriString: String): Result<ThemeApply.ApplyResult> {
+        return ThemeApply.applyFromUri(context, settingsManager, this, uriString)
+    }
+
+    suspend fun applyThemeBytes(context: Context, bytes: ByteArray, themeUri: String): Result<ThemeApply.ApplyResult> {
+        return ThemeApply.applyBytes(context, settingsManager, this, bytes, themeUri)
+    }
+
+    fun saveDriveModeThemePath(rawValue: Int, uri: String) {
+        viewModelScope.launch { settingsManager.saveDriveModeThemePath(rawValue, uri) }
+    }
+
+    suspend fun assignDriveModeTheme(
+        context: Context,
+        rawValue: Int,
+        sourceUri: String,
+    ): Result<Unit> {
+        return runCatching {
+            ThemeApply.materializeDriveModeThemeFromUri(
+                context = context,
+                settingsManager = settingsManager,
+                rawValue = rawValue,
+                sourceUri = sourceUri,
+            ).getOrThrow()
+            settingsManager.saveDriveModeThemePath(rawValue, sourceUri)
+        }
+    }
+
+    fun clearDriveModeThemePath(rawValue: Int) {
+        viewModelScope.launch { settingsManager.saveDriveModeThemePath(rawValue, "") }
+    }
+
+    fun clearActiveThemeSelection() {
+        viewModelScope.launch {
+            settingsManager.clearActiveTheme()
+            settingsManager.bumpLauncherAppIconRevision()
+            settingsManager.bumpTileBackgroundImageRevision()
+        }
+    }
+
+    suspend fun clearThemeStorage(context: Context) {
+        val activeKey = settingsManager.activeThemeUriFlow.first().trim()
+            .takeIf { ThemeCacheKeys.isLikelyCacheKey(it) && ThemeMaterialization.isMaterialized(context, it) }
+        ThemeMaterialization.clearThemeCachesExcept(
+            context = context,
+            settingsManager = settingsManager,
+            keepCacheKey = activeKey,
+        )
+        settingsManager.clearDriveModeThemePaths()
+    }
+
+    suspend fun formatActiveThemeRuntimeJsonDebugText(context: Context): String {
+        return ThemeMaterialization.formatRuntimeJsonDebugText(
+            context = context,
+            cacheKeyRaw = settingsManager.activeThemeUriFlow.first(),
+            dataStoreSelections = settingsManager.mainScreenWallpaperSelectionsSnapshot(),
+        )
+    }
+
+    suspend fun validateThemeSettings(context: Context) {
+        ThemeSettingsValidator.validateOnStartup(context, settingsManager)
+    }
+
+    override fun onCleared() {
+        if (ThemeActivationCoordinator.preThemeActivationFlush === preThemeActivationFlushHook) {
+            ThemeActivationCoordinator.preThemeActivationFlush = null
+        }
+        super.onCleared()
     }
 }
 

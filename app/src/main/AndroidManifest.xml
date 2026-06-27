@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="vad.dashing.tbox">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -23,6 +24,54 @@
         android:minSdkVersion="29" />
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission
+        android:name="android.car.permission.CAR_INFO"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_VENDOR_EXTENSION"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_SPEED"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_POWERTRAIN"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_ENGINE_DETAILED"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_ENERGY"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_ENERGY_PORTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_EXTERIOR_LIGHTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_EXTERIOR_ENVIRONMENT"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CABIN"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_AUDIO_VOLUME"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_AUDIO_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_CAR_CLIMATE"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_INTERIOR_LIGHTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_EXTERIOR_LIGHTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission
+        android:name="android.car.permission.CAR_CONTROL_DISPLAY_UNITS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- Разрешения хранилища только для Android 9-10 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -64,6 +113,48 @@
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.tboxtheme" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="application/zip" />
             </intent-filter>
         </activity>
 
@@ -146,6 +237,7 @@
             android:exported="true">
             <intent-filter android:priority="998">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="vad.dashing.tbox.DEBUG_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
     </application>

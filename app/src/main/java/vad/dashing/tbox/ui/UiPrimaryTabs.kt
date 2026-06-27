@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -30,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,14 +45,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.update.UpdateChannel
+import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.valueToString
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -163,8 +172,7 @@ fun ModemModeSelectorContent(
     Column(modifier = modifier) {
         Text(
             text = stringResource(R.string.modem_mode_title),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -237,6 +245,7 @@ fun SettingsTabContent(
     viewModel: TboxViewModel,
     settingsViewModel: SettingsViewModel,
     appDataViewModel: AppDataViewModel,
+    updateViewModel: UpdateViewModel,
     onTboxRestartClick: () -> Unit,
     onMockLocationSettingChanged: (Boolean) -> Unit,
     onServiceCommand: (String, String, String) -> Unit,
@@ -260,18 +269,8 @@ fun SettingsTabContent(
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
+    val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
-
-    val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
-    val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
-    val isFloatingDashboardShowTboxDisconnectIndicator by
-        settingsViewModel.isFloatingDashboardShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
-    val floatingDashboardsList by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
-    val hasFloatingPanels = floatingDashboardsList.isNotEmpty()
-    val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
-    val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
-    val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
-    val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
 
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
@@ -284,8 +283,12 @@ fun SettingsTabContent(
         miscTankLitersDraft = fuelTankLiters.toString()
     }
     val splitTripTimeMinutes by settingsViewModel.splitTripTimeMinutes.collectAsStateWithLifecycle()
+    val trackRefuels by settingsViewModel.trackRefuels.collectAsStateWithLifecycle()
     val wheelPressurePersistAcrossStops by settingsViewModel.wheelPressurePersistAcrossStops.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
+    val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
+    val updateCheckEnabled by settingsViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
 
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
 
@@ -296,28 +299,36 @@ fun SettingsTabContent(
     val warningTitle = stringResource(R.string.warning_title)
     val warningSuspendStop = stringResource(R.string.warning_suspend_stop_manual_reboot)
     val expertModeWarning = stringResource(R.string.settings_expert_mode_warning_desc)
-    val newFloatingPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
 
-    LaunchedEffect(Unit) {
-        MbCanRepository.warmUpAvailabilityForUi()
+    LaunchedEffect(headUnitCanMode) {
+        UniversalCanRepository.setMode(headUnitCanMode)
+        UniversalCanRepository.warmUpAvailabilityForUi()
     }
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
+    var backgroundServiceRestartButtonEnabled by remember { mutableStateOf(true) }
+
     var huRebootButtonEnabled by remember { mutableStateOf(true) }
-    val mbCanAvailability by MbCanRepository.availability.collectAsStateWithLifecycle()
+    val mbCanAvailability by UniversalCanRepository.availability.collectAsStateWithLifecycle()
     val mbCanAvailable = mbCanAvailability is MbCanAvailability.Available
 
     var showExportBackupDialog by remember { mutableStateOf(false) }
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
-    var showUsageStatsHideFloatingDialog by remember { mutableStateOf(false) }
-    var showFloatingPanelOrderDialog by remember { mutableStateOf(false) }
+    var showLeftMenuConfigDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
             delay(15000)
             restartButtonEnabled = true
+        }
+    }
+
+    LaunchedEffect(backgroundServiceRestartButtonEnabled) {
+        if (!backgroundServiceRestartButtonEnabled) {
+            delay(15000)
+            backgroundServiceRestartButtonEnabled = true
         }
     }
 
@@ -334,6 +345,36 @@ fun SettingsTabContent(
             .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
+        SettingsTitle(stringResource(R.string.settings_hu_type_title))
+        Text(
+            text = stringResource(R.string.settings_hu_type_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ModeButton(
+                text = stringResource(R.string.settings_hu_type_android9),
+                isSelected = headUnitCanMode == HeadUnitCanMode.Android9MbCan,
+                onClick = { settingsViewModel.saveHeadUnitCanMode(HeadUnitCanMode.Android9MbCan) },
+                enabled = true,
+                modifier = Modifier.weight(1f)
+            )
+            ModeButton(
+                text = stringResource(R.string.settings_hu_type_android10),
+                isSelected = headUnitCanMode == HeadUnitCanMode.Android10Vhal,
+                onClick = { settingsViewModel.saveHeadUnitCanMode(HeadUnitCanMode.Android10Vhal) },
+                enabled = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
         SettingsTitle(stringResource(R.string.settings_network_control_title))
         SettingSwitch(
             isAutoRestartEnabled,
@@ -459,135 +500,6 @@ fun SettingsTabContent(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_floating_panels_title))
-        if (hasFloatingPanels) {
-            FloatingDashboardPanelEditor(
-                panels = floatingDashboardsList,
-                selectedPanelId = activeFloatingDashboardId,
-                onSelectPanelId = { panelId ->
-                    settingsViewModel.saveSelectedFloatingDashboardId(panelId)
-                },
-                onRenamePanel = { panelId, name ->
-                    settingsViewModel.saveFloatingDashboardName(panelId, name)
-                },
-                onAddPanel = {
-                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
-                },
-                onDeletePanel = { panelId ->
-                    settingsViewModel.deleteFloatingDashboard(panelId)
-                },
-                deleteInProgressPanelId = floatingPanelDeleteInProgressId,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            OutlinedButton(
-                onClick = rememberWrappedOnClick { showFloatingPanelOrderDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_panels_order_button),
-                    fontSize = 22.sp,
-                )
-            }
-        } else {
-            Button(
-                onClick = rememberWrappedOnClick {
-                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
-                },
-                modifier = Modifier.padding(bottom = 8.dp)
-            ) {
-                Text(stringResource(R.string.action_add), fontSize = 22.sp)
-            }
-        }
-        SettingSwitch(
-            isFloatingDashboardEnabled,
-            { enabled ->
-                if (enabled) {
-                    if (Settings.canDrawOverlays(context)) {
-                        settingsViewModel.saveFloatingDashboardSetting(true)
-                    } else {
-                        showOverlayRequirementsDialog(context)
-                    }
-                } else {
-                    settingsViewModel.saveFloatingDashboardSetting(false)
-                }
-            },
-            stringResource(R.string.settings_show_floating_panel_title),
-            "",
-            hasFloatingPanels
-        )
-        SettingSwitch(
-            isFloatingDashboardClickAction,
-            { enabled ->
-                settingsViewModel.saveFloatingDashboardClickAction(enabled)
-            },
-            stringResource(R.string.settings_open_app_on_panel_click_title),
-            "",
-            hasFloatingPanels
-        )
-        SettingSwitch(
-            isFloatingDashboardShowTboxDisconnectIndicator,
-            { enabled ->
-                settingsViewModel.saveFloatingDashboardShowTboxDisconnectIndicator(enabled)
-            },
-            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
-            "",
-            hasFloatingPanels
-        )
-        SettingDropdownGeneric(
-            floatingDashboardRows,
-            { rows ->
-                settingsViewModel.saveFloatingDashboardRows(rows)
-            },
-            stringResource(R.string.settings_floating_rows_title),
-            "",
-            hasFloatingPanels,
-            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
-        )
-        SettingDropdownGeneric(
-            floatingDashboardCols,
-            { cols ->
-                settingsViewModel.saveFloatingDashboardCols(cols)
-            },
-            stringResource(R.string.settings_floating_cols_title),
-            "",
-            hasFloatingPanels,
-            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
-        )
-        FloatingDashboardPositionSizeSettings(
-            settingsViewModel,
-            Modifier,
-            enabled = hasFloatingPanels
-        )
-
-        Text(
-            text = stringResource(R.string.settings_floating_usage_stats_hide_title),
-            modifier = Modifier.padding(top = 12.dp),
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(R.string.settings_floating_usage_stats_hide_explanation),
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-            fontSize = 20.sp,
-            lineHeight = 20.sp * 1.35f,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        OutlinedButton(
-            onClick = rememberWrappedOnClick { showUsageStatsHideFloatingDialog = true },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.settings_floating_usage_stats_hide_configure),
-                fontSize = 22.sp,
-            )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
@@ -662,6 +574,23 @@ fun SettingsTabContent(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_left_menu_title))
+        Button(
+            onClick = rememberWrappedOnClick { showLeftMenuConfigDialog = true },
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            Text(stringResource(R.string.settings_left_menu_edit), style = MaterialTheme.typography.tboxTitle)
+        }
+        SettingAppFontFamily(
+            selectedFontFamilyId = appFontFamilyId,
+            onFontFamilyIdChange = { settingsViewModel.saveAppFontFamilyId(it) },
+            text = stringResource(R.string.settings_app_font_family_title),
+            description = stringResource(R.string.settings_app_font_family_desc),
+            enabled = true,
+            selectorWidth = 250.dp
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_misc_title))
         CalibrationIntCommitField(
             title = stringResource(R.string.settings_fuel_tank_liters_title),
@@ -682,6 +611,13 @@ fun SettingsTabContent(
             "",
             1,
             100000
+        )
+        SettingSwitch(
+            trackRefuels,
+            { enabled -> settingsViewModel.saveTrackRefuels(enabled) },
+            stringResource(R.string.settings_track_refuels_title),
+            stringResource(R.string.settings_track_refuels_desc),
+            true
         )
         SettingSwitch(
             wheelPressurePersistAcrossStops,
@@ -753,7 +689,7 @@ fun SettingsTabContent(
 //            if (!canUseMockLocation) {
 //                Text(
 //                    text = stringResource(R.string.settings_mock_location_requirements_link),
-//                    fontSize = 20.sp,
+//                    style = MaterialTheme.typography.tboxBody,
 //                    color = MaterialTheme.colorScheme.primary,
 //                    modifier = Modifier
 //                        .clickableWithSound { showLocationRequirementsDialog(context) }
@@ -763,10 +699,55 @@ fun SettingsTabContent(
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_update_title))
+        SettingSwitch(
+            updateCheckEnabled,
+            { enabled ->
+                settingsViewModel.saveUpdateCheckEnabled(enabled)
+            },
+            stringResource(R.string.settings_update_check_enabled_title),
+            stringResource(R.string.settings_update_check_enabled_desc),
+            true,
+        )
+        val releaseChannelLabel = stringResource(R.string.update_channel_release)
+        val developmentChannelLabel = stringResource(R.string.update_channel_development)
+        val updateChannelOptions = remember(releaseChannelLabel, developmentChannelLabel) {
+            listOf(
+                UpdateChannelDropdownOption(UpdateChannel.RELEASE, releaseChannelLabel),
+                UpdateChannelDropdownOption(UpdateChannel.DEVELOPMENT, developmentChannelLabel),
+            )
+        }
+        val selectedUpdateChannelOption = remember(updateChannel, updateChannelOptions) {
+            updateChannelOptions.first { it.channel == updateChannel }
+        }
+        SettingDropdownGeneric(
+            selectedValue = selectedUpdateChannelOption,
+            onValueChange = { option ->
+                updateViewModel.saveUpdateChannel(option.channel)
+            },
+            text = stringResource(R.string.settings_update_channel_title),
+            description = stringResource(R.string.settings_update_channel_desc),
+            enabled = true,
+            options = updateChannelOptions,
+            selectorWidth = 250.dp,
+        )
+        Button(
+            onClick = rememberWrappedOnClick { updateViewModel.checkForUpdate(force = true) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_update_check_button),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_backup_title))
         Text(
             text = stringResource(R.string.settings_backup_desc),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -781,7 +762,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.settings_backup_export),
-                    fontSize = 22.sp,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -792,7 +773,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.settings_backup_import),
-                    fontSize = 22.sp,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -806,7 +787,7 @@ fun SettingsTabContent(
         ) {
             Text(
                 text = stringResource(R.string.settings_backup_export_without_trips),
-                fontSize = 22.sp,
+                style = MaterialTheme.typography.tboxButton,
                 maxLines = 2,
                 textAlign = TextAlign.Center
             )
@@ -881,44 +862,42 @@ fun SettingsTabContent(
             )
         }
 
-        if (showUsageStatsHideFloatingDialog) {
-            UsageStatsHideFloatingPanelsDialog(
-                settingsViewModel = settingsViewModel,
-                floatingPanels = floatingDashboardsList,
-                onDismiss = { showUsageStatsHideFloatingDialog = false },
-            )
-        }
-        if (showFloatingPanelOrderDialog) {
-            PanelOrderConfigDialog(
-                visible = true,
-                title = stringResource(R.string.settings_floating_panels_order_dialog_title),
-                hint = stringResource(R.string.settings_panels_order_dialog_hint),
-                items = floatingDashboardsList.map { panel ->
-                    PanelOrderItem(
-                        id = panel.id,
-                        name = panel.name.ifBlank { panel.id },
+        LeftMenuConfigDialog(
+            settingsViewModel = settingsViewModel,
+            visible = showLeftMenuConfigDialog,
+            onDismiss = { showLeftMenuConfigDialog = false },
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        Button(
+            onClick = rememberWrappedOnClick {
+                if (backgroundServiceRestartButtonEnabled) {
+                    backgroundServiceRestartButtonEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_RESTART,
+                        "",
+                        "",
                     )
-                },
-                onDismiss = { showFloatingPanelOrderDialog = false },
-                onSave = { orderedIds ->
-                    val byId = floatingDashboardsList.associateBy { it.id }
-                    val reordered = buildList {
-                        orderedIds.forEach { panelId ->
-                            byId[panelId]?.let { add(it) }
-                        }
-                        floatingDashboardsList.forEach { panel ->
-                            if (orderedIds.none { it == panel.id }) add(panel)
-                        }
-                    }
-                    settingsViewModel.saveFloatingDashboards(reordered)
-                },
+                }
+            },
+            enabled = backgroundServiceRestartButtonEnabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.button_restart_background_service),
+                style = MaterialTheme.typography.tboxTitle,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
             )
         }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp),
+                .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -934,7 +913,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_tbox),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -950,17 +929,211 @@ fun SettingsTabContent(
                         )
                     }
                 },
-                enabled = huRebootButtonEnabled && mbCanAvailable,
+                enabled = huRebootButtonEnabled &&
+                    mbCanAvailable &&
+                    headUnitCanMode == HeadUnitCanMode.Android9MbCan,
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_hu),
-                    fontSize = 24.sp,
+                    style = MaterialTheme.typography.tboxTitle,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
             }
         }
+    }
+}
+
+@Composable
+fun FloatingPanelsSettingsTabContent(
+    settingsViewModel: SettingsViewModel,
+) {
+    val isFloatingDashboardEnabled by settingsViewModel.isFloatingDashboardEnabled.collectAsStateWithLifecycle()
+    val isFloatingDashboardClickAction by settingsViewModel.isFloatingDashboardClickAction.collectAsStateWithLifecycle()
+    val isFloatingDashboardShowTboxDisconnectIndicator by
+        settingsViewModel.isFloatingDashboardShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
+    val floatingDashboardsList by settingsViewModel.floatingDashboards.collectAsStateWithLifecycle()
+    val hasFloatingPanels = floatingDashboardsList.isNotEmpty()
+    val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
+    val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
+    val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
+    val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
+
+    val scrollState = rememberScrollState()
+    val context = LocalContext.current
+    val newFloatingPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
+
+    var showUsageStatsHideFloatingDialog by remember { mutableStateOf(false) }
+    var showFloatingPanelOrderDialog by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(18.dp),
+    ) {
+        SettingsTitle(stringResource(R.string.settings_floating_panels_title))
+        if (hasFloatingPanels) {
+            FloatingDashboardPanelEditor(
+                panels = floatingDashboardsList,
+                selectedPanelId = activeFloatingDashboardId,
+                onSelectPanelId = { panelId ->
+                    settingsViewModel.saveSelectedFloatingDashboardId(panelId)
+                },
+                onRenamePanel = { panelId, name ->
+                    settingsViewModel.saveFloatingDashboardName(panelId, name)
+                },
+                onAddPanel = {
+                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
+                },
+                onDeletePanel = { panelId ->
+                    settingsViewModel.deleteFloatingDashboard(panelId)
+                },
+                deleteInProgressPanelId = floatingPanelDeleteInProgressId,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            OutlinedButton(
+                onClick = rememberWrappedOnClick { showFloatingPanelOrderDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_panels_order_button),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
+        } else {
+            Button(
+                onClick = rememberWrappedOnClick {
+                    settingsViewModel.addFloatingDashboard(newFloatingPanelDefaultName)
+                },
+                modifier = Modifier.padding(bottom = 8.dp),
+            ) {
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxTitle)
+            }
+        }
+        SettingSwitch(
+            isFloatingDashboardEnabled,
+            { enabled ->
+                if (enabled) {
+                    if (Settings.canDrawOverlays(context)) {
+                        settingsViewModel.saveFloatingDashboardSetting(true)
+                    } else {
+                        showOverlayRequirementsDialog(context)
+                    }
+                } else {
+                    settingsViewModel.saveFloatingDashboardSetting(false)
+                }
+            },
+            stringResource(R.string.settings_show_floating_panel_title),
+            "",
+            hasFloatingPanels,
+        )
+        SettingSwitch(
+            isFloatingDashboardClickAction,
+            { enabled ->
+                settingsViewModel.saveFloatingDashboardClickAction(enabled)
+            },
+            stringResource(R.string.settings_open_app_on_panel_click_title),
+            "",
+            hasFloatingPanels,
+        )
+        SettingSwitch(
+            isFloatingDashboardShowTboxDisconnectIndicator,
+            { enabled ->
+                settingsViewModel.saveFloatingDashboardShowTboxDisconnectIndicator(enabled)
+            },
+            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
+            "",
+            hasFloatingPanels,
+        )
+        SettingDropdownGeneric(
+            floatingDashboardRows,
+            { rows ->
+                settingsViewModel.saveFloatingDashboardRows(rows)
+            },
+            stringResource(R.string.settings_floating_rows_title),
+            "",
+            hasFloatingPanels,
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS,
+        )
+        SettingDropdownGeneric(
+            floatingDashboardCols,
+            { cols ->
+                settingsViewModel.saveFloatingDashboardCols(cols)
+            },
+            stringResource(R.string.settings_floating_cols_title),
+            "",
+            hasFloatingPanels,
+            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS,
+        )
+        FloatingDashboardPositionSizeSettings(
+            settingsViewModel,
+            Modifier,
+            enabled = hasFloatingPanels,
+        )
+
+        Text(
+            text = stringResource(R.string.settings_floating_usage_stats_hide_title),
+            modifier = Modifier.padding(top = 12.dp),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.settings_floating_usage_stats_hide_explanation),
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            style = MaterialTheme.typography.tboxBody.copy(
+                lineHeight = MaterialTheme.typography.tboxBody.fontSize * 1.35f,
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { showUsageStatsHideFloatingDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_floating_usage_stats_hide_configure),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+    }
+
+    if (showUsageStatsHideFloatingDialog) {
+        UsageStatsHideFloatingPanelsDialog(
+            settingsViewModel = settingsViewModel,
+            floatingPanels = floatingDashboardsList,
+            onDismiss = { showUsageStatsHideFloatingDialog = false },
+        )
+    }
+    if (showFloatingPanelOrderDialog) {
+        PanelOrderConfigDialog(
+            visible = true,
+            title = stringResource(R.string.settings_floating_panels_order_dialog_title),
+            hint = stringResource(R.string.settings_panels_order_dialog_hint),
+            items = floatingDashboardsList.map { panel ->
+                PanelOrderItem(
+                    id = panel.id,
+                    name = panel.name.ifBlank { panel.id },
+                )
+            },
+            onDismiss = { showFloatingPanelOrderDialog = false },
+            onSave = { orderedIds ->
+                val byId = floatingDashboardsList.associateBy { it.id }
+                val reordered = buildList {
+                    orderedIds.forEach { panelId ->
+                        byId[panelId]?.let { add(it) }
+                    }
+                    floatingDashboardsList.forEach { panel ->
+                        if (orderedIds.none { it == panel.id }) add(panel)
+                    }
+                }
+                settingsViewModel.saveFloatingDashboards(reordered)
+            },
+        )
     }
 }
 
@@ -1103,7 +1276,7 @@ fun LocationTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.location_button_resume_loc),
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -1123,7 +1296,7 @@ fun LocationTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.location_button_suspend_loc),
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -1244,7 +1417,7 @@ fun InfoTabContent(
                     ) {
                         Text(
                             text = stringResource(R.string.button_request_tbox_info),
-                            fontSize = 24.sp,
+                            style = MaterialTheme.typography.tboxTitle,
                             maxLines = 2,
                             textAlign = TextAlign.Center
                         )
@@ -1253,4 +1426,11 @@ fun InfoTabContent(
             }
         }
     }
+}
+
+private data class UpdateChannelDropdownOption(
+    val channel: UpdateChannel,
+    val label: String,
+) {
+    override fun toString(): String = label
 }

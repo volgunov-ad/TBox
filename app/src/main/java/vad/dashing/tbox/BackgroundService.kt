@@ -34,6 +34,7 @@ import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationJson
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationLive
 import vad.dashing.tbox.fuellevelcalibration.FuelEntry
 import vad.dashing.tbox.fuellevelcalibration.FuelFilter
+import vad.dashing.tbox.fuellevelcalibration.FuelLevelMath
 import vad.dashing.tbox.fuellevelcalibration.FuelSmartEstimator
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -47,7 +48,7 @@ import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import com.mengbo.mbCan.defines.MBAudioProperty
 import vad.dashing.tbox.fuel.FuelCoordinates
 import vad.dashing.tbox.fuel.FuelCostAccounting
@@ -112,6 +113,7 @@ class BackgroundService : Service() {
     private lateinit var fuelCalibrationMaturityThresholdSetting: StateFlow<Int>
     private lateinit var fuelPriceFuelIdSetting: StateFlow<Int>
     private lateinit var splitTripTimeMinutesSetting: StateFlow<Int>
+    private lateinit var trackRefuelsSetting: StateFlow<Boolean>
     private lateinit var wheelPressurePersistAcrossStopsSetting: StateFlow<Boolean>
     private val fuelPriceClient by lazy { FuelPriceClient() }
 
@@ -150,6 +152,8 @@ class BackgroundService : Service() {
     private var settingsListenerJob: Job? = null
     private var dataListenerJob: Job? = null
     private var usageStatsFloatingHideJob: Job? = null
+    private var lastUsageStatsOverlayRules: UsageStatsOverlayRulesState? = null
+    private var usageStatsStableForegroundPackage: String? = null
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -190,6 +194,7 @@ class BackgroundService : Service() {
             prev = m.elapsedMs
         }
         TboxRepository.addLog("DEBUG", tag, sb.toString())
+        Log.d("TboxTimings", "$tag: $sb")
         timingMarks.clear()
     }
 
@@ -233,8 +238,8 @@ class BackgroundService : Service() {
     private var motorHoursTripBuffer = MotorHoursBuffer(0.01f)
 
     /**
-     * In-RAM state for automatic trips: each CAN RPM sample drives [onTripRpmSample]. Split-window
-     * length comes from [splitTripTimeMinutesSetting] (same semantics as [vad.dashing.tbox.trip.TripRules]).
+     * In-RAM state for automatic trips: [onTripPeriodicSample] runs on a 1 s tick (RPM snapshot).
+     * Split-window length comes from [splitTripTimeMinutesSetting] (same semantics as [vad.dashing.tbox.trip.TripRules]).
      */
     private var tripPrevRpmForStart = 0f
     /** True once we have seen RPM > 0 this service session; blocks spurious "new trip" on first samples. */
@@ -254,7 +259,7 @@ class BackgroundService : Service() {
     private var tripLastFuelLitersCalibrated: Float? = null
     private var tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
     private var tripLastPersistedSnapshot: TripRecord? = null
-    /** First RPM sample after service start or reload: special-case resume vs new trip without double-counting. */
+    /** First periodic sample after service start or reload: special-case resume vs new trip without double-counting. */
     private var tripFirstSampleAfterSessionStart = true
     private var isLastSMS: Boolean = false
 
@@ -296,6 +301,7 @@ class BackgroundService : Service() {
         /** Source broadcast action that initiated boot-time start (BOOT/LOCKED_BOOT/QUICKBOOT). */
         const val EXTRA_START_SOURCE_ACTION = "vad.dashing.tbox.START_SOURCE_ACTION"
         const val ACTION_STOP = "vad.dashing.tbox.STOP"
+        const val ACTION_RESTART = "vad.dashing.tbox.RESTART"
         const val ACTION_SEND_AT = "vad.dashing.tbox.SEND_AT"
         const val ACTION_MODEM_CHECK = "vad.dashing.tbox.MODEM_CHECK"
         const val ACTION_MODEM_OFF = "vad.dashing.tbox.MODEM_OFF"
@@ -382,6 +388,7 @@ class BackgroundService : Service() {
         )
 
         private const val MOTOR_HOURS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
+        private const val ACCOUNTING_SAMPLE_INTERVAL_MS = 1_000L
         private const val TRIPS_PERSIST_INTERVAL_MS = 10 * 60 * 1000L
         private const val OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS = 2000L
         /** No Tbox client reconnect attempts until this long after [serviceStartElapsed] (first init / first reply). */
@@ -456,6 +463,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.fuelPriceFuelId)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, settingsSnap.splitTripTimeMinutes)
+            trackRefuelsSetting = settingsManager.trackRefuelsFlow
+                .stateIn(scope, eager, true)
             wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
                 .stateIn(scope, eager, settingsSnap.wheelPressurePersistAcrossStops)
         } else {
@@ -513,6 +522,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, FuelTypes.DEFAULT_FUEL_ID)
             splitTripTimeMinutesSetting = settingsManager.splitTripTimeMinutesFlow
                 .stateIn(scope, eager, 5)
+            trackRefuelsSetting = settingsManager.trackRefuelsFlow
+                .stateIn(scope, eager, true)
             wheelPressurePersistAcrossStopsSetting = settingsManager.wheelPressurePersistAcrossStopsFlow
                 .stateIn(scope, eager, false)
         }
@@ -541,10 +552,23 @@ class BackgroundService : Service() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+        DriveModeThemeWatcher(this, settingsManager, scope).start()
+        scope.launch {
+            ThemeSettingsValidator.validateOnStartup(this@BackgroundService, settingsManager)
+        }
+        scope.launch {
+            settingsManager.headUnitCanModeFlow.collect { mode ->
+                UniversalCanRepository.setMode(mode)
+            }
+        }
         startLogLevelSync()
         MbCanDiagnostics.setEnabled(false)
         scope.launch {
-            MbCanRepository.bind(scope)
+            UniversalCanRepository.bind(scope)
+            UniversalCanRepository.autoResolveModeOnStartup(
+                settingsManager = settingsManager,
+                scope = scope
+            )
         }
         /*mbCanDebugProbeJob = scope.launch(exceptionHandler) {
             delay(MBCAN_DEBUG_PROBE_INTERVAL_MS)
@@ -571,24 +595,9 @@ class BackgroundService : Service() {
                 }
                 bindSettingsStateFlows(settingsSnap)
                 try {
-                    coroutineScope {
-                        val tripsJsonDeferred = async(Dispatchers.IO) {
-                            appDataManager.tripsJsonFlow.first()
-                        }
-                        val favoritesJsonDeferred = async(Dispatchers.IO) {
-                            appDataManager.tripFavoritesJsonFlow.first()
-                        }
-                        val refuelsJsonDeferred = async(Dispatchers.IO) {
-                            appDataManager.refuelsJsonFlow.first()
-                        }
-                        tripsFromDiskReady.set(false)
-                        TripRepository.setTripsFromStore(
-                            tripsListFromJson(tripsJsonDeferred.await()),
-                            favoritesSetFromJson(favoritesJsonDeferred.await())
-                        )
-                        RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJsonDeferred.await()))
-                        tripsFromDiskReady.set(true)
-                    }
+                    tripsFromDiskReady.set(false)
+                    StartupRepositoryLoader.ensureCriticalLoaded(appDataManager)
+                    tripsFromDiskReady.set(true)
                 } catch (e: Exception) {
                     Log.e("Background Service", "Initial trips load failed", e)
                     TboxRepository.addLog("ERROR", "Background Service", "Initial trips: ${e.message}")
@@ -720,71 +729,29 @@ class BackgroundService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 if (!kickoffStart) return
-                val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
-                serviceStartupJob?.cancel()
-                serviceStartupJob = scope.launch(exceptionHandler) {
-                    try {
-                        timingReset()
-                        timingMark("startup_begin")
-                        if (!isRunning) return@launch
-                        servicePhase = ServiceLifecyclePhase.Starting
-                        TripRepository.setTripsProcessingEnabled(false)
-                        reloadTripsFromDataStoreSuspend()
-                        if (!isRunning) return@launch
-                        TboxRepository.updateServiceStartTime()
-                        val splitWindowMs =
-                            splitTripTimeMinutesSetting.value.toLong() * 60_000L
-                        resetTripStateForNewServiceSession(splitWindowMs)
-                        applyTripResumeIfLastTripContinues(splitWindowMs)
-                        if (!isRunning) return@launch
-                        timingMark("startup_trips_ready")
-                        connectTboxClient()
-                        timingMark("startup_tbox_connected")
-                        startSettingsListener()
-                        yield()
-                        startNetUpdater()
-                        yield()
-                        startAPNUpdater()
-                        yield()
-                        startCheckConnection()
-                        yield()
-                        startTboxClientReconnectWatchdog()
-                        yield()
-                        startPeriodicJob()
-                        yield()
-                        ensureFuelEstimatorForReads()
-                        yield()
-                        startDataListener()
-                        startFuelCalibratedLitersWatcher()
-                        timingMark("startup_listeners")
-                        if (startFromBoot) {
-                            maybeOpenMainScreenAfterBootSuspend()
-                        }
-                        TripRepository.setTripsProcessingEnabled(true)
-                        servicePhase = ServiceLifecyclePhase.Running
-                        timingMark("startup_running")
-                        timingLog("Timings.startup")
-                    } catch (e: CancellationException) {
-                        servicePhase = ServiceLifecyclePhase.Idle
-                        TripRepository.setTripsProcessingEnabled(false)
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e("Background Service", "Service startup pipeline failed", e)
-                        TboxRepository.addLog(
-                            "ERROR",
-                            "Service",
-                            "Startup failed: ${e.message}"
-                        )
-                        servicePhase = ServiceLifecyclePhase.Idle
-                        TripRepository.setTripsProcessingEnabled(false)
+                launchServiceStartupPipeline(
+                    startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false),
+                )
+            }
+            ACTION_RESTART -> {
+                if (isRunning) {
+                    performServiceStopIfRunning()
+                }
+                if (!isRunning) {
+                    isRunning = true
+                    val notification = withContext(Dispatchers.Default) {
+                        createNotification("Restart service")
                     }
+                    startForeground(NOTIFICATION_ID, notification)
+                    TboxRepository.addLog("INFO", "Service", "Restart service")
+                    launchServiceStartupPipeline(startFromBoot = false)
                 }
             }
             ACTION_RELOAD_TRIPS_FROM_STORE -> {
                 if (isRunning) {
                     TripRepository.setTripsProcessingEnabled(false)
                     try {
-                        reloadTripsFromDataStoreSuspend()
+                        reloadTripsFromDataStoreSuspend(forceReload = true)
                         if (!isRunning) return
                         val splitWindowMs =
                             splitTripTimeMinutesSetting.value.toLong() * 60_000L
@@ -815,37 +782,7 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("WARN", "Fuel calibration", "train: пустой refuel id")
                 }
             }
-            ACTION_STOP -> {
-                if (isRunning) {
-                    servicePhase = ServiceLifecyclePhase.Stopping
-                    TripRepository.setTripsProcessingEnabled(false)
-                    serviceStartupJob?.cancel()
-                    serviceStartupJob = null
-                    tripsFromDiskReady.set(false)
-                    openMainActivityJob?.cancel()
-                    openMainActivityJob = null
-                    isRunning = false
-                    TboxRepository.addLog("INFO", "Service", "Stop service")
-                    stopNetUpdater()
-                    stopAPNUpdater()
-                    stopCheckConnection()
-                    stopTboxClientReconnectWatchdog()
-                    stopPeriodicJob()
-                    stopSettingsListener()
-                    stopDataListener()
-                    stopFuelCalibratedLitersWatcher()
-                    scope.launch { finalizeTripsOnServiceStop() }
-                    stopStateBroadcastListener()
-                    stopReadAllSMS()
-                    disconnectTboxClient()
-                    val notification = withContext(Dispatchers.Default) {
-                        createNotification("Stop service")
-                    }
-                    startForeground(NOTIFICATION_ID, notification)
-                    overlayController.closeAllOverlays()
-                    servicePhase = ServiceLifecyclePhase.Idle
-                }
-            }
+            ACTION_STOP -> performServiceStopIfRunning()
             ACTION_SEND_AT -> {
                 val atCmd = intent.getStringExtra(EXTRA_AT_CMD) ?: "ATI"
                 mdcSendAT((atCmd).toByteArray())
@@ -961,13 +898,13 @@ class BackgroundService : Service() {
                     when (commandType) {
                         MBCAN_COMMAND_TOGGLE_PROPERTY -> {
                             if (propertyId != Int.MIN_VALUE) {
-                                val result = MbCanRepository.execute(MbCanCommand.ToggleProperty(propertyId))
+                                val result = UniversalCanRepository.execute(MbCanCommand.ToggleProperty(propertyId))
                                 MbCanDiagnostics.log("DEBUG", "toggle result success=${result.success} msg=${result.message}")
                             }
                         }
                         MBCAN_COMMAND_SET_PROPERTY -> {
                             if (propertyId != Int.MIN_VALUE) {
-                                val result = MbCanRepository.execute(MbCanCommand.SetProperty(propertyId, propertyValue))
+                                val result = UniversalCanRepository.execute(MbCanCommand.SetProperty(propertyId, propertyValue))
                                 MbCanDiagnostics.log("DEBUG", "set result success=${result.success} msg=${result.message}")
                             }
                         }
@@ -981,6 +918,99 @@ class BackgroundService : Service() {
                     MbCanDiagnostics.setEnabled(enabled)
                     MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
                 }
+            }
+        }
+    }
+
+    private suspend fun performServiceStopIfRunning() {
+        if (!isRunning) return
+        servicePhase = ServiceLifecyclePhase.Stopping
+        TripRepository.setTripsProcessingEnabled(false)
+        serviceStartupJob?.cancel()
+        serviceStartupJob = null
+        tripsFromDiskReady.set(false)
+        openMainActivityJob?.cancel()
+        openMainActivityJob = null
+        isRunning = false
+        TboxRepository.addLog("INFO", "Service", "Stop service")
+        stopNetUpdater()
+        stopAPNUpdater()
+        stopCheckConnection()
+        stopTboxClientReconnectWatchdog()
+        stopPeriodicJob()
+        stopSettingsListener()
+        stopDataListener()
+        stopFuelCalibratedLitersWatcher()
+        scope.launch { finalizeTripsOnServiceStop() }
+        stopStateBroadcastListener()
+        stopReadAllSMS()
+        disconnectTboxClient()
+        val notification = withContext(Dispatchers.Default) {
+            createNotification("Stop service")
+        }
+        startForeground(NOTIFICATION_ID, notification)
+        overlayController.closeAllOverlays()
+        servicePhase = ServiceLifecyclePhase.Idle
+    }
+
+    private fun launchServiceStartupPipeline(startFromBoot: Boolean) {
+        serviceStartupJob?.cancel()
+        serviceStartupJob = scope.launch(exceptionHandler) {
+            try {
+                timingReset()
+                timingMark("startup_begin")
+                if (!isRunning) return@launch
+                servicePhase = ServiceLifecyclePhase.Starting
+                TripRepository.setTripsProcessingEnabled(false)
+                applyCriticalSnapshotForServiceStartup(forceReload = false)
+                if (!isRunning) return@launch
+                TboxRepository.updateServiceStartTime()
+                val splitWindowMs =
+                    splitTripTimeMinutesSetting.value.toLong() * 60_000L
+                resetTripStateForNewServiceSession(splitWindowMs)
+                applyTripResumeIfLastTripContinues(splitWindowMs)
+                if (!isRunning) return@launch
+                timingMark("startup_trips_ready")
+                launch { loadRefuelsDeferred() }
+                connectTboxClient()
+                timingMark("startup_tbox_connected")
+                startSettingsListener()
+                yield()
+                startNetUpdater()
+                yield()
+                startAPNUpdater()
+                yield()
+                startCheckConnection()
+                yield()
+                startTboxClientReconnectWatchdog()
+                yield()
+                startPeriodicJob()
+                yield()
+                refreshFuelCalibrationRepositoryOutputs()
+                yield()
+                startDataListener()
+                startFuelCalibratedLitersWatcher()
+                timingMark("startup_listeners")
+                if (startFromBoot) {
+                    maybeOpenMainScreenAfterBootSuspend()
+                }
+                TripRepository.setTripsProcessingEnabled(true)
+                servicePhase = ServiceLifecyclePhase.Running
+                timingMark("startup_running")
+                timingLog("Timings.startup")
+            } catch (e: CancellationException) {
+                servicePhase = ServiceLifecyclePhase.Idle
+                TripRepository.setTripsProcessingEnabled(false)
+                throw e
+            } catch (e: Exception) {
+                Log.e("Background Service", "Service startup pipeline failed", e)
+                TboxRepository.addLog(
+                    "ERROR",
+                    "Service",
+                    "Startup failed: ${e.message}"
+                )
+                servicePhase = ServiceLifecyclePhase.Idle
+                TripRepository.setTripsProcessingEnabled(false)
             }
         }
     }
@@ -1364,44 +1394,44 @@ class BackgroundService : Service() {
                 TboxRepository.addLog("WARN", "Data Listener", "Fuel level restore: ${e.message}")
                 Log.w("Data Listener", "Fuel level restore failed", e)
             }
-            // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
-                var prevRpm = 0f
+                var prevRpmForEngineStop = 0f
                 var lastMotorHoursPeriodicPersistAt = SystemClock.elapsedRealtime()
-                CanDataRepository.engineRPM
-                    .drop(1)
-                    .collect { rpm ->
+                while (isActive) {
                     try {
-                        val r = rpm ?: 0f
-                        val motorHours = motorHoursBuffer.updateValue(r)
-                        val motorHoursTrip = motorHoursTripBuffer.updateValue(r)
+                        val now = SystemClock.elapsedRealtime()
+                        val rpm = CanDataRepository.engineRPM.value ?: 0f
+                        val motorHours = motorHoursBuffer.updateValue(rpm)
+                        val motorHoursTrip = motorHoursTripBuffer.updateValue(rpm)
                         if (motorHours != 0f) {
                             CarDataRepository.addMotorHours(motorHours)
                         }
                         if (motorHoursTrip != 0f) {
                             CanDataRepository.addMotorHoursTrip(motorHoursTrip)
                         }
-                        val now = SystemClock.elapsedRealtime()
                         if (now - lastMotorHoursPeriodicPersistAt >= MOTOR_HOURS_PERSIST_INTERVAL_MS &&
                             CarDataRepository.needsPersistence()
                         ) {
                             lastMotorHoursPeriodicPersistAt = now
                             persistMotorHoursToStore()
                         }
-                        if (prevRpm > 0f && r == 0f) {
+                        if (prevRpmForEngineStop > 0f && rpm == 0f) {
                             persistMotorHoursToStore()
                             if (wheelPressurePersistAcrossStopsSetting.value) {
                                 persistLastKnownWheelPressuresOnEngineStop()
                             }
-                            persistLastKnownFuelLevelOnEngineStop()
+                            // Active trip fuel level is saved via maybePersistTrips on the same tick.
+                            if (TripRepository.activeTrip.value == null) {
+                                persistLastKnownFuelLevel()
+                            }
                         }
-                        onTripRpmSample(r, prevRpm, now)
-                        prevRpm = r
+                        onTripPeriodicSample(now)
+                        prevRpmForEngineStop = rpm
                     } catch (e: Exception) {
-                        TboxRepository.addLog("ERROR", "Data Listener",
-                            "Fatal error in motor hours")
-                        Log.e("Data Listener", "Fatal error in motor hours", e)
+                        TboxRepository.addLog("ERROR", "Data Listener", "Fatal error in periodic accounting")
+                        Log.e("Data Listener", "Fatal error in periodic accounting", e)
                     }
+                    delay(ACCOUNTING_SAMPLE_INTERVAL_MS)
                 }
             }
         }
@@ -1425,13 +1455,22 @@ class BackgroundService : Service() {
         }
     }
 
-    /** Текущий уровень для учёта поездки: калиброванные стандартные л с CAN, иначе линейно из %. */
-    private fun currentFuelAccountingLiters(tankL: Float): Float? =
-        CanDataRepository.fuelLevelCalibratedLiters.value
-            ?: CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()?.let { it / 100f * tankL }
+    /** Текущий уровень для учёта поездки: калиброванные или линейные л с CAN. */
+    private fun currentFuelAccountingLiters(tankL: Float): Float? {
+        val pct = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return null
+        return if (trackRefuelsSetting.value) {
+            CanDataRepository.fuelLevelCalibratedLiters.value
+                ?: FuelLevelMath.linearLitersFromFilteredPercent(pct, tankL)
+        } else {
+            FuelLevelMath.linearLitersFromFilteredPercent(pct, tankL)
+        }
+    }
 
     private fun baselineCalibratedStandardLitersFromPercent(percent: Float, tankL: Float): Float {
-        val est = ensureFuelEstimatorForReads() ?: return percent / 100f * tankL
+        if (!trackRefuelsSetting.value) {
+            return FuelLevelMath.linearLitersFromFilteredPercent(percent, tankL)
+        }
+        val est = ensureFuelEstimatorForReads() ?: return FuelLevelMath.linearLitersFromFilteredPercent(percent, tankL)
         val sensorLiters = percent / 100f * tankL
         val temp = (CanDataRepository.outsideTemperature.value ?: 15f).toDouble()
         return est.getCorrectedLiters(sensorLiters.toDouble(), temp).litersStandard.toFloat()
@@ -1455,8 +1494,30 @@ class BackgroundService : Service() {
     }
 
     private fun refreshFuelCalibrationRepositoryOutputs() {
-        ensureFuelEstimatorForReads()
+        FuelCalibrationLive.configure(
+            trackRefuels = trackRefuelsSetting.value,
+            tankLiters = fuelTankLitersSetting.value,
+        )
+        if (trackRefuelsSetting.value) {
+            ensureFuelEstimatorForReads()
+        }
         FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
+    }
+
+    private fun syncActiveTripFuelBaselineAfterTrackRefuelsChange() {
+        val active = TripRepository.activeTrip.value ?: return
+        val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+        val pct = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat() ?: return
+        val liters = baselineCalibratedStandardLitersFromPercent(pct, tankL)
+        tripLastFuelPercent = pct
+        tripLastFuelLitersCalibrated = liters
+        TripRepository.updateActiveTrip { cur ->
+            if (cur.id != active.id) return@updateActiveTrip cur
+            cur.copy(
+                fuelBaselinePercent = pct,
+                fuelBaselineLiters = liters,
+            )
+        }
     }
 
     /**
@@ -1486,9 +1547,10 @@ class BackgroundService : Service() {
         // Проверяем, не изменился ли объем бака или сетка калибровки в RAM-буфере.
         tripLastFuelLitersCalibrated?.let { lastLiters ->
             tripLastFuelPercent?.let { lastPercent ->
-                val expectedLitersForCurrentTank = (lastPercent / 100f) * tankL
-                // Если литры в буфере не бьются с текущим объемом бака (дельта > 0.5 л),
-                // значит пользователь изменил настройки или сбросил калибровку.
+                val expectedLitersForCurrentTank =
+                    baselineCalibratedStandardLitersFromPercent(lastPercent, tankL)
+                // Если калиброванные литры в буфере не бьются с пересчётом под текущий бак
+                // (дельта > 0.5 л), значит пользователь изменил настройки или сбросил калибровку.
                 if (kotlin.math.abs(lastLiters - expectedLitersForCurrentTank) > 0.5f) {
                     // Мягко обновляем буфер под новые настройки и выходим, блокируя ложный триггер заправки
                     tripLastFuelLitersCalibrated = litersNow
@@ -1500,6 +1562,7 @@ class BackgroundService : Service() {
         var refuelTripId: String? = null
         var refueledLiters = 0f
         var percentBefore: Float? = pctNow
+        val trackRefuels = trackRefuelsSetting.value
         TripRepository.updateActiveTrip { cur ->
             val beforePct = tripLastFuelPercent
             if (beforePct != null) {
@@ -1511,17 +1574,19 @@ class BackgroundService : Service() {
                 litersNow = litersNow,
                 baselinePercentNow = pctNow,
                 tankLiters = tankL,
+                detectRefuels = trackRefuels,
             )
             tripLastFuelLitersCalibrated = step.baselineCalibratedLiters
             tripLastFuelPercent = step.baselinePercent
-            if (step.refuelDetected && step.refueledLitersThisStep > 0f) {
+            if (trackRefuels && step.refuelDetected && step.refueledLitersThisStep > 0f) {
                 refuelTripId = cur.id
                 refueledLiters = step.refueledLitersThisStep
             }
             cur.copy(
                 fuelConsumedLiters = step.consumedLiters,
-                refuelCount = cur.refuelCount + if (step.refuelDetected) 1 else 0,
-                fuelRefueledLiters = cur.fuelRefueledLiters + step.refueledLitersThisStep,
+                refuelCount = cur.refuelCount + if (trackRefuels && step.refuelDetected) 1 else 0,
+                fuelRefueledLiters = cur.fuelRefueledLiters +
+                    if (trackRefuels) step.refueledLitersThisStep else 0f,
                 fuelBaselinePercent = step.baselinePercent,
                 fuelBaselineLiters = step.baselineCalibratedLiters,
             )
@@ -1679,14 +1744,16 @@ class BackgroundService : Service() {
     }
 
     /**
-     * One decision per RPM sample: maintain active trip, end on engine off, optionally reopen the same
-     * trip after a short stop, or start a new trip after a longer gap. Moving vs idle time uses speed
-     * (not RPM) for samples while the trip is active and RPM > 0.
+     * One decision per periodic (1 s) tick: maintain active trip, end on engine off, optionally reopen
+     * the same trip after a short stop, or start a new trip after a longer gap. Moving vs idle time
+     * uses speed (not RPM) for samples while the trip is active and RPM > 0.
      */
-    private fun onTripRpmSample(rpm: Float, prevRpm: Float, nowElapsedMs: Long) {
+    private fun onTripPeriodicSample(nowElapsedMs: Long) {
         if (!TripRepository.isTripsProcessingEnabled()) return
         if (!tripsFromDiskReady.get()) return
         synchronized(TripRepository.lock) {
+            val rpm = CanDataRepository.engineRPM.value ?: 0f
+            val prevRpm = tripPrevRpmForStart
             val wallNow = System.currentTimeMillis()
             val splitWindowMs = splitTripTimeMinutesSetting.value * 60_000L
             val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
@@ -1898,28 +1965,53 @@ class BackgroundService : Service() {
     }
 
     /**
-     * Loads trips, favorites and refuels from disk in parallel. Clears [tripsFromDiskReady] until
-     * repositories have the new snapshot so [responseWork] does not run CAN side effects mid-load.
+     * Ensures trips/favorites are in memory for service startup. Re-reads disk only when
+     * [forceReload] or when [StartupRepositoryLoader] has no cached snapshot yet.
      */
-    private suspend fun reloadTripsFromDataStoreSuspend() {
+    private suspend fun applyCriticalSnapshotForServiceStartup(forceReload: Boolean) {
         tripsFromDiskReady.set(false)
         try {
-            coroutineScope {
-                val tripsJsonDeferred = async(Dispatchers.IO) {
-                    appDataManager.tripsJsonFlow.first()
-                }
-                val favoritesJsonDeferred = async(Dispatchers.IO) {
-                    appDataManager.tripFavoritesJsonFlow.first()
-                }
-                val refuelsJsonDeferred = async(Dispatchers.IO) {
-                    appDataManager.refuelsJsonFlow.first()
-                }
-                TripRepository.setTripsFromStore(
-                    tripsListFromJson(tripsJsonDeferred.await()),
-                    favoritesSetFromJson(favoritesJsonDeferred.await())
-                )
-                RefuelRepository.setRefuelsFromStore(refuelsListFromJson(refuelsJsonDeferred.await()))
+            if (forceReload) {
+                StartupRepositoryLoader.reloadAllFromStore(appDataManager)
+            } else {
+                StartupRepositoryLoader.ensureCriticalLoaded(appDataManager)
             }
+            StartupLoadTimings.log("Timings.startup_data")
+            tripsFromDiskReady.set(true)
+        } catch (e: CancellationException) {
+            tripsFromDiskReady.set(false)
+            throw e
+        } catch (e: Exception) {
+            tripsFromDiskReady.set(false)
+            throw e
+        }
+    }
+
+    private suspend fun loadRefuelsDeferred() {
+        try {
+            StartupRepositoryLoader.ensureRefuelsLoaded(appDataManager)
+            StartupLoadTimings.log("Timings.startup_refuels")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Background Service", "Deferred refuels load failed", e)
+            TboxRepository.addLog("ERROR", "Background Service", "Deferred refuels: ${e.message}")
+        }
+    }
+
+    /**
+     * Loads trips, favorites and refuels from disk. Clears [tripsFromDiskReady] until
+     * repositories have the new snapshot so [responseWork] does not run CAN side effects mid-load.
+     */
+    private suspend fun reloadTripsFromDataStoreSuspend(forceReload: Boolean = true) {
+        tripsFromDiskReady.set(false)
+        try {
+            if (forceReload) {
+                StartupRepositoryLoader.reloadAllFromStore(appDataManager)
+            } else {
+                applyCriticalSnapshotForServiceStartup(forceReload = false)
+            }
+            StartupLoadTimings.log("Timings.startup_data")
             tripsFromDiskReady.set(true)
         } catch (e: CancellationException) {
             tripsFromDiskReady.set(false)
@@ -1940,6 +2032,7 @@ class BackgroundService : Service() {
                 appDataManager.saveTripFavoritesJson(favJson)
                 TripRepository.markPersisted(tripsJson, favJson)
             }
+            persistLastKnownFuelLevel()
         }
     }
 
@@ -2087,7 +2180,7 @@ class BackgroundService : Service() {
         appDataManager.saveLastKnownNonZeroWheelPressuresPartial(CanDataRepository.wheelsPressure.value)
     }
 
-    private suspend fun persistLastKnownFuelLevelOnEngineStop() {
+    private suspend fun persistLastKnownFuelLevel() {
         appDataManager.saveLastKnownFuelLevelPartial(
             percentFiltered = CanDataRepository.fuelLevelPercentageFiltered.value,
             calibratedStandardLiters = CanDataRepository.fuelLevelCalibratedLiters.value,
@@ -2096,7 +2189,7 @@ class BackgroundService : Service() {
 
     /**
      * Восстанавливает последний уровень топлива с диска до прихода CAN (уровень по шине только при работающем двигателе).
-     * Вызывать после [ensureFuelEstimatorForReads] в пайплайне старта службы.
+     * Вызывать после [refreshFuelCalibrationRepositoryOutputs] в пайплайне старта службы.
      */
     private suspend fun restoreLastKnownFuelLevelFromAppData() {
         val (pct, liters) = withContext(Dispatchers.IO) {
@@ -2248,13 +2341,21 @@ class BackgroundService : Service() {
                     fuelCalibrationZoneCountSetting,
                     fuelCalibrationJsonSetting,
                     fuelCalibrationMaturityThresholdSetting,
-                ) { _: Int, _: Int, _: String, _: Int ->
+                    trackRefuelsSetting,
+                ) { _: Int, _: Int, _: String, _: Int, _: Boolean ->
                     refreshFuelCalibrationRepositoryOutputs()
                 }.collect { }
             }
             launch {
+                trackRefuelsSetting.drop(1).collect {
+                    syncActiveTripFuelBaselineAfterTrackRefuelsChange()
+                }
+            }
+            launch {
                 CanDataRepository.outsideTemperature.collect {
-                    FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
+                    if (trackRefuelsSetting.value) {
+                        FuelCalibrationLive.reapplyFromRepositoryFilteredPercentOrClear()
+                    }
                 }
             }
         }
@@ -2324,72 +2425,91 @@ class BackgroundService : Service() {
     private fun startUsageStatsFloatingHideWatcher() {
         if (usageStatsFloatingHideJob?.isActive == true) return
         usageStatsFloatingHideJob = scope.launch {
-            var lastAppliedRules: UsageStatsOverlayRulesState? = null
-            var stableForegroundPackage: String? = null
+            launch {
+                FloatingPanelEditModeTracker.suppressUsageStatsHide.collect {
+                    applyUsageStatsOverlayRulesIfChanged()
+                }
+            }
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
-                val watchHide = usageStatsHideFloatingWatchPackages.value
-                val hidePanels = usageStatsHideFloatingPanelIds.value
-                val watchShow = usageStatsForceShowFloatingWatchPackages.value
-                val showPanels = usageStatsForceShowFloatingPanelIds.value
-                val hasHideRules = watchHide.isNotEmpty() && hidePanels.isNotEmpty()
-                val hasShowRules = watchShow.isNotEmpty() && showPanels.isNotEmpty()
-                val hasAnyRules = hasHideRules || hasShowRules
-                if (!hasAnyRules) {
-                    stableForegroundPackage = null
-                }
-                val isMainActivityInForeground = hasAnyRules &&
-                    MainActivityForegroundTracker.isMainActivityInForeground.value
-                val sampledForeground = if (hasAnyRules &&
-                    UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)
-                ) {
-                    UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
-                        this@BackgroundService,
-                        windowMs = 25_000L
-                    )
-                } else {
-                    null
-                }
-                val candidateForeground = sampledForeground
-                    ?.trim()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?.let { pkg ->
-                        if (pkg == packageName && !isMainActivityInForeground) null else pkg
-                    }
+                applyUsageStatsOverlayRulesIfChanged()
+            }
+        }
+    }
 
-                val effectiveForeground = if (!hasAnyRules) {
-                    null
-                } else {
-                    when {
-                        candidateForeground.isNullOrBlank() -> stableForegroundPackage
-                        else -> {
-                            stableForegroundPackage = candidateForeground
-                            stableForegroundPackage
-                        }
+    private suspend fun applyUsageStatsOverlayRulesIfChanged() {
+        val newState = buildUsageStatsOverlayRulesState()
+        if (newState == lastUsageStatsOverlayRules) return
+        lastUsageStatsOverlayRules = newState
+        overlayController.setUsageStatsOverlayRulesState(newState)
+        overlayController.syncFloatingDashboards(floatingDashboards.value)
+        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+    }
+
+    private fun buildUsageStatsOverlayRulesState(): UsageStatsOverlayRulesState {
+        val watchHide = usageStatsHideFloatingWatchPackages.value
+        val hidePanels = usageStatsHideFloatingPanelIds.value
+        val watchShow = usageStatsForceShowFloatingWatchPackages.value
+        val showPanels = usageStatsForceShowFloatingPanelIds.value
+        val hasHideRules = watchHide.isNotEmpty() && hidePanels.isNotEmpty()
+        val hasShowRules = watchShow.isNotEmpty() && showPanels.isNotEmpty()
+        val hasAnyRules = hasHideRules || hasShowRules
+        if (!hasAnyRules) {
+            usageStatsStableForegroundPackage = null
+        }
+        val isMainActivityInForeground = hasAnyRules &&
+            MainActivityForegroundTracker.isMainActivityInForeground.value
+        val sampledForeground = if (hasAnyRules &&
+            UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)
+        ) {
+            UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
+                this@BackgroundService,
+                windowMs = 25_000L
+            )
+        } else {
+            null
+        }
+        val candidateForeground = sampledForeground
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { pkg ->
+                if (pkg == packageName && !isMainActivityInForeground) null else pkg
+            }
+
+        val effectiveForeground = if (!hasAnyRules) {
+            null
+        } else {
+            when {
+                candidateForeground.isNullOrBlank() -> {
+                    if (usageStatsStableForegroundPackage == packageName && !isMainActivityInForeground) {
+                        usageStatsStableForegroundPackage = null
                     }
+                    usageStatsStableForegroundPackage
                 }
-                val newState = UsageStatsOverlayRulesState(
-                    foregroundPackage = effectiveForeground,
-                    // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
-                    isMainActivityVisible = isMainActivityInForeground,
-                    watchHidePackages = watchHide,
-                    hidePanelIds = hidePanels,
-                    watchShowPackages = watchShow,
-                    showPanelIds = showPanels,
-                )
-                if (newState != lastAppliedRules) {
-                    lastAppliedRules = newState
-                    overlayController.setUsageStatsOverlayRulesState(newState)
-                    overlayController.syncFloatingDashboards(floatingDashboards.value)
-                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                else -> {
+                    usageStatsStableForegroundPackage = candidateForeground
+                    usageStatsStableForegroundPackage
                 }
             }
         }
+        return UsageStatsOverlayRulesState(
+            foregroundPackage = effectiveForeground,
+            // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
+            isMainActivityVisible = isMainActivityInForeground,
+            suppressFloatingPanelUsageStatsHide =
+                FloatingPanelEditModeTracker.shouldSuppressUsageStatsHide(),
+            watchHidePackages = watchHide,
+            hidePanelIds = hidePanels,
+            watchShowPackages = watchShow,
+            showPanelIds = showPanels,
+        )
     }
 
     private fun stopUsageStatsFloatingHideWatcher() {
         usageStatsFloatingHideJob?.cancel()
         usageStatsFloatingHideJob = null
+        lastUsageStatsOverlayRules = null
+        usageStatsStableForegroundPackage = null
         scope.launch {
             overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
             overlayController.syncFloatingDashboards(floatingDashboards.value)
@@ -3174,7 +3294,7 @@ class BackgroundService : Service() {
         scope.launch(Dispatchers.IO + NonCancellable) {
             try {
                 withTimeout(2_000L) {
-                    MbCanRepository.unbind()
+                    UniversalCanRepository.unbind()
                 }
             } catch (e: Exception) {
                 MbCanDiagnostics.log("ERROR", "onDestroy mbCAN unbind failed: ${e.message}")
@@ -4358,7 +4478,7 @@ class BackgroundService : Service() {
             val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
             if (!enabled) return
             val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
-            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
+            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
             scheduleOpenMainActivity(delaySeconds.toLong() * 1000L)
         } catch (e: Exception) {
             Log.e("BackgroundService", "Open main screen after boot failed", e)

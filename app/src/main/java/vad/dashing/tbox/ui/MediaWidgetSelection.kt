@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -62,8 +70,8 @@ fun MediaPlayersInlineSelection(
 ) {
     val context = LocalContext.current
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
-    val apps = rememberLaunchableAppEntries(iconRevision)
-    var pendingIconPackage by remember { mutableStateOf<String?>(null) }
+    val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
+    var pendingIconPackage by rememberSaveable { mutableStateOf<String?>(null) }
     val pickCustomIcon = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -119,12 +127,12 @@ fun MediaPlayersInlineSelection(
     ) {
         Text(
             text = stringResource(R.string.widget_music_players),
-            fontSize = 24.sp,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
             text = stringResource(R.string.widget_music_players_hint),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         OutlinedTextField(
@@ -136,7 +144,7 @@ fun MediaPlayersInlineSelection(
             label = {
                 Text(
                     text = stringResource(R.string.widget_app_launcher_search),
-                    fontSize = 18.sp
+                    style = MaterialTheme.typography.tboxCaption
                 )
             },
             singleLine = true,
@@ -190,7 +198,7 @@ fun MediaPlayersInlineSelection(
                 ) {
                     Text(
                         text = stringResource(player.titleRes),
-                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.tboxBody,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -210,7 +218,7 @@ fun MediaPlayersInlineSelection(
                             ) {
                                 Text(
                                     stringResource(R.string.widget_app_launcher_change_icon),
-                                    fontSize = 18.sp,
+                                    style = MaterialTheme.typography.tboxCaption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -268,7 +276,7 @@ fun MediaPlayersInlineSelection(
                 } else {
                     Text(
                         text = stringResource(R.string.widget_app_launcher_no_icon),
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .padding(start = 4.dp)
@@ -284,7 +292,7 @@ fun MediaPlayersInlineSelection(
                 ) {
                     Text(
                         text = app.label,
-                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.tboxBody,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -304,7 +312,7 @@ fun MediaPlayersInlineSelection(
                             ) {
                                 Text(
                                     stringResource(R.string.widget_app_launcher_change_icon),
-                                    fontSize = 18.sp,
+                                    style = MaterialTheme.typography.tboxCaption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -328,18 +336,22 @@ private fun MusicPlayerIconDeleteButton(
     enabled: Boolean,
     settingsViewModel: SettingsViewModel,
 ) {
+    val context = LocalContext.current
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     var hasCustom by remember(packageName) { mutableStateOf(false) }
+    var removeIconLabel by remember(packageName) { mutableIntStateOf(R.string.widget_app_launcher_remove_icon) }
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
-    LaunchedEffect(packageName, iconRevision) {
+    LaunchedEffect(packageName, iconRevision, iconLookup) {
         hasCustom = settingsViewModel.hasCustomLauncherAppIcon(packageName)
+        removeIconLabel = launcherAppIconRemoveLabelRes(context.filesDir, packageName, iconLookup)
     }
     OutlinedButton(
         onClick = rememberWrappedOnClick { settingsViewModel.clearCustomLauncherAppIcon(packageName) },
         enabled = enabled && hasCustom,
     ) {
         Text(
-            stringResource(R.string.widget_app_launcher_remove_icon),
-            fontSize = 18.sp,
+            stringResource(removeIconLabel),
+            style = MaterialTheme.typography.tboxCaption,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )

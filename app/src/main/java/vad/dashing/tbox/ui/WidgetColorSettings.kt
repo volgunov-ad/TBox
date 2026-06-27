@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,6 +67,9 @@ fun DashboardWidget.resolveTextColorForTheme(currentTheme: Int): Color {
     return Color(if (currentTheme == 2) textColorDark else textColorLight)
 }
 
+/** 0 = light theme color settings, 1 = dark (same convention as [resolveTextColorForTheme]). */
+fun colorThemeSegmentFor(theme: Int): Int = if (theme == 2) 1 else 0
+
 fun DashboardWidget.resolveBackgroundColorForTheme(currentTheme: Int): Color {
     return Color(if (currentTheme == 2) backgroundColorDark else backgroundColorLight)
 }
@@ -114,9 +124,11 @@ fun WidgetColorSetting(
     presetSlots: List<Int>,
     onPresetSlotColorSave: (slotIndex: Int, color: Int) -> Unit,
     /** Optional override for the hex input (e.g. widget dialog uses larger type). */
-    valueTextStyle: TextStyle = TextStyle(fontSize = 20.sp),
-    valueLabelStyle: TextStyle = TextStyle(fontSize = 20.sp),
+    valueTextStyle: TextStyle? = null,
+    valueLabelStyle: TextStyle? = null,
 ) {
+    val resolvedValueTextStyle = valueTextStyle ?: MaterialTheme.typography.tboxBody
+    val resolvedValueLabelStyle = valueLabelStyle ?: MaterialTheme.typography.tboxBody
     val slots = remember(presetSlots) { normalizeWidgetColorPresetSlots(presetSlots) }
     var selectedSlot by remember { mutableStateOf<Int?>(null) }
     var localColorValue by remember { mutableIntStateOf(colorValue) }
@@ -166,7 +178,7 @@ fun WidgetColorSetting(
     ) {
         Text(
             text = title,
-            fontSize = 24.sp,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface
         )
 
@@ -180,7 +192,7 @@ fun WidgetColorSetting(
 
             OutlinedTextField(
                 value = textValue,
-                textStyle = valueTextStyle,
+                textStyle = resolvedValueTextStyle,
                 onValueChange = { newText ->
                     textValue = newText
                     if (newText.isBlank()) {
@@ -201,7 +213,7 @@ fun WidgetColorSetting(
                 label = {
                     Text(
                         stringResource(R.string.widget_color_value_label),
-                        style = valueLabelStyle
+                        style = resolvedValueLabelStyle
                     )
                 }
             )
@@ -242,7 +254,7 @@ fun WidgetColorSetting(
 
         Text(
             text = stringResource(R.string.widget_color_value_hint),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
@@ -332,7 +344,7 @@ fun WidgetColorSetting(
         val alphaPercent = ((alphaChannel / 255f) * 100f).roundToInt()
         Text(
             text = stringResource(R.string.widget_color_alpha, alphaPercent),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 

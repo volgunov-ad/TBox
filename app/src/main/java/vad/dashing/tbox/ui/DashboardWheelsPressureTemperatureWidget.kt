@@ -167,17 +167,13 @@ fun DashboardWheelsPressureTemperatureWidgetItem(
                     ) {
                         Text(
                             text = widget.unit,
-                            fontSize = calculateResponsiveFontSize(
+                            style = calculateResponsiveTextStyle(
                                 containerHeight = availableHeight,
                                 textType = TextType.UNIT
                             ),
                             color = resolvedTextColor,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
-                            lineHeight = calculateResponsiveFontSize(
-                                containerHeight = availableHeight,
-                                textType = TextType.UNIT
-                            ) * 1.3f,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -255,11 +251,10 @@ fun PressureText(
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     Text(
         text = displayText.ifBlank { "-" },
-        fontSize = calculateResponsiveFontSize(
+        style = calculateResponsiveTextStyle(
             containerHeight = availableHeight,
             textType = textType
         ),
-        fontWeight = FontWeight.Medium,
         color = if ((value ?: 0f) >= 1.92f) resolvedTextColor else Color(0xD9FF0000),
         textAlign = align,
         maxLines = 1,
@@ -278,11 +273,10 @@ private fun TemperatureText(
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     Text(
         text = displayText.ifBlank { "-" },
-        fontSize = calculateResponsiveFontSize(
+        style = calculateResponsiveTextStyle(
             containerHeight = availableHeight,
             textType = TextType.TITLE
         ),
-        fontWeight = FontWeight.Medium,
         color = if ((value ?: 90f) <= 85f) resolvedTextColor else Color(0xD9FF0000),
         textAlign = align,
         maxLines = 1,

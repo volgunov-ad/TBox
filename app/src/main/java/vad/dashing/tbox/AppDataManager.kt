@@ -9,14 +9,24 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 private const val APP_DATA_NAME = "vad.dashing.tbox.app_data"
 
 internal val Context.appDataStore: DataStore<Preferences> by preferencesDataStore(name = APP_DATA_NAME)
+
+/** Single read of all startup-critical keys from [appDataStore]. */
+data class AppDataStartupSnapshot(
+    val motorHours: Float,
+    val tripsJson: String,
+    val tripFavoritesJson: String,
+    val refuelsJson: String,
+)
 
 class AppDataManager(private val context: Context) {
 
@@ -69,6 +79,17 @@ class AppDataManager(private val context: Context) {
         .distinctUntilChanged()
 
     // Suspend функции для сохранения данных
+    /** One DataStore [first] for motor hours, trips, favorites and refuels. */
+    suspend fun readStartupSnapshot(): AppDataStartupSnapshot = withContext(Dispatchers.IO) {
+        val preferences = context.appDataStore.data.first()
+        AppDataStartupSnapshot(
+            motorHours = preferences[MOTOR_HOURS_KEY] ?: 0f,
+            tripsJson = preferences[TRIPS_JSON_KEY] ?: "",
+            tripFavoritesJson = preferences[TRIP_FAVORITES_JSON_KEY] ?: "",
+            refuelsJson = preferences[REFUELS_JSON_KEY] ?: "",
+        )
+    }
+
     suspend fun saveMotorHours(value: Float) {
         context.appDataStore.edit { preferences ->
             preferences[MOTOR_HOURS_KEY] = value
@@ -126,7 +147,8 @@ class AppDataManager(private val context: Context) {
 
     /**
      * Сохраняет последний известный отфильтрованный % и калиброванные стандартные литры с шины
-     * (на переходе RPM > 0 → 0). Ключ не перезаписывается, если соответствующее значение недоступно.
+     * (на переходе RPM > 0 → 0 и при каждом сохранении поездок). Ключ не перезаписывается,
+     * если соответствующее значение недоступно.
      */
     suspend fun saveLastKnownFuelLevelPartial(
         percentFiltered: UInt?,

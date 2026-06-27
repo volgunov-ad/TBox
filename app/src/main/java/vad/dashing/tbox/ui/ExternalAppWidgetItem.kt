@@ -131,6 +131,7 @@ fun ExternalAppWidgetItem(
             }
         }
     }
+    var forceSizeOptionsRefresh by remember(appWidgetId, hostView) { mutableStateOf(true) }
 
     val clickModifier = if (!isEditMode && handleClick) {
         Modifier.clickableWithSound(onClick = onClick)
@@ -160,7 +161,7 @@ fun ExternalAppWidgetItem(
                 val containerHeightForTitle = maxHeight
                 Column(modifier = Modifier.fillMaxSize()) {
                     if (showTitle) {
-                        val titleFont = calculateResponsiveFontSize(
+                        val titleStyle = calculateResponsiveTextStyle(
                             containerHeight = containerHeightForTitle,
                             textType = TextType.TITLE
                         )
@@ -169,10 +170,9 @@ fun ExternalAppWidgetItem(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(start = 4.dp, top = 4.dp, end = 4.dp),
-                            fontSize = titleFont,
-                            lineHeight = titleFont * 1.3f,
-                            fontWeight = FontWeight.Medium,
-                            color = resolvedColor,
+                            style = titleStyle,
+
+                                        color = resolvedColor,
                             textAlign = TextAlign.Center,
                             maxLines = 2,
                             softWrap = true,
@@ -194,19 +194,17 @@ fun ExternalAppWidgetItem(
                 // No AppWidget host view: LongPressInterceptLayout is absent, so long-press would
                 // not reach the panel's edit handler unless we capture it here.
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val titleFont = calculateResponsiveFontSize(
+                    val titleStyle = calculateResponsiveTextStyle(
                         containerHeight = maxHeight,
                         textType = TextType.TITLE
                     )
                     val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
                     Text(
                         text = placeholder,
-                        fontSize = titleFont,
-                        fontWeight = FontWeight.Medium,
+                        style = titleStyle,
                         color = resolvedColor,
                         textAlign = TextAlign.Center,
                         maxLines = 3,
-                        lineHeight = titleFont * 1.3f,
                         softWrap = true,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.align(Alignment.Center)
@@ -273,9 +271,12 @@ fun ExternalAppWidgetItem(
                                 val minWidth = with(density) { size.width.toDp().value }.roundToInt()
                                 val minHeight = with(density) { size.height.toDp().value }.roundToInt()
                                 if (minWidth <= 0 || minHeight <= 0) return@onSizeChanged
+                                val forceRefresh = forceSizeOptionsRefresh
                                 applySizeOptionsJob?.cancel()
                                 applySizeOptionsJob = applySizeOptionsScope.launch {
-                                    delay(EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS)
+                                    if (!forceRefresh) {
+                                        delay(EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS)
+                                    }
                                     withContext(Dispatchers.Main) {
                                         val merged = mergeAppWidgetSizeOptions(
                                             appWidgetManager,
@@ -284,8 +285,11 @@ fun ExternalAppWidgetItem(
                                             minHeight
                                         )
                                         val existing = appWidgetManager.getAppWidgetOptions(appWidgetId)
-                                        if (!embeddedWidgetSizeHintsMatch(existing, merged)) {
+                                        if (forceRefresh || !embeddedWidgetSizeHintsMatch(existing, merged)) {
                                             appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
+                                        }
+                                        if (forceRefresh) {
+                                            forceSizeOptionsRefresh = false
                                         }
                                     }
                                 }

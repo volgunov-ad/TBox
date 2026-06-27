@@ -1,6 +1,5 @@
 package vad.dashing.tbox.ui
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -17,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import vad.dashing.tbox.decodeFileToOwnedImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
@@ -41,13 +40,19 @@ internal fun DashboardTileBackgroundImageUnderlay(
 ) {
     val context = LocalContext.current
     val rev by settingsViewModel.tileBackgroundImageRevision.collectAsStateWithLifecycle()
-    var bitmap by remember(relPath, rev) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(relPath, rev) {
+    val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
+    val themeLookup = rememberLauncherAppIconLookup(settingsViewModel)
+    var bitmap by remember(relPath, rev, themeLookup) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(relPath, rev, themeLookup, themeActivating) {
+        if (themeActivating) {
+            bitmap = null
+            return@LaunchedEffect
+        }
         bitmap = withContext(Dispatchers.IO) {
-            val f = TileBackgroundImageStorage.resolveFile(context, relPath)
+            val f = TileBackgroundImageStorage.resolveFile(context.filesDir, relPath, themeLookup)
             if (f == null || !f.isFile) return@withContext null
             runCatching {
-                BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
+                decodeFileToOwnedImageBitmap(f)
             }.getOrNull()
         }
     }
@@ -58,7 +63,7 @@ internal fun DashboardTileBackgroundImageUnderlay(
             .background(backgroundColor)
     ) {
         val b = bitmap
-        if (b != null) {
+        if (b != null && !themeActivating) {
             Image(
                 bitmap = b,
                 contentDescription = null,

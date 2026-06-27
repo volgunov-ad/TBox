@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.net.Uri
@@ -21,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import android.content.Context
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
 import vad.dashing.tbox.SettingsViewModel
@@ -56,16 +65,19 @@ internal data class LaunchableAppEntry(
 private object LaunchableAppsWithIconsCache {
     private var cachedIconSizePx: Int? = null
     private var cachedIconRevision: Int? = null
+    private var cachedLookup: LauncherAppIconPaths.Lookup? = null
     private var entries: List<LaunchableAppEntry>? = null
 
     fun getOrLoad(
         iconSizePx: Int,
         iconRevision: Int,
+        lookup: LauncherAppIconPaths.Lookup,
         load: () -> List<LaunchableAppEntry>,
     ): List<LaunchableAppEntry> {
         synchronized(this) {
             if (cachedIconSizePx == iconSizePx &&
                 cachedIconRevision == iconRevision &&
+                cachedLookup == lookup &&
                 entries != null
             ) {
                 return entries!!
@@ -73,6 +85,7 @@ private object LaunchableAppsWithIconsCache {
             val list = load()
             cachedIconSizePx = iconSizePx
             cachedIconRevision = iconRevision
+            cachedLookup = lookup
             entries = list
             return list
         }
@@ -82,6 +95,7 @@ private object LaunchableAppsWithIconsCache {
         synchronized(this) {
             cachedIconSizePx = null
             cachedIconRevision = null
+            cachedLookup = null
             entries = null
         }
     }
@@ -95,6 +109,7 @@ internal fun disposeAppLauncherPickerIconCache() {
 private fun loadLaunchableAppEntries(
     appContext: Context,
     iconSizePx: Int,
+    lookup: LauncherAppIconPaths.Lookup,
     @Suppress("UNUSED_PARAMETER") iconRevision: Int,
 ): List<LaunchableAppEntry> {
     val pm = appContext.packageManager
@@ -107,7 +122,7 @@ private fun loadLaunchableAppEntries(
         .map { ri ->
             val pkg = ri.activityInfo.packageName
             val label = ri.loadLabel(pm).toString()
-            val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx)
+            val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx, lookup)
                 ?: runCatching {
                     ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
                 }.getOrNull()
@@ -118,15 +133,19 @@ private fun loadLaunchableAppEntries(
 }
 
 @Composable
-internal fun rememberLaunchableAppEntries(launcherIconRevision: Int = 0): List<LaunchableAppEntry> {
+internal fun rememberLaunchableAppEntries(
+    settingsViewModel: SettingsViewModel,
+    launcherIconRevision: Int = 0,
+): List<LaunchableAppEntry> {
     val context = LocalContext.current
     val appContext = context.applicationContext
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconSizePx = remember(appContext) {
         (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
     }
-    return remember(appContext, iconSizePx, launcherIconRevision) {
-        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx, launcherIconRevision) {
-            loadLaunchableAppEntries(appContext, iconSizePx, launcherIconRevision)
+    return remember(appContext, iconSizePx, launcherIconRevision, iconLookup) {
+        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx, launcherIconRevision, iconLookup) {
+            loadLaunchableAppEntries(appContext, iconSizePx, iconLookup, launcherIconRevision)
         }
     }
 }
@@ -143,8 +162,9 @@ internal fun AppLauncherWidgetSettingsSection(
 ) {
     if (!state.isAppLauncherWidgetSelected) return
     val context = LocalContext.current
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
-    val apps = rememberLaunchableAppEntries(iconRevision)
+    val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
     val selectedLabel = apps.find { it.packageName == state.launcherAppPackage }?.label
     var filterText by rememberSaveable { mutableStateOf("") }
     val needle = filterText.trim().lowercase()
@@ -159,11 +179,17 @@ internal fun AppLauncherWidgetSettingsSection(
         }
     }
     var selectedHasCustomIcon by remember { mutableStateOf(false) }
-    LaunchedEffect(state.launcherAppPackage, iconRevision) {
+    var selectedRemoveIconLabel by remember { mutableIntStateOf(R.string.widget_app_launcher_remove_icon) }
+    LaunchedEffect(state.launcherAppPackage, iconRevision, iconLookup) {
         selectedHasCustomIcon = if (state.launcherAppPackage.isNotBlank()) {
             settingsViewModel.hasCustomLauncherAppIcon(state.launcherAppPackage)
         } else {
             false
+        }
+        selectedRemoveIconLabel = if (state.launcherAppPackage.isNotBlank()) {
+            launcherAppIconRemoveLabelRes(context.filesDir, state.launcherAppPackage, iconLookup)
+        } else {
+            R.string.widget_app_launcher_remove_icon
         }
     }
     val canPickImage = remember(context) {
@@ -203,13 +229,13 @@ internal fun AppLauncherWidgetSettingsSection(
             } else {
                 stringResource(R.string.widget_app_launcher_none_selected)
             },
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.tboxButton,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Text(
             text = stringResource(R.string.widget_app_launcher_pick_title),
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.tboxButton,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 6.dp)
         )
@@ -222,7 +248,7 @@ internal fun AppLauncherWidgetSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.widget_app_launcher_search),
-                    fontSize = 18.sp
+                    style = MaterialTheme.typography.tboxCaption
                 )
             },
             singleLine = true,
@@ -256,7 +282,7 @@ internal fun AppLauncherWidgetSettingsSection(
                 } else {
                     Text(
                         text = stringResource(R.string.widget_app_launcher_no_icon),
-                        fontSize = 16.sp,
+                        style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .padding(start = 4.dp)
@@ -272,7 +298,7 @@ internal fun AppLauncherWidgetSettingsSection(
                 ) {
                     Text(
                         text = app.label,
-                        fontSize = 20.sp,
+                        style = MaterialTheme.typography.tboxBody,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -300,7 +326,7 @@ internal fun AppLauncherWidgetSettingsSection(
                             ) {
                                 Text(
                                     text = stringResource(R.string.widget_app_launcher_change_icon),
-                                    fontSize = 18.sp,
+                                    style = MaterialTheme.typography.tboxCaption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -312,8 +338,8 @@ internal fun AppLauncherWidgetSettingsSection(
                                 enabled = state.togglesEnabled && selectedHasCustomIcon
                             ) {
                                 Text(
-                                    text = stringResource(R.string.widget_app_launcher_remove_icon),
-                                    fontSize = 18.sp,
+                                    text = stringResource(selectedRemoveIconLabel),
+                                    style = MaterialTheme.typography.tboxCaption,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -327,7 +353,7 @@ internal fun AppLauncherWidgetSettingsSection(
             Text(
                 text = stringResource(R.string.widget_app_launcher_required),
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 20.sp,
+                style = MaterialTheme.typography.tboxBody,
                 modifier = Modifier.padding(top = 8.dp)
             )
         }

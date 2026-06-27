@@ -1,6 +1,13 @@
 package vad.dashing.tbox.ui
 
-import android.graphics.BitmapFactory
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
+import vad.dashing.tbox.decodeFileToOwnedImageBitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,23 +26,23 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
-import java.io.File
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
-import vad.dashing.tbox.SettingsManager
 
 @Composable
 internal fun DashboardAppLauncherWidgetItem(
     widget: DashboardWidget,
     packageName: String,
     customIconRevision: Int,
+    iconLookup: LauncherAppIconPaths.Lookup,
+    suppressCustomIcon: Boolean = false,
     showTitle: Boolean,
     titleOverride: String = "",
     onClick: () -> Unit,
@@ -46,17 +53,17 @@ internal fun DashboardAppLauncherWidgetItem(
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
-    val imageBitmap = remember(packageName, customIconRevision) {
+    val imageBitmap = remember(packageName, customIconRevision, iconLookup, suppressCustomIcon) {
         if (packageName.isBlank()) return@remember null
-        val custom: ImageBitmap? = runCatching {
-            val f = File(
-                context.filesDir,
-                "${SettingsManager.LAUNCHER_APP_ICONS_DIR}/$packageName"
-            )
-            if (!f.isFile || f.length() <= 0L) return@runCatching null
-            BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap()
-        }.getOrNull()
-        custom ?: runCatching {
+        if (!suppressCustomIcon) {
+            val custom: ImageBitmap? = runCatching {
+                val f = LauncherAppIconPaths.resolveIconFile(context.filesDir, packageName, iconLookup)
+                    ?: return@runCatching null
+                decodeFileToOwnedImageBitmap(f)
+            }.getOrNull()
+            if (custom != null) return@remember custom
+        }
+        runCatching {
             val pm = context.packageManager
             val info = pm.getApplicationInfo(packageName, 0)
             info.loadIcon(pm).toBitmap().asImageBitmap()
@@ -104,21 +111,20 @@ internal fun DashboardAppLauncherWidgetItem(
                 } else {
                     Text(
                         text = stringResource(R.string.widget_app_launcher_no_icon),
-                        fontSize = 18.sp,
+                        style = MaterialTheme.typography.tboxCaption,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             val titleLine = titleOverride.trim().ifBlank { appLabel }
             if (showTitle && titleLine.isNotEmpty()) {
-                val titleFontSize = calculateResponsiveFontSize(
+                val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
                 )
                 Text(
                     text = titleLine,
-                    fontSize = titleFontSize,
-                    fontWeight = FontWeight.Medium,
+                    style = titleStyle,
                     color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,

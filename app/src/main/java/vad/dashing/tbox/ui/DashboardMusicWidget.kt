@@ -39,10 +39,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.ui.theme.scaledWidgetText
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -52,8 +52,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.SupportedMediaPlayer
@@ -82,6 +84,8 @@ fun DashboardMusicWidgetItem(
 ) {
     val context = LocalContext.current
     val launcherIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val selectedPlayers = remember(widget.dataKey, widgetConfig.mediaPlayers) {
         resolveMediaPlayersForWidget(widgetConfig)
     }
@@ -294,6 +298,8 @@ fun DashboardMusicWidgetItem(
                         MusicWidgetPlayerAvatar(
                             selectedPackage = selectedPackage,
                             launcherIconRevision = launcherIconRevision,
+                            iconLookup = iconLookup,
+                            suppressCustomIcon = themeActivating,
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
@@ -301,10 +307,10 @@ fun DashboardMusicWidgetItem(
                         Text(
                             text = musicHeaderLabel,
                             color = resolvedTextColor,
-                            fontSize = calculateResponsiveFontSize(
+                            style = calculateResponsiveTextStyle(
                                 containerHeight = availableHeight,
                                 textType = TextType.UNIT
-                            ) * 0.8f,
+                            ).scaledWidgetText(0.8f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
@@ -315,10 +321,10 @@ fun DashboardMusicWidgetItem(
                             Text(
                                 text = "${carouselPackages.indexOf(selectedPackage).coerceAtLeast(0) + 1}/${carouselPackages.size}",
                                 color = resolvedTextColor,
-                                fontSize = calculateResponsiveFontSize(
+                                style = calculateResponsiveTextStyle(
                                     containerHeight = availableHeight,
                                     textType = TextType.UNIT
-                                ) * 0.8f
+                                ).scaledWidgetText(0.8f)
                             )
                         }
                     }
@@ -344,6 +350,8 @@ fun DashboardMusicWidgetItem(
                         MusicWidgetPlayerAvatar(
                             selectedPackage = selectedPackage,
                             launcherIconRevision = launcherIconRevision,
+                            iconLookup = iconLookup,
+                            suppressCustomIcon = themeActivating,
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .aspectRatio(1f)
@@ -356,7 +364,7 @@ fun DashboardMusicWidgetItem(
                         } else {
                             MaterialTheme.colorScheme.error
                         },
-                        fontSize = calculateResponsiveFontSize(
+                        style = calculateResponsiveTextStyle(
                             containerHeight = availableHeight,
                             textType = TextType.TITLE
                         ),
@@ -399,8 +407,7 @@ fun DashboardMusicWidgetItem(
                     Text(
                         text = line3Text,
                         color = resolvedTextColor,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = calculateResponsiveFontSize(
+                        style = calculateResponsiveTextStyle(
                             containerHeight = availableHeight,
                             textType = TextType.TITLE
                         ),
@@ -493,6 +500,8 @@ fun DashboardMusicWidgetItem(
 private fun MusicWidgetPlayerAvatar(
     selectedPackage: String,
     launcherIconRevision: Int,
+    iconLookup: LauncherAppIconPaths.Lookup,
+    suppressCustomIcon: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -502,16 +511,22 @@ private fun MusicWidgetPlayerAvatar(
     val enumPlayer = remember(selectedPackage) {
         SupportedMediaPlayer.fromPackage(selectedPackage)
     }
-    val appIcon = remember(selectedPackage, context, launcherIconRevision, iconSizePx) {
+    val appIcon = remember(selectedPackage, context, launcherIconRevision, iconSizePx, iconLookup, suppressCustomIcon) {
         if (selectedPackage.isBlank() || enumPlayer != null) {
             null
-        } else {
-            decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx)
+        } else if (!suppressCustomIcon) {
+            decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx, iconLookup)
                 ?: runCatching {
                     val pm = context.packageManager
                     val info = pm.getApplicationInfo(selectedPackage, 0)
                     info.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
                 }.getOrNull()
+        } else {
+            runCatching {
+                val pm = context.packageManager
+                val info = pm.getApplicationInfo(selectedPackage, 0)
+                info.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
+            }.getOrNull()
         }
     }
     val clip = Modifier.clip(RoundedCornerShape(4.dp))

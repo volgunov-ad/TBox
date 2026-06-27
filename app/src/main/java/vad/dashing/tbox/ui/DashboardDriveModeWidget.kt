@@ -23,7 +23,8 @@ import androidx.compose.ui.res.stringResource
 import vad.dashing.tbox.DriveModeWidgetOption
 import vad.dashing.tbox.R
 import vad.dashing.tbox.resolveDriveModeWidgetOption
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 private val DriveModeWidgetEcoColor = Color(0xD900A400)
 private val DriveModeWidgetNorColor = Color(0xD9004DFF)
@@ -44,9 +45,13 @@ fun DashboardDriveModeWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
 ) {
-    val currentDriveMode by MbCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     val selectedMode = resolveDriveModeWidgetOption(selectedDriveModeRawValue)
-    val isSelectedModeActive = currentDriveMode == selectedMode.rawValue
+    val currentDriveMode by when (selectedMode.propertyId) {
+        MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET ->
+            UniversalCanRepository.carSettingsDriveMode6dctWet.collectAsStateWithLifecycle()
+        else -> UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
+    }
+    val isSelectedModeActive = currentDriveMode == selectedMode.propertyValue
     val defaultTitle = stringResource(R.string.data_title_drive_mode_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
@@ -78,22 +83,21 @@ fun DashboardDriveModeWidgetItem(
                 availableHeight = availableHeight,
                 resolvedTextColor = resolvedTextColor
             )
-            val modeFont = calculateResponsiveFontSize(
+            val modeStyle = calculateResponsiveTextStyle(
                 containerHeight = availableHeight,
                 textType = TextType.VALUE
-            ) * 1.3f
+            )
             Text(
-                text = selectedMode.label,
+                text = selectedMode.widgetLabel,
                 modifier = Modifier
                     .weight(if (showTitle) 2f else 1f)
                     .fillMaxWidth()
                     .wrapContentHeight(Alignment.CenterVertically),
-                fontSize = modeFont,
-                lineHeight = modeFont * 1.3f,
-                fontWeight = FontWeight.Medium,
+                style = modeStyle,
+
                 color = modeTextColor,
                 textAlign = TextAlign.Center,
-                maxLines = 2,
+                maxLines = 1,
                 softWrap = true,
                 overflow = TextOverflow.Ellipsis
             )
@@ -102,13 +106,13 @@ fun DashboardDriveModeWidgetItem(
 }
 
 private fun DriveModeWidgetOption.activeColor(): Color {
-    return when (label) {
-        "ECO" -> DriveModeWidgetEcoColor
-        "NOR" -> DriveModeWidgetNorColor
-        "SPT" -> DriveModeWidgetSptColor
-        "SAND" -> DriveModeWidgetSandColor
-        "MUD" -> DriveModeWidgetMudColor
-        "SNOW" -> DriveModeWidgetSnowColor
+    return when {
+        label.startsWith("ECO") -> DriveModeWidgetEcoColor
+        label.startsWith("NOR") -> DriveModeWidgetNorColor
+        label.startsWith("SPT") -> DriveModeWidgetSptColor
+        label == "SAND" -> DriveModeWidgetSandColor
+        label == "MUD" -> DriveModeWidgetMudColor
+        label == "SNOW" -> DriveModeWidgetSnowColor
         else -> Color.Unspecified
     }
 }

@@ -34,7 +34,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -44,7 +43,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 private const val MEDIA_VOLUME_SWIPE_STEP_PX = 58f
 private const val MEDIA_VOLUME_POLL_DELAY_MS = 350L
@@ -74,7 +73,7 @@ fun DashboardMediaVolumeWidgetItem(
     val audioManager = remember(context) {
         context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
-    val mbCanVolume by MbCanRepository.audioVolumeState.collectAsStateWithLifecycle()
+    val mbCanVolume by UniversalCanRepository.audioVolumeState.collectAsStateWithLifecycle()
 
     var volumeState by remember(widget.id, isVertical, useMbCan) {
         mutableStateOf(readMediaVolumeState(audioManager))
@@ -115,13 +114,13 @@ fun DashboardMediaVolumeWidgetItem(
             muted = current == 0
         )
         if (current > 0) {
-            MbCanRepository.rememberAudioVolumeLastNonZeroInSession(current)
+            UniversalCanRepository.rememberAudioVolumeLastNonZeroInSession(current)
         }
     }
 
     fun applyMbCanVolume(target: Int) {
         scope.launch {
-            MbCanRepository.setAudioVolume(target)
+            UniversalCanRepository.setAudioVolume(target)
         }
     }
 
@@ -147,10 +146,10 @@ fun DashboardMediaVolumeWidgetItem(
     fun toggleMute() {
         if (useMbCan) {
             if (volumeState.current > 0) {
-                MbCanRepository.rememberAudioVolumeLastNonZeroInSession(volumeState.current)
+                UniversalCanRepository.rememberAudioVolumeLastNonZeroInSession(volumeState.current)
                 applyMbCanVolume(0)
             } else {
-                applyMbCanVolume(MbCanRepository.audioVolumeRestoreCandidate())
+                applyMbCanVolume(UniversalCanRepository.audioVolumeRestoreCandidate())
             }
             return
         }
@@ -216,7 +215,7 @@ fun DashboardMediaVolumeWidgetItem(
                 Text(
                     text = volumeTitleText,
                     color = resolvedTextColor,
-                    fontSize = calculateResponsiveFontSize(
+                    style = calculateResponsiveTextStyle(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE
                     ),
@@ -378,11 +377,10 @@ private fun MediaVolumeCenterButton(
                 Text(
                     text = currentVolume.toString(),
                     color = textColor,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = calculateResponsiveFontSize(
+                    style = calculateResponsiveTextStyle(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE
-                    )
+                    ),
                 )
             }
         },

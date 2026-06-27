@@ -3,7 +3,14 @@ package vad.dashing.tbox
 import android.content.Context
 import java.io.File
 
-/** On-disk tile backgrounds live under [Context.filesDir]/[DIR_NAME]/… (paths stored in settings JSON). */
+/**
+ * Tile background images stored as paths relative to [Context.filesDir] (e.g. `tile_backgrounds/panel/0_light`).
+ *
+ * Resolution order when reading:
+ * 1. Active theme cache `files/themes/{cacheKey}/tile_backgrounds/…` when main screen or floating panels are in the active theme
+ * 2. Shared [DIR_NAME]/… — user overrides (written by [SettingsManager.setTileBackgroundImageFromUri])
+ * 3. Tile background color only (callers when this returns null)
+ */
 object TileBackgroundImageStorage {
     const val DIR_NAME = "tile_backgrounds"
     /** Used when editing tiles on the main Dashboard tab (no floating / main-screen panel id). */
@@ -37,9 +44,81 @@ object TileBackgroundImageStorage {
         return true
     }
 
-    fun resolveFile(context: Context, relPath: String?): File? {
+    fun sharedDir(filesDir: File): File = File(filesDir, DIR_NAME)
+
+    fun themeCacheDir(filesDir: File, cacheKey: String): File =
+        File(
+            File(filesDir, ThemeMaterialization.THEMES_ROOT_DIR),
+            ThemeCacheKeys.sanitizeCacheKey(cacheKey),
+        ).resolve(ThemeMaterialization.TILE_BACKGROUNDS_DIR)
+
+    fun themeSectionsIncludeTileBackgrounds(lookup: LauncherAppIconPaths.Lookup): Boolean =
+        ThemeSection.MAIN_SCREEN in lookup.activeThemeSections ||
+            ThemeSection.FLOATING_PANELS in lookup.activeThemeSections
+
+    /** Shared folder only (export helpers, legacy). */
+    fun resolveFile(context: Context, relPath: String?): File? =
+        resolveSharedFile(context.filesDir, relPath)
+
+    fun resolveFile(
+        filesDir: File,
+        relPath: String?,
+        lookup: LauncherAppIconPaths.Lookup,
+    ): File? {
+        if (themeSectionsIncludeTileBackgrounds(lookup)) {
+            resolveThemeCacheFile(filesDir, relPath, lookup.activeThemeCacheKey)?.let { return it }
+        }
+        return resolveSharedFile(filesDir, relPath)
+    }
+
+    fun hasSharedOverride(filesDir: File, relPath: String?): Boolean =
+        resolveSharedFile(filesDir, relPath) != null
+
+    fun hasThemeCacheFile(filesDir: File, relPath: String?, lookup: LauncherAppIconPaths.Lookup): Boolean {
+        if (!themeSectionsIncludeTileBackgrounds(lookup)) return false
+        return resolveThemeCacheFile(filesDir, relPath, lookup.activeThemeCacheKey) != null
+    }
+
+    fun hasResolvableFile(filesDir: File, relPath: String?, lookup: LauncherAppIconPaths.Lookup): Boolean =
+        resolveFile(filesDir, relPath, lookup) != null
+
+    fun deleteThemeCacheFile(filesDir: File, relPath: String?, cacheKey: String): Boolean {
+        val file = resolveThemeCacheFile(filesDir, relPath, cacheKey) ?: return false
+        return file.delete()
+    }
+
+    fun deleteSharedFile(filesDir: File, relPath: String?): Boolean {
+        val file = resolveSharedFile(filesDir, relPath) ?: return false
+        return file.delete()
+    }
+
+    fun clearSharedDir(filesDir: File) {
+        val dir = sharedDir(filesDir)
+        if (!dir.isDirectory) return
+        dir.deleteRecursively()
+        dir.mkdirs()
+    }
+
+    fun countThemeCacheFiles(filesDir: File, cacheKey: String): Int {
+        val dir = themeCacheDir(filesDir, cacheKey)
+        if (!dir.isDirectory) return 0
+        return dir.walkTopDown().count { it.isFile && it.length() > 0L }
+    }
+
+    private fun resolveSharedFile(filesDir: File, relPath: String?): File? {
         val normalized = relPath?.trim()?.replace('\\', '/') ?: return null
         if (!isAllowedStoredRelPath(normalized)) return null
-        return File(context.filesDir, normalized.replace('/', File.separatorChar))
+        val file = File(filesDir, normalized.replace('/', File.separatorChar))
+        return file.takeIf { it.isFile && it.length() > 0L }
+    }
+
+    private fun resolveThemeCacheFile(filesDir: File, relPath: String?, cacheKey: String): File? {
+        val normalized = relPath?.trim()?.replace('\\', '/') ?: return null
+        if (!isAllowedStoredRelPath(normalized)) return null
+        val key = cacheKey.trim()
+        if (!ThemeCacheKeys.isLikelyCacheKey(key)) return null
+        val relInCache = normalized.removePrefix("$DIR_NAME/")
+        val file = File(themeCacheDir(filesDir, key), relInCache.replace('/', File.separatorChar))
+        return file.takeIf { it.isFile && it.length() > 0L }
     }
 }

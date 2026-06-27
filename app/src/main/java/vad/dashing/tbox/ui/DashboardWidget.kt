@@ -25,7 +25,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -38,6 +38,11 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.normalizeWidgetScale
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
+import vad.dashing.tbox.ui.theme.TboxWidgetTextRole
+import vad.dashing.tbox.ui.theme.TboxWidgetTypography
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxTitle
 import kotlin.math.abs
 
 val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
@@ -56,6 +61,7 @@ fun DashboardWidgetItem(
     title: Boolean = true,
     titleOverride: String = "",
     units: Boolean = true,
+    dateTimeFormat: String = "",
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
@@ -63,8 +69,12 @@ fun DashboardWidgetItem(
 
     val widgetHistory by dashboardManager.getWidgetHistoryFlow(widget.id).collectAsState()
 
-    val valueFlow = remember(widget.dataKey, widget.valueAccuracy) {
-        dataProvider.getValueFlow(widget.dataKey, widget.valueAccuracy)
+    val valueFlow = remember(widget.dataKey, widget.valueAccuracy, dateTimeFormat) {
+        dataProvider.getValueFlow(
+            key = widget.dataKey,
+            accuracy = widget.valueAccuracy,
+            dateTimeFormat = dateTimeFormat,
+        )
     }
     val valueString by valueFlow.collectAsStateWithLifecycle()
 
@@ -115,20 +125,16 @@ fun DashboardWidgetItem(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (title && !onlyText) {
+                val titleStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE,
+                )
                 Text(
                     text = displayTitle,
-                    fontSize = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ),
-                    fontWeight = FontWeight.Medium,
+                    style = titleStyle,
                     color = resolvedTextColor,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
-                    lineHeight = calculateResponsiveFontSize(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ) * 1.3f,
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
@@ -138,24 +144,21 @@ fun DashboardWidgetItem(
                 )
             }
 
+            val valueTextType = if (widget.dataKey == "restartTbox") {
+                TextType.TITLE
+            } else {
+                TextType.VALUE
+            }
+            val valueStyle = calculateResponsiveTextStyle(
+                containerHeight = availableHeight,
+                textType = valueTextType,
+            )
             Text(
                 text = "$valueString\u2009${if (units && !onlyText) widget.unit.replace("/", "\u2060/\u2060") else ""}",
-                fontSize = calculateResponsiveFontSize(
-                    containerHeight = availableHeight,
-                    textType = if (widget.dataKey == "restartTbox") {
-                        TextType.TITLE
-                    } else {
-                        TextType.VALUE
-                    }
-                ),
-                fontWeight = FontWeight.Medium,
+                style = valueStyle,
                 color = resolvedTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
-                lineHeight = calculateResponsiveFontSize(
-                    containerHeight = availableHeight,
-                    textType = TextType.VALUE
-                ) * 1.3f,
                 softWrap = true,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
@@ -195,9 +198,9 @@ fun ColumnScope.DashboardWidgetTitleRowIfVisible(
     resolvedTextColor: Color,
 ) {
     if (!showTitle) return
-    val titleFont = calculateResponsiveFontSize(
+    val titleStyle = calculateResponsiveTextStyle(
         containerHeight = availableHeight,
-        textType = TextType.TITLE
+        textType = TextType.TITLE,
     )
     Text(
         text = titleText,
@@ -205,9 +208,7 @@ fun ColumnScope.DashboardWidgetTitleRowIfVisible(
             .weight(1f)
             .fillMaxWidth()
             .wrapContentHeight(Alignment.CenterVertically),
-        fontSize = titleFont,
-        lineHeight = titleFont * 1.3f,
-        fontWeight = FontWeight.Medium,
+        style = titleStyle,
         color = resolvedTextColor,
         textAlign = TextAlign.Center,
         maxLines = 2,
@@ -217,56 +218,39 @@ fun ColumnScope.DashboardWidgetTitleRowIfVisible(
 }
 
 @Composable
-fun calculateResponsiveFontSize(
+fun calculateResponsiveTextStyle(
     containerHeight: Dp,
-    textType: TextType = TextType.VALUE
-): TextUnit {
-    val heightInDp = containerHeight.value
+    textType: TextType = TextType.VALUE,
+): TextStyle {
     val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
-
-    val baseSize = when (textType) {
-        TextType.TITLE -> {
-            when {
-                heightInDp < 20 -> 8.sp
-                heightInDp < 40 -> 10.sp
-                heightInDp < 60 -> 12.sp
-                heightInDp < 80 -> 16.sp
-                heightInDp < 100 -> 20.sp
-                heightInDp < 120 -> 24.sp
-                heightInDp < 150 -> 28.sp
-                else -> 32.sp
-            }
-        }
-        TextType.VALUE -> {
-            when {
-                heightInDp < 20 -> 10.sp
-                heightInDp < 40 -> 14.sp
-                heightInDp < 60 -> 18.sp
-                heightInDp < 80 -> 24.sp
-                heightInDp < 100 -> 30.sp
-                heightInDp < 120 -> 36.sp
-                heightInDp < 150 -> 42.sp
-                else -> 48.sp
-            }
-        }
-        TextType.UNIT -> {
-            when {
-                heightInDp < 20 -> 6.sp
-                heightInDp < 40 -> 8.sp
-                heightInDp < 60 -> 10.sp
-                heightInDp < 80 -> 14.sp
-                heightInDp < 100 -> 18.sp
-                heightInDp < 120 -> 22.sp
-                heightInDp < 150 -> 26.sp
-                else -> 30.sp
-            }
-        }
+    val role = textType.toWidgetRole()
+    val baseStyle = when (role) {
+        TboxWidgetTextRole.TITLE -> MaterialTheme.typography.tboxTitle
+        TboxWidgetTextRole.VALUE -> MaterialTheme.typography.tboxBody
+        TboxWidgetTextRole.UNIT -> MaterialTheme.typography.tboxCaption
     }
-    return baseSize * textScale
+    return TboxWidgetTypography.textStyleForHeight(
+        containerHeightDp = containerHeight.value,
+        role = role,
+        baseStyle = baseStyle,
+        textScale = textScale,
+    )
 }
 
+@Composable
+fun calculateResponsiveFontSize(
+    containerHeight: Dp,
+    textType: TextType = TextType.VALUE,
+): TextUnit = calculateResponsiveTextStyle(containerHeight, textType).fontSize
+
 enum class TextType {
-    TITLE, VALUE, UNIT
+    TITLE, VALUE, UNIT,
+}
+
+fun TextType.toWidgetRole(): TboxWidgetTextRole = when (this) {
+    TextType.TITLE -> TboxWidgetTextRole.TITLE
+    TextType.VALUE -> TboxWidgetTextRole.VALUE
+    TextType.UNIT -> TboxWidgetTextRole.UNIT
 }
 
 @Composable

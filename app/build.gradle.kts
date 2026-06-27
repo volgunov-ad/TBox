@@ -12,14 +12,29 @@ android {
         applicationId = "vad.dashing.tbox"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1502
-        versionName = "0.15.2"
+        versionCode = 1600
+        versionName = "0.16.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField(
             "String",
             "TBOX_PROXY_VERSION",
             "\"${libs.versions.tboxProxy.get()}\""
+        )
+        buildConfigField(
+            "String",
+            "UPDATE_RELEASE_PUBLIC_KEY",
+            "\"https://disk.yandex.ru/d/v-6n17wSRbVQsw\""
+        )
+        buildConfigField(
+            "String",
+            "UPDATE_DEV_PUBLIC_KEY",
+            "\"https://disk.yandex.ru/d/yuvH_9cdzyOoBg\""
+        )
+        buildConfigField(
+            "String",
+            "UPDATE_SIGNING_CERT_SHA256",
+            "\"\""
         )
     }
     flavorDimensions += "language"
@@ -90,6 +105,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.androidx.profileinstaller.profileinstaller)
     implementation(libs.okhttp)
+    implementation(libs.snakeyaml.engine)
     implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

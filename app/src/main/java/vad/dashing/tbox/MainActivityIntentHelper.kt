@@ -23,6 +23,20 @@ object FloatingDashboardTileEditRequestBus {
     }
 }
 
+/** Delivers an external «open .tboxtheme file» request from [MainActivity] into Compose. */
+object ThemeOpenRequestBus {
+    private val _pending = MutableStateFlow<ThemeOpenRequest?>(null)
+    val pending: StateFlow<ThemeOpenRequest?> = _pending.asStateFlow()
+
+    fun post(request: ThemeOpenRequest) {
+        _pending.value = request
+    }
+
+    fun clear() {
+        _pending.value = null
+    }
+}
+
 /**
  * Brings an existing [MainActivity] (singleTask) to the front when possible.
  *

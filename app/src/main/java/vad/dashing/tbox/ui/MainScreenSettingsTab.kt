@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -54,6 +61,7 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 @Composable
 fun MainScreenSettingsTab(
     settingsViewModel: SettingsViewModel,
+    currentTheme: Int,
     onRequestWallpaperStorageAccess: ((() -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -90,6 +98,8 @@ fun MainScreenSettingsTab(
         settingsViewModel.mainScreenCornerButtonIconLight.collectAsStateWithLifecycle()
     val mainScreenCornerBtnIconDark by
         settingsViewModel.mainScreenCornerButtonIconDark.collectAsStateWithLifecycle()
+    val mainScreenPageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
+    val mainScreenPanelPageNumber by settingsViewModel.mainScreenPanelPageNumber.collectAsStateWithLifecycle()
     val mainScreenCanvasBgLight by
         settingsViewModel.mainScreenCanvasBackgroundLight.collectAsStateWithLifecycle()
     val mainScreenCanvasBgDark by
@@ -97,6 +107,11 @@ fun MainScreenSettingsTab(
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
     var cornerColorSegment by remember { mutableIntStateOf(0) }
     var mainScreenBgSegment by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        val segment = colorThemeSegmentFor(currentTheme)
+        cornerColorSegment = segment
+        mainScreenBgSegment = segment
+    }
     var lightFolderPathInput by remember { mutableStateOf("") }
     var darkFolderPathInput by remember { mutableStateOf("") }
     var showMainScreenPanelOrderDialog by remember { mutableStateOf(false) }
@@ -269,17 +284,27 @@ fun MainScreenSettingsTab(
             maxValue = SettingsManager.MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_main_screen_page_count_title))
+        SettingDropdownGeneric(
+            selectedValue = mainScreenPageCount,
+            onValueChange = { settingsViewModel.saveMainScreenPageCount(it) },
+            text = "",
+            description = stringResource(R.string.settings_main_screen_page_count_hint),
+            enabled = true,
+            options = SettingsManager.MAIN_SCREEN_PAGE_COUNT_OPTIONS,
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_wallpaper_title))
         Text(
             text = stringResource(R.string.settings_main_screen_wallpaper_folder_hint),
-            fontSize = 18.sp,
+            style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 10.dp)
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !allFilesAccess) {
             Text(
                 text = stringResource(R.string.settings_main_screen_wallpaper_all_files_hint),
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -289,20 +314,20 @@ fun MainScreenSettingsTab(
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_open_all_files_settings), fontSize = 20.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_open_all_files_settings), style = MaterialTheme.typography.tboxBody)
             }
         }
         if (allFilesAccess) {
             Text(
                 text = stringResource(R.string.settings_main_screen_wallpaper_path_mode_hint),
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }
         Text(
             text = stringResource(R.string.settings_main_screen_wallpaper_light),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
         )
@@ -312,7 +337,7 @@ fun MainScreenSettingsTab(
                     R.string.settings_main_screen_wallpaper_current_path,
                     displayWallpaperFolderSummary(mainScreenWallpaperLightFolderUri)
                 ),
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -327,14 +352,14 @@ fun MainScreenSettingsTab(
                 onClick = rememberWrappedOnClick { launchLightWallpaperPicker() },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), fontSize = 22.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), style = MaterialTheme.typography.tboxButton)
             }
             OutlinedButton(
                 onClick = rememberWrappedOnClick { settingsViewModel.saveMainScreenWallpaperLightFolderUri(null) },
                 enabled = mainScreenWallpaperLightFolderUri.isNotBlank(),
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.action_delete), fontSize = 22.sp)
+                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxButton)
             }
         }
         if (allFilesAccess) {
@@ -344,7 +369,12 @@ fun MainScreenSettingsTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
-                label = { Text(stringResource(R.string.settings_main_screen_wallpaper_path_label)) },
+                label = {
+                    Text(
+                        stringResource(R.string.settings_main_screen_wallpaper_path_label),
+                        style = MaterialTheme.typography.tboxCaption,
+                    )
+                },
                 singleLine = true,
             )
             OutlinedButton(
@@ -366,12 +396,12 @@ fun MainScreenSettingsTab(
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_apply_path), fontSize = 20.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_apply_path), style = MaterialTheme.typography.tboxBody)
             }
         }
         Text(
             text = stringResource(R.string.settings_main_screen_wallpaper_dark),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 6.dp)
         )
@@ -381,7 +411,7 @@ fun MainScreenSettingsTab(
                     R.string.settings_main_screen_wallpaper_current_path,
                     displayWallpaperFolderSummary(mainScreenWallpaperDarkFolderUri)
                 ),
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -396,14 +426,14 @@ fun MainScreenSettingsTab(
                 onClick = rememberWrappedOnClick { launchDarkWallpaperPicker() },
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), fontSize = 22.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_pick_source), style = MaterialTheme.typography.tboxButton)
             }
             OutlinedButton(
                 onClick = rememberWrappedOnClick { settingsViewModel.saveMainScreenWallpaperDarkFolderUri(null) },
                 enabled = mainScreenWallpaperDarkFolderUri.isNotBlank(),
                 modifier = Modifier.weight(1f)
             ) {
-                Text(stringResource(R.string.action_delete), fontSize = 22.sp)
+                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxButton)
             }
         }
         if (allFilesAccess) {
@@ -413,7 +443,12 @@ fun MainScreenSettingsTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp),
-                label = { Text(stringResource(R.string.settings_main_screen_wallpaper_path_label)) },
+                label = {
+                    Text(
+                        stringResource(R.string.settings_main_screen_wallpaper_path_label),
+                        style = MaterialTheme.typography.tboxCaption,
+                    )
+                },
                 singleLine = true,
             )
             OutlinedButton(
@@ -435,7 +470,7 @@ fun MainScreenSettingsTab(
                     .fillMaxWidth()
                     .padding(bottom = 8.dp)
             ) {
-                Text(stringResource(R.string.settings_main_screen_wallpaper_apply_path), fontSize = 20.sp)
+                Text(stringResource(R.string.settings_main_screen_wallpaper_apply_path), style = MaterialTheme.typography.tboxBody)
             }
         }
         SettingSwitch(
@@ -450,7 +485,7 @@ fun MainScreenSettingsTab(
         SettingsTitle(stringResource(R.string.settings_main_screen_canvas_bg_title))
         Text(
             text = stringResource(R.string.settings_main_screen_canvas_bg_desc),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -487,20 +522,20 @@ fun MainScreenSettingsTab(
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
         ) {
-            Text(stringResource(R.string.settings_main_screen_canvas_bg_reset), fontSize = 20.sp)
+            Text(stringResource(R.string.settings_main_screen_canvas_bg_reset), style = MaterialTheme.typography.tboxBody)
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_main_screen_corner_buttons_title))
         Text(
             text = stringResource(R.string.settings_main_screen_corner_buttons_size, mainScreenCornerButtonSizeDp),
-            fontSize = 24.sp,
+            style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
         )
         Text(
             text = stringResource(R.string.settings_main_screen_corner_buttons_size_hint),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 6.dp)
         )
@@ -576,7 +611,7 @@ fun MainScreenSettingsTab(
             ) {
                 Text(
                     stringResource(R.string.settings_main_screen_corner_buttons_reset),
-                    fontSize = 20.sp,
+                    style = MaterialTheme.typography.tboxBody,
                     maxLines = 2
                 )
             }
@@ -611,7 +646,7 @@ fun MainScreenSettingsTab(
             ) {
                 Text(
                     text = stringResource(R.string.settings_panels_order_button),
-                    fontSize = 22.sp,
+                    style = MaterialTheme.typography.tboxButton,
                 )
             }
         } else {
@@ -621,7 +656,7 @@ fun MainScreenSettingsTab(
                 },
                 modifier = Modifier.padding(bottom = 8.dp)
             ) {
-                Text(stringResource(R.string.action_add), fontSize = 22.sp)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxButton)
             }
         }
         SettingSwitch(
@@ -670,6 +705,14 @@ fun MainScreenSettingsTab(
             "",
             hasMainScreenPanels,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
+        )
+        SettingDropdownGeneric(
+            mainScreenPanelPageNumber,
+            { page -> settingsViewModel.saveMainScreenPanelPageNumber(page) },
+            stringResource(R.string.settings_main_screen_panel_page_title),
+            stringResource(R.string.settings_main_screen_panel_page_desc),
+            hasMainScreenPanels,
+            (1..mainScreenPageCount).toList(),
         )
         MainScreenPanelRelativeLayoutSettings(
             settingsViewModel = settingsViewModel,

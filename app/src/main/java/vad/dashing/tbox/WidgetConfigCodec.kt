@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import kotlin.math.roundToInt
 
 private const val LEGACY_WIDGETS_SEPARATOR = "|"
@@ -91,6 +92,10 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
+        if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+            obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
+            obj.put("httpOpenBrowser", config.httpOpenBrowser)
+        }
         if (config.appWidgetId != null) {
             obj.put("appWidgetId", config.appWidgetId)
         }
@@ -101,6 +106,10 @@ fun serializeWidgetConfigsToJsonArray(
         if (acc != null && acc in 0..2) {
             obj.put("valueAccuracy", acc)
         }
+        val dateTimeFormat = sanitizeDateTimeWidgetFormat(config.dataKey, config.dateTimeFormat)
+        if (dateTimeFormat.isNotBlank()) {
+            obj.put("dateTimeFormat", dateTimeFormat)
+        }
         if (config.selectedVariant != 0) {
             obj.put("selectedVariant", config.selectedVariant)
         }
@@ -108,7 +117,7 @@ fun serializeWidgetConfigsToJsonArray(
         if (selectedDriveMode != DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE) {
             obj.put("selectedDriveMode", selectedDriveMode)
         }
-        obj.put("mediaVolumeUseMbCan", config.mediaVolumeUseMbCan)
+        obj.put("useMbCanVhal", config.useMbCanVhal)
         config.tileBackgroundImageRelPathLight?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
                 obj.put("tileBackgroundImageRelPathLight", it)
@@ -117,6 +126,21 @@ fun serializeWidgetConfigsToJsonArray(
         config.tileBackgroundImageRelPathDark?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
                 obj.put("tileBackgroundImageRelPathDark", it)
+            }
+        }
+        if (isActiveTripWidgetDataKey(config.dataKey)) {
+            if (!config.tripWidgetShowRowDividers) {
+                obj.put("tripWidgetShowRowDividers", false)
+            }
+            if (config.tripWidgetLabelColumnWidthPercent !=
+                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
+            ) {
+                obj.put(
+                    "tripWidgetLabelColumnWidthPercent",
+                    TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                        config.tripWidgetLabelColumnWidthPercent,
+                    ),
+                )
             }
         }
         array.put(obj)
@@ -247,6 +271,17 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             ""
                         },
+                        httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                            item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)
+                                .ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
+                        } else {
+                            DEFAULT_HTTP_REQUEST_WIDGET_YAML
+                        },
+                        httpOpenBrowser = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                            item.optBoolean("httpOpenBrowser", false)
+                        } else {
+                            false
+                        },
                         appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                             appWidgetId
                         } else {
@@ -254,13 +289,27 @@ private fun parseWidgetConfigsFromJsonArray(
                         },
                         customTitle = item.optString("customTitle", "").trim(),
                         valueAccuracy = valueAccuracy,
+                        dateTimeFormat = sanitizeDateTimeWidgetFormat(
+                            dataKey,
+                            item.optString("dateTimeFormat", ""),
+                        ),
                         selectedVariant = item.optInt("selectedVariant", 0),
                         selectedDriveMode = normalizeDriveModeWidgetRawValue(
                             item.optInt("selectedDriveMode", DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE)
                         ),
-                        mediaVolumeUseMbCan = item.optBoolean("mediaVolumeUseMbCan", false),
+                        useMbCanVhal = item.optBoolean("useMbCanVhal", false),
                         tileBackgroundImageRelPathLight = tileLight,
                         tileBackgroundImageRelPathDark = tileDark,
+                        tripWidgetShowRowDividers = item.optBoolean(
+                            "tripWidgetShowRowDividers",
+                            TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
+                        ),
+                        tripWidgetLabelColumnWidthPercent = TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                            item.optInt(
+                                "tripWidgetLabelColumnWidthPercent",
+                                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
+                            ),
+                        ),
                     )
                 )
             }

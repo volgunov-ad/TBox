@@ -82,11 +82,10 @@ fun DashboardLocWidgetItem(
             )
             Text(
                 text = "${locValues.visibleSatellites}",
-                fontSize = calculateResponsiveFontSize(
+                style = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
                 ),
-                fontWeight = FontWeight.Medium,
                 color = resolvedTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -113,11 +112,10 @@ fun DashboardLocWidgetItem(
             )
             Text(
                 text = "${locValues.speed}\u2009${stringResource(R.string.unit_kmh)}",
-                fontSize = calculateResponsiveFontSize(
+                style = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
                 ),
-                fontWeight = FontWeight.Medium,
                 color = resolvedTextColor,
                 textAlign = TextAlign.Center,
                 maxLines = 2,

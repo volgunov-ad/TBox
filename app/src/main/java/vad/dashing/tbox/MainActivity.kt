@@ -25,6 +25,7 @@ import java.io.FileWriter
 import androidx.core.net.toUri
 import vad.dashing.tbox.ui.TboxApp
 import vad.dashing.tbox.ui.disposeAppLauncherPickerIconCache
+import vad.dashing.tbox.update.InstallPermissionHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -61,6 +62,10 @@ class MainActivity : ComponentActivity() {
             onStoragePermissionsDenied()
         }
     }
+
+    private val installPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { /* permission state refreshed from UpdateTab on resume */ }
 
     // Переменные для хранения данных/тега, которые нужно сохранить после получения разрешений
     private var pendingSaveTag: String? = null
@@ -133,6 +138,7 @@ class MainActivity : ComponentActivity() {
         MainActivityLoadTimings.mark("main_after_managers")
 
         consumeFloatingDashboardTileEditIntent(intent)
+        consumeThemeOpenIntent(intent)
         MainActivityLoadTimings.mark("main_after_intent")
 
         MainActivityLoadTimings.mark("main_before_setContent")
@@ -169,6 +175,7 @@ class MainActivity : ComponentActivity() {
                     onRequestWallpaperStorageAccess = { afterGranted ->
                         runWallpaperPickerWithStorageIfNeeded(afterGranted)
                     },
+                    onOpenInstallPermissionSettings = { openInstallPermissionSettings() },
                 )
             }
         }
@@ -195,6 +202,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeFloatingDashboardTileEditIntent(intent)
+        consumeThemeOpenIntent(intent)
     }
 
     /**
@@ -212,8 +220,22 @@ class MainActivity : ComponentActivity() {
         if (panelId.isBlank() || widgetIndex < 0) return
         FloatingDashboardTileEditRequestBus.post(panelId, widgetIndex)
         lifecycleScope.launch(Dispatchers.IO) {
-            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_SELECTED_TAB_INDEX)
+            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
         }
+    }
+
+    private fun consumeThemeOpenIntent(intent: Intent?) {
+        val i = intent ?: return
+        val request = ThemeOpenIntentParser.parse(i) ?: return
+        ThemeOpenRequestBus.post(request)
+        setIntent(
+            Intent(i).apply {
+                action = Intent.ACTION_MAIN
+                data = null
+                clipData = null
+                removeExtra(Intent.EXTRA_STREAM)
+            },
+        )
     }
 
     override fun onRestart() {
@@ -657,5 +679,11 @@ class MainActivity : ComponentActivity() {
     private fun hasLocationPermissions(): Boolean {
         return (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+    }
+
+    private fun openInstallPermissionSettings() {
+        installPermissionLauncher.launch(
+            InstallPermissionHelper.createUnknownSourcesSettingsIntent(this)
+        )
     }
 }

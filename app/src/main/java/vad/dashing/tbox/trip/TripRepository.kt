@@ -19,7 +19,7 @@ object TripRepository {
     val lock = Any()
 
     /**
-     * When false, RPM-driven trip accounting ([vad.dashing.tbox.BackgroundService.onTripRpmSample]) is skipped.
+     * When false, periodic (1 s) trip accounting ([vad.dashing.tbox.BackgroundService.onTripPeriodicSample]) is skipped.
      * Disk load and [responseWork] gating use separate flags in the service.
      */
     @Volatile

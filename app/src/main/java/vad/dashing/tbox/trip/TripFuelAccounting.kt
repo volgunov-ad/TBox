@@ -36,6 +36,7 @@ object TripFuelAccounting {
         litersNow: Float,
         baselinePercentNow: Float,
         tankLiters: Float,
+        detectRefuels: Boolean = true,
     ): FuelCalibratedStepResult {
         val refuelRiseLiters = tankLiters * (REFUEL_RISE_PERCENT / 100f)
         val consumeMinLiters = tankLiters * (CONSUME_MIN_DELTA_PERCENT / 100f)
@@ -49,7 +50,7 @@ object TripFuelAccounting {
             )
         }
         val delta = litersNow - lastCalibratedLiters
-        val refuel = delta >= refuelRiseLiters
+        val refuel = detectRefuels && delta >= refuelRiseLiters
         val consumed = when {
             refuel -> currentConsumedLiters
             delta <= -consumeMinLiters -> currentConsumedLiters + (-delta)

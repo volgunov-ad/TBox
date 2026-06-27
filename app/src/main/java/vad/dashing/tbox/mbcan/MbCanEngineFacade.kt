@@ -187,8 +187,33 @@ object MbCanEngineFacade {
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
             when (method.name) {
-                "onCanVehicleSpeed",
-                "onVehicleEngineStatusChange" -> Unit
+                "onCanVehicleSpeed" -> {
+                    val fromArgs = runCatching {
+                        val raw = args?.getOrNull(0)
+                        when (raw) {
+                            is Number -> raw.toFloat()
+                            else -> {
+                                val getter = raw?.javaClass?.methods?.firstOrNull { it.name == "getSpeed" && it.parameterCount == 0 }
+                                (getter?.invoke(raw) as? Number)?.toFloat()
+                            }
+                        }
+                    }.getOrNull()
+                    val speed = fromArgs ?: readVehicleSpeed()
+                    MbCanRepository.scheduleCarSpeedPush(speed)
+                }
+                "onVehicleEngineStatusChange" -> {
+                    val engine = args?.getOrNull(0)
+                    val rpm = runCatching {
+                        val getter = engine?.javaClass?.getMethod("getfSpeed")
+                        (getter?.invoke(engine) as? Number)?.toFloat()
+                    }.getOrNull()
+                    val temperature = runCatching {
+                        val getter = engine?.javaClass?.getMethod("getfTemperture")
+                        (getter?.invoke(engine) as? Number)?.toFloat()
+                    }.getOrNull()
+                    MbCanRepository.scheduleEngineRpmPush(rpm)
+                    MbCanRepository.scheduleEngineTemperaturePush(temperature)
+                }
             }
             null
         }
@@ -310,6 +335,56 @@ object MbCanEngineFacade {
         } catch (_: Throwable) {
             audioCfgCmdListenerProxy = null
         }
+    }
+
+    /**
+     * Reads RPM from [com.mengbo.mbCan.entity.MBCanVehicleEngine#getfSpeed()] via
+     * [com.mengbo.mbCan.MBCanEngine.getMbCanData] data type 22 (eMBCAN_VEHICLE_ENGINE).
+     */
+    fun readVehicleEngineRpm(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val engCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleEngine")
+            val engObj = getMbCanData.invoke(inst, 22, engCls) ?: return null
+            val fs = engCls.getMethod("getfSpeed").invoke(engObj) as? Number
+            fs?.toFloat()
+        }.getOrNull()
+    }
+
+    /**
+     * Reads coolant temperature from [com.mengbo.mbCan.entity.MBCanVehicleEngine#getfTemperture()].
+     */
+    fun readVehicleEngineTemperature(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val engCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleEngine")
+            val engObj = getMbCanData.invoke(inst, 22, engCls) ?: return null
+            val temp = engCls.getMethod("getfTemperture").invoke(engObj) as? Number
+            temp?.toFloat()
+        }.getOrNull()
+    }
+
+    /**
+     * Reads speed from [com.mengbo.mbCan.entity.MBCanVehicleSpeed#getSpeed()] via
+     * [com.mengbo.mbCan.MBCanEngine.getMbCanData] data type 1 (eMBCAN_VEHICLE_SPEED).
+     */
+    fun readVehicleSpeed(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val speedCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleSpeed")
+            val speedObj = getMbCanData.invoke(inst, 1, speedCls) ?: return null
+            val speed = speedCls.getMethod("getSpeed").invoke(speedObj) as? Number
+            speed?.toFloat()
+        }.getOrNull()
     }
 
     @Synchronized

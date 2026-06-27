@@ -6,6 +6,7 @@ import android.content.Intent
 
 class BootCompleteReceiver : BroadcastReceiver() {
     companion object {
+        const val ACTION_DEBUG_BOOT_COMPLETED = "vad.dashing.tbox.DEBUG_BOOT_COMPLETED"
         private const val QUICKBOOT_POWERON_ACTION = "android.intent.action.QUICKBOOT_POWERON"
     }
 
@@ -13,6 +14,9 @@ class BootCompleteReceiver : BroadcastReceiver() {
         when (intent?.action) {
             Intent.ACTION_BOOT_COMPLETED -> {
                 startService(context, Intent.ACTION_BOOT_COMPLETED)
+            }
+            ACTION_DEBUG_BOOT_COMPLETED -> {
+                startService(context, ACTION_DEBUG_BOOT_COMPLETED)
             }
             /*Intent.ACTION_LOCKED_BOOT_COMPLETED -> {
                 startService(context, Intent.ACTION_LOCKED_BOOT_COMPLETED)
@@ -24,6 +28,7 @@ class BootCompleteReceiver : BroadcastReceiver() {
     }
 
     private fun startService(context: Context, bootAction: String) {
+        TboxRepository.addLog("INFO", "Boot receiver", "Received: $bootAction")
         val intent = Intent(context, BackgroundService::class.java).apply {
             action = BackgroundService.ACTION_START
             putExtra(BackgroundService.EXTRA_START_FROM_BOOT, true)

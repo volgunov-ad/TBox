@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,7 +20,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -24,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetTileBackgroundImageResult
 import vad.dashing.tbox.SettingsViewModel
@@ -38,14 +48,30 @@ internal fun TileBackgroundImageSettingsSection(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
+    val tileRevision by settingsViewModel.tileBackgroundImageRevision.collectAsStateWithLifecycle()
     val darkSegment = state.advancedColorThemeSegment == 1
     val currentPath = if (darkSegment) {
         state.tileBackgroundImageRelPathDark
     } else {
         state.tileBackgroundImageRelPathLight
     }
-    val hasImage = !currentPath.isNullOrBlank() &&
-        TileBackgroundImageStorage.isAllowedStoredRelPath(currentPath)
+    var hasImage by remember { mutableStateOf(false) }
+    var removeImageLabel by remember { mutableIntStateOf(R.string.widget_tile_background_image_remove) }
+    LaunchedEffect(currentPath, tileRevision, iconLookup, darkSegment) {
+        hasImage = !currentPath.isNullOrBlank() &&
+            TileBackgroundImageStorage.isAllowedStoredRelPath(currentPath) &&
+            TileBackgroundImageStorage.hasResolvableFile(context.filesDir, currentPath, iconLookup)
+        removeImageLabel = if (hasImage) {
+            if (TileBackgroundImageStorage.hasThemeCacheFile(context.filesDir, currentPath, iconLookup)) {
+                R.string.widget_tile_background_image_remove_from_theme
+            } else {
+                R.string.widget_tile_background_image_remove
+            }
+        } else {
+            R.string.widget_tile_background_image_remove
+        }
+    }
     val canPickImage = remember(context) {
         android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
             .resolveActivity(context.packageManager) != null
@@ -95,13 +121,13 @@ internal fun TileBackgroundImageSettingsSection(
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.widget_tile_background_image_title),
-            fontSize = 22.sp,
+            style = MaterialTheme.typography.tboxButton,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 4.dp)
         )
         Text(
             text = stringResource(R.string.widget_tile_background_image_desc),
-            fontSize = 18.sp,
+            style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
         )
@@ -127,7 +153,7 @@ internal fun TileBackgroundImageSettingsSection(
             ) {
                 Text(
                     text = stringResource(R.string.widget_tile_background_image_pick),
-                    fontSize = 18.sp,
+                    style = MaterialTheme.typography.tboxCaption,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -153,8 +179,8 @@ internal fun TileBackgroundImageSettingsSection(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = stringResource(R.string.widget_tile_background_image_remove),
-                    fontSize = 18.sp,
+                    text = stringResource(removeImageLabel),
+                    style = MaterialTheme.typography.tboxCaption,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )

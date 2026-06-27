@@ -121,4 +121,19 @@ class MainScreenWallpaperSupportTest {
         assertEquals("ok.png", listed.first().first)
         dir.deleteRecursively()
     }
+
+    @Test
+    fun listWallpaperImageBytesForThemeExport_readsFileFolder() {
+        val ctx = ApplicationProvider.getApplicationContext<Application>()
+        val dir = File(ctx.cacheDir, "theme_wp_export").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        File(dir, "a.jpg").writeBytes(byteArrayOf(1, 2, 3))
+        File(dir, "b.png").writeBytes(byteArrayOf(4, 5))
+        val exported = runBlocking { listWallpaperImageBytesForThemeExport(ctx, Uri.fromFile(dir)) }
+        assertEquals(listOf("a.jpg", "b.png"), exported.map { it.first })
+        assertEquals(3, exported.first().second.size)
+        dir.deleteRecursively()
+    }
 }

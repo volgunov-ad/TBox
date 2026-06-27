@@ -1,5 +1,12 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -107,9 +114,7 @@ fun TripsTab(
         SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
     }
 
-    val tabTextStyle = MaterialTheme.typography.bodyLarge.copy(
-        fontSize = 24.sp,
-        lineHeight = 24.sp * 1.3f,
+    val tabTextStyle = MaterialTheme.typography.tboxTitle.copy(
         color = MaterialTheme.colorScheme.onSurface
     )
 
@@ -142,18 +147,18 @@ fun TripsTab(
             Button(
                 onClick = rememberWrappedOnClick { showCustomTripWidgetDialog = true },
             ) {
-                Text(stringResource(R.string.trips_edit_custom_widget), fontSize = 24.sp)
+                Text(stringResource(R.string.trips_edit_custom_widget), style = MaterialTheme.typography.tboxTitle)
             }
             Button(
                 onClick = rememberWrappedOnClick { showSimpleTripWidgetDialog = true },
             ) {
-                Text(stringResource(R.string.trips_edit_simple_widget), fontSize = 24.sp)
+                Text(stringResource(R.string.trips_edit_simple_widget), style = MaterialTheme.typography.tboxTitle)
             }
             Button(
                 onClick = rememberWrappedOnClick { if (trips.isNotEmpty()) showExportDialog = true },
                 enabled = trips.isNotEmpty()
             ) {
-                Text(stringResource(R.string.trips_export), fontSize = 24.sp)
+                Text(stringResource(R.string.trips_export), style = MaterialTheme.typography.tboxTitle)
             }
         }
 
@@ -322,7 +327,7 @@ fun TripsTab(
                 label = {
                     Text(
                         stringResource(R.string.trips_name_label),
-                        style = tabTextStyle.copy(fontSize = 20.sp)
+                        style = MaterialTheme.typography.tboxBody
                     )
                 },
                 modifier = Modifier
@@ -365,14 +370,14 @@ fun TripsTab(
                     Text(
                         text = if (fav) stringResource(R.string.trips_remove_favorite)
                         else stringResource(R.string.trips_add_favorite),
-                        fontSize = 24.sp
+                        style = MaterialTheme.typography.tboxTitle
                     )
                 }
                 if (trip.isActive && activeTrip?.id == trip.id) {
                     Button(onClick = rememberWrappedOnClick(onTripFinishAndStart)) {
                         Text(
                             stringResource(R.string.trips_finish),
-                            fontSize = 24.sp
+                            style = MaterialTheme.typography.tboxTitle
                         )
                     }
                 }

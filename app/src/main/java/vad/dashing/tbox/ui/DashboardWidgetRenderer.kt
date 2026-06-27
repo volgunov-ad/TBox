@@ -22,6 +22,8 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -31,6 +33,8 @@ import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
+import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 
 @Composable
@@ -60,9 +64,13 @@ fun DashboardWidgetRenderer(
     isEditMode: Boolean = false,
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
-    enableInnerInteractions: Boolean = true
+    enableInnerInteractions: Boolean = true,
+    panelStorageId: String = "",
 ) {
     val launcherAppIconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
+    val httpRequestIconRevision by settingsViewModel.httpRequestIconRevision.collectAsStateWithLifecycle()
+    val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
+    val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val activeTripCustomLayout by settingsViewModel.activeTripCustomWidgetLayout.collectAsStateWithLifecycle()
     val activeTripSimpleLayout by settingsViewModel.activeTripSimpleWidgetLayout.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
@@ -287,6 +295,34 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        WIPER_MAINTENANCE_WIDGET_DATA_KEY -> {
+            DashboardWiperMaintenanceWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        PARKING_RADAR_WIDGET_DATA_KEY -> {
+            DashboardParkingRadarWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
         "frontWindscreenHeatWidget" -> {
             DashboardFrontWindscreenHeatWidgetItem(
                 onClick = onClick,
@@ -317,6 +353,34 @@ fun DashboardWidgetRenderer(
 
         "hvacAirRecirculationWidget" -> {
             DashboardHvacAirRecirculationWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        "hvacAcWidget" -> {
+            DashboardHvacAcWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        "hvacAutoWidget" -> {
+            DashboardHvacAutoWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
@@ -462,9 +526,32 @@ fun DashboardWidgetRenderer(
                 widget = widget,
                 packageName = widgetConfig.launcherAppPackage,
                 customIconRevision = launcherAppIconRevision,
+                iconLookup = iconLookup,
+                suppressCustomIcon = themeActivating,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        HTTP_REQUEST_WIDGET_DATA_KEY -> {
+            DashboardHttpRequestWidgetItem(
+                widget = widget,
+                iconKey = HttpRequestIconPaths.iconKey(panelStorageId, widget.id),
+                requestYaml = widgetConfig.httpRequestYaml,
+                openBrowser = widgetConfig.httpOpenBrowser,
+                customIconRevision = httpRequestIconRevision,
+                iconLookup = iconLookup,
+                suppressCustomIcon = themeActivating,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                isEditMode = isEditMode,
+                onEditClick = onClick,
                 onLongClick = onLongClick,
                 elevation = elevation,
                 shape = shape,
@@ -510,7 +597,7 @@ fun DashboardWidgetRenderer(
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
                 isVertical = false,
-                useMbCan = widgetConfig.mediaVolumeUseMbCan,
+                useMbCan = widgetConfig.useMbCanVhal,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
@@ -527,7 +614,7 @@ fun DashboardWidgetRenderer(
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
                 isVertical = true,
-                useMbCan = widgetConfig.mediaVolumeUseMbCan,
+                useMbCan = widgetConfig.useMbCanVhal,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
@@ -569,6 +656,8 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 customTripLayout = activeTripCustomLayout,
                 simpleTripLayout = activeTripSimpleLayout,
+                showRowDividers = widgetConfig.tripWidgetShowRowDividers,
+                labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
@@ -590,6 +679,8 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 simpleTripLayout = activeTripSimpleLayout,
+                showRowDividers = widgetConfig.tripWidgetShowRowDividers,
+                labelColumnWidthPercent = widgetConfig.tripWidgetLabelColumnWidthPercent,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
@@ -661,6 +752,72 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "engineRPM" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = ENGINE_RPM_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "engineTemperature" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = ENGINE_TEMPERATURE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "carSpeed" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = CAR_SPEED_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
         else -> {
             DashboardWidgetItem(
                 widget = widget,
@@ -679,6 +836,7 @@ fun DashboardWidgetRenderer(
                 title = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 units = widgetConfig.showUnit,
+                dateTimeFormat = widgetConfig.dateTimeFormat,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor
             )

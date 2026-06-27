@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
-import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 private val DefrostOnColor = Color(0xFFFF9800)
 
@@ -39,7 +39,7 @@ fun DashboardRearWindowMirrorsDefrostWidgetItem(
     titleOverride: String = "",
     scale: Float = 1f
 ) {
-    val state by MbCanRepository.hvacDefrosterState.collectAsStateWithLifecycle()
+    val state by UniversalCanRepository.hvacDefrosterState.collectAsStateWithLifecycle()
     val iconColor = when (state) {
         is MbCanBinaryState.On -> DefrostOnColor
         is MbCanBinaryState.Off -> textColor

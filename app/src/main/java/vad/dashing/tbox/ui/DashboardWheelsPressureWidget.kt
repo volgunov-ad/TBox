@@ -129,7 +129,7 @@ fun DashboardWheelsPressureWidgetItem(
                     ) {
                         Text(
                             text = widget.unit,
-                            fontSize = calculateResponsiveFontSize(
+                            style = calculateResponsiveTextStyle(
                                 availableHeight,
                                 TextType.UNIT
                             ),

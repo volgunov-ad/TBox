@@ -1,5 +1,11 @@
 package vad.dashing.tbox.ui
 
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxBody
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,42 +40,47 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
-import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
+import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.isValidDateTimeWidgetFormat
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
+import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.normalizeDateTimeWidgetFormat
+import vad.dashing.tbox.previewDateTimeWidgetFormat
 import vad.dashing.tbox.R
+import vad.dashing.tbox.sanitizeDateTimeWidgetFormat
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
-import vad.dashing.tbox.isMediaVolumeWidgetDataKey
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
+import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
-
-private val WidgetSelectionDialogActionButtonFontSize = 22.sp
 
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
 internal data class ValueAccuracyDropdownEntry(
@@ -79,26 +90,13 @@ internal data class ValueAccuracyDropdownEntry(
     override fun toString(): String = display
 }
 
-/** Matches [SettingSwitch] primary row text (24.sp Medium). */
-private val WidgetSelectionDialogFieldInputStyle = TextStyle(
-    fontSize = 24.sp,
-    lineHeight = 24.sp * 1.3f
-)
-/** OutlinedTextField labels in this dialog. */
-private val WidgetSelectionDialogFieldLabelStyle = TextStyle(
-    fontSize = 20.sp
-)
-/** Placeholder / secondary — same as [SettingSwitch] description (20.sp). */
-private val WidgetSelectionDialogFieldPlaceholderStyle = TextStyle(
-    fontSize = 20.sp,
-    lineHeight = 20.sp
-)
 
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
     initialConfig: FloatingDashboardWidgetConfig,
     private val panelDefaultBackgroundLight: Int,
     private val panelDefaultBackgroundDark: Int,
+    initialColorThemeSegment: Int = 0,
 ) {
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
@@ -135,7 +133,7 @@ internal class WidgetSelectionDialogState(
     var mediaKeepPlayerForeground by mutableStateOf(
         initialConfig.mediaKeepPlayerForeground
     )
-    var mediaVolumeUseMbCan by mutableStateOf(initialConfig.mediaVolumeUseMbCan)
+    var useMbCanVhal by mutableStateOf(initialConfig.useMbCanVhal)
     var selectedDriveMode by mutableIntStateOf(
         if (initialConfig.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
             normalizeDriveModeWidgetRawValue(initialConfig.selectedDriveMode)
@@ -147,12 +145,13 @@ internal class WidgetSelectionDialogState(
     var showAdvancedSettings by mutableStateOf(false)
     var showWholePanelSettings by mutableStateOf(false)
     /** 0 = light theme colors, 1 = dark theme colors (advanced settings only). */
-    var advancedColorThemeSegment by mutableIntStateOf(0)
+    var advancedColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
     /** Draft for «Вся панель»; persisted only on dialog Save. */
     var wholePanelNameDraft by mutableStateOf("")
     var wholePanelShowTboxDisconnect by mutableStateOf(false)
     var wholePanelRows by mutableIntStateOf(2)
     var wholePanelCols by mutableIntStateOf(3)
+    var wholePanelPageNumber by mutableIntStateOf(1)
     /** Main-screen and floating whole-panel draft for clickAction. */
     var wholePanelClickAction by mutableStateOf(false)
     /**
@@ -168,6 +167,7 @@ internal class WidgetSelectionDialogState(
         wholePanelRows = cfg.rows
         wholePanelCols = cfg.cols
         wholePanelClickAction = cfg.clickAction
+        wholePanelPageNumber = cfg.pageNumber
     }
 
     fun syncWholePanelDraftFromFloating(cfg: FloatingDashboardConfig) {
@@ -192,6 +192,20 @@ internal class WidgetSelectionDialogState(
             ""
         }
     )
+    var httpRequestYaml by mutableStateOf(
+        if (initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+            initialConfig.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
+        } else {
+            DEFAULT_HTTP_REQUEST_WIDGET_YAML
+        }
+    )
+    var httpOpenBrowser by mutableStateOf(
+        if (initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+            initialConfig.httpOpenBrowser
+        } else {
+            false
+        }
+    )
 
     var tileBackgroundImageRelPathLight by mutableStateOf(
         initialConfig.tileBackgroundImageRelPathLight?.takeIf {
@@ -206,14 +220,27 @@ internal class WidgetSelectionDialogState(
 
     /** `null` = default decimals per data key in provider; otherwise 0..2 fractional digits. */
     var valueAccuracy by mutableStateOf(initialConfig.valueAccuracy?.takeIf { it in 0..2 })
+    var dateTimeFormat by mutableStateOf(
+        normalizeDateTimeWidgetFormat(initialConfig.dataKey, initialConfig.dateTimeFormat)
+    )
+
+    var tripWidgetShowRowDividers by mutableStateOf(initialConfig.tripWidgetShowRowDividers)
+    var tripWidgetLabelColumnWidthPercent by mutableIntStateOf(
+        TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+            initialConfig.tripWidgetLabelColumnWidthPercent,
+        ),
+    )
 
     fun applySelectedDataKey(key: String) {
         selectedDataKey = key
         if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
             singleLineDualMetrics = false
         }
-        if (!isMediaVolumeWidgetDataKey(key)) {
-            mediaVolumeUseMbCan = false
+        if (!WidgetsRepository.supportsUseMbCanVhal(key)) {
+            useMbCanVhal = false
+        }
+        if (!WidgetsRepository.supportsDateTimeFormat(key)) {
+            dateTimeFormat = ""
         }
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
@@ -226,6 +253,9 @@ internal class WidgetSelectionDialogState(
     val isAppLauncherWidgetSelected: Boolean
         get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
 
+    val isHttpRequestWidgetSelected: Boolean
+        get() = selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY
+
     val isExternalAppWidgetSelected: Boolean
         get() = selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
 
@@ -237,6 +267,9 @@ internal class WidgetSelectionDialogState(
             selectedDataKey.isEmpty() -> true
             isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
             isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
+            isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
+            WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
+                isValidDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)
             else -> true
         }
 }
@@ -248,6 +281,7 @@ internal fun rememberWidgetSelectionDialogState(
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
     defaultBackgroundLight: Int,
     defaultBackgroundDark: Int,
+    currentTheme: Int,
 ): WidgetSelectionDialogState {
     val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
         ?: FloatingDashboardWidgetConfig(dataKey = "")
@@ -257,13 +291,15 @@ internal fun rememberWidgetSelectionDialogState(
         currentWidgets,
         currentWidgetConfigs,
         defaultBackgroundLight,
-        defaultBackgroundDark
+        defaultBackgroundDark,
+        currentTheme,
     ) {
         WidgetSelectionDialogState(
             initialDataKey = initialDataKey,
             initialConfig = initialConfig,
             panelDefaultBackgroundLight = defaultBackgroundLight,
-            panelDefaultBackgroundDark = defaultBackgroundDark
+            panelDefaultBackgroundDark = defaultBackgroundDark,
+            initialColorThemeSegment = colorThemeSegmentFor(currentTheme),
         )
     }
 }
@@ -290,11 +326,11 @@ internal fun ExternalAppWidgetPickerSection(
         SettingsTitle(stringResource(R.string.widget_external_app_title))
         Text(
             text = stringResource(R.string.widget_external_app_selected, label),
-            fontSize = 20.sp,
+            style = MaterialTheme.typography.tboxBody,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         OutlinedButton(onClick = rememberWrappedOnClick(onPickClick)) {
-            Text(text = stringResource(R.string.widget_external_app_pick), fontSize = 22.sp)
+            Text(text = stringResource(R.string.widget_external_app_pick), style = MaterialTheme.typography.tboxButton)
         }
     }
 }
@@ -338,7 +374,7 @@ internal fun WidgetColorThemeSegmentRow(
         ) {
             Text(
                 text = stringResource(R.string.widget_color_theme_segment_light),
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.tboxCaption,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -370,7 +406,7 @@ internal fun WidgetColorThemeSegmentRow(
         ) {
             Text(
                 text = stringResource(R.string.widget_color_theme_segment_dark),
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.tboxCaption,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -381,6 +417,7 @@ internal fun WidgetColorThemeSegmentRow(
 @Composable
 private fun MainScreenPanelWholeSettingsSection(
     state: WidgetSelectionDialogState,
+    pageCount: Int,
     enabled: Boolean,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -395,10 +432,10 @@ private fun MainScreenPanelWholeSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.floating_panel_name_label),
-                    style = WidgetSelectionDialogFieldLabelStyle
+                    style = MaterialTheme.typography.tboxBody
                 )
             },
-            textStyle = WidgetSelectionDialogFieldInputStyle
+            textStyle = MaterialTheme.typography.tboxTitle
         )
         SettingSwitch(
             state.wholePanelClickAction,
@@ -430,6 +467,14 @@ private fun MainScreenPanelWholeSettingsSection(
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
+        SettingDropdownGeneric(
+            state.wholePanelPageNumber,
+            { state.wholePanelPageNumber = it },
+            stringResource(R.string.settings_main_screen_panel_page_title),
+            stringResource(R.string.settings_main_screen_panel_page_desc),
+            enabled,
+            (1..pageCount.coerceAtLeast(1)).toList(),
+        )
     }
 }
 
@@ -450,10 +495,10 @@ private fun FloatingDashboardWholeSettingsSection(
             label = {
                 Text(
                     text = stringResource(R.string.floating_panel_name_label),
-                    style = WidgetSelectionDialogFieldLabelStyle
+                    style = MaterialTheme.typography.tboxBody
                 )
             },
-            textStyle = WidgetSelectionDialogFieldInputStyle
+            textStyle = MaterialTheme.typography.tboxTitle
         )
         SettingSwitch(
             state.wholePanelClickAction,
@@ -503,6 +548,7 @@ internal fun WidgetSelectionDialogForm(
 ) {
     val context = LocalContext.current
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
+    val mainScreenPageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
     val notSelectedLabel = stringResource(R.string.widget_option_not_selected)
     val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets()
         .filter { it.isNotEmpty() && dataKeyFilter(it) }
@@ -530,6 +576,7 @@ internal fun WidgetSelectionDialogForm(
                     ) {
                         MainScreenPanelWholeSettingsSection(
                             state = state,
+                            pageCount = mainScreenPageCount,
                             enabled = true
                         )
                     }
@@ -565,7 +612,7 @@ internal fun WidgetSelectionDialogForm(
                             Text(
                                 text = stringResource(R.string.widget_music_players_required),
                                 color = MaterialTheme.colorScheme.error,
-                                fontSize = 20.sp
+                                style = MaterialTheme.typography.tboxBody
                             )
                         }
                         SettingSwitch(
@@ -601,6 +648,13 @@ internal fun WidgetSelectionDialogForm(
                         settingsViewModel = settingsViewModel,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
+                    HttpRequestWidgetSettingsSection(
+                        state = state,
+                        settingsViewModel = settingsViewModel,
+                        panelStorageId = tileBackgroundPanelStorageId,
+                        widgetIndex = widgetIndex,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
                     SettingSwitch(
                         state.showTitle,
                         { state.showTitle = it },
@@ -612,17 +666,17 @@ internal fun WidgetSelectionDialogForm(
                         value = state.customTitle,
                         onValueChange = { state.customTitle = it },
                         enabled = state.togglesEnabled,
-                        textStyle = WidgetSelectionDialogFieldInputStyle,
+                        textStyle = MaterialTheme.typography.tboxTitle,
                         label = {
                             Text(
                                 stringResource(R.string.widget_custom_title_label),
-                                style = WidgetSelectionDialogFieldLabelStyle
+                                style = MaterialTheme.typography.tboxBody
                             )
                         },
                         placeholder = {
                             Text(
                                 stringResource(R.string.widget_custom_title_hint),
-                                style = WidgetSelectionDialogFieldPlaceholderStyle,
+                                style = MaterialTheme.typography.tboxBody,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         },
@@ -680,11 +734,58 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = 300.dp
                         )
                     }
-                    if (isMediaVolumeWidgetDataKey(state.selectedDataKey)) {
+                    if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
+                        val dateTimeFormatError = !isValidDateTimeWidgetFormat(
+                            state.selectedDataKey,
+                            state.dateTimeFormat,
+                        )
+                        val dateTimeFormatPreview = previewDateTimeWidgetFormat(
+                            state.selectedDataKey,
+                            state.dateTimeFormat,
+                        ).orEmpty()
+                        OutlinedTextField(
+                            value = state.dateTimeFormat,
+                            onValueChange = { state.dateTimeFormat = it },
+                            enabled = state.togglesEnabled,
+                            isError = dateTimeFormatError,
+                            textStyle = MaterialTheme.typography.tboxTitle,
+                            label = {
+                                Text(
+                                    stringResource(R.string.widget_datetime_format_label),
+                                    style = MaterialTheme.typography.tboxBody,
+                                )
+                            },
+                            placeholder = {
+                                Text(
+                                    stringResource(R.string.widget_datetime_format_hint),
+                                    style = MaterialTheme.typography.tboxBody,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            supportingText = {
+                                Text(
+                                    text = if (dateTimeFormatError) {
+                                        stringResource(R.string.widget_datetime_format_error)
+                                    } else {
+                                        stringResource(
+                                            R.string.widget_datetime_format_preview,
+                                            dateTimeFormatPreview,
+                                        )
+                                    },
+                                    style = MaterialTheme.typography.tboxCaption,
+                                )
+                            },
+                            singleLine = false,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp, bottom = 4.dp),
+                        )
+                    }
+                    if (WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey)) {
                         SettingSwitch(
-                            state.mediaVolumeUseMbCan,
-                            { state.mediaVolumeUseMbCan = it },
-                            stringResource(R.string.widget_media_volume_use_mbcan),
+                            state.useMbCanVhal,
+                            { state.useMbCanVhal = it },
+                            stringResource(R.string.widget_media_volume_use_mbcan_vhal),
                             "",
                             state.togglesEnabled
                         )
@@ -703,6 +804,23 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = 220.dp
                         )
                     }
+                    if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                        SettingSwitch(
+                            state.tripWidgetShowRowDividers,
+                            { state.tripWidgetShowRowDividers = it },
+                            stringResource(R.string.trips_widget_show_row_dividers_title),
+                            "",
+                            state.togglesEnabled,
+                        )
+                        SettingInt(
+                            value = state.tripWidgetLabelColumnWidthPercent,
+                            onValueChange = { state.tripWidgetLabelColumnWidthPercent = it },
+                            text = stringResource(R.string.trips_widget_label_column_width_title),
+                            description = stringResource(R.string.trips_widget_label_column_width_desc),
+                            minValue = TripWidgetTileDisplay.MIN_LABEL_COLUMN_WIDTH_PERCENT,
+                            maxValue = TripWidgetTileDisplay.MAX_LABEL_COLUMN_WIDTH_PERCENT,
+                        )
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -710,12 +828,12 @@ internal fun WidgetSelectionDialogForm(
                     ) {
                         Text(
                             text = stringResource(R.string.widget_scale, state.scale),
-                            fontSize = 24.sp,
+                            style = MaterialTheme.typography.tboxTitle,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = stringResource(R.string.widget_scale_hint),
-                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.tboxBody,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Slider(
@@ -736,12 +854,12 @@ internal fun WidgetSelectionDialogForm(
                     ) {
                         Text(
                             text = stringResource(R.string.widget_shape, state.shape),
-                            fontSize = 24.sp,
+                            style = MaterialTheme.typography.tboxTitle,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = stringResource(R.string.widget_shape_hint),
-                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.tboxBody,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Slider(
@@ -768,8 +886,8 @@ internal fun WidgetSelectionDialogForm(
                             onColorChange = { state.textColorLight = it },
                             presetSlots = widgetColorPresetSlots,
                             onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
-                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
                         )
                         WidgetColorSetting(
                             title = stringResource(R.string.widget_background_color_light),
@@ -778,8 +896,8 @@ internal fun WidgetSelectionDialogForm(
                             onColorChange = { state.backgroundColorLight = it },
                             presetSlots = widgetColorPresetSlots,
                             onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
-                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
                         )
                     } else {
                         WidgetColorSetting(
@@ -789,8 +907,8 @@ internal fun WidgetSelectionDialogForm(
                             onColorChange = { state.textColorDark = it },
                             presetSlots = widgetColorPresetSlots,
                             onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
-                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
                         )
                         WidgetColorSetting(
                             title = stringResource(R.string.widget_background_color_dark),
@@ -799,8 +917,8 @@ internal fun WidgetSelectionDialogForm(
                             onColorChange = { state.backgroundColorDark = it },
                             presetSlots = widgetColorPresetSlots,
                             onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = WidgetSelectionDialogFieldInputStyle,
-                            valueLabelStyle = WidgetSelectionDialogFieldLabelStyle,
+                            valueTextStyle = MaterialTheme.typography.tboxTitle,
+                            valueLabelStyle = MaterialTheme.typography.tboxBody,
                         )
                     }
                     TileBackgroundImageSettingsSection(
@@ -819,7 +937,7 @@ internal fun WidgetSelectionDialogForm(
                     ) {
                         Text(
                             stringResource(R.string.widget_reset_text_background_colors),
-                            fontSize = 20.sp
+                            style = MaterialTheme.typography.tboxBody
                         )
                     }
                 }
@@ -861,11 +979,11 @@ internal fun WidgetSelectionDialogForm(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
-                        textStyle = WidgetSelectionDialogFieldInputStyle,
+                        textStyle = MaterialTheme.typography.tboxTitle,
                         label = {
                             Text(
                                 text = stringResource(R.string.widget_app_launcher_search),
-                                style = WidgetSelectionDialogFieldLabelStyle
+                                style = MaterialTheme.typography.tboxBody
                             )
                         },
                         singleLine = true,
@@ -888,7 +1006,7 @@ internal fun WidgetSelectionDialogForm(
                                 )
                                 Text(
                                     text = displayName,
-                                    fontSize = 24.sp,
+                                    style = MaterialTheme.typography.tboxTitle,
                                     modifier = Modifier
                                         .padding(start = 8.dp)
                                         .weight(1f),
@@ -912,7 +1030,6 @@ internal fun WidgetSelectionDialogActions(
     onDismiss: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
-    saveTextFontWeight: FontWeight = FontWeight.Normal,
     showWholePanelButton: Boolean = false,
     deleteAfterWholePanel: (@Composable RowScope.() -> Unit)? = null,
     /** Load whole-panel draft from persisted config once when user opens «Вся панель». */
@@ -960,7 +1077,7 @@ internal fun WidgetSelectionDialogActions(
             ) {
                 Text(
                     text = stringResource(R.string.widget_toggle_advanced),
-                    fontSize = WidgetSelectionDialogActionButtonFontSize,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1001,7 +1118,7 @@ internal fun WidgetSelectionDialogActions(
                 ) {
                     Text(
                         text = stringResource(R.string.widget_toggle_whole_panel),
-                        fontSize = WidgetSelectionDialogActionButtonFontSize,
+                        style = MaterialTheme.typography.tboxButton,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1015,7 +1132,7 @@ internal fun WidgetSelectionDialogActions(
         ) {
             Text(
                 text = stringResource(R.string.action_cancel),
-                fontSize = WidgetSelectionDialogActionButtonFontSize
+                style = MaterialTheme.typography.tboxButton,
             )
         }
         Button(
@@ -1024,8 +1141,7 @@ internal fun WidgetSelectionDialogActions(
         ) {
             Text(
                 text = stringResource(R.string.action_save),
-                fontSize = WidgetSelectionDialogActionButtonFontSize,
-                fontWeight = saveTextFontWeight
+                style = MaterialTheme.typography.tboxButton,
             )
         }
     }
@@ -1140,12 +1256,27 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 ""
             },
+            httpRequestYaml = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                state.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
+            } else {
+                DEFAULT_HTTP_REQUEST_WIDGET_YAML
+            },
+            httpOpenBrowser = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
+                state.httpOpenBrowser
+            } else {
+                false
+            },
             appWidgetId = if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 externalAppWidgetId
             } else {
                 null
             },
             valueAccuracy = storedValueAccuracy,
+            dateTimeFormat = if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
+                sanitizeDateTimeWidgetFormat(state.selectedDataKey, state.dateTimeFormat)
+            } else {
+                ""
+            },
             selectedVariant = when {
                 !isSeatHeatVentSingleWidgetDataKey(state.selectedDataKey) -> 0
                 else -> {
@@ -1162,13 +1293,25 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
             },
-            mediaVolumeUseMbCan = isMediaVolumeWidgetDataKey(state.selectedDataKey) &&
-                state.mediaVolumeUseMbCan,
+            useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey) &&
+                state.useMbCanVhal,
             tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },
             tileBackgroundImageRelPathDark = state.tileBackgroundImageRelPathDark?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
+            },
+            tripWidgetShowRowDividers = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                state.tripWidgetShowRowDividers
+            } else {
+                TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS
+            },
+            tripWidgetLabelColumnWidthPercent = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
+                    state.tripWidgetLabelColumnWidthPercent,
+                )
+            } else {
+                TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
             },
         )
     } else {
@@ -1195,7 +1338,8 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         rows = state.wholePanelRows,
         cols = state.wholePanelCols,
         showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
-        clickAction = state.wholePanelClickAction
+        clickAction = state.wholePanelClickAction,
+        pageNumber = state.wholePanelPageNumber,
     )
 }
 

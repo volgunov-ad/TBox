@@ -405,6 +405,14 @@ object WidgetsRepository {
         "voltage+engineTemperatureWidget" to DataTitle(R.string.data_title_voltage_engine_temperature_widget),
         "gearBoxWidget" to DataTitle(R.string.data_title_gearbox_widget),
         DRIVE_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_drive_mode_widget),
+        "wheel1Pressure" to DataTitle(R.string.data_title_wheel_pressure_fl, R.string.unit_bar),
+        "wheel2Pressure" to DataTitle(R.string.data_title_wheel_pressure_fr, R.string.unit_bar),
+        "wheel3Pressure" to DataTitle(R.string.data_title_wheel_pressure_rl, R.string.unit_bar),
+        "wheel4Pressure" to DataTitle(R.string.data_title_wheel_pressure_rr, R.string.unit_bar),
+        "wheel1Temperature" to DataTitle(R.string.data_title_wheel_temperature_fl, R.string.unit_celsius),
+        "wheel2Temperature" to DataTitle(R.string.data_title_wheel_temperature_fr, R.string.unit_celsius),
+        "wheel3Temperature" to DataTitle(R.string.data_title_wheel_temperature_rl, R.string.unit_celsius),
+        "wheel4Temperature" to DataTitle(R.string.data_title_wheel_temperature_rr, R.string.unit_celsius),
         "wheelsPressureWidget" to DataTitle(R.string.data_title_wheels_pressure_widget, R.string.unit_bar),
         "wheelsPressureTemperatureWidget" to DataTitle(
             R.string.data_title_wheels_pressure_temperature_widget,
@@ -414,9 +422,13 @@ object WidgetsRepository {
         "fuelLevelWidget" to DataTitle(R.string.data_title_fuel_level_widget),
         "airQualityWidget" to DataTitle(R.string.data_title_air_quality_widget),
         "steeringWheelHeatWidget" to DataTitle(R.string.data_title_steering_wheel_heat_widget),
+        WIPER_MAINTENANCE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_wiper_maintenance_widget),
+        PARKING_RADAR_WIDGET_DATA_KEY to DataTitle(R.string.data_title_parking_radar_widget),
         "frontWindscreenHeatWidget" to DataTitle(R.string.data_title_front_windscreen_heat_widget),
         "rearWindowMirrorsDefrostWidget" to DataTitle(R.string.data_title_rear_window_mirrors_defrost_widget),
         "hvacAirRecirculationWidget" to DataTitle(R.string.data_title_hvac_air_recirculation_widget),
+        "hvacAcWidget" to DataTitle(R.string.data_title_hvac_ac_widget),
+        "hvacAutoWidget" to DataTitle(R.string.data_title_hvac_auto_widget),
         "hvacDefrosterFrontWidget" to DataTitle(R.string.data_title_hvac_defroster_front_widget),
         "frontLeftSeatHeatVentWidget" to DataTitle(R.string.data_title_front_left_seat_heat_vent_widget),
         "frontRightSeatHeatVentWidget" to DataTitle(R.string.data_title_front_right_seat_heat_vent_widget),
@@ -436,6 +448,7 @@ object WidgetsRepository {
             R.string.data_title_media_volume_widget_vertical
         ),
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
+        HTTP_REQUEST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_http_request_widget),
         EMPTY_TILE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_empty_tile_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         EXTERNAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_external_app_widget),
@@ -489,9 +502,12 @@ object WidgetsRepository {
             "locWidget",
             "airQualityWidget",
             "steeringWheelHeatWidget",
+            PARKING_RADAR_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
+            "hvacAcWidget",
+            "hvacAutoWidget",
             "hvacDefrosterFrontWidget",
             "frontLeftSeatHeatVentWidget",
             "frontRightSeatHeatVentWidget",
@@ -507,6 +523,7 @@ object WidgetsRepository {
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
+            HTTP_REQUEST_WIDGET_DATA_KEY,
             "timeWidget",
             "dateWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
@@ -540,6 +557,7 @@ object WidgetsRepository {
             EXTERNAL_WIDGET_DATA_KEY,
             MUSIC_WIDGET_DATA_KEY,
             APP_LAUNCHER_WIDGET_DATA_KEY,
+            HTTP_REQUEST_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
@@ -559,14 +577,33 @@ object WidgetsRepository {
             REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY,
             REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
             "steeringWheelHeatWidget",
+            PARKING_RADAR_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
+            "hvacAcWidget",
+            "hvacAutoWidget",
             "hvacDefrosterFrontWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }
+    }
+
+    fun supportsDateTimeFormat(dataKey: String): Boolean = isDateTimeWidgetDataKey(dataKey)
+
+    /**
+     * Widget types where [FloatingDashboardWidgetConfig.useMbCanVhal] is available in widget settings.
+     */
+    fun supportsUseMbCanVhal(dataKey: String): Boolean {
+        if (dataKey.isBlank()) return false
+        return dataKey in setOf(
+            MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
+            MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,
+            ENGINE_RPM_WIDGET_DATA_KEY,
+            ENGINE_TEMPERATURE_WIDGET_DATA_KEY,
+            CAR_SPEED_WIDGET_DATA_KEY
+        )
     }
 }
 

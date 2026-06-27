@@ -2,7 +2,7 @@ package vad.dashing.tbox.trip
 
 /**
  * Pure rules for trip continuation (unit-tested). Used from [TripRepository] and documented for
- * parity with [vad.dashing.tbox.BackgroundService] RPM / split-window behaviour.
+ * parity with [vad.dashing.tbox.BackgroundService] periodic RPM snapshot / split-window behaviour.
  */
 object TripRules {
 

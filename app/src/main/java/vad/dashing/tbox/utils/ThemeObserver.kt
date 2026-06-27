@@ -13,11 +13,14 @@ class ThemeObserver(
 ) : ContentObserver(Handler(Looper.getMainLooper())) {
 
     private val contentResolver = context.contentResolver
+    private val debounceHandler = Handler(Looper.getMainLooper())
 
     private val dayNightUri = Settings.System.getUriFor("DAY_NIGHT_STATUS")
     private val autoModeUri = Settings.Global.getUriFor("com.mb.provider.night_mode_auto")
 
     private var isObserving = false
+    private var pendingThemeDelivery: Runnable? = null
+    private var lastDeliveredTheme: Int? = null
 
     fun startObserving() {
         try {
@@ -34,19 +37,19 @@ class ThemeObserver(
             isObserving = true
             Log.d("ThemeObserver", "Started observing theme changes")
 
-            // Первоначальное чтение текущего значения
-            onChange(false)
+            deliverCurrentTheme(immediate = true)
         } catch (e: SecurityException) {
             Log.e("ThemeObserver", "SecurityException: Missing READ_SETTINGS permission", e)
-            callback(1) // Возвращаем светлую тему по умолчанию
+            deliverThemeMode(1)
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Failed to start observing theme changes", e)
-            callback(1) // Возвращаем светлую тему по умолчанию
+            deliverThemeMode(1)
         }
     }
 
     fun stopObserving() {
         try {
+            cancelPendingDelivery()
             if (isObserving) {
                 contentResolver.unregisterContentObserver(this)
                 isObserving = false
@@ -59,13 +62,37 @@ class ThemeObserver(
 
     override fun onChange(selfChange: Boolean) {
         super.onChange(selfChange)
-        try {
-            val normalizedTheme = getNormalizedThemeMode()
-            callback(normalizedTheme)
-        } catch (e: Exception) {
-            Log.e("ThemeObserver", "Error in onChange callback", e)
-            callback(1) // Возвращаем светлую тему по умолчанию при ошибке
+        deliverCurrentTheme(immediate = false)
+    }
+
+    private fun deliverCurrentTheme(immediate: Boolean) {
+        cancelPendingDelivery()
+        val delivery = Runnable {
+            pendingThemeDelivery = null
+            try {
+                deliverThemeMode(getNormalizedThemeMode())
+            } catch (e: Exception) {
+                Log.e("ThemeObserver", "Error in onChange callback", e)
+                deliverThemeMode(1)
+            }
         }
+        pendingThemeDelivery = delivery
+        if (immediate) {
+            debounceHandler.post(delivery)
+        } else {
+            debounceHandler.postDelayed(delivery, THEME_CHANGE_DEBOUNCE_MS)
+        }
+    }
+
+    private fun cancelPendingDelivery() {
+        pendingThemeDelivery?.let { debounceHandler.removeCallbacks(it) }
+        pendingThemeDelivery = null
+    }
+
+    private fun deliverThemeMode(themeMode: Int) {
+        if (lastDeliveredTheme == themeMode) return
+        lastDeliveredTheme = themeMode
+        callback(themeMode)
     }
 
     private fun getNormalizedThemeMode(): Int {
@@ -78,7 +105,7 @@ class ThemeObserver(
             }
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Error getting normalized theme mode", e)
-            1 // Возвращаем светлую тему по умолчанию при ошибке
+            1
         }
     }
 
@@ -87,13 +114,13 @@ class ThemeObserver(
             Settings.Global.getInt(contentResolver, "com.mb.provider.night_mode_auto", 1)
         } catch (e: SecurityException) {
             Log.w("ThemeObserver", "SecurityException: No permission to read auto mode", e)
-            1 // Auto mode по умолчанию
+            1
         } catch (e: Settings.SettingNotFoundException) {
             Log.w("ThemeObserver", "Auto mode setting not found, using default", e)
-            1 // Auto mode по умолчанию
+            1
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Unexpected error reading auto mode", e)
-            1 // Auto mode по умолчанию
+            1
         }
     }
 
@@ -103,17 +130,19 @@ class ThemeObserver(
             if (dayNight == 2) 2 else 1
         } catch (e: SecurityException) {
             Log.w("ThemeObserver", "SecurityException: No permission to read day/night mode", e)
-            1 // Light theme по умолчанию
+            1
         } catch (e: Settings.SettingNotFoundException) {
             Log.w("ThemeObserver", "Day/Night setting not found, using default", e)
-            1 // Light theme по умолчанию
+            1
         } catch (e: Exception) {
             Log.e("ThemeObserver", "Unexpected error reading day/night mode", e)
-            1 // Light theme по умолчанию
+            1
         }
     }
 
-    fun isObserving(): Boolean {
-        return isObserving
+    fun isObserving(): Boolean = isObserving
+
+    companion object {
+        const val THEME_CHANGE_DEBOUNCE_MS = 1_000L
     }
 }

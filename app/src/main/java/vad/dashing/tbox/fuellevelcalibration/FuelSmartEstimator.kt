@@ -60,51 +60,62 @@ class FuelSmartEstimator(
      * Преобразование «кривого» показания датчика (л) в скорректированный объём при текущей температуре.
      */
     fun getCorrectedLiters(currentSensorValue: Double, currentTemp: Double): EstimationResult {
-        // Защита: не даем значению датчика выйти за пределы физического бака
         val safeSensor = currentSensorValue.coerceIn(0.0, tankCapacity)
-
-        // Определяем индекс текущей зоны бака
-        val zoneIdx = (safeSensor / store.zoneSize).toInt().coerceIn(0, store.zoneCount - 1)
-
-        // Получаем коэффициенты: локальный (для этой зоны) и глобальный (средний по баку)
-        val kLocal = store.getZoneK(zoneIdx)
-        val kGlobal = store.getGlobalK()
-
-        // Насколько мы доверяем данным именно в этой зоне (от 0.0 до 1.0)
-        val confidence = store.getConfidence(zoneIdx)
-
-        // СМЕШИВАНИЕ: если уверенность низкая, берем больше от глобального коэффициента
-        val kFinal = (kLocal * confidence) + (kGlobal * (1.0 - confidence))
-
-        // 1. Стабильный объем (при +15°C) — то, что не зависит от текущей жары/холода
-        val stdVolume = safeSensor * kFinal
-
-        // 2. Фактический объем (при текущей T) — сколько места бензин занимает сейчас
-        val actualVolume = physics.fromStandard(stdVolume, currentTemp)
+        val raw = computeZoneVolumes(safeSensor, currentTemp)
+        val (finalStd, finalActual) = applyUpperDeadZoneRamp(safeSensor, raw, currentTemp)
 
         val isAtLimit = currentSensorValue >= sensorMax || currentSensorValue <= sensorMin
-
-        // Если датчик уровня уперся в верхнюю мертвую зону (полный бак) —
-        // принудительно выставляем паспортную емкость бака, игнорируя сбойные зоны калибровки
-        val finalStd = if (currentSensorValue >= sensorMax) {
-            tankCapacity
-        } else {
-            val smoothThreshold = tankCapacity * 0.98
-            if (stdVolume >= smoothThreshold) tankCapacity else stdVolume
-        }
-
-        val finalActual = if (currentSensorValue >= sensorMax) {
-            tankCapacity
-        } else {
-            val smoothThreshold = tankCapacity * 0.98
-            if (stdVolume >= smoothThreshold) tankCapacity else actualVolume
-        }
+        val zoneIdx = (safeSensor / store.zoneSize).toInt().coerceIn(0, store.zoneCount - 1)
+        val confidence = store.getConfidence(zoneIdx)
 
         return EstimationResult(
             litersActual = finalActual.coerceAtMost(tankCapacity + 5),
             litersStandard = finalStd.coerceAtMost(tankCapacity + 5),
             confidence = if (isAtLimit) confidence * 0.7 else confidence
         )
+    }
+
+    private data class ZoneVolumes(val std: Double, val actual: Double)
+
+    private fun computeZoneVolumes(sensorLiters: Double, currentTemp: Double): ZoneVolumes {
+        val safeSensor = sensorLiters.coerceIn(0.0, tankCapacity)
+        val zoneIdx = (safeSensor / store.zoneSize).toInt().coerceIn(0, store.zoneCount - 1)
+        val kLocal = store.getZoneK(zoneIdx)
+        val kGlobal = store.getGlobalK()
+        val confidence = store.getConfidence(zoneIdx)
+        val kFinal = (kLocal * confidence) + (kGlobal * (1.0 - confidence))
+        val stdVolume = safeSensor * kFinal
+        val actualVolume = physics.fromStandard(stdVolume, currentTemp)
+        return ZoneVolumes(stdVolume, actualVolume)
+    }
+
+    /**
+     * Верхняя мёртвая зона датчика: вместо мгновенного «полного бака» линейно интерполируем
+     * от калиброванного уровня на [sensorMax] до [tankCapacity] на 100%.
+     */
+    private fun applyUpperDeadZoneRamp(
+        sensorValue: Double,
+        raw: ZoneVolumes,
+        currentTemp: Double,
+    ): Pair<Double, Double> {
+        val cap = tankCapacity
+        val rampStart = min(sensorMax, cap)
+
+        if (sensorValue >= cap) {
+            val fullActual = physics.fromStandard(cap, currentTemp)
+            return cap to fullActual
+        }
+        if (rampStart >= cap || sensorValue <= rampStart) {
+            return raw.std to raw.actual
+        }
+
+        val low = computeZoneVolumes(rampStart, currentTemp)
+        val rampSpan = cap - rampStart
+        val t = ((sensorValue - rampStart) / rampSpan).coerceIn(0.0, 1.0)
+        val finalStd = low.std + t * (cap - low.std)
+        val fullActual = physics.fromStandard(cap, currentTemp)
+        val finalActual = low.actual + t * (fullActual - low.actual)
+        return finalStd to finalActual
     }
 
     fun calculateRange(liters: Double, avgCons: Double): Double =
