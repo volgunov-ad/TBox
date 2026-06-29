@@ -420,13 +420,14 @@
     <string name="settings_left_menu_title">General UI settings</string>
     <string name="settings_left_menu_edit">Configure menu items</string>
     <string name="settings_app_font_family_title">Interface font</string>
-    <string name="settings_app_font_family_desc">App text font: system families and bundled Google Fonts (Cabin, Nunito). Saved in settings backup and visual theme.</string>
+    <string name="settings_app_font_family_desc">App text font: system families and bundled Google Fonts (Cabin, Nunito, Roboto). Saved in settings backup and visual theme.</string>
     <string name="settings_app_font_family_default">Default</string>
     <string name="settings_app_font_family_sans_serif">Sans serif</string>
     <string name="settings_app_font_family_serif">Serif</string>
     <string name="settings_app_font_family_monospace">Monospace</string>
     <string name="settings_app_font_family_cabin">Cabin</string>
     <string name="settings_app_font_family_nunito">Nunito</string>
+    <string name="settings_app_font_family_roboto">Roboto</string>
     <string name="left_menu_config_dialog_title">Menu items</string>
     <string name="left_menu_config_dialog_hint">Check the items to show and drag the list icon to reorder. Settings and Main screen settings are always enabled.</string>
     <string name="left_menu_config_drag_handle_a11y">Drag menu item</string>
