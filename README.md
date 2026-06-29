@@ -2,7 +2,7 @@
 
 Приложение для головного устройства (ГУ) Jetour Dashing: мониторинг TBox, CAN и геопозиции, плитки на главном экране и в плавающих окнах, учёт поездок и топлива, управление служебными процессами блока TBox.
 
-**Текущая версия:** 0.15.2 (`ru` / `en` flavor).
+**Текущая версия:** 0.16.0 (`ru` / `en` flavor).
 
 == Основные возможности
 
@@ -49,12 +49,24 @@
 | Файл | Содержание |
 |------|------------|
 | [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) | Руководство пользователя (интерфейс, TBox, настройки) |
+| [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md) | Обмен с TBox по UDP через tbox-proxy, протокол, модули |
+| [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) | mbCAN (Android 9) и VHAL (Android 10), `UniversalCanRepository` |
+| [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) | Плитки: вкладка «Плитки», главный экран, плавающие панели, новый виджет |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
+| [docs/BRANCHING.md](docs/BRANCHING.md) | Ветки `preRelease` / `master`, feature-ветки и релизный процесс |
 | [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 0.16.0) |
 | [AGENTS.md](AGENTS.md) | Сборка и окружение для разработки (Cursor Cloud) |
 
+== Архитектура данных
+
+| Подсистема | Документ |
+|------------|----------|
+| TBox, модем, GPS, CAN с блока | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md) |
+| CAN головного устройства (климат, сиденья, режимы) | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) |
+| Панели и виджеты | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
+
 == Техническая документация по CAN backend
 Подробное описание выбора режима `mbCAN`/`VHAL`, работы `UniversalCanRepository`, подключения и диагностики:
-* `docs/CAN_BACKENDS_RU.md`
+* [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md)
