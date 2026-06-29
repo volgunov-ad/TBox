@@ -38,11 +38,9 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.normalizeWidgetScale
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
+import vad.dashing.tbox.ui.theme.LocalTboxTextStyles
 import vad.dashing.tbox.ui.theme.TboxWidgetTextRole
 import vad.dashing.tbox.ui.theme.TboxWidgetTypography
-import vad.dashing.tbox.ui.theme.tboxBody
-import vad.dashing.tbox.ui.theme.tboxCaption
-import vad.dashing.tbox.ui.theme.tboxTitle
 import kotlin.math.abs
 
 val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
@@ -224,10 +222,11 @@ fun calculateResponsiveTextStyle(
 ): TextStyle {
     val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
     val role = textType.toWidgetRole()
+    val styles = LocalTboxTextStyles.current
     val baseStyle = when (role) {
-        TboxWidgetTextRole.TITLE -> MaterialTheme.typography.tboxTitle
-        TboxWidgetTextRole.VALUE -> MaterialTheme.typography.tboxBody
-        TboxWidgetTextRole.UNIT -> MaterialTheme.typography.tboxCaption
+        TboxWidgetTextRole.TITLE -> styles.WidgetTitle
+        TboxWidgetTextRole.VALUE -> styles.WidgetValue
+        TboxWidgetTextRole.UNIT -> styles.WidgetUnit
     }
     return TboxWidgetTypography.textStyleForHeight(
         containerHeightDp = containerHeight.value,
