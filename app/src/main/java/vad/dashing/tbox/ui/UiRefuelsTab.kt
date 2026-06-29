@@ -299,6 +299,7 @@ fun RefuelsTab(
                     description = "",
                     enabled = true,
                     options = FuelTypes.options,
+                    selectorWidth = 200.dp
                 )
                 CalibrationIntCommitField(
                     title = stringResource(R.string.settings_fuel_tank_liters_title),

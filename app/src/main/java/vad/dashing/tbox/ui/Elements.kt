@@ -89,7 +89,7 @@ fun StatusRow(
 ) {
     val textColor = color ?: MaterialTheme.colorScheme.onSurface
     val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
-    val baseStyle = style ?: MaterialTheme.typography.tboxTitle
+    val baseStyle = style ?: MaterialTheme.typography.tboxBody
     val resolvedStyle = if (fontSize != null) baseStyle.copy(fontSize = fontSize) else baseStyle
     val lineHeight = resolvedStyle.lineHeight
     val labelPercent = TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(

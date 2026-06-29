@@ -1,12 +1,9 @@
 package vad.dashing.tbox.ui
 
-import vad.dashing.tbox.ui.theme.tboxTitle
-import vad.dashing.tbox.ui.theme.tboxTabLabel
 import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
-import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -40,9 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -263,7 +258,7 @@ fun ThemesTabContent(
         }
         Text(
             text = activeDisplay,
-            style = MaterialTheme.typography.tboxCaption,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
         )
@@ -366,7 +361,7 @@ fun ThemesTabContent(
 
         Text(
             text = stringResource(R.string.themes_clear_shared_assets_hint),
-            style = MaterialTheme.typography.tboxCaption,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
         )
@@ -405,7 +400,7 @@ fun ThemesTabContent(
         SettingsTitle(stringResource(R.string.themes_drive_mode_section))
         Text(
             text = stringResource(R.string.themes_drive_mode_hint),
-            style = MaterialTheme.typography.tboxCaption,
+            style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 12.dp),
         )

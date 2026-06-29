@@ -35,11 +35,11 @@ class TboxTextStyleSet internal constructor(
 
 fun tboxTextStyles(fontFamily: FontFamily = FontFamily.Default): TboxTextStyleSet =
     TboxTextStyleSet(
-        Caption = tboxTextStyle(fontFamily, FontWeight.Normal, 18.sp, 23.4.sp),
-        Body = tboxTextStyle(fontFamily, FontWeight.Normal, 20.sp, 26.sp),
-        Button = tboxTextStyle(fontFamily, FontWeight.Normal, 22.sp, 28.6.sp),
-        Title = tboxTextStyle(fontFamily, FontWeight.Medium, 24.sp, 31.2.sp),
-        Headline = tboxTextStyle(fontFamily, FontWeight.Medium, 26.sp, 33.8.sp),
+        Caption = tboxTextStyle(fontFamily, FontWeight.Normal, 20.sp, 26.sp),
+        Body = tboxTextStyle(fontFamily, FontWeight.Normal, 24.sp, 31.2.sp),
+        Button = tboxTextStyle(fontFamily, FontWeight.Normal, 24.sp, 31.2.sp),
+        Title = tboxTextStyle(fontFamily, FontWeight.Medium, 26.sp, 33.8.sp),
+        Headline = tboxTextStyle(fontFamily, FontWeight.Medium, 28.sp, 36.4.sp),
         TabLabel = tboxTextStyle(fontFamily, FontWeight.Normal, 34.sp, 44.2.sp),
         WidgetTitle = tboxTextStyle(fontFamily, FontWeight.Medium, 24.sp, 31.2.sp),
         WidgetValue = tboxTextStyle(fontFamily, FontWeight.Medium, 20.sp, 26.sp),
