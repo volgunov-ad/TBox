@@ -14,6 +14,7 @@ import vad.dashing.tbox.ui.theme.TboxFontFamily
 import vad.dashing.tbox.ui.theme.resolveFontFamily
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxMaterialTypography
+import vad.dashing.tbox.ui.theme.tboxTextStyles
 import vad.dashing.tbox.ui.theme.tboxTitle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +45,18 @@ class TboxFontFamilyTest {
         assertEquals(FontFamily.Serif, typography.tboxTitle.fontFamily)
         assertEquals(FontWeight.Normal, typography.tboxTitle.fontWeight)
         assertEquals(FontFamily.Serif, typography.tboxCaption.fontFamily)
+    }
+
+    @Test
+    fun widgetTextStyles_useMediumWeightAndStaySeparateFromAppText() {
+        val styles = tboxTextStyles(FontFamily.Serif)
+        assertEquals(FontFamily.Serif, styles.WidgetTitle.fontFamily)
+        assertEquals(FontWeight.Medium, styles.WidgetTitle.fontWeight)
+        assertEquals(FontWeight.Medium, styles.WidgetValue.fontWeight)
+        assertEquals(FontWeight.Medium, styles.WidgetUnit.fontWeight)
+        assertEquals(FontWeight.Normal, styles.Title.fontWeight)
+        assertEquals(FontWeight.Normal, styles.Body.fontWeight)
+        assertEquals(FontWeight.Normal, styles.Caption.fontWeight)
     }
 
     @Test

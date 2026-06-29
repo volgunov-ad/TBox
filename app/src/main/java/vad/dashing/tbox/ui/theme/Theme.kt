@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
 @Composable
@@ -14,13 +15,17 @@ fun TboxAppTheme(
         2 -> darkColorScheme()
         else -> lightColorScheme()
     }
-    val typography = tboxMaterialTypography(resolveFontFamily(fontFamilyId))
+    val fontFamily = resolveFontFamily(fontFamilyId)
+    val textStyles = tboxTextStyles(fontFamily)
+    val typography = tboxMaterialTypography(fontFamily)
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalTboxTextStyles provides textStyles) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = typography,
+            content = content
+        )
+    }
 }
 
 // Светлая цветовая схема
