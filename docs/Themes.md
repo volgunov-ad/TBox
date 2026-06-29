@@ -480,4 +480,6 @@ files/themes/{cacheKey}/
 ## См. также
 
 - [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — пошаговая работа с интерфейсом;
+- [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) — обмен с TBox;
+- [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) — плитки в темах;
 - [Trips.md](Trips.md) — виджеты поездки в конфиге плиток темы.

@@ -202,5 +202,6 @@
 | UI | `UiRefuelsTab.kt` |
 | Буфер и gate по активной поездке | `CanFramesProcess.kt` (`FuelLevelBuffer`), `utils/Buffers.kt` |
 | Поток откалиброванных литров | `FuelCalibrationLive`, `BackgroundService.startFuelCalibratedLitersWatcher`, сохранение при остановке двигателя |
+| Источник сырого % CAN | [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) (CRT), [Trips.md](Trips.md) (gate по поездке) |
 
 Если поведение на машине расходится с ожиданиями, имеет смысл сверить: объём бака, число зон, качество процента CAN, корректность **литров по чеку** и **температуры** в записи заправки, а также сообщения лога службы после `train` и при отклонении фильтром.

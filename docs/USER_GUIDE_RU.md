@@ -4,6 +4,16 @@
 
 Документ из **трёх частей**: (1) **пошаговая работа** с интерфейсом; (2) **ARM/MCU и логика перезагрузок** внутри TBox; (3) **таблицы опций** в приложении и безопасность.
 
+### Техническая документация (архитектура)
+
+| Тема | Файл |
+|------|------|
+| TBox, UDP, tbox-proxy, протокол | [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) |
+| mbCAN / VHAL на ГУ | [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md) |
+| Плитки: «Плитки», главный экран, плавающие панели | [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) |
+| Поездки и топливо | [Trips.md](Trips.md), [fuel-refuels-calibration.md](fuel-refuels-calibration.md) |
+| Темы `.tboxtheme` | [Themes.md](Themes.md) |
+
 ---
 
 ## Кратко: режимы CAN (mbCAN / VHAL)
