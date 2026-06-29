@@ -38,6 +38,7 @@ import vad.dashing.tbox.update.formatDownloadEta
 import vad.dashing.tbox.update.formatDownloadSpeed
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxTitle
 
 @Composable
@@ -149,7 +150,7 @@ fun UpdateTab(
                 ) {
                     Text(
                         text = stringResource(R.string.update_download),
-                        style = MaterialTheme.typography.tboxTitle,
+                        style = MaterialTheme.typography.tboxButton,
                     )
                 }
             }
@@ -201,7 +202,7 @@ fun UpdateTab(
                 ) {
                     Text(
                         text = stringResource(R.string.update_cancel_download),
-                        style = MaterialTheme.typography.tboxTitle,
+                        style = MaterialTheme.typography.tboxButton,
                     )
                 }
             }
@@ -228,7 +229,7 @@ fun UpdateTab(
                     ) {
                         Text(
                             text = stringResource(R.string.update_grant_install_permission),
-                            style = MaterialTheme.typography.tboxTitle,
+                            style = MaterialTheme.typography.tboxButton,
                         )
                     }
                 }
@@ -239,7 +240,7 @@ fun UpdateTab(
                 ) {
                     Text(
                         text = stringResource(R.string.update_install),
-                        style = MaterialTheme.typography.tboxTitle,
+                        style = MaterialTheme.typography.tboxButton,
                     )
                 }
             }
@@ -256,7 +257,7 @@ fun UpdateTab(
                 ) {
                     Text(
                         text = stringResource(R.string.update_retry_check),
-                        style = MaterialTheme.typography.tboxTitle,
+                        style = MaterialTheme.typography.tboxButton,
                     )
                 }
                 if (state.cachedInfo != null) {
@@ -266,7 +267,7 @@ fun UpdateTab(
                     ) {
                         Text(
                             text = stringResource(R.string.update_download),
-                            style = MaterialTheme.typography.tboxTitle,
+                            style = MaterialTheme.typography.tboxButton,
                         )
                     }
                 }

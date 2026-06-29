@@ -92,7 +92,7 @@ fun ModemTabContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
             item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
@@ -579,7 +579,7 @@ fun SettingsTabContent(
             onClick = rememberWrappedOnClick { showLeftMenuConfigDialog = true },
             modifier = Modifier.padding(bottom = 8.dp),
         ) {
-            Text(stringResource(R.string.settings_left_menu_edit), style = MaterialTheme.typography.tboxTitle)
+            Text(stringResource(R.string.settings_left_menu_edit), style = MaterialTheme.typography.tboxButton)
         }
         SettingAppFontFamily(
             selectedFontFamilyId = appFontFamilyId,
@@ -888,7 +888,7 @@ fun SettingsTabContent(
         ) {
             Text(
                 text = stringResource(R.string.button_restart_background_service),
-                style = MaterialTheme.typography.tboxTitle,
+                style = MaterialTheme.typography.tboxButton,
                 maxLines = 2,
                 textAlign = TextAlign.Center,
             )
@@ -913,7 +913,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_tbox),
-                    style = MaterialTheme.typography.tboxTitle,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -936,7 +936,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_hu),
-                    style = MaterialTheme.typography.tboxTitle,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -1011,7 +1011,7 @@ fun FloatingPanelsSettingsTabContent(
                 },
                 modifier = Modifier.padding(bottom = 8.dp),
             ) {
-                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxTitle)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxButton)
             }
         }
         SettingSwitch(
@@ -1234,7 +1234,7 @@ fun LocationTabContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
             item { StatusRow(stringResource(R.string.location_last_update), lastRefresh) }
@@ -1276,7 +1276,7 @@ fun LocationTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.location_button_resume_loc),
-                    style = MaterialTheme.typography.tboxCaption,
+                    style = MaterialTheme.typography.tboxButton,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -1296,7 +1296,7 @@ fun LocationTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.location_button_suspend_loc),
-                    style = MaterialTheme.typography.tboxCaption,
+                    style = MaterialTheme.typography.tboxButton,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -1417,7 +1417,7 @@ fun InfoTabContent(
                     ) {
                         Text(
                             text = stringResource(R.string.button_request_tbox_info),
-                            style = MaterialTheme.typography.tboxTitle,
+                            style = MaterialTheme.typography.tboxButton,
                             maxLines = 2,
                             textAlign = TextAlign.Center
                         )

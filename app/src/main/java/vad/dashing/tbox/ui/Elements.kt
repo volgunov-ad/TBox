@@ -218,7 +218,7 @@ fun ModeButton(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.tboxTitle,
+            style = MaterialTheme.typography.tboxButton,
             textAlign = TextAlign.Center
         )
     }

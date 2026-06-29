@@ -229,7 +229,7 @@ fun ThemesTabContent(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp),
+            .padding(18.dp),
     ) {
         Text(
             text = stringResource(R.string.themes_tab_title),
@@ -242,7 +242,7 @@ fun ThemesTabContent(
             onClick = rememberWrappedOnClick { showCreateDialog = true },
             modifier = Modifier.padding(bottom = 8.dp),
         ) {
-            Text(stringResource(R.string.themes_create), style = MaterialTheme.typography.tboxTitle)
+            Text(stringResource(R.string.themes_create), style = MaterialTheme.typography.tboxButton)
         }
 
         SettingsTitle(stringResource(R.string.themes_active_title))
@@ -284,7 +284,7 @@ fun ThemesTabContent(
                 ) {
                     Text(
                         stringResource(R.string.themes_clear_active),
-                        style = MaterialTheme.typography.tboxTitle,
+                        style = MaterialTheme.typography.tboxButton,
                         maxLines = 2,
                     )
                 }
@@ -296,7 +296,7 @@ fun ThemesTabContent(
                 ) {
                     Text(
                         stringResource(R.string.themes_apply),
-                        style = MaterialTheme.typography.tboxTitle,
+                        style = MaterialTheme.typography.tboxButton,
                         maxLines = 2,
                     )
                 }
@@ -310,7 +310,7 @@ fun ThemesTabContent(
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
             ) {
-                Text(stringResource(R.string.themes_apply), style = MaterialTheme.typography.tboxTitle)
+                Text(stringResource(R.string.themes_apply), style = MaterialTheme.typography.tboxButton)
             }
         }
 
@@ -335,7 +335,7 @@ fun ThemesTabContent(
             ) {
                 Text(
                     stringResource(R.string.themes_clear_shared_icons),
-                    style = MaterialTheme.typography.tboxCaption,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                 )
             }
@@ -345,7 +345,7 @@ fun ThemesTabContent(
             ) {
                 Text(
                     stringResource(R.string.themes_clear_shared_tile_backgrounds),
-                    style = MaterialTheme.typography.tboxCaption,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                 )
             }
@@ -359,7 +359,7 @@ fun ThemesTabContent(
         ) {
             Text(
                 stringResource(R.string.themes_clear_shared_http_request_icons),
-                style = MaterialTheme.typography.tboxCaption,
+                style = MaterialTheme.typography.tboxButton,
                 maxLines = 2,
             )
         }
@@ -447,7 +447,7 @@ fun ThemesTabContent(
                         },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(stringResource(R.string.themes_drive_mode_pick), style = MaterialTheme.typography.tboxCaption)
+                        Text(stringResource(R.string.themes_drive_mode_pick), style = MaterialTheme.typography.tboxButton)
                     }
                     if (path.isNotBlank()) {
                         OutlinedButton(
@@ -456,7 +456,7 @@ fun ThemesTabContent(
                             },
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text(stringResource(R.string.themes_drive_mode_clear), style = MaterialTheme.typography.tboxCaption)
+                            Text(stringResource(R.string.themes_drive_mode_clear), style = MaterialTheme.typography.tboxButton)
                         }
                     }
                 }
