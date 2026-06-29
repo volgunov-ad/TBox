@@ -577,7 +577,7 @@ private fun RefuelTableRow(
                     OutlinedButton(onClick = rememberWrappedOnClick(onRequestTrainCalibration)) {
                         Text(
                             stringResource(R.string.refuels_calibration_train),
-                            style = MaterialTheme.typography.tboxCaption,
+                            style = MaterialTheme.typography.tboxButton,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )

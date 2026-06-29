@@ -265,7 +265,7 @@ fun MainDashboardTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         if (dashboardState.widgets.isEmpty()) {
             Box(

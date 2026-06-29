@@ -292,7 +292,7 @@ fun LogsTabContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         Row(
             modifier = Modifier
@@ -368,7 +368,7 @@ fun LogsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_save_to_file),
-                    style = MaterialTheme.typography.tboxTitle,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -436,7 +436,7 @@ fun CanTabContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         val sortedCanEntries = remember(canFramesStructured) {
             canFramesStructured.entries.sortedBy { it.key }
@@ -462,7 +462,7 @@ fun CanTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_save_can_to_file),
-                    style = MaterialTheme.typography.tboxTitle,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -548,7 +548,7 @@ fun ATcmdTabContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         Row(
             modifier = Modifier
@@ -624,7 +624,7 @@ fun ATcmdTabContent(
                 ) {
                     Text(
                         text = stringResource(R.string.action_send),
-                        style = MaterialTheme.typography.tboxTitle,
+                        style = MaterialTheme.typography.tboxButton,
                         maxLines = 2,
                         textAlign = TextAlign.Center
                     )
@@ -643,7 +643,7 @@ fun ATcmdTabContent(
                 ) {
                     Text(
                         text = stringResource(R.string.action_get_all_sms),
-                        style = MaterialTheme.typography.tboxTitle,
+                        style = MaterialTheme.typography.tboxButton,
                         maxLines = 2,
                         textAlign = TextAlign.Center
                     )

@@ -3,8 +3,8 @@ package vad.dashing.tbox.ui
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,7 +41,7 @@ fun ThemeOpenConfirmDialog(
             )
         },
         confirmButton = {
-            TextButton(
+            Button(
                 enabled = !applying,
                 onClick = rememberWrappedOnClick {
                     applying = true
@@ -80,7 +80,7 @@ fun ThemeOpenConfirmDialog(
             }
         },
         dismissButton = {
-            TextButton(
+            OutlinedButton(
                 enabled = !applying,
                 onClick = rememberWrappedOnClick(onDismiss),
             ) {
