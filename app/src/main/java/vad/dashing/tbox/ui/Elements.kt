@@ -504,6 +504,7 @@ fun appFontFamilyLabel(fontFamily: TboxFontFamily): String = stringResource(
         TboxFontFamily.Monospace -> R.string.settings_app_font_family_monospace
         TboxFontFamily.Cabin -> R.string.settings_app_font_family_cabin
         TboxFontFamily.Nunito -> R.string.settings_app_font_family_nunito
+        TboxFontFamily.Roboto -> R.string.settings_app_font_family_roboto
     }
 )
 

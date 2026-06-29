@@ -25,6 +25,7 @@ class TboxFontFamilyTest {
         assertEquals(TboxFontFamily.Serif, TboxFontFamily.fromId(2))
         assertEquals(TboxFontFamily.Cabin, TboxFontFamily.fromId(5))
         assertEquals(TboxFontFamily.Nunito, TboxFontFamily.fromId(6))
+        assertEquals(TboxFontFamily.Roboto, TboxFontFamily.fromId(7))
         assertEquals(TboxFontFamily.Default, TboxFontFamily.fromId(4))
         assertEquals(TboxFontFamily.Default, TboxFontFamily.fromId(99))
     }
@@ -33,6 +34,7 @@ class TboxFontFamilyTest {
     fun fromSlug_roundTripsSlug() {
         assertEquals(TboxFontFamily.Monospace, TboxFontFamily.fromSlug("monospace"))
         assertEquals(TboxFontFamily.Cabin, TboxFontFamily.fromSlug("cabin"))
+        assertEquals(TboxFontFamily.Roboto, TboxFontFamily.fromSlug("roboto"))
         assertNull(TboxFontFamily.fromSlug("crimson_text"))
         assertNull(TboxFontFamily.fromSlug("unknown"))
         assertNull(TboxFontFamily.fromSlug(""))
@@ -57,6 +59,13 @@ class TboxFontFamilyTest {
         assertNotEquals(FontFamily.Default, nunito)
         assertEquals(nunito, resolveFontFamily(TboxFontFamily.Nunito.id))
     }
+
+    @Test
+    fun bundledRoboto_differsFromDefault() {
+        val roboto = TboxFontFamily.Roboto.toComposeFontFamily()
+        assertNotEquals(FontFamily.Default, roboto)
+        assertEquals(roboto, resolveFontFamily(TboxFontFamily.Roboto.id))
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -73,6 +82,9 @@ class BundledFontWeightResourcesTest {
             R.font.cabin_medium,
             R.font.cabin_semibold,
             R.font.cabin_bold,
+            R.font.roboto_medium,
+            R.font.roboto_semibold,
+            R.font.roboto_bold,
         )
         fontIds.forEach { fontId ->
             context.resources.openRawResource(fontId).use { input ->

@@ -13,6 +13,7 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
     Monospace(3, "monospace"),
     Cabin(5, "cabin"),
     Nunito(6, "nunito"),
+    Roboto(7, "roboto"),
     ;
 
     fun toComposeFontFamily(): FontFamily = when (this) {
@@ -22,6 +23,7 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
         Monospace -> FontFamily.Monospace
         Cabin -> Bundled.cabin
         Nunito -> Bundled.nunito
+        Roboto -> Bundled.roboto
     }
 
     companion object {
@@ -46,6 +48,12 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
             medium = R.font.nunito_medium,
             semiBold = R.font.nunito_semibold,
             bold = R.font.nunito_bold,
+        )
+        val roboto = fontFamilyWithMedium(
+            regular = R.font.roboto_regular,
+            medium = R.font.roboto_medium,
+            semiBold = R.font.roboto_semibold,
+            bold = R.font.roboto_bold,
         )
     }
 }

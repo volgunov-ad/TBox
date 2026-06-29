@@ -428,13 +428,14 @@
     <string name="settings_left_menu_title">Общие настройки интерфейса</string>
     <string name="settings_left_menu_edit">Настроить пункты меню</string>
     <string name="settings_app_font_family_title">Шрифт интерфейса</string>
-    <string name="settings_app_font_family_desc">Шрифт для текста приложения: системные и встроенные Google Fonts (Cabin, Nunito). Сохраняется в резервной копии настроек и в теме оформления.</string>
+    <string name="settings_app_font_family_desc">Шрифт для текста приложения: системные и встроенные Google Fonts (Cabin, Nunito, Roboto). Сохраняется в резервной копии настроек и в теме оформления.</string>
     <string name="settings_app_font_family_default">По умолчанию</string>
     <string name="settings_app_font_family_sans_serif">Без засечек</string>
     <string name="settings_app_font_family_serif">С засечками</string>
     <string name="settings_app_font_family_monospace">Моноширинный</string>
     <string name="settings_app_font_family_cabin">Cabin</string>
     <string name="settings_app_font_family_nunito">Nunito</string>
+    <string name="settings_app_font_family_roboto">Roboto</string>
     <string name="left_menu_config_dialog_title">Пункты меню</string>
     <string name="left_menu_config_dialog_hint">Отметьте нужные пункты и перетащите за значок списка, чтобы изменить порядок. «Настройки» и «Настройки главного экрана» всегда включены.</string>
     <string name="left_menu_config_drag_handle_a11y">Перетащить пункт меню</string>
