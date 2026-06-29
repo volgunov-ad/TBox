@@ -49,6 +49,10 @@ Build commands use the Gradle wrapper. Two product flavors exist: `ru` (Russian)
 
 - `tools/can_log_to_xlsx.py` — converts app CAN export (`.txt`) to Excel using the same decode rules as `CanFramesProcess.kt`. Requires Python deps from `requirements.txt`.
 
+### Git branches
+
+Use **`preRelease`** for pre-release integration; merge to **`master`** when ready to ship. Feature branches branch off `preRelease`, not `master`. See [docs/BRANCHING.md](docs/BRANCHING.md).
+
 ### Caveats
 
 - `local.properties` (with `sdk.dir=/opt/android-sdk`) is gitignored but must exist for Gradle to locate the SDK. The update script recreates it on each startup.
