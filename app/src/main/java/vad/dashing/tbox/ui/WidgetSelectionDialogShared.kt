@@ -743,7 +743,7 @@ internal fun WidgetSelectionDialogForm(
                             description = "",
                             enabled = state.togglesEnabled,
                             options = titlePositionEntries,
-                            selectorWidth = 220.dp,
+                            selectorWidth = 300.dp,
                         )
                     }
                     OutlinedTextField(
@@ -885,7 +885,7 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_drive_mode_target_desc),
                             enabled = state.togglesEnabled,
                             options = DRIVE_MODE_WIDGET_OPTIONS,
-                            selectorWidth = 220.dp
+                            selectorWidth = 300.dp
                         )
                     }
                     if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
@@ -981,7 +981,7 @@ internal fun WidgetSelectionDialogForm(
                         description = "",
                         enabled = state.togglesEnabled,
                         options = textAlignEntries,
-                        selectorWidth = 220.dp,
+                        selectorWidth = 300.dp,
                     )
                     val fontWeightEntries = listOf(
                         WidgetFontWeightDropdownEntry(
@@ -1007,7 +1007,7 @@ internal fun WidgetSelectionDialogForm(
                         description = "",
                         enabled = state.togglesEnabled,
                         options = fontWeightEntries,
-                        selectorWidth = 220.dp,
+                        selectorWidth = 300.dp,
                     )
                     WidgetColorThemeSegmentRow(
                         selectedSegment = state.advancedColorThemeSegment,
