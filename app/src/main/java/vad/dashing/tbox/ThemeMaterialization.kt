@@ -239,11 +239,13 @@ object ThemeMaterialization {
             applyWallpaperDirsFromCache(settingsManager, dir, sections)
             settingsManager.bumpMainScreenWallpaperRevision()
 
+            val normalizedCacheKey = ThemeCacheKeys.sanitizeCacheKey(cacheKey)
             settingsManager.saveActiveTheme(
-                uri = cacheKey,
+                uri = normalizedCacheKey,
                 fingerprint = manifest.fingerprint,
                 sections = sections,
             )
+            settingsManager.activeThemeUriFlow.first { it.trim() == normalizedCacheKey }
 
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpHttpRequestIconRevision()

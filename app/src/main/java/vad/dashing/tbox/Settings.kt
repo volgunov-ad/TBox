@@ -1665,9 +1665,14 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun syncActiveThemeCurrentPage(currentPage: Int): Boolean {
-        return ThemeMaterialization.syncCurrentPageToActiveThemeCache(
+        val cacheKey = activeThemeUriFlow.first().trim()
+        return syncThemeCurrentPage(cacheKey, currentPage)
+    }
+
+    suspend fun syncThemeCurrentPage(cacheKey: String, currentPage: Int): Boolean {
+        return ThemeMaterialization.syncRuntimeStateToThemeCache(
             context = context,
-            settingsManager = this,
+            cacheKey = cacheKey,
             currentPage = currentPage,
         )
     }

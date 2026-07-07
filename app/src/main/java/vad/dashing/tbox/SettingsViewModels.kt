@@ -568,6 +568,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     private var saveCurrentPageJob: Job? = null
     private var pendingCurrentPage: Int? = null
+    private val currentPageFlushMutex = Mutex()
 
     private var saveWallpaperSelectionJob: Job? = null
     private val wallpaperFlushMutex = Mutex()
@@ -2102,10 +2103,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     private suspend fun flushMainScreenCurrentPageInternal() {
-        val toSave = pendingCurrentPage ?: return
-        pendingCurrentPage = null
-        settingsManager.saveMainScreenCurrentPage(toSave)
-        settingsManager.syncActiveThemeCurrentPage(toSave)
+        currentPageFlushMutex.withLock {
+            val toSave = pendingCurrentPage ?: return
+            val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+            pendingCurrentPage = null
+            settingsManager.saveMainScreenCurrentPage(toSave)
+            if (settingsManager.themeActivationInProgressFlow.value) return
+            if (settingsManager.activeThemeUriFlow.first().trim() != syncCacheKey) return
+            if (ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)) {
+                settingsManager.syncThemeCurrentPage(syncCacheKey, toSave)
+            }
+        }
     }
 
     fun saveMainScreenPagePrevButton(position: MainScreenPagePrevButtonPosition) {

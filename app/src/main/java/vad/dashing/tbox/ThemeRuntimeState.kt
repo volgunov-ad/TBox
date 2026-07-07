@@ -1,5 +1,6 @@
 package vad.dashing.tbox
 
+import kotlinx.coroutines.flow.first
 import org.json.JSONObject
 import java.io.File
 
@@ -112,15 +113,17 @@ object ThemeRuntimeState {
         settingsManager: SettingsManager,
         cacheDir: File,
         themeJson: String,
-    ) {
+    ): MainScreenWallpaperSelectionsByPage {
         val selections = resolveWallpaperSelectionsForActivation(cacheDir, themeJson)
         settingsManager.saveMainScreenWallpaperSelectionsByPage(selections)
+        settingsManager.mainScreenWallpaperSelectionByPageFlow.first { stored -> stored == selections }
         val runtime = read(cacheDir)
         if (runtime.hasCurrentPage) {
-            settingsManager.saveMainScreenCurrentPage(
-                runtime.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
-            )
+            val page = runtime.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE
+            settingsManager.saveMainScreenCurrentPage(page)
+            settingsManager.mainScreenCurrentPageFlow.first { stored -> stored == page }
         }
+        return selections
     }
 
     /**
