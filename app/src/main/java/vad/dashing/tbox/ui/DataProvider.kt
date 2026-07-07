@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -20,6 +21,8 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.createDateTimeWidgetDateFormat
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.seatModeToString
+import vad.dashing.tbox.utils.GEARBOX_MODE_CURRENT_GEAR_DATA_KEY
+import vad.dashing.tbox.utils.formatGearBoxModeWithCurrentGear
 import vad.dashing.tbox.valueToString
 import java.text.DateFormat
 import java.text.SimpleDateFormat
@@ -192,6 +195,18 @@ class TboxDataProvider(
                 valueToString(it, booleanTrue = switchingLabel, booleanFalse = noLabel)
             }
             "gearBoxMode" -> canViewModel.gearBoxMode
+            GEARBOX_MODE_CURRENT_GEAR_DATA_KEY -> combine(
+                canViewModel.gearBoxMode,
+                canViewModel.gearBoxCurrentGear,
+            ) { mode, gear ->
+                formatGearBoxModeWithCurrentGear(mode, gear)
+            }.let { flow ->
+                flow.distinctUntilChanged().stateIn(
+                    scope = viewModel.viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000),
+                    initialValue = "",
+                )
+            }
             "gearBoxDriveMode" -> canViewModel.gearBoxDriveMode
             "gearBoxWork" -> canViewModel.gearBoxWork
             "frontRightSeatMode" -> canViewModel.frontRightSeatMode.mapState { seatModeToString(context, it) }

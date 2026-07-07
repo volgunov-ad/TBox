@@ -751,6 +751,7 @@
     <string name="data_title_loc_widget">Navigation widget</string>
     <string name="data_title_voltage_engine_temperature_widget">Voltage and engine temperature widget</string>
     <string name="data_title_gearbox_widget">Gearbox mode widget with current gear and temperature</string>
+    <string name="data_title_gearbox_mode_current_gear">Gearbox mode and gear</string>
     <string name="data_title_drive_mode_widget">Drive mode widget</string>
     <string name="data_title_wheels_pressure_widget">Tire pressure widget</string>
     <string name="data_title_wheels_pressure_temperature_widget">Tire pressure and temperature widget</string>

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
+import vad.dashing.tbox.utils.GEARBOX_MODE_CURRENT_GEAR_DATA_KEY
 
 @Composable
 fun DashboardGearBoxWidgetItem(
@@ -39,20 +40,16 @@ fun DashboardGearBoxWidgetItem(
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
-    val modeFlow = remember(valueAccuracy) {
-        dataProvider.getValueFlow("gearBoxMode", valueAccuracy)
-    }
-    val gearFlow = remember(valueAccuracy) {
-        dataProvider.getValueFlow("gearBoxCurrentGear", valueAccuracy)
+    val modeGearFlow = remember(valueAccuracy) {
+        dataProvider.getValueFlow(GEARBOX_MODE_CURRENT_GEAR_DATA_KEY, valueAccuracy)
     }
     val oilFlow = remember(valueAccuracy) {
         dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.GEARBOX_OIL_TEMP_GEAR_TILE, valueAccuracy)
     }
-    val gearBoxMode by modeFlow.collectAsStateWithLifecycle()
-    val gearStr by gearFlow.collectAsStateWithLifecycle()
+    val modeGearLine by modeGearFlow.collectAsStateWithLifecycle()
     val oilStr by oilFlow.collectAsStateWithLifecycle()
     val celsiusUnit = stringResource(R.string.unit_celsius)
-    val firstLine = "$gearBoxMode$gearStr"
+    val firstLine = modeGearLine
     val secondLine = "$oilStr${if (units) "\u2009$celsiusUnit" else ""}"
     val defaultTitle = stringResource(R.string.widget_title_gear_box_mode_temp)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }

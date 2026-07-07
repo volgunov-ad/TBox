@@ -758,6 +758,7 @@
     <string name="data_title_loc_widget">Виджет навигации</string>
     <string name="data_title_voltage_engine_temperature_widget">Виджет напряжения и температуры двигателя</string>
     <string name="data_title_gearbox_widget">Виджет режима КПП с текущей передачей и температурой</string>
+    <string name="data_title_gearbox_mode_current_gear">Режим КПП и передача</string>
     <string name="data_title_drive_mode_widget">Виджет режима вождения</string>
     <string name="data_title_wheels_pressure_widget">Виджет давления в шинах</string>
     <string name="data_title_wheels_pressure_temperature_widget">Виджет давления и температуры в шинах</string>
