@@ -134,7 +134,7 @@ fun DashboardWheelsPressureWidgetItem(
                                 TextType.UNIT
                             ),
                             color = resolvedTextColor,
-                            textAlign = TextAlign.Center,
+                            textAlign = LocalWidgetTextAlign.current,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )

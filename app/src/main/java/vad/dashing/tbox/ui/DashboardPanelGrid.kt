@@ -44,6 +44,9 @@ import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.normalizeWidgetTitlePosition
+import vad.dashing.tbox.normalizeWidgetTextAlign
+import vad.dashing.tbox.normalizeWidgetFontWeight
 import vad.dashing.tbox.mbcan.MbCanSignal
 
 /**
@@ -238,6 +241,15 @@ internal fun DashboardPanelGridAndFrames(
                             }
                             CompositionLocalProvider(
                                 LocalWidgetTextScale provides widgetTextScale,
+                                LocalWidgetTextAlign provides widgetTextAlignToCompose(
+                                    normalizeWidgetTextAlign(widgetConfig.textAlign)
+                                ),
+                                LocalWidgetFontWeight provides widgetFontWeightToCompose(
+                                    normalizeWidgetFontWeight(widgetConfig.fontWeight)
+                                ),
+                                LocalWidgetTitlePosition provides normalizeWidgetTitlePosition(
+                                    widgetConfig.titlePosition
+                                ),
                                 LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy
                             ) {
                                 DashboardWidgetRenderer(

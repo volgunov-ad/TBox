@@ -196,7 +196,7 @@ internal fun DashboardHttpRequestWidgetItem(
                     text = titleLine,
                     style = titleStyle,
                     color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
+                    textAlign = LocalWidgetTextAlign.current,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier

@@ -38,6 +38,7 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val showTboxDisconnectIndicator: Boolean,
     val clickAction: Boolean,
     val pageNumber: Int,
+    val gridSpacingDp: Int,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -46,6 +47,7 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val cols: Int,
     val showTboxDisconnectIndicator: Boolean,
     val clickAction: Boolean,
+    val gridSpacingDp: Int,
 )
 
 /** Merges widget list and optional whole-panel draft; used by [SettingsViewModel] and unit tests. */
@@ -63,6 +65,7 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
         clickAction = w.clickAction,
         pageNumber = w.pageNumber.coerceAtLeast(1),
+        gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
     )
 }
 
@@ -78,7 +81,8 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         rows = w.rows.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         cols = w.cols.coerceIn(1, SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION),
         showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
-        clickAction = w.clickAction
+        clickAction = w.clickAction,
+        gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
     )
 }
 
@@ -843,6 +847,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = false
+        )
+
+    val dashboardGridSpacingDp = settingsManager.dashboardGridSpacingDpFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_MAIN_TAB_DASHBOARD_GRID_SPACING_DP
         )
 
     val activeTripCustomWidgetLayout = settingsManager.activeTripCustomWidgetLayoutJsonFlow
@@ -1974,6 +1985,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveDashboardChart(config: Boolean) {
         viewModelScope.launch {
             settingsManager.saveDashboardChart(config)
+        }
+    }
+
+    fun saveDashboardGridSpacingDp(config: Int) {
+        viewModelScope.launch {
+            settingsManager.saveDashboardGridSpacingDp(config)
         }
     }
 
