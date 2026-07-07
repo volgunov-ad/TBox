@@ -319,6 +319,8 @@ object Android10VhalRepository {
     private val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_TEMPERATURE_PROPERTY_ID
     private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
     private const val VHAL_ENGINE_RPM_SCALE = 4f
+    private const val VHAL_ENGINE_TEMPERATURE_SCALE = 0.75f
+    private const val VHAL_ENGINE_TEMPERATURE_OFFSET = -48f
     private const val NORMAL_POLL_INTERVAL_MS = 30_000L
     private const val BURST_POLL_INTERVAL_MS = 1_500L
     private const val BURST_DURATION_MS = 15_000L
@@ -771,7 +773,8 @@ object Android10VhalRepository {
     }
 
     private fun decodeEngineTemperature(raw: Any?): Float? {
-        return (raw as? Number)?.toFloat()
+        val numeric = (raw as? Number)?.toFloat() ?: return null
+        return numeric * VHAL_ENGINE_TEMPERATURE_SCALE + VHAL_ENGINE_TEMPERATURE_OFFSET
     }
 
     private fun decodeCarSpeed(raw: Any?): Float? {
@@ -1228,7 +1231,8 @@ object Android10VhalRepository {
                 _engineRpmState.value = decodeEngineRpm(readNumericProperty(VHAL_ENGINE_RPM_PROPERTY_ID))
             }
             MbCanSignal.EngineTemperature -> {
-                _engineTemperatureState.value = readNumericProperty(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID)
+                _engineTemperatureState.value =
+                    decodeEngineTemperature(readNumericProperty(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID))
             }
             MbCanSignal.CarSpeed -> {
                 _carSpeedState.value = readNumericProperty(VHAL_CAR_SPEED_PROPERTY_ID)?.coerceAtLeast(0f)
