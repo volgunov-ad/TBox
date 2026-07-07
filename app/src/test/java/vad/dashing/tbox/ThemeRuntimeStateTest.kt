@@ -155,4 +155,42 @@ class ThemeRuntimeStateTest {
 
         assertFalse(File(dir, ThemeRuntimeState.RUNTIME_JSON_FILE).exists())
     }
+
+    @Test
+    fun wallpaperSelectionMatchesCache_comparesRuntimeJsonToDataStoreSnapshot() {
+        val dir = createTempDir(prefix = "drive_mode_wp_match_")
+        ThemeRuntimeState.patch(
+            dir,
+            wallpaperSelections = MainScreenWallpaperSelectionsByPage.empty()
+                .withFileName(page = 1, forLightTheme = true, fileName = "eco.jpg"),
+        )
+        val themeJson = """
+            {
+              "mainScreen": {
+                "wallpaperSelectionByPage": {
+                  "light": { "1": "nor.jpg" }
+                }
+              }
+            }
+        """.trimIndent()
+        val eco = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "eco.jpg")
+        val nor = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "nor.jpg")
+
+        assertTrue(
+            DriveModeThemeWatcher.wallpaperSelectionMatchesCache(
+                cacheDir = dir,
+                themeJson = themeJson,
+                actual = eco,
+            ),
+        )
+        assertFalse(
+            DriveModeThemeWatcher.wallpaperSelectionMatchesCache(
+                cacheDir = dir,
+                themeJson = themeJson,
+                actual = nor,
+            ),
+        )
+    }
 }

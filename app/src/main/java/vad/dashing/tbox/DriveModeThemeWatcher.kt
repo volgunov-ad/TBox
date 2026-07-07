@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import java.io.File
 
 class DriveModeThemeWatcher(
     private val context: Context,
@@ -52,6 +53,10 @@ class DriveModeThemeWatcher(
                             activeThemeUri = settingsManager.activeThemeUriFlow.first(),
                             activeThemeFingerprint = settingsManager.activeThemeFingerprintFlow.first(),
                             manifest = manifest,
+                        ) && isDriveModeWallpaperSelectionApplied(
+                            context = context,
+                            request = request,
+                            settingsManager = settingsManager,
                         )
                     ) {
                         rememberApplied(request)
@@ -119,6 +124,30 @@ class DriveModeThemeWatcher(
                 activeFingerprint.isNotEmpty() &&
                 manifestFingerprint.isNotEmpty() &&
                 activeFingerprint == manifestFingerprint
+        }
+
+        internal suspend fun isDriveModeWallpaperSelectionApplied(
+            context: Context,
+            request: DriveModeThemeActivationRequest,
+            settingsManager: SettingsManager,
+        ): Boolean {
+            val cacheDir = ThemeMaterialization.cacheDir(context, request.cacheKey)
+            val themeJsonFile = File(cacheDir, ThemeMaterialization.THEME_JSON_FILE)
+            if (!themeJsonFile.isFile) return false
+            return wallpaperSelectionMatchesCache(
+                cacheDir = cacheDir,
+                themeJson = themeJsonFile.readText(),
+                actual = settingsManager.mainScreenWallpaperSelectionByPageFlow.first(),
+            )
+        }
+
+        internal fun wallpaperSelectionMatchesCache(
+            cacheDir: File,
+            themeJson: String,
+            actual: MainScreenWallpaperSelectionsByPage,
+        ): Boolean {
+            val expected = ThemeRuntimeState.resolveWallpaperSelectionsForActivation(cacheDir, themeJson)
+            return expected == actual
         }
 
         internal fun resolveActivationRequest(

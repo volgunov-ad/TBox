@@ -281,8 +281,21 @@ class SettingsManager(private val context: Context) {
     suspend fun syncActiveThemeWallpaperSelectionReliable(
         selections: MainScreenWallpaperSelectionsByPage,
     ): Boolean {
-        if (syncActiveThemeWallpaperSelection(selections)) return true
-        return syncActiveThemeWallpaperSelection(selections)
+        val cacheKey = activeThemeUriFlow.first().trim()
+        return syncThemeWallpaperSelectionReliable(cacheKey, selections)
+    }
+
+    /**
+     * Persists [selections] to [cacheKey] theme [runtime.json], retrying once on failure.
+     * Use an explicit [cacheKey] captured before async work so a drive-mode theme switch cannot
+     * redirect the write to the newly active theme cache.
+     */
+    suspend fun syncThemeWallpaperSelectionReliable(
+        cacheKey: String,
+        selections: MainScreenWallpaperSelectionsByPage,
+    ): Boolean {
+        if (syncThemeWallpaperSelection(cacheKey, selections)) return true
+        return syncThemeWallpaperSelection(cacheKey, selections)
     }
 
     companion object {
@@ -1618,9 +1631,18 @@ class SettingsManager(private val context: Context) {
     suspend fun syncActiveThemeWallpaperSelection(
         selections: MainScreenWallpaperSelectionsByPage? = null,
     ): Boolean {
-        return ThemeMaterialization.syncWallpaperSelectionToActiveThemeCache(
+        val cacheKey = activeThemeUriFlow.first().trim()
+        return syncThemeWallpaperSelection(cacheKey, selections)
+    }
+
+    suspend fun syncThemeWallpaperSelection(
+        cacheKey: String,
+        selections: MainScreenWallpaperSelectionsByPage? = null,
+    ): Boolean {
+        if (selections == null) return false
+        return ThemeMaterialization.syncRuntimeStateToThemeCache(
             context = context,
-            settingsManager = this,
+            cacheKey = cacheKey,
             wallpaperSelections = selections,
         )
     }
