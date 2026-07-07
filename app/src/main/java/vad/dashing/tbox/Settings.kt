@@ -106,6 +106,8 @@ data class FloatingDashboardWidgetConfig(
     val tripWidgetShowRowDividers: Boolean = TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
     /** First column width (percent) for trip widget row layout. */
     val tripWidgetLabelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
+    /** Map zoom level for [MAP_KIT_WIDGET_DATA_KEY] tiles (Yandex MapKit). */
+    val mapKitZoom: Float = DEFAULT_MAP_KIT_ZOOM,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */

@@ -35,3 +35,7 @@
 -keepclasseswithmembernames class * {
     native <methods>;
 }
+
+# Yandex MapKit (native + reflection)
+-keep class com.yandex.** { *; }
+-dontwarn com.yandex.**

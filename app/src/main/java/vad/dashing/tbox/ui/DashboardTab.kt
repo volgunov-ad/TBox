@@ -365,6 +365,14 @@ fun MainDashboardTab(
                                         onMusicSelectedPlayerChange = { selectedPackage ->
                                             pendingMusicSelection = index to selectedPackage
                                         },
+                                        onMapKitZoomChange = { zoom ->
+                                            persistDashboardPanelMapKitZoom(
+                                                currentWidgetConfigs = latestWidgetConfigs,
+                                                widgetIndex = index,
+                                                zoom = zoom,
+                                                saveConfigs = settingsViewModel::saveDashboardWidgets,
+                                            )
+                                        },
                                         onSeatHeatVentSelectedVariantChange = { variant ->
                                             pendingSeatHeatVentVariant = index to variant
                                         },

@@ -99,6 +99,9 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.appWidgetId != null) {
             obj.put("appWidgetId", config.appWidgetId)
         }
+        if (config.dataKey == MAP_KIT_WIDGET_DATA_KEY) {
+            obj.put("mapKitZoom", normalizeMapKitZoom(config.mapKitZoom))
+        }
         if (config.customTitle.isNotBlank()) {
             obj.put("customTitle", config.customTitle.trim())
         }
@@ -310,6 +313,13 @@ private fun parseWidgetConfigsFromJsonArray(
                                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
                             ),
                         ),
+                        mapKitZoom = if (dataKey == MAP_KIT_WIDGET_DATA_KEY) {
+                            normalizeMapKitZoom(
+                                item.optDouble("mapKitZoom", DEFAULT_MAP_KIT_ZOOM.toDouble()).toFloat()
+                            )
+                        } else {
+                            DEFAULT_MAP_KIT_ZOOM
+                        },
                     )
                 )
             }

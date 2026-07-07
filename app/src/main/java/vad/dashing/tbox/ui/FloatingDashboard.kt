@@ -433,6 +433,16 @@ fun FloatingDashboard(
                     onMusicSelectedPlayerChange = { index, selectedPackage ->
                         pendingMusicSelection = index to selectedPackage
                     },
+                    onMapKitZoomChange = { index, zoom ->
+                        persistDashboardPanelMapKitZoom(
+                            currentWidgetConfigs = latestWidgetConfigs,
+                            widgetIndex = index,
+                            zoom = zoom,
+                            saveConfigs = { configs ->
+                                settingsViewModel.saveFloatingDashboardWidgets(panelId, configs)
+                            },
+                        )
+                    },
                     onSeatHeatVentSelectedVariantChange = { index, variant ->
                         pendingSeatHeatVentVariant = index to variant
                     },

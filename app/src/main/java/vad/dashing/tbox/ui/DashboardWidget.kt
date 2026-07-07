@@ -194,16 +194,17 @@ fun ColumnScope.DashboardWidgetTitleRowIfVisible(
     titleText: String,
     availableHeight: Dp,
     resolvedTextColor: Color,
+    layoutWeight: Float = 1f,
 ) {
     if (!showTitle) return
     val titleStyle = calculateResponsiveTextStyle(
-        containerHeight = availableHeight,
+        containerHeight = availableHeight * layoutWeight.coerceIn(0f, 1f),
         textType = TextType.TITLE,
     )
     Text(
         text = titleText,
         modifier = Modifier
-            .weight(1f)
+            .weight(layoutWeight)
             .fillMaxWidth()
             .wrapContentHeight(Alignment.CenterVertically),
         style = titleStyle,

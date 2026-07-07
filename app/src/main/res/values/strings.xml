@@ -756,6 +756,14 @@
     <string name="data_title_net_widget_new">Виджет сигнала сети (новый)</string>
     <string name="data_title_net_widget_colored">Виджет сигнала сети (цветной)</string>
     <string name="data_title_loc_widget">Виджет навигации</string>
+    <string name="data_title_map_kit_widget">Яндекс.Карты (MapKit)</string>
+    <string name="map_kit_widget_missing_key">Укажите MAPKIT_API_KEY в local.properties и пересоберите приложение.</string>
+    <string name="map_kit_widget_zoom_title">Масштаб карты</string>
+    <string name="map_kit_widget_zoom_desc">Уровень приближения MapKit (5–19). Также можно менять жестами и кнопками на плитке.</string>
+    <string name="map_kit_widget_zoom_in_cd">Приблизить карту</string>
+    <string name="map_kit_widget_zoom_out_cd">Отдалить карту</string>
+    <string name="map_kit_widget_no_location_permission">Нет доступа к геолокации устройства. Разрешите ACCESS_FINE_LOCATION в настройках приложения.</string>
+    <string name="map_kit_widget_follow_center_cd">Удерживайте, чтобы центрировать карту на текущем положении</string>
     <string name="data_title_voltage_engine_temperature_widget">Виджет напряжения и температуры двигателя</string>
     <string name="data_title_gearbox_widget">Виджет режима КПП с текущей передачей и температурой</string>
     <string name="data_title_drive_mode_widget">Виджет режима вождения</string>
