@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -13,9 +14,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.ExternalAppWidgetBinder.PickBindStatus
 
 /**
- * Allocates an app widget id and opens the system [AppWidgetManager.ACTION_APPWIDGET_PICK] flow.
+ * Allocates an app widget id, opens [AppWidgetManager.ACTION_APPWIDGET_PICK], then explicitly
+ * binds the id to [ExternalWidgetHostManager] before configure/save.
  */
 class WidgetPickerActivity : ComponentActivity() {
 
@@ -66,6 +69,7 @@ class WidgetPickerActivity : ComponentActivity() {
     private var widgetIndex: Int = -1
     private var showTitle: Boolean = false
     private var showUnit: Boolean = true
+    private var pendingProviderInfo: AppWidgetProviderInfo? = null
 
     private val pickWidgetLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -75,6 +79,34 @@ class WidgetPickerActivity : ComponentActivity() {
             return@registerForActivityResult
         }
         handlePickResult(result.data)
+    }
+
+    private val bindWidgetLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val providerInfo = pendingProviderInfo
+        if (providerInfo == null) {
+            showBindFailureAndCleanup(null)
+            return@registerForActivityResult
+        }
+        val bindOk = ExternalAppWidgetBinder.tryBindIfAllowed(
+            appWidgetManager,
+            appWidgetId,
+            providerInfo,
+        )
+        val infoPresent = ExternalAppWidgetBinder.isWidgetInfoAvailable(appWidgetManager, appWidgetId)
+        when (
+            ExternalAppWidgetBinder.statusAfterBindPermissionUi(
+                bindUiResultOk = result.resultCode == RESULT_OK,
+                bindIfAllowedSucceeded = bindOk,
+                widgetInfoPresent = infoPresent,
+            )
+        ) {
+            PickBindStatus.ReadyToConfigure -> proceedAfterSuccessfulBind()
+            PickBindStatus.NeedsBindPermission,
+            PickBindStatus.Unavailable,
+            -> showBindFailureAndCleanup(providerInfo)
+        }
     }
 
     private val configureWidgetLauncher = registerForActivityResult(
@@ -129,9 +161,72 @@ class WidgetPickerActivity : ComponentActivity() {
         }
         appWidgetId = pickedId
 
+        val providerInfo = ExternalAppWidgetBinder.resolveProviderInfo(
+            appWidgetManager,
+            data,
+            appWidgetId,
+        )
+        if (providerInfo == null) {
+            Log.w(TAG, "No AppWidgetProviderInfo for appWidgetId=$appWidgetId after pick")
+            cleanupAndFinish()
+            return
+        }
+        pendingProviderInfo = providerInfo
+
+        val bindOk = ExternalAppWidgetBinder.tryBindIfAllowed(
+            appWidgetManager,
+            appWidgetId,
+            providerInfo,
+        )
+        val infoPresent = ExternalAppWidgetBinder.isWidgetInfoAvailable(appWidgetManager, appWidgetId)
+        when (
+            ExternalAppWidgetBinder.statusAfterPickBindAttempt(
+                bindIfAllowedSucceeded = bindOk,
+                widgetInfoPresent = infoPresent,
+            )
+        ) {
+            PickBindStatus.ReadyToConfigure -> {
+                if (!bindOk && infoPresent) {
+                    Log.i(
+                        TAG,
+                        "bindAppWidgetIdIfAllowed denied for appWidgetId=$appWidgetId " +
+                            "but AppWidgetProviderInfo is present; continuing (pre-bind flow).",
+                    )
+                }
+                proceedAfterSuccessfulBind()
+            }
+            PickBindStatus.NeedsBindPermission -> requestBindPermission(providerInfo)
+            PickBindStatus.Unavailable -> showBindFailureAndCleanup(providerInfo)
+        }
+    }
+
+    private fun requestBindPermission(providerInfo: AppWidgetProviderInfo) {
+        if (ExternalAppWidgetBinder.isWidgetInfoAvailable(appWidgetManager, appWidgetId)) {
+            Log.i(
+                TAG,
+                "Skipping ACTION_APPWIDGET_BIND for appWidgetId=$appWidgetId; widget info already available.",
+            )
+            proceedAfterSuccessfulBind()
+            return
+        }
+        val bindIntent = ExternalAppWidgetBinder.createBindPermissionIntent(appWidgetId, providerInfo)
+        if (bindIntent.resolveActivity(packageManager) == null) {
+            Log.w(TAG, "No activity handles ACTION_APPWIDGET_BIND for ${providerInfo.provider.flattenToShortString()}")
+            showBindFailureAndCleanup(providerInfo)
+            return
+        }
+        try {
+            bindWidgetLauncher.launch(bindIntent)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to launch ACTION_APPWIDGET_BIND", e)
+            showBindFailureAndCleanup(providerInfo)
+        }
+    }
+
+    private fun proceedAfterSuccessfulBind() {
         val info = appWidgetManager.getAppWidgetInfo(appWidgetId)
         if (info == null) {
-            cleanupAndFinish()
+            showBindFailureAndCleanup(pendingProviderInfo)
             return
         }
         val configure = info.configure
@@ -172,6 +267,25 @@ class WidgetPickerActivity : ComponentActivity() {
         } else {
             saveSelectionAndFinish()
         }
+    }
+
+    private fun showBindFailureAndCleanup(providerInfo: AppWidgetProviderInfo?) {
+        if (ExternalAppWidgetBinder.isWidgetInfoAvailable(appWidgetManager, appWidgetId)) {
+            Log.i(TAG, "Bind failure ignored; appWidgetId=$appWidgetId has AppWidgetProviderInfo.")
+            proceedAfterSuccessfulBind()
+            return
+        }
+        val label = providerInfo?.loadLabel(packageManager)?.toString()
+            ?: getString(R.string.data_title_external_app_widget)
+        val adbCommand = ExternalAppWidgetBinder.buildGrantBindAdbCommand(packageName)
+        android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.widget_external_bind_failed_title)
+            .setMessage(getString(R.string.widget_external_bind_failed_message, label, adbCommand))
+            .setCancelable(false)
+            .setPositiveButton(R.string.widget_external_bind_failed_ok) { _, _ ->
+                cleanupAndFinish()
+            }
+            .show()
     }
 
     private fun isConfigureActivityExported(component: ComponentName): Boolean {

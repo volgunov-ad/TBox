@@ -132,6 +132,9 @@
     <string name="widget_external_app_not_selected">Not selected</string>
     <string name="widget_external_tile_empty">No widget selected</string>
     <string name="widget_external_tile_unavailable">Widget unavailable</string>
+    <string name="widget_external_bind_failed_title">Could not bind widget</string>
+    <string name="widget_external_bind_failed_message">The system did not allow TBox Monitor to display the \"%1$s\" widget.\n\nOn the head unit, grant bind permission once via ADB:\n\n%2$s\n\nThen pick the widget again in the panel settings.</string>
+    <string name="widget_external_bind_failed_ok">OK</string>
     <string name="widget_toggle_advanced">Advanced</string>
     <string name="widget_toggle_whole_panel">Whole panel</string>
     <string name="widget_panel_settings_title">Panel settings</string>
