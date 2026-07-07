@@ -98,6 +98,9 @@ import vad.dashing.tbox.resolveDefaultTitlePositionForDataKey
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
+/** Width of value dropdowns in the tile / panel settings dialog. */
+private val WidgetDialogDropdownSelectorWidth = 300.dp
+
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
 internal data class ValueAccuracyDropdownEntry(
     private val display: String,
@@ -743,7 +746,7 @@ internal fun WidgetSelectionDialogForm(
                             description = "",
                             enabled = state.togglesEnabled,
                             options = titlePositionEntries,
-                            selectorWidth = 300.dp,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
                     OutlinedTextField(
@@ -815,7 +818,7 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_value_accuracy_desc),
                             enabled = state.togglesEnabled,
                             options = accuracyEntries,
-                            selectorWidth = 300.dp
+                            selectorWidth = WidgetDialogDropdownSelectorWidth
                         )
                     }
                     if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
@@ -885,7 +888,7 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_drive_mode_target_desc),
                             enabled = state.togglesEnabled,
                             options = DRIVE_MODE_WIDGET_OPTIONS,
-                            selectorWidth = 300.dp
+                            selectorWidth = WidgetDialogDropdownSelectorWidth
                         )
                     }
                     if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
@@ -981,7 +984,7 @@ internal fun WidgetSelectionDialogForm(
                         description = "",
                         enabled = state.togglesEnabled,
                         options = textAlignEntries,
-                        selectorWidth = 300.dp,
+                        selectorWidth = WidgetDialogDropdownSelectorWidth,
                     )
                     val fontWeightEntries = listOf(
                         WidgetFontWeightDropdownEntry(
@@ -1007,7 +1010,7 @@ internal fun WidgetSelectionDialogForm(
                         description = "",
                         enabled = state.togglesEnabled,
                         options = fontWeightEntries,
-                        selectorWidth = 300.dp,
+                        selectorWidth = WidgetDialogDropdownSelectorWidth,
                     )
                     WidgetColorThemeSegmentRow(
                         selectedSegment = state.advancedColorThemeSegment,
