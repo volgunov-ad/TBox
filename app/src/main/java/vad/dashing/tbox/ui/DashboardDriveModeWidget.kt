@@ -96,7 +96,7 @@ fun DashboardDriveModeWidgetItem(
                 style = modeStyle,
 
                 color = modeTextColor,
-                textAlign = TextAlign.Center,
+                textAlign = LocalWidgetTextAlign.current,
                 maxLines = 1,
                 softWrap = true,
                 overflow = TextOverflow.Ellipsis

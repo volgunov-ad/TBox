@@ -87,7 +87,7 @@ fun DashboardLocWidgetItem(
                     textType = TextType.TITLE
                 ),
                 color = resolvedTextColor,
-                textAlign = TextAlign.Center,
+                textAlign = LocalWidgetTextAlign.current,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
@@ -117,7 +117,7 @@ fun DashboardLocWidgetItem(
                     textType = TextType.TITLE
                 ),
                 color = resolvedTextColor,
-                textAlign = TextAlign.Center,
+                textAlign = LocalWidgetTextAlign.current,
                 maxLines = 2,
                 softWrap = true,
                 overflow = TextOverflow.Ellipsis,

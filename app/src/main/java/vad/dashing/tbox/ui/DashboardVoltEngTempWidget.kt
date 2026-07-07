@@ -62,43 +62,25 @@ fun DashboardVoltEngTempWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle && !singleLineDualMetrics) 2f else 2f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            if (showTitle) {
-                val titleStyle = calculateResponsiveTextStyle(
-                    containerHeight = availableHeight,
-                    textType = TextType.TITLE
-                )
-                Text(
-                    text = titleText,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .wrapContentHeight(Alignment.CenterVertically),
-                    style = titleStyle,
-
-                        color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    softWrap = true,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+        ) { contentModifier ->
             DashboardDualMetricRows(
                 firstLine = firstLine,
                 secondLine = secondLine,
                 singleLineDualMetrics = singleLineDualMetrics,
                 availableHeight = availableHeight,
                 resolvedTextColor = resolvedTextColor,
-                modifier = Modifier.weight(
-                    if (showTitle && !singleLineDualMetrics) 2f else 2f
-                )
+                modifier = contentModifier,
             )
         }
     }

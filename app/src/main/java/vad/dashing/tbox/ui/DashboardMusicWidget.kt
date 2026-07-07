@@ -370,7 +370,7 @@ fun DashboardMusicWidgetItem(
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        textAlign = LocalWidgetTextAlign.current,
                         modifier = Modifier.weight(1f)
                     )
                     if (!title) {
@@ -413,7 +413,7 @@ fun DashboardMusicWidgetItem(
                         ),
                         maxLines = if (mediaState.notificationAccessGranted) 2 else 1,
                         overflow = TextOverflow.Ellipsis,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = LocalWidgetTextAlign.current
                     )
                 }
 

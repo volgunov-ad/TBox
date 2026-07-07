@@ -35,6 +35,8 @@ import androidx.core.graphics.drawable.toBitmap
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
+import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.normalizeWidgetTitlePosition
 
 @Composable
 internal fun DashboardAppLauncherWidgetItem(
@@ -89,12 +91,32 @@ internal fun DashboardAppLauncherWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor,
     ) { availableHeight, resolvedTextColor ->
+        val titleAtBottom =
+            normalizeWidgetTitlePosition(LocalWidgetTitlePosition.current) == WIDGET_TITLE_POSITION_BOTTOM
+        val titleLine = titleOverride.trim().ifBlank { appLabel }
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = widgetColumnHorizontalAlignment(LocalWidgetTextAlign.current)
         ) {
+            if (showTitle && titleLine.isNotEmpty() && !titleAtBottom) {
+                val titleStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE
+                )
+                Text(
+                    text = titleLine,
+                    style = titleStyle,
+                    color = resolvedTextColor,
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp)
+                )
+            }
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -116,8 +138,7 @@ internal fun DashboardAppLauncherWidgetItem(
                     )
                 }
             }
-            val titleLine = titleOverride.trim().ifBlank { appLabel }
-            if (showTitle && titleLine.isNotEmpty()) {
+            if (showTitle && titleLine.isNotEmpty() && titleAtBottom) {
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE
@@ -126,7 +147,7 @@ internal fun DashboardAppLauncherWidgetItem(
                     text = titleLine,
                     style = titleStyle,
                     color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
+                    textAlign = LocalWidgetTextAlign.current,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier

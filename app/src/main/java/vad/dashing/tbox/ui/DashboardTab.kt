@@ -72,6 +72,9 @@ import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.normalizeWidgetConfigs
+import vad.dashing.tbox.normalizeWidgetTextAlign
+import vad.dashing.tbox.normalizeWidgetFontWeight
+import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
@@ -103,6 +106,7 @@ fun MainDashboardTab(
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
+    val dashboardGridSpacingDp by settingsViewModel.dashboardGridSpacingDp.collectAsStateWithLifecycle()
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -284,14 +288,14 @@ fun MainDashboardTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(dashboardGridSpacingDp.dp)
             ) {
                 for (row in 0 until dashboardRows) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(dashboardGridSpacingDp.dp)
                     ) {
                         for (col in 0 until dashboardCols) {
                             val index = row * dashboardCols + col
@@ -322,7 +326,16 @@ fun MainDashboardTab(
                                     )
                                 }
                                 CompositionLocalProvider(
-                                    LocalWidgetTextScale provides widgetTextScale
+                                    LocalWidgetTextScale provides widgetTextScale,
+                                    LocalWidgetTextAlign provides widgetTextAlignToCompose(
+                                        normalizeWidgetTextAlign(widgetConfig.textAlign)
+                                    ),
+                                    LocalWidgetFontWeight provides widgetFontWeightToCompose(
+                                        normalizeWidgetFontWeight(widgetConfig.fontWeight)
+                                    ),
+                                    LocalWidgetTitlePosition provides normalizeWidgetTitlePosition(
+                                        widgetConfig.titlePosition
+                                    ),
                                 ) {
                                     DashboardWidgetRenderer(
                                         widget = widget,

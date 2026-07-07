@@ -79,13 +79,53 @@ import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
+import vad.dashing.tbox.normalizeWidgetTextAlign
+import vad.dashing.tbox.normalizeWidgetFontWeight
+import vad.dashing.tbox.normalizeWidgetTitlePosition
+import vad.dashing.tbox.normalizePanelGridSpacingDp
+import vad.dashing.tbox.WIDGET_TEXT_ALIGN_CENTER
+import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
+import vad.dashing.tbox.WIDGET_TEXT_ALIGN_END
+import vad.dashing.tbox.WIDGET_FONT_WEIGHT_NORMAL
+import vad.dashing.tbox.WIDGET_FONT_WEIGHT_MEDIUM
+import vad.dashing.tbox.WIDGET_FONT_WEIGHT_SEMI_BOLD
+import vad.dashing.tbox.WIDGET_TITLE_POSITION_TOP
+import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.DEFAULT_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.resolveDefaultTitlePositionForDataKey
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
+
+/** Width of value dropdowns in the tile / panel settings dialog. */
+private val WidgetDialogDropdownSelectorWidth = 300.dp
 
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
 internal data class ValueAccuracyDropdownEntry(
     private val display: String,
     val stored: Int?
+) {
+    override fun toString(): String = display
+}
+
+internal data class WidgetTextAlignDropdownEntry(
+    private val display: String,
+    val stored: Int,
+) {
+    override fun toString(): String = display
+}
+
+internal data class WidgetFontWeightDropdownEntry(
+    private val display: String,
+    val stored: Int,
+) {
+    override fun toString(): String = display
+}
+
+internal data class WidgetTitlePositionDropdownEntry(
+    private val display: String,
+    val stored: Int,
 ) {
     override fun toString(): String = display
 }
@@ -101,6 +141,9 @@ internal class WidgetSelectionDialogState(
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
     var showUnit by mutableStateOf(initialConfig.showUnit)
+    var textAlign by mutableIntStateOf(normalizeWidgetTextAlign(initialConfig.textAlign))
+    var fontWeight by mutableIntStateOf(normalizeWidgetFontWeight(initialConfig.fontWeight))
+    var titlePosition by mutableIntStateOf(normalizeWidgetTitlePosition(initialConfig.titlePosition))
     var customTitle by mutableStateOf(initialConfig.customTitle)
     var singleLineDualMetrics by mutableStateOf(
         initialConfig.singleLineDualMetrics &&
@@ -151,6 +194,7 @@ internal class WidgetSelectionDialogState(
     var wholePanelShowTboxDisconnect by mutableStateOf(false)
     var wholePanelRows by mutableIntStateOf(2)
     var wholePanelCols by mutableIntStateOf(3)
+    var wholePanelGridSpacingDp by mutableIntStateOf(DEFAULT_PANEL_GRID_SPACING_DP)
     var wholePanelPageNumber by mutableIntStateOf(1)
     /** Main-screen and floating whole-panel draft for clickAction. */
     var wholePanelClickAction by mutableStateOf(false)
@@ -166,6 +210,7 @@ internal class WidgetSelectionDialogState(
         wholePanelShowTboxDisconnect = cfg.showTboxDisconnectIndicator
         wholePanelRows = cfg.rows
         wholePanelCols = cfg.cols
+        wholePanelGridSpacingDp = cfg.gridSpacingDp
         wholePanelClickAction = cfg.clickAction
         wholePanelPageNumber = cfg.pageNumber
     }
@@ -175,6 +220,7 @@ internal class WidgetSelectionDialogState(
         wholePanelShowTboxDisconnect = cfg.showTboxDisconnectIndicator
         wholePanelRows = cfg.rows
         wholePanelCols = cfg.cols
+        wholePanelGridSpacingDp = cfg.gridSpacingDp
         wholePanelClickAction = cfg.clickAction
     }
 
@@ -245,6 +291,7 @@ internal class WidgetSelectionDialogState(
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
         }
+        titlePosition = resolveDefaultTitlePositionForDataKey(key)
     }
 
     val isMusicWidgetSelected: Boolean
@@ -467,6 +514,14 @@ private fun MainScreenPanelWholeSettingsSection(
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
+        SettingInt(
+            value = state.wholePanelGridSpacingDp,
+            onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
+            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            description = stringResource(R.string.settings_panel_grid_spacing_desc),
+            minValue = MIN_PANEL_GRID_SPACING_DP,
+            maxValue = MAX_PANEL_GRID_SPACING_DP,
+        )
         SettingDropdownGeneric(
             state.wholePanelPageNumber,
             { state.wholePanelPageNumber = it },
@@ -529,6 +584,14 @@ private fun FloatingDashboardWholeSettingsSection(
             "",
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
+        )
+        SettingInt(
+            value = state.wholePanelGridSpacingDp,
+            onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
+            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            description = stringResource(R.string.settings_panel_grid_spacing_desc),
+            minValue = MIN_PANEL_GRID_SPACING_DP,
+            maxValue = MAX_PANEL_GRID_SPACING_DP,
         )
     }
 }
@@ -662,6 +725,30 @@ internal fun WidgetSelectionDialogForm(
                         "",
                         state.togglesEnabled
                     )
+                    if (state.showTitle) {
+                        val titlePositionEntries = listOf(
+                            WidgetTitlePositionDropdownEntry(
+                                stringResource(R.string.widget_title_position_top),
+                                WIDGET_TITLE_POSITION_TOP,
+                            ),
+                            WidgetTitlePositionDropdownEntry(
+                                stringResource(R.string.widget_title_position_bottom),
+                                WIDGET_TITLE_POSITION_BOTTOM,
+                            ),
+                        )
+                        val selectedTitlePosition = titlePositionEntries.firstOrNull {
+                            it.stored == normalizeWidgetTitlePosition(state.titlePosition)
+                        } ?: titlePositionEntries.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedTitlePosition,
+                            onValueChange = { state.titlePosition = it.stored },
+                            text = stringResource(R.string.widget_title_position_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = titlePositionEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
                     OutlinedTextField(
                         value = state.customTitle,
                         onValueChange = { state.customTitle = it },
@@ -731,7 +818,7 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_value_accuracy_desc),
                             enabled = state.togglesEnabled,
                             options = accuracyEntries,
-                            selectorWidth = 300.dp
+                            selectorWidth = WidgetDialogDropdownSelectorWidth
                         )
                     }
                     if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
@@ -801,7 +888,7 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_drive_mode_target_desc),
                             enabled = state.togglesEnabled,
                             options = DRIVE_MODE_WIDGET_OPTIONS,
-                            selectorWidth = 220.dp
+                            selectorWidth = WidgetDialogDropdownSelectorWidth
                         )
                     }
                     if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
@@ -873,6 +960,58 @@ internal fun WidgetSelectionDialogForm(
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
+                    val textAlignEntries = listOf(
+                        WidgetTextAlignDropdownEntry(
+                            stringResource(R.string.widget_text_align_center),
+                            WIDGET_TEXT_ALIGN_CENTER,
+                        ),
+                        WidgetTextAlignDropdownEntry(
+                            stringResource(R.string.widget_text_align_start),
+                            WIDGET_TEXT_ALIGN_START,
+                        ),
+                        WidgetTextAlignDropdownEntry(
+                            stringResource(R.string.widget_text_align_end),
+                            WIDGET_TEXT_ALIGN_END,
+                        ),
+                    )
+                    val selectedTextAlign = textAlignEntries.firstOrNull {
+                        it.stored == normalizeWidgetTextAlign(state.textAlign)
+                    } ?: textAlignEntries.first()
+                    SettingDropdownGeneric(
+                        selectedValue = selectedTextAlign,
+                        onValueChange = { state.textAlign = it.stored },
+                        text = stringResource(R.string.widget_text_align_title),
+                        description = "",
+                        enabled = state.togglesEnabled,
+                        options = textAlignEntries,
+                        selectorWidth = WidgetDialogDropdownSelectorWidth,
+                    )
+                    val fontWeightEntries = listOf(
+                        WidgetFontWeightDropdownEntry(
+                            stringResource(R.string.widget_font_weight_normal),
+                            WIDGET_FONT_WEIGHT_NORMAL,
+                        ),
+                        WidgetFontWeightDropdownEntry(
+                            stringResource(R.string.widget_font_weight_medium),
+                            WIDGET_FONT_WEIGHT_MEDIUM,
+                        ),
+                        WidgetFontWeightDropdownEntry(
+                            stringResource(R.string.widget_font_weight_semi_bold),
+                            WIDGET_FONT_WEIGHT_SEMI_BOLD,
+                        ),
+                    )
+                    val selectedFontWeight = fontWeightEntries.firstOrNull {
+                        it.stored == normalizeWidgetFontWeight(state.fontWeight)
+                    } ?: fontWeightEntries[1]
+                    SettingDropdownGeneric(
+                        selectedValue = selectedFontWeight,
+                        onValueChange = { state.fontWeight = it.stored },
+                        text = stringResource(R.string.widget_font_weight_title),
+                        description = "",
+                        enabled = state.togglesEnabled,
+                        options = fontWeightEntries,
+                        selectorWidth = WidgetDialogDropdownSelectorWidth,
+                    )
                     WidgetColorThemeSegmentRow(
                         selectedSegment = state.advancedColorThemeSegment,
                         onSegmentSelected = { state.advancedColorThemeSegment = it },
@@ -1313,6 +1452,9 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
             },
+            textAlign = normalizeWidgetTextAlign(state.textAlign),
+            fontWeight = normalizeWidgetFontWeight(state.fontWeight),
+            titlePosition = normalizeWidgetTitlePosition(state.titlePosition),
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
@@ -1340,6 +1482,7 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
         clickAction = state.wholePanelClickAction,
         pageNumber = state.wholePanelPageNumber,
+        gridSpacingDp = normalizePanelGridSpacingDp(state.wholePanelGridSpacingDp),
     )
 }
 
@@ -1352,7 +1495,8 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
         rows = state.wholePanelRows,
         cols = state.wholePanelCols,
         showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
-        clickAction = state.wholePanelClickAction
+        clickAction = state.wholePanelClickAction,
+        gridSpacingDp = normalizePanelGridSpacingDp(state.wholePanelGridSpacingDp),
     )
 }
 

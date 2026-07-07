@@ -89,7 +89,7 @@ fun DashboardActiveTripWidgetItem(
                     style = titleStyle,
 
                         color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
+                    textAlign = LocalWidgetTextAlign.current,
                     maxLines = 2,
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis

@@ -463,6 +463,7 @@ fun FloatingDashboard(
                     },
                     showTboxDisconnectIndicator = panelConfig.showTboxDisconnectIndicator,
                     enableInnerInteractions = !isEditMode,
+                    gridSpacingDp = panelConfig.gridSpacingDp.dp,
                     externalWidgetHost = appWidgetHost,
                 )
                 if (isEditMode) {

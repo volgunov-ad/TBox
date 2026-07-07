@@ -459,6 +459,7 @@ fun MainScreenDashboardPanel(
             },
             showTboxDisconnectIndicator = panel.showTboxDisconnectIndicator,
             enableInnerInteractions = !isEditMode,
+            gridSpacingDp = panel.gridSpacingDp.dp,
             externalWidgetHost = appWidgetHost
         )
         if (isEditMode) {

@@ -219,7 +219,7 @@ fun DashboardMediaVolumeWidgetItem(
                         containerHeight = availableHeight,
                         textType = TextType.TITLE
                     ),
-                    textAlign = TextAlign.Center,
+                    textAlign = LocalWidgetTextAlign.current,
                     maxLines = 1,
                     modifier = Modifier.fillMaxWidth()
                 )
