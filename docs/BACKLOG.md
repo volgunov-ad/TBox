@@ -27,7 +27,7 @@
 | # | Задача | Источник | Область кода | Сложн. |
 |---|--------|----------|--------------|--------|
 | D-01 | **Уличная и салонная температура: задержка перед обнулением при null** — как для давления шин: не сбрасывать значение сразу при невалидном CAN, держать последнее **5 минут**. Без сохранения на диск. | «…температура за бортом…»; «задержку на null, как для давления шин» | `InOutTemperatureNullDebounce`, `CanDataRepository`, `CanFramesProcess` | S *(реализовано)* |
-| D-02 | **Передачи: показывать номер передачи** — режим P/R/N/D уже отображается, но `gearBoxCurrentGear` не выводится (пусто или не декодируется с шины). | «…p, r, n, d показывало но номера передачи нет» | `CanFramesProcess` / mbCAN decode, `DashboardGearBoxWidget`, `DataProvider` (`gearBoxCurrentGear`) | M |
+| D-02 | **КПП: режим + передача** — номер передачи только в **D**; плитка `gearBoxModeCurrentGear` без температуры масла. | «…p, r, n, d… номера передачи нет» | `GearBoxDisplayFormat`, `DashboardGearBoxWidget`, `DataProvider`, `ViewModels` | S *(реализовано)* |
 | D-03 | **Давление и температура шин через mbCAN/VHAL** — получать с головного устройства и **сохранять** так же, как при приёме через TBox (история, задержка null, запоминание при стоянке). | «давление шин и температуру шин получать через mbCAN/vhal и сохранять…» | `UniversalCanRepository`, `CanDataRepository` (`WheelPressureState`), `BackgroundService`, виджеты шин | L |
 | D-04 | **Перевести поездки и заправки на mbCAN/VHAL** — уменьшить зависимость от TBox UDP для одометра, RPM, топлива и связанной логики учёта. | «перевести работу функций поездок и заправок на mbCAN/vhal» | `BackgroundService`, `TripRepository`, `fuel/`, `UniversalCanRepository`, `docs/Trips.md`, `docs/fuel-refuels-calibration.md` | L |
 

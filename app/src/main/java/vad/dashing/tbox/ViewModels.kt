@@ -18,6 +18,7 @@ import java.util.Date
 import java.util.Locale
 import vad.dashing.tbox.ui.theme.DARK_THEME_ON_SURFACE_COLOR_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_ON_SURFACE_COLOR_INT
+import vad.dashing.tbox.utils.GEARBOX_MODE_CURRENT_GEAR_DATA_KEY
 import kotlin.Boolean
 import kotlin.collections.List
 
@@ -404,6 +405,7 @@ object WidgetsRepository {
         "locWidget" to DataTitle(R.string.data_title_loc_widget),
         "voltage+engineTemperatureWidget" to DataTitle(R.string.data_title_voltage_engine_temperature_widget),
         "gearBoxWidget" to DataTitle(R.string.data_title_gearbox_widget),
+        GEARBOX_MODE_CURRENT_GEAR_DATA_KEY to DataTitle(R.string.data_title_gearbox_mode_current_gear),
         DRIVE_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_drive_mode_widget),
         "wheel1Pressure" to DataTitle(R.string.data_title_wheel_pressure_fl, R.string.unit_bar),
         "wheel2Pressure" to DataTitle(R.string.data_title_wheel_pressure_fr, R.string.unit_bar),
@@ -527,6 +529,7 @@ object WidgetsRepository {
             "timeWidget",
             "dateWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
+            GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }
@@ -585,6 +588,7 @@ object WidgetsRepository {
             "hvacAutoWidget",
             "hvacDefrosterFrontWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
+            GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             -> false
             else -> !isActiveTripWidgetDataKey(dataKey)
         }
