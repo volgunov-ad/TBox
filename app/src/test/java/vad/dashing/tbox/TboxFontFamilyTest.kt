@@ -96,13 +96,10 @@ class BundledFontWeightResourcesTest {
         val fontIds = listOf(
             R.font.nunito_medium,
             R.font.nunito_semibold,
-            R.font.nunito_bold,
             R.font.cabin_medium,
             R.font.cabin_semibold,
-            R.font.cabin_bold,
             R.font.roboto_medium,
             R.font.roboto_semibold,
-            R.font.roboto_bold,
         )
         fontIds.forEach { fontId ->
             context.resources.openRawResource(fontId).use { input ->

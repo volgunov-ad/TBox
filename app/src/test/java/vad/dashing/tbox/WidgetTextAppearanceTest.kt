@@ -14,11 +14,12 @@ class WidgetTextAppearanceTest {
     }
 
     @Test
-    fun normalizeWidgetFontWeight_defaultsToSemiBoldConstant() {
-        assertEquals(WIDGET_FONT_WEIGHT_SEMI_BOLD, DEFAULT_WIDGET_FONT_WEIGHT)
+    fun normalizeWidgetFontWeight_defaultsToMediumConstant() {
+        assertEquals(WIDGET_FONT_WEIGHT_MEDIUM, DEFAULT_WIDGET_FONT_WEIGHT)
         assertEquals(WIDGET_FONT_WEIGHT_NORMAL, normalizeWidgetFontWeight(0))
-        assertEquals(WIDGET_FONT_WEIGHT_BOLD, normalizeWidgetFontWeight(2))
-        assertEquals(WIDGET_FONT_WEIGHT_BOLD, normalizeWidgetFontWeight(99))
+        assertEquals(WIDGET_FONT_WEIGHT_MEDIUM, normalizeWidgetFontWeight(1))
+        assertEquals(WIDGET_FONT_WEIGHT_SEMI_BOLD, normalizeWidgetFontWeight(2))
+        assertEquals(WIDGET_FONT_WEIGHT_SEMI_BOLD, normalizeWidgetFontWeight(99))
     }
 
     @Test

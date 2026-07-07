@@ -99,9 +99,9 @@
     <string name="widget_text_align_start">Слева</string>
     <string name="widget_text_align_end">Справа</string>
     <string name="widget_font_weight_title">Насыщенность шрифта</string>
-    <string name="widget_font_weight_normal">Обычный</string>
+    <string name="widget_font_weight_normal">Стандартный</string>
+    <string name="widget_font_weight_medium">Средний</string>
     <string name="widget_font_weight_semi_bold">Полужирный</string>
-    <string name="widget_font_weight_bold">Жирный</string>
     <string name="settings_dashboard_grid_spacing_title">Расстояние между плитками</string>
     <string name="settings_dashboard_grid_spacing_desc">Зазор между ячейками сетки на вкладке «Плитки» (0–32 dp)</string>
     <string name="settings_panel_grid_spacing_title">Расстояние между плитками</string>

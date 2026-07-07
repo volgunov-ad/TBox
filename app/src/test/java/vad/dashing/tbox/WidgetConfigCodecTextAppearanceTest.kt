@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import org.json.JSONArray
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -17,7 +18,7 @@ class WidgetConfigCodecTextAppearanceTest {
             FloatingDashboardWidgetConfig(
                 dataKey = "fuelLevelPercentageFiltered",
                 textAlign = WIDGET_TEXT_ALIGN_START,
-                fontWeight = WIDGET_FONT_WEIGHT_BOLD,
+                fontWeight = WIDGET_FONT_WEIGHT_SEMI_BOLD,
                 titlePosition = WIDGET_TITLE_POSITION_BOTTOM,
             ),
             FloatingDashboardWidgetConfig(
@@ -28,7 +29,7 @@ class WidgetConfigCodecTextAppearanceTest {
         )
         val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(configs))
         assertEquals(WIDGET_TEXT_ALIGN_START, parsed[0].textAlign)
-        assertEquals(WIDGET_FONT_WEIGHT_BOLD, parsed[0].fontWeight)
+        assertEquals(WIDGET_FONT_WEIGHT_SEMI_BOLD, parsed[0].fontWeight)
         assertEquals(WIDGET_TITLE_POSITION_BOTTOM, parsed[0].titlePosition)
         assertEquals(WIDGET_TITLE_POSITION_TOP, parsed[1].titlePosition)
     }
@@ -68,9 +69,9 @@ class WidgetConfigCodecTextAppearanceTest {
             ),
         )
         val array = serializeWidgetConfigsToJsonArray(configs)
-        assertEquals(false, array.getJSONObject(0).has("textAlign"))
-        assertEquals(false, array.getJSONObject(0).has("fontWeight"))
-        assertEquals(false, array.getJSONObject(0).has("titlePosition"))
-        assertEquals(false, array.getJSONObject(1).has("titlePosition"))
+        assertFalse(array.getJSONObject(0).has("textAlign"))
+        assertFalse(array.getJSONObject(0).has("fontWeight"))
+        assertFalse(array.getJSONObject(0).has("titlePosition"))
+        assertFalse(array.getJSONObject(1).has("titlePosition"))
     }
 }

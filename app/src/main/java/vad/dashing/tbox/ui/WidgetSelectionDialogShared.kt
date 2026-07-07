@@ -87,8 +87,8 @@ import vad.dashing.tbox.WIDGET_TEXT_ALIGN_CENTER
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_END
 import vad.dashing.tbox.WIDGET_FONT_WEIGHT_NORMAL
+import vad.dashing.tbox.WIDGET_FONT_WEIGHT_MEDIUM
 import vad.dashing.tbox.WIDGET_FONT_WEIGHT_SEMI_BOLD
-import vad.dashing.tbox.WIDGET_FONT_WEIGHT_BOLD
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_TOP
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.DEFAULT_PANEL_GRID_SPACING_DP
@@ -989,12 +989,12 @@ internal fun WidgetSelectionDialogForm(
                             WIDGET_FONT_WEIGHT_NORMAL,
                         ),
                         WidgetFontWeightDropdownEntry(
-                            stringResource(R.string.widget_font_weight_semi_bold),
-                            WIDGET_FONT_WEIGHT_SEMI_BOLD,
+                            stringResource(R.string.widget_font_weight_medium),
+                            WIDGET_FONT_WEIGHT_MEDIUM,
                         ),
                         WidgetFontWeightDropdownEntry(
-                            stringResource(R.string.widget_font_weight_bold),
-                            WIDGET_FONT_WEIGHT_BOLD,
+                            stringResource(R.string.widget_font_weight_semi_bold),
+                            WIDGET_FONT_WEIGHT_SEMI_BOLD,
                         ),
                     )
                     val selectedFontWeight = fontWeightEntries.firstOrNull {

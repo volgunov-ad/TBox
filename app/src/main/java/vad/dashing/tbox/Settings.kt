@@ -108,7 +108,7 @@ data class FloatingDashboardWidgetConfig(
     val tripWidgetLabelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
     /** Horizontal text alignment: [WIDGET_TEXT_ALIGN_CENTER], [WIDGET_TEXT_ALIGN_START], [WIDGET_TEXT_ALIGN_END]. */
     val textAlign: Int = DEFAULT_WIDGET_TEXT_ALIGN,
-    /** Font weight: [WIDGET_FONT_WEIGHT_NORMAL], [WIDGET_FONT_WEIGHT_SEMI_BOLD], [WIDGET_FONT_WEIGHT_BOLD]. */
+    /** Font weight: [WIDGET_FONT_WEIGHT_NORMAL], [WIDGET_FONT_WEIGHT_MEDIUM], [WIDGET_FONT_WEIGHT_SEMI_BOLD]. */
     val fontWeight: Int = DEFAULT_WIDGET_FONT_WEIGHT,
     /** Title row position when [showTitle]: [WIDGET_TITLE_POSITION_TOP] or [WIDGET_TITLE_POSITION_BOTTOM]. */
     val titlePosition: Int = DEFAULT_WIDGET_TITLE_POSITION,

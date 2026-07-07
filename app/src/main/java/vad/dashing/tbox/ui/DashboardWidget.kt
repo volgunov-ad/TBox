@@ -48,7 +48,7 @@ import kotlin.math.abs
 
 val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
 val LocalWidgetTextAlign = staticCompositionLocalOf { TextAlign.Center }
-val LocalWidgetFontWeight = staticCompositionLocalOf { FontWeight.SemiBold }
+val LocalWidgetFontWeight = staticCompositionLocalOf { FontWeight.Medium }
 val LocalWidgetTitlePosition = staticCompositionLocalOf { 0 }
 
 @Composable

@@ -11,16 +11,16 @@ const val WIDGET_TEXT_ALIGN_END = 2
 
 const val DEFAULT_WIDGET_TEXT_ALIGN = WIDGET_TEXT_ALIGN_CENTER
 
-/** Stored [FloatingDashboardWidgetConfig.fontWeight]: normal. */
+/** Stored [FloatingDashboardWidgetConfig.fontWeight]: standard (Normal / 400). */
 const val WIDGET_FONT_WEIGHT_NORMAL = 0
 
-/** Stored [FloatingDashboardWidgetConfig.fontWeight]: semi-bold (default for tiles). */
-const val WIDGET_FONT_WEIGHT_SEMI_BOLD = 1
+/** Stored [FloatingDashboardWidgetConfig.fontWeight]: medium (Medium / 500, default for tiles). */
+const val WIDGET_FONT_WEIGHT_MEDIUM = 1
 
-/** Stored [FloatingDashboardWidgetConfig.fontWeight]: bold. */
-const val WIDGET_FONT_WEIGHT_BOLD = 2
+/** Stored [FloatingDashboardWidgetConfig.fontWeight]: semi-bold (SemiBold / 600). */
+const val WIDGET_FONT_WEIGHT_SEMI_BOLD = 2
 
-const val DEFAULT_WIDGET_FONT_WEIGHT = WIDGET_FONT_WEIGHT_SEMI_BOLD
+const val DEFAULT_WIDGET_FONT_WEIGHT = WIDGET_FONT_WEIGHT_MEDIUM
 
 /** Stored [FloatingDashboardWidgetConfig.titlePosition]: title above value. */
 const val WIDGET_TITLE_POSITION_TOP = 0
@@ -39,7 +39,7 @@ fun normalizeWidgetTextAlign(raw: Int): Int =
     raw.coerceIn(WIDGET_TEXT_ALIGN_CENTER, WIDGET_TEXT_ALIGN_END)
 
 fun normalizeWidgetFontWeight(raw: Int): Int =
-    raw.coerceIn(WIDGET_FONT_WEIGHT_NORMAL, WIDGET_FONT_WEIGHT_BOLD)
+    raw.coerceIn(WIDGET_FONT_WEIGHT_NORMAL, WIDGET_FONT_WEIGHT_SEMI_BOLD)
 
 fun normalizeWidgetTitlePosition(raw: Int): Int =
     raw.coerceIn(WIDGET_TITLE_POSITION_TOP, WIDGET_TITLE_POSITION_BOTTOM)
