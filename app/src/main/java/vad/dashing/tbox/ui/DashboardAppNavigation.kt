@@ -3,7 +3,10 @@ package vad.dashing.tbox.ui
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import kotlin.math.roundToInt
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.LastAppTracker
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
@@ -41,6 +44,7 @@ internal fun launchAppFromWidget(context: Context, packageName: String) {
         val pm = context.packageManager
         val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
         MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
+        LastAppTracker.recordLaunch(context, packageName)
         context.startActivity(launchIntent)
     } catch (e: Exception) {
         e.printStackTrace()
@@ -310,6 +314,14 @@ internal fun sendToggleHvacDefrosterFront(context: Context) {
         )
     } catch (_: Exception) {
     }
+}
+
+internal fun sendAdjustHvacTemperature(context: Context, currentCelsius: Float?, deltaCelsius: Float) {
+    val next = ((currentCelsius ?: 22f) + deltaCelsius).coerceIn(16f, 32f)
+    val halfStep = (next * 2f).roundToInt() / 2f
+    val encoded = (halfStep * 4f).roundToInt()
+    CanDataRepository.updateClimateSetTemperature1(halfStep)
+    sendSetMbCanProperty(context, MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE, encoded)
 }
 
 internal fun sendSetMbCanProperty(context: Context, propertyId: Int, value: Int) {

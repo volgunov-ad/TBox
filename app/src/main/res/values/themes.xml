@@ -2,4 +2,16 @@
 <resources>
 
     <style name="Theme.TBox" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.TBox.Launcher" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.TBox.Transparent" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

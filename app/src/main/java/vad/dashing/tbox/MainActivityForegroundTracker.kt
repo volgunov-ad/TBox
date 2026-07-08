@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Tracks [MainActivity] visibility and foreground state.
+ * Tracks [MainActivity] and [LauncherHomeActivity] visibility and foreground state.
  * Registered from [TboxApplication].
  */
 object MainActivityForegroundTracker {
@@ -20,6 +20,9 @@ object MainActivityForegroundTracker {
 
     private var startedCount: Int = 0
     private var resumedCount: Int = 0
+
+    private fun isTrackedActivity(activity: Activity): Boolean =
+        activity is MainActivity || activity is LauncherHomeActivity
 
     private fun publishStateLocked() {
         _isMainActivityVisible.value = startedCount > 0
@@ -33,28 +36,28 @@ object MainActivityForegroundTracker {
             override fun onActivityDestroyed(activity: Activity) {}
 
             override fun onActivityStarted(activity: Activity) {
-                if (activity is MainActivity) {
+                if (isTrackedActivity(activity)) {
                     startedCount += 1
                     publishStateLocked()
                 }
             }
 
             override fun onActivityStopped(activity: Activity) {
-                if (activity is MainActivity) {
+                if (isTrackedActivity(activity)) {
                     startedCount = (startedCount - 1).coerceAtLeast(0)
                     publishStateLocked()
                 }
             }
 
             override fun onActivityResumed(activity: Activity) {
-                if (activity is MainActivity) {
+                if (isTrackedActivity(activity)) {
                     resumedCount += 1
                     publishStateLocked()
                 }
             }
 
             override fun onActivityPaused(activity: Activity) {
-                if (activity is MainActivity) {
+                if (isTrackedActivity(activity)) {
                     resumedCount = (resumedCount - 1).coerceAtLeast(0)
                     publishStateLocked()
                 }

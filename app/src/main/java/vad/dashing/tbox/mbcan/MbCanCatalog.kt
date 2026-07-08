@@ -133,6 +133,8 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_AIR_RECIRCULATION_VALUE_ON = 1
     /** Same property: recirculation off. */
     const val HVAC_AIR_RECIRCULATION_VALUE_OFF = 2
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_TEMPERATURE] — value = °C × 4. */
+    const val HVAC_TEMPERATURE = 37
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER] — AC compressor; 1 off, 2 on. */
     const val HVAC_POWER = 36
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_AUTO_STATE] — AUTO mode; 1 off, 2 on. */
@@ -277,6 +279,12 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.HvacAcPower
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = (64..128 step 2).toSet(),
+            ),
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,

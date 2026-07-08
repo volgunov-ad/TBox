@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TBox — просмотр GLB-моделей</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #1a1d24;
+      --border: #2a3040;
+      --text: #e8ecf2;
+      --muted: #8b95a8;
+      --accent: #3dd6c6;
+      --danger: #ff6b6b;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      height: 100%;
+    }
+
+    aside {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 20px 14px;
+      text-align: center;
+      color: var(--muted);
+      transition: border-color .15s, background .15s;
+      cursor: pointer;
+    }
+
+    .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(61, 214, 198, 0.08);
+      color: var(--text);
+    }
+
+    .dropzone strong { color: var(--accent); }
+
+    button, label.file-btn {
+      display: block;
+      width: 100%;
+      border: 1px solid var(--border);
+      background: #222733;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 12px;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+    }
+
+    button:hover, label.file-btn:hover {
+      border-color: var(--accent);
+    }
+
+    button.active {
+      border-color: var(--accent);
+      background: rgba(61, 214, 198, 0.12);
+    }
+
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin: 4px 0 0;
+    }
+
+    .presets {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .row label {
+      flex: 0 0 110px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    input[type="range"] { flex: 1; }
+
+    #info {
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      background: #12151b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      color: #b8c0d0;
+      min-height: 120px;
+    }
+
+    #status {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #status.error { color: var(--danger); }
+
+    #canvas-wrap {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    canvas { display: block; width: 100%; height: 100%; }
+
+    #hint {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, .55);
+      color: var(--muted);
+      font-size: 12px;
+      pointer-events: none;
+    }
+
+    input[type="file"] { display: none; }
+
+    .note {
+      font-size: 11px;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    code {
+      background: #12151b;
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <aside>
+      <div>
+        <h1>GLB Viewer</h1>
+        <p class="subtitle">Проверка моделей перед сборкой APK</p>
+      </div>
+
+      <div id="dropzone" class="dropzone">
+        Перетащите <strong>.glb</strong> сюда<br />
+        или нажмите для выбора файла
+        <input id="file-input" type="file" accept=".glb,model/gltf-binary" />
+      </div>
+
+      <label class="file-btn" for="file-input">Выбрать файл…</label>
+
+      <p class="section-title">Модели проекта</p>
+      <div class="presets" id="presets"></div>
+      <p class="note">Пресеты работают при запуске через локальный сервер (см. ниже).</p>
+
+      <p class="section-title">Отображение</p>
+      <div class="row">
+        <label>Масштаб</label>
+        <input id="scale" type="range" min="0.2" max="3" step="0.05" value="1.2" />
+      </div>
+      <div class="row">
+        <label>Поворот Y</label>
+        <input id="rot-y" type="range" min="-180" max="180" step="1" value="25" />
+      </div>
+      <button id="wireframe">Каркас: выкл</button>
+      <button id="auto-rotate">Авто-вращение: выкл</button>
+      <button id="reset-cam">Сбросить камеру</button>
+
+      <p class="section-title">Инфо</p>
+      <div id="status">Модель не загружена</div>
+      <div id="info">—</div>
+
+      <p class="note">
+        Локальный сервер из корня проекта:<br />
+        <code>cd c:\side\TBox</code><br />
+        <code>npx --yes serve -l 5173</code><br />
+        Открыть: <code>http://localhost:5173/tools/preview_models.html</code>
+      </p>
+    </aside>
+
+    <div id="canvas-wrap">
+      <canvas id="canvas"></canvas>
+      <div id="hint">ЛКМ — вращение · Колесо — зум · ПКМ — панорама</div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+    const PRESETS = [
+      {
+        label: "Dashing 720 (site)",
+        path: "/app/src/main/assets/models/jetour_dashing_site.glb",
+      },
+      {
+        label: "Полная",
+        path: "/app/src/main/assets/models/jetour_dashing.glb",
+      },
+      {
+        label: "Лёгкая",
+        path: "/app/src/main/assets/models/jetour_dashing_lite.glb",
+      },
+      {
+        label: "Merged (промежуточная)",
+        path: "/app/src/main/assets/models/jetour_dashing_site_merged.glb",
+      },
+    ];
+
+    const canvas = document.getElementById("canvas");
+    const wrap = document.getElementById("canvas-wrap");
+    const statusEl = document.getElementById("status");
+    const infoEl = document.getElementById("info");
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("file-input");
+    const scaleInput = document.getElementById("scale");
+    const rotYInput = document.getElementById("rot-y");
+    const wireframeBtn = document.getElementById("wireframe");
+    const autoRotateBtn = document.getElementById("auto-rotate");
+    const resetCamBtn = document.getElementById("reset-cam");
+    const presetsEl = document.getElementById("presets");
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f1115);
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 500);
+    camera.position.set(3.5, 1.4, 4.5);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.target.set(0, 0.5, 0);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x223044, 1.1));
+    const key = new THREE.DirectionalLight(0xffffff, 1.4);
+    key.position.set(4, 8, 6);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0x9ecfff, 0.45);
+    fill.position.set(-5, 2, -3);
+    scene.add(fill);
+
+    const grid = new THREE.GridHelper(10, 20, 0x2a3040, 0x1b2130);
+    grid.position.y = -0.02;
+    scene.add(grid);
+
+    let currentRoot = null;
+    let wireframeOn = false;
+    let autoRotate = false;
+    let activePresetBtn = null;
+
+    function resize() {
+      const w = wrap.clientWidth;
+      const h = wrap.clientHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+
+    window.addEventListener("resize", resize);
+    resize();
+
+    function setStatus(text, isError = false) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle("error", isError);
+    }
+
+    function clearModel() {
+      if (!currentRoot) return;
+      scene.remove(currentRoot);
+      currentRoot.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.geometry?.dispose();
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach((m) => {
+            if (!m) return;
+            for (const key of ["map", "normalMap", "metalnessMap", "roughnessMap"]) {
+              m[key]?.dispose?.();
+            }
+            m.dispose?.();
+          });
+        }
+      });
+      currentRoot = null;
+    }
+
+    function applyViewSettings() {
+      if (!currentRoot) return;
+      const scale = Number(scaleInput.value);
+      const rotY = THREE.MathUtils.degToRad(Number(rotYInput.value));
+      currentRoot.scale.setScalar(scale);
+      currentRoot.rotation.set(0, rotY, 0);
+    }
+
+    function setWireframe(enabled) {
+      wireframeOn = enabled;
+      wireframeBtn.textContent = `Каркас: ${enabled ? "вкл" : "выкл"}`;
+      wireframeBtn.classList.toggle("active", enabled);
+      if (!currentRoot) return;
+      currentRoot.traverse((obj) => {
+        if (!obj.isMesh) return;
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach((m) => { if (m) m.wireframe = enabled; });
+      });
+    }
+
+    function frameObject(object) {
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const dist = maxDim * 1.8 / Math.tan((camera.fov * Math.PI) / 360);
+      camera.position.set(center.x + dist * 0.65, center.y + maxDim * 0.35, center.z + dist);
+      controls.target.copy(center);
+      controls.update();
+    }
+
+    function collectInfo(gltf, sourceName) {
+      let meshes = 0;
+      let tris = 0;
+      let materials = new Set();
+      let textures = new Set();
+
+      gltf.scene.traverse((obj) => {
+        if (!obj.isMesh) return;
+        meshes += 1;
+        const geom = obj.geometry;
+        if (geom?.index) tris += geom.index.count / 3;
+        else if (geom?.attributes?.position) tris += geom.attributes.position.count / 3;
+
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach((m) => {
+          if (!m) return;
+          materials.add(m.name || m.uuid);
+          for (const key of ["map", "normalMap", "metalnessMap", "roughnessMap"]) {
+            if (m[key]) textures.add(m[key].uuid);
+          }
+        });
+      });
+
+      const scenes = gltf.scenes?.length ?? 1;
+      return [
+        `Источник: ${sourceName}`,
+        `Сцены: ${scenes}`,
+        `Меши: ${meshes}`,
+        `Треугольники: ${Math.round(tris).toLocaleString("ru-RU")}`,
+        `Материалы: ${materials.size}`,
+        `Текстуры: ${textures.size}`,
+        `BBox: ${(() => {
+          const b = new THREE.Box3().setFromObject(gltf.scene);
+          const s = b.getSize(new THREE.Vector3());
+          return `${s.x.toFixed(2)} × ${s.y.toFixed(2)} × ${s.z.toFixed(2)} м`;
+        })()}`,
+      ].join("\n");
+    }
+
+    function showModel(gltf, sourceName) {
+      clearModel();
+      currentRoot = gltf.scene;
+      scene.add(currentRoot);
+      applyViewSettings();
+      setWireframe(wireframeOn);
+      frameObject(currentRoot);
+      infoEl.textContent = collectInfo(gltf, sourceName);
+      setStatus(`Загружено: ${sourceName}`);
+    }
+
+    function loadArrayBuffer(buffer, sourceName) {
+      setStatus(`Загрузка: ${sourceName}…`);
+      const loader = new GLTFLoader();
+      loader.parse(
+        buffer,
+        "",
+        (gltf) => showModel(gltf, sourceName),
+        (err) => {
+          console.error(err);
+          setStatus(`Ошибка парсинга: ${sourceName}`, true);
+        },
+      );
+    }
+
+    function loadFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => loadArrayBuffer(reader.result, file.name);
+      reader.onerror = () => setStatus(`Не удалось прочитать файл: ${file.name}`, true);
+      reader.readAsArrayBuffer(file);
+    }
+
+    async function loadUrl(url, label) {
+      setStatus(`Загрузка: ${label}…`);
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        loadArrayBuffer(buf, label);
+      } catch (e) {
+        console.error(e);
+        setStatus(`Не удалось загрузить пресет. Запустите локальный сервер или перетащите файл.`, true);
+      }
+    }
+
+    dropzone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => loadFile(fileInput.files[0]));
+
+    ["dragenter", "dragover"].forEach((evt) => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.add("dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach((evt) => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("dragover");
+      });
+    });
+    dropzone.addEventListener("drop", (e) => {
+      const file = [...e.dataTransfer.files].find((f) => f.name.toLowerCase().endsWith(".glb"));
+      if (!file) {
+        setStatus("Нужен файл .glb", true);
+        return;
+      }
+      loadFile(file);
+    });
+
+    scaleInput.addEventListener("input", applyViewSettings);
+    rotYInput.addEventListener("input", applyViewSettings);
+
+    wireframeBtn.addEventListener("click", () => setWireframe(!wireframeOn));
+    autoRotateBtn.addEventListener("click", () => {
+      autoRotate = !autoRotate;
+      autoRotateBtn.textContent = `Авто-вращение: ${autoRotate ? "вкл" : "выкл"}`;
+      autoRotateBtn.classList.toggle("active", autoRotate);
+    });
+    resetCamBtn.addEventListener("click", () => {
+      if (currentRoot) frameObject(currentRoot);
+    });
+
+    PRESETS.forEach((preset) => {
+      const btn = document.createElement("button");
+      btn.textContent = preset.label;
+      btn.addEventListener("click", () => {
+        if (activePresetBtn) activePresetBtn.classList.remove("active");
+        activePresetBtn = btn;
+        btn.classList.add("active");
+        loadUrl(preset.path, preset.label);
+      });
+      presetsEl.appendChild(btn);
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (autoRotate && currentRoot) currentRoot.rotation.y += 0.004;
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    if (location.protocol.startsWith("http")) {
+      loadUrl(PRESETS[0].path, PRESETS[0].label);
+      if (presetsEl.firstChild) presetsEl.firstChild.classList.add("active");
+      activePresetBtn = presetsEl.firstChild;
+    } else {
+      setStatus("Откройте через локальный сервер или перетащите .glb файл");
+    }
+  </script>
+</body>
+</html>

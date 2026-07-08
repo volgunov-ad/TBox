@@ -45,7 +45,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import android.content.Context
+import android.content.pm.LauncherApps
+import android.content.pm.PackageManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.os.Process
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
@@ -54,7 +57,8 @@ import vad.dashing.tbox.SettingsViewModel
 internal data class LaunchableAppEntry(
     val packageName: String,
     val label: String,
-    val icon: ImageBitmap?
+    val icon: ImageBitmap?,
+    val activityName: String? = null,
 )
 
 /**
@@ -113,23 +117,62 @@ private fun loadLaunchableAppEntries(
     @Suppress("UNUSED_PARAMETER") iconRevision: Int,
 ): List<LaunchableAppEntry> {
     val pm = appContext.packageManager
-    val intent = Intent(Intent.ACTION_MAIN).apply {
-        addCategory(Intent.CATEGORY_LAUNCHER)
+    val launcherApps = appContext.getSystemService(LauncherApps::class.java)
+    val fromLauncherService = launcherApps
+        ?.getActivityList(null, Process.myUserHandle())
+        .orEmpty()
+        .map { info ->
+            val pkg = info.componentName.packageName
+            val activity = info.componentName.className
+            val label = info.label?.toString().orEmpty().ifBlank { pkg }
+            val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx, lookup)
+                ?: runCatching {
+                    info.getBadgedIcon(iconSizePx).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
+                }.getOrNull()
+            LaunchableAppEntry(packageName = pkg, label = label, icon = bitmap, activityName = activity)
+        }
+    if (fromLauncherService.isNotEmpty()) {
+        return dedupePrimaryActivities(pm, fromLauncherService)
     }
-    @Suppress("QueryPermissionsNeeded", "DEPRECATION")
-    val resolves: List<ResolveInfo> = pm.queryIntentActivities(intent, 0)
-    return resolves
-        .map { ri ->
+
+    val intent = Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_LAUNCHER) }
+    @Suppress("QueryPermissionsNeeded", "DEPRECATION") val resolves: List<ResolveInfo> =
+        pm.queryIntentActivities(intent, 0)
+    return dedupePrimaryActivities(
+        pm,
+        resolves.map { ri ->
             val pkg = ri.activityInfo.packageName
+            val activity = ri.activityInfo.name
             val label = ri.loadLabel(pm).toString()
             val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx, lookup)
                 ?: runCatching {
                     ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
                 }.getOrNull()
-            LaunchableAppEntry(packageName = pkg, label = label, icon = bitmap)
-        }
-        .distinctBy { it.packageName }
+            LaunchableAppEntry(packageName = pkg, label = label, icon = bitmap, activityName = activity)
+        },
+    )
+}
+
+private fun dedupePrimaryActivities(
+    pm: PackageManager,
+    entries: List<LaunchableAppEntry>,
+): List<LaunchableAppEntry> =
+    entries
+        .groupBy { it.packageName }
+        .map { (pkg, list) -> pickPrimaryLaunchEntry(pm, pkg, list) }
         .sortedBy { it.label.lowercase() }
+
+private fun pickPrimaryLaunchEntry(
+    pm: PackageManager,
+    packageName: String,
+    entries: List<LaunchableAppEntry>,
+): LaunchableAppEntry {
+    val component = pm.getLaunchIntentForPackage(packageName)?.component
+        ?: pm.getLeanbackLaunchIntentForPackage(packageName)?.component
+    if (component != null) {
+        entries.firstOrNull { it.activityName == component.className }?.let { return it }
+    }
+    return entries.first()
 }
 
 @Composable

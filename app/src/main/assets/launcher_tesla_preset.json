@@ -1,0 +1,161 @@
+{
+  "formatVersion": 1,
+  "type": "tbox_launcher_layout",
+  "exportedAtMillis": 0,
+  "screen": { "orientation": "landscape", "aspectRatio": "16:9", "referenceDpi": 160 },
+  "theme": {
+    "canvasBackground": { "light": "#FFF5F6FA", "dark": "#FF070A14" },
+    "cornerButtons": {
+      "sizeDp": 52,
+      "background": { "light": "#00000000", "dark": "#00000000" },
+      "icon": { "light": "#FF111827", "dark": "#FFE5E7EB" }
+    },
+    "wallpaperCrop": true,
+    "colorPresets": [
+      "#FF070A14",
+      "#FF0B1020",
+      "#FF111827",
+      "#FFE5E7EB",
+      "#FF22D3EE",
+      "#FFF59E0B"
+    ]
+  },
+  "settingsButton": { "x": 0.92, "y": 0.04 },
+  "addButton": { "x": 0.84, "y": 0.04 },
+  "mainScreenPanels": [
+    {
+      "id": "left_card",
+      "name": "Assist",
+      "enabled": true,
+      "positionMode": "absolute",
+      "grid": { "rows": 2, "cols": 6 },
+      "position": { "x": 0.02, "y": 0.08 },
+      "size": { "width": 0.96, "height": 0.62 },
+      "background": true,
+      "clickAction": false,
+      "showTboxDisconnectIndicator": true,
+      "widgets": [
+        {
+          "dataKey": "musicWidget",
+          "customTitle": "Музыка",
+          "showTitle": false,
+          "showUnit": false,
+          "colSpan": 3,
+          "rowSpan": 2,
+          "shape": 22,
+          "scale": 1.0,
+          "textColorLight": "#FF111827",
+          "textColorDark": "#FFE5E7EB",
+          "backgroundColorLight": "#FFFFFFFF",
+          "backgroundColorDark": "#FF0B1020"
+        },
+        {
+          "dataKey": "outsideTemperature",
+          "customTitle": "Temp",
+          "showTitle": true,
+          "showUnit": true,
+          "displayStyle": "minimal",
+          "colSpan": 1,
+          "rowSpan": 1,
+          "shape": 22,
+          "scale": 1.0,
+          "textColorLight": "#FF111827",
+          "textColorDark": "#FFE5E7EB",
+          "backgroundColorLight": "#FFFFFFFF",
+          "backgroundColorDark": "#FF0B1020"
+        },
+        {
+          "dataKey": "fuelLevelWidget",
+          "customTitle": "Fuel",
+          "showTitle": true,
+          "showUnit": true,
+          "singleLineDualMetrics": true,
+          "displayStyle": "minimal",
+          "colSpan": 1,
+          "rowSpan": 1,
+          "shape": 22,
+          "scale": 1.0,
+          "textColorLight": "#FF111827",
+          "textColorDark": "#FFE5E7EB",
+          "backgroundColorLight": "#FFFFFFFF",
+          "backgroundColorDark": "#FF0B1020"
+        }
+      ]
+    },
+    {
+      "id": "dock",
+      "name": "Dock",
+      "enabled": true,
+      "positionMode": "absolute",
+      "grid": { "rows": 1, "cols": 6 },
+      "position": { "x": 0.02, "y": 0.72 },
+      "size": { "width": 0.96, "height": 0.26 },
+      "background": false,
+      "clickAction": false,
+      "showTboxDisconnectIndicator": false,
+      "widgets": [
+        {
+          "dataKey": "musicWidget",
+          "customTitle": "Музыка",
+          "showTitle": false,
+          "showUnit": false,
+          "colSpan": 2,
+          "rowSpan": 1,
+          "shape": 26,
+          "scale": 1.0,
+          "textColorLight": "#FF111827",
+          "textColorDark": "#FFE5E7EB",
+          "backgroundColorLight": "#FFFFFFFF",
+          "backgroundColorDark": "#FF0B1020"
+        },
+        {
+          "dataKey": "decorativeClock",
+          "showTitle": false,
+          "showUnit": false,
+          "colSpan": 2,
+          "rowSpan": 1,
+          "shape": 26,
+          "scale": 1.05,
+          "textColorLight": "#FF111827",
+          "textColorDark": "#FFE5E7EB",
+          "backgroundColorLight": "#FFFFFFFF",
+          "backgroundColorDark": "#FF0B1020"
+        },
+        {
+          "dataKey": "appLauncherWidget",
+          "customTitle": "Навигация",
+          "showTitle": true,
+          "showUnit": false,
+          "launcherAppPackage": "com.tencent.wecarnavi",
+          "colSpan": 1,
+          "rowSpan": 1,
+          "shape": 26,
+          "scale": 1.0,
+          "textColorLight": "#FF111827",
+          "textColorDark": "#FFE5E7EB",
+          "backgroundColorLight": "#FFFFFFFF",
+          "backgroundColorDark": "#FF0B1020"
+        },
+        {
+          "dataKey": "appLauncherWidget",
+          "customTitle": "Медиа",
+          "showTitle": true,
+          "showUnit": false,
+          "launcherAppPackage": "com.wt.multimedia.platform3",
+          "colSpan": 1,
+          "rowSpan": 1,
+          "shape": 26,
+          "scale": 1.0,
+          "textColorLight": "#FF111827",
+          "textColorDark": "#FFE5E7EB",
+          "backgroundColorLight": "#FFFFFFFF",
+          "backgroundColorDark": "#FF0B1020"
+        }
+      ]
+    }
+  ],
+  "floatingPanels": [],
+  "dashboardTab": { "rows": 3, "cols": 4, "widgets": [] },
+  "availableWidgets": []
+}
+

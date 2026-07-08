@@ -387,6 +387,29 @@ object MbCanEngineFacade {
         }.getOrNull()
     }
 
+    /**
+     * Reads door/trunk state from [com.mengbo.mbCan.defines.MBCanDataType.eMBCAN_VEHICLE_DOOR] (5).
+     * Returns null when mbCAN is unavailable or data is missing.
+     */
+    fun readVehicleDoor(): LauncherVehicleDoorSnapshot? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val doorCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleDoor")
+            val doorObj = getMbCanData.invoke(inst, 5, doorCls) ?: return null
+            LauncherVehicleDoorSnapshot(
+                driverDoor = doorCls.getMethod("getDriverDoorSts").invoke(doorObj) as Byte,
+                passengerDoor = doorCls.getMethod("getPsngrDoorSts").invoke(doorObj) as Byte,
+                rearLeftDoor = doorCls.getMethod("getLHRdoorSts").invoke(doorObj) as Byte,
+                rearRightDoor = doorCls.getMethod("getRHRDoorSts").invoke(doorObj) as Byte,
+                trunk = doorCls.getMethod("getTrunkSts").invoke(doorObj) as Byte,
+                hood = doorCls.getMethod("getHoodSts").invoke(doorObj) as Byte,
+            )
+        }.getOrNull()
+    }
+
     @Synchronized
     private fun unregisterAudioCfgCmdListener() {
         val inst = engineInstance

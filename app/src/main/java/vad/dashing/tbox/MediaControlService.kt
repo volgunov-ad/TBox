@@ -4,11 +4,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.MediaMetadata
+import android.media.Rating
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.SystemClock
 import android.view.KeyEvent
+import android.graphics.Bitmap
 import android.provider.Settings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -60,7 +62,9 @@ data class MediaPlayerState(
     val playbackSpeed: Float = 1f,
     val positionUpdateTimeMs: Long = 0L,
     val isPlaying: Boolean = false,
-    val hasSession: Boolean = false
+    val hasSession: Boolean = false,
+    val isLiked: Boolean? = null,
+    val supportsLike: Boolean = false,
 )
 
 data class MediaWidgetState(
@@ -73,7 +77,9 @@ data class MediaWidgetState(
     val positionUpdateTimeMs: Long = 0L,
     val isPlaying: Boolean = false,
     val controlsAvailable: Boolean = false,
-    val notificationAccessGranted: Boolean = false
+    val notificationAccessGranted: Boolean = false,
+    val isLiked: Boolean? = null,
+    val supportsLike: Boolean = false,
 )
 
 /**
@@ -163,6 +169,7 @@ object SharedMediaControlService {
 
     private val controllers = mutableMapOf<String, MediaController>()
     private val controllerCallbacks = mutableMapOf<String, MediaController.Callback>()
+    private val albumArtByPackage = mutableMapOf<String, Bitmap?>()
 
     private val _playerStates = MutableStateFlow<Map<String, MediaPlayerState>>(emptyMap())
     val playerStates: StateFlow<Map<String, MediaPlayerState>> = _playerStates.asStateFlow()
@@ -258,8 +265,14 @@ object SharedMediaControlService {
             positionUpdateTimeMs = selectedState?.positionUpdateTimeMs ?: 0L,
             isPlaying = selectedState?.isPlaying == true,
             controlsAvailable = selectedState?.hasSession == true,
-            notificationAccessGranted = isNotificationAccessGranted()
+            notificationAccessGranted = isNotificationAccessGranted(),
+            isLiked = selectedState?.isLiked,
+            supportsLike = selectedState?.supportsLike == true,
         )
+    }
+
+    fun albumArtFor(packageName: String): Bitmap? = synchronized(this) {
+        albumArtByPackage[packageName]
     }
 
     fun skipToPrevious(selectedPackages: Set<String>, preferredPackage: String = "") {
@@ -279,7 +292,8 @@ object SharedMediaControlService {
         context: Context,
         selectedPackages: Set<String>,
         preferredPackage: String = "",
-        keepPlayerForeground: Boolean = false // anymani: опция независима от автозапуска
+        keepPlayerForeground: Boolean = false,
+        launchAppIfNeeded: Boolean = true,
     ) {
         var controllerHandled = false
         synchronized(this) {
@@ -287,8 +301,16 @@ object SharedMediaControlService {
             val controller = resolveControllerLocked(
                 selectedPackages = selectedPackages,
                 preferredPackage = preferredPackage,
-                strictPreferred = preferredPackage.isNotBlank()
-            )
+                strictPreferred = preferredPackage.isNotBlank() && launchAppIfNeeded,
+            ) ?: if (!launchAppIfNeeded) {
+                resolveControllerLocked(
+                    selectedPackages = selectedPackages,
+                    preferredPackage = preferredPackage,
+                    strictPreferred = false,
+                )
+            } else {
+                null
+            }
             if (controller != null) {
                 val isPlaying = controller.playbackState.isPlayingState()
                 if (isPlaying) {
@@ -306,13 +328,31 @@ object SharedMediaControlService {
             preferredPackage = preferredPackage
         ) ?: return
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
+        if (!launchAppIfNeeded) return
         launchPlayerApp(
             context.applicationContext,
             targetPackage,
             scheduleColdStartPlayRetry = true,
-            keepPlayerForeground = keepPlayerForeground, // anymani: передаём флаг при ручном запуске
+            keepPlayerForeground = keepPlayerForeground,
             scheduleLateSessionPlayRetry = true
         )
+    }
+
+    fun toggleLike(selectedPackages: Set<String>, preferredPackage: String = "") {
+        synchronized(this) {
+            syncControllersLocked()
+            val controller = resolveControllerLocked(
+                selectedPackages = selectedPackages,
+                preferredPackage = preferredPackage,
+                strictPreferred = preferredPackage.isNotBlank(),
+            ) ?: return
+            val playbackState = controller.playbackState
+            if ((playbackState?.actions ?: 0L) and PlaybackState.ACTION_SET_RATING == 0L) return
+            val metadata = controller.metadata
+            val current = metadata.extractUserRating()
+            val likedNow = current?.isRated == true && current.ratingStyle == Rating.RATING_HEART && current.hasHeart()
+            controller.transportControls.setRating(Rating.newHeartRating(!likedNow))
+        }
     }
 
     fun play(
@@ -665,11 +705,14 @@ object SharedMediaControlService {
     private fun publishPlayerStatesLocked() {
         if (requestedPackages.isEmpty()) {
             _playerStates.value = emptyMap()
+            albumArtByPackage.clear()
             return
         }
 
         val orderedPackages = orderedMediaPlayerPackages(requestedPackages)
         val updatedStates = mutableMapOf<String, MediaPlayerState>()
+        val activePackages = orderedPackages.toSet()
+        albumArtByPackage.keys.retainAll(activePackages)
         orderedPackages.forEach { packageName ->
             val player = SupportedMediaPlayer.fromPackage(packageName)
             val controller = controllers[packageName]
@@ -677,6 +720,7 @@ object SharedMediaControlService {
             val playbackState = controller?.playbackState
             val track = metadata.extractTrackTitle()
             val artist = metadata.extractArtistName()
+            albumArtByPackage[packageName] = metadata.extractAlbumArt()
             updatedStates[packageName] = MediaPlayerState(
                 player = player,
                 artist = artist,
@@ -686,7 +730,9 @@ object SharedMediaControlService {
                 playbackSpeed = playbackState.extractPlaybackSpeed(),
                 positionUpdateTimeMs = playbackState.extractPositionUpdateTimeMs(),
                 isPlaying = playbackState.isPlayingState(),
-                hasSession = controller != null
+                hasSession = controller != null,
+                isLiked = metadata.extractLikedState(),
+                supportsLike = playbackState.supportsLike(),
             )
         }
 
@@ -715,6 +761,48 @@ private fun PlaybackState?.isPlayingState(): Boolean {
         PlaybackState.STATE_CONNECTING -> true
         else -> false
     }
+}
+
+private fun PlaybackState?.supportsLike(): Boolean {
+    return ((this?.actions ?: 0L) and PlaybackState.ACTION_SET_RATING) != 0L
+}
+
+private fun MediaMetadata?.extractUserRating(): Rating? {
+    if (this == null) return null
+    return getRating(MediaMetadata.METADATA_KEY_USER_RATING)
+        ?: getRating(MediaMetadata.METADATA_KEY_RATING)
+}
+
+private fun MediaMetadata?.extractLikedState(): Boolean? {
+    val rating = extractUserRating() ?: return null
+    if (!rating.isRated) return false
+    return when (rating.ratingStyle) {
+        Rating.RATING_HEART -> rating.hasHeart()
+        Rating.RATING_THUMB_UP_DOWN -> rating.isThumbUp
+        else -> null
+    }
+}
+
+private fun MediaMetadata?.extractAlbumArt(maxPx: Int = 256): Bitmap? {
+    if (this == null) return null
+    return runCatching {
+        val raw = getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+            ?: return null
+        val software = raw.toSoftwareBitmap()
+        val maxSide = maxOf(software.width, software.height)
+        if (maxSide <= maxPx) return software
+        val scale = maxPx.toFloat() / maxSide.toFloat()
+        val w = (software.width * scale).toInt().coerceAtLeast(1)
+        val h = (software.height * scale).toInt().coerceAtLeast(1)
+        Bitmap.createScaledBitmap(software, w, h, true)
+    }.getOrNull()
+}
+
+private fun Bitmap.toSoftwareBitmap(): Bitmap {
+    if (config != Bitmap.Config.HARDWARE) return this
+    return copy(Bitmap.Config.ARGB_8888, false) ?: this
 }
 
 private fun MediaMetadata?.extractTrackTitle(): String {

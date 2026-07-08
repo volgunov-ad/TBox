@@ -63,12 +63,13 @@ android {
             isShrinkResources = false
         }
     }
+    androidResources {
+        // PlayCanvas bundle is build-only; runtime uses baked GLB in models/
+        ignoreAssetsPattern = "jetour720:models/web:.DS_Store:thumbs.db"
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
     buildFeatures {
         compose = true
@@ -76,6 +77,12 @@ android {
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -106,6 +113,7 @@ dependencies {
     implementation(libs.androidx.profileinstaller.profileinstaller)
     implementation(libs.okhttp)
     implementation(libs.snakeyaml.engine)
+    implementation(libs.sceneview)
     implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

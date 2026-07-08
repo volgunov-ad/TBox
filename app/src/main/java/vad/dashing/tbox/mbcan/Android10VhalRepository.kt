@@ -318,6 +318,11 @@ object Android10VhalRepository {
     private val VHAL_ENGINE_RPM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID
     private val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_TEMPERATURE_PROPERTY_ID
     private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
+    private const val VHAL_DRIVER_DOOR_STS = 289412336
+    private const val VHAL_PASSENGER_DOOR_STS = 289412337
+    private const val VHAL_REAR_RIGHT_DOOR_STS = 289412339
+    private const val VHAL_REAR_LEFT_DOOR_STS = 289412340
+    private const val VHAL_TAILGATE_STS = 289412273
     private const val VHAL_ENGINE_RPM_SCALE = 4f
     private const val NORMAL_POLL_INTERVAL_MS = 30_000L
     private const val BURST_POLL_INTERVAL_MS = 1_500L
@@ -1235,6 +1240,18 @@ object Android10VhalRepository {
             }
             MbCanSignal.WirelessChargingSwitch -> Unit
         }
+    }
+
+    /** Reads door/trunk status from CEM / PLG VHAL properties. */
+    fun readVehicleBodyState(): VehicleBodyState? {
+        val b = bridge ?: return null
+        return VehicleBodyState(
+            doorFlOpen = decodeVhalDoorOpen(b.getIntProperty(VHAL_DRIVER_DOOR_STS)),
+            doorFrOpen = decodeVhalDoorOpen(b.getIntProperty(VHAL_PASSENGER_DOOR_STS)),
+            doorRlOpen = decodeVhalDoorOpen(b.getIntProperty(VHAL_REAR_LEFT_DOOR_STS)),
+            doorRrOpen = decodeVhalDoorOpen(b.getIntProperty(VHAL_REAR_RIGHT_DOOR_STS)),
+            tailgateOpen = decodeVhalDoorOpen(b.getIntProperty(VHAL_TAILGATE_STS)),
+        )
     }
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {

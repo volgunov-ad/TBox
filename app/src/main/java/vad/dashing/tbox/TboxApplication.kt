@@ -15,8 +15,15 @@ class TboxApplication : Application() {
         super.onCreate()
         AppContextHolder.init(this)
         MainActivityForegroundTracker.register(this)
+        LastAppTracker.register(this)
         val appDataManager = AppDataManager(this)
         val settingsManager = SettingsManager(this)
+        applicationScope.launch {
+            try {
+                LauncherPresetInitializer.ensureDefaultLayoutIfNeeded(this@TboxApplication, settingsManager)
+            } catch (_: Exception) {
+            }
+        }
         applicationScope.launch {
             settingsManager.headUnitCanModeFlow.collectLatest { mode ->
                 UniversalCanRepository.setMode(mode)

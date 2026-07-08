@@ -460,6 +460,16 @@ object ThemeLayoutExport {
         importFloatingPanels(section?.optJSONArray("panels"), sm)
     }
 
+    /** Public entry for [LauncherLayoutImporter] and tests. */
+    suspend fun importMainScreenSectionPublic(section: JSONObject, sm: SettingsManager) {
+        importMainScreenSection(section, sm)
+    }
+
+    /** Public entry for [LauncherLayoutImporter] and tests. */
+    suspend fun importFloatingPanelsPublic(panels: JSONArray, sm: SettingsManager) {
+        importFloatingPanels(panels, sm)
+    }
+
     private suspend fun importFloatingPanels(panels: JSONArray?, sm: SettingsManager) {
         if (panels == null || panels.length() == 0) return
         val configs = mutableListOf<FloatingDashboardConfig>()

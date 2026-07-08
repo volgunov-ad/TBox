@@ -77,6 +77,11 @@ import java.util.Date
 import java.util.concurrent.Executors
 import java.util.Locale
 import kotlin.let
+import vad.dashing.tbox.ui.launcher.LauncherEmbeddedBoundsState
+import vad.dashing.tbox.ui.launcher.LauncherOemDelegate
+import vad.dashing.tbox.ui.launcher.LauncherOemFullscreenPolicy
+import vad.dashing.tbox.ui.launcher.isFreeformEnabled
+import vad.dashing.tbox.ui.launcher.tryLaunchIntentInBounds
 
 class BackgroundService : Service() {
     private lateinit var settingsManager: SettingsManager
@@ -343,6 +348,12 @@ class BackgroundService : Service() {
          */
         const val ACTION_OPEN_MAIN_ACTIVITY = "vad.dashing.tbox.OPEN_MAIN_ACTIVITY"
         const val EXTRA_OPEN_MAIN_DELAY_MS = "vad.dashing.tbox.EXTRA_OPEN_MAIN_DELAY_MS"
+        /** Launch a third-party app from service context (HOME launcher cannot startActivity on some HUs). */
+        const val ACTION_LAUNCH_APP = "vad.dashing.tbox.LAUNCH_APP"
+        const val EXTRA_LAUNCH_PACKAGE = "vad.dashing.tbox.EXTRA_LAUNCH_PACKAGE"
+        const val EXTRA_LAUNCH_COMPONENT = "vad.dashing.tbox.EXTRA_LAUNCH_COMPONENT"
+        const val EXTRA_LAUNCH_EMBEDDED = "vad.dashing.tbox.EXTRA_LAUNCH_EMBEDDED"
+        const val EXTRA_LAUNCH_FULLSCREEN = "vad.dashing.tbox.EXTRA_LAUNCH_FULLSCREEN"
         /** Double-tap on «hide floating panels» tile: hide other overlays or restore them. */
         const val ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS =
             "vad.dashing.tbox.TOGGLE_HIDE_OTHER_FLOATING_PANELS"
@@ -847,6 +858,19 @@ class BackgroundService : Service() {
             ACTION_OPEN_MAIN_ACTIVITY -> {
                 val delayMs = intent.getLongExtra(EXTRA_OPEN_MAIN_DELAY_MS, 0L).coerceAtLeast(0L)
                 scheduleOpenMainActivity(delayMs)
+            }
+            ACTION_LAUNCH_APP -> {
+                val pkg = intent.getStringExtra(EXTRA_LAUNCH_PACKAGE).orEmpty()
+                val component = intent.getStringExtra(EXTRA_LAUNCH_COMPONENT)
+                    ?.let { android.content.ComponentName.unflattenFromString(it) }
+                val preferEmbedded = intent.getBooleanExtra(EXTRA_LAUNCH_EMBEDDED, true)
+                val forceFullscreen = intent.getBooleanExtra(EXTRA_LAUNCH_FULLSCREEN, false)
+                launchExternalAppFromService(
+                    packageName = pkg,
+                    component = component,
+                    preferEmbedded = preferEmbedded,
+                    forceFullscreen = forceFullscreen,
+                )
             }
             ACTION_TOGGLE_HIDE_OTHER_FLOATING_PANELS -> {
                 val excludeOrigin = intent.getBooleanExtra(EXTRA_FLOATING_HIDE_EXCLUDE_ORIGIN, true)
@@ -3259,6 +3283,145 @@ class BackgroundService : Service() {
         }
     }
 
+    private fun tryLaunchEmbedded(
+        packageName: String,
+        component: android.content.ComponentName?,
+    ): Boolean {
+        val bounds = LauncherEmbeddedBoundsState.embeddedBounds() ?: return false
+        if (!isFreeformEnabled(this)) return false
+        val launch = buildLaunchIntent(packageName, component) ?: return false
+        val ok = tryLaunchIntentInBounds(this, packageName, launch, bounds)
+        if (ok) {
+            LastAppTracker.recordLaunch(this, packageName)
+            Log.w("LauncherAppLaunch", "embedded OK pkg=$packageName bounds=$bounds")
+        }
+        return ok
+    }
+
+    private fun tryLaunchFullscreenFreeform(
+        packageName: String,
+        component: android.content.ComponentName?,
+    ): Boolean {
+        val bounds = LauncherEmbeddedBoundsState.fullScreenBounds() ?: return false
+        if (!isFreeformEnabled(this)) return false
+        val launch = buildLaunchIntent(packageName, component) ?: return false
+        val ok = tryLaunchIntentInBounds(this, packageName, launch, bounds)
+        if (ok) {
+            LastAppTracker.recordLaunch(this, packageName)
+            Log.w("LauncherAppLaunch", "fullscreen freeform OK pkg=$packageName bounds=$bounds")
+        }
+        return ok
+    }
+
+    private fun buildLaunchIntent(
+        packageName: String,
+        component: android.content.ComponentName?,
+    ): android.content.Intent? = when {
+        component != null -> android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+            addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+            setComponent(component)
+        }
+        packageName.isNotBlank() -> packageManager.getLaunchIntentForPackage(packageName)
+        else -> null
+    }
+
+    private fun launchExternalAppFromService(
+        packageName: String,
+        component: android.content.ComponentName?,
+        preferEmbedded: Boolean = true,
+        forceFullscreen: Boolean = false,
+    ) {
+        if (forceFullscreen) {
+            if (tryLaunchFullscreenFreeform(packageName, component)) {
+                LauncherForegroundHandoff.requestLauncherHandoff()
+                logTopActivityAfterLaunch()
+                return
+            }
+            if (!LauncherOemFullscreenPolicy.allowsDirectFullscreen(this, packageName)) {
+                LauncherOemDelegate.notifyFullscreenBlocked(this, packageName)
+                LauncherForegroundHandoff.restoreLauncherWindow()
+                return
+            }
+        } else if (preferEmbedded && tryLaunchEmbedded(packageName, component)) {
+            logTopActivityAfterLaunch()
+            return
+        }
+
+        if (!LauncherOemFullscreenPolicy.allowsDirectFullscreen(this, packageName)) {
+            Log.w("LauncherAppLaunch", "pkg=$packageName not in OEM fullscreen whitelist")
+            if (tryLaunchEmbedded(packageName, component)) {
+                logTopActivityAfterLaunch()
+                return
+            }
+            LauncherOemDelegate.notifyFullscreenBlocked(this, packageName)
+            LauncherForegroundHandoff.restoreLauncherWindow()
+            return
+        }
+
+        if (component != null) {
+            val launcherApps = getSystemService(android.content.pm.LauncherApps::class.java)
+            if (launcherApps != null) {
+                val viaLauncherApps = runCatching {
+                    launcherApps.startMainActivity(
+                        component,
+                        android.os.Process.myUserHandle(),
+                        null,
+                        null,
+                    )
+                }.onSuccess {
+                    Log.w("LauncherAppLaunch", "service startMainActivity OK pkg=$packageName component=$component")
+                }.onFailure {
+                    Log.w("LauncherAppLaunch", "service startMainActivity failed pkg=$packageName", it)
+                }.isSuccess
+                if (viaLauncherApps) {
+                    if (packageName.isNotBlank()) {
+                        LastAppTracker.recordLaunch(this, packageName)
+                    }
+                    LauncherForegroundHandoff.requestLauncherHandoff()
+                    logTopActivityAfterLaunch()
+                    return
+                }
+            }
+        }
+
+        val launch = when {
+            component != null -> android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+                addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+                setComponent(component)
+            }
+            packageName.isNotBlank() -> packageManager.getLaunchIntentForPackage(packageName)
+            else -> null
+        }
+        if (launch == null) {
+            Log.w("LauncherAppLaunch", "service no intent pkg=$packageName component=$component")
+            return
+        }
+        launch.addFlags(
+            android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED,
+        )
+        try {
+            startActivity(launch)
+            if (packageName.isNotBlank()) {
+                LastAppTracker.recordLaunch(this, packageName)
+            }
+            Log.w("LauncherAppLaunch", "service startActivity OK pkg=$packageName component=${launch.component}")
+            LauncherForegroundHandoff.requestLauncherHandoff()
+            logTopActivityAfterLaunch()
+        } catch (e: Exception) {
+            Log.w("LauncherAppLaunch", "service startActivity failed pkg=$packageName", e)
+        }
+    }
+
+    private fun logTopActivityAfterLaunch() {
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            val am = getSystemService(android.app.ActivityManager::class.java) ?: return@postDelayed
+            @Suppress("DEPRECATION")
+            val top = am.getRunningTasks(1)?.firstOrNull()?.topActivity
+            Log.w("LauncherAppLaunch", "topActivity after launch: $top")
+        }, 500L)
+    }
+
     private fun scheduleOpenMainActivity(delayMs: Long) {
         openMainActivityJob?.cancel()
         openMainActivityJob = scope.launch(exceptionHandler) {
@@ -3271,6 +3434,7 @@ class BackgroundService : Service() {
                         val launchIntent =
                             MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
                         startActivity(launchIntent)
+                        LauncherForegroundHandoff.requestLauncherHandoff()
                     } catch (e: Exception) {
                         Log.e("BackgroundService", "Open MainActivity failed", e)
                         TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")

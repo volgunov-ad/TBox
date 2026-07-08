@@ -1,0 +1,70 @@
+{
+  "scale": "meters",
+  "defaultPaint": "cheqi01",
+  "doors": [
+    {
+      "pivot": "p_door01",
+      "openDeg": -65
+    },
+    {
+      "pivot": "p_door02",
+      "openDeg": 65
+    },
+    {
+      "pivot": "p_door03",
+      "openDeg": -65
+    },
+    {
+      "pivot": "p_door04",
+      "openDeg": 65
+    }
+  ],
+  "tailgate": {
+    "lidPivot": "houbeimen_copy",
+    "meshPivot": "p_houbeimen05",
+    "openDeg": 60,
+    "axis": "Z"
+  },
+  "struts": [
+    "p_chenggan01",
+    "p_chenggan02"
+  ],
+  "sunroof": {
+    "movableMeshes": ["tianchuan1", "tianchuan5"],
+    "fixedMeshes": ["tianchuan4"],
+    "axis": "x",
+    "slideCm": 59
+  },
+  "steeringMeshes": [],
+  "steeringWheel": {
+    "axis": "Z",
+    "ratio": 2.8
+  },
+  "wheels": {
+    "radiusCm": 25,
+    "front": [
+      "wheel_lungu01_L",
+      "wheel_lungu01_R"
+    ],
+    "rear": [
+      "wheel_lungu02_L",
+      "wheel_lungu02_R"
+    ],
+    "spinAxis": "Z",
+    "steerFront": true
+  },
+  "paints": [
+    "cheqi01",
+    "cheqi02",
+    "cheqi03",
+    "cheqi04",
+    "cheqi05"
+  ],
+  "paintMeshMaterialPrefix": "cheqi",
+  "headlights": {
+    "materials": [
+      "waiguanxianshi01",
+      "jinshu"
+    ]
+  }
+}
