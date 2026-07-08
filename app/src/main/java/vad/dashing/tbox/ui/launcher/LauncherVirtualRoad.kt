@@ -14,10 +14,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlin.math.exp
 import kotlin.math.pow
@@ -28,10 +32,16 @@ private const val DRIVE_SPEED_THRESHOLD_KMH = 3f
 fun LauncherVirtualRoad(
     speedKmh: Float,
     steerAngleDeg: Float,
+    adas: LauncherAdasState = LauncherAdasState(),
     modifier: Modifier = Modifier,
     steerPreview: Boolean = false,
 ) {
-    val driveTarget = if (speedKmh > DRIVE_SPEED_THRESHOLD_KMH) 1f else if (steerPreview) 1f else 0f
+    val driveTarget = when {
+        speedKmh > DRIVE_SPEED_THRESHOLD_KMH -> 1f
+        steerPreview -> 1f
+        adas.frontObject.valid || adas.hasAnyAssist -> 1f
+        else -> 0f
+    }
     val driveBlend by animateFloatAsState(
         targetValue = driveTarget,
         animationSpec = tween(280),
@@ -79,6 +89,7 @@ fun LauncherVirtualRoad(
             roadPhase = roadPhase,
             steerDeg = visualSteer,
             speedKmh = speedKmh,
+            adas = adas,
         )
     }
 }
@@ -87,6 +98,7 @@ private fun DrawScope.drawVirtualRoad(
     roadPhase: Float,
     steerDeg: Float,
     speedKmh: Float,
+    adas: LauncherAdasState,
 ) {
     val w = size.width
     val h = size.height
@@ -127,14 +139,13 @@ private fun DrawScope.drawVirtualRoad(
     )
 
     val edgeColor = LauncherColors.AccentBlue.copy(alpha = 0.32f)
-    drawCurvedLine(
-        color = edgeColor,
-        xAt = { t -> centerXAt(t) - halfWidthAt(t) },
-        yAt = ::yAt,
-    )
-    drawCurvedLine(
-        color = edgeColor,
-        xAt = { t -> centerXAt(t) + halfWidthAt(t) },
+    drawCurvedLine(color = edgeColor, xAt = { t -> centerXAt(t) - halfWidthAt(t) }, yAt = ::yAt)
+    drawCurvedLine(color = edgeColor, xAt = { t -> centerXAt(t) + halfWidthAt(t) }, yAt = ::yAt)
+
+    drawAdasLaneAssist(
+        adas = adas,
+        centerXAt = ::centerXAt,
+        halfWidthAt = ::halfWidthAt,
         yAt = ::yAt,
     )
 
@@ -156,10 +167,118 @@ private fun DrawScope.drawVirtualRoad(
         }
         y += dashSpacing * (0.4f + 0.6f * t)
     }
+
+    adas.frontObject.displayDistanceM?.let { distanceM ->
+        if (adas.frontObject.valid) {
+            drawFrontObject(
+                adas = adas,
+                distanceM = distanceM,
+                centerXAt = ::centerXAt,
+                halfWidthAt = ::halfWidthAt,
+                yAt = ::yAt,
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawAdasLaneAssist(
+    adas: LauncherAdasState,
+    centerXAt: (Float) -> Float,
+    halfWidthAt: (Float) -> Float,
+    yAt: (Float) -> Float,
+) {
+    fun laneColor(side: LauncherAdasLaneVisualization, warning: Boolean): Color = when {
+        warning -> Color(0xFFEF4444).copy(alpha = 0.72f)
+        side == LauncherAdasLaneVisualization.Intervention -> LauncherColors.AccentCyan.copy(alpha = 0.55f)
+        side == LauncherAdasLaneVisualization.Tracking -> LauncherColors.AccentBlue.copy(alpha = 0.42f)
+        else -> Color.Transparent
+    }
+    listOf(
+        adas.leftLane to -1f,
+        adas.rightLane to 1f,
+    ).forEach { (lane, side) ->
+        if (lane == LauncherAdasLaneVisualization.Hidden) return@forEach
+        val warning = lane == LauncherAdasLaneVisualization.Warning
+        val color = laneColor(lane, warning)
+        if (color == Color.Transparent) return@forEach
+        var prev = Offset(
+            centerXAt(1f) + side * (halfWidthAt(1f) - 6f),
+            yAt(1f),
+        )
+        for (i in 8 downTo 0) {
+            val t = i / 8f
+            val next = Offset(
+                centerXAt(t) + side * (halfWidthAt(t) - 6f),
+                yAt(t),
+            )
+            drawLine(color = color, start = prev, end = next, strokeWidth = if (warning) 3.5f else 2.5f)
+            prev = next
+        }
+    }
+}
+
+private fun DrawScope.drawFrontObject(
+    adas: LauncherAdasState,
+    distanceM: Int,
+    centerXAt: (Float) -> Float,
+    halfWidthAt: (Float) -> Float,
+    yAt: (Float) -> Float,
+) {
+    val depth = distanceToRoadDepth(distanceM)
+    val cx = centerXAt(depth)
+    val cy = yAt(depth)
+    val roadHalf = halfWidthAt(depth)
+    val alert = adas.fcwActive || adas.distanceWarning || adas.aebHint || adas.accTakeOver
+    val baseColor = if (alert) Color(0xFFEF4444) else LauncherColors.AccentCyan
+    val fillColor = baseColor.copy(alpha = if (alert) 0.55f else 0.42f)
+    val strokeColor = baseColor.copy(alpha = 0.88f)
+
+    val (objW, objH) = objectSizeForType(adas.frontObject.type, roadHalf)
+    val topLeft = Offset(cx - objW / 2f, cy - objH)
+    drawRoundRect(
+        color = fillColor,
+        topLeft = topLeft,
+        size = Size(objW, objH),
+        cornerRadius = CornerRadius(objW * 0.18f, objW * 0.18f),
+    )
+    drawRoundRect(
+        color = strokeColor,
+        topLeft = topLeft,
+        size = Size(objW, objH),
+        cornerRadius = CornerRadius(objW * 0.18f, objW * 0.18f),
+        style = Stroke(width = 2f),
+    )
+    when (adas.frontObject.type) {
+        LauncherAdasFrontObjectType.Pedestrian -> {
+            drawCircle(
+                color = strokeColor,
+                radius = objW * 0.22f,
+                center = Offset(cx, cy - objH * 0.72f),
+            )
+        }
+        LauncherAdasFrontObjectType.Motorcycle, LauncherAdasFrontObjectType.Bicycle -> {
+            drawCircle(color = strokeColor, radius = objW * 0.14f, center = Offset(cx - objW * 0.2f, cy - objH * 0.1f))
+            drawCircle(color = strokeColor, radius = objW * 0.14f, center = Offset(cx + objW * 0.2f, cy - objH * 0.1f))
+        }
+        else -> Unit
+    }
+}
+
+private fun objectSizeForType(type: LauncherAdasFrontObjectType, roadHalf: Float): Pair<Float, Float> {
+    val base = roadHalf * 0.34f
+    return when (type) {
+        LauncherAdasFrontObjectType.Truck, LauncherAdasFrontObjectType.Bus ->
+            base * 1.05f to base * 1.35f
+        LauncherAdasFrontObjectType.Motorcycle, LauncherAdasFrontObjectType.Bicycle ->
+            base * 0.55f to base * 0.85f
+        LauncherAdasFrontObjectType.Pedestrian ->
+            base * 0.42f to base * 0.95f
+        else -> base * 0.82f to base * 1.0f
+    }
 }
 
 private fun DrawScope.drawCurvedLine(
-    color: androidx.compose.ui.graphics.Color,
+    color: Color,
     xAt: (Float) -> Float,
     yAt: (Float) -> Float,
 ) {

@@ -64,6 +64,7 @@ fun LauncherLeftPanel(
     val gearBoxCurrentGear by canViewModel.gearBoxCurrentGear.collectAsStateWithLifecycle()
     val fuelPct by canViewModel.fuelLevelPercentageFiltered.collectAsStateWithLifecycle()
     val vehicleBody by LauncherVehicleBodyRepository.state.collectAsStateWithLifecycle()
+    val adas by LauncherAdasRepository.state.collectAsStateWithLifecycle()
     val motion = rememberLauncherVehicleMotion(tboxConnected, canViewModel)
 
     val simulateEnabled = LauncherDevVehicleState.simulateEnabled
@@ -195,6 +196,7 @@ fun LauncherLeftPanel(
                 LauncherVirtualRoad(
                     speedKmh = effectiveSpeed,
                     steerAngleDeg = effectiveSteer,
+                    adas = adas,
                     steerPreview = steerPreview,
                     modifier = Modifier.fillMaxSize(),
                 )

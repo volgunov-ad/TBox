@@ -68,7 +68,11 @@ fun TeslaLauncherScreen(
 
     DisposableEffect(Unit) {
         LauncherVehicleBodyRepository.ensurePolling()
-        onDispose { LauncherVehicleBodyRepository.stopPolling() }
+        LauncherAdasRepository.ensureActive()
+        onDispose {
+            LauncherVehicleBodyRepository.stopPolling()
+            LauncherAdasRepository.stop()
+        }
     }
 
     val sidebarWidth = rememberLauncherSidebarWidth()
