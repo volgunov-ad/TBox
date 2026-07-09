@@ -214,6 +214,16 @@ object MbCanEngineFacade {
                     MbCanRepository.scheduleEngineRpmPush(rpm)
                     MbCanRepository.scheduleEngineTemperaturePush(temperature)
                 }
+                "onVehicleBcmStatusChange" -> {
+                    val bcm = args?.getOrNull(0) ?: return@InvocationHandler null
+                    val moveDir = runCatching {
+                        val getter = bcm.javaClass.getMethod("getRearDoorMoveDir")
+                        (getter.invoke(bcm) as? Number)?.toInt()
+                    }.getOrNull()
+                    if (moveDir != null) {
+                        MbCanRepository.scheduleTrunkMoveDirPush(moveDir)
+                    }
+                }
             }
             null
         }

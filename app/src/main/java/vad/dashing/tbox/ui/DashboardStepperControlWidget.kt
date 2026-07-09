@@ -1,0 +1,246 @@
+package vad.dashing.tbox.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlin.math.abs
+
+private const val STEPPER_SWIPE_STEP_PX = 58f
+
+@Composable
+fun DashboardStepperControlWidget(
+    modifier: Modifier = Modifier,
+    isVertical: Boolean,
+    centerLabel: String,
+    centerDimmed: Boolean,
+    decreaseIcon: @Composable () -> Unit,
+    increaseIcon: @Composable () -> Unit,
+    centerIcon: @Composable () -> Unit,
+    enableInnerInteractions: Boolean,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+    onCenterClick: () -> Unit,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean,
+    titleText: String,
+) {
+    var swipeAccumulator by remember(isVertical) { mutableFloatStateOf(0f) }
+    val rootSwipeModifier = if (enableInnerInteractions) {
+        modifier.pointerInput(isVertical) {
+            detectDragGestures(
+                onDrag = { change, dragAmount ->
+                    change.consume()
+                    val primaryDelta = if (isVertical) -dragAmount.y else dragAmount.x
+                    swipeAccumulator += primaryDelta
+                    while (abs(swipeAccumulator) >= STEPPER_SWIPE_STEP_PX) {
+                        val shouldIncrease = swipeAccumulator > 0f
+                        if (shouldIncrease) onIncrease() else onDecrease()
+                        swipeAccumulator += if (shouldIncrease) -STEPPER_SWIPE_STEP_PX else STEPPER_SWIPE_STEP_PX
+                    }
+                },
+                onDragEnd = { swipeAccumulator = 0f },
+                onDragCancel = { swipeAccumulator = 0f }
+            )
+        }
+    } else {
+        modifier
+    }
+
+    DashboardWidgetScaffold(
+        modifier = rootSwipeModifier,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, resolvedTextColor ->
+        val centerTextColor = if (centerDimmed) {
+            resolvedTextColor.copy(alpha = 0.35f)
+        } else {
+            resolvedTextColor
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (showTitle) {
+                Text(
+                    text = titleText,
+                    color = resolvedTextColor,
+                    style = calculateResponsiveTextStyle(
+                        containerHeight = availableHeight,
+                        textType = TextType.TITLE
+                    ),
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 1,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (isVertical) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    StepperActionButton(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
+                        onClick = onIncrease,
+                        icon = increaseIcon,
+                    )
+                    StepperCenterButton(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        label = centerLabel,
+                        labelColor = centerTextColor,
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
+                        onClick = onCenterClick,
+                        icon = centerIcon,
+                        availableHeight = availableHeight,
+                    )
+                    StepperActionButton(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
+                        onClick = onDecrease,
+                        icon = decreaseIcon,
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    StepperActionButton(
+                        modifier = Modifier.fillMaxHeight().weight(1f),
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
+                        onClick = onDecrease,
+                        icon = decreaseIcon,
+                    )
+                    StepperCenterButton(
+                        modifier = Modifier.fillMaxHeight().weight(1f),
+                        label = centerLabel,
+                        labelColor = centerTextColor,
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
+                        onClick = onCenterClick,
+                        icon = centerIcon,
+                        availableHeight = availableHeight,
+                    )
+                    StepperActionButton(
+                        modifier = Modifier.fillMaxHeight().weight(1f),
+                        interactionEnabled = enableInnerInteractions,
+                        onLongClick = onLongClick,
+                        onClick = onIncrease,
+                        icon = increaseIcon,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepperCenterButton(
+    modifier: Modifier,
+    label: String,
+    labelColor: Color,
+    interactionEnabled: Boolean,
+    onLongClick: () -> Unit,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
+    availableHeight: Dp,
+) {
+    StepperActionButton(
+        modifier = modifier,
+        interactionEnabled = interactionEnabled,
+        onLongClick = onLongClick,
+        onClick = onClick,
+        icon = {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight(0.48f)
+                        .aspectRatio(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    icon()
+                }
+                Text(
+                    text = label,
+                    color = labelColor,
+                    style = calculateResponsiveTextStyle(
+                        containerHeight = availableHeight,
+                        textType = TextType.TITLE
+                    ),
+                    maxLines = 1
+                )
+            }
+        },
+    )
+}
+
+@Composable
+private fun StepperActionButton(
+    modifier: Modifier,
+    interactionEnabled: Boolean,
+    onLongClick: () -> Unit,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+                shape = RoundedCornerShape(10.dp)
+            )
+            .combinedClickableWithSound(
+                enabled = interactionEnabled,
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        icon()
+    }
+}

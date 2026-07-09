@@ -1,0 +1,603 @@
+package vad.dashing.tbox.ui
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.R
+import vad.dashing.tbox.mbcan.HvacBlowMode
+import vad.dashing.tbox.mbcan.HvacClimateCanRepository
+import vad.dashing.tbox.mbcan.HvacClimateDomain
+import vad.dashing.tbox.mbcan.MbCanBinaryState
+import vad.dashing.tbox.mbcan.TrunkDoorState
+import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.mbcan.adjustHvacFanSpeed
+import vad.dashing.tbox.mbcan.adjustHvacTempLeft
+import vad.dashing.tbox.mbcan.adjustHvacTempRight
+import vad.dashing.tbox.mbcan.launchHvacClimateCommand
+import vad.dashing.tbox.mbcan.setHvacBlowMode
+import vad.dashing.tbox.mbcan.toggleHvacFrontOff
+import vad.dashing.tbox.mbcan.trunkPulseClose
+import vad.dashing.tbox.mbcan.trunkPulseOpen
+
+private val HvacClimateOnColor = Color(0xFF0066CC)
+
+@Composable
+fun DashboardHvacSyncWidgetItem(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
+    scale: Float = 1f
+) {
+    val state by HvacClimateCanRepository.hvacSyncState.collectAsStateWithLifecycle()
+    val iconColor = when (state) {
+        is MbCanBinaryState.On -> HvacClimateOnColor
+        is MbCanBinaryState.Off -> textColor
+        else -> textColor.copy(alpha = 0.25f)
+    }
+    val defaultTitle = stringResource(R.string.data_title_hvac_sync_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+    DashboardWidgetScaffold(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, resolvedTextColor ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(4.dp).wrapContentHeight(Alignment.CenterVertically),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            DashboardWidgetTitleRowIfVisible(
+                showTitle = showTitle,
+                titleText = titleText,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor
+            )
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(if (showTitle) 2f else 1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_widget_hvac_sync),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.matchParentSize().scale(scale),
+                    colorFilter = ColorFilter.tint(iconColor)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DashboardHvacFanWidgetItem(
+    isVertical: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    enableInnerInteractions: Boolean,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = true,
+    titleOverride: String = "",
+) {
+    val scope = rememberCoroutineScope()
+    val fanSpeed by HvacClimateCanRepository.hvacFanSpeed.collectAsStateWithLifecycle()
+    val frontOff by HvacClimateCanRepository.hvacFrontOffState.collectAsStateWithLifecycle()
+    val centerLabel = (fanSpeed ?: 0).toString()
+    val frontOffActive = frontOff is MbCanBinaryState.On
+    val defaultTitle = stringResource(R.string.data_title_hvac_fan_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+
+    DashboardStepperControlWidget(
+        isVertical = isVertical,
+        centerLabel = centerLabel,
+        centerDimmed = frontOffActive,
+        decreaseIcon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_media_volume_minus),
+                contentDescription = stringResource(R.string.widget_hvac_fan_decrease),
+                tint = textColor,
+                modifier = Modifier.fillMaxHeight(0.58f).aspectRatio(1f),
+            )
+        },
+        increaseIcon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_media_volume_plus),
+                contentDescription = stringResource(R.string.widget_hvac_fan_increase),
+                tint = textColor,
+                modifier = Modifier.fillMaxHeight(0.58f).aspectRatio(1f),
+            )
+        },
+        centerIcon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_widget_hvac_fan),
+                contentDescription = stringResource(R.string.widget_hvac_front_off_toggle),
+                tint = if (frontOffActive) textColor.copy(alpha = 0.35f) else HvacClimateOnColor,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+        enableInnerInteractions = enableInnerInteractions,
+        onDecrease = {
+            UniversalCanRepository.launchHvacClimateCommand(scope) { adjustHvacFanSpeed(increase = false) }
+        },
+        onIncrease = {
+            UniversalCanRepository.launchHvacClimateCommand(scope) { adjustHvacFanSpeed(increase = true) }
+        },
+        onCenterClick = {
+            UniversalCanRepository.launchHvacClimateCommand(scope) { toggleHvacFrontOff() }
+        },
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+        showTitle = showTitle,
+        titleText = titleText,
+    )
+}
+
+@Composable
+fun DashboardHvacTempLeftWidgetItem(
+    isVertical: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    enableInnerInteractions: Boolean,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = true,
+    titleOverride: String = "",
+) {
+    HvacTempStepperWidget(
+        isVertical = isVertical,
+        isLeftZone = true,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        enableInnerInteractions = enableInnerInteractions,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+        showTitle = showTitle,
+        titleOverride = titleOverride,
+        defaultTitleRes = R.string.data_title_hvac_temp_left_widget
+    )
+}
+
+@Composable
+fun DashboardHvacTempRightWidgetItem(
+    isVertical: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    enableInnerInteractions: Boolean,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = true,
+    titleOverride: String = "",
+) {
+    HvacTempStepperWidget(
+        isVertical = isVertical,
+        isLeftZone = false,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        enableInnerInteractions = enableInnerInteractions,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+        showTitle = showTitle,
+        titleOverride = titleOverride,
+        defaultTitleRes = R.string.data_title_hvac_temp_right_widget
+    )
+}
+
+@Composable
+private fun HvacTempStepperWidget(
+    isVertical: Boolean,
+    isLeftZone: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    enableInnerInteractions: Boolean,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean,
+    titleOverride: String,
+    defaultTitleRes: Int,
+) {
+    val scope = rememberCoroutineScope()
+    val tempLeft by HvacClimateCanRepository.hvacTempLeftCelsius.collectAsStateWithLifecycle()
+    val tempRight by HvacClimateCanRepository.hvacTempRightCelsius.collectAsStateWithLifecycle()
+    val tempCelsius = if (isLeftZone) tempLeft else tempRight
+    val frontOff by HvacClimateCanRepository.hvacFrontOffState.collectAsStateWithLifecycle()
+    val centerLabel = tempCelsius?.let(HvacClimateDomain::formatCelsius) ?: "--"
+    val frontOffActive = frontOff is MbCanBinaryState.On
+    val defaultTitle = stringResource(defaultTitleRes)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+
+    DashboardStepperControlWidget(
+        isVertical = isVertical,
+        centerLabel = centerLabel,
+        centerDimmed = frontOffActive,
+        decreaseIcon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_media_volume_minus),
+                contentDescription = stringResource(R.string.widget_hvac_temp_decrease),
+                tint = textColor,
+                modifier = Modifier.fillMaxHeight(0.58f).aspectRatio(1f),
+            )
+        },
+        increaseIcon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_media_volume_plus),
+                contentDescription = stringResource(R.string.widget_hvac_temp_increase),
+                tint = textColor,
+                modifier = Modifier.fillMaxHeight(0.58f).aspectRatio(1f),
+            )
+        },
+        centerIcon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_widget_hvac_temp),
+                contentDescription = stringResource(R.string.widget_hvac_front_off_toggle),
+                tint = if (frontOffActive) textColor.copy(alpha = 0.35f) else HvacClimateOnColor,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+        enableInnerInteractions = enableInnerInteractions,
+        onDecrease = {
+            UniversalCanRepository.launchHvacClimateCommand(scope) {
+                if (isLeftZone) adjustHvacTempLeft(increase = false) else adjustHvacTempRight(increase = false)
+            }
+        },
+        onIncrease = {
+            UniversalCanRepository.launchHvacClimateCommand(scope) {
+                if (isLeftZone) adjustHvacTempLeft(increase = true) else adjustHvacTempRight(increase = true)
+            }
+        },
+        onCenterClick = {
+            UniversalCanRepository.launchHvacClimateCommand(scope) { toggleHvacFrontOff() }
+        },
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor,
+        showTitle = showTitle,
+        titleText = titleText,
+    )
+}
+
+@Composable
+fun DashboardHvacBlowModeCycleWidgetItem(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDoubleClick: () -> Unit,
+    enableInnerInteractions: Boolean,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
+    scale: Float = 1f,
+) {
+    val scope = rememberCoroutineScope()
+    val blowMode by HvacClimateCanRepository.hvacBlowMode.collectAsStateWithLifecycle()
+    var pendingMode by remember { mutableStateOf<HvacBlowMode?>(null) }
+    val displayMode = pendingMode ?: blowMode
+    val debounceHost = rememberDebouncedCanCommandHost(HVAC_BLOW_MODE_DEBOUNCE_MS) {
+        val target = pendingMode ?: return@rememberDebouncedCanCommandHost
+        UniversalCanRepository.setHvacBlowMode(target)
+        pendingMode = null
+    }
+
+    val defaultTitle = stringResource(R.string.data_title_hvac_blow_mode_cycle_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+    val label = displayMode?.let { blowModeLabel(it) } ?: "--"
+
+    DashboardWidgetScaffold(
+        onClick = {
+            if (enableInnerInteractions) {
+                val next = HvacBlowMode.nextInCycle(displayMode)
+                pendingMode = next
+                debounceHost.schedule(scope)
+            } else {
+                onClick()
+            }
+        },
+        onLongClick = onLongClick,
+        onDoubleClick = {
+            if (enableInnerInteractions) {
+                pendingMode = HvacBlowMode.Defrost
+                debounceHost.schedule(scope)
+            }
+            onDoubleClick()
+        },
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, resolvedTextColor ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(4.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            DashboardWidgetTitleRowIfVisible(
+                showTitle = showTitle,
+                titleText = titleText,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor
+            )
+            Text(
+                text = label,
+                color = resolvedTextColor,
+                style = calculateResponsiveTextStyle(availableHeight, TextType.TITLE),
+                maxLines = 2,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = LocalWidgetTextAlign.current
+            )
+        }
+    }
+}
+
+@Composable
+fun DashboardHvacBlowModePanelWidgetItem(
+    isVertical: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    enableInnerInteractions: Boolean,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = true,
+    titleOverride: String = "",
+) {
+    val scope = rememberCoroutineScope()
+    val blowMode by HvacClimateCanRepository.hvacBlowMode.collectAsStateWithLifecycle()
+    var pendingMode by remember { mutableStateOf<HvacBlowMode?>(null) }
+    val displayMode = pendingMode ?: blowMode
+    val debounceHost = rememberDebouncedCanCommandHost(HVAC_BLOW_MODE_DEBOUNCE_MS) {
+        val target = pendingMode ?: return@rememberDebouncedCanCommandHost
+        UniversalCanRepository.setHvacBlowMode(target)
+        pendingMode = null
+    }
+
+    val defaultTitle = stringResource(R.string.data_title_hvac_blow_mode_panel_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+    val modes = HvacBlowMode.cycleOrder
+
+    DashboardWidgetScaffold(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, resolvedTextColor ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (showTitle) {
+                Text(
+                    text = titleText,
+                    color = resolvedTextColor,
+                    style = calculateResponsiveTextStyle(availableHeight, TextType.TITLE),
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 1,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (isVertical) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    modes.forEach { mode ->
+                        BlowModePanelButton(
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            mode = mode,
+                            selected = displayMode == mode,
+                            enabled = enableInnerInteractions,
+                            textColor = resolvedTextColor,
+                            onClick = {
+                                pendingMode = mode
+                                debounceHost.schedule(scope)
+                            },
+                            onLongClick = onLongClick
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    modes.forEach { mode ->
+                        BlowModePanelButton(
+                            modifier = Modifier.fillMaxHeight().weight(1f),
+                            mode = mode,
+                            selected = displayMode == mode,
+                            enabled = enableInnerInteractions,
+                            textColor = resolvedTextColor,
+                            onClick = {
+                                pendingMode = mode
+                                debounceHost.schedule(scope)
+                            },
+                            onLongClick = onLongClick
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BlowModePanelButton(
+    modifier: Modifier,
+    mode: HvacBlowMode,
+    selected: Boolean,
+    enabled: Boolean,
+    textColor: Color,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val bg = if (selected) {
+        HvacClimateOnColor.copy(alpha = 0.35f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f)
+    }
+    Box(
+        modifier = modifier
+            .background(bg, RoundedCornerShape(8.dp))
+            .combinedClickableWithSound(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = blowModeShortLabel(mode),
+            color = if (selected) HvacClimateOnColor else textColor,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 2,
+            textAlign = LocalWidgetTextAlign.current,
+            modifier = Modifier.padding(2.dp)
+        )
+    }
+}
+
+@Composable
+fun DashboardTrunkDoorWidgetItem(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDoubleClick: () -> Unit,
+    enableInnerInteractions: Boolean,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
+    scale: Float = 1f,
+) {
+    val scope = rememberCoroutineScope()
+    val trunkState by HvacClimateCanRepository.trunkDoorState.collectAsStateWithLifecycle()
+    val iconColor = if (HvacClimateDomain.isTrunkDoorOpenForDisplay(trunkState)) {
+        HvacClimateOnColor
+    } else {
+        textColor
+    }
+    val defaultTitle = stringResource(R.string.data_title_trunk_door_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+
+    DashboardWidgetScaffold(
+        onClick = {
+            if (enableInnerInteractions) {
+                UniversalCanRepository.launchHvacClimateCommand(scope) { trunkPulseOpen() }
+            } else {
+                onClick()
+            }
+        },
+        onLongClick = onLongClick,
+        onDoubleClick = {
+            if (enableInnerInteractions) {
+                UniversalCanRepository.launchHvacClimateCommand(scope) { trunkPulseClose() }
+            }
+            onDoubleClick()
+        },
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, resolvedTextColor ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(4.dp).wrapContentHeight(Alignment.CenterVertically),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            DashboardWidgetTitleRowIfVisible(
+                showTitle = showTitle,
+                titleText = titleText,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor
+            )
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(if (showTitle) 2f else 1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_widget_trunk),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.matchParentSize().scale(scale),
+                    colorFilter = ColorFilter.tint(iconColor)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun blowModeLabel(mode: HvacBlowMode): String = when (mode) {
+    HvacBlowMode.Face -> stringResource(R.string.hvac_blow_mode_face)
+    HvacBlowMode.Foot -> stringResource(R.string.hvac_blow_mode_foot)
+    HvacBlowMode.FaceFoot -> stringResource(R.string.hvac_blow_mode_face_foot)
+    HvacBlowMode.Defrost -> stringResource(R.string.hvac_blow_mode_defrost)
+    HvacBlowMode.DefrostFoot -> stringResource(R.string.hvac_blow_mode_defrost_foot)
+}
+
+@Composable
+private fun blowModeShortLabel(mode: HvacBlowMode): String = when (mode) {
+    HvacBlowMode.Face -> stringResource(R.string.hvac_blow_mode_face_short)
+    HvacBlowMode.Foot -> stringResource(R.string.hvac_blow_mode_foot_short)
+    HvacBlowMode.FaceFoot -> stringResource(R.string.hvac_blow_mode_face_foot_short)
+    HvacBlowMode.Defrost -> stringResource(R.string.hvac_blow_mode_defrost_short)
+    HvacBlowMode.DefrostFoot -> stringResource(R.string.hvac_blow_mode_defrost_foot_short)
+}

@@ -59,7 +59,12 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_POWER to 289415300, // T_0201_IHU_5_ACRequestCommand
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415311, // T_0201_IHU_5_AutoState
-        // Seat controls
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415313, // T_0201_IHU_5_L_Set_Temperature
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT to 289415314, // T_0201_IHU_5_R_Set_Temperature
+        MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED to 289415296, // T_0201_IHU_5_BlowSpeedLevel_Req
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF to 289415301, // T_0201_IHU_5_FrontOFF_Req
+        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415308, // T_0201_IHU_5_SyncSwtich_Req
+        MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL to 289412638, // T_0403_SET_PLG_Control
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415316, // T_0201_SET_FLSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415315, // T_0201_SET_FRSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH to 289415345, // T_0203_SET_LRSeatHeatVentSwReq
@@ -92,6 +97,13 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_POWER to 289415180, // R_0200_CEM_IPM_AC_DisplaySts
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415182, // R_0200_CEM_IPM_FrontAutoACSts
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415169, // R_0200_CEM_IPM_FLTempsts
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT to 289415168, // R_0200_CEM_IPM_FRTempsts
+        MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED to 289415171, // R_0200_CEM_IPM_FrontBlowSpdCtrlsts
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF to 289415175, // R_0200_CEM_IPM_FrontOFFSts
+        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415181, // R_0200_CEM_IPM_SyncSts
+        MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR to 289412272, // R_0402_PLG_1_RearDoorMoveDir
+        MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_STATUS to 289412273, // R_0402_PLG_1_RearDoorStatus
         // Seat states
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415193, // R_0200_CEM_IPM_FLSeatHeatVentSwSts
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415192, // R_0200_CEM_IPM_FRSeatHeatVentSwSts

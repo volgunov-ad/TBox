@@ -35,6 +35,9 @@ private var hvacAutoToggleBlockedUntilMs = 0L
 private val hvacDefrosterFrontToggleLock = Any()
 private var hvacDefrosterFrontToggleBlockedUntilMs = 0L
 
+private val hvacSyncToggleLock = Any()
+private var hvacSyncToggleBlockedUntilMs = 0L
+
 internal fun launchAppFromWidget(context: Context, packageName: String) {
     if (packageName.isBlank()) return
     try {
@@ -305,6 +308,30 @@ internal fun sendToggleHvacDefrosterFront(context: Context) {
                 putExtra(
                     BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
                     MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleHvacSync(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacSyncToggleLock) {
+        if (now < hvacSyncToggleBlockedUntilMs) return
+        hvacSyncToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH
                 )
             }
         )
