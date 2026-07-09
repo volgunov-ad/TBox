@@ -37,7 +37,8 @@ fun DashboardStepperControlWidget(
     centerDimmed: Boolean,
     decreaseIcon: @Composable () -> Unit,
     increaseIcon: @Composable () -> Unit,
-    centerIcon: @Composable () -> Unit,
+    centerIcon: @Composable () -> Unit = {},
+    showCenterIcon: Boolean = true,
     enableInnerInteractions: Boolean,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
@@ -125,6 +126,7 @@ fun DashboardStepperControlWidget(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         label = centerLabel,
                         labelColor = centerTextColor,
+                        showIcon = showCenterIcon,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onCenterClick,
@@ -157,6 +159,7 @@ fun DashboardStepperControlWidget(
                         modifier = Modifier.fillMaxHeight().weight(1f),
                         label = centerLabel,
                         labelColor = centerTextColor,
+                        showIcon = showCenterIcon,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onCenterClick,
@@ -181,6 +184,7 @@ private fun StepperCenterButton(
     modifier: Modifier,
     label: String,
     labelColor: Color,
+    showIcon: Boolean,
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
@@ -193,28 +197,45 @@ private fun StepperCenterButton(
         onLongClick = onLongClick,
         onClick = onClick,
         icon = {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            if (showIcon) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight(0.48f)
+                            .aspectRatio(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        icon()
+                    }
+                    Text(
+                        text = label,
+                        color = labelColor,
+                        style = calculateResponsiveTextStyle(
+                            containerHeight = availableHeight,
+                            textType = TextType.TITLE
+                        ),
+                        maxLines = 1
+                    )
+                }
+            } else {
                 Box(
-                    modifier = Modifier
-                        .fillMaxHeight(0.48f)
-                        .aspectRatio(1f),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    icon()
+                    Text(
+                        text = label,
+                        color = labelColor,
+                        style = calculateResponsiveTextStyle(
+                            containerHeight = availableHeight,
+                            textType = TextType.VALUE
+                        ),
+                        maxLines = 1
+                    )
                 }
-                Text(
-                    text = label,
-                    color = labelColor,
-                    style = calculateResponsiveTextStyle(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ),
-                    maxLines = 1
-                )
             }
         },
     )

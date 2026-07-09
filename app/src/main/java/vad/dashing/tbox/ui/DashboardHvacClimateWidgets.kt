@@ -264,6 +264,7 @@ private fun HvacTempStepperWidget(
         isVertical = isVertical,
         centerLabel = centerLabel,
         centerDimmed = frontOffActive,
+        showCenterIcon = false,
         decreaseIcon = {
             Icon(
                 painter = painterResource(R.drawable.ic_media_volume_minus),
@@ -278,14 +279,6 @@ private fun HvacTempStepperWidget(
                 contentDescription = stringResource(R.string.widget_hvac_temp_increase),
                 tint = textColor,
                 modifier = Modifier.fillMaxHeight(0.58f).aspectRatio(1f),
-            )
-        },
-        centerIcon = {
-            Icon(
-                painter = painterResource(R.drawable.ic_widget_hvac_temp),
-                contentDescription = stringResource(R.string.widget_hvac_front_off_toggle),
-                tint = if (frontOffActive) textColor.copy(alpha = 0.35f) else HvacClimateOnColor,
-                modifier = Modifier.fillMaxSize(),
             )
         },
         enableInnerInteractions = enableInnerInteractions,
