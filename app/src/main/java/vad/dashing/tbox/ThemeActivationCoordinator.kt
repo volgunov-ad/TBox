@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -53,9 +54,14 @@ object ThemeActivationCoordinator {
         preThemeActivationFlush = null
     }
 
+    /** Max wait for [markMainScreenUiReady]; then activation proceeds with snapshot-only flush. */
+    internal const val MAIN_SCREEN_UI_READY_TIMEOUT_MS = 5_000L
+
     suspend fun awaitMainScreenUiReady() {
         if (_mainScreenUiReady.value) return
-        mainScreenUiReadyFlow.first { it }
+        withTimeoutOrNull(MAIN_SCREEN_UI_READY_TIMEOUT_MS) {
+            mainScreenUiReadyFlow.first { it }
+        }
     }
 
     suspend fun <T> runWithThemeActivation(

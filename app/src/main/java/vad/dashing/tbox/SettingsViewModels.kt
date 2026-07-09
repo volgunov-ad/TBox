@@ -975,6 +975,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     init {
+        settingsManager.preThemeActivationFlush = preThemeActivationFlushHook
+        ThemeActivationCoordinator.markMainScreenUiReady()
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
             selectedFloatingDashboardIdState.value =

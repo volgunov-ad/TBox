@@ -70,7 +70,19 @@ class DriveModeThemeKeyTest {
         assertNotNull(request)
         assertEquals(101, request!!.modeRawValue)
         assertEquals("content://theme/eco.tboxtheme", request.sourceUri)
-        assertEquals(ThemeCacheKeys.driveModeCacheKey(101), request.cacheKey)
+        assertEquals(ThemeCacheKeys.driveModeCacheKey(2), request.cacheKey)
+    }
+
+    @Test
+    fun resolveDriveModeThemeAssignment_usesSiblingCacheKey() {
+        val assignment = DriveModeThemeWatcher.resolveDriveModeThemeAssignment(
+            paths = mapOf(2 to "content://theme/eco.tboxtheme"),
+            modeRawValue = 101,
+        )
+        assertNotNull(assignment)
+        assertEquals("content://theme/eco.tboxtheme", assignment!!.sourceUri)
+        assertEquals(2, assignment.assignedRawValue)
+        assertEquals(ThemeCacheKeys.driveModeCacheKey(2), assignment.cacheKey)
     }
 
     @Test
