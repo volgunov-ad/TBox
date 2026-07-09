@@ -145,7 +145,7 @@ private fun MainScreenWallpaperFolderContent(
     LaunchedEffect(sortedNames.size) {
         onWallpaperCountChanged(sortedNames.size)
     }
-    val savedForPage = wallpaperSelections.fileNameFor(currentMainScreenPage, forLightTheme)
+    val savedForPage = wallpaperSelections.fileNameForCurrentOrAnyPage(currentMainScreenPage, forLightTheme)
     val effectiveName = remember(sortedNames, displayedFileName, savedForPage, forLightTheme, wallpaperSelections) {
         if (sortedNames.isEmpty()) {
             null

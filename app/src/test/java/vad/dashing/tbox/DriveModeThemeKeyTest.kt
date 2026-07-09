@@ -52,6 +52,28 @@ class DriveModeThemeKeyTest {
     }
 
     @Test
+    fun resolveDriveModeThemeSourceUri_fallsBackToSiblingWidgetLabel() {
+        val paths = mapOf(2 to "content://theme/eco.tboxtheme")
+        assertEquals(
+            "content://theme/eco.tboxtheme",
+            DriveModeThemeWatcher.resolveDriveModeThemeSourceUri(paths, modeRawValue = 101),
+        )
+    }
+
+    @Test
+    fun resolveActivationRequest_usesSiblingAssignmentFor6dctEco() {
+        val request = DriveModeThemeWatcher.resolveActivationRequest(
+            paths = mapOf(2 to "content://theme/eco.tboxtheme"),
+            drive = null,
+            wet6dct = 1,
+        )
+        assertNotNull(request)
+        assertEquals(101, request!!.modeRawValue)
+        assertEquals("content://theme/eco.tboxtheme", request.sourceUri)
+        assertEquals(ThemeCacheKeys.driveModeCacheKey(101), request.cacheKey)
+    }
+
+    @Test
     fun resolveActivationRequest_ignoresUnrelatedModeAssignments() {
         val first = DriveModeThemeWatcher.resolveActivationRequest(
             paths = mapOf(2 to "content://theme/eco.tboxtheme"),

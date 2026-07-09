@@ -157,6 +157,20 @@ class ThemeRuntimeStateTest {
     }
 
     @Test
+    fun normalizeCurrentPageForWallpaperSelections_usesFirstPageWithSelection() {
+        val selections = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "eco.jpg")
+
+        assertEquals(
+            1,
+            ThemeRuntimeState.normalizeCurrentPageForWallpaperSelections(
+                requestedPage = 2,
+                selections = selections,
+            ),
+        )
+    }
+
+    @Test
     fun wallpaperSelectionMatchesCache_comparesRuntimeJsonToDataStoreSnapshot() {
         val dir = createTempDir(prefix = "drive_mode_wp_match_")
         ThemeRuntimeState.patch(

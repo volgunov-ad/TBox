@@ -53,10 +53,6 @@ class DriveModeThemeWatcher(
                             activeThemeUri = settingsManager.activeThemeUriFlow.first(),
                             activeThemeFingerprint = settingsManager.activeThemeFingerprintFlow.first(),
                             manifest = manifest,
-                        ) && isDriveModeWallpaperSelectionApplied(
-                            context = context,
-                            request = request,
-                            settingsManager = settingsManager,
                         )
                     ) {
                         rememberApplied(request)
@@ -157,13 +153,29 @@ class DriveModeThemeWatcher(
         ): DriveModeThemeActivationRequest? {
             if (paths.isEmpty()) return null
             val key = resolveDriveModeThemeKey(drive, wet6dct) ?: return null
-            val sourceUri = paths[key]?.trim().orEmpty()
-            if (sourceUri.isEmpty()) return null
+            val sourceUri = resolveDriveModeThemeSourceUri(paths, key) ?: return null
             return DriveModeThemeActivationRequest(
                 modeRawValue = key,
                 sourceUri = sourceUri,
                 cacheKey = ThemeCacheKeys.driveModeCacheKey(key),
             )
+        }
+
+        /**
+         * Resolves the assigned `.tboxtheme` URI for [modeRawValue], falling back to sibling
+         * drive-mode labels (e.g. standard ECO vs ECO 6DCT) when only one slot was configured.
+         */
+        internal fun resolveDriveModeThemeSourceUri(
+            paths: Map<Int, String>,
+            modeRawValue: Int,
+        ): String? {
+            paths[modeRawValue]?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+            val label = resolveDriveModeWidgetOption(modeRawValue).widgetLabel
+            return DRIVE_MODE_WIDGET_OPTIONS
+                .filter { it.widgetLabel == label }
+                .firstNotNullOfOrNull { option ->
+                    paths[option.rawValue]?.trim()?.takeIf { it.isNotEmpty() }
+                }
         }
 
         fun resolveDriveModeThemeKey(drive: Int?, wet6dct: Int?): Int? {

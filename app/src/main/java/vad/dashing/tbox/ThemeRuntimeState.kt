@@ -1,6 +1,5 @@
 package vad.dashing.tbox
 
-import kotlinx.coroutines.flow.first
 import org.json.JSONObject
 import java.io.File
 
@@ -116,14 +115,44 @@ object ThemeRuntimeState {
     ): MainScreenWallpaperSelectionsByPage {
         val selections = resolveWallpaperSelectionsForActivation(cacheDir, themeJson)
         settingsManager.saveMainScreenWallpaperSelectionsByPage(selections)
-        settingsManager.mainScreenWallpaperSelectionByPageFlow.first { stored -> stored == selections }
         val runtime = read(cacheDir)
-        if (runtime.hasCurrentPage) {
-            val page = runtime.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE
-            settingsManager.saveMainScreenCurrentPage(page)
-            settingsManager.mainScreenCurrentPageFlow.first { stored -> stored == page }
+        val pageFromRuntime = if (runtime.hasCurrentPage) {
+            runtime.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE
+        } else {
+            null
+        }
+        val pageFromThemeJson = currentPageFromThemeJson(themeJson)
+        val resolvedPage = normalizeCurrentPageForWallpaperSelections(
+            requestedPage = pageFromRuntime ?: pageFromThemeJson,
+            selections = selections,
+        )
+        if (resolvedPage != null) {
+            settingsManager.saveMainScreenCurrentPage(resolvedPage)
         }
         return selections
+    }
+
+    internal fun currentPageFromThemeJson(themeJson: String): Int? {
+        val root = runCatching { JSONObject(themeJson) }.getOrNull() ?: return null
+        val mainScreen = root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey) ?: return null
+        if (!mainScreen.has(KEY_CURRENT_PAGE)) return null
+        return mainScreen.optInt(KEY_CURRENT_PAGE, SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
+    }
+
+    /**
+     * Keeps [requestedPage] when it has a wallpaper entry; otherwise uses the first page that does.
+     */
+    internal fun normalizeCurrentPageForWallpaperSelections(
+        requestedPage: Int?,
+        selections: MainScreenWallpaperSelectionsByPage,
+    ): Int? {
+        if (selections.isEmpty()) return requestedPage
+        val candidate = requestedPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE
+        if (selections.lightByPage.containsKey(candidate) || selections.darkByPage.containsKey(candidate)) {
+            return candidate
+        }
+        val pagesWithSelection = (selections.lightByPage.keys + selections.darkByPage.keys).sorted()
+        return pagesWithSelection.firstOrNull() ?: candidate
     }
 
     /**

@@ -245,7 +245,6 @@ object ThemeMaterialization {
                 fingerprint = manifest.fingerprint,
                 sections = sections,
             )
-            settingsManager.activeThemeUriFlow.first { it.trim() == normalizedCacheKey }
 
             settingsManager.bumpLauncherAppIconRevision()
             settingsManager.bumpHttpRequestIconRevision()
