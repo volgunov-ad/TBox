@@ -443,7 +443,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
-                titleOverride = titleOverride
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 
@@ -458,7 +459,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
-                titleOverride = titleOverride
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 
@@ -473,7 +475,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
-                titleOverride = titleOverride
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 
@@ -488,7 +491,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
-                titleOverride = titleOverride
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 
@@ -503,7 +507,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
-                titleOverride = titleOverride
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 
@@ -518,7 +523,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
-                titleOverride = titleOverride
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 
@@ -783,7 +789,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 
@@ -800,7 +807,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 

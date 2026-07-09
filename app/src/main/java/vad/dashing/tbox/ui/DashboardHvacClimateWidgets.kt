@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.mbcan.HvacBlowMode
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacClimateDomain
@@ -119,6 +120,7 @@ fun DashboardHvacFanWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = true,
     titleOverride: String = "",
+    stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
 ) {
     val scope = rememberCoroutineScope()
     val fanSpeed by HvacClimateCanRepository.hvacFanSpeed.collectAsStateWithLifecycle()
@@ -132,22 +134,9 @@ fun DashboardHvacFanWidgetItem(
         isVertical = isVertical,
         centerLabel = centerLabel,
         centerDimmed = frontOffActive,
-        decreaseIcon = {
-            Icon(
-                painter = painterResource(R.drawable.ic_media_volume_minus),
-                contentDescription = stringResource(R.string.widget_hvac_fan_decrease),
-                tint = textColor,
-                modifier = Modifier.fillMaxHeight(0.58f).aspectRatio(1f),
-            )
-        },
-        increaseIcon = {
-            Icon(
-                painter = painterResource(R.drawable.ic_media_volume_plus),
-                contentDescription = stringResource(R.string.widget_hvac_fan_increase),
-                tint = textColor,
-                modifier = Modifier.fillMaxHeight(0.58f).aspectRatio(1f),
-            )
-        },
+        decreaseContentDescriptionRes = R.string.widget_hvac_fan_decrease,
+        increaseContentDescriptionRes = R.string.widget_hvac_fan_increase,
+        adjustIconStyle = stepperAdjustIconStyle,
         centerIcon = {
             Icon(
                 painter = painterResource(R.drawable.ic_widget_hvac_fan),
@@ -189,6 +178,7 @@ fun DashboardHvacTempLeftWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = true,
     titleOverride: String = "",
+    stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
 ) {
     HvacTempStepperWidget(
         isVertical = isVertical,
@@ -202,7 +192,8 @@ fun DashboardHvacTempLeftWidgetItem(
         backgroundColor = backgroundColor,
         showTitle = showTitle,
         titleOverride = titleOverride,
-        defaultTitleRes = R.string.data_title_hvac_temp_left_widget
+        defaultTitleRes = R.string.data_title_hvac_temp_left_widget,
+        stepperAdjustIconStyle = stepperAdjustIconStyle,
     )
 }
 
@@ -218,6 +209,7 @@ fun DashboardHvacTempRightWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = true,
     titleOverride: String = "",
+    stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
 ) {
     HvacTempStepperWidget(
         isVertical = isVertical,
@@ -231,7 +223,8 @@ fun DashboardHvacTempRightWidgetItem(
         backgroundColor = backgroundColor,
         showTitle = showTitle,
         titleOverride = titleOverride,
-        defaultTitleRes = R.string.data_title_hvac_temp_right_widget
+        defaultTitleRes = R.string.data_title_hvac_temp_right_widget,
+        stepperAdjustIconStyle = stepperAdjustIconStyle,
     )
 }
 
@@ -249,6 +242,7 @@ private fun HvacTempStepperWidget(
     showTitle: Boolean,
     titleOverride: String,
     defaultTitleRes: Int,
+    stepperAdjustIconStyle: Int,
 ) {
     val scope = rememberCoroutineScope()
     val tempLeft by HvacClimateCanRepository.hvacTempLeftCelsius.collectAsStateWithLifecycle()
@@ -265,22 +259,9 @@ private fun HvacTempStepperWidget(
         centerLabel = centerLabel,
         centerDimmed = frontOffActive,
         showCenterIcon = false,
-        decreaseIcon = {
-            Icon(
-                painter = painterResource(R.drawable.ic_media_volume_minus),
-                contentDescription = stringResource(R.string.widget_hvac_temp_decrease),
-                tint = textColor,
-                modifier = Modifier.fillMaxHeight(0.58f).aspectRatio(1f),
-            )
-        },
-        increaseIcon = {
-            Icon(
-                painter = painterResource(R.drawable.ic_media_volume_plus),
-                contentDescription = stringResource(R.string.widget_hvac_temp_increase),
-                tint = textColor,
-                modifier = Modifier.fillMaxHeight(0.58f).aspectRatio(1f),
-            )
-        },
+        decreaseContentDescriptionRes = R.string.widget_hvac_temp_decrease,
+        increaseContentDescriptionRes = R.string.widget_hvac_temp_increase,
+        adjustIconStyle = stepperAdjustIconStyle,
         enableInnerInteractions = enableInnerInteractions,
         onDecrease = {
             UniversalCanRepository.launchHvacClimateCommand(scope) {

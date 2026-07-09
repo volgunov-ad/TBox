@@ -118,6 +118,12 @@ fun serializeWidgetConfigsToJsonArray(
             obj.put("selectedDriveMode", selectedDriveMode)
         }
         obj.put("useMbCanVhal", config.useMbCanVhal)
+        if (config.stepperAdjustIconStyle != STEPPER_ADJUST_ICON_PLUS_MINUS) {
+            obj.put(
+                "stepperAdjustIconStyle",
+                normalizeStepperAdjustIconStyle(config.stepperAdjustIconStyle),
+            )
+        }
         config.tileBackgroundImageRelPathLight?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
                 obj.put("tileBackgroundImageRelPathLight", it)
@@ -308,6 +314,9 @@ private fun parseWidgetConfigsFromJsonArray(
                             item.optInt("selectedDriveMode", DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE)
                         ),
                         useMbCanVhal = item.optBoolean("useMbCanVhal", false),
+                        stepperAdjustIconStyle = normalizeStepperAdjustIconStyle(
+                            item.optInt("stepperAdjustIconStyle", STEPPER_ADJUST_ICON_PLUS_MINUS),
+                        ),
                         tileBackgroundImageRelPathLight = tileLight,
                         tileBackgroundImageRelPathDark = tileDark,
                         tripWidgetShowRowDividers = item.optBoolean(

@@ -1,6 +1,6 @@
 package vad.dashing.tbox.ui
 
-import androidx.compose.foundation.background
+import androidx.annotation.StringRes
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,8 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,9 +22,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
+import vad.dashing.tbox.R
+import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
+import vad.dashing.tbox.resolveStepperAdjustIconDrawableRes
 
 private const val STEPPER_SWIPE_STEP_PX = 58f
 
@@ -35,8 +39,9 @@ fun DashboardStepperControlWidget(
     isVertical: Boolean,
     centerLabel: String,
     centerDimmed: Boolean,
-    decreaseIcon: @Composable () -> Unit,
-    increaseIcon: @Composable () -> Unit,
+    @StringRes decreaseContentDescriptionRes: Int,
+    @StringRes increaseContentDescriptionRes: Int,
+    adjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
     centerIcon: @Composable () -> Unit = {},
     showCenterIcon: Boolean = true,
     enableInnerInteractions: Boolean,
@@ -120,7 +125,15 @@ fun DashboardStepperControlWidget(
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onIncrease,
-                        icon = increaseIcon,
+                        content = {
+                            StepperAdjustIcon(
+                                increase = true,
+                                isVertical = true,
+                                adjustIconStyle = adjustIconStyle,
+                                tint = resolvedTextColor,
+                                contentDescriptionRes = increaseContentDescriptionRes,
+                            )
+                        },
                     )
                     StepperCenterButton(
                         modifier = Modifier.fillMaxWidth().weight(1f),
@@ -138,7 +151,15 @@ fun DashboardStepperControlWidget(
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onDecrease,
-                        icon = decreaseIcon,
+                        content = {
+                            StepperAdjustIcon(
+                                increase = false,
+                                isVertical = true,
+                                adjustIconStyle = adjustIconStyle,
+                                tint = resolvedTextColor,
+                                contentDescriptionRes = decreaseContentDescriptionRes,
+                            )
+                        },
                     )
                 }
             } else {
@@ -153,7 +174,15 @@ fun DashboardStepperControlWidget(
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onDecrease,
-                        icon = decreaseIcon,
+                        content = {
+                            StepperAdjustIcon(
+                                increase = false,
+                                isVertical = false,
+                                adjustIconStyle = adjustIconStyle,
+                                tint = resolvedTextColor,
+                                contentDescriptionRes = decreaseContentDescriptionRes,
+                            )
+                        },
                     )
                     StepperCenterButton(
                         modifier = Modifier.fillMaxHeight().weight(1f),
@@ -171,12 +200,44 @@ fun DashboardStepperControlWidget(
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onIncrease,
-                        icon = increaseIcon,
+                        content = {
+                            StepperAdjustIcon(
+                                increase = true,
+                                isVertical = false,
+                                adjustIconStyle = adjustIconStyle,
+                                tint = resolvedTextColor,
+                                contentDescriptionRes = increaseContentDescriptionRes,
+                            )
+                        },
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun StepperAdjustIcon(
+    increase: Boolean,
+    isVertical: Boolean,
+    adjustIconStyle: Int,
+    tint: Color,
+    @StringRes contentDescriptionRes: Int,
+) {
+    Icon(
+        painter = painterResource(
+            resolveStepperAdjustIconDrawableRes(
+                increase = increase,
+                isVertical = isVertical,
+                style = adjustIconStyle,
+            )
+        ),
+        contentDescription = stringResource(contentDescriptionRes),
+        tint = tint,
+        modifier = Modifier
+            .fillMaxHeight(0.58f)
+            .aspectRatio(1f),
+    )
 }
 
 @Composable
@@ -196,7 +257,7 @@ private fun StepperCenterButton(
         interactionEnabled = interactionEnabled,
         onLongClick = onLongClick,
         onClick = onClick,
-        icon = {
+        content = {
             if (showIcon) {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -247,14 +308,10 @@ private fun StepperActionButton(
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
-    icon: @Composable () -> Unit,
+    content: @Composable () -> Unit,
 ) {
     Box(
         modifier = modifier
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
-                shape = RoundedCornerShape(10.dp)
-            )
             .combinedClickableWithSound(
                 enabled = interactionEnabled,
                 onClick = onClick,
@@ -262,6 +319,6 @@ private fun StepperActionButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        icon()
+        content()
     }
 }

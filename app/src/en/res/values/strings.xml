@@ -174,6 +174,10 @@
     <string name="widget_media_volume_action_decrease">Decrease media volume</string>
     <string name="widget_media_volume_action_mute">Toggle media mute</string>
     <string name="widget_media_volume_use_mbcan_vhal">Use CAN mode (mbCAN/VHAL)</string>
+    <string name="widget_stepper_adjust_icon_style_title">Value adjust buttons</string>
+    <string name="widget_stepper_adjust_icon_style_desc">Icons for increase and decrease controls</string>
+    <string name="widget_stepper_adjust_icon_plus_minus">Plus and minus</string>
+    <string name="widget_stepper_adjust_icon_arrows">Arrows</string>
     <string name="widget_drive_mode_target_title">Drive mode for button</string>
     <string name="widget_drive_mode_target_desc">Command sent on tap</string>
     <string name="media_player_yandex_music">Yandex Music</string>

@@ -82,6 +82,9 @@ import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
 import vad.dashing.tbox.normalizeWidgetTitlePosition
+import vad.dashing.tbox.normalizeStepperAdjustIconStyle
+import vad.dashing.tbox.STEPPER_ADJUST_ICON_ARROWS
+import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.normalizePanelGridSpacingDp
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_CENTER
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
@@ -124,6 +127,13 @@ internal data class WidgetFontWeightDropdownEntry(
 }
 
 internal data class WidgetTitlePositionDropdownEntry(
+    private val display: String,
+    val stored: Int,
+) {
+    override fun toString(): String = display
+}
+
+internal data class StepperAdjustIconStyleDropdownEntry(
     private val display: String,
     val stored: Int,
 ) {
@@ -177,6 +187,9 @@ internal class WidgetSelectionDialogState(
         initialConfig.mediaKeepPlayerForeground
     )
     var useMbCanVhal by mutableStateOf(initialConfig.useMbCanVhal)
+    var stepperAdjustIconStyle by mutableIntStateOf(
+        normalizeStepperAdjustIconStyle(initialConfig.stepperAdjustIconStyle)
+    )
     var selectedDriveMode by mutableIntStateOf(
         if (initialConfig.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
             normalizeDriveModeWidgetRawValue(initialConfig.selectedDriveMode)
@@ -284,6 +297,9 @@ internal class WidgetSelectionDialogState(
         }
         if (!WidgetsRepository.supportsUseMbCanVhal(key)) {
             useMbCanVhal = false
+        }
+        if (!WidgetsRepository.supportsStepperAdjustIconStyle(key)) {
+            stepperAdjustIconStyle = STEPPER_ADJUST_ICON_PLUS_MINUS
         }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
@@ -877,6 +893,30 @@ internal fun WidgetSelectionDialogForm(
                             state.togglesEnabled
                         )
                     }
+                    if (WidgetsRepository.supportsStepperAdjustIconStyle(state.selectedDataKey)) {
+                        val stepperIconEntries = listOf(
+                            StepperAdjustIconStyleDropdownEntry(
+                                stringResource(R.string.widget_stepper_adjust_icon_plus_minus),
+                                STEPPER_ADJUST_ICON_PLUS_MINUS,
+                            ),
+                            StepperAdjustIconStyleDropdownEntry(
+                                stringResource(R.string.widget_stepper_adjust_icon_arrows),
+                                STEPPER_ADJUST_ICON_ARROWS,
+                            ),
+                        )
+                        val selectedStepperIconEntry = stepperIconEntries.find {
+                            it.stored == state.stepperAdjustIconStyle
+                        } ?: stepperIconEntries.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedStepperIconEntry,
+                            onValueChange = { state.stepperAdjustIconStyle = it.stored },
+                            text = stringResource(R.string.widget_stepper_adjust_icon_style_title),
+                            description = stringResource(R.string.widget_stepper_adjust_icon_style_desc),
+                            enabled = state.togglesEnabled,
+                            options = stepperIconEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
                     if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                         val selectedOption = DRIVE_MODE_WIDGET_OPTIONS.firstOrNull {
                             it.rawValue == normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
@@ -1434,6 +1474,11 @@ internal fun applyWidgetSelectionChanges(
             },
             useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey) &&
                 state.useMbCanVhal,
+            stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(state.selectedDataKey)) {
+                normalizeStepperAdjustIconStyle(state.stepperAdjustIconStyle)
+            } else {
+                STEPPER_ADJUST_ICON_PLUS_MINUS
+            },
             tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },

@@ -642,6 +642,8 @@ object WidgetsRepository {
             CAR_SPEED_WIDGET_DATA_KEY
         )
     }
+
+    fun supportsStepperAdjustIconStyle(dataKey: String): Boolean = isStepperWidgetDataKey(dataKey)
 }
 
 const val DEFAULT_WIDGET_TEXT_COLOR_LIGHT = LIGHT_THEME_ON_SURFACE_COLOR_INT

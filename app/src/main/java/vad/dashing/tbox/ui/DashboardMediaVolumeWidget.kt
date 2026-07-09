@@ -3,8 +3,6 @@ package vad.dashing.tbox.ui
 import android.content.Context
 import android.media.AudioManager
 import android.os.Build
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
+import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 private const val MEDIA_VOLUME_POLL_DELAY_MS = 350L
@@ -50,7 +49,8 @@ fun DashboardMediaVolumeWidgetItem(
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     textColor: Color? = null,
-    backgroundColor: Color? = null
+    backgroundColor: Color? = null,
+    stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -160,26 +160,9 @@ fun DashboardMediaVolumeWidgetItem(
         isVertical = isVertical,
         centerLabel = volumeState.current.toString(),
         centerDimmed = false,
-        decreaseIcon = {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_media_volume_minus),
-                contentDescription = stringResource(R.string.widget_media_volume_action_decrease),
-                tint = resolvedTextColor,
-                modifier = Modifier
-                    .fillMaxHeight(0.58f)
-                    .aspectRatio(1f)
-            )
-        },
-        increaseIcon = {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_media_volume_plus),
-                contentDescription = stringResource(R.string.widget_media_volume_action_increase),
-                tint = resolvedTextColor,
-                modifier = Modifier
-                    .fillMaxHeight(0.58f)
-                    .aspectRatio(1f)
-            )
-        },
+        decreaseContentDescriptionRes = R.string.widget_media_volume_action_decrease,
+        increaseContentDescriptionRes = R.string.widget_media_volume_action_increase,
+        adjustIconStyle = stepperAdjustIconStyle,
         centerIcon = {
             Icon(
                 painter = painterResource(id = centerIconRes),

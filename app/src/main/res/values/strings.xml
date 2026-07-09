@@ -177,6 +177,10 @@
     <string name="widget_media_volume_action_decrease">Уменьшить громкость медиа</string>
     <string name="widget_media_volume_action_mute">Включить или выключить звук медиа</string>
     <string name="widget_media_volume_use_mbcan_vhal">Работа через CAN (mbCAN/VHAL)</string>
+    <string name="widget_stepper_adjust_icon_style_title">Кнопки изменения значения</string>
+    <string name="widget_stepper_adjust_icon_style_desc">Вид иконок для увеличения и уменьшения</string>
+    <string name="widget_stepper_adjust_icon_plus_minus">Плюс и минус</string>
+    <string name="widget_stepper_adjust_icon_arrows">Стрелки</string>
     <string name="widget_drive_mode_target_title">Режим вождения для кнопки</string>
     <string name="widget_drive_mode_target_desc">Команда, отправляемая при нажатии</string>
     <string name="media_player_yandex_music">Я.Музыка</string>
