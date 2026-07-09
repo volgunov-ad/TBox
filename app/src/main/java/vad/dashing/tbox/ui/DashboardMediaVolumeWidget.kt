@@ -3,49 +3,33 @@ package vad.dashing.tbox.ui
 import android.content.Context
 import android.media.AudioManager
 import android.os.Build
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
-private const val MEDIA_VOLUME_SWIPE_STEP_PX = 58f
 private const val MEDIA_VOLUME_POLL_DELAY_MS = 350L
 
 private data class MediaVolumeState(
@@ -81,12 +65,16 @@ fun DashboardMediaVolumeWidgetItem(
     var lastNonZeroVolume by remember(widget.id, isVertical, useMbCan) {
         mutableIntStateOf(kotlin.math.max(volumeState.current, 1))
     }
-    var swipeAccumulator by remember(widget.id, isVertical) {
-        mutableFloatStateOf(0f)
-    }
 
     val defaultVolumeTitle = stringResource(R.string.widget_media_volume_title)
     val volumeTitleText = titleOverride.trim().ifBlank { defaultVolumeTitle }
+    val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
+    val resolvedBackgroundColor = backgroundColor ?: MaterialTheme.colorScheme.surface
+    val centerIconRes = if (volumeState.muted) {
+        R.drawable.ic_media_volume_mute
+    } else {
+        R.drawable.ic_media_volume_audio
+    }
 
     LaunchedEffect(widget.id, isVertical, useMbCan) {
         if (useMbCan) {
@@ -167,252 +155,52 @@ fun DashboardMediaVolumeWidgetItem(
         }
     }
 
-    val rootSwipeModifier = if (enableInnerInteractions) {
-        Modifier.pointerInput(widget.id, isVertical) {
-            detectDragGestures(
-                onDrag = { change, dragAmount ->
-                    change.consume()
-                    val primaryDelta = if (isVertical) {
-                        -dragAmount.y
-                    } else {
-                        dragAmount.x
-                    }
-                    swipeAccumulator += primaryDelta
-                    while (abs(swipeAccumulator) >= MEDIA_VOLUME_SWIPE_STEP_PX) {
-                        val shouldIncrease = swipeAccumulator > 0f
-                        applyVolumeDelta(increase = shouldIncrease)
-                        swipeAccumulator += if (shouldIncrease) {
-                            -MEDIA_VOLUME_SWIPE_STEP_PX
-                        } else {
-                            MEDIA_VOLUME_SWIPE_STEP_PX
-                        }
-                    }
-                },
-                onDragEnd = { swipeAccumulator = 0f },
-                onDragCancel = { swipeAccumulator = 0f }
+    DashboardStepperControlWidget(
+        modifier = Modifier,
+        isVertical = isVertical,
+        centerLabel = volumeState.current.toString(),
+        centerDimmed = false,
+        decreaseIcon = {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_media_volume_minus),
+                contentDescription = stringResource(R.string.widget_media_volume_action_decrease),
+                tint = resolvedTextColor,
+                modifier = Modifier
+                    .fillMaxHeight(0.58f)
+                    .aspectRatio(1f)
             )
-        }
-    } else {
-        Modifier
-    }
-
-    DashboardWidgetScaffold(
-        modifier = rootSwipeModifier,
+        },
+        increaseIcon = {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_media_volume_plus),
+                contentDescription = stringResource(R.string.widget_media_volume_action_increase),
+                tint = resolvedTextColor,
+                modifier = Modifier
+                    .fillMaxHeight(0.58f)
+                    .aspectRatio(1f)
+            )
+        },
+        centerIcon = {
+            Icon(
+                painter = painterResource(id = centerIconRes),
+                contentDescription = stringResource(R.string.widget_media_volume_action_mute),
+                tint = resolvedTextColor,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+        enableInnerInteractions = enableInnerInteractions,
+        onDecrease = { applyVolumeDelta(increase = false) },
+        onIncrease = { applyVolumeDelta(increase = true) },
+        onCenterClick = { toggleMute() },
         onClick = onClick,
         onLongClick = onLongClick,
         elevation = elevation,
         shape = shape,
-        textColor = textColor,
-        backgroundColor = backgroundColor
-    ) { availableHeight, resolvedTextColor ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (showTitle) {
-                Text(
-                    text = volumeTitleText,
-                    color = resolvedTextColor,
-                    style = calculateResponsiveTextStyle(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ),
-                    textAlign = LocalWidgetTextAlign.current,
-                    maxLines = 1,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            if (isVertical) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    MediaVolumeActionButton(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_media_volume_plus),
-                                contentDescription = stringResource(R.string.widget_media_volume_action_increase),
-                                tint = resolvedTextColor,
-                                modifier = Modifier
-                                    .fillMaxHeight(0.58f)
-                                    .aspectRatio(1f)
-                            )
-                        },
-                        interactionEnabled = enableInnerInteractions,
-                        onLongClick = onLongClick,
-                        onClick = { applyVolumeDelta(increase = true) }
-                    )
-                    MediaVolumeCenterButton(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        muted = volumeState.muted,
-                        currentVolume = volumeState.current,
-                        textColor = resolvedTextColor,
-                        availableHeight = availableHeight,
-                        interactionEnabled = enableInnerInteractions,
-                        onLongClick = onLongClick,
-                        onToggleMute = { toggleMute() }
-                    )
-                    MediaVolumeActionButton(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_media_volume_minus),
-                                contentDescription = stringResource(R.string.widget_media_volume_action_decrease),
-                                tint = resolvedTextColor,
-                                modifier = Modifier
-                                    .fillMaxHeight(0.58f)
-                                    .aspectRatio(1f)
-                            )
-                        },
-                        interactionEnabled = enableInnerInteractions,
-                        onLongClick = onLongClick,
-                        onClick = { applyVolumeDelta(increase = false) }
-                    )
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    MediaVolumeActionButton(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .weight(1f),
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_media_volume_minus),
-                                contentDescription = stringResource(R.string.widget_media_volume_action_decrease),
-                                tint = resolvedTextColor,
-                                modifier = Modifier
-                                    .fillMaxHeight(0.58f)
-                                    .aspectRatio(1f)
-                            )
-                        },
-                        interactionEnabled = enableInnerInteractions,
-                        onLongClick = onLongClick,
-                        onClick = { applyVolumeDelta(increase = false) }
-                    )
-                    MediaVolumeCenterButton(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .weight(1f),
-                        muted = volumeState.muted,
-                        currentVolume = volumeState.current,
-                        textColor = resolvedTextColor,
-                        availableHeight = availableHeight,
-                        interactionEnabled = enableInnerInteractions,
-                        onLongClick = onLongClick,
-                        onToggleMute = { toggleMute() }
-                    )
-                    MediaVolumeActionButton(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .weight(1f),
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_media_volume_plus),
-                                contentDescription = stringResource(R.string.widget_media_volume_action_increase),
-                                tint = resolvedTextColor,
-                                modifier = Modifier
-                                    .fillMaxHeight(0.58f)
-                                    .aspectRatio(1f)
-                            )
-                        },
-                        interactionEnabled = enableInnerInteractions,
-                        onLongClick = onLongClick,
-                        onClick = { applyVolumeDelta(increase = true) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MediaVolumeCenterButton(
-    modifier: Modifier,
-    muted: Boolean,
-    currentVolume: Int,
-    textColor: Color,
-    availableHeight: Dp,
-    interactionEnabled: Boolean,
-    onLongClick: () -> Unit,
-    onToggleMute: () -> Unit
-) {
-    val iconRes = if (muted) {
-        R.drawable.ic_media_volume_mute
-    } else {
-        R.drawable.ic_media_volume_audio
-    }
-    MediaVolumeActionButton(
-        modifier = modifier,
-        icon = {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    painter = painterResource(id = iconRes),
-                    contentDescription = stringResource(R.string.widget_media_volume_action_mute),
-                    tint = textColor,
-                    modifier = Modifier
-                        .fillMaxHeight(0.48f)
-                        .aspectRatio(1f)
-                )
-                Text(
-                    text = currentVolume.toString(),
-                    color = textColor,
-                    style = calculateResponsiveTextStyle(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ),
-                )
-            }
-        },
-        interactionEnabled = interactionEnabled,
-        onLongClick = onLongClick,
-        onClick = onToggleMute
+        textColor = resolvedTextColor,
+        backgroundColor = resolvedBackgroundColor,
+        showTitle = showTitle,
+        titleText = volumeTitleText,
     )
-}
-
-@Composable
-private fun MediaVolumeActionButton(
-    modifier: Modifier,
-    icon: @Composable () -> Unit,
-    interactionEnabled: Boolean,
-    onLongClick: () -> Unit,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
-                shape = RoundedCornerShape(10.dp)
-            )
-            .combinedClickableWithSound(
-                enabled = interactionEnabled,
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        icon()
-    }
 }
 
 private fun readMediaVolumeState(audioManager: AudioManager): MediaVolumeState {
