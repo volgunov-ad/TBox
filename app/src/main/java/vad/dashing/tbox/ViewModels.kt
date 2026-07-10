@@ -445,6 +445,7 @@ object WidgetsRepository {
         TRUNK_DOOR_WIDGET_DATA_KEY to DataTitle(R.string.data_title_trunk_door_widget),
         MIRROR_ADJUST_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_mirror_adjust_mode_widget),
         MIRROR_FOLD_WIDGET_DATA_KEY to DataTitle(R.string.data_title_mirror_fold_widget),
+        DAY_NIGHT_THEME_WIDGET_DATA_KEY to DataTitle(R.string.data_title_day_night_theme_widget),
         "frontLeftSeatHeatVentWidget" to DataTitle(R.string.data_title_front_left_seat_heat_vent_widget),
         "frontRightSeatHeatVentWidget" to DataTitle(R.string.data_title_front_right_seat_heat_vent_widget),
         FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to DataTitle(
@@ -537,6 +538,7 @@ object WidgetsRepository {
             TRUNK_DOOR_WIDGET_DATA_KEY,
             MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
             MIRROR_FOLD_WIDGET_DATA_KEY,
+            DAY_NIGHT_THEME_WIDGET_DATA_KEY,
             "frontLeftSeatHeatVentWidget",
             "frontRightSeatHeatVentWidget",
             FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
@@ -626,6 +628,7 @@ object WidgetsRepository {
             TRUNK_DOOR_WIDGET_DATA_KEY,
             MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
             MIRROR_FOLD_WIDGET_DATA_KEY,
+            DAY_NIGHT_THEME_WIDGET_DATA_KEY,
             DRIVE_MODE_WIDGET_DATA_KEY,
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             -> false
