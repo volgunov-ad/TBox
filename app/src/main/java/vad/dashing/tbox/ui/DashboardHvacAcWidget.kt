@@ -24,8 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-
-private val HvacAcOnColor = Color(0xFF0066CC)
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 @Composable
 fun DashboardHvacAcWidgetItem(
@@ -41,7 +40,7 @@ fun DashboardHvacAcWidgetItem(
 ) {
     val state by UniversalCanRepository.hvacAcPowerState.collectAsStateWithLifecycle()
     val iconColor = when (state) {
-        is MbCanBinaryState.On -> HvacAcOnColor
+        is MbCanBinaryState.On -> WidgetActiveColors.Primary
         is MbCanBinaryState.Off -> textColor
         else -> textColor.copy(alpha = 0.25f)
     }

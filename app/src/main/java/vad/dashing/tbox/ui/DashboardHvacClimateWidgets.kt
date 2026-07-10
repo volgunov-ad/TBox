@@ -1,21 +1,17 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,8 +46,15 @@ import vad.dashing.tbox.mbcan.setHvacBlowMode
 import vad.dashing.tbox.mbcan.toggleHvacFrontOff
 import vad.dashing.tbox.mbcan.trunkPulseClose
 import vad.dashing.tbox.mbcan.trunkPulseOpen
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
-private val HvacClimateOnColor = Color(0xFF0066CC)
+private fun hvacBlowModeIconRes(mode: HvacBlowMode): Int = when (mode) {
+    HvacBlowMode.Face -> R.drawable.ic_widget_hvac_blow_face
+    HvacBlowMode.Foot -> R.drawable.ic_widget_hvac_blow_foot
+    HvacBlowMode.FaceFoot -> R.drawable.ic_widget_hvac_blow_face_foot
+    HvacBlowMode.DefrostFoot -> R.drawable.ic_widget_hvac_blow_defrost_foot
+    HvacBlowMode.Defrost -> R.drawable.ic_widget_hvac_defroster_front
+}
 
 @Composable
 fun DashboardHvacSyncWidgetItem(
@@ -67,7 +70,7 @@ fun DashboardHvacSyncWidgetItem(
 ) {
     val state by HvacClimateCanRepository.hvacSyncState.collectAsStateWithLifecycle()
     val iconColor = when (state) {
-        is MbCanBinaryState.On -> HvacClimateOnColor
+        is MbCanBinaryState.On -> WidgetActiveColors.Primary
         is MbCanBinaryState.Off -> textColor
         else -> textColor.copy(alpha = 0.25f)
     }
@@ -141,7 +144,7 @@ fun DashboardHvacFanWidgetItem(
             Icon(
                 painter = painterResource(R.drawable.ic_widget_hvac_fan),
                 contentDescription = stringResource(R.string.widget_hvac_front_off_toggle),
-                tint = if (frontOffActive) textColor.copy(alpha = 0.35f) else HvacClimateOnColor,
+                tint = if (frontOffActive) textColor.copy(alpha = 0.35f) else WidgetActiveColors.Primary,
                 modifier = Modifier.fillMaxSize(),
             )
         },
@@ -313,7 +316,6 @@ fun DashboardHvacBlowModeCycleWidgetItem(
 
     val defaultTitle = stringResource(R.string.data_title_hvac_blow_mode_cycle_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
-    val label = displayMode?.let { blowModeLabel(it) } ?: "--"
 
     DashboardWidgetScaffold(
         onClick = {
@@ -349,14 +351,28 @@ fun DashboardHvacBlowModeCycleWidgetItem(
                 availableHeight = availableHeight,
                 resolvedTextColor = resolvedTextColor
             )
-            Text(
-                text = label,
-                color = resolvedTextColor,
-                style = calculateResponsiveTextStyle(availableHeight, TextType.TITLE),
-                maxLines = 2,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = LocalWidgetTextAlign.current
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(if (showTitle) 2f else 1f),
+                contentAlignment = Alignment.Center
+            ) {
+                val mode = displayMode
+                val iconColor = if (mode != null) {
+                    WidgetActiveColors.Primary
+                } else {
+                    resolvedTextColor.copy(alpha = 0.25f)
+                }
+                Image(
+                    painter = painterResource(
+                        if (mode != null) hvacBlowModeIconRes(mode) else R.drawable.ic_widget_hvac_blow_face
+                    ),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.matchParentSize().scale(scale),
+                    colorFilter = ColorFilter.tint(iconColor)
+                )
+            }
         }
     }
 }
@@ -465,24 +481,20 @@ private fun BlowModePanelButton(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val bg = if (selected) {
-        HvacClimateOnColor.copy(alpha = 0.35f)
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f)
-    }
+    val iconColor = if (selected) WidgetActiveColors.Primary else textColor
     Box(
         modifier = modifier
-            .background(bg, RoundedCornerShape(8.dp))
             .combinedClickableWithSound(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = blowModeShortLabel(mode),
-            color = if (selected) HvacClimateOnColor else textColor,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 2,
-            textAlign = LocalWidgetTextAlign.current,
-            modifier = Modifier.padding(2.dp)
+        Image(
+            painter = painterResource(hvacBlowModeIconRes(mode)),
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp),
+            colorFilter = ColorFilter.tint(iconColor)
         )
     }
 }
@@ -504,7 +516,7 @@ fun DashboardTrunkDoorWidgetItem(
     val scope = rememberCoroutineScope()
     val trunkState by HvacClimateCanRepository.trunkDoorState.collectAsStateWithLifecycle()
     val iconColor = if (HvacClimateDomain.isTrunkDoorOpenForDisplay(trunkState)) {
-        HvacClimateOnColor
+        WidgetActiveColors.Primary
     } else {
         textColor
     }
@@ -558,20 +570,3 @@ fun DashboardTrunkDoorWidgetItem(
     }
 }
 
-@Composable
-private fun blowModeLabel(mode: HvacBlowMode): String = when (mode) {
-    HvacBlowMode.Face -> stringResource(R.string.hvac_blow_mode_face)
-    HvacBlowMode.Foot -> stringResource(R.string.hvac_blow_mode_foot)
-    HvacBlowMode.FaceFoot -> stringResource(R.string.hvac_blow_mode_face_foot)
-    HvacBlowMode.Defrost -> stringResource(R.string.hvac_blow_mode_defrost)
-    HvacBlowMode.DefrostFoot -> stringResource(R.string.hvac_blow_mode_defrost_foot)
-}
-
-@Composable
-private fun blowModeShortLabel(mode: HvacBlowMode): String = when (mode) {
-    HvacBlowMode.Face -> stringResource(R.string.hvac_blow_mode_face_short)
-    HvacBlowMode.Foot -> stringResource(R.string.hvac_blow_mode_foot_short)
-    HvacBlowMode.FaceFoot -> stringResource(R.string.hvac_blow_mode_face_foot_short)
-    HvacBlowMode.Defrost -> stringResource(R.string.hvac_blow_mode_defrost_short)
-    HvacBlowMode.DefrostFoot -> stringResource(R.string.hvac_blow_mode_defrost_foot_short)
-}

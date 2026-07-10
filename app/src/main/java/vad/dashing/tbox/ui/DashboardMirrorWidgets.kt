@@ -26,13 +26,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.R
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.launchMirrorFoldCommand
 import vad.dashing.tbox.mbcan.mirrorFoldPulseFold
 import vad.dashing.tbox.mbcan.mirrorFoldPulseUnfold
-
-private val MirrorAdjustOnColor = Color(0xFF0066CC)
 
 @Composable
 fun DashboardMirrorAdjustModeWidgetItem(
@@ -53,7 +52,7 @@ fun DashboardMirrorAdjustModeWidgetItem(
     }
     val state by MirrorAdjustModeRepository.mirrorAdjustModeState.collectAsStateWithLifecycle()
     val iconColor = when (state) {
-        is MbCanBinaryState.On -> MirrorAdjustOnColor
+        is MbCanBinaryState.On -> WidgetActiveColors.Primary
         is MbCanBinaryState.Off -> textColor
         else -> textColor.copy(alpha = 0.25f)
     }

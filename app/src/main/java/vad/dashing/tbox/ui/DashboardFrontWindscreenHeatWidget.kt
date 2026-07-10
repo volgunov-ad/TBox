@@ -24,8 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-
-private val WindscreenHeatOnColor = Color(0xFFFF9800)
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 @Composable
 fun DashboardFrontWindscreenHeatWidgetItem(
@@ -41,7 +40,7 @@ fun DashboardFrontWindscreenHeatWidgetItem(
 ) {
     val state by UniversalCanRepository.frontWindscreenHeatState.collectAsStateWithLifecycle()
     val iconColor = when (state) {
-        is MbCanBinaryState.On -> WindscreenHeatOnColor
+        is MbCanBinaryState.On -> WidgetActiveColors.Secondary
         is MbCanBinaryState.Off -> textColor
         else -> textColor.copy(alpha = 0.25f)
     }
