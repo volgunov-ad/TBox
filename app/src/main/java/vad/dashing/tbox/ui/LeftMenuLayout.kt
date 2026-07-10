@@ -30,6 +30,7 @@ enum class LeftMenuTabField(
     WIDGETS("widgets", R.string.tab_widgets),
     MAIN_SCREEN_SETTINGS("main_screen_settings", R.string.tab_main_screen_settings, locked = true),
     CAR_SETTINGS("car_settings", R.string.tab_car_settings),
+    AUDIO_SETTINGS("audio_settings", R.string.tab_audio_settings),
     ;
 
     companion object {
@@ -49,6 +50,7 @@ enum class LeftMenuTabField(
             THEMES,
             MAIN_SCREEN_SETTINGS,
             CAR_SETTINGS,
+            AUDIO_SETTINGS,
             LOGS,
             INFO,
             CAN,

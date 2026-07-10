@@ -436,6 +436,7 @@ fun TboxScreen(
                         onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
                     )
                     LeftMenuTabField.CAR_SETTINGS.id -> CarSettingsTab()
+                    LeftMenuTabField.AUDIO_SETTINGS.id -> AudioSettingsTab()
                     SettingsManager.UPDATE_TAB_KEY -> UpdateTab(
                         updateViewModel = updateViewModel,
                         onOpenInstallPermissionSettings = onOpenInstallPermissionSettings,

@@ -10,6 +10,7 @@
     <string name="action_close">Close</string>
     <string name="action_configure">Configure</string>
     <string name="action_send">Send</string>
+    <string name="action_set">Set</string>
     <string name="action_get_all_sms">Get all SMS</string>
 
     <string name="value_yes">yes</string>
@@ -48,6 +49,7 @@
     <string name="tab_themes">Themes</string>
     <string name="tab_main_screen_settings">Main screen settings</string>
     <string name="tab_car_settings">Car settings</string>
+    <string name="tab_audio_settings">Sound settings</string>
     <string name="tab_logs">Logs</string>
     <string name="tab_info">Info</string>
     <string name="tab_can">CAN</string>
@@ -75,6 +77,14 @@
     <string name="car_settings_source_station_mode_desc">eSOURCE_STATION_MODE</string>
     <string name="car_settings_vehwash_mode_title">Car wash mode</string>
     <string name="car_settings_vehwash_mode_desc">eVEHICLE_VEHWASH_MODESET</string>
+    <string name="audio_settings_screen_title">Sound settings</string>
+    <string name="audio_settings_screen_desc">MBAudioProperty parameters via mbCAN (Android 9). Values refresh automatically.</string>
+    <string name="audio_settings_android9_only">Available only in mbCAN Android 9 mode. Switch head-unit type in app settings.</string>
+    <string name="audio_settings_mbcan_unavailable">mbCAN is unavailable on this device.</string>
+    <string name="audio_settings_property_id">ID: %1$d</string>
+    <string name="audio_settings_current_value">Current: %1$s</string>
+    <string name="audio_settings_new_value_label">New value</string>
+    <string name="audio_settings_invalid_value">Invalid value for %1$s</string>
     <string name="menu_hide">Hide menu</string>
     <string name="menu_show">Show menu</string>
     <string name="menu_navigate_home">Home</string>

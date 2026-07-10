@@ -10,6 +10,7 @@
     <string name="action_close">Закрыть</string>
     <string name="action_configure">Настроить</string>
     <string name="action_send">Отправить</string>
+    <string name="action_set">Задать</string>
     <string name="action_get_all_sms">Получить все SMS</string>
 
     <string name="value_yes">да</string>
@@ -48,6 +49,7 @@
     <string name="tab_themes">Темы</string>
     <string name="tab_main_screen_settings">Настройки главного экрана</string>
     <string name="tab_car_settings">Настройки автомобиля</string>
+    <string name="tab_audio_settings">Настройка звука</string>
     <string name="tab_logs">Журнал</string>
     <string name="tab_info">Информация</string>
     <string name="tab_can">CAN</string>
@@ -75,6 +77,14 @@
     <string name="car_settings_source_station_mode_desc">eSOURCE_STATION_MODE</string>
     <string name="car_settings_vehwash_mode_title">Режим мойки автомобиля</string>
     <string name="car_settings_vehwash_mode_desc">eVEHICLE_VEHWASH_MODESET</string>
+    <string name="audio_settings_screen_title">Настройка звука</string>
+    <string name="audio_settings_screen_desc">Параметры MBAudioProperty через mbCAN (Android 9). Значения обновляются автоматически.</string>
+    <string name="audio_settings_android9_only">Доступно только в режиме mbCAN Android 9. Переключите тип ГУ в настройках приложения.</string>
+    <string name="audio_settings_mbcan_unavailable">mbCAN недоступен на этом устройстве.</string>
+    <string name="audio_settings_property_id">ID: %1$d</string>
+    <string name="audio_settings_current_value">Текущее: %1$s</string>
+    <string name="audio_settings_new_value_label">Новое значение</string>
+    <string name="audio_settings_invalid_value">Некорректное значение для %1$s</string>
     <string name="menu_hide">Скрыть меню</string>
     <string name="menu_show">Показать меню</string>
     <string name="menu_navigate_home">Главная</string>

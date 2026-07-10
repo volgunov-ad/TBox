@@ -331,6 +331,11 @@ object UniversalCanRepository {
         }
     }
 
+    fun getAudioParam(propertyId: Int): Int? {
+        if (_mode.value != HeadUnitCanMode.Android9MbCan) return null
+        return MbCanRepository.getAudioParam(propertyId)
+    }
+
     suspend fun setAudioVolume(value: Int): MbCanCommandResult {
         return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
             MbCanRepository.setAudioVolume(value)

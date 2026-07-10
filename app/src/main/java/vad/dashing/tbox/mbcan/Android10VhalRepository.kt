@@ -1355,6 +1355,8 @@ object Android10VhalRepository {
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
             }
+            is MbCanCommand.SetAudioPropertyRaw ->
+                MbCanCommandResult(false, "Raw audio property write is only supported in Android 9 mbCAN mode")
             is MbCanCommand.RefreshSignal -> {
                 logDebug("RefreshSignal ${command.signal}")
                 refreshSignal(command.signal)

@@ -75,6 +75,8 @@ sealed class MbCanCommand {
     data class SetProperty(val propertyId: Int, val value: Int) : MbCanCommand()
     data class ToggleAudioProperty(val propertyId: Int) : MbCanCommand()
     data class SetAudioProperty(val propertyId: Int, val value: Int) : MbCanCommand()
+    /** Direct [MbCanEngineFacade.canSetAudioParam] without [MbCanAudioCommandRegistry] policy checks. */
+    data class SetAudioPropertyRaw(val propertyId: Int, val value: Int) : MbCanCommand()
     data class RefreshSignal(val signal: MbCanSignal) : MbCanCommand()
 }
 
@@ -607,6 +609,7 @@ object MbCanRepository {
             is MbCanCommand.SetProperty -> executeSetViaRegistry(command.propertyId, command.value)
             is MbCanCommand.ToggleAudioProperty -> executeToggleAudioViaRegistry(command.propertyId)
             is MbCanCommand.SetAudioProperty -> executeSetAudioViaRegistry(command.propertyId, command.value)
+            is MbCanCommand.SetAudioPropertyRaw -> executeSetAudioRaw(command.propertyId, command.value)
             is MbCanCommand.RefreshSignal -> {
                 refreshSignal(command.signal)
                 MbCanCommandResult(true, "Refresh requested")
@@ -715,6 +718,23 @@ object MbCanRepository {
             return MbCanCommandResult(false, "mbCAN unavailable")
         }
         return applyAudioSetAndVerify(spec, value)
+    }
+
+    private suspend fun executeSetAudioRaw(propertyId: Int, value: Int): MbCanCommandResult {
+        MbCanDiagnostics.log("DEBUG", "executeSetAudioPropertyRaw propertyId=$propertyId value=$value")
+        if (availability.value !is MbCanAvailability.Available) {
+            return MbCanCommandResult(false, "mbCAN unavailable")
+        }
+        val setResult = MbCanEngineFacade.canSetAudioParam(propertyId, value)
+            ?: return MbCanCommandResult(false, "Set audio command failed")
+                .also { MbCanDiagnostics.log("ERROR", "audio raw set failed propertyId=$propertyId value=$value") }
+        MbCanDiagnostics.log("DEBUG", "audio raw set result=$setResult propertyId=$propertyId value=$value")
+        return MbCanCommandResult(setResult >= 0, "Set result: $setResult")
+    }
+
+    fun getAudioParam(propertyId: Int): Int? {
+        if (availability.value !is MbCanAvailability.Available) return null
+        return MbCanEngineFacade.canGetAudioParam(propertyId)
     }
 
     private suspend fun applyAudioSetAndVerify(spec: MbCanAudioCommandSpec, targetValue: Int): MbCanCommandResult {

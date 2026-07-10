@@ -81,6 +81,8 @@ fun LeftMenuTabField.menuIcon(): ImageVector = when (this) {
         ImageVector.vectorResource(R.drawable.ic_tab_main_screen_settings)
     LeftMenuTabField.CAR_SETTINGS ->
         ImageVector.vectorResource(R.drawable.ic_tab_car_settings)
+    LeftMenuTabField.AUDIO_SETTINGS ->
+        ImageVector.vectorResource(R.drawable.ic_media_volume_audio)
 }
 
 private fun swapMutableMenuRowsAt(
