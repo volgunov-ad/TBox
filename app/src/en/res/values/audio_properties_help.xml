@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_settings_screen_desc">MBAudioProperty parameters via mbCAN (Android 9). Values refresh automatically. Hints are from stock apps (SystemSettings, Multimedia) and Adayo firmware (AdayoAudioConfig.json).</string>
+    <string name="audio_settings_current_value_decoded">%1$d (%2$s)</string>
+    <string name="audio_help_legend">Tags: confirmed in stock apps · inferred from SDK/firmware · not found in stock apps</string>
+    <string name="audio_help_confirmed">confirmed in stock apps</string>
+    <string name="audio_help_inferred">inferred from SDK/firmware</string>
+    <string name="audio_help_unknown">not found in stock apps</string>
+
+    <string name="audio_value_source_null">no source</string>
+    <string name="audio_value_source_media">media</string>
+    <string name="audio_value_source_radio">radio</string>
+    <string name="audio_value_source_handsfree">hands-free</string>
+    <string name="audio_value_source_bcall">B-call / eCall</string>
+    <string name="audio_value_source_vr">voice assistant</string>
+    <string name="audio_value_vsc_off">off</string>
+    <string name="audio_value_vsc_low">low</string>
+    <string name="audio_value_vsc_mid">mid</string>
+    <string name="audio_value_vsc_high">high</string>
+
+    <string name="audio_prop_1_title">Audio source</string>
+    <string name="audio_prop_1_desc">Active audio source (MBAudioSource). Range: 0=none, 1=media, 2=radio, 3=hands-free, 4=B-call, 5=voice. No explicit stock UI usage found.</string>
+    <string name="audio_prop_2_title">Media volume</string>
+    <string name="audio_prop_2_desc">Main media volume. Confirmed: 0–39 (AdayoAudioConfig MaxVolumeList, VHAL AUDIO_CURRENT_MAIN_VOLUME). 0 = mute. Used in Multimedia / SystemSettings.</string>
+    <string name="audio_prop_3_title">Balance L/R</string>
+    <string name="audio_prop_3_desc">Left/right balance. Confirmed: 0–49 (SoundFadeBalanceArr in firmware). Center is usually mid-range. VHAL: AUDIO_BALANCE_L/R.</string>
+    <string name="audio_prop_4_title">Fader F/R</string>
+    <string name="audio_prop_4_desc">Front/rear balance. Confirmed: 0–49 (SoundFadeBalanceArr). VHAL: AUDIO_FADE_F/R.</string>
+    <string name="audio_prop_5_title">EQ: bass</string>
+    <string name="audio_prop_5_desc">Bass band gain. Firmware uses 10-band EQ; bass is band index 2 (EQFrequency). Neutral preset value: 14, typical preset range 9–21. VHAL: AUDIO_BASS_SET.</string>
+    <string name="audio_prop_6_title">EQ: mid</string>
+    <string name="audio_prop_6_desc">Mid band gain. Band index 5 in EQFrequency. Neutral value: 14. VHAL: AUDIO_MIDRANGE_SET.</string>
+    <string name="audio_prop_7_title">EQ: treble</string>
+    <string name="audio_prop_7_desc">Treble band gain. Band index 8 in EQFrequency. Neutral value: 14. VHAL: AUDIO_HIGH_PITCH.</string>
+    <string name="audio_prop_8_title">Soft mute</string>
+    <string name="audio_prop_8_desc">Software mute flag. Not found in stock apps; likely 0/1.</string>
+    <string name="audio_prop_9_title">AMP mute</string>
+    <string name="audio_prop_9_desc">Amplifier mute. Not found in stock apps; likely 0/1.</string>
+    <string name="audio_prop_10_title">EQ mode</string>
+    <string name="audio_prop_10_desc">EQ preset index. Confirmed: 10 modes (0–9), default 7 = neutral (InitEQMode in AdayoAudioConfig). Used in Multimedia (eAUDIO_PROPERTY_EQMODE). VHAL: AUDIO_EQ_MODEL_SET.</string>
+    <string name="audio_prop_11_title">Radar volume</string>
+    <string name="audio_prop_11_desc">Parking radar / APS alert volume. No MBAudioProperty usage found in stock apps; related VHAL radar props exist separately.</string>
+    <string name="audio_prop_12_title">Instrument volume</string>
+    <string name="audio_prop_12_desc">Instrument cluster chime volume. Not found in stock apps.</string>
+    <string name="audio_prop_13_title">Speed-dependent volume</string>
+    <string name="audio_prop_13_desc">Volume compensation vs speed. Confirmed in SystemSettings: 1=off, 2=low, 3=mid, 4=high (AUDIO_VOL_VSC_MOD_REQ / eAUDIO_PROPERTY_VOLUME_SPEED).</string>
+    <string name="audio_prop_14_title">Channel mix</string>
+    <string name="audio_prop_14_desc">Audio mixing control (canAudioMix). Three byte arguments; semantics not found in stock UI.</string>
+    <string name="audio_prop_15_title">XF microphone mode</string>
+    <string name="audio_prop_15_desc">Cross/external microphone mode (eVEHICLE_PROPERTY_XFMIC_MODE). Not found in stock audio settings.</string>
+    <string name="audio_prop_16_title">Loudness mode</string>
+    <string name="audio_prop_16_desc">Loudness compensation mode. Separate from Music Loudness bands (27–33). Not found in stock apps.</string>
+    <string name="audio_prop_17_title">Key/beep volume</string>
+    <string name="audio_prop_17_desc">UI key / beep volume. Confirmed: called from Multimedia (eAUDIO_PROPERTY_VOLUME_KEY). Value range not found in available sources.</string>
+    <string name="audio_prop_18_title">Phone volume</string>
+    <string name="audio_prop_18_desc">Bluetooth call volume. Inferred from VHAL AUDIO_BLUETOOTH_CALL; typical channel range 0–39 (MaxVolumeList).</string>
+    <string name="audio_prop_19_title">Navigation volume</string>
+    <string name="audio_prop_19_desc">Navigation prompt volume. Inferred from VHAL AUDIO_NAVI_VOLUME; typical range 0–39.</string>
+    <string name="audio_prop_20_title">Voice assistant volume</string>
+    <string name="audio_prop_20_desc">TTS / voice assistant volume. Inferred from VHAL AUDIO_SPEECH_RECOGNITION; typical range 0–39.</string>
+    <string name="audio_prop_21_title">Listening position</string>
+    <string name="audio_prop_21_desc">Listener position / sound field. Inferred from VHAL AUDIO_LISTENING_POSI. Mode values not confirmed in stock apps.</string>
+    <string name="audio_prop_22_title">Soundwave mode</string>
+    <string name="audio_prop_22_desc">Soundwave / sound styling mode. Not found in stock apps.</string>
+    <string name="audio_prop_23_title">Surround</string>
+    <string name="audio_prop_23_desc">Surround / stereo widening. Inferred from VHAL AUDIO_STEREO_SURROUND and AUDIO_EQ_QLI_SURROUND_SET. Likely 0/1.</string>
+    <string name="audio_prop_24_title">Acoustic mode</string>
+    <string name="audio_prop_24_desc">Cabin acoustic preset. Not found in stock apps.</string>
+    <string name="audio_prop_25_title">Loudness</string>
+    <string name="audio_prop_25_desc">Bass boost at low volume. Inferred from VHAL AUDIO_LOUD. Likely 0=off, 1=on.</string>
+    <string name="audio_prop_26_title">Audio reset</string>
+    <string name="audio_prop_26_desc">Reset audio settings command. Likely write-only (e.g. 1). Not found in stock apps.</string>
+    <string name="audio_prop_27_title">Music Loudness 120 Hz</string>
+    <string name="audio_prop_27_desc">120 Hz band boost (Music Loudness). Confirmed in firmware: T_0901_IHU_6_SET_MusicLoudness_120HZ, factory default 15.</string>
+    <string name="audio_prop_28_title">Music Loudness 250 Hz</string>
+    <string name="audio_prop_28_desc">250 Hz band boost. Factory default 15 (firmware).</string>
+    <string name="audio_prop_29_title">Music Loudness 500 Hz</string>
+    <string name="audio_prop_29_desc">500 Hz band boost. Factory default 15 (firmware).</string>
+    <string name="audio_prop_30_title">Music Loudness 1000 Hz</string>
+    <string name="audio_prop_30_desc">1000 Hz band boost. Factory default 15 (firmware).</string>
+    <string name="audio_prop_31_title">Music Loudness 2000 Hz</string>
+    <string name="audio_prop_31_desc">2000 Hz band boost. Factory default 15 (firmware).</string>
+    <string name="audio_prop_32_title">Music Loudness 6000 Hz</string>
+    <string name="audio_prop_32_desc">6000 Hz band boost. Factory default 3 (unlike other bands, firmware).</string>
+    <string name="audio_prop_33_title">Music Loudness 1500 Hz</string>
+    <string name="audio_prop_33_desc">1500 Hz band boost. Factory default 15 (firmware).</string>
+    <string name="audio_prop_34_title">Default max volume</string>
+    <string name="audio_prop_34_desc">Volume upper limit. Confirmed: 39 (MaxVolumeList / AUDIO_MAX_MAIN_VOLUME).</string>
+    <string name="audio_prop_35_title">Factory audio reset</string>
+    <string name="audio_prop_35_desc">Restore factory audio settings (factory command). Not found in stock apps.</string>
+    <string name="audio_prop_36_title">B-call volume</string>
+    <string name="audio_prop_36_desc">Emergency / B-call volume. Inferred from MBAudioSource.eAUDIO_SOURCE_BCALL (4). Range not confirmed.</string>
+    <string name="audio_prop_37_title">Headrest speakers</string>
+    <string name="audio_prop_37_desc">Headrest speaker routing/mode. Not found in stock apps.</string>
+</resources>

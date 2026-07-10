@@ -38,6 +38,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
+import vad.dashing.tbox.mbcan.MbCanAudioPropertyHelp
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -135,6 +136,12 @@ fun AudioSettingsTab(
                     text = stringResource(R.string.audio_settings_screen_desc),
                     style = MaterialTheme.typography.tboxCaption,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+                Text(
+                    text = stringResource(R.string.audio_help_legend),
+                    style = MaterialTheme.typography.tboxCaption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 12.dp),
                 )
             }
@@ -202,32 +209,59 @@ private fun AudioPropertyRow(
     onDraftChange: (String) -> Unit,
     onApply: (String) -> Unit,
 ) {
+    val context = LocalContext.current
+    val help = MbCanAudioPropertyHelp.get(entry.propertyId)
+    val title = help?.let { stringResource(it.titleRes) } ?: entry.propertyName
+    val description = help?.let { stringResource(it.descriptionRes) }
+    val confidenceLabel = help?.let {
+        stringResource(MbCanAudioPropertyHelp.confidenceLabelRes(it.confidence))
+    }
+    val currentValueLabel = MbCanAudioPropertyHelp.formatCurrentValue(
+        context = context,
+        propertyId = entry.propertyId,
+        raw = currentValue,
+        noDataLabel = noDataLabel,
+    )
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
     ) {
         Text(
-            text = entry.propertyName,
+            text = title,
             style = MaterialTheme.typography.tboxTitle,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = stringResource(R.string.audio_settings_property_id, entry.propertyId),
+            text = stringResource(R.string.audio_settings_property_id, entry.propertyId) +
+                " · " + entry.propertyName,
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 6.dp),
         )
+        confidenceLabel?.let { label ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+            )
+        }
+        description?.let { text ->
+            Text(
+                text = text,
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = stringResource(
-                    R.string.audio_settings_current_value,
-                    currentValue?.toString() ?: noDataLabel,
-                ),
+                text = stringResource(R.string.audio_settings_current_value, currentValueLabel),
                 modifier = Modifier.weight(0.35f),
                 style = MaterialTheme.typography.tboxBody,
                 color = MaterialTheme.colorScheme.onSurface,

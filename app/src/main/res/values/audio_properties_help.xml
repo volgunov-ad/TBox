@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="audio_settings_screen_desc">Параметры MBAudioProperty через mbCAN (Android 9). Значения обновляются автоматически. Подсказки собраны из штатных приложений (SystemSettings, Multimedia) и прошивки Adayo (AdayoAudioConfig.json).</string>
+    <string name="audio_settings_current_value_decoded">%1$d (%2$s)</string>
+    <string name="audio_help_legend">Метки: подтверждено в штатке · выведено по SDK/прошивке · не найдено в штатке</string>
+    <string name="audio_help_confirmed">подтверждено в штатке</string>
+    <string name="audio_help_inferred">выведено по SDK/прошивке</string>
+    <string name="audio_help_unknown">не найдено в штатке</string>
+
+    <string name="audio_value_source_null">нет источника</string>
+    <string name="audio_value_source_media">медиа</string>
+    <string name="audio_value_source_radio">радио</string>
+    <string name="audio_value_source_handsfree">громкая связь</string>
+    <string name="audio_value_source_bcall">B-call / eCall</string>
+    <string name="audio_value_source_vr">голосовой помощник</string>
+    <string name="audio_value_vsc_off">выкл</string>
+    <string name="audio_value_vsc_low">низкий</string>
+    <string name="audio_value_vsc_mid">средний</string>
+    <string name="audio_value_vsc_high">высокий</string>
+
+    <string name="audio_prop_1_title">Источник звука</string>
+    <string name="audio_prop_1_desc">Активный аудиоисточник (MBAudioSource). Диапазон: 0=нет, 1=медиа, 2=радио, 3=громкая связь, 4=B-call, 5=голос. В штатных UI явных вызовов не найдено.</string>
+    <string name="audio_prop_2_title">Громкость медиа</string>
+    <string name="audio_prop_2_desc">Основная громкость медиа. Подтверждено: 0–39 (AdayoAudioConfig MaxVolumeList, VHAL AUDIO_CURRENT_MAIN_VOLUME). 0 — беззвучно. Используется в Multimedia / SystemSettings.</string>
+    <string name="audio_prop_3_title">Баланс L/R</string>
+    <string name="audio_prop_3_desc">Баланс лево/право. Подтверждено: 0–49 (SoundFadeBalanceArr в прошивке). Центр обычно около середины диапазона. VHAL: AUDIO_BALANCE_L/R.</string>
+    <string name="audio_prop_4_title">Фейдер F/R</string>
+    <string name="audio_prop_4_desc">Баланс перед/зад. Подтверждено: 0–49 (SoundFadeBalanceArr). VHAL: AUDIO_FADE_F/R.</string>
+    <string name="audio_prop_5_title">Эквалайзер: бас</string>
+    <string name="audio_prop_5_desc">Усиление басовой полосы. В прошивке 10-полосный EQ; бас — полоса с индексом 2 (EQFrequency). Нейтральное значение в пресетах: 14, типичный диапазон пресетов 9–21. VHAL: AUDIO_BASS_SET.</string>
+    <string name="audio_prop_6_title">Эквалайзер: средние</string>
+    <string name="audio_prop_6_desc">Усиление средних частот. Полоса с индексом 5 в EQFrequency. Нейтральное значение: 14. VHAL: AUDIO_MIDRANGE_SET.</string>
+    <string name="audio_prop_7_title">Эквалайзер: высокие</string>
+    <string name="audio_prop_7_desc">Усиление высоких частот. Полоса с индексом 8 в EQFrequency. Нейтральное значение: 14. VHAL: AUDIO_HIGH_PITCH.</string>
+    <string name="audio_prop_8_title">Soft mute</string>
+    <string name="audio_prop_8_desc">Программное отключение звука. В штатке не найдено; вероятно 0/1.</string>
+    <string name="audio_prop_9_title">AMP mute</string>
+    <string name="audio_prop_9_desc">Отключение усилителя. В штатке не найдено; вероятно 0/1.</string>
+    <string name="audio_prop_10_title">Режим эквалайзера</string>
+    <string name="audio_prop_10_desc">Пресет EQ. Подтверждено: 10 режимов (0–9), по умолчанию 7 — нейтральный (InitEQMode в AdayoAudioConfig). Используется в Multimedia (eAUDIO_PROPERTY_EQMODE). VHAL: AUDIO_EQ_MODEL_SET.</string>
+    <string name="audio_prop_11_title">Громкость радара</string>
+    <string name="audio_prop_11_desc">Громкость звуков парктроника/радара. В штатных MBAudioProperty-вызовах не найдено; связанные VHAL-параметры радара существуют отдельно.</string>
+    <string name="audio_prop_12_title">Громкость приборки</string>
+    <string name="audio_prop_12_desc">Громкость сигналов/звуков приборной панели. В штатке не найдено.</string>
+    <string name="audio_prop_13_title">Громкость по скорости</string>
+    <string name="audio_prop_13_desc">Компенсация громкости от скорости. Подтверждено в SystemSettings: 1=выкл, 2=низкий, 3=средний, 4=высокий (AUDIO_VOL_VSC_MOD_REQ / eAUDIO_PROPERTY_VOLUME_SPEED).</string>
+    <string name="audio_prop_14_title">Микширование каналов</string>
+    <string name="audio_prop_14_desc">Управление микшированием (canAudioMix). Семантика трёх байтовых аргументов в штатном UI не найдена.</string>
+    <string name="audio_prop_15_title">Режим XF-микрофона</string>
+    <string name="audio_prop_15_desc">Режим внешнего/кросс-микрофона (eVEHICLE_PROPERTY_XFMIC_MODE). В штатных аудио-настройках не найдено.</string>
+    <string name="audio_prop_16_title">Режим Loudness</string>
+    <string name="audio_prop_16_desc">Режим компенсации громкости (Loudness mode). Отдельно от полос Music Loudness (27–33). В штатке не найдено.</string>
+    <string name="audio_prop_17_title">Громкость клавиш</string>
+    <string name="audio_prop_17_desc">Громкость звуков кнопок/клавиш. Подтверждено: вызывается в Multimedia (eAUDIO_PROPERTY_VOLUME_KEY). Диапазон значений в доступных исходниках не найден.</string>
+    <string name="audio_prop_18_title">Громкость телефона</string>
+    <string name="audio_prop_18_desc">Громкость Bluetooth-звонка. Выведено по VHAL AUDIO_BLUETOOTH_CALL; типичный диапазон каналов 0–39 (MaxVolumeList).</string>
+    <string name="audio_prop_19_title">Громкость навигации</string>
+    <string name="audio_prop_19_desc">Громкость подсказок навигации. Выведено по VHAL AUDIO_NAVI_VOLUME; типичный диапазон 0–39.</string>
+    <string name="audio_prop_20_title">Громкость голосового помощника</string>
+    <string name="audio_prop_20_desc">Громкость TTS/голосового помощника. Выведено по VHAL AUDIO_SPEECH_RECOGNITION; типичный диапазон 0–39.</string>
+    <string name="audio_prop_21_title">Звуковое поле</string>
+    <string name="audio_prop_21_desc">Позиция слушателя / звуковое поле. Выведено по VHAL AUDIO_LISTENING_POSI. Конкретные значения режимов в штатке не найдены.</string>
+    <string name="audio_prop_22_title">Режим Soundwave</string>
+    <string name="audio_prop_22_desc">Режим звуковой волны / звукового оформления. В штатке не найдено.</string>
+    <string name="audio_prop_23_title">Объёмный звук</string>
+    <string name="audio_prop_23_desc">Surround / стерео-объём. Выведено по VHAL AUDIO_STEREO_SURROUND и AUDIO_EQ_QLI_SURROUND_SET. Вероятно 0/1.</string>
+    <string name="audio_prop_24_title">Акустический режим</string>
+    <string name="audio_prop_24_desc">Пресет акустики салона. В штатке не найдено.</string>
+    <string name="audio_prop_25_title">Loudness</string>
+    <string name="audio_prop_25_desc">Компенсация НЧ на малой громкости. Выведено по VHAL AUDIO_LOUD. Вероятно 0=выкл, 1=вкл.</string>
+    <string name="audio_prop_26_title">Сброс аудионастроек</string>
+    <string name="audio_prop_26_desc">Команда сброса аудиопараметров. Вероятно write-only (например 1). В штатке не найдено.</string>
+    <string name="audio_prop_27_title">Music Loudness 120 Гц</string>
+    <string name="audio_prop_27_desc">Усиление полосы 120 Гц (Music Loudness). Подтверждено в прошивке: T_0901_IHU_6_SET_MusicLoudness_120HZ, заводское значение 15.</string>
+    <string name="audio_prop_28_title">Music Loudness 250 Гц</string>
+    <string name="audio_prop_28_desc">Усиление полосы 250 Гц. Заводское значение 15 (прошивка).</string>
+    <string name="audio_prop_29_title">Music Loudness 500 Гц</string>
+    <string name="audio_prop_29_desc">Усиление полосы 500 Гц. Заводское значение 15 (прошивка).</string>
+    <string name="audio_prop_30_title">Music Loudness 1000 Гц</string>
+    <string name="audio_prop_30_desc">Усиление полосы 1000 Гц. Заводское значение 15 (прошивка).</string>
+    <string name="audio_prop_31_title">Music Loudness 2000 Гц</string>
+    <string name="audio_prop_31_desc">Усиление полосы 2000 Гц. Заводское значение 15 (прошивка).</string>
+    <string name="audio_prop_32_title">Music Loudness 6000 Гц</string>
+    <string name="audio_prop_32_desc">Усиление полосы 6000 Гц. Заводское значение 3 (отличается от остальных полос, прошивка).</string>
+    <string name="audio_prop_33_title">Music Loudness 1500 Гц</string>
+    <string name="audio_prop_33_desc">Усиление полосы 1500 Гц. Заводское значение 15 (прошивка).</string>
+    <string name="audio_prop_34_title">Максимальная громкость</string>
+    <string name="audio_prop_34_desc">Верхний предел громкости. Подтверждено: 39 (MaxVolumeList / AUDIO_MAX_MAIN_VOLUME).</string>
+    <string name="audio_prop_35_title">Заводские настройки звука</string>
+    <string name="audio_prop_35_desc">Команда возврата заводских аудиопараметров (factory). В штатке не найдено.</string>
+    <string name="audio_prop_36_title">Громкость B-call</string>
+    <string name="audio_prop_36_desc">Громкость экстренного/B-call вызова. Выведено по MBAudioSource.eAUDIO_SOURCE_BCALL (4). Диапазон не подтверждён.</string>
+    <string name="audio_prop_37_title">Динамики подголовника</string>
+    <string name="audio_prop_37_desc">Маршрутизация/режим динамиков подголовника. В штатке не найдено.</string>
+</resources>

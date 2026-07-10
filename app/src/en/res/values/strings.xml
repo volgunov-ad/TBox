@@ -78,7 +78,6 @@
     <string name="car_settings_vehwash_mode_title">Car wash mode</string>
     <string name="car_settings_vehwash_mode_desc">eVEHICLE_VEHWASH_MODESET</string>
     <string name="audio_settings_screen_title">Sound settings</string>
-    <string name="audio_settings_screen_desc">MBAudioProperty parameters via mbCAN (Android 9). Values refresh automatically.</string>
     <string name="audio_settings_android9_only">Available only in mbCAN Android 9 mode. Switch head-unit type in app settings.</string>
     <string name="audio_settings_mbcan_unavailable">mbCAN is unavailable on this device.</string>
     <string name="audio_settings_property_id">ID: %1$d</string>
