@@ -65,6 +65,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF to 289415301, // T_0201_IHU_5_FrontOFF_Req
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415308, // T_0201_IHU_5_SyncSwtich_Req
         MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL to 289412638, // T_0403_SET_PLG_Control
+        MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH to 289412705, // T_0401_SET_Mirror_Fold_Switch
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415316, // T_0201_SET_FLSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415315, // T_0201_SET_FRSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH to 289415345, // T_0203_SET_LRSeatHeatVentSwReq

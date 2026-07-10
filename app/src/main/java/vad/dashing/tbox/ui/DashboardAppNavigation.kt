@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.SystemClock
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.MainActivityIntentHelper
+import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
 private val steeringHeatToggleLock = Any()
@@ -335,6 +336,13 @@ internal fun sendToggleHvacSync(context: Context) {
                 )
             }
         )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleMirrorAdjustMode(context: Context) {
+    try {
+        MirrorAdjustModeRepository.toggleMirrorAdjustMode(context)
     } catch (_: Exception) {
     }
 }

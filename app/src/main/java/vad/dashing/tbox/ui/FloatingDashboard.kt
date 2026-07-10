@@ -42,6 +42,7 @@ import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
+import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
@@ -391,6 +392,8 @@ fun FloatingDashboard(
                             }
                         } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
                             sendToggleSteeringWheelHeat(context)
+                        } else if (cfg?.dataKey == MIRROR_ADJUST_MODE_WIDGET_DATA_KEY) {
+                            sendToggleMirrorAdjustMode(context)
                         } else if (cfg?.dataKey == WIPER_MAINTENANCE_WIDGET_DATA_KEY) {
                             sendToggleWiperMaintenance(context)
                         } else if (cfg?.dataKey == PARKING_RADAR_WIDGET_DATA_KEY) {

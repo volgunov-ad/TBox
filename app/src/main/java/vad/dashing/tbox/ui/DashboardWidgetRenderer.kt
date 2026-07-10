@@ -43,6 +43,8 @@ import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
+import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.MIRROR_FOLD_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
@@ -576,6 +578,36 @@ fun DashboardWidgetRenderer(
 
         TRUNK_DOOR_WIDGET_DATA_KEY -> {
             DashboardTrunkDoorWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {},
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        MIRROR_ADJUST_MODE_WIDGET_DATA_KEY -> {
+            DashboardMirrorAdjustModeWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        MIRROR_FOLD_WIDGET_DATA_KEY -> {
+            DashboardMirrorFoldWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {},

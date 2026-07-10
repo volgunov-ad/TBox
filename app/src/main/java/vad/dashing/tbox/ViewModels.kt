@@ -443,6 +443,8 @@ object WidgetsRepository {
         HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(R.string.data_title_hvac_blow_mode_panel_widget_horizontal),
         HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY to DataTitle(R.string.data_title_hvac_blow_mode_panel_widget_vertical),
         TRUNK_DOOR_WIDGET_DATA_KEY to DataTitle(R.string.data_title_trunk_door_widget),
+        MIRROR_ADJUST_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_mirror_adjust_mode_widget),
+        MIRROR_FOLD_WIDGET_DATA_KEY to DataTitle(R.string.data_title_mirror_fold_widget),
         "frontLeftSeatHeatVentWidget" to DataTitle(R.string.data_title_front_left_seat_heat_vent_widget),
         "frontRightSeatHeatVentWidget" to DataTitle(R.string.data_title_front_right_seat_heat_vent_widget),
         FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to DataTitle(
@@ -533,6 +535,8 @@ object WidgetsRepository {
             HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY,
             HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY,
             TRUNK_DOOR_WIDGET_DATA_KEY,
+            MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
+            MIRROR_FOLD_WIDGET_DATA_KEY,
             "frontLeftSeatHeatVentWidget",
             "frontRightSeatHeatVentWidget",
             FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
@@ -620,6 +624,8 @@ object WidgetsRepository {
             HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY,
             HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY,
             TRUNK_DOOR_WIDGET_DATA_KEY,
+            MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
+            MIRROR_FOLD_WIDGET_DATA_KEY,
             DRIVE_MODE_WIDGET_DATA_KEY,
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             -> false

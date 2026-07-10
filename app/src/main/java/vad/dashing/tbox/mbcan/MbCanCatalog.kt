@@ -153,6 +153,8 @@ object MbCanKnownVehiclePropertyId {
     const val TRUNK_REAR_DOOR_MOVE_DIR = 71341
     /** Read-only: [R_0402_PLG_1_RearDoorStatus]. */
     const val TRUNK_REAR_DOOR_STATUS = 71342
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_MIRROR_FOLD_SWITCH] — fold=1, unfold=2. */
+    const val MIRROR_FOLD_SWITCH = 230
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION] — blow mode. */
     const val HVAC_FAN_DIRECTION = 40
     /** mbCAN blow modes (Android 9 [MBFrontDefrostingView]). */
@@ -454,6 +456,10 @@ object MbCanCommandRegistry {
             propertyId = MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL,
             policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(0, 1, 2)),
             refreshSignal = MbCanSignal.TrunkDoor
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
         ),
     ).associateBy { it.propertyId }
 
