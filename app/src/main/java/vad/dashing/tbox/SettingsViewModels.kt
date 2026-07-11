@@ -16,6 +16,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
@@ -566,8 +568,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     private var saveCurrentPageJob: Job? = null
     private var pendingCurrentPage: Int? = null
+    private val currentPageFlushMutex = Mutex()
 
     private var saveWallpaperSelectionJob: Job? = null
+    private val wallpaperFlushMutex = Mutex()
     private val pendingWallpaperPatches = mutableMapOf<Pair<Int, Boolean>, String>()
     private val pendingWallpaperPatchesFlow = MutableStateFlow<Map<Pair<Int, Boolean>, String>>(emptyMap())
 
@@ -971,6 +975,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     init {
+        settingsManager.preThemeActivationFlush = preThemeActivationFlushHook
+        ThemeActivationCoordinator.markMainScreenUiReady()
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
             selectedFloatingDashboardIdState.value =
@@ -1445,9 +1451,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                     page,
                 )
             }
-            settingsManager.syncActiveThemeWallpaperSelection(
-                settingsManager.mainScreenWallpaperSelectionByPageFlow.first(),
-            )
+            val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+            if (ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)) {
+                settingsManager.syncThemeWallpaperSelection(
+                    syncCacheKey,
+                    settingsManager.mainScreenWallpaperSelectionByPageFlow.first(),
+                )
+            }
             settingsManager.bumpMainScreenWallpaperRevision()
         }
     }
@@ -1489,22 +1499,29 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     private suspend fun flushMainScreenWallpaperSelectionInternal() {
-        if (pendingWallpaperPatches.isEmpty()) return
-        if (settingsManager.themeActivationInProgressFlow.value) return
-        val patches = pendingWallpaperPatches.toMap()
-        var merged = settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
-        patches.forEach { (key, fileName) ->
-            merged = merged.withFileName(key.first, key.second, fileName)
-        }
-        settingsManager.saveMainScreenWallpaperSelectionsByPage(merged)
-        settingsManager.syncActiveThemeWallpaperSelectionReliable(merged)
-        settingsManager.mainScreenWallpaperSelectionByPageFlow.first { stored ->
-            patches.all { (key, fileName) ->
-                stored.fileNameFor(key.first, key.second) == fileName
+        wallpaperFlushMutex.withLock {
+            if (pendingWallpaperPatches.isEmpty()) return
+            if (settingsManager.themeActivationInProgressFlow.value) return
+            val patches = pendingWallpaperPatches.toMap()
+            val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+            var merged = settingsManager.mainScreenWallpaperSelectionByPageFlow.first()
+            patches.forEach { (key, fileName) ->
+                merged = merged.withFileName(key.first, key.second, fileName)
             }
+            settingsManager.saveMainScreenWallpaperSelectionsByPage(merged)
+            if (settingsManager.themeActivationInProgressFlow.value) return
+            if (settingsManager.activeThemeUriFlow.first().trim() != syncCacheKey) return
+            if (ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)) {
+                settingsManager.syncThemeWallpaperSelectionReliable(syncCacheKey, merged)
+            }
+            settingsManager.mainScreenWallpaperSelectionByPageFlow.first { stored ->
+                patches.all { (key, fileName) ->
+                    stored.fileNameFor(key.first, key.second) == fileName
+                }
+            }
+            patches.keys.forEach { pendingWallpaperPatches.remove(it) }
+            pendingWallpaperPatchesFlow.value = pendingWallpaperPatches.toMap()
         }
-        patches.keys.forEach { pendingWallpaperPatches.remove(it) }
-        pendingWallpaperPatchesFlow.value = pendingWallpaperPatches.toMap()
     }
 
     fun saveMainScreenWallpaperCrop(crop: Boolean) {
@@ -2088,10 +2105,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     private suspend fun flushMainScreenCurrentPageInternal() {
-        val toSave = pendingCurrentPage ?: return
-        pendingCurrentPage = null
-        settingsManager.saveMainScreenCurrentPage(toSave)
-        settingsManager.syncActiveThemeCurrentPage(toSave)
+        currentPageFlushMutex.withLock {
+            val toSave = pendingCurrentPage ?: return
+            val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+            pendingCurrentPage = null
+            settingsManager.saveMainScreenCurrentPage(toSave)
+            if (settingsManager.themeActivationInProgressFlow.value) return
+            if (settingsManager.activeThemeUriFlow.first().trim() != syncCacheKey) return
+            if (ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)) {
+                settingsManager.syncThemeCurrentPage(syncCacheKey, toSave)
+            }
+        }
     }
 
     fun saveMainScreenPagePrevButton(position: MainScreenPagePrevButtonPosition) {

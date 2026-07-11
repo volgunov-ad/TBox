@@ -143,6 +143,16 @@ class MainScreenWallpaperSelectionsTest {
     }
 
     @Test
+    fun fileNameForCurrentOrAnyPage_fallsBackToFirstConfiguredPage() {
+        val selections = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "eco.jpg")
+
+        assertEquals("eco.jpg", selections.fileNameForCurrentOrAnyPage(page = 2, forLightTheme = true))
+        assertEquals("eco.jpg", selections.fileNameFor(page = 1, forLightTheme = true))
+        assertNull(selections.fileNameFor(page = 2, forLightTheme = true))
+    }
+
+    @Test
     fun clearedForTheme_removesOnlyMatchingSide() {
         val selections = MainScreenWallpaperSelectionsByPage(
             lightByPage = mapOf(1 to "a.jpg"),

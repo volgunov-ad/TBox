@@ -239,8 +239,9 @@ object ThemeMaterialization {
             applyWallpaperDirsFromCache(settingsManager, dir, sections)
             settingsManager.bumpMainScreenWallpaperRevision()
 
+            val normalizedCacheKey = ThemeCacheKeys.sanitizeCacheKey(cacheKey)
             settingsManager.saveActiveTheme(
-                uri = cacheKey,
+                uri = normalizedCacheKey,
                 fingerprint = manifest.fingerprint,
                 sections = sections,
             )
@@ -396,17 +397,19 @@ object ThemeMaterialization {
         cacheDir: File,
         sections: Set<ThemeSection>,
     ) {
-        if (ThemeSection.MAIN_SCREEN !in sections) return
+        if (ThemeSection.MAIN_SCREEN !in sections) {
+            settingsManager.saveMainScreenWallpaperLightFolderUri(null)
+            settingsManager.saveMainScreenWallpaperDarkFolderUri(null)
+            settingsManager.bumpMainScreenWallpaperRevision()
+            return
+        }
 
         val lightUri = wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_LIGHT_DIR))
-        if (lightUri != null) {
-            settingsManager.saveMainScreenWallpaperLightFolderUri(lightUri)
-        }
+        settingsManager.saveMainScreenWallpaperLightFolderUri(lightUri)
 
         val darkUri = wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_DARK_DIR))
-        if (darkUri != null) {
-            settingsManager.saveMainScreenWallpaperDarkFolderUri(darkUri)
-        }
+        settingsManager.saveMainScreenWallpaperDarkFolderUri(darkUri)
+
         settingsManager.bumpMainScreenWallpaperRevision()
     }
 

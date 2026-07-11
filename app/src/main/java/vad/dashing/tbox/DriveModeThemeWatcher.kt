@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import java.io.File
 
 class DriveModeThemeWatcher(
     private val context: Context,
@@ -24,6 +25,8 @@ class DriveModeThemeWatcher(
             settingsManager.driveModeThemePathsFlow
                 .distinctUntilChanged()
                 .collect { paths ->
+                    lastAppliedCacheKey = null
+                    lastAppliedKey = null
                     updateCanInterest(paths)
                 }
         }
@@ -39,9 +42,6 @@ class DriveModeThemeWatcher(
                 .debounce(DRIVE_MODE_THEME_ACTIVATION_DEBOUNCE_MS)
                 .collect { request ->
                     if (request == null) return@collect
-                    if (request.cacheKey == lastAppliedCacheKey && request.modeRawValue == lastAppliedKey) {
-                        return@collect
-                    }
                     ThemeActivationCoordinator.awaitMainScreenUiReady()
                     if (!ThemeMaterialization.isMaterialized(context, request.cacheKey)) {
                         return@collect
@@ -104,6 +104,12 @@ class DriveModeThemeWatcher(
             val cacheKey: String,
         )
 
+        internal data class DriveModeThemeAssignment(
+            val sourceUri: String,
+            val cacheKey: String,
+            val assignedRawValue: Int,
+        )
+
         internal fun isDriveModeThemeAlreadyApplied(
             request: DriveModeThemeActivationRequest,
             activeThemeUri: String,
@@ -121,6 +127,30 @@ class DriveModeThemeWatcher(
                 activeFingerprint == manifestFingerprint
         }
 
+        internal suspend fun isDriveModeWallpaperSelectionApplied(
+            context: Context,
+            request: DriveModeThemeActivationRequest,
+            settingsManager: SettingsManager,
+        ): Boolean {
+            val cacheDir = ThemeMaterialization.cacheDir(context, request.cacheKey)
+            val themeJsonFile = File(cacheDir, ThemeMaterialization.THEME_JSON_FILE)
+            if (!themeJsonFile.isFile) return false
+            return wallpaperSelectionMatchesCache(
+                cacheDir = cacheDir,
+                themeJson = themeJsonFile.readText(),
+                actual = settingsManager.mainScreenWallpaperSelectionByPageFlow.first(),
+            )
+        }
+
+        internal fun wallpaperSelectionMatchesCache(
+            cacheDir: File,
+            themeJson: String,
+            actual: MainScreenWallpaperSelectionsByPage,
+        ): Boolean {
+            val expected = ThemeRuntimeState.resolveWallpaperSelectionsForActivation(cacheDir, themeJson)
+            return expected == actual
+        }
+
         internal fun resolveActivationRequest(
             paths: Map<Int, String>,
             drive: Int?,
@@ -128,14 +158,52 @@ class DriveModeThemeWatcher(
         ): DriveModeThemeActivationRequest? {
             if (paths.isEmpty()) return null
             val key = resolveDriveModeThemeKey(drive, wet6dct) ?: return null
-            val sourceUri = paths[key]?.trim().orEmpty()
-            if (sourceUri.isEmpty()) return null
+            val assignment = resolveDriveModeThemeAssignment(paths, key) ?: return null
             return DriveModeThemeActivationRequest(
                 modeRawValue = key,
-                sourceUri = sourceUri,
-                cacheKey = ThemeCacheKeys.driveModeCacheKey(key),
+                sourceUri = assignment.sourceUri,
+                cacheKey = assignment.cacheKey,
             )
         }
+
+        /**
+         * Resolves the assigned `.tboxtheme` URI and materialized cache key for [modeRawValue].
+         * When only a sibling slot with the same [DriveModeWidgetOption.widgetLabel] was configured
+         * (e.g. standard ECO vs ECO 6DCT), returns that sibling's cache key so activation can use
+         * the existing materialized cache.
+         */
+        internal fun resolveDriveModeThemeAssignment(
+            paths: Map<Int, String>,
+            modeRawValue: Int,
+        ): DriveModeThemeAssignment? {
+            paths[modeRawValue]?.trim()?.takeIf { it.isNotEmpty() }?.let { uri ->
+                return DriveModeThemeAssignment(
+                    sourceUri = uri,
+                    cacheKey = ThemeCacheKeys.driveModeCacheKey(modeRawValue),
+                    assignedRawValue = modeRawValue,
+                )
+            }
+            val label = resolveDriveModeWidgetOption(modeRawValue).widgetLabel
+            return DRIVE_MODE_WIDGET_OPTIONS
+                .filter { it.widgetLabel == label }
+                .firstNotNullOfOrNull { option ->
+                    paths[option.rawValue]?.trim()?.takeIf { it.isNotEmpty() }?.let { uri ->
+                        DriveModeThemeAssignment(
+                            sourceUri = uri,
+                            cacheKey = ThemeCacheKeys.driveModeCacheKey(option.rawValue),
+                            assignedRawValue = option.rawValue,
+                        )
+                    }
+                }
+        }
+
+        /**
+         * @deprecated Use [resolveDriveModeThemeAssignment].
+         */
+        internal fun resolveDriveModeThemeSourceUri(
+            paths: Map<Int, String>,
+            modeRawValue: Int,
+        ): String? = resolveDriveModeThemeAssignment(paths, modeRawValue)?.sourceUri
 
         fun resolveDriveModeThemeKey(drive: Int?, wet6dct: Int?): Int? {
             DRIVE_MODE_WIDGET_OPTIONS
