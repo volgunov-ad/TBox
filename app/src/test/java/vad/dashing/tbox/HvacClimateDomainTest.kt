@@ -7,8 +7,6 @@ import vad.dashing.tbox.mbcan.HvacBlowMode
 import vad.dashing.tbox.mbcan.HvacClimateDomain
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
-import vad.dashing.tbox.mbcan.TrunkDoorReadPlatform
-import vad.dashing.tbox.mbcan.TrunkDoorState
 
 class HvacClimateDomainTest {
 
@@ -65,27 +63,5 @@ class HvacClimateDomainTest {
     fun encodeHvacFrontOffWrite_matchesStatusEncoding() {
         assertEquals(2, HvacClimateDomain.encodeHvacFrontOffMbCanWrite(targetClimateOn = true))
         assertEquals(1, HvacClimateDomain.encodeHvacFrontOffMbCanWrite(targetClimateOn = false))
-    }
-
-    @Test
-    fun resolveTrunkDoorState_mbCanBcm() {
-        assertEquals(TrunkDoorState.Closed, HvacClimateDomain.resolveTrunkDoorState(0, null, TrunkDoorReadPlatform.MbCanBcm))
-        assertEquals(TrunkDoorState.Moving, HvacClimateDomain.resolveTrunkDoorState(1, null, TrunkDoorReadPlatform.MbCanBcm))
-        assertEquals(TrunkDoorState.Open, HvacClimateDomain.resolveTrunkDoorState(2, null, TrunkDoorReadPlatform.MbCanBcm))
-    }
-
-    @Test
-    fun resolveTrunkDoorState_vhalUsesStatusWhenStopped() {
-        assertEquals(TrunkDoorState.Moving, HvacClimateDomain.resolveTrunkDoorState(0, 0, TrunkDoorReadPlatform.Vhal))
-        assertEquals(TrunkDoorState.Moving, HvacClimateDomain.resolveTrunkDoorState(1, 0, TrunkDoorReadPlatform.Vhal))
-        assertEquals(TrunkDoorState.Closed, HvacClimateDomain.resolveTrunkDoorState(2, 0, TrunkDoorReadPlatform.Vhal))
-        assertEquals(TrunkDoorState.Open, HvacClimateDomain.resolveTrunkDoorState(2, 1, TrunkDoorReadPlatform.Vhal))
-    }
-
-    @Test
-    fun isTrunkDoorOpenForDisplay_openOrMoving() {
-        assertEquals(true, HvacClimateDomain.isTrunkDoorOpenForDisplay(TrunkDoorState.Open))
-        assertEquals(true, HvacClimateDomain.isTrunkDoorOpenForDisplay(TrunkDoorState.Moving))
-        assertEquals(false, HvacClimateDomain.isTrunkDoorOpenForDisplay(TrunkDoorState.Closed))
     }
 }

@@ -27,13 +27,6 @@ object HvacClimateCanRepository {
     private val _hvacBlowMode = MutableStateFlow<HvacBlowMode?>(null)
     val hvacBlowMode: StateFlow<HvacBlowMode?> = _hvacBlowMode.asStateFlow()
 
-    private val _trunkDoorState = MutableStateFlow<TrunkDoorState>(TrunkDoorState.Unknown)
-    val trunkDoorState: StateFlow<TrunkDoorState> = _trunkDoorState.asStateFlow()
-
-    private var trunkMoveDir: Int? = null
-    private var trunkStatus: Int? = null
-    private var trunkReadPlatform: TrunkDoorReadPlatform = TrunkDoorReadPlatform.Vhal
-
     fun clearAll() {
         _hvacFrontOffState.value = MbCanBinaryState.Unknown
         _hvacTempLeftCelsius.value = null
@@ -41,9 +34,6 @@ object HvacClimateCanRepository {
         _hvacFanSpeed.value = null
         _hvacSyncState.value = MbCanBinaryState.Unknown
         _hvacBlowMode.value = null
-        trunkMoveDir = null
-        trunkStatus = null
-        _trunkDoorState.value = TrunkDoorState.Unknown
     }
 
     fun applyFrontOffMbCan(raw: Int) {
@@ -88,37 +78,5 @@ object HvacClimateCanRepository {
 
     fun applyBlowModeVhal(raw: Int) {
         _hvacBlowMode.value = HvacBlowMode.fromVhalRaw(raw)
-    }
-
-    fun applyTrunkMoveDirMbCan(raw: Int) {
-        trunkReadPlatform = TrunkDoorReadPlatform.MbCanBcm
-        trunkMoveDir = raw
-        publishTrunkState()
-    }
-
-    fun applyTrunkMoveDirVhal(raw: Int) {
-        trunkReadPlatform = TrunkDoorReadPlatform.Vhal
-        trunkMoveDir = raw
-        publishTrunkState()
-    }
-
-    fun applyTrunkStatusVhal(raw: Int) {
-        trunkReadPlatform = TrunkDoorReadPlatform.Vhal
-        trunkStatus = raw
-        publishTrunkState()
-    }
-
-    fun clearTrunkState() {
-        trunkMoveDir = null
-        trunkStatus = null
-        _trunkDoorState.value = TrunkDoorState.Unknown
-    }
-
-    private fun publishTrunkState() {
-        _trunkDoorState.value = HvacClimateDomain.resolveTrunkDoorState(
-            moveDir = trunkMoveDir,
-            status = trunkStatus,
-            platform = trunkReadPlatform,
-        )
     }
 }

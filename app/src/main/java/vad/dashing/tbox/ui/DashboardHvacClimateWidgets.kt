@@ -36,7 +36,6 @@ import vad.dashing.tbox.mbcan.HvacBlowMode
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacClimateDomain
 import vad.dashing.tbox.mbcan.MbCanBinaryState
-import vad.dashing.tbox.mbcan.TrunkDoorState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.adjustHvacFanSpeed
 import vad.dashing.tbox.mbcan.adjustHvacTempLeft
@@ -44,8 +43,6 @@ import vad.dashing.tbox.mbcan.adjustHvacTempRight
 import vad.dashing.tbox.mbcan.launchHvacClimateCommand
 import vad.dashing.tbox.mbcan.setHvacBlowMode
 import vad.dashing.tbox.mbcan.toggleHvacFrontOff
-import vad.dashing.tbox.mbcan.trunkPulseClose
-import vad.dashing.tbox.mbcan.trunkPulseOpen
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 private fun hvacBlowModeIconRes(mode: HvacBlowMode): Int = when (mode) {
@@ -496,77 +493,6 @@ private fun BlowModePanelButton(
                 .padding(4.dp),
             colorFilter = ColorFilter.tint(iconColor)
         )
-    }
-}
-
-@Composable
-fun DashboardTrunkDoorWidgetItem(
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onDoubleClick: () -> Unit,
-    enableInnerInteractions: Boolean,
-    elevation: Dp,
-    shape: Dp,
-    textColor: Color,
-    backgroundColor: Color,
-    showTitle: Boolean = false,
-    titleOverride: String = "",
-    scale: Float = 1f,
-) {
-    val scope = rememberCoroutineScope()
-    val trunkState by HvacClimateCanRepository.trunkDoorState.collectAsStateWithLifecycle()
-    val iconColor = if (HvacClimateDomain.isTrunkDoorOpenForDisplay(trunkState)) {
-        WidgetActiveColors.Primary
-    } else {
-        textColor
-    }
-    val defaultTitle = stringResource(R.string.data_title_trunk_door_widget)
-    val titleText = titleOverride.trim().ifBlank { defaultTitle }
-
-    DashboardWidgetScaffold(
-        onClick = {
-            if (enableInnerInteractions) {
-                UniversalCanRepository.launchHvacClimateCommand(scope) { trunkPulseOpen() }
-            } else {
-                onClick()
-            }
-        },
-        onLongClick = onLongClick,
-        onDoubleClick = {
-            if (enableInnerInteractions) {
-                UniversalCanRepository.launchHvacClimateCommand(scope) { trunkPulseClose() }
-            }
-            onDoubleClick()
-        },
-        elevation = elevation,
-        shape = shape,
-        textColor = textColor,
-        backgroundColor = backgroundColor
-    ) { availableHeight, resolvedTextColor ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp).wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(if (showTitle) 2f else 1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_widget_trunk),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize().scale(scale),
-                    colorFilter = ColorFilter.tint(iconColor)
-                )
-            }
-        }
     }
 }
 

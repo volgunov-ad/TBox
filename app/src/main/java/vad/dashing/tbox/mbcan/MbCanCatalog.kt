@@ -149,10 +149,12 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_SYNC_SWITCH = 94
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PLG_CONTROL] — power liftgate pulse. */
     const val TRUNK_PLG_CONTROL = 134
-    /** Read-only: [R_0402_PLG_1_RearDoorMoveDir] / BCM `nRearDoorMoveDir` (not [canGetVehicleParam] on A9). */
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_DOOR_TRUNK_POS] — max opening angle setting (stock dialog). */
+    const val DOOR_TRUNK_POS = 6
+    /** VHAL [R_0402_PLG_1_RearDoorStatus] — 0 closed, 1 open (stock [CarCommon3]). */
+    const val TRUNK_STATUS = 71343
+    /** PLG movement direction (A10 read); also BCM `nRearDoorMoveDir` push on A9. */
     const val TRUNK_REAR_DOOR_MOVE_DIR = 71341
-    /** Read-only: [R_0402_PLG_1_RearDoorStatus]. */
-    const val TRUNK_REAR_DOOR_STATUS = 71342
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_MIRROR_FOLD_SWITCH] — fold=1, unfold=2. */
     const val MIRROR_FOLD_SWITCH = 230
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION] — blow mode. */

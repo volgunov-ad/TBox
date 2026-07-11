@@ -104,7 +104,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF to 289415175, // R_0200_CEM_IPM_FrontOFFSts
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415181, // R_0200_CEM_IPM_SyncSts
         MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR to 289412272, // R_0402_PLG_1_RearDoorMoveDir
-        MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_STATUS to 289412273, // R_0402_PLG_1_RearDoorStatus
+        MbCanKnownVehiclePropertyId.TRUNK_STATUS to 289412273, // R_0402_PLG_1_RearDoorStatus
         // Seat states
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415193, // R_0200_CEM_IPM_FLSeatHeatVentSwSts
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415192, // R_0200_CEM_IPM_FRSeatHeatVentSwSts

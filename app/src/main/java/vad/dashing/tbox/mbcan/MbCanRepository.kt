@@ -195,6 +195,7 @@ object MbCanRepository {
     private val flushTelemetryPushesRunnable = Runnable { flushPendingTelemetryPushes() }
     private val trunkPushLock = Any()
     private var pendingTrunkMoveDir: Int? = null
+    private var pendingTrunkSts: Int? = null
     private var trunkPushFlushScheduled = false
     private val flushTrunkPushRunnable = Runnable { flushPendingTrunkPush() }
     private val pendingPushDebugByKey = mutableMapOf<String, Pair<Int, String>>()
@@ -335,6 +336,7 @@ object MbCanRepository {
             }
             synchronized(trunkPushLock) {
                 pendingTrunkMoveDir = null
+                pendingTrunkSts = null
                 trunkPushFlushScheduled = false
             }
             synchronized(pendingPushDebugByKey) {
@@ -548,25 +550,35 @@ object MbCanRepository {
     /**
      * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM push callback.
      */
-    fun scheduleTrunkMoveDirPush(moveDir: Int) {
+    fun scheduleTrunkBcmPush(moveDir: Int?, trunkSts: Int?) {
         synchronized(trunkPushLock) {
-            pendingTrunkMoveDir = moveDir
+            moveDir?.let { pendingTrunkMoveDir = it }
+            trunkSts?.let { pendingTrunkSts = it }
             if (!trunkPushFlushScheduled) {
                 trunkPushFlushScheduled = true
                 cfgPushHandler.postDelayed(flushTrunkPushRunnable, PUSH_STATE_COALESCE_MS)
             }
         }
-        recordPushDebugEvent("telemetry/trunk_move_dir", "raw=$moveDir")
+        recordPushDebugEvent(
+            "telemetry/trunk_bcm",
+            "moveDir=$moveDir trunkSts=$trunkSts",
+        )
     }
 
     private fun flushPendingTrunkPush() {
-        val moveDir = synchronized(trunkPushLock) {
+        val snapshot = synchronized(trunkPushLock) {
             trunkPushFlushScheduled = false
-            pendingTrunkMoveDir.also { pendingTrunkMoveDir = null }
-        } ?: return
+            pendingTrunkMoveDir to pendingTrunkSts
+        }
+        val (moveDir, trunkSts) = snapshot
+        if (moveDir == null && trunkSts == null) return
+        synchronized(trunkPushLock) {
+            pendingTrunkMoveDir = null
+            pendingTrunkSts = null
+        }
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            HvacClimateCanRepository.applyTrunkMoveDirMbCan(moveDir)
+            TrunkDoorRepository.applyBcmPush(moveDir, trunkSts)
         }
     }
 
@@ -1246,15 +1258,19 @@ object MbCanRepository {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
                 _availability.value = MbCanEngineFacade.probeAvailability()
-                HvacClimateCanRepository.clearTrunkState()
+                TrunkDoorRepository.clear()
                 return@withContext
             }
             val availability = MbCanEngineFacade.availability
             _availability.value = availability
             if (availability !is MbCanAvailability.Available) {
-                HvacClimateCanRepository.clearTrunkState()
+                TrunkDoorRepository.clear()
+                return@withContext
             }
-            // A9: state comes from BCM push via [scheduleTrunkMoveDirPush], not [canGetVehicleParam].
+            val snapshot = MbCanEngineFacade.readVehicleBcmTrunkSnapshot()
+            if (snapshot != null) {
+                TrunkDoorRepository.applyBcmPush(snapshot.moveDir, snapshot.trunkSts)
+            }
         }
     }
 

@@ -770,8 +770,8 @@ object Android10VhalRepository {
             MbCanSignal.HvacSync -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH))
             MbCanSignal.HvacBlowMode -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION))
             MbCanSignal.TrunkDoor -> setOf(
+                resolved(MbCanKnownVehiclePropertyId.TRUNK_STATUS),
                 resolved(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR),
-                resolved(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_STATUS),
             )
             MbCanSignal.AudioVolume -> setOf(resolved(MbCanKnownAudioPropertyId.VOLUME))
             MbCanSignal.AudioVolumeSpeed -> setOf(resolved(MbCanKnownAudioPropertyId.VOLUME_SPEED))
@@ -974,10 +974,10 @@ object Android10VhalRepository {
                 raw?.let { HvacClimateCanRepository.applySyncVhal(it) }
             resolved(MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF) ->
                 raw?.let { HvacClimateCanRepository.applyFrontOffVhal(it) }
+            resolved(MbCanKnownVehiclePropertyId.TRUNK_STATUS) ->
+                raw?.let { TrunkDoorRepository.applyBinaryOpenRaw(it) }
             resolved(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR) ->
-                raw?.let { HvacClimateCanRepository.applyTrunkMoveDirVhal(it) }
-            resolved(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_STATUS) ->
-                raw?.let { HvacClimateCanRepository.applyTrunkStatusVhal(it) }
+                raw?.let { TrunkDoorRepository.applyMoveDirRaw(it) }
             resolved(MbCanKnownAudioPropertyId.VOLUME) -> raw?.let {
                 _audioVolumeState.value = it.coerceAtLeast(0)
                 if (it > 0) _audioVolumeLastNonZeroInSession.value = it
@@ -1098,7 +1098,7 @@ object Android10VhalRepository {
                 MbCanSignal.HvacFanSpeed -> HvacClimateCanRepository.applyFanSpeed(-1)
                 MbCanSignal.HvacSync -> HvacClimateCanRepository.applySyncVhal(-1)
                 MbCanSignal.HvacBlowMode -> HvacClimateCanRepository.applyBlowModeVhal(-1)
-                MbCanSignal.TrunkDoor -> HvacClimateCanRepository.clearTrunkState()
+                MbCanSignal.TrunkDoor -> TrunkDoorRepository.clear()
                 MbCanSignal.AudioVolumeSpeed -> {
                     _audioVolumeSpeedModeState.value = null
                     stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unavailable(deniedReason))
@@ -1143,7 +1143,7 @@ object Android10VhalRepository {
                 MbCanSignal.HvacFanSpeed -> HvacClimateCanRepository.applyFanSpeed(-1)
                 MbCanSignal.HvacSync -> HvacClimateCanRepository.applySyncVhal(-1)
                 MbCanSignal.HvacBlowMode -> HvacClimateCanRepository.applyBlowModeVhal(-1)
-                MbCanSignal.TrunkDoor -> HvacClimateCanRepository.clearTrunkState()
+                MbCanSignal.TrunkDoor -> TrunkDoorRepository.clear()
                 MbCanSignal.AudioVolumeSpeed -> {
                     _audioVolumeSpeedModeState.value = null
                     stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unavailable(reason))
@@ -1275,10 +1275,10 @@ object Android10VhalRepository {
                     ?.let { HvacClimateCanRepository.applyBlowModeVhal(it) }
             }
             MbCanSignal.TrunkDoor -> {
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.TRUNK_STATUS)
+                    ?.let { TrunkDoorRepository.applyBinaryOpenRaw(it) }
                 readMappedIntProperty(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR)
-                    ?.let { HvacClimateCanRepository.applyTrunkMoveDirVhal(it) }
-                readMappedIntProperty(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_STATUS)
-                    ?.let { HvacClimateCanRepository.applyTrunkStatusVhal(it) }
+                    ?.let { TrunkDoorRepository.applyMoveDirRaw(it) }
             }
             MbCanSignal.AudioVolume -> {
                 val propertyId = FirmwareVehicleJsonMapper

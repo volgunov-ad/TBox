@@ -220,8 +220,14 @@ object MbCanEngineFacade {
                         val getter = bcm.javaClass.getMethod("getRearDoorMoveDir")
                         (getter.invoke(bcm) as? Number)?.toInt()
                     }.getOrNull()
-                    if (moveDir != null) {
-                        MbCanRepository.scheduleTrunkMoveDirPush(moveDir)
+                    val trunkSts = runCatching {
+                        val doorGetter = bcm.javaClass.getMethod("getDoorStatus")
+                        val door = doorGetter.invoke(bcm) ?: return@runCatching null
+                        val trunkGetter = door.javaClass.getMethod("getTrunkSts")
+                        (trunkGetter.invoke(door) as? Number)?.toInt()
+                    }.getOrNull()
+                    if (moveDir != null || trunkSts != null) {
+                        MbCanRepository.scheduleTrunkBcmPush(moveDir, trunkSts)
                     }
                 }
             }
@@ -345,6 +351,30 @@ object MbCanEngineFacade {
         } catch (_: Throwable) {
             audioCfgCmdListenerProxy = null
         }
+    }
+
+    /**
+     * Reads trunk movement and door status from cached BCM snapshot
+     * ([com.mengbo.mbCan.defines.MBCanDataType.eMBCAN_VEHICLE_BCM_STATUS]).
+     */
+    data class BcmTrunkSnapshot(val moveDir: Int?, val trunkSts: Int?)
+
+    fun readVehicleBcmTrunkSnapshot(): BcmTrunkSnapshot? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val moveDir = bcmCls.getMethod("getRearDoorMoveDir").invoke(bcmObj)?.let { (it as Number).toInt() }
+            val trunkSts = runCatching {
+                val door = bcmCls.getMethod("getDoorStatus").invoke(bcmObj) ?: return@runCatching null
+                val trunkGetter = door.javaClass.getMethod("getTrunkSts")
+                trunkGetter.invoke(door)?.let { (it as Number).toInt() }
+            }.getOrNull()
+            BcmTrunkSnapshot(moveDir = moveDir, trunkSts = trunkSts)
+        }.getOrNull()
     }
 
     /**

@@ -45,8 +45,6 @@ import vad.dashing.tbox.mbcan.MbCanSeatModeState
 
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
-private val SeatVentOnColor = Color(0xFF4FC3F7)
-
 private const val SEAT_ACTION_LOCKOUT_MS = 500L
 
 private enum class SeatSide { FrontLeft, FrontRight, BackLeft, BackRight }
@@ -657,7 +655,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) WidgetActiveColors.Primary else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -666,7 +664,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) WidgetActiveColors.Primary else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -675,7 +673,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) SeatVentOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) WidgetActiveColors.Primary else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -684,7 +682,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level == 3) SeatVentOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level == 3) WidgetActiveColors.Primary else iconColor),
                 contentScale = ContentScale.Fit,
             )
         }

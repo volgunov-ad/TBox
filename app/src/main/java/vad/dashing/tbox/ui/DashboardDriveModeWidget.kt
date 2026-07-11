@@ -25,9 +25,9 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 private val DriveModeWidgetEcoColor = Color(0xD900A400)
-private val DriveModeWidgetNorColor = Color(0xD9004DFF)
 private val DriveModeWidgetSptColor = Color(0xD9FF0000)
 private val DriveModeWidgetSandColor = Color(0xD9E6C200)
 private val DriveModeWidgetMudColor = Color(0xD98B5A2B)
@@ -108,7 +108,7 @@ fun DashboardDriveModeWidgetItem(
 private fun DriveModeWidgetOption.activeColor(): Color {
     return when {
         label.startsWith("ECO") -> DriveModeWidgetEcoColor
-        label.startsWith("NOR") -> DriveModeWidgetNorColor
+        label.startsWith("NOR") -> WidgetActiveColors.Primary
         label.startsWith("SPT") -> DriveModeWidgetSptColor
         label == "SAND" -> DriveModeWidgetSandColor
         label == "MUD" -> DriveModeWidgetMudColor

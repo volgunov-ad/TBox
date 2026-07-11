@@ -1,6 +1,5 @@
 package vad.dashing.tbox
 
-const val TRUNK_DOOR_WIDGET_DATA_KEY = "trunkDoorWidget"
 const val HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY = "hvacTempLeftWidgetHorizontal"
 const val HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY = "hvacTempLeftWidgetVertical"
 const val HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY = "hvacTempRightWidgetHorizontal"
@@ -13,7 +12,6 @@ const val HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY = "hvacBlowModePanelWi
 const val HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY = "hvacBlowModePanelWidgetVertical"
 
 val HVAC_CLIMATE_WIDGET_DATA_KEYS: Set<String> = setOf(
-    TRUNK_DOOR_WIDGET_DATA_KEY,
     HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY,
     HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY,
     HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY,

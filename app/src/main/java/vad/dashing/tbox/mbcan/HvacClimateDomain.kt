@@ -33,20 +33,6 @@ enum class HvacBlowMode(val mbCanValue: Int) {
     }
 }
 
-sealed class TrunkDoorState {
-    data object Unknown : TrunkDoorState()
-    data object Closed : TrunkDoorState()
-    data object Open : TrunkDoorState()
-    /** Liftgate is moving (opening or closing). */
-    data object Moving : TrunkDoorState()
-    data class Unavailable(val reason: String) : TrunkDoorState()
-}
-
-enum class TrunkDoorReadPlatform {
-    MbCanBcm,
-    Vhal,
-}
-
 object HvacClimateDomain {
     const val TEMP_MB_CAN_MIN = 160
     const val TEMP_MB_CAN_MAX = 300
@@ -142,49 +128,6 @@ object HvacClimateDomain {
 
     /** Write [T_0201_IHU_5_FrontOFF_Req]: 2 = climate on, 1 = climate off. */
     fun encodeHvacFrontOffMbCanWrite(targetClimateOn: Boolean): Int = if (targetClimateOn) 2 else 1
-
-    /**
-     * BCM [nRearDoorMoveDir] / VHAL [R_0402_PLG_1_RearDoorMoveDir] (stock [RearDoorView]):
-     * 0 = down/closing, 1 = up/opening, 2 = stopped.
-     */
-    fun resolveTrunkDoorState(
-        moveDir: Int?,
-        status: Int?,
-        platform: TrunkDoorReadPlatform,
-    ): TrunkDoorState {
-        val dir = moveDir ?: return status?.let { resolveTrunkDoorStateFromStatus(it) } ?: TrunkDoorState.Unknown
-        return when (platform) {
-            TrunkDoorReadPlatform.MbCanBcm -> when (dir) {
-                2 -> TrunkDoorState.Open
-                1 -> TrunkDoorState.Moving
-                0 -> TrunkDoorState.Closed
-                else -> TrunkDoorState.Unknown
-            }
-            TrunkDoorReadPlatform.Vhal -> when (dir) {
-                0, 1 -> TrunkDoorState.Moving
-                2 -> resolveTrunkDoorStateFromStatus(status ?: return TrunkDoorState.Unknown)
-                else -> status?.let { resolveTrunkDoorStateFromStatus(it) } ?: TrunkDoorState.Unknown
-            }
-        }
-    }
-
-    /** VHAL [R_0402_PLG_1_RearDoorStatus]: 0 = closed, 1 = open. */
-    fun resolveTrunkDoorStateFromStatus(status: Int): TrunkDoorState = when (status) {
-        0 -> TrunkDoorState.Closed
-        1 -> TrunkDoorState.Open
-        else -> TrunkDoorState.Unknown
-    }
-
-    fun isTrunkDoorOpenForDisplay(state: TrunkDoorState): Boolean = when (state) {
-        TrunkDoorState.Open, TrunkDoorState.Moving -> true
-        else -> false
-    }
-
-    fun decodeTrunkMoveDirMbCanRaw(raw: Int): TrunkDoorState =
-        resolveTrunkDoorState(moveDir = raw, status = null, platform = TrunkDoorReadPlatform.MbCanBcm)
-
-    fun decodeTrunkMoveDirVhalRaw(raw: Int): TrunkDoorState =
-        resolveTrunkDoorState(moveDir = raw, status = null, platform = TrunkDoorReadPlatform.Vhal)
 
     fun formatCelsius(celsius: Float): String {
         val tenths = (celsius * 10f).toInt()

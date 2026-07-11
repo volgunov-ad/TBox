@@ -53,12 +53,6 @@ suspend fun UniversalCanRepository.cycleHvacBlowMode(): MbCanCommandResult {
 suspend fun UniversalCanRepository.setHvacBlowModeDefrost(): MbCanCommandResult =
     setHvacBlowMode(HvacBlowMode.Defrost)
 
-suspend fun UniversalCanRepository.trunkPulseOpen(): MbCanCommandResult =
-    execute(MbCanCommand.TrunkPulse(2))
-
-suspend fun UniversalCanRepository.trunkPulseClose(): MbCanCommandResult =
-    execute(MbCanCommand.TrunkPulse(1))
-
 fun UniversalCanRepository.launchHvacClimateCommand(
     scope: CoroutineScope,
     block: suspend UniversalCanRepository.() -> MbCanCommandResult,
