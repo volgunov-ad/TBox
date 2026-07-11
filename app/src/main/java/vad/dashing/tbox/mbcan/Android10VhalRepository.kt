@@ -975,7 +975,7 @@ object Android10VhalRepository {
             resolved(MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF) ->
                 raw?.let { HvacClimateCanRepository.applyFrontOffVhal(it) }
             resolved(MbCanKnownVehiclePropertyId.TRUNK_STATUS) ->
-                raw?.let { TrunkDoorRepository.applyBinaryOpenRaw(it) }
+                raw?.let { TrunkDoorRepository.applyVhalOpenRaw(it) }
             resolved(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR) ->
                 raw?.let { TrunkDoorRepository.applyMoveDirRaw(it) }
             resolved(MbCanKnownAudioPropertyId.VOLUME) -> raw?.let {
@@ -1276,7 +1276,7 @@ object Android10VhalRepository {
             }
             MbCanSignal.TrunkDoor -> {
                 readMappedIntProperty(MbCanKnownVehiclePropertyId.TRUNK_STATUS)
-                    ?.let { TrunkDoorRepository.applyBinaryOpenRaw(it) }
+                    ?.let { TrunkDoorRepository.applyVhalOpenRaw(it) }
                 readMappedIntProperty(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR)
                     ?.let { TrunkDoorRepository.applyMoveDirRaw(it) }
             }

@@ -20,8 +20,8 @@ object TrunkDoorRepository {
         _displayState.value = TrunkDoorDisplayState.Unknown
     }
 
-    fun applyBinaryOpenRaw(raw: Int?) {
-        TrunkDoorDomain.decodeBinaryOpen(raw)?.let { isOpen = it }
+    fun applyVhalOpenRaw(raw: Int?) {
+        TrunkDoorDomain.decodeBinaryOpenVhal(raw)?.let { isOpen = it }
         publish()
     }
 
@@ -32,7 +32,7 @@ object TrunkDoorRepository {
 
     fun applyBcmPush(moveDirRaw: Int?, trunkStsRaw: Int?) {
         trunkStsRaw?.let { raw ->
-            TrunkDoorDomain.decodeBinaryOpen(raw)?.let { isOpen = it }
+            TrunkDoorDomain.decodeBinaryOpenMbCan(raw)?.let { isOpen = it }
         }
         moveDir = moveDirRaw
         publish()
