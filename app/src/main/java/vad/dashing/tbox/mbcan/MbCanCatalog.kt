@@ -137,6 +137,26 @@ object MbCanKnownVehiclePropertyId {
     const val HVAC_POWER = 36
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_AUTO_STATE] — AUTO mode; 1 off, 2 on. */
     const val HVAC_AUTO_STATE = 110
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_TEMPERATURE] — left zone, °C×10. */
+    const val HVAC_TEMPERATURE_LEFT = 37
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_FR_TEMPERATURE] — right zone, °C×10. */
+    const val HVAC_TEMPERATURE_RIGHT = 111
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_SPEED] — 0..7. */
+    const val HVAC_FAN_SPEED = 38
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eFRONT_OFF] — front climate off; 1 running, 2 off. */
+    const val HVAC_FRONT_OFF = 90
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYNCSWTICH_REQ] — dual-zone sync; 1 off, 2 on. */
+    const val HVAC_SYNC_SWITCH = 94
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PLG_CONTROL] — power liftgate pulse. */
+    const val TRUNK_PLG_CONTROL = 134
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_DOOR_TRUNK_POS] — max opening angle setting (stock dialog). */
+    const val DOOR_TRUNK_POS = 6
+    /** VHAL [R_0402_PLG_1_RearDoorStatus] — 0 closed, 1 open (stock [CarCommon3]). */
+    const val TRUNK_STATUS = 71343
+    /** PLG movement direction (A10 read); also BCM `nRearDoorMoveDir` push on A9. */
+    const val TRUNK_REAR_DOOR_MOVE_DIR = 71341
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_MIRROR_FOLD_SWITCH] — fold=1, unfold=2. */
+    const val MIRROR_FOLD_SWITCH = 230
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION] — blow mode. */
     const val HVAC_FAN_DIRECTION = 40
     /** mbCAN blow modes (Android 9 [MBFrontDefrostingView]). */
@@ -394,7 +414,55 @@ object MbCanCommandRegistry {
             propertyId = MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH,
             policy = MbCanCommandPolicy.SetExact(allowedValues = (1..4).toSet()),
             refreshSignal = MbCanSignal.RearRightSeatMode
-        )
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = HvacClimateDomain.HVAC_TEMP_MB_CAN_ALLOWED
+            ),
+            refreshSignal = MbCanSignal.HvacTempLeft
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = HvacClimateDomain.HVAC_TEMP_MB_CAN_ALLOWED
+            ),
+            refreshSignal = MbCanSignal.HvacTempRight
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = (HvacClimateDomain.FAN_SPEED_MIN..HvacClimateDomain.FAN_SPEED_MAX).toSet()
+            ),
+            refreshSignal = MbCanSignal.HvacFanSpeed
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 1
+            ),
+            refreshSignal = MbCanSignal.HvacFrontOff
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 1
+            ),
+            refreshSignal = MbCanSignal.HvacSync
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(0, 1, 2)),
+            refreshSignal = MbCanSignal.TrunkDoor
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
+        ),
     ).associateBy { it.propertyId }
 
     fun get(propertyId: Int): MbCanCommandSpec? = specsByPropertyId[propertyId]

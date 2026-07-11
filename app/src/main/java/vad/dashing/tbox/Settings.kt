@@ -96,6 +96,11 @@ data class FloatingDashboardWidgetConfig(
     /** If true, media volume widget controls CAN backend (mbCAN/VHAL) instead of Android AudioManager. */
     val useMbCanVhal: Boolean = false,
     /**
+     * Stepper +/- control icon style for [isStepperWidgetDataKey] tiles:
+     * [STEPPER_ADJUST_ICON_PLUS_MINUS] or [STEPPER_ADJUST_ICON_ARROWS].
+     */
+    val stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
+    /**
      * Optional background image on top of the tile color (light theme).
      * Path relative to [Context.filesDir]; must stay under [TileBackgroundImageStorage.DIR_NAME].
      */
