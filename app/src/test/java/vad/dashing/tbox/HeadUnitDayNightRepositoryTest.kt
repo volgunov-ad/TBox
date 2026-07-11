@@ -33,24 +33,43 @@ class HeadUnitDayNightRepositoryTest {
     }
 
     @Test
-    fun cycleMode_rotatesThroughStockAutoValues() {
+    fun toggleManualTheme_switchesBetweenManualDayAndNight() {
         val context = RuntimeEnvironment.getApplication()
         val resolver: ContentResolver = context.contentResolver
 
         Settings.Global.putInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY, 0)
-        assertTrue(HeadUnitDayNightRepository.cycleMode(context))
-        assertEquals(1, Settings.Global.getInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY))
-
-        assertTrue(HeadUnitDayNightRepository.cycleMode(context))
+        assertTrue(HeadUnitDayNightRepository.toggleManualTheme(context))
         assertEquals(2, Settings.Global.getInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY))
 
-        assertTrue(HeadUnitDayNightRepository.cycleMode(context))
-        assertEquals(1, Settings.Global.getInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY))
+        assertTrue(HeadUnitDayNightRepository.toggleManualTheme(context))
+        assertEquals(0, Settings.Global.getInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY))
 
+        Settings.Global.putInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY, 1)
+        Settings.System.putInt(resolver, HeadUnitDayNightRepository.DAY_NIGHT_STATUS_KEY, 1)
+        assertEquals(HeadUnitDayNightRepository.Mode.LightAuto, HeadUnitDayNightRepository.readMode(context))
+
+        assertTrue(HeadUnitDayNightRepository.toggleManualTheme(context))
+        assertEquals(2, Settings.Global.getInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY))
+
+        Settings.Global.putInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY, 1)
         Settings.System.putInt(resolver, HeadUnitDayNightRepository.DAY_NIGHT_STATUS_KEY, 2)
         assertEquals(HeadUnitDayNightRepository.Mode.DarkAuto, HeadUnitDayNightRepository.readMode(context))
 
-        assertTrue(HeadUnitDayNightRepository.cycleMode(context))
+        assertTrue(HeadUnitDayNightRepository.toggleManualTheme(context))
         assertEquals(0, Settings.Global.getInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY))
+    }
+
+    @Test
+    fun enableAutoMode_setsStockAutoValue() {
+        val context = RuntimeEnvironment.getApplication()
+        val resolver: ContentResolver = context.contentResolver
+
+        Settings.Global.putInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY, 0)
+        assertTrue(HeadUnitDayNightRepository.enableAutoMode(context))
+        assertEquals(1, Settings.Global.getInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY))
+
+        Settings.Global.putInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY, 2)
+        assertTrue(HeadUnitDayNightRepository.enableAutoMode(context))
+        assertEquals(1, Settings.Global.getInt(resolver, HeadUnitDayNightRepository.NIGHT_MODE_AUTO_KEY))
     }
 }

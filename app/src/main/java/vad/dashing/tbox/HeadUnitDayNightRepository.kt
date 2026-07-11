@@ -52,14 +52,22 @@ object HeadUnitDayNightRepository {
         }
     }
 
-    fun cycleMode(context: Context): Boolean {
+    /** Single tap: switch to the opposite manual theme (day ↔ night). */
+    fun toggleManualTheme(context: Context): Boolean {
         val nextAutoValue = when (readMode(context)) {
-            Mode.LightManual -> NIGHT_MODE_AUTO
-            Mode.LightAuto -> NIGHT_MODE_DARK_MANUAL
-            Mode.DarkManual -> NIGHT_MODE_AUTO
-            Mode.DarkAuto -> NIGHT_MODE_LIGHT_MANUAL
+            Mode.LightManual, Mode.LightAuto -> NIGHT_MODE_DARK_MANUAL
+            Mode.DarkManual, Mode.DarkAuto -> NIGHT_MODE_LIGHT_MANUAL
         }
         return writeAutoMode(context, nextAutoValue).also { success ->
+            if (success) {
+                publishFromContext(context)
+            }
+        }
+    }
+
+    /** Double tap: enable stock auto day/night mode. */
+    fun enableAutoMode(context: Context): Boolean {
+        return writeAutoMode(context, NIGHT_MODE_AUTO).also { success ->
             if (success) {
                 publishFromContext(context)
             }

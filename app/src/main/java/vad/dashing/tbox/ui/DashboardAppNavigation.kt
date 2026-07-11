@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.SystemClock
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.MainActivityIntentHelper
-import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
@@ -348,12 +347,6 @@ internal fun sendToggleMirrorAdjustMode(context: Context) {
     }
 }
 
-internal fun sendCycleDayNightTheme(context: Context) {
-    try {
-        HeadUnitDayNightRepository.cycleMode(context)
-    } catch (_: Exception) {
-    }
-}
 
 internal fun sendSetMbCanProperty(context: Context, propertyId: Int, value: Int) {
     try {

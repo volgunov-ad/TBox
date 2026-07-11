@@ -812,7 +812,7 @@
     <string name="data_title_hvac_blow_mode_panel_widget_vertical">Режим обдува (панель, вертикально)</string>
     <string name="data_title_trunk_door_widget">Багажник</string>
     <string name="data_title_mirror_adjust_mode_widget">Регулировка зеркал</string>
-    <string name="data_title_day_night_theme_widget">Тема день/ночь</string>
+    <string name="data_title_day_night_theme_widget">Тема день/ночь (темная/светлая)</string>
     <string name="data_title_mirror_fold_widget">Складывание зеркал</string>
     <string name="widget_hvac_fan_decrease">Уменьшить скорость вентилятора</string>
     <string name="widget_hvac_fan_increase">Увеличить скорость вентилятора</string>

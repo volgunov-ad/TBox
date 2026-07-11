@@ -805,7 +805,7 @@
     <string name="data_title_hvac_blow_mode_panel_widget_vertical">Blow mode panel (vertical)</string>
     <string name="data_title_trunk_door_widget">Trunk</string>
     <string name="data_title_mirror_adjust_mode_widget">Mirror adjustment</string>
-    <string name="data_title_day_night_theme_widget">Day/night theme</string>
+    <string name="data_title_day_night_theme_widget">Day/night theme (dark/light)</string>
     <string name="data_title_mirror_fold_widget">Mirror fold</string>
     <string name="widget_hvac_fan_decrease">Decrease fan speed</string>
     <string name="widget_hvac_fan_increase">Increase fan speed</string>

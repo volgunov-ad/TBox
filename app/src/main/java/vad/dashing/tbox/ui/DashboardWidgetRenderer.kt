@@ -597,6 +597,8 @@ fun DashboardWidgetRenderer(
             DashboardDayNightThemeWidgetItem(
                 onClick = onClick,
                 onLongClick = onLongClick,
+                onDoubleClick = {},
+                enableInnerInteractions = enableInnerInteractions,
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,

@@ -31,6 +31,8 @@ import vad.dashing.tbox.ui.theme.WidgetActiveColors
 fun DashboardDayNightThemeWidgetItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onDoubleClick: () -> Unit,
+    enableInnerInteractions: Boolean,
     elevation: Dp,
     shape: Dp,
     textColor: Color,
@@ -69,8 +71,20 @@ fun DashboardDayNightThemeWidgetItem(
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
     DashboardWidgetScaffold(
-        onClick = onClick,
+        onClick = {
+            if (enableInnerInteractions) {
+                HeadUnitDayNightRepository.toggleManualTheme(context)
+            } else {
+                onClick()
+            }
+        },
         onLongClick = onLongClick,
+        onDoubleClick = {
+            if (enableInnerInteractions) {
+                HeadUnitDayNightRepository.enableAutoMode(context)
+            }
+            onDoubleClick()
+        },
         elevation = elevation,
         shape = shape,
         textColor = textColor,
