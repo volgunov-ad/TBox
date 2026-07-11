@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-This is an Android application (**TBox Monitor** for Jetour Dashing, v0.16.0). There is no server backend, web frontend, or external database — it is a single-module Gradle project (`:app`) producing an APK. Vehicle data comes from the TBox module (UDP via **tbox-proxy**) and from the head unit CAN stack (**mbCAN** on Android 9 or **VHAL** on Android 10).
+This is an Android application (**TBox Monitor** for Jetour Dashing, v0.16.1). There is no server backend, web frontend, or external database — it is a single-module Gradle project (`:app`) producing an APK. Vehicle data comes from the TBox module (UDP via **tbox-proxy**) and from the head unit CAN stack (**mbCAN** on Android 9 or **VHAL** on Android 10).
 
 ### Key subsystems
 
