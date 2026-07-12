@@ -42,7 +42,7 @@ class ThemeAppIconsTest {
         File(themeIcons, "com.example.app").writeBytes(byteArrayOf(2))
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "my_theme",
-            activeThemeSections = setOf(ThemeSection.APP_ICONS),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.APP_ICONS),
         )
         val resolved = LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup)
         assertNotNull(resolved)
@@ -57,7 +57,7 @@ class ThemeAppIconsTest {
         File(themeIcons, "ru.yandex.music").writeBytes(byteArrayOf(5, 6))
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "my_theme",
-            activeThemeSections = setOf(ThemeSection.APP_ICONS),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.APP_ICONS),
         )
         val resolved = LauncherAppIconPaths.resolveIconFile(root, "ru.yandex.music", lookup)
         assertNotNull(resolved)
@@ -72,7 +72,7 @@ class ThemeAppIconsTest {
         File(shared, "com.example.app").writeBytes(byteArrayOf(9))
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "my_theme",
-            activeThemeSections = setOf(ThemeSection.APP_ICONS),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.APP_ICONS),
         )
         val resolved = LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup)
         assertNotNull(resolved)
@@ -89,7 +89,7 @@ class ThemeAppIconsTest {
         File(shared, "com.example.app").writeBytes(byteArrayOf(1))
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "my_theme",
-            activeThemeSections = setOf(ThemeSection.MAIN_SCREEN),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.TILE_BACKGROUNDS),
         )
         val resolved = LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup)
         assertNotNull(resolved)
@@ -106,7 +106,7 @@ class ThemeAppIconsTest {
         File(themeIcons, "com.example.app").writeBytes(byteArrayOf(2))
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "my_theme",
-            activeThemeSections = setOf(ThemeSection.APP_ICONS),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.APP_ICONS),
         )
         assertTrue(LauncherAppIconPaths.deleteThemeCacheIcon(root, "com.example.app", lookup))
         assertArrayEquals(byteArrayOf(1), LauncherAppIconPaths.resolveIconFile(root, "com.example.app", lookup)!!.readBytes())

@@ -20,7 +20,7 @@ object LauncherAppIconPaths {
 
     data class Lookup(
         val activeThemeCacheKey: String = "",
-        val activeThemeSections: Set<ThemeSection> = emptySet(),
+        val activeThemeApplyTargets: Set<ThemeApplyTarget> = emptySet(),
     ) {
         companion object {
             val None = Lookup()
@@ -48,7 +48,7 @@ object LauncherAppIconPaths {
     }
 
     fun resolveIconFile(filesDir: File, packageName: String, lookup: Lookup): File? {
-        if (ThemeSection.APP_ICONS in lookup.activeThemeSections) {
+        if (ThemeApplyTarget.APP_ICONS in lookup.activeThemeApplyTargets) {
             val cacheKey = lookup.activeThemeCacheKey.trim()
             if (ThemeCacheKeys.isLikelyCacheKey(cacheKey)) {
                 val themeDir = themeIconsDir(filesDir, cacheKey)
@@ -65,7 +65,7 @@ object LauncherAppIconPaths {
         resolveStoredIconFile(sharedIconsDir(filesDir), packageName) != null
 
     fun hasThemeCacheIcon(filesDir: File, packageName: String, lookup: Lookup): Boolean {
-        if (ThemeSection.APP_ICONS !in lookup.activeThemeSections) return false
+        if (ThemeApplyTarget.APP_ICONS !in lookup.activeThemeApplyTargets) return false
         val cacheKey = lookup.activeThemeCacheKey.trim()
         if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
         val themeDir = themeIconsDir(filesDir, cacheKey)
@@ -77,7 +77,7 @@ object LauncherAppIconPaths {
         resolveIconFile(filesDir, packageName, lookup) != null
 
     fun deleteThemeCacheIcon(filesDir: File, packageName: String, lookup: Lookup): Boolean {
-        if (ThemeSection.APP_ICONS !in lookup.activeThemeSections) return false
+        if (ThemeApplyTarget.APP_ICONS !in lookup.activeThemeApplyTargets) return false
         val cacheKey = lookup.activeThemeCacheKey.trim()
         if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
         val themeDir = themeIconsDir(filesDir, cacheKey)
@@ -111,7 +111,7 @@ object LauncherAppIconPaths {
     fun listAllResolvablePackageNames(filesDir: File, lookup: Lookup): Set<String> {
         val names = linkedSetOf<String>()
         names.addAll(listStoredPackageNames(sharedIconsDir(filesDir)))
-        if (ThemeSection.APP_ICONS in lookup.activeThemeSections) {
+        if (ThemeApplyTarget.APP_ICONS in lookup.activeThemeApplyTargets) {
             val cacheKey = lookup.activeThemeCacheKey.trim()
             if (ThemeCacheKeys.isLikelyCacheKey(cacheKey)) {
                 names.addAll(listStoredPackageNames(themeIconsDir(filesDir, cacheKey)))

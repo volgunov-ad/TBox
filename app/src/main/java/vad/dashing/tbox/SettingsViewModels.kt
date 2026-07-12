@@ -558,6 +558,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "")
 
     val activeThemeSections = settingsManager.activeThemeSectionsFlow
+    val activeThemeApplyTargets = settingsManager.activeThemeApplyTargetsFlow
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptySet())
 
     val themeActivationInProgress = settingsManager.themeActivationInProgressFlow
@@ -2146,12 +2147,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     suspend fun exportThemeBundleToDownloads(
         context: Context,
-        sections: Set<ThemeSection>,
+        applyTargets: Set<ThemeApplyTarget>,
         baseName: String,
     ): Result<ThemeExportResult> = withContext(Dispatchers.IO) {
         runCatching {
             val dest = ThemeBundleExport.downloadsThemeExportFile(baseName)
-            ThemeBundleExport.exportBundleToFile(context, settingsManager, sections, dest)
+            ThemeBundleExport.exportBundleToFile(context, settingsManager, applyTargets, dest)
             ThemeExportResult(savedPath = dest.absolutePath)
         }
     }
@@ -2159,27 +2160,33 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     suspend fun exportThemeBundle(
         context: Context,
         output: java.io.OutputStream,
-        sections: Set<ThemeSection>,
+        applyTargets: Set<ThemeApplyTarget>,
     ) {
-        ThemeBundleExport.exportBundle(context, settingsManager, sections, output)
+        ThemeBundleExport.exportBundle(context, settingsManager, applyTargets, output)
     }
 
-    suspend fun applyThemeFromUri(context: Context, uriString: String): Result<ThemeApply.ApplyResult> {
-        return ThemeApply.applyFromUri(context, settingsManager, this, uriString)
+    suspend fun applyThemeFromUri(
+        context: Context,
+        uriString: String,
+        applyTargets: Set<ThemeApplyTarget>? = null,
+    ): Result<ThemeApply.ApplyResult> {
+        return ThemeApply.applyFromUri(context, settingsManager, this, uriString, applyTargets)
     }
 
-    suspend fun applyThemeBytes(context: Context, bytes: ByteArray, themeUri: String): Result<ThemeApply.ApplyResult> {
-        return ThemeApply.applyBytes(context, settingsManager, this, bytes, themeUri)
-    }
-
-    fun saveDriveModeThemePath(rawValue: Int, uri: String) {
-        viewModelScope.launch { settingsManager.saveDriveModeThemePath(rawValue, uri) }
+    suspend fun applyThemeBytes(
+        context: Context,
+        bytes: ByteArray,
+        themeUri: String,
+        applyTargets: Set<ThemeApplyTarget>? = null,
+    ): Result<ThemeApply.ApplyResult> {
+        return ThemeApply.applyBytes(context, settingsManager, this, bytes, themeUri, applyTargets)
     }
 
     suspend fun assignDriveModeTheme(
         context: Context,
         rawValue: Int,
         sourceUri: String,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): Result<Unit> {
         return runCatching {
             ThemeApply.materializeDriveModeThemeFromUri(
@@ -2187,9 +2194,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 settingsManager = settingsManager,
                 rawValue = rawValue,
                 sourceUri = sourceUri,
+                applyTargets = applyTargets,
             ).getOrThrow()
             settingsManager.saveDriveModeThemePath(rawValue, sourceUri)
         }
+    }
+
+    fun saveDriveModeThemePath(rawValue: Int, uri: String) {
+        viewModelScope.launch { settingsManager.saveDriveModeThemePath(rawValue, uri) }
     }
 
     fun clearDriveModeThemePath(rawValue: Int) {
