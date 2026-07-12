@@ -72,17 +72,14 @@ class TrunkDoorDomainTest {
     }
 
     @Test
-    fun pulseTargets_whenStopped() {
+    fun pulseToggle_whenStopped_matchesStockRearDoorViewLongPress() {
         val closed = TrunkDoorDisplayState(isOpen = false, moveDir = 2)
         val unknown = TrunkDoorDisplayState(isOpen = null, moveDir = 2)
         val openStopped = TrunkDoorDisplayState(isOpen = true, moveDir = 2)
 
-        assertTrue(TrunkDoorDomain.shouldPulseOpen(closed))
-        assertTrue(TrunkDoorDomain.shouldPulseOpen(unknown))
-        assertFalse(TrunkDoorDomain.shouldPulseClose(closed))
-
-        assertTrue(TrunkDoorDomain.shouldPulseClose(openStopped))
-        assertFalse(TrunkDoorDomain.shouldPulseOpen(openStopped))
+        assertTrue(TrunkDoorDomain.shouldPulseToggleWhenStopped(closed))
+        assertTrue(TrunkDoorDomain.shouldPulseToggleWhenStopped(unknown))
+        assertTrue(TrunkDoorDomain.shouldPulseToggleWhenStopped(openStopped))
     }
 
     @Test

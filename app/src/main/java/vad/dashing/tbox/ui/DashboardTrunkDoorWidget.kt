@@ -39,7 +39,7 @@ import vad.dashing.tbox.mbcan.trunkPulseFromStopped
 import vad.dashing.tbox.mbcan.trunkPulseStop
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
-private const val TRUNK_PULSE_DURATION_MS = 900
+private const val TRUNK_PULSE_DURATION_MS = 550
 
 @Composable
 private fun rememberTrunkPulseColor(from: Color, to: Color): Color {

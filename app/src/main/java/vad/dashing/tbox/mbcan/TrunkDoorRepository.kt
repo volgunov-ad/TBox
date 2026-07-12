@@ -34,7 +34,7 @@ object TrunkDoorRepository {
         trunkStsRaw?.let { raw ->
             TrunkDoorDomain.decodeBinaryOpenMbCan(raw)?.let { isOpen = it }
         }
-        moveDir = moveDirRaw
+        moveDirRaw?.let { moveDir = it }
         publish()
     }
 

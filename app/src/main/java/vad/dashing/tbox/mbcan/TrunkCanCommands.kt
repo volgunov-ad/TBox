@@ -3,26 +3,24 @@ package vad.dashing.tbox.mbcan
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-/** Close liftgate — [MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL] pulse 1. */
-suspend fun UniversalCanRepository.trunkPulseClose(): MbCanCommandResult =
+/**
+ * Toggle liftgate when stopped — [MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL] pulse 1.
+ * Stock A9 [RearDoorView] onLongClick and A10 [CarCommon3] long-press both use pulse 1
+ * regardless of open/closed position.
+ */
+suspend fun UniversalCanRepository.trunkPulseToggle(): MbCanCommandResult =
     execute(MbCanCommand.TrunkPulse(1))
 
-/**
- * Open liftgate — PLG pulse 2.
- * Also used to stop movement while the gate is opening/closing (stock [CarCommon3] tailgate onClick).
- */
-suspend fun UniversalCanRepository.trunkPulseOpen(): MbCanCommandResult =
+/** Stop movement while opening/closing — PLG pulse 2 (stock [RearDoorView] onClick). */
+suspend fun UniversalCanRepository.trunkPulseStop(): MbCanCommandResult =
     execute(MbCanCommand.TrunkPulse(2))
 
-suspend fun UniversalCanRepository.trunkPulseStop(): MbCanCommandResult =
-    trunkPulseOpen()
-
-/** Double-tap when the liftgate is stopped. */
+/** Double-tap when the liftgate is stopped (stock PLG pulse 1). */
 suspend fun UniversalCanRepository.trunkPulseFromStopped(state: TrunkDoorDisplayState): MbCanCommandResult =
-    if (TrunkDoorDomain.shouldPulseClose(state)) {
-        trunkPulseClose()
+    if (TrunkDoorDomain.shouldPulseToggleWhenStopped(state)) {
+        trunkPulseToggle()
     } else {
-        trunkPulseOpen()
+        trunkPulseStop()
     }
 
 fun UniversalCanRepository.launchTrunkCommand(
