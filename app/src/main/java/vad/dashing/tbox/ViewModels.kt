@@ -316,6 +316,11 @@ object WidgetsRepository {
         @StringRes val unitRes: Int? = null
     )
 
+    private data class WidgetDescription(
+        @StringRes val descriptionRes: Int,
+        @StringRes val actionsRes: Int? = null,
+    )
+
     const val EXTERNAL_WIDGET_DATA_KEY = "externalAppWidget"
 
     private val dataKeyTitles = mapOf(
@@ -474,6 +479,247 @@ object WidgetsRepository {
         ),
     )
 
+    private val widgetDescriptions = mapOf(
+        "voltage" to WidgetDescription(R.string.widget_desc_voltage),
+        "steerAngle" to WidgetDescription(R.string.widget_desc_steer_angle),
+        "steerSpeed" to WidgetDescription(R.string.widget_desc_steer_speed),
+        "engineRPM" to WidgetDescription(R.string.widget_desc_engine_rpm),
+        "carSpeed" to WidgetDescription(R.string.widget_desc_car_speed),
+        "carSpeedAccurate" to WidgetDescription(R.string.widget_desc_car_speed_accurate),
+        "cruiseSetSpeed" to WidgetDescription(R.string.widget_desc_cruise_set_speed),
+        "odometer" to WidgetDescription(R.string.widget_desc_odometer),
+        "distanceToNextMaintenance" to WidgetDescription(R.string.widget_desc_distance_to_next_maintenance),
+        "distanceToFuelEmpty" to WidgetDescription(R.string.widget_desc_distance_to_fuel_empty),
+        "fuelLevelPercentage" to WidgetDescription(R.string.widget_desc_fuel_level_percentage),
+        "fuelLevelPercentageFiltered" to WidgetDescription(R.string.widget_desc_fuel_level_percentage_filtered),
+        "fuelLevelLiters" to WidgetDescription(R.string.widget_desc_fuel_level_liters),
+        "fuelLevelLitersActual" to WidgetDescription(R.string.widget_desc_fuel_level_liters_actual),
+        "currentFuelConsumption" to WidgetDescription(R.string.widget_desc_current_fuel_consumption),
+        "breakingForce" to WidgetDescription(R.string.widget_desc_breaking_force),
+        "engineTemperature" to WidgetDescription(R.string.widget_desc_engine_temperature),
+        "gearBoxOilTemperature" to WidgetDescription(R.string.widget_desc_gearbox_oil_temperature),
+        "gearBoxCurrentGear" to WidgetDescription(R.string.widget_desc_gearbox_current_gear),
+        "gearBoxPreparedGear" to WidgetDescription(R.string.widget_desc_gearbox_prepared_gear),
+        "gearBoxChangeGear" to WidgetDescription(R.string.widget_desc_gearbox_change_gear),
+        "gearBoxMode" to WidgetDescription(R.string.widget_desc_gearbox_mode),
+        "gearBoxDriveMode" to WidgetDescription(R.string.widget_desc_gearbox_drive_mode),
+        "gearBoxWork" to WidgetDescription(R.string.widget_desc_gearbox_work),
+        "gnssSpeed" to WidgetDescription(R.string.widget_desc_gnss_speed),
+        "visibleSatellites" to WidgetDescription(R.string.widget_desc_visible_satellites),
+        "longitude" to WidgetDescription(R.string.widget_desc_longitude),
+        "latitude" to WidgetDescription(R.string.widget_desc_latitude),
+        "altitude" to WidgetDescription(R.string.widget_desc_altitude),
+        "trueDirection" to WidgetDescription(R.string.widget_desc_true_direction),
+        "outsideTemperature" to WidgetDescription(R.string.widget_desc_outside_temperature),
+        "insideTemperature" to WidgetDescription(R.string.widget_desc_inside_temperature),
+        "outsideAirQuality" to WidgetDescription(R.string.widget_desc_outside_air_quality),
+        "insideAirQuality" to WidgetDescription(R.string.widget_desc_inside_air_quality),
+        "motorHours" to WidgetDescription(
+            R.string.widget_desc_motor_hours,
+            R.string.widget_actions_motor_hours,
+        ),
+        "motorHoursTrip" to WidgetDescription(R.string.widget_desc_motor_hours_trip),
+        "motorHoursWidget" to WidgetDescription(
+            R.string.widget_desc_motor_hours_widget,
+            R.string.widget_actions_motor_hours,
+        ),
+        "timeWidget" to WidgetDescription(R.string.widget_desc_time),
+        "dateWidget" to WidgetDescription(R.string.widget_desc_date),
+        "activeTripWidget" to WidgetDescription(
+            R.string.widget_desc_active_trip,
+            R.string.widget_actions_active_trip,
+        ),
+        "activeTripWidgetSimple" to WidgetDescription(
+            R.string.widget_desc_active_trip_simple,
+            R.string.widget_actions_active_trip,
+        ),
+        "activeTripWidgetMini" to WidgetDescription(
+            R.string.widget_desc_active_trip_mini,
+            R.string.widget_actions_active_trip,
+        ),
+        ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_active_trip_custom,
+            R.string.widget_actions_active_trip,
+        ),
+        "netWidget" to WidgetDescription(R.string.widget_desc_net_signal),
+        "netWidgetNew" to WidgetDescription(R.string.widget_desc_net_new),
+        "netWidgetColored" to WidgetDescription(R.string.widget_desc_net_colored),
+        "locWidget" to WidgetDescription(R.string.widget_desc_navigation),
+        "voltage+engineTemperatureWidget" to WidgetDescription(R.string.widget_desc_voltage_engine_temperature),
+        "gearBoxWidget" to WidgetDescription(R.string.widget_desc_gearbox),
+        GEARBOX_MODE_CURRENT_GEAR_DATA_KEY to WidgetDescription(R.string.widget_desc_gearbox_mode_current_gear),
+        DRIVE_MODE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_drive_mode,
+            R.string.widget_actions_drive_mode,
+        ),
+        "wheel1Pressure" to WidgetDescription(R.string.widget_desc_wheel_pressure_fl),
+        "wheel2Pressure" to WidgetDescription(R.string.widget_desc_wheel_pressure_fr),
+        "wheel3Pressure" to WidgetDescription(R.string.widget_desc_wheel_pressure_rl),
+        "wheel4Pressure" to WidgetDescription(R.string.widget_desc_wheel_pressure_rr),
+        "wheel1Temperature" to WidgetDescription(R.string.widget_desc_wheel_temperature_fl),
+        "wheel2Temperature" to WidgetDescription(R.string.widget_desc_wheel_temperature_fr),
+        "wheel3Temperature" to WidgetDescription(R.string.widget_desc_wheel_temperature_rl),
+        "wheel4Temperature" to WidgetDescription(R.string.widget_desc_wheel_temperature_rr),
+        "wheelsPressureWidget" to WidgetDescription(R.string.widget_desc_wheels_pressure),
+        "wheelsPressureTemperatureWidget" to WidgetDescription(R.string.widget_desc_wheels_pressure_temperature),
+        "tempInOutWidget" to WidgetDescription(R.string.widget_desc_temp_in_out),
+        "fuelLevelWidget" to WidgetDescription(R.string.widget_desc_fuel_level),
+        "airQualityWidget" to WidgetDescription(R.string.widget_desc_air_quality),
+        "steeringWheelHeatWidget" to WidgetDescription(
+            R.string.widget_desc_steering_wheel_heat,
+            R.string.widget_actions_steering_wheel_heat,
+        ),
+        WIPER_MAINTENANCE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_wiper_maintenance,
+            R.string.widget_actions_wiper_maintenance,
+        ),
+        PARKING_RADAR_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_parking_radar,
+            R.string.widget_actions_parking_radar,
+        ),
+        "frontWindscreenHeatWidget" to WidgetDescription(
+            R.string.widget_desc_front_windscreen_heat,
+            R.string.widget_actions_front_windscreen_heat,
+        ),
+        "rearWindowMirrorsDefrostWidget" to WidgetDescription(
+            R.string.widget_desc_rear_window_mirrors_defrost,
+            R.string.widget_actions_rear_window_mirrors_defrost,
+        ),
+        "hvacAirRecirculationWidget" to WidgetDescription(
+            R.string.widget_desc_hvac_air_recirculation,
+            R.string.widget_actions_hvac_air_recirculation,
+        ),
+        "hvacAcWidget" to WidgetDescription(
+            R.string.widget_desc_hvac_ac,
+            R.string.widget_actions_hvac_ac,
+        ),
+        "hvacAutoWidget" to WidgetDescription(
+            R.string.widget_desc_hvac_auto,
+            R.string.widget_actions_hvac_auto,
+        ),
+        "hvacDefrosterFrontWidget" to WidgetDescription(
+            R.string.widget_desc_hvac_defroster_front,
+            R.string.widget_actions_hvac_defroster_front,
+        ),
+        HVAC_SYNC_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_sync,
+            R.string.widget_actions_hvac_sync,
+        ),
+        HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_fan_horizontal,
+            R.string.widget_actions_hvac_fan,
+        ),
+        HVAC_FAN_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_fan_vertical,
+            R.string.widget_actions_hvac_fan,
+        ),
+        HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_temp_left_horizontal,
+            R.string.widget_actions_hvac_temperature,
+        ),
+        HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_temp_left_vertical,
+            R.string.widget_actions_hvac_temperature,
+        ),
+        HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_temp_right_horizontal,
+            R.string.widget_actions_hvac_temperature,
+        ),
+        HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_temp_right_vertical,
+            R.string.widget_actions_hvac_temperature,
+        ),
+        HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_blow_mode_cycle,
+            R.string.widget_actions_hvac_blow_mode_cycle,
+        ),
+        HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_blow_mode_panel_horizontal,
+            R.string.widget_actions_hvac_blow_mode_panel,
+        ),
+        HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hvac_blow_mode_panel_vertical,
+            R.string.widget_actions_hvac_blow_mode_panel,
+        ),
+        TRUNK_DOOR_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_trunk_door,
+            R.string.widget_actions_trunk_door,
+        ),
+        MIRROR_ADJUST_MODE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_mirror_adjust_mode,
+            R.string.widget_actions_mirror_adjust_mode,
+        ),
+        MIRROR_FOLD_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_mirror_fold,
+            R.string.widget_actions_mirror_fold,
+        ),
+        DAY_NIGHT_THEME_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_day_night_theme,
+            R.string.widget_actions_day_night_theme,
+        ),
+        "frontLeftSeatHeatVentWidget" to WidgetDescription(
+            R.string.widget_desc_front_left_seat_heat_vent,
+            R.string.widget_actions_seat_heat_vent_dual,
+        ),
+        "frontRightSeatHeatVentWidget" to WidgetDescription(
+            R.string.widget_desc_front_right_seat_heat_vent,
+            R.string.widget_actions_seat_heat_vent_dual,
+        ),
+        FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_front_left_seat_heat_vent_single,
+            R.string.widget_actions_seat_heat_vent_single,
+        ),
+        FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_front_right_seat_heat_vent_single,
+            R.string.widget_actions_seat_heat_vent_single,
+        ),
+        REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_rear_left_seat_heat,
+            R.string.widget_actions_rear_seat_heat,
+        ),
+        REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_rear_right_seat_heat,
+            R.string.widget_actions_rear_seat_heat,
+        ),
+        "musicWidget" to WidgetDescription(
+            R.string.widget_desc_music,
+            R.string.widget_actions_music,
+        ),
+        MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_media_volume_horizontal,
+            R.string.widget_actions_media_volume,
+        ),
+        MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_media_volume_vertical,
+            R.string.widget_actions_media_volume,
+        ),
+        APP_LAUNCHER_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_app_launcher,
+            R.string.widget_actions_app_launcher,
+        ),
+        HTTP_REQUEST_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_http_request,
+            R.string.widget_actions_http_request,
+        ),
+        EMPTY_TILE_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_empty_tile),
+        "restartTbox" to WidgetDescription(
+            R.string.widget_desc_restart_tbox,
+            R.string.widget_actions_restart_tbox,
+        ),
+        EXTERNAL_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_external_app,
+            R.string.widget_actions_external_app,
+        ),
+        HIDE_FLOATING_PANELS_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hide_floating_panels,
+            R.string.widget_actions_hide_floating_panels,
+        ),
+        TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_toggle_floating_panels_enabled,
+            R.string.widget_actions_toggle_floating_panels_enabled,
+        ),
+    )
+
     private fun getDataTitle(dataKey: String): DataTitle? {
         return (dataKeyTitles + dataKeyTitlesWidgets)[dataKey]
     }
@@ -503,6 +749,16 @@ object WidgetsRepository {
 
     fun getAvailableDataKeysWidgets(): List<String> {
         return dataKeyTitlesWidgets.keys.toList()
+    }
+
+    @StringRes
+    fun getDescriptionResForDataKey(dataKey: String): Int? {
+        return widgetDescriptions[dataKey]?.descriptionRes
+    }
+
+    @StringRes
+    fun getActionsDescriptionResForDataKey(dataKey: String): Int? {
+        return widgetDescriptions[dataKey]?.actionsRes
     }
 
     /**
