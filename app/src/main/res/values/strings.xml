@@ -952,10 +952,10 @@
     <string name="widget_desc_active_trip_simple">Основные показатели текущей поездки в упрощённом виде.</string>
     <string name="widget_desc_active_trip_mini">Краткие показатели поездки для небольшой плитки.</string>
     <string name="widget_desc_active_trip_custom">Показатели поездки с настраиваемым составом строк.</string>
-    <string name="widget_desc_net">Уровень сигнала мобильной сети.</string>
+    <string name="widget_desc_net_signal">Уровень сигнала мобильной сети.</string>
     <string name="widget_desc_net_new">Уровень и состояние мобильной сети в новом оформлении.</string>
     <string name="widget_desc_net_colored">Уровень и состояние мобильной сети с цветовой индикацией.</string>
-    <string name="widget_desc_location">Состояние навигации и текущие координаты.</string>
+    <string name="widget_desc_navigation">Состояние навигации и текущие координаты.</string>
     <string name="widget_desc_voltage_engine_temperature">Напряжение бортовой сети и температура двигателя.</string>
     <string name="widget_desc_gearbox">Режим, передача и температура масла коробки передач.</string>
     <string name="widget_desc_gearbox_mode_current_gear">Режим коробки и текущая передача в одной плитке.</string>

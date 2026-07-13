@@ -929,10 +929,10 @@
     <string name="widget_desc_active_trip_simple">Main current trip metrics in a simplified layout.</string>
     <string name="widget_desc_active_trip_mini">Brief trip metrics for a small tile.</string>
     <string name="widget_desc_active_trip_custom">Trip metrics with a configurable set of rows.</string>
-    <string name="widget_desc_net">Mobile network signal strength.</string>
+    <string name="widget_desc_net_signal">Mobile network signal strength.</string>
     <string name="widget_desc_net_new">Mobile network signal and status in the new layout.</string>
     <string name="widget_desc_net_colored">Mobile network signal and status with color indication.</string>
-    <string name="widget_desc_location">Navigation status and current coordinates.</string>
+    <string name="widget_desc_navigation">Navigation status and current coordinates.</string>
     <string name="widget_desc_voltage_engine_temperature">Vehicle electrical voltage and engine temperature.</string>
     <string name="widget_desc_gearbox">Gearbox mode, gear, and oil temperature.</string>
     <string name="widget_desc_gearbox_mode_current_gear">Gearbox mode and current gear in one tile.</string>
