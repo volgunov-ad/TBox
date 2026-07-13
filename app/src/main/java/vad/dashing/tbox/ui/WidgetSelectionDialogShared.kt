@@ -612,6 +612,23 @@ private fun FloatingDashboardWholeSettingsSection(
     }
 }
 
+internal data class WidgetSelectionDescriptionResources(
+    val descriptionRes: Int,
+    val actionsRes: Int?,
+)
+
+internal fun resolveWidgetSelectionDescriptionResources(
+    dataKey: String,
+    selectedDataKey: String,
+): WidgetSelectionDescriptionResources? {
+    if (dataKey != selectedDataKey) return null
+    val descriptionRes = WidgetsRepository.getDescriptionResForDataKey(dataKey) ?: return null
+    return WidgetSelectionDescriptionResources(
+        descriptionRes = descriptionRes,
+        actionsRes = WidgetsRepository.getActionsDescriptionResForDataKey(dataKey),
+    )
+}
+
 @Composable
 internal fun WidgetSelectionDialogForm(
     titleText: String,
@@ -1181,8 +1198,10 @@ internal fun WidgetSelectionDialogForm(
                         key(key) {
                             val selectKey = rememberWrappedOnClick { state.applySelectedDataKey(key) }
                             val selected = state.selectedDataKey == key
-                            val descriptionRes = WidgetsRepository.getDescriptionResForDataKey(key)
-                            val actionsRes = WidgetsRepository.getActionsDescriptionResForDataKey(key)
+                            val descriptionResources = resolveWidgetSelectionDescriptionResources(
+                                dataKey = key,
+                                selectedDataKey = state.selectedDataKey,
+                            )
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1209,13 +1228,14 @@ internal fun WidgetSelectionDialogForm(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                                if (selected && descriptionRes != null) {
+                                if (descriptionResources != null) {
                                     Text(
-                                        text = stringResource(descriptionRes),
+                                        text = stringResource(descriptionResources.descriptionRes),
                                         style = MaterialTheme.typography.tboxBody,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(start = 56.dp, end = 8.dp)
                                     )
+                                    val actionsRes = descriptionResources.actionsRes
                                     if (actionsRes != null) {
                                         Text(
                                             text = stringResource(

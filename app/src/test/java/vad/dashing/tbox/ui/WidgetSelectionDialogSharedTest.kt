@@ -1,7 +1,10 @@
 package vad.dashing.tbox.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
+import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 
 class WidgetSelectionDialogSharedTest {
 
@@ -33,5 +36,37 @@ class WidgetSelectionDialogSharedTest {
         )
 
         assertEquals("", result)
+    }
+
+    @Test
+    fun descriptionResources_areHiddenForUnselectedItem() {
+        val result = resolveWidgetSelectionDescriptionResources(
+            dataKey = DAY_NIGHT_THEME_WIDGET_DATA_KEY,
+            selectedDataKey = "voltage",
+        )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun descriptionResources_hideActionsForNonInteractiveItem() {
+        val result = resolveWidgetSelectionDescriptionResources(
+            dataKey = "voltage",
+            selectedDataKey = "voltage",
+        )
+
+        assertNotNull(result)
+        assertNull(result?.actionsRes)
+    }
+
+    @Test
+    fun descriptionResources_showActionsForInteractiveItem() {
+        val result = resolveWidgetSelectionDescriptionResources(
+            dataKey = DAY_NIGHT_THEME_WIDGET_DATA_KEY,
+            selectedDataKey = DAY_NIGHT_THEME_WIDGET_DATA_KEY,
+        )
+
+        assertNotNull(result?.descriptionRes)
+        assertNotNull(result?.actionsRes)
     }
 }
