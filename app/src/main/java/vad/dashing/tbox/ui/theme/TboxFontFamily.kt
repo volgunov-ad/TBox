@@ -13,6 +13,7 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
     Monospace(3, "monospace"),
     Cabin(5, "cabin"),
     Nunito(6, "nunito"),
+    Roboto(7, "roboto"),
     ;
 
     fun toComposeFontFamily(): FontFamily = when (this) {
@@ -22,6 +23,7 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
         Monospace -> FontFamily.Monospace
         Cabin -> Bundled.cabin
         Nunito -> Bundled.nunito
+        Roboto -> Bundled.roboto
     }
 
     companion object {
@@ -35,31 +37,32 @@ enum class TboxFontFamily(val id: Int, val slug: String) {
     }
 
     private object Bundled {
-        val cabin = fontFamilyWithMedium(
+        val cabin = bundledFontFamily(
             regular = R.font.cabin_regular,
             medium = R.font.cabin_medium,
             semiBold = R.font.cabin_semibold,
-            bold = R.font.cabin_bold,
         )
-        val nunito = fontFamilyWithMedium(
+        val nunito = bundledFontFamily(
             regular = R.font.nunito_regular,
             medium = R.font.nunito_medium,
             semiBold = R.font.nunito_semibold,
-            bold = R.font.nunito_bold,
+        )
+        val roboto = bundledFontFamily(
+            regular = R.font.roboto_regular,
+            medium = R.font.roboto_medium,
+            semiBold = R.font.roboto_semibold,
         )
     }
 }
 
-private fun fontFamilyWithMedium(
+private fun bundledFontFamily(
     regular: Int,
     medium: Int,
     semiBold: Int,
-    bold: Int,
 ): FontFamily = FontFamily(
     Font(regular, FontWeight.Normal),
     Font(medium, FontWeight.Medium),
     Font(semiBold, FontWeight.SemiBold),
-    Font(bold, FontWeight.Bold),
 )
 
 fun resolveFontFamily(fontFamilyId: Int): FontFamily =

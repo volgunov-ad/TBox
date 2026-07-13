@@ -346,18 +346,11 @@ object CanFramesProcess {
                         readUInt16BigEndian(rawValue, payloadStart + 2).toUInt()
                     CanDataRepository.updateDistanceToFuelEmpty(distanceToFuelEmpty)
                 } else if (canId == CAN_ID_IN_OUT_TEMP) {
+                    val curTime = SystemClock.elapsedRealtime()
                     val insideTemperature = unsignedByte(b5).toFloat() * 0.5f - 40f
                     val outsideTemperature = unsignedByte(b6).toFloat() * 0.5f - 40f
-                    if (outsideTemperature >= -40f && outsideTemperature < 87f) {
-                        CanDataRepository.updateOutsideTemperature(outsideTemperature)
-                    } else {
-                        CanDataRepository.updateOutsideTemperature(null)
-                    }
-                    if (insideTemperature >= -40f && insideTemperature < 87f) {
-                        CanDataRepository.updateInsideTemperature(insideTemperature)
-                    } else {
-                        CanDataRepository.updateInsideTemperature(null)
-                    }
+                    CanDataRepository.applyInsideTemperatureFromCan(insideTemperature, curTime)
+                    CanDataRepository.applyOutsideTemperatureFromCan(outsideTemperature, curTime)
                 } else if (canId == CAN_ID_AIR_QUALITY) {
                     val insideAirQuality = readUInt16BigEndian(rawValue, payloadStart).toUInt()
                     val outsideAirQuality = readUInt16BigEndian(rawValue, payloadStart + 2).toUInt()

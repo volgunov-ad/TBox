@@ -118,6 +118,12 @@ fun serializeWidgetConfigsToJsonArray(
             obj.put("selectedDriveMode", selectedDriveMode)
         }
         obj.put("useMbCanVhal", config.useMbCanVhal)
+        if (config.stepperAdjustIconStyle != STEPPER_ADJUST_ICON_PLUS_MINUS) {
+            obj.put(
+                "stepperAdjustIconStyle",
+                normalizeStepperAdjustIconStyle(config.stepperAdjustIconStyle),
+            )
+        }
         config.tileBackgroundImageRelPathLight?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
                 obj.put("tileBackgroundImageRelPathLight", it)
@@ -142,6 +148,16 @@ fun serializeWidgetConfigsToJsonArray(
                     ),
                 )
             }
+        }
+        if (config.textAlign != DEFAULT_WIDGET_TEXT_ALIGN) {
+            obj.put("textAlign", normalizeWidgetTextAlign(config.textAlign))
+        }
+        if (config.fontWeight != DEFAULT_WIDGET_FONT_WEIGHT) {
+            obj.put("fontWeight", normalizeWidgetFontWeight(config.fontWeight))
+        }
+        val defaultTitlePosition = resolveDefaultTitlePositionForDataKey(config.dataKey)
+        if (config.titlePosition != defaultTitlePosition) {
+            obj.put("titlePosition", normalizeWidgetTitlePosition(config.titlePosition))
         }
         array.put(obj)
     }
@@ -298,6 +314,9 @@ private fun parseWidgetConfigsFromJsonArray(
                             item.optInt("selectedDriveMode", DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE)
                         ),
                         useMbCanVhal = item.optBoolean("useMbCanVhal", false),
+                        stepperAdjustIconStyle = normalizeStepperAdjustIconStyle(
+                            item.optInt("stepperAdjustIconStyle", STEPPER_ADJUST_ICON_PLUS_MINUS),
+                        ),
                         tileBackgroundImageRelPathLight = tileLight,
                         tileBackgroundImageRelPathDark = tileDark,
                         tripWidgetShowRowDividers = item.optBoolean(
@@ -310,6 +329,17 @@ private fun parseWidgetConfigsFromJsonArray(
                                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
                             ),
                         ),
+                        textAlign = normalizeWidgetTextAlign(
+                            item.optInt("textAlign", DEFAULT_WIDGET_TEXT_ALIGN)
+                        ),
+                        fontWeight = normalizeWidgetFontWeight(
+                            item.optInt("fontWeight", DEFAULT_WIDGET_FONT_WEIGHT)
+                        ),
+                        titlePosition = if (item.has("titlePosition")) {
+                            normalizeWidgetTitlePosition(item.optInt("titlePosition"))
+                        } else {
+                            resolveDefaultTitlePositionForDataKey(dataKey)
+                        },
                     )
                 )
             }

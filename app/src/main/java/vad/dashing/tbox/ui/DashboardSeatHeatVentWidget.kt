@@ -43,8 +43,7 @@ import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
 
-private val SeatHeatOnColor = Color(0xFFFF9800)
-private val SeatVentOnColor = Color(0xFF4FC3F7)
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 private const val SEAT_ACTION_LOCKOUT_MS = 500L
 
@@ -628,7 +627,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatHeatOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) WidgetActiveColors.Secondary else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -637,7 +636,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) SeatHeatOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) WidgetActiveColors.Secondary else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -646,7 +645,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level == 3) SeatHeatOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level == 3) WidgetActiveColors.Secondary else iconColor),
                 contentScale = ContentScale.Fit,
             )
         } else if (modeType == "vent") {
@@ -656,7 +655,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) WidgetActiveColors.Primary else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -665,7 +664,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) SeatVentOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) WidgetActiveColors.Primary else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -674,7 +673,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) SeatVentOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) WidgetActiveColors.Primary else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -683,7 +682,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level == 3) SeatVentOnColor else iconColor),
+                colorFilter = ColorFilter.tint(if (level == 3) WidgetActiveColors.Primary else iconColor),
                 contentScale = ContentScale.Fit,
             )
         }

@@ -15,6 +15,15 @@ data class MainScreenWallpaperSelectionsByPage(
     fun hasSelectionFor(page: Int, forLightTheme: Boolean): Boolean =
         fileNameFor(page, forLightTheme) != null
 
+    /** Prefer [page]; if that page has no entry, use the first page that has a selection. */
+    fun fileNameForCurrentOrAnyPage(page: Int, forLightTheme: Boolean): String? {
+        fileNameFor(page, forLightTheme)?.let { return it }
+        val preferredSide = if (forLightTheme) lightByPage else darkByPage
+        val otherSide = if (forLightTheme) darkByPage else lightByPage
+        val pages = (preferredSide.keys + otherSide.keys).sorted()
+        return pages.firstNotNullOfOrNull { fileNameFor(it, forLightTheme) }
+    }
+
     fun withFileName(page: Int, forLightTheme: Boolean, fileName: String): MainScreenWallpaperSelectionsByPage {
         val normalizedPage = page.coerceAtLeast(1)
         return if (forLightTheme) {

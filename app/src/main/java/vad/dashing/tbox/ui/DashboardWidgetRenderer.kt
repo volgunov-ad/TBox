@@ -32,6 +32,20 @@ import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_FAN_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
+import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
+import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.MIRROR_FOLD_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
@@ -407,6 +421,224 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        HVAC_SYNC_WIDGET_DATA_KEY -> {
+            DashboardHvacSyncWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardHvacFanWidgetItem(
+                isVertical = false,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HVAC_FAN_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardHvacFanWidgetItem(
+                isVertical = true,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardHvacTempLeftWidgetItem(
+                isVertical = false,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardHvacTempLeftWidgetItem(
+                isVertical = true,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardHvacTempRightWidgetItem(
+                isVertical = false,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardHvacTempRightWidgetItem(
+                isVertical = true,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY -> {
+            DashboardHvacBlowModeCycleWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {},
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardHvacBlowModePanelWidgetItem(
+                isVertical = false,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride
+            )
+        }
+
+        HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardHvacBlowModePanelWidgetItem(
+                isVertical = true,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride
+            )
+        }
+
+        TRUNK_DOOR_WIDGET_DATA_KEY -> {
+            DashboardTrunkDoorWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {},
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        DAY_NIGHT_THEME_WIDGET_DATA_KEY -> {
+            DashboardDayNightThemeWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {},
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        MIRROR_ADJUST_MODE_WIDGET_DATA_KEY -> {
+            DashboardMirrorAdjustModeWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
+        MIRROR_FOLD_WIDGET_DATA_KEY -> {
+            DashboardMirrorFoldWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {},
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                scale = widgetConfig.scale
+            )
+        }
+
         "frontLeftSeatHeatVentWidget" -> {
             DashboardFrontLeftSeatHeatVentWidgetItem(
                 onClick = onClick,
@@ -606,7 +838,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 
@@ -623,7 +856,8 @@ fun DashboardWidgetRenderer(
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 

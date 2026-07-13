@@ -13,7 +13,9 @@ import androidx.test.core.app.ApplicationProvider
 import vad.dashing.tbox.ui.theme.TboxFontFamily
 import vad.dashing.tbox.ui.theme.resolveFontFamily
 import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxMaterialTypography
+import vad.dashing.tbox.ui.theme.tboxTextStyles
 import vad.dashing.tbox.ui.theme.tboxTitle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -25,6 +27,7 @@ class TboxFontFamilyTest {
         assertEquals(TboxFontFamily.Serif, TboxFontFamily.fromId(2))
         assertEquals(TboxFontFamily.Cabin, TboxFontFamily.fromId(5))
         assertEquals(TboxFontFamily.Nunito, TboxFontFamily.fromId(6))
+        assertEquals(TboxFontFamily.Roboto, TboxFontFamily.fromId(7))
         assertEquals(TboxFontFamily.Default, TboxFontFamily.fromId(4))
         assertEquals(TboxFontFamily.Default, TboxFontFamily.fromId(99))
     }
@@ -33,17 +36,34 @@ class TboxFontFamilyTest {
     fun fromSlug_roundTripsSlug() {
         assertEquals(TboxFontFamily.Monospace, TboxFontFamily.fromSlug("monospace"))
         assertEquals(TboxFontFamily.Cabin, TboxFontFamily.fromSlug("cabin"))
+        assertEquals(TboxFontFamily.Roboto, TboxFontFamily.fromSlug("roboto"))
         assertNull(TboxFontFamily.fromSlug("crimson_text"))
         assertNull(TboxFontFamily.fromSlug("unknown"))
         assertNull(TboxFontFamily.fromSlug(""))
     }
 
     @Test
-    fun typographyUsesSelectedFontFamilyAndNormalWeight() {
+    fun typographyUsesSelectedFontFamilyAndMediumTitleHeadline() {
         val typography = tboxMaterialTypography(FontFamily.Serif)
         assertEquals(FontFamily.Serif, typography.tboxTitle.fontFamily)
-        assertEquals(FontWeight.Normal, typography.tboxTitle.fontWeight)
+        assertEquals(FontWeight.Medium, typography.tboxTitle.fontWeight)
+        assertEquals(FontFamily.Serif, typography.tboxHeadline.fontFamily)
+        assertEquals(FontWeight.Medium, typography.tboxHeadline.fontWeight)
         assertEquals(FontFamily.Serif, typography.tboxCaption.fontFamily)
+        assertEquals(FontWeight.Normal, typography.tboxCaption.fontWeight)
+    }
+
+    @Test
+    fun widgetTextStyles_useMediumWeightAndStaySeparateFromAppText() {
+        val styles = tboxTextStyles(FontFamily.Serif)
+        assertEquals(FontFamily.Serif, styles.WidgetTitle.fontFamily)
+        assertEquals(FontWeight.Medium, styles.WidgetTitle.fontWeight)
+        assertEquals(FontWeight.Medium, styles.WidgetValue.fontWeight)
+        assertEquals(FontWeight.Medium, styles.WidgetUnit.fontWeight)
+        assertEquals(FontWeight.Medium, styles.Title.fontWeight)
+        assertEquals(FontWeight.Medium, styles.Headline.fontWeight)
+        assertEquals(FontWeight.Normal, styles.Body.fontWeight)
+        assertEquals(FontWeight.Normal, styles.Caption.fontWeight)
     }
 
     @Test
@@ -57,6 +77,13 @@ class TboxFontFamilyTest {
         assertNotEquals(FontFamily.Default, nunito)
         assertEquals(nunito, resolveFontFamily(TboxFontFamily.Nunito.id))
     }
+
+    @Test
+    fun bundledRoboto_differsFromDefault() {
+        val roboto = TboxFontFamily.Roboto.toComposeFontFamily()
+        assertNotEquals(FontFamily.Default, roboto)
+        assertEquals(roboto, resolveFontFamily(TboxFontFamily.Roboto.id))
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -69,10 +96,10 @@ class BundledFontWeightResourcesTest {
         val fontIds = listOf(
             R.font.nunito_medium,
             R.font.nunito_semibold,
-            R.font.nunito_bold,
             R.font.cabin_medium,
             R.font.cabin_semibold,
-            R.font.cabin_bold,
+            R.font.roboto_medium,
+            R.font.roboto_semibold,
         )
         fontIds.forEach { fontId ->
             context.resources.openRawResource(fontId).use { input ->
@@ -113,6 +140,16 @@ class MainScreenWallpaperSelectionsTest {
     fun fromDataStoreJson_handlesBlank() {
         assertEquals(MainScreenWallpaperSelectionsByPage.empty(), MainScreenWallpaperSelectionsByPage.fromDataStoreJson(""))
         assertEquals(MainScreenWallpaperSelectionsByPage.empty(), MainScreenWallpaperSelectionsByPage.fromDataStoreJson(null))
+    }
+
+    @Test
+    fun fileNameForCurrentOrAnyPage_fallsBackToFirstConfiguredPage() {
+        val selections = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "eco.jpg")
+
+        assertEquals("eco.jpg", selections.fileNameForCurrentOrAnyPage(page = 2, forLightTheme = true))
+        assertEquals("eco.jpg", selections.fileNameFor(page = 1, forLightTheme = true))
+        assertNull(selections.fileNameFor(page = 2, forLightTheme = true))
     }
 
     @Test

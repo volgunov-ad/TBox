@@ -20,6 +20,18 @@ import kotlinx.coroutines.withContext
 import java.lang.reflect.Proxy
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_CLIMATE_WIDGET_DATA_KEYS
+import vad.dashing.tbox.HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_FAN_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
@@ -319,6 +331,8 @@ object Android10VhalRepository {
     private val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_TEMPERATURE_PROPERTY_ID
     private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
     private const val VHAL_ENGINE_RPM_SCALE = 4f
+    private const val VHAL_ENGINE_TEMPERATURE_SCALE = 0.75f
+    private const val VHAL_ENGINE_TEMPERATURE_OFFSET = -48f
     private const val NORMAL_POLL_INTERVAL_MS = 30_000L
     private const val BURST_POLL_INTERVAL_MS = 1_500L
     private const val BURST_DURATION_MS = 15_000L
@@ -637,6 +651,17 @@ object Android10VhalRepository {
                 "hvacAcWidget" -> MbCanSignal.HvacAcPower
                 "hvacAutoWidget" -> MbCanSignal.HvacAutoState
                 "hvacDefrosterFrontWidget" -> MbCanSignal.HvacDefrosterFront
+                HVAC_SYNC_WIDGET_DATA_KEY -> MbCanSignal.HvacSync
+                HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY,
+                HVAC_FAN_WIDGET_VERTICAL_DATA_KEY -> MbCanSignal.HvacFanSpeed
+                HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY,
+                HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY -> MbCanSignal.HvacTempLeft
+                HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY,
+                HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY -> MbCanSignal.HvacTempRight
+                HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY,
+                HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY,
+                HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY -> MbCanSignal.HvacBlowMode
+                TRUNK_DOOR_WIDGET_DATA_KEY -> MbCanSignal.TrunkDoor
                 DRIVE_MODE_WIDGET_DATA_KEY -> MbCanSignal.CarSettingsVehicleParams
                 "frontLeftSeatHeatVentWidget" -> MbCanSignal.FrontLeftSeatMode
                 "frontRightSeatHeatVentWidget" -> MbCanSignal.FrontRightSeatMode
@@ -697,8 +722,8 @@ object Android10VhalRepository {
                 FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
                 FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
                 REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY,
-                REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
-            )
+                REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
+            ) || key in HVAC_CLIMATE_WIDGET_DATA_KEYS
         }
     }
 
@@ -738,6 +763,16 @@ object Android10VhalRepository {
             MbCanSignal.HvacAcPower -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_POWER))
             MbCanSignal.HvacAutoState -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE))
             MbCanSignal.HvacDefrosterFront -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION))
+            MbCanSignal.HvacFrontOff -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF))
+            MbCanSignal.HvacTempLeft -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT))
+            MbCanSignal.HvacTempRight -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT))
+            MbCanSignal.HvacFanSpeed -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED))
+            MbCanSignal.HvacSync -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH))
+            MbCanSignal.HvacBlowMode -> setOf(resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION))
+            MbCanSignal.TrunkDoor -> setOf(
+                resolved(MbCanKnownVehiclePropertyId.TRUNK_STATUS),
+                resolved(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR),
+            )
             MbCanSignal.AudioVolume -> setOf(resolved(MbCanKnownAudioPropertyId.VOLUME))
             MbCanSignal.AudioVolumeSpeed -> setOf(resolved(MbCanKnownAudioPropertyId.VOLUME_SPEED))
             MbCanSignal.CarSettingsVehicleParams -> setOf(
@@ -771,7 +806,8 @@ object Android10VhalRepository {
     }
 
     private fun decodeEngineTemperature(raw: Any?): Float? {
-        return (raw as? Number)?.toFloat()
+        val numeric = (raw as? Number)?.toFloat() ?: return null
+        return numeric * VHAL_ENGINE_TEMPERATURE_SCALE + VHAL_ENGINE_TEMPERATURE_OFFSET
     }
 
     private fun decodeCarSpeed(raw: Any?): Float? {
@@ -801,6 +837,8 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
         MbCanKnownVehiclePropertyId.HVAC_POWER,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE -> true
+        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF -> true
         else -> false
     }
 
@@ -815,6 +853,10 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.HVAC_POWER,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
             decodeVhalBinaryOneIsOn(raw)
+        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
+            HvacClimateDomain.decodeHvacSyncVhalRaw(raw)
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
+            HvacClimateDomain.decodeHvacFrontOffVhalRaw(raw)
         MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION ->
             MbCanSignalStateEngine.decodeHvacFrontDefrostVhalRaw(raw)
         else -> MbCanBinaryState.Unknown
@@ -836,6 +878,10 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
             if (targetOn) MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_ON
             else MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF
+        MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
+            HvacClimateDomain.encodeHvacSyncVhalWrite(targetOn)
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
+            if (targetOn) 1 else 2
         else -> null
     }
 
@@ -856,6 +902,23 @@ object Android10VhalRepository {
         val asInt = bridge?.getIntProperty(propertyId)
         if (asInt != null) return asInt.toFloat()
         return bridge?.getFloatProperty(propertyId)
+    }
+
+    private fun encodeVhalSetValue(propertyId: Int, mbCanValue: Int): Int? = when (propertyId) {
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
+        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT ->
+            HvacClimateDomain.mbCanTempRawToVhalWrite(mbCanValue)
+        MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED ->
+            mbCanValue.takeIf { it in HvacClimateDomain.FAN_SPEED_MIN..HvacClimateDomain.FAN_SPEED_MAX }
+        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION ->
+            HvacClimateDomain.mbCanBlowModeToVhalWrite(mbCanValue)
+        MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL -> mbCanValue
+        else -> mbCanValue
+    }
+
+    private fun readMappedIntProperty(mbCanPropertyId: Int): Int? {
+        val propertyId = FirmwareVehicleJsonMapper.resolveReadPropertyId(mbCanPropertyId) ?: mbCanPropertyId
+        return bridge?.getIntProperty(propertyId)
     }
 
     private suspend fun applyPushPropertyUpdate(propertyId: Int, rawValue: Any?) {
@@ -899,7 +962,22 @@ object Android10VhalRepository {
                     stateEngine.applyHvacDefrosterFrontCandidate(
                         MbCanSignalStateEngine.decodeHvacFrontDefrostVhalRaw(it)
                     )
+                    HvacClimateCanRepository.applyBlowModeVhal(it)
                 }
+            resolved(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT) ->
+                raw?.let { HvacClimateCanRepository.applyTempLeftVhal(it) }
+            resolved(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT) ->
+                raw?.let { HvacClimateCanRepository.applyTempRightVhal(it) }
+            resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED) ->
+                raw?.let { HvacClimateCanRepository.applyFanSpeed(it) }
+            resolved(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH) ->
+                raw?.let { HvacClimateCanRepository.applySyncVhal(it) }
+            resolved(MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF) ->
+                raw?.let { HvacClimateCanRepository.applyFrontOffVhal(it) }
+            resolved(MbCanKnownVehiclePropertyId.TRUNK_STATUS) ->
+                raw?.let { TrunkDoorRepository.applyVhalOpenRaw(it) }
+            resolved(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR) ->
+                raw?.let { TrunkDoorRepository.applyMoveDirRaw(it) }
             resolved(MbCanKnownAudioPropertyId.VOLUME) -> raw?.let {
                 _audioVolumeState.value = it.coerceAtLeast(0)
                 if (it > 0) _audioVolumeLastNonZeroInSession.value = it
@@ -1014,6 +1092,13 @@ object Android10VhalRepository {
                 MbCanSignal.HvacAcPower -> stateEngine.applyHvacAcPowerCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacAutoState -> stateEngine.applyHvacAutoStateCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.HvacFrontOff -> HvacClimateCanRepository.applyFrontOffVhal(0)
+                MbCanSignal.HvacTempLeft -> HvacClimateCanRepository.applyTempLeftVhal(-1)
+                MbCanSignal.HvacTempRight -> HvacClimateCanRepository.applyTempRightVhal(-1)
+                MbCanSignal.HvacFanSpeed -> HvacClimateCanRepository.applyFanSpeed(-1)
+                MbCanSignal.HvacSync -> HvacClimateCanRepository.applySyncVhal(-1)
+                MbCanSignal.HvacBlowMode -> HvacClimateCanRepository.applyBlowModeVhal(-1)
+                MbCanSignal.TrunkDoor -> TrunkDoorRepository.clear()
                 MbCanSignal.AudioVolumeSpeed -> {
                     _audioVolumeSpeedModeState.value = null
                     stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unavailable(deniedReason))
@@ -1052,6 +1137,13 @@ object Android10VhalRepository {
                 MbCanSignal.HvacAcPower -> stateEngine.applyHvacAcPowerCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacAutoState -> stateEngine.applyHvacAutoStateCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HvacDefrosterFront -> stateEngine.applyHvacDefrosterFrontCandidate(MbCanBinaryState.Unavailable(reason))
+                MbCanSignal.HvacFrontOff -> HvacClimateCanRepository.applyFrontOffVhal(0)
+                MbCanSignal.HvacTempLeft -> HvacClimateCanRepository.applyTempLeftVhal(-1)
+                MbCanSignal.HvacTempRight -> HvacClimateCanRepository.applyTempRightVhal(-1)
+                MbCanSignal.HvacFanSpeed -> HvacClimateCanRepository.applyFanSpeed(-1)
+                MbCanSignal.HvacSync -> HvacClimateCanRepository.applySyncVhal(-1)
+                MbCanSignal.HvacBlowMode -> HvacClimateCanRepository.applyBlowModeVhal(-1)
+                MbCanSignal.TrunkDoor -> TrunkDoorRepository.clear()
                 MbCanSignal.AudioVolumeSpeed -> {
                     _audioVolumeSpeedModeState.value = null
                     stateEngine.applyVolumeSpeedCandidate(MbCanBinaryState.Unavailable(reason))
@@ -1152,13 +1244,41 @@ object Android10VhalRepository {
                 )
             }
             MbCanSignal.HvacDefrosterFront -> {
-                val propertyId = FirmwareVehicleJsonMapper
-                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION)
-                    ?: MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION
-                val raw = bridge?.getIntProperty(propertyId)
+                val raw = readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION)
                 stateEngine.applyHvacDefrosterFrontCandidate(
                     raw?.let(MbCanSignalStateEngine::decodeHvacFrontDefrostVhalRaw) ?: MbCanBinaryState.Unknown
                 )
+                raw?.let { HvacClimateCanRepository.applyBlowModeVhal(it) }
+            }
+            MbCanSignal.HvacFrontOff -> {
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF)
+                    ?.let { HvacClimateCanRepository.applyFrontOffVhal(it) }
+            }
+            MbCanSignal.HvacTempLeft -> {
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT)
+                    ?.let { HvacClimateCanRepository.applyTempLeftVhal(it) }
+            }
+            MbCanSignal.HvacTempRight -> {
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT)
+                    ?.let { HvacClimateCanRepository.applyTempRightVhal(it) }
+            }
+            MbCanSignal.HvacFanSpeed -> {
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED)
+                    ?.let { HvacClimateCanRepository.applyFanSpeed(it) }
+            }
+            MbCanSignal.HvacSync -> {
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH)
+                    ?.let { HvacClimateCanRepository.applySyncVhal(it) }
+            }
+            MbCanSignal.HvacBlowMode -> {
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION)
+                    ?.let { HvacClimateCanRepository.applyBlowModeVhal(it) }
+            }
+            MbCanSignal.TrunkDoor -> {
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.TRUNK_STATUS)
+                    ?.let { TrunkDoorRepository.applyVhalOpenRaw(it) }
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR)
+                    ?.let { TrunkDoorRepository.applyMoveDirRaw(it) }
             }
             MbCanSignal.AudioVolume -> {
                 val propertyId = FirmwareVehicleJsonMapper
@@ -1228,7 +1348,8 @@ object Android10VhalRepository {
                 _engineRpmState.value = decodeEngineRpm(readNumericProperty(VHAL_ENGINE_RPM_PROPERTY_ID))
             }
             MbCanSignal.EngineTemperature -> {
-                _engineTemperatureState.value = readNumericProperty(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID)
+                _engineTemperatureState.value =
+                    decodeEngineTemperature(readNumericProperty(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID))
             }
             MbCanSignal.CarSpeed -> {
                 _carSpeedState.value = readNumericProperty(VHAL_CAR_SPEED_PROPERTY_ID)?.coerceAtLeast(0f)
@@ -1293,22 +1414,50 @@ object Android10VhalRepository {
             is MbCanCommand.SetProperty -> {
                 val spec = MbCanCommandRegistry.get(command.propertyId)
                     ?: return MbCanCommandResult(false, "No command policy for propertyId=${command.propertyId}")
-                val policy = spec.policy as? MbCanCommandPolicy.SetExact
-                    ?: return MbCanCommandResult(false, "Set unsupported for propertyId=${command.propertyId}")
-                if (!policy.allowedValues.contains(command.value)) {
+                val allowed = when (val policy = spec.policy) {
+                    is MbCanCommandPolicy.SetExact -> policy.allowedValues
+                    is MbCanCommandPolicy.ToggleHvacFrontDefrost -> setOf(
+                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE,
+                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FOOT,
+                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE_FOOT,
+                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST,
+                        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST_FOOT,
+                    )
+                    else -> return MbCanCommandResult(false, "Set unsupported for propertyId=${command.propertyId}")
+                }
+                if (!allowed.contains(command.value)) {
                     return MbCanCommandResult(false, "Value ${command.value} is not allowed")
                 }
                 val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(command.propertyId)
                     ?: command.propertyId
+                val encodedValue = encodeVhalSetValue(command.propertyId, command.value)
+                    ?: return MbCanCommandResult(false, "Value ${command.value} cannot be encoded for VHAL")
                 logDebug(
                     "SetProperty request=${command.propertyId} effective=$effectivePropertyId " +
-                        "value=${command.value}"
+                        "value=${command.value} encoded=$encodedValue"
                 )
-                val ok = bridge?.setIntProperty(effectivePropertyId, command.value) == true
-                logDebug("SetProperty result=$ok propertyId=$effectivePropertyId value=${command.value}")
+                val ok = bridge?.setIntProperty(effectivePropertyId, encodedValue) == true
+                logDebug("SetProperty result=$ok propertyId=$effectivePropertyId encoded=$encodedValue")
                 if (ok) requestBurstPolling()
                 spec.refreshSignal?.let { refreshSignal(it) }
                 MbCanCommandResult(ok, if (ok) "Set ok" else "Set failed")
+            }
+            is MbCanCommand.TrunkPulse -> {
+                if (command.value !in setOf(1, 2)) {
+                    return MbCanCommandResult(false, "Trunk pulse value ${command.value} is not allowed")
+                }
+                val effectivePropertyId = FirmwareVehicleJsonMapper.resolveWritePropertyId(
+                    MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL
+                ) ?: MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL
+                val firstOk = bridge?.setIntProperty(effectivePropertyId, command.value) == true
+                if (!firstOk) {
+                    return MbCanCommandResult(false, "Trunk pulse failed")
+                }
+                delay(HvacClimateDomain.TRUNK_PULSE_RESET_MS)
+                bridge?.setIntProperty(effectivePropertyId, 0)
+                requestBurstPolling()
+                refreshSignal(MbCanSignal.TrunkDoor)
+                MbCanCommandResult(true, "Trunk pulse sent")
             }
             is MbCanCommand.ToggleAudioProperty -> {
                 val spec = MbCanAudioCommandRegistry.get(command.propertyId)

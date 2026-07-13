@@ -79,13 +79,63 @@ import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
+import vad.dashing.tbox.normalizeWidgetTextAlign
+import vad.dashing.tbox.normalizeWidgetFontWeight
+import vad.dashing.tbox.normalizeWidgetTitlePosition
+import vad.dashing.tbox.normalizeStepperAdjustIconStyle
+import vad.dashing.tbox.STEPPER_ADJUST_ICON_ARROWS
+import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
+import vad.dashing.tbox.normalizePanelGridSpacingDp
+import vad.dashing.tbox.WIDGET_TEXT_ALIGN_CENTER
+import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
+import vad.dashing.tbox.WIDGET_TEXT_ALIGN_END
+import vad.dashing.tbox.WIDGET_FONT_WEIGHT_NORMAL
+import vad.dashing.tbox.WIDGET_FONT_WEIGHT_MEDIUM
+import vad.dashing.tbox.WIDGET_FONT_WEIGHT_SEMI_BOLD
+import vad.dashing.tbox.WIDGET_TITLE_POSITION_TOP
+import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.DEFAULT_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.resolveDefaultTitlePositionForDataKey
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
+
+/** Width of value dropdowns in the tile / panel settings dialog. */
+private val WidgetDialogDropdownSelectorWidth = 300.dp
 
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
 internal data class ValueAccuracyDropdownEntry(
     private val display: String,
     val stored: Int?
+) {
+    override fun toString(): String = display
+}
+
+internal data class WidgetTextAlignDropdownEntry(
+    private val display: String,
+    val stored: Int,
+) {
+    override fun toString(): String = display
+}
+
+internal data class WidgetFontWeightDropdownEntry(
+    private val display: String,
+    val stored: Int,
+) {
+    override fun toString(): String = display
+}
+
+internal data class WidgetTitlePositionDropdownEntry(
+    private val display: String,
+    val stored: Int,
+) {
+    override fun toString(): String = display
+}
+
+internal data class StepperAdjustIconStyleDropdownEntry(
+    private val display: String,
+    val stored: Int,
 ) {
     override fun toString(): String = display
 }
@@ -101,6 +151,9 @@ internal class WidgetSelectionDialogState(
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
     var showUnit by mutableStateOf(initialConfig.showUnit)
+    var textAlign by mutableIntStateOf(normalizeWidgetTextAlign(initialConfig.textAlign))
+    var fontWeight by mutableIntStateOf(normalizeWidgetFontWeight(initialConfig.fontWeight))
+    var titlePosition by mutableIntStateOf(normalizeWidgetTitlePosition(initialConfig.titlePosition))
     var customTitle by mutableStateOf(initialConfig.customTitle)
     var singleLineDualMetrics by mutableStateOf(
         initialConfig.singleLineDualMetrics &&
@@ -134,6 +187,9 @@ internal class WidgetSelectionDialogState(
         initialConfig.mediaKeepPlayerForeground
     )
     var useMbCanVhal by mutableStateOf(initialConfig.useMbCanVhal)
+    var stepperAdjustIconStyle by mutableIntStateOf(
+        normalizeStepperAdjustIconStyle(initialConfig.stepperAdjustIconStyle)
+    )
     var selectedDriveMode by mutableIntStateOf(
         if (initialConfig.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
             normalizeDriveModeWidgetRawValue(initialConfig.selectedDriveMode)
@@ -151,6 +207,7 @@ internal class WidgetSelectionDialogState(
     var wholePanelShowTboxDisconnect by mutableStateOf(false)
     var wholePanelRows by mutableIntStateOf(2)
     var wholePanelCols by mutableIntStateOf(3)
+    var wholePanelGridSpacingDp by mutableIntStateOf(DEFAULT_PANEL_GRID_SPACING_DP)
     var wholePanelPageNumber by mutableIntStateOf(1)
     /** Main-screen and floating whole-panel draft for clickAction. */
     var wholePanelClickAction by mutableStateOf(false)
@@ -166,6 +223,7 @@ internal class WidgetSelectionDialogState(
         wholePanelShowTboxDisconnect = cfg.showTboxDisconnectIndicator
         wholePanelRows = cfg.rows
         wholePanelCols = cfg.cols
+        wholePanelGridSpacingDp = cfg.gridSpacingDp
         wholePanelClickAction = cfg.clickAction
         wholePanelPageNumber = cfg.pageNumber
     }
@@ -175,6 +233,7 @@ internal class WidgetSelectionDialogState(
         wholePanelShowTboxDisconnect = cfg.showTboxDisconnectIndicator
         wholePanelRows = cfg.rows
         wholePanelCols = cfg.cols
+        wholePanelGridSpacingDp = cfg.gridSpacingDp
         wholePanelClickAction = cfg.clickAction
     }
 
@@ -239,12 +298,16 @@ internal class WidgetSelectionDialogState(
         if (!WidgetsRepository.supportsUseMbCanVhal(key)) {
             useMbCanVhal = false
         }
+        if (!WidgetsRepository.supportsStepperAdjustIconStyle(key)) {
+            stepperAdjustIconStyle = STEPPER_ADJUST_ICON_PLUS_MINUS
+        }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
         }
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
         }
+        titlePosition = resolveDefaultTitlePositionForDataKey(key)
     }
 
     val isMusicWidgetSelected: Boolean
@@ -467,6 +530,14 @@ private fun MainScreenPanelWholeSettingsSection(
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
+        SettingInt(
+            value = state.wholePanelGridSpacingDp,
+            onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
+            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            description = stringResource(R.string.settings_panel_grid_spacing_desc),
+            minValue = MIN_PANEL_GRID_SPACING_DP,
+            maxValue = MAX_PANEL_GRID_SPACING_DP,
+        )
         SettingDropdownGeneric(
             state.wholePanelPageNumber,
             { state.wholePanelPageNumber = it },
@@ -530,7 +601,32 @@ private fun FloatingDashboardWholeSettingsSection(
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
+        SettingInt(
+            value = state.wholePanelGridSpacingDp,
+            onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
+            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            description = stringResource(R.string.settings_panel_grid_spacing_desc),
+            minValue = MIN_PANEL_GRID_SPACING_DP,
+            maxValue = MAX_PANEL_GRID_SPACING_DP,
+        )
     }
+}
+
+internal data class WidgetSelectionDescriptionResources(
+    val descriptionRes: Int,
+    val actionsRes: Int?,
+)
+
+internal fun resolveWidgetSelectionDescriptionResources(
+    dataKey: String,
+    selectedDataKey: String,
+): WidgetSelectionDescriptionResources? {
+    if (dataKey != selectedDataKey) return null
+    val descriptionRes = WidgetsRepository.getDescriptionResForDataKey(dataKey) ?: return null
+    return WidgetSelectionDescriptionResources(
+        descriptionRes = descriptionRes,
+        actionsRes = WidgetsRepository.getActionsDescriptionResForDataKey(dataKey),
+    )
 }
 
 @Composable
@@ -662,6 +758,30 @@ internal fun WidgetSelectionDialogForm(
                         "",
                         state.togglesEnabled
                     )
+                    if (state.showTitle) {
+                        val titlePositionEntries = listOf(
+                            WidgetTitlePositionDropdownEntry(
+                                stringResource(R.string.widget_title_position_top),
+                                WIDGET_TITLE_POSITION_TOP,
+                            ),
+                            WidgetTitlePositionDropdownEntry(
+                                stringResource(R.string.widget_title_position_bottom),
+                                WIDGET_TITLE_POSITION_BOTTOM,
+                            ),
+                        )
+                        val selectedTitlePosition = titlePositionEntries.firstOrNull {
+                            it.stored == normalizeWidgetTitlePosition(state.titlePosition)
+                        } ?: titlePositionEntries.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedTitlePosition,
+                            onValueChange = { state.titlePosition = it.stored },
+                            text = stringResource(R.string.widget_title_position_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = titlePositionEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
                     OutlinedTextField(
                         value = state.customTitle,
                         onValueChange = { state.customTitle = it },
@@ -731,7 +851,7 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_value_accuracy_desc),
                             enabled = state.togglesEnabled,
                             options = accuracyEntries,
-                            selectorWidth = 300.dp
+                            selectorWidth = WidgetDialogDropdownSelectorWidth
                         )
                     }
                     if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
@@ -790,6 +910,30 @@ internal fun WidgetSelectionDialogForm(
                             state.togglesEnabled
                         )
                     }
+                    if (WidgetsRepository.supportsStepperAdjustIconStyle(state.selectedDataKey)) {
+                        val stepperIconEntries = listOf(
+                            StepperAdjustIconStyleDropdownEntry(
+                                stringResource(R.string.widget_stepper_adjust_icon_plus_minus),
+                                STEPPER_ADJUST_ICON_PLUS_MINUS,
+                            ),
+                            StepperAdjustIconStyleDropdownEntry(
+                                stringResource(R.string.widget_stepper_adjust_icon_arrows),
+                                STEPPER_ADJUST_ICON_ARROWS,
+                            ),
+                        )
+                        val selectedStepperIconEntry = stepperIconEntries.find {
+                            it.stored == state.stepperAdjustIconStyle
+                        } ?: stepperIconEntries.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedStepperIconEntry,
+                            onValueChange = { state.stepperAdjustIconStyle = it.stored },
+                            text = stringResource(R.string.widget_stepper_adjust_icon_style_title),
+                            description = stringResource(R.string.widget_stepper_adjust_icon_style_desc),
+                            enabled = state.togglesEnabled,
+                            options = stepperIconEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
                     if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                         val selectedOption = DRIVE_MODE_WIDGET_OPTIONS.firstOrNull {
                             it.rawValue == normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
@@ -801,7 +945,7 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_drive_mode_target_desc),
                             enabled = state.togglesEnabled,
                             options = DRIVE_MODE_WIDGET_OPTIONS,
-                            selectorWidth = 220.dp
+                            selectorWidth = WidgetDialogDropdownSelectorWidth
                         )
                     }
                     if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
@@ -873,6 +1017,58 @@ internal fun WidgetSelectionDialogForm(
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
+                    val textAlignEntries = listOf(
+                        WidgetTextAlignDropdownEntry(
+                            stringResource(R.string.widget_text_align_center),
+                            WIDGET_TEXT_ALIGN_CENTER,
+                        ),
+                        WidgetTextAlignDropdownEntry(
+                            stringResource(R.string.widget_text_align_start),
+                            WIDGET_TEXT_ALIGN_START,
+                        ),
+                        WidgetTextAlignDropdownEntry(
+                            stringResource(R.string.widget_text_align_end),
+                            WIDGET_TEXT_ALIGN_END,
+                        ),
+                    )
+                    val selectedTextAlign = textAlignEntries.firstOrNull {
+                        it.stored == normalizeWidgetTextAlign(state.textAlign)
+                    } ?: textAlignEntries.first()
+                    SettingDropdownGeneric(
+                        selectedValue = selectedTextAlign,
+                        onValueChange = { state.textAlign = it.stored },
+                        text = stringResource(R.string.widget_text_align_title),
+                        description = "",
+                        enabled = state.togglesEnabled,
+                        options = textAlignEntries,
+                        selectorWidth = WidgetDialogDropdownSelectorWidth,
+                    )
+                    val fontWeightEntries = listOf(
+                        WidgetFontWeightDropdownEntry(
+                            stringResource(R.string.widget_font_weight_normal),
+                            WIDGET_FONT_WEIGHT_NORMAL,
+                        ),
+                        WidgetFontWeightDropdownEntry(
+                            stringResource(R.string.widget_font_weight_medium),
+                            WIDGET_FONT_WEIGHT_MEDIUM,
+                        ),
+                        WidgetFontWeightDropdownEntry(
+                            stringResource(R.string.widget_font_weight_semi_bold),
+                            WIDGET_FONT_WEIGHT_SEMI_BOLD,
+                        ),
+                    )
+                    val selectedFontWeight = fontWeightEntries.firstOrNull {
+                        it.stored == normalizeWidgetFontWeight(state.fontWeight)
+                    } ?: fontWeightEntries[1]
+                    SettingDropdownGeneric(
+                        selectedValue = selectedFontWeight,
+                        onValueChange = { state.fontWeight = it.stored },
+                        text = stringResource(R.string.widget_font_weight_title),
+                        description = "",
+                        enabled = state.togglesEnabled,
+                        options = fontWeightEntries,
+                        selectorWidth = WidgetDialogDropdownSelectorWidth,
+                    )
                     WidgetColorThemeSegmentRow(
                         selectedSegment = state.advancedColorThemeSegment,
                         onSegmentSelected = { state.advancedColorThemeSegment = it },
@@ -951,8 +1147,18 @@ internal fun WidgetSelectionDialogForm(
                     val needle = dataKeyFilterText.trim().lowercase()
                     fun optionMatches(pair: Pair<String, String>): Boolean {
                         if (needle.isEmpty()) return true
+                        val description = WidgetsRepository
+                            .getDescriptionResForDataKey(pair.first)
+                            ?.let(context::getString)
+                            .orEmpty()
+                        val actions = WidgetsRepository
+                            .getActionsDescriptionResForDataKey(pair.first)
+                            ?.let(context::getString)
+                            .orEmpty()
                         return pair.second.lowercase().contains(needle) ||
-                            pair.first.lowercase().contains(needle)
+                            pair.first.lowercase().contains(needle) ||
+                            description.lowercase().contains(needle) ||
+                            actions.lowercase().contains(needle)
                     }
                     val selectedPair = widgetPairs.find { it.first == initialListSelectedKey }
                     val filteredTileOptions = buildList {
@@ -991,28 +1197,61 @@ internal fun WidgetSelectionDialogForm(
                     filteredTileOptions.forEach { (key, displayName) ->
                         key(key) {
                             val selectKey = rememberWrappedOnClick { state.applySelectedDataKey(key) }
-                            Row(
+                            val selected = state.selectedDataKey == key
+                            val descriptionResources = resolveWidgetSelectionDescriptionResources(
+                                dataKey = key,
+                                selectedDataKey = state.selectedDataKey,
+                            )
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickableWithSound {
                                         state.applySelectedDataKey(key)
                                     }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 8.dp)
                             ) {
-                                RadioButton(
-                                    selected = state.selectedDataKey == key,
-                                    onClick = selectKey
-                                )
-                                Text(
-                                    text = displayName,
-                                    style = MaterialTheme.typography.tboxTitle,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .weight(1f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = selected,
+                                        onClick = selectKey
+                                    )
+                                    Text(
+                                        text = displayName,
+                                        style = MaterialTheme.typography.tboxTitle,
+                                        modifier = Modifier
+                                            .padding(start = 8.dp)
+                                            .weight(1f),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                if (descriptionResources != null) {
+                                    Text(
+                                        text = stringResource(descriptionResources.descriptionRes),
+                                        style = MaterialTheme.typography.tboxBody,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 56.dp, end = 8.dp)
+                                    )
+                                    val actionsRes = descriptionResources.actionsRes
+                                    if (actionsRes != null) {
+                                        Text(
+                                            text = stringResource(
+                                                R.string.widget_actions_template,
+                                                stringResource(actionsRes)
+                                            ),
+                                            style = MaterialTheme.typography.tboxCaption,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(
+                                                start = 56.dp,
+                                                top = 4.dp,
+                                                end = 8.dp
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1295,6 +1534,11 @@ internal fun applyWidgetSelectionChanges(
             },
             useMbCanVhal = WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey) &&
                 state.useMbCanVhal,
+            stepperAdjustIconStyle = if (WidgetsRepository.supportsStepperAdjustIconStyle(state.selectedDataKey)) {
+                normalizeStepperAdjustIconStyle(state.stepperAdjustIconStyle)
+            } else {
+                STEPPER_ADJUST_ICON_PLUS_MINUS
+            },
             tileBackgroundImageRelPathLight = state.tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },
@@ -1313,6 +1557,9 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
             },
+            textAlign = normalizeWidgetTextAlign(state.textAlign),
+            fontWeight = normalizeWidgetFontWeight(state.fontWeight),
+            titlePosition = normalizeWidgetTitlePosition(state.titlePosition),
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
@@ -1340,6 +1587,7 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
         clickAction = state.wholePanelClickAction,
         pageNumber = state.wholePanelPageNumber,
+        gridSpacingDp = normalizePanelGridSpacingDp(state.wholePanelGridSpacingDp),
     )
 }
 
@@ -1352,7 +1600,8 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
         rows = state.wholePanelRows,
         cols = state.wholePanelCols,
         showTboxDisconnectIndicator = state.wholePanelShowTboxDisconnect,
-        clickAction = state.wholePanelClickAction
+        clickAction = state.wholePanelClickAction,
+        gridSpacingDp = normalizePanelGridSpacingDp(state.wholePanelGridSpacingDp),
     )
 }
 

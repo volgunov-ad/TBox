@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.SystemClock
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.MainActivityIntentHelper
+import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
 private val steeringHeatToggleLock = Any()
@@ -34,6 +35,9 @@ private var hvacAutoToggleBlockedUntilMs = 0L
 
 private val hvacDefrosterFrontToggleLock = Any()
 private var hvacDefrosterFrontToggleBlockedUntilMs = 0L
+
+private val hvacSyncToggleLock = Any()
+private var hvacSyncToggleBlockedUntilMs = 0L
 
 internal fun launchAppFromWidget(context: Context, packageName: String) {
     if (packageName.isBlank()) return
@@ -311,6 +315,38 @@ internal fun sendToggleHvacDefrosterFront(context: Context) {
     } catch (_: Exception) {
     }
 }
+
+internal fun sendToggleHvacSync(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacSyncToggleLock) {
+        if (now < hvacSyncToggleBlockedUntilMs) return
+        hvacSyncToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleMirrorAdjustMode(context: Context) {
+    try {
+        MirrorAdjustModeRepository.toggleMirrorAdjustMode(context)
+    } catch (_: Exception) {
+    }
+}
+
 
 internal fun sendSetMbCanProperty(context: Context, propertyId: Int, value: Int) {
     try {

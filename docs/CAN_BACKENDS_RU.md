@@ -33,9 +33,11 @@
 
 Где применяется:
 
-- при старте приложения (`TboxApplication`) режим считывается и передаётся в `UniversalCanRepository.setMode(...)`;
-- в `BackgroundService` режим также синхронизируется, чтобы фоновые операции шли через правильный backend;
-- в UI переключатель находится в настройках (две кнопки: Android 9 / Android 10).
+- `TboxApplication` и UI настроек подписываются на `headUnitCanModeFlow` и вызывают `UniversalCanRepository.setMode(...)`;
+- **`bind()` и автоfallback `autoResolveModeOnStartup()` выполняются в `BackgroundService.onCreate`** — только там поднимается реальное подключение к mbCAN/VHAL;
+- в UI переключатель находится в настройках (две кнопки: Android 9 / Android 10);
+- `can_auto_bind_enabled` по умолчанию **включён** (отдельного переключателя в UI нет);
+- если режим в DataStore не задан, используется **Android 9 (mbCAN)**.
 
 Поведение при переключении:
 
@@ -85,14 +87,22 @@
   `value` — целевая громкость.
 - `autoResolveModeOnStartup(settingsManager: SettingsManager, scope: CoroutineScope)`  
   выполняет автоfallback `3+3` на старте.
+- `enqueueClearSource(sourceId: String)`  
+  снимает интересы источника с debounce **3 минуты** (одинаково в обоих backend).
+- `widgetConfigsNeedMbCan(dataKeys: Set<String>)`  
+  проверяет, нужны ли mbCAN/VHAL для набора `dataKey` плиток.
+
+Операции `setSourceWidgetKeys`, `setSourceSignals`, `execute`, `setAudioVolume` **не** сериализуются `modeSwitchMutex` — только переключение режима и bind/unbind.
 
 ---
 
 ## 3) Как работает Android 9 backend (`MbCanRepository`)
 
+Доступ к vendor API идёт через **reflection** (`MbCanEngineFacade`), а не через прямой compile-time import классов mbCAN.
+
 Логика:
 
-1. `bind(...)` подключает mbCAN-движок.
+1. `bind(...)` проверяет наличие классов mbCAN (`probeAvailability` → `Unknown` до первой инициализации).
 2. Подписки/источники сигналов управляют, какие данные нужно обновлять.
 3. Чтение параметров идёт через mbCAN API (`canGet...`).
 4. Запись команд идёт через mbCAN API (`canSet...`) с политиками допустимых значений из `MbCanCommandRegistry`.
@@ -156,19 +166,19 @@
 
 ### 4.1 Подключение к Car/VHAL
 
-Используется схема, совместимая со штатными приложениями прошивки:
+Используется схема, совместимая со штатными приложениями прошивки. В коде доступ к `Car` / `CarPropertyManager` идёт через **reflection** (`CarPropertyBridge`), чтобы не зависеть от compile SDK с полным Android Car API.
 
 - `Car.createCar(Context, ServiceConnection)` (основной путь),
 - `car.connect()`,
-- ожидание `onServiceConnected`,
-- получение `CarPropertyManager` через `getCarManager(Car.PROPERTY_SERVICE)`.
+- ожидание `onServiceConnected` (таймаут ожидания **2,5 с**),
+- получение property manager через `getCarManager("property")` (до **20** повторов по 100 ms).
 
 Функции/аргументы подключения:
 
 - `Car.createCar(context: Context, serviceConnection: ServiceConnection)`
 - `car.connect()` / `car.disconnect()`
-- `car.getCarManager(serviceName: String)`  
-  `serviceName` обычно `Car.PROPERTY_SERVICE` (`"property"`).
+- `getCarManager(serviceName: String)`  
+  `serviceName` = `"property"` (`Car.PROPERTY_SERVICE`).
 
 Если подключение не удалось:
 
@@ -180,8 +190,12 @@
 - backend отслеживает активные источники сигналов;
 - при наличии источников запускается polling-цикл (`POLL_INTERVAL_MS`);
 - для каждого сигнала вызывается `refreshSignal(...)`;
-- чтение делается через `CarPropertyManager.getIntProperty(propertyId, areaId=0)`.
-- для RPM в VHAL используется `propertyId = 291504901` (`ENGINE_RPM`).
+- чтение делается через reflective `getIntProperty` / `getFloatProperty(propertyId, areaId=0)`.
+- для **RPM, температуры и скорости** используются **фиксированные firmware ID** из `FirmwareVehicleJsonMapper`, а не стандартные `VehiclePropertyIds`:
+  - RPM: `289_414_951` (`R_0900_EMS_1_EngineSpd`), после чтения умножается на **4** (`VHAL_ENGINE_RPM_SCALE`);
+  - температура: `289_414_949`;
+  - скорость: `289_414_964`.
+- Справочная копия стандартных ID: `docs/reference/VehiclePropertyIds.java` — для команд управления, не для этой телеметрии.
 
 Ключевые вызовы чтения/записи:
 
@@ -252,9 +266,9 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 Источники ID:
 
-- VHAL ID берутся из `android.car.VehiclePropertyIds` штатной прошивки.
-  - локальная reference-копия в проекте: `docs/reference/VehiclePropertyIds.java`
-  - исходный файл: `D:\Dashing\CarSettings\sources\android\car\VehiclePropertyIds.java`
+- **Команды записи/чтения настроек** — явные таблицы `explicitWriteIdMap` / `explicitReadIdMap` и membership в `send.json` / `receive.json` прошивки; reference: `docs/reference/VehiclePropertyIds.java`.
+- **Телеметрия RPM/температура/скорость** — константы в `FirmwareVehicleJsonMapper` (см. §4.2), не из `VehiclePropertyIds.ENGINE_RPM` (`291504901`).
+- Эвристического «угадывания» семантики по числу ID **нет** — только явный map или попадание в таблицы прошивки.
 - mbCAN ID берутся из vendor-библиотеки `com.mengbo.mbCan`:
   - `com.mengbo.mbCan.defines.*` (типы/enum/константы),
   - `com.mengbo.mbCan.entity.*` (структуры данных, например `MBCanVehicleEngine`),
@@ -299,7 +313,7 @@ Polling остаётся fallback-механизмом: даже при push-с�
 1. Пользователь выбирает режим ГУ в настройках.
 2. `SettingsManager` публикует режим.
 3. `UniversalCanRepository` переключает backend.
-4. UI/Service выставляют набор интересующих сигналов.
+4. UI/Service выставляют набор интересующих сигналов (`setSourceWidgetKeys` с панелей, `setSourceSignals` из настроек авто и `DriveModeThemeWatcher`).
 5. Backend читает/пишет данные:
    - Android 9: mbCAN API,
    - Android 10: VHAL (`CarPropertyManager`) с firmware mapping.

@@ -1,12 +1,13 @@
 package vad.dashing.tbox
 
 import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import java.util.Locale
-import java.util.Date
+import vad.dashing.tbox.utils.InOutTemperatureNullDebounce
 
 
 data class Wheels(
@@ -157,9 +158,11 @@ object CanDataRepository {
 
     private val _outsideTemperature = MutableStateFlow<Float?>(null)
     val outsideTemperature: StateFlow<Float?> = _outsideTemperature.asStateFlow()
+    private var outsideTemperatureLastTimeNotNull: Long? = null
 
     private val _insideTemperature = MutableStateFlow<Float?>(null)
     val insideTemperature: StateFlow<Float?> = _insideTemperature.asStateFlow()
+    private var insideTemperatureLastTimeNotNull: Long? = null
 
     private val _outsideAirQuality = MutableStateFlow<UInt?>(null)
     val outsideAirQuality: StateFlow<UInt?> = _outsideAirQuality.asStateFlow()
@@ -348,8 +351,47 @@ object CanDataRepository {
         _outsideTemperature.setIfChanged(newValue)
     }
 
+    fun applyOutsideTemperatureFromCan(
+        decodedCelsius: Float,
+        now: Long,
+        nullDebounceMs: Long = InOutTemperatureNullDebounce.DEFAULT_NULL_DEBOUNCE_MS,
+    ) {
+        val resolved = InOutTemperatureNullDebounce.resolveAfterProbe(
+            current = _outsideTemperature.value,
+            lastTimeNotNull = outsideTemperatureLastTimeNotNull,
+            decodedCelsius = decodedCelsius,
+            now = now,
+            debounceMs = nullDebounceMs,
+        )
+        outsideTemperatureLastTimeNotNull = resolved.lastTimeNotNull
+        _outsideTemperature.setIfChanged(resolved.value)
+    }
+
     fun updateInsideTemperature(newValue: Float?) {
         _insideTemperature.setIfChanged(newValue)
+    }
+
+    fun applyInsideTemperatureFromCan(
+        decodedCelsius: Float,
+        now: Long,
+        nullDebounceMs: Long = InOutTemperatureNullDebounce.DEFAULT_NULL_DEBOUNCE_MS,
+    ) {
+        val resolved = InOutTemperatureNullDebounce.resolveAfterProbe(
+            current = _insideTemperature.value,
+            lastTimeNotNull = insideTemperatureLastTimeNotNull,
+            decodedCelsius = decodedCelsius,
+            now = now,
+            debounceMs = nullDebounceMs,
+        )
+        insideTemperatureLastTimeNotNull = resolved.lastTimeNotNull
+        _insideTemperature.setIfChanged(resolved.value)
+    }
+
+    internal fun resetInOutTemperatureStateForTest() {
+        outsideTemperatureLastTimeNotNull = null
+        insideTemperatureLastTimeNotNull = null
+        _outsideTemperature.value = null
+        _insideTemperature.value = null
     }
 
     fun updateOutsideAirQuality(newValue: UInt?) {

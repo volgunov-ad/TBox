@@ -124,13 +124,15 @@ class UpdateRepository(
         }
         downloadInProgress = true
         lastAvailableInfo = info
+        withContext(Dispatchers.IO) {
+            prepareForDownload()
+        }
         _uiState.value = UpdateUiState.Downloading(UpdateDownloadProgress())
         try {
             val channel = settingsManager.updateChannelFlow.first()
             val publicKey = publicKeyForChannel(channel)
             val destination = apkDestinationFile(info)
             withContext(Dispatchers.IO) {
-                clearCachedApk()
                 val startedAtNanos = System.nanoTime()
                 yandexDiskClient.downloadToFile(
                     publicKey = publicKey,
@@ -168,12 +170,14 @@ class UpdateRepository(
             lastAvailableInfo = infoWithSize
             _uiState.value = UpdateUiState.ReadyToInstall(destination, infoWithSize)
         } catch (error: CancellationException) {
-            preparedApkFile = null
-            clearCachedApk()
+            withContext(Dispatchers.IO) {
+                prepareForDownload()
+            }
             _uiState.value = UpdateUiState.Available(info)
         } catch (error: Exception) {
-            preparedApkFile?.takeIf { it.exists() }?.delete()
-            preparedApkFile = null
+            withContext(Dispatchers.IO) {
+                prepareForDownload()
+            }
             _uiState.value = UpdateUiState.Error(
                 message = error.message ?: error.javaClass.simpleName,
                 cachedInfo = info,
@@ -186,8 +190,7 @@ class UpdateRepository(
     fun cancelDownload() {
         if (_uiState.value !is UpdateUiState.Downloading) return
         val info = lastAvailableInfo
-        preparedApkFile = null
-        clearCachedApk()
+        prepareForDownload()
         _uiState.value = if (info != null) {
             UpdateUiState.Available(info)
         } else {
@@ -331,12 +334,13 @@ class UpdateRepository(
         }
     }
 
+    private fun prepareForDownload() {
+        preparedApkFile = null
+        clearCachedApk()
+    }
+
     private fun clearCachedApk() {
-        val dir = File(context.cacheDir, "updates")
-        if (!dir.exists()) return
-        dir.listFiles()?.forEach { file ->
-            file.delete()
-        }
+        clearUpdateDownloadCache(context)
     }
 
     private fun isNetworkAvailable(): Boolean {
@@ -346,5 +350,13 @@ class UpdateRepository(
         val network = connectivityManager.activeNetwork ?: return false
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+}
+
+internal fun clearUpdateDownloadCache(context: Context) {
+    val dir = File(context.cacheDir, "updates")
+    if (!dir.exists()) return
+    dir.listFiles()?.forEach { file ->
+        file.delete()
     }
 }

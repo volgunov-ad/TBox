@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -36,16 +37,19 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DEFAULT_WIDGET_SCALE
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.normalizeWidgetScale
+import vad.dashing.tbox.normalizeWidgetTitlePosition
+import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
+import vad.dashing.tbox.ui.theme.LocalTboxTextStyles
 import vad.dashing.tbox.ui.theme.TboxWidgetTextRole
 import vad.dashing.tbox.ui.theme.TboxWidgetTypography
-import vad.dashing.tbox.ui.theme.tboxBody
-import vad.dashing.tbox.ui.theme.tboxCaption
-import vad.dashing.tbox.ui.theme.tboxTitle
 import kotlin.math.abs
 
 val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
+val LocalWidgetTextAlign = staticCompositionLocalOf { TextAlign.Center }
+val LocalWidgetFontWeight = staticCompositionLocalOf { FontWeight.Medium }
+val LocalWidgetTitlePosition = staticCompositionLocalOf { 0 }
 
 @Composable
 fun DashboardWidgetItem(
@@ -122,9 +126,11 @@ fun DashboardWidgetItem(
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = widgetColumnHorizontalAlignment(LocalWidgetTextAlign.current)
         ) {
-            if (title && !onlyText) {
+            val titleAtBottom =
+                normalizeWidgetTitlePosition(LocalWidgetTitlePosition.current) == WIDGET_TITLE_POSITION_BOTTOM
+            if (title && !onlyText && !titleAtBottom) {
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE,
@@ -133,7 +139,7 @@ fun DashboardWidgetItem(
                     text = displayTitle,
                     style = titleStyle,
                     color = resolvedTextColor,
-                    textAlign = TextAlign.Center,
+                    textAlign = LocalWidgetTextAlign.current,
                     maxLines = 2,
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis,
@@ -157,7 +163,7 @@ fun DashboardWidgetItem(
                 text = "$valueString\u2009${if (units && !onlyText) widget.unit.replace("/", "\u2060/\u2060") else ""}",
                 style = valueStyle,
                 color = resolvedTextColor,
-                textAlign = TextAlign.Center,
+                textAlign = LocalWidgetTextAlign.current,
                 maxLines = 2,
                 softWrap = true,
                 overflow = TextOverflow.Ellipsis,
@@ -167,6 +173,25 @@ fun DashboardWidgetItem(
                     .wrapContentHeight(Alignment.CenterVertically)
             )
 
+            if (title && !onlyText && titleAtBottom) {
+                val titleStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE,
+                )
+                Text(
+                    text = displayTitle,
+                    style = titleStyle,
+                    color = resolvedTextColor,
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 2,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically)
+                )
+            }
+
             /*if (units && !onlyText) {
                 Text(
                     text = widget.unit,
@@ -175,7 +200,7 @@ fun DashboardWidgetItem(
                         textType = TextType.UNIT
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
+                    textAlign = LocalWidgetTextAlign.current,
                     maxLines = 2,
                     softWrap = true,
                     overflow = TextOverflow.Ellipsis,
@@ -189,13 +214,14 @@ fun DashboardWidgetItem(
     }
 }
 
-/** Title row aligned with dual-metric widgets (e.g. [DashboardFuelLevelWidgetItem]) when [showTitle] is true. */
+/** Title row aligned with dual-metric widgets when [showTitle] is true. */
 @Composable
 fun ColumnScope.DashboardWidgetTitleRowIfVisible(
     showTitle: Boolean,
     titleText: String,
     availableHeight: Dp,
     resolvedTextColor: Color,
+    modifier: Modifier = Modifier,
 ) {
     if (!showTitle) return
     val titleStyle = calculateResponsiveTextStyle(
@@ -204,17 +230,60 @@ fun ColumnScope.DashboardWidgetTitleRowIfVisible(
     )
     Text(
         text = titleText,
-        modifier = Modifier
-            .weight(1f)
+        modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight(Alignment.CenterVertically),
         style = titleStyle,
         color = resolvedTextColor,
-        textAlign = TextAlign.Center,
+        textAlign = LocalWidgetTextAlign.current,
         maxLines = 2,
         softWrap = true,
         overflow = TextOverflow.Ellipsis
     )
+}
+
+/**
+ * Lays out optional title above or below [content] per [LocalWidgetTitlePosition].
+ * [content] receives a [Modifier] with [contentWeight] when a top title is shown.
+ */
+@Composable
+fun DashboardWidgetContentWithOptionalTitle(
+    showTitle: Boolean,
+    titleText: String,
+    availableHeight: Dp,
+    resolvedTextColor: Color,
+    titleWeight: Float = 1f,
+    contentWeight: Float = 2f,
+    modifier: Modifier = Modifier,
+    verticalArrangement: Arrangement.Vertical = Arrangement.Center,
+    content: @Composable ColumnScope.(Modifier) -> Unit,
+) {
+    val titleAtBottom =
+        normalizeWidgetTitlePosition(LocalWidgetTitlePosition.current) == WIDGET_TITLE_POSITION_BOTTOM
+    Column(
+        modifier = modifier,
+        verticalArrangement = verticalArrangement,
+        horizontalAlignment = widgetColumnHorizontalAlignment(LocalWidgetTextAlign.current),
+    ) {
+        if (showTitle && !titleAtBottom) {
+            DashboardWidgetTitleRowIfVisible(
+                showTitle = true,
+                titleText = titleText,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor,
+                modifier = Modifier.weight(titleWeight),
+            )
+        }
+        content(Modifier.weight(contentWeight))
+        if (showTitle && titleAtBottom) {
+            DashboardWidgetTitleRowIfVisible(
+                showTitle = true,
+                titleText = titleText,
+                availableHeight = availableHeight,
+                resolvedTextColor = resolvedTextColor,
+            )
+        }
+    }
 }
 
 @Composable
@@ -224,17 +293,18 @@ fun calculateResponsiveTextStyle(
 ): TextStyle {
     val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
     val role = textType.toWidgetRole()
+    val styles = LocalTboxTextStyles.current
     val baseStyle = when (role) {
-        TboxWidgetTextRole.TITLE -> MaterialTheme.typography.tboxTitle
-        TboxWidgetTextRole.VALUE -> MaterialTheme.typography.tboxBody
-        TboxWidgetTextRole.UNIT -> MaterialTheme.typography.tboxCaption
+        TboxWidgetTextRole.TITLE -> styles.WidgetTitle
+        TboxWidgetTextRole.VALUE -> styles.WidgetValue
+        TboxWidgetTextRole.UNIT -> styles.WidgetUnit
     }
     return TboxWidgetTypography.textStyleForHeight(
         containerHeightDp = containerHeight.value,
         role = role,
         baseStyle = baseStyle,
         textScale = textScale,
-    )
+    ).copy(fontWeight = LocalWidgetFontWeight.current)
 }
 
 @Composable

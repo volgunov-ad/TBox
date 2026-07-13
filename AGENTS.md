@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-This is an Android application (**TBox Monitor** for Jetour Dashing, v0.16.0). There is no server backend, web frontend, or external database — it is a single-module Gradle project (`:app`) producing an APK. Vehicle data comes from the TBox module (UDP via **tbox-proxy**) and from the head unit CAN stack (**mbCAN** on Android 9 or **VHAL** on Android 10).
+This is an Android application (**TBox Monitor** for Jetour Dashing, v0.16.1). There is no server backend, web frontend, or external database — it is a single-module Gradle project (`:app`) producing an APK. Vehicle data comes from the TBox module (UDP via **tbox-proxy**) and from the head unit CAN stack (**mbCAN** on Android 9 or **VHAL** on Android 10).
 
 ### Key subsystems
 
@@ -12,8 +12,8 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v0.16.0). T
 | **Refuels & fuel calibration** | `fuel/`, `fuellevelcalibration/`, `utils/CanFramesProcess.kt` | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) |
 | **Themes** (`.tboxtheme`) | `Theme*.kt`, `DriveModeThemeWatcher`, `ui/ThemesTabContent.kt` | [docs/Themes.md](docs/Themes.md) |
 | **CAN backends** | `mbcan/UniversalCanRepository.kt`, `HeadUnitCanMode.kt` | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) |
-| **TBox / network** | `TboxRepository`, `BackgroundService`, `TboxProtocol` | [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) |
-| **Dashboard / widgets** | `ui/Dashboard*.kt`, `WidgetConfigCodec.kt` | [README.md](README.md) |
+| **TBox / network** | `TboxRepository`, `BackgroundService`, `TboxProtocol` | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md), [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) |
+| **Dashboard / widgets** | `ui/Dashboard*.kt`, `WidgetConfigCodec.kt` | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
 
 Trips and refuels are tightly coupled: filtered fuel % and calibrated liters are computed **only during an active trip** (`CanFramesProcess` gate); refuel records are created inside `BackgroundService.applyActiveTripFuelStep`.
 
@@ -48,6 +48,10 @@ Build commands use the Gradle wrapper. Two product flavors exist: `ru` (Russian)
 ### Tools
 
 - `tools/can_log_to_xlsx.py` — converts app CAN export (`.txt`) to Excel using the same decode rules as `CanFramesProcess.kt`. Requires Python deps from `requirements.txt`.
+
+### Git branches
+
+Use **`preRelease`** for pre-release integration; merge to **`master`** when ready to ship. Feature branches branch off `preRelease`, not `master`. See [docs/BRANCHING.md](docs/BRANCHING.md).
 
 ### Caveats
 

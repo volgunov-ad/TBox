@@ -259,6 +259,9 @@ object ThemeLayoutExport {
                 JSONObject().apply {
                     put("rows", panel.rows)
                     put("cols", panel.cols)
+                    if (panel.gridSpacingDp != DEFAULT_PANEL_GRID_SPACING_DP) {
+                        put("spacingDp", panel.gridSpacingDp)
+                    }
                 },
             )
             o.put(
@@ -297,6 +300,9 @@ object ThemeLayoutExport {
                 JSONObject().apply {
                     put("rows", panel.rows)
                     put("cols", panel.cols)
+                    if (panel.gridSpacingDp != DEFAULT_PANEL_GRID_SPACING_DP) {
+                        put("spacingDp", panel.gridSpacingDp)
+                    }
                 },
             )
             o.put("width", panel.width)
@@ -448,6 +454,10 @@ object ThemeLayoutExport {
                         o.optInt("pageNumber", SettingsManager.DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER),
                         pageCount,
                     ),
+                    gridSpacingDp = normalizePanelGridSpacingDp(
+                        grid?.optInt("spacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
+                            ?: DEFAULT_PANEL_GRID_SPACING_DP
+                    ),
                 ),
             )
         }
@@ -485,6 +495,10 @@ object ThemeLayoutExport {
                     background = o.optBoolean("background", false),
                     clickAction = o.optBoolean("clickAction", true),
                     showTboxDisconnectIndicator = o.optBoolean("showTboxDisconnectIndicator", true),
+                    gridSpacingDp = normalizePanelGridSpacingDp(
+                        grid?.optInt("spacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
+                            ?: DEFAULT_PANEL_GRID_SPACING_DP
+                    ),
                 ),
             )
         }

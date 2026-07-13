@@ -299,6 +299,7 @@ fun RefuelsTab(
                     description = "",
                     enabled = true,
                     options = FuelTypes.options,
+                    selectorWidth = 200.dp
                 )
                 CalibrationIntCommitField(
                     title = stringResource(R.string.settings_fuel_tank_liters_title),
@@ -577,7 +578,7 @@ private fun RefuelTableRow(
                     OutlinedButton(onClick = rememberWrappedOnClick(onRequestTrainCalibration)) {
                         Text(
                             stringResource(R.string.refuels_calibration_train),
-                            style = MaterialTheme.typography.tboxCaption,
+                            style = MaterialTheme.typography.tboxButton,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )

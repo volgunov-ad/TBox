@@ -145,15 +145,16 @@ private fun MainScreenWallpaperFolderContent(
     LaunchedEffect(sortedNames.size) {
         onWallpaperCountChanged(sortedNames.size)
     }
-    val savedForPage = wallpaperSelections.fileNameFor(currentMainScreenPage, forLightTheme)
-    val effectiveName = remember(sortedNames, displayedFileName, savedForPage, forLightTheme) {
+    val savedForPage = wallpaperSelections.fileNameForCurrentOrAnyPage(currentMainScreenPage, forLightTheme)
+    val effectiveName = remember(sortedNames, displayedFileName, savedForPage, forLightTheme, wallpaperSelections) {
         if (sortedNames.isEmpty()) {
             null
         } else {
             when {
                 savedForPage != null -> effectiveWallpaperFileName(sortedNames, savedForPage)
                 displayedFileName != null -> effectiveWallpaperFileName(sortedNames, displayedFileName!!)
-                else -> effectiveWallpaperFileName(sortedNames, "")
+                wallpaperSelections.isEmpty() -> effectiveWallpaperFileName(sortedNames, "")
+                else -> null
             }
         }
     }
@@ -184,6 +185,8 @@ private fun MainScreenWallpaperFolderContent(
             val currentMainScreenPageState by rememberUpdatedState(currentMainScreenPage)
             val effectiveNameState by rememberUpdatedState(effectiveName)
             val targetIdxState by rememberUpdatedState(targetIdx)
+            val savedForPageState by rememberUpdatedState(savedForPage)
+            val wallpaperSelectionsState by rememberUpdatedState(wallpaperSelections)
             LaunchedEffect(themeActivating) {
                 if (themeActivating) {
                     prefetchGeneration += 1
@@ -298,7 +301,7 @@ private fun MainScreenWallpaperFolderContent(
                         wallpaperController.stepWallpaper = null
                     }
                 }
-                LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey, forLightTheme, themeActivating, activeThemeUri) {
+                LaunchedEffect(targetIdx, currentMainScreenPage, folderUriStr, wallpaperNamesKey, forLightTheme, themeActivating, activeThemeUri, savedForPage) {
                     if (themeActivating || wallpaperCount <= 0) return@LaunchedEffect
                     val wantPage = mainScreenWallpaperPagerPageForLogicalIndex(targetIdx, wallpaperCount)
                     if (wantPage !in 0 until pagerPageCount) return@LaunchedEffect
@@ -309,7 +312,12 @@ private fun MainScreenWallpaperFolderContent(
                         runCatching { pagerState.scrollToPage(wantPage) }
                         wallpaperScrollIsProgrammatic = false
                     }
-                    if (logicalIndexFromMainScreenWallpaperPagerPage(pagerState.settledPage, wallpaperCount) == targetIdx) {
+                    val settledLogical = logicalIndexFromMainScreenWallpaperPagerPage(
+                        pagerState.settledPage,
+                        wallpaperCount,
+                    )
+                    val settledName = settledLogical?.let { sortedNames.getOrNull(it) }
+                    if (savedForPage != null && settledName == savedForPage) {
                         suppressWallpaperSave = false
                     }
                 }
@@ -377,7 +385,12 @@ private fun MainScreenWallpaperFolderContent(
                             val name = sortedNames[logical]
                             displayedFileName = name
                             if (suppressWallpaperSave) {
-                                if (logical == targetIdxState) {
+                                val saved = savedForPageState
+                                    ?: wallpaperSelectionsState.fileNameFor(
+                                        currentMainScreenPageState,
+                                        forLightTheme,
+                                    )
+                                if (saved != null && name == saved) {
                                     suppressWallpaperSave = false
                                 }
                                 return@collectLatest

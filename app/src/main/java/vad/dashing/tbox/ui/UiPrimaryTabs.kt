@@ -48,6 +48,8 @@ import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.update.UpdateChannel
@@ -92,7 +94,7 @@ fun ModemTabContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
             item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
@@ -274,6 +276,7 @@ fun SettingsTabContent(
 
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
+    val dashboardGridSpacingDp by settingsViewModel.dashboardGridSpacingDp.collectAsStateWithLifecycle()
     val dashboardChart by settingsViewModel.dashboardChart.collectAsStateWithLifecycle()
 
     val canDataSaveCount by settingsViewModel.canDataSaveCount.collectAsStateWithLifecycle()
@@ -551,6 +554,14 @@ fun SettingsTabContent(
             true,
             SettingsManager.MAIN_TAB_DASHBOARD_GRID_OPTIONS
         )
+        SettingInt(
+            value = dashboardGridSpacingDp,
+            onValueChange = { settingsViewModel.saveDashboardGridSpacingDp(it) },
+            text = stringResource(R.string.settings_dashboard_grid_spacing_title),
+            description = stringResource(R.string.settings_dashboard_grid_spacing_desc),
+            minValue = MIN_PANEL_GRID_SPACING_DP,
+            maxValue = MAX_PANEL_GRID_SPACING_DP,
+        )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
@@ -579,7 +590,7 @@ fun SettingsTabContent(
             onClick = rememberWrappedOnClick { showLeftMenuConfigDialog = true },
             modifier = Modifier.padding(bottom = 8.dp),
         ) {
-            Text(stringResource(R.string.settings_left_menu_edit), style = MaterialTheme.typography.tboxTitle)
+            Text(stringResource(R.string.settings_left_menu_edit), style = MaterialTheme.typography.tboxButton)
         }
         SettingAppFontFamily(
             selectedFontFamilyId = appFontFamilyId,
@@ -888,7 +899,7 @@ fun SettingsTabContent(
         ) {
             Text(
                 text = stringResource(R.string.button_restart_background_service),
-                style = MaterialTheme.typography.tboxTitle,
+                style = MaterialTheme.typography.tboxButton,
                 maxLines = 2,
                 textAlign = TextAlign.Center,
             )
@@ -913,7 +924,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_tbox),
-                    style = MaterialTheme.typography.tboxTitle,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -936,7 +947,7 @@ fun SettingsTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.button_reboot_hu),
-                    style = MaterialTheme.typography.tboxTitle,
+                    style = MaterialTheme.typography.tboxButton,
                     maxLines = 2,
                     textAlign = TextAlign.Center
                 )
@@ -1011,7 +1022,7 @@ fun FloatingPanelsSettingsTabContent(
                 },
                 modifier = Modifier.padding(bottom = 8.dp),
             ) {
-                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxTitle)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxButton)
             }
         }
         SettingSwitch(
@@ -1234,7 +1245,7 @@ fun LocationTabContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
             item { StatusRow(stringResource(R.string.location_last_update), lastRefresh) }
@@ -1276,7 +1287,7 @@ fun LocationTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.location_button_resume_loc),
-                    style = MaterialTheme.typography.tboxCaption,
+                    style = MaterialTheme.typography.tboxButton,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -1296,7 +1307,7 @@ fun LocationTabContent(
             ) {
                 Text(
                     text = stringResource(R.string.location_button_suspend_loc),
-                    style = MaterialTheme.typography.tboxCaption,
+                    style = MaterialTheme.typography.tboxButton,
                     textAlign = TextAlign.Center,
                 )
             }
@@ -1417,7 +1428,7 @@ fun InfoTabContent(
                     ) {
                         Text(
                             text = stringResource(R.string.button_request_tbox_info),
-                            style = MaterialTheme.typography.tboxTitle,
+                            style = MaterialTheme.typography.tboxButton,
                             maxLines = 2,
                             textAlign = TextAlign.Center
                         )

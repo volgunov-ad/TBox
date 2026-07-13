@@ -1,6 +1,7 @@
 package vad.dashing.tbox.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -27,17 +28,26 @@ class TboxTextStyleSet internal constructor(
     val Title: TextStyle,
     val Headline: TextStyle,
     val TabLabel: TextStyle,
+    val WidgetTitle: TextStyle,
+    val WidgetValue: TextStyle,
+    val WidgetUnit: TextStyle,
 )
 
 fun tboxTextStyles(fontFamily: FontFamily = FontFamily.Default): TboxTextStyleSet =
     TboxTextStyleSet(
-        Caption = tboxTextStyle(fontFamily, FontWeight.Normal, 18.sp, 23.4.sp),
-        Body = tboxTextStyle(fontFamily, FontWeight.Normal, 20.sp, 26.sp),
-        Button = tboxTextStyle(fontFamily, FontWeight.Normal, 22.sp, 28.6.sp),
-        Title = tboxTextStyle(fontFamily, FontWeight.Normal, 24.sp, 31.2.sp),
-        Headline = tboxTextStyle(fontFamily, FontWeight.Normal, 26.sp, 33.8.sp),
+        Caption = tboxTextStyle(fontFamily, FontWeight.Normal, 20.sp, 26.sp),
+        Body = tboxTextStyle(fontFamily, FontWeight.Normal, 24.sp, 31.2.sp),
+        Button = tboxTextStyle(fontFamily, FontWeight.Normal, 24.sp, 31.2.sp),
+        Title = tboxTextStyle(fontFamily, FontWeight.Medium, 26.sp, 33.8.sp),
+        Headline = tboxTextStyle(fontFamily, FontWeight.Medium, 28.sp, 36.4.sp),
         TabLabel = tboxTextStyle(fontFamily, FontWeight.Normal, 34.sp, 44.2.sp),
+        WidgetTitle = tboxTextStyle(fontFamily, FontWeight.Medium, 24.sp, 31.2.sp),
+        WidgetValue = tboxTextStyle(fontFamily, FontWeight.Medium, 20.sp, 26.sp),
+        WidgetUnit = tboxTextStyle(fontFamily, FontWeight.Medium, 18.sp, 23.4.sp),
     )
+
+/** Resolved text styles for the active theme (font family from settings). */
+val LocalTboxTextStyles = staticCompositionLocalOf { tboxTextStyles() }
 
 /** Default-family styles for non-Compose callers and legacy defaults. */
 object TboxTextStyles {
@@ -48,6 +58,9 @@ object TboxTextStyles {
     val Title = defaults.Title
     val Headline = defaults.Headline
     val TabLabel = defaults.TabLabel
+    val WidgetTitle = defaults.WidgetTitle
+    val WidgetValue = defaults.WidgetValue
+    val WidgetUnit = defaults.WidgetUnit
 }
 
 /** Dashboard tile text roles: family from [MaterialTheme.typography], size adapts to tile height. */
@@ -57,7 +70,7 @@ enum class TboxWidgetTextRole {
 
 /**
  * Height-adaptive widget typography. Size steps match the legacy [calculateResponsiveFontSize]
- * tables; font family and weight come from the corresponding typography slot.
+ * tables; font family and weight come from [TboxTextStyleSet.WidgetTitle] / [WidgetValue] / [WidgetUnit].
  */
 object TboxWidgetTypography {
     private val titleSizesSp = floatArrayOf(8f, 10f, 12f, 16f, 20f, 24f, 28f, 32f)

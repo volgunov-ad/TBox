@@ -24,8 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-
-private val WiperMaintenanceOnColor = Color(0xFFFF9800)
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 @Composable
 fun DashboardWiperMaintenanceWidgetItem(
@@ -41,7 +40,7 @@ fun DashboardWiperMaintenanceWidgetItem(
 ) {
     val state by UniversalCanRepository.wiperMaintenanceState.collectAsStateWithLifecycle()
     val iconColor = when (state) {
-        is MbCanBinaryState.On -> WiperMaintenanceOnColor
+        is MbCanBinaryState.On -> WidgetActiveColors.Primary
         is MbCanBinaryState.Off -> textColor
         else -> textColor.copy(alpha = 0.25f)
     }
@@ -55,24 +54,20 @@ fun DashboardWiperMaintenanceWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
+        ) { contentModifier ->
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (showTitle) 2f else 1f),
+                modifier = contentModifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 Image(

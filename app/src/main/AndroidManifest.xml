@@ -18,6 +18,16 @@
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Виджеты «Тема день/ночь» (Settings.Global) и «Регулировка зеркал» на Android 9 (Settings.Global).
+         Выдаётся вручную через adb: pm grant … android.permission.WRITE_SECURE_SETTINGS -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- «Регулировка зеркал» на Android 10 (Settings.System mirrorAdjustment).
+         На A10 pm grant обычно не срабатывает — включите «Изменение системных настроек» для приложения. -->
+    <uses-permission
+        android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- Для Android 10+ -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"

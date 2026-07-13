@@ -31,11 +31,13 @@ class ThemeActivationCoordinatorTest {
     }
 
     @Test
-    fun settingsViewModelInit_doesNotMarkMainScreenUiReady() {
+    fun settingsViewModelInit_marksMainScreenUiReadyAndRegistersFlushHook() {
         val context = ApplicationProvider.getApplicationContext<Application>()
-        SettingsViewModel(SettingsManager(context))
+        val settingsManager = SettingsManager(context)
+        SettingsViewModel(settingsManager)
 
-        assertFalse(ThemeActivationCoordinator.mainScreenUiReadyFlow.value)
+        assertTrue(ThemeActivationCoordinator.mainScreenUiReadyFlow.value)
+        assertTrue(ThemeActivationCoordinator.preThemeActivationFlush != null)
     }
 
     @Test

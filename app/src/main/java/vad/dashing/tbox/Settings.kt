@@ -96,6 +96,11 @@ data class FloatingDashboardWidgetConfig(
     /** If true, media volume widget controls CAN backend (mbCAN/VHAL) instead of Android AudioManager. */
     val useMbCanVhal: Boolean = false,
     /**
+     * Stepper +/- control icon style for [isStepperWidgetDataKey] tiles:
+     * [STEPPER_ADJUST_ICON_PLUS_MINUS] or [STEPPER_ADJUST_ICON_ARROWS].
+     */
+    val stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
+    /**
      * Optional background image on top of the tile color (light theme).
      * Path relative to [Context.filesDir]; must stay under [TileBackgroundImageStorage.DIR_NAME].
      */
@@ -106,6 +111,12 @@ data class FloatingDashboardWidgetConfig(
     val tripWidgetShowRowDividers: Boolean = TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
     /** First column width (percent) for trip widget row layout. */
     val tripWidgetLabelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
+    /** Horizontal text alignment: [WIDGET_TEXT_ALIGN_CENTER], [WIDGET_TEXT_ALIGN_START], [WIDGET_TEXT_ALIGN_END]. */
+    val textAlign: Int = DEFAULT_WIDGET_TEXT_ALIGN,
+    /** Font weight: [WIDGET_FONT_WEIGHT_NORMAL], [WIDGET_FONT_WEIGHT_MEDIUM], [WIDGET_FONT_WEIGHT_SEMI_BOLD]. */
+    val fontWeight: Int = DEFAULT_WIDGET_FONT_WEIGHT,
+    /** Title row position when [showTitle]: [WIDGET_TITLE_POSITION_TOP] or [WIDGET_TITLE_POSITION_BOTTOM]. */
+    val titlePosition: Int = DEFAULT_WIDGET_TITLE_POSITION,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -171,6 +182,8 @@ data class MainScreenPanelConfig(
     val showTboxDisconnectIndicator: Boolean = false,
     /** 1-based page index on the main screen (1..[SettingsManager.MAX_MAIN_SCREEN_PAGE_COUNT]). */
     val pageNumber: Int = SettingsManager.DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER,
+    /** Gap between tile cells in dp (0..[MAX_PANEL_GRID_SPACING_DP]). */
+    val gridSpacingDp: Int = DEFAULT_PANEL_GRID_SPACING_DP,
 )
 
 data class FloatingDashboardConfig(
@@ -186,7 +199,9 @@ data class FloatingDashboardConfig(
     val startY: Int,
     val background: Boolean,
     val clickAction: Boolean,
-    val showTboxDisconnectIndicator: Boolean = true
+    val showTboxDisconnectIndicator: Boolean = true,
+    /** Gap between tile cells in dp (0..[MAX_PANEL_GRID_SPACING_DP]). */
+    val gridSpacingDp: Int = DEFAULT_PANEL_GRID_SPACING_DP,
 )
 
 /**
@@ -271,8 +286,21 @@ class SettingsManager(private val context: Context) {
     suspend fun syncActiveThemeWallpaperSelectionReliable(
         selections: MainScreenWallpaperSelectionsByPage,
     ): Boolean {
-        if (syncActiveThemeWallpaperSelection(selections)) return true
-        return syncActiveThemeWallpaperSelection(selections)
+        val cacheKey = activeThemeUriFlow.first().trim()
+        return syncThemeWallpaperSelectionReliable(cacheKey, selections)
+    }
+
+    /**
+     * Persists [selections] to [cacheKey] theme [runtime.json], retrying once on failure.
+     * Use an explicit [cacheKey] captured before async work so a drive-mode theme switch cannot
+     * redirect the write to the newly active theme cache.
+     */
+    suspend fun syncThemeWallpaperSelectionReliable(
+        cacheKey: String,
+        selections: MainScreenWallpaperSelectionsByPage,
+    ): Boolean {
+        if (syncThemeWallpaperSelection(cacheKey, selections)) return true
+        return syncThemeWallpaperSelection(cacheKey, selections)
     }
 
     companion object {
@@ -374,6 +402,8 @@ class SettingsManager(private val context: Context) {
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
         private val DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_cols")
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
+        private val DASHBOARD_GRID_SPACING_KEY =
+            intPreferencesKey("${KEY_PREFIX}dashboard_grid_spacing_dp")
         private val CAN_DATA_SAVE_COUNT_KEY = intPreferencesKey("${KEY_PREFIX}can_data_save_count")
         private val FUEL_TANK_LITERS_KEY = intPreferencesKey("${KEY_PREFIX}fuel_tank_liters")
         private val FUEL_CALIBRATION_JSON_KEY = stringPreferencesKey("${KEY_PREFIX}fuel_calibration_json")
@@ -873,6 +903,14 @@ class SettingsManager(private val context: Context) {
 
     val dashboardChartFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[DASHBOARD_CHART_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val dashboardGridSpacingDpFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizePanelGridSpacingDp(
+                preferences[DASHBOARD_GRID_SPACING_KEY] ?: DEFAULT_MAIN_TAB_DASHBOARD_GRID_SPACING_DP
+            )
+        }
         .distinctUntilChanged()
 
     val canDataSaveCountFlow: Flow<Int> = context.settingsDataStore.data
@@ -1598,9 +1636,18 @@ class SettingsManager(private val context: Context) {
     suspend fun syncActiveThemeWallpaperSelection(
         selections: MainScreenWallpaperSelectionsByPage? = null,
     ): Boolean {
-        return ThemeMaterialization.syncWallpaperSelectionToActiveThemeCache(
+        val cacheKey = activeThemeUriFlow.first().trim()
+        return syncThemeWallpaperSelection(cacheKey, selections)
+    }
+
+    suspend fun syncThemeWallpaperSelection(
+        cacheKey: String,
+        selections: MainScreenWallpaperSelectionsByPage? = null,
+    ): Boolean {
+        if (selections == null) return false
+        return ThemeMaterialization.syncRuntimeStateToThemeCache(
             context = context,
-            settingsManager = this,
+            cacheKey = cacheKey,
             wallpaperSelections = selections,
         )
     }
@@ -1623,9 +1670,14 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun syncActiveThemeCurrentPage(currentPage: Int): Boolean {
-        return ThemeMaterialization.syncCurrentPageToActiveThemeCache(
+        val cacheKey = activeThemeUriFlow.first().trim()
+        return syncThemeCurrentPage(cacheKey, currentPage)
+    }
+
+    suspend fun syncThemeCurrentPage(cacheKey: String, currentPage: Int): Boolean {
+        return ThemeMaterialization.syncRuntimeStateToThemeCache(
             context = context,
-            settingsManager = this,
+            cacheKey = cacheKey,
             currentPage = currentPage,
         )
     }
@@ -2013,6 +2065,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveDashboardGridSpacingDp(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[DASHBOARD_GRID_SPACING_KEY] = normalizePanelGridSpacingDp(config)
+        }
+    }
+
     suspend fun saveCanDataSaveCount(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[CAN_DATA_SAVE_COUNT_KEY] = config
@@ -2315,6 +2373,9 @@ class SettingsManager(private val context: Context) {
                 obj.optInt("pageNumber", DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER),
                 pageCount,
             ),
+            gridSpacingDp = normalizePanelGridSpacingDp(
+                obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
+            ),
         )
     }
 
@@ -2336,6 +2397,9 @@ class SettingsManager(private val context: Context) {
             o.put("clickAction", config.clickAction)
             o.put("showTboxDisconnectIndicator", config.showTboxDisconnectIndicator)
             o.put("pageNumber", config.pageNumber)
+            if (config.gridSpacingDp != DEFAULT_PANEL_GRID_SPACING_DP) {
+                o.put("gridSpacingDp", config.gridSpacingDp)
+            }
             array.put(o)
         }
         return array.toString()
@@ -2379,7 +2443,10 @@ class SettingsManager(private val context: Context) {
             showTboxDisconnectIndicator = obj.optBoolean(
                 "showTboxDisconnectIndicator",
                 DEFAULT_FLOATING_DASHBOARD_SHOW_TBOX_DISCONNECT_INDICATOR
-            )
+            ),
+            gridSpacingDp = normalizePanelGridSpacingDp(
+                obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
+            ),
         )
     }
 
@@ -2400,6 +2467,9 @@ class SettingsManager(private val context: Context) {
             obj.put("background", config.background)
             obj.put("clickAction", config.clickAction)
             obj.put("showTboxDisconnectIndicator", config.showTboxDisconnectIndicator)
+            if (config.gridSpacingDp != DEFAULT_PANEL_GRID_SPACING_DP) {
+                obj.put("gridSpacingDp", config.gridSpacingDp)
+            }
             array.put(obj)
         }
         return array.toString()

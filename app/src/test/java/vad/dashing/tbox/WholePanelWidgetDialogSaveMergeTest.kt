@@ -60,6 +60,7 @@ class WholePanelWidgetDialogSaveMergeTest {
             showTboxDisconnectIndicator = true,
             clickAction = true,
             pageNumber = 2,
+            gridSpacingDp = 99,
         )
         val merged = mergeMainScreenPanelForWidgetDialogSave(baseMain, newWidgets, draft)
         assertEquals(newWidgets, merged.widgetsConfig)
@@ -69,6 +70,7 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(true, merged.showTboxDisconnectIndicator)
         assertEquals(true, merged.clickAction)
         assertEquals(2, merged.pageNumber)
+        assertEquals(MAX_PANEL_GRID_SPACING_DP, merged.gridSpacingDp)
         assertEquals(baseMain.relWidth, merged.relWidth, 0f)
     }
 
@@ -88,7 +90,8 @@ class WholePanelWidgetDialogSaveMergeTest {
             rows = 3,
             cols = 4,
             showTboxDisconnectIndicator = false,
-            clickAction = false
+            clickAction = false,
+            gridSpacingDp = 12,
         )
         val merged = mergeFloatingDashboardForWidgetDialogSave(
             baseFloat,
@@ -100,5 +103,6 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals(4, merged.cols)
         assertEquals(false, merged.showTboxDisconnectIndicator)
         assertEquals(false, merged.clickAction)
+        assertEquals(12, merged.gridSpacingDp)
     }
 }

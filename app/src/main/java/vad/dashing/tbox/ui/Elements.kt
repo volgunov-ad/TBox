@@ -89,7 +89,7 @@ fun StatusRow(
 ) {
     val textColor = color ?: MaterialTheme.colorScheme.onSurface
     val valueWithUnit = if (unit.isNotEmpty()) "$value\u2009$unit" else value
-    val baseStyle = style ?: MaterialTheme.typography.tboxTitle
+    val baseStyle = style ?: MaterialTheme.typography.tboxBody
     val resolvedStyle = if (fontSize != null) baseStyle.copy(fontSize = fontSize) else baseStyle
     val lineHeight = resolvedStyle.lineHeight
     val labelPercent = TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
@@ -218,7 +218,7 @@ fun ModeButton(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.tboxTitle,
+            style = MaterialTheme.typography.tboxButton,
             textAlign = TextAlign.Center
         )
     }
@@ -504,6 +504,7 @@ fun appFontFamilyLabel(fontFamily: TboxFontFamily): String = stringResource(
         TboxFontFamily.Monospace -> R.string.settings_app_font_family_monospace
         TboxFontFamily.Cabin -> R.string.settings_app_font_family_cabin
         TboxFontFamily.Nunito -> R.string.settings_app_font_family_nunito
+        TboxFontFamily.Roboto -> R.string.settings_app_font_family_roboto
     }
 )
 

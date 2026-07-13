@@ -15,12 +15,16 @@
   Разработка -> C:\\Users\\volgu\\AndroidStudioProjects\\TBM\\dev
   Релиз      -> C:\\Users\\volgu\\AndroidStudioProjects\\TBM\\release
 
+Changelog для version.json берётся из Changelog.dm (секция текущей versionName),
+если не передан --changelog.
+
 Запуск из корня репозитория:
   python tools/build_ota_release.py
 
 Или с аргументами:
   python tools/build_ota_release.py --channel dev
   python tools/build_ota_release.py --channel dev-release
+  python tools/build_ota_release.py --channel release
   python tools/build_ota_release.py --channel release --changelog "Исправления"
 """
 
@@ -40,7 +44,9 @@ from pathlib import Path
 
 DEFAULT_OUTPUT_BASE = Path(r"C:\Users\volgu\AndroidStudioProjects\TBM")
 GRADLE_FILE = Path("app/build.gradle.kts")
+CHANGELOG_FILE = Path("Changelog.dm")
 FLAVORS = ("ru", "en")
+VERSION_HEADER_RE = re.compile(r"^\d+\.\d+(?:\.\d+)*$")
 
 
 @dataclass(frozen=True)
@@ -205,9 +211,58 @@ def copy_apk(source: Path, destination_dir: Path, destination_name: str) -> Path
     return destination
 
 
-def prompt_changelog(default: str = "") -> str:
-    text = input("Changelog (Enter — пропустить): ").strip()
-    return text or default
+def read_changelog_section(changelog_path: Path, version_name: str) -> str:
+    """Extract the numbered entries for version_name from Changelog.dm."""
+    if not changelog_path.is_file():
+        raise FileNotFoundError(f"Changelog file not found: {changelog_path}")
+
+    lines = changelog_path.read_text(encoding="utf-8").splitlines()
+    start_index: int | None = None
+    for index, line in enumerate(lines):
+        if line.strip() == version_name:
+            start_index = index + 1
+            break
+    if start_index is None:
+        raise ValueError(
+            f"Version '{version_name}' not found in {changelog_path}"
+        )
+
+    section_lines: list[str] = []
+    for line in lines[start_index:]:
+        stripped = line.strip()
+        if VERSION_HEADER_RE.fullmatch(stripped):
+            break
+        if stripped or section_lines:
+            section_lines.append(line.rstrip())
+
+    while section_lines and not section_lines[-1].strip():
+        section_lines.pop()
+
+    changelog = "\n".join(section_lines).strip()
+    if not changelog:
+        raise ValueError(
+            f"Changelog section for '{version_name}' in {changelog_path} is empty"
+        )
+    return changelog
+
+
+def resolve_changelog(
+    args: argparse.Namespace,
+    project_dir: Path,
+    version_name: str,
+) -> str:
+    if args.changelog is not None:
+        return args.changelog
+
+    changelog_path = (
+        args.changelog_file
+        if args.changelog_file is not None
+        else project_dir / CHANGELOG_FILE
+    )
+    if not changelog_path.is_absolute():
+        changelog_path = project_dir / changelog_path
+
+    return read_changelog_section(changelog_path, version_name)
 
 
 def build_version_json(
@@ -266,7 +321,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--changelog",
         default=None,
-        help="Текст изменений для version.json",
+        help="Текст изменений для version.json (иначе — секция версии из Changelog.dm)",
+    )
+    parser.add_argument(
+        "--changelog-file",
+        type=Path,
+        default=None,
+        help=f"Файл changelog (по умолчанию: {CHANGELOG_FILE})",
     )
     parser.add_argument(
         "--min-supported-version-code",
@@ -294,16 +355,14 @@ def main() -> int:
         channel = resolve_channel(args)
         version = read_app_version(gradle_file)
         output_dir = args.output_base / channel.output_dir_name
-
-        changelog = args.changelog
-        if changelog is None and sys.stdin.isatty():
-            changelog = prompt_changelog()
-        changelog = changelog or ""
+        changelog = resolve_changelog(args, root, version.version_name)
 
         print()
         print(f"Канал: {channel.label}")
         print(f"Версия: {version.version_name} ({version.version_code})")
         print(f"Папка назначения: {output_dir}")
+        changelog_preview = changelog if len(changelog) <= 200 else changelog[:200] + "…"
+        print(f"Changelog: {changelog_preview}")
         print()
 
         if not args.skip_build:

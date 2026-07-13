@@ -147,18 +147,18 @@ fun TripsTab(
             Button(
                 onClick = rememberWrappedOnClick { showCustomTripWidgetDialog = true },
             ) {
-                Text(stringResource(R.string.trips_edit_custom_widget), style = MaterialTheme.typography.tboxTitle)
+                Text(stringResource(R.string.trips_edit_custom_widget), style = MaterialTheme.typography.tboxButton)
             }
             Button(
                 onClick = rememberWrappedOnClick { showSimpleTripWidgetDialog = true },
             ) {
-                Text(stringResource(R.string.trips_edit_simple_widget), style = MaterialTheme.typography.tboxTitle)
+                Text(stringResource(R.string.trips_edit_simple_widget), style = MaterialTheme.typography.tboxButton)
             }
             Button(
                 onClick = rememberWrappedOnClick { if (trips.isNotEmpty()) showExportDialog = true },
                 enabled = trips.isNotEmpty()
             ) {
-                Text(stringResource(R.string.trips_export), style = MaterialTheme.typography.tboxTitle)
+                Text(stringResource(R.string.trips_export), style = MaterialTheme.typography.tboxButton)
             }
         }
 
@@ -370,14 +370,14 @@ fun TripsTab(
                     Text(
                         text = if (fav) stringResource(R.string.trips_remove_favorite)
                         else stringResource(R.string.trips_add_favorite),
-                        style = MaterialTheme.typography.tboxTitle
+                        style = MaterialTheme.typography.tboxButton
                     )
                 }
                 if (trip.isActive && activeTrip?.id == trip.id) {
                     Button(onClick = rememberWrappedOnClick(onTripFinishAndStart)) {
                         Text(
                             stringResource(R.string.trips_finish),
-                            style = MaterialTheme.typography.tboxTitle
+                            style = MaterialTheme.typography.tboxButton
                         )
                     }
                 }

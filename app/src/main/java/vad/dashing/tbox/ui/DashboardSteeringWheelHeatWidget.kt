@@ -24,8 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-
-private val SteeringHeatOnColor = Color(0xFFFF9800)
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 @Composable
 fun DashboardSteeringWheelHeatWidgetItem(
@@ -42,7 +41,7 @@ fun DashboardSteeringWheelHeatWidgetItem(
     val state by UniversalCanRepository.steeringWheelHeatState.collectAsStateWithLifecycle()
     val iconColor = when (state) {
         is MbCanBinaryState.On -> {
-            SteeringHeatOnColor
+            WidgetActiveColors.Secondary
         }
 
         is MbCanBinaryState.Off -> {

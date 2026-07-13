@@ -39,6 +39,8 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
+import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
@@ -139,6 +141,7 @@ fun MainScreenDashboardPanel(
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
+    val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
 
     var isEditMode by remember { mutableStateOf(false) }
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
@@ -225,7 +228,8 @@ fun MainScreenDashboardPanel(
         TboxDataProvider(tboxViewModel, canViewModel, appDataViewModel, settingsViewModel, context)
     }
 
-    LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols, context) {
+    LaunchedEffect(widgetConfigs, dashboardRows, dashboardCols, context, themeActivating) {
+        if (themeActivating) return@LaunchedEffect
         val totalWidgets = dashboardRows * dashboardCols
         val widgets = loadWidgetsFromConfig(
             configs = widgetConfigs,
@@ -384,6 +388,8 @@ fun MainScreenDashboardPanel(
                     showDialogForIndex = index
                 } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
                     sendToggleSteeringWheelHeat(context)
+                } else if (cfg?.dataKey == MIRROR_ADJUST_MODE_WIDGET_DATA_KEY) {
+                    sendToggleMirrorAdjustMode(context)
                 } else if (cfg?.dataKey == WIPER_MAINTENANCE_WIDGET_DATA_KEY) {
                     sendToggleWiperMaintenance(context)
                 } else if (cfg?.dataKey == PARKING_RADAR_WIDGET_DATA_KEY) {
@@ -400,6 +406,8 @@ fun MainScreenDashboardPanel(
                     sendToggleHvacAuto(context)
                 } else if (cfg?.dataKey == "hvacDefrosterFrontWidget") {
                     sendToggleHvacDefrosterFront(context)
+                } else if (cfg?.dataKey == HVAC_SYNC_WIDGET_DATA_KEY) {
+                    sendToggleHvacSync(context)
                 } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                     val selectedMode = resolveDriveModeWidgetOption(cfg.selectedDriveMode)
                     sendSetMbCanProperty(
@@ -459,6 +467,7 @@ fun MainScreenDashboardPanel(
             },
             showTboxDisconnectIndicator = panel.showTboxDisconnectIndicator,
             enableInnerInteractions = !isEditMode,
+            gridSpacingDp = panel.gridSpacingDp.dp,
             externalWidgetHost = appWidgetHost
         )
         if (isEditMode) {

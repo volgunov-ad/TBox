@@ -29,6 +29,8 @@
 
 Переключение ECO/NOR/SPT — это **второй** слой. Переключение день/ночь на головном устройстве — **первый**; оно влияет на то, из какой подпапки `wallpaper/light` или `wallpaper/dark` читаются обои и какие цвета берутся из настроек темы.
 
+Штатную тему день/ночь ГУ можно менять плиткой **«Тема день/ночь»** (см. [USER_GUIDE_RU.md](USER_GUIDE_RU.md) §1.4b и [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md)): нужны **изменение системных настроек** в Android и ADB `pm grant … WRITE_SECURE_SETTINGS`.
+
 ---
 
 ## Архитектура хранения состояния
@@ -480,4 +482,6 @@ files/themes/{cacheKey}/
 ## См. также
 
 - [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — пошаговая работа с интерфейсом;
+- [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) — обмен с TBox;
+- [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) — плитки в темах;
 - [Trips.md](Trips.md) — виджеты поездки в конфиге плиток темы.

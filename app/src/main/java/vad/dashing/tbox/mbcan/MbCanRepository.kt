@@ -19,6 +19,17 @@ import kotlinx.coroutines.job
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_FAN_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
@@ -36,6 +47,13 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     HvacAcPower(setOf("eMBCAN_CFG_VEHICLE")),
     HvacAutoState(setOf("eMBCAN_CFG_VEHICLE")),
     HvacDefrosterFront(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacFrontOff(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacTempLeft(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacTempRight(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacFanSpeed(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacSync(setOf("eMBCAN_CFG_VEHICLE")),
+    HvacBlowMode(setOf("eMBCAN_CFG_VEHICLE")),
+    TrunkDoor(emptySet()),
     WirelessChargingSwitch(setOf("eMBCAN_CFG_VEHICLE")),
     /** Vehicle cfg params shown on [vad.dashing.tbox.ui.CarSettingsTab] (poll + push). */
     CarSettingsVehicleParams(setOf("eMBCAN_CFG_VEHICLE")),
@@ -73,6 +91,8 @@ data class MbCanCommandResult(
 sealed class MbCanCommand {
     data class ToggleProperty(val propertyId: Int) : MbCanCommand()
     data class SetProperty(val propertyId: Int, val value: Int) : MbCanCommand()
+    /** Power liftgate pulse: set [value] then 0 after [HvacClimateDomain.TRUNK_PULSE_RESET_MS]. */
+    data class TrunkPulse(val value: Int) : MbCanCommand()
     data class ToggleAudioProperty(val propertyId: Int) : MbCanCommand()
     data class SetAudioProperty(val propertyId: Int, val value: Int) : MbCanCommand()
     data class RefreshSignal(val signal: MbCanSignal) : MbCanCommand()
@@ -120,6 +140,17 @@ object MbCanRepository {
         WidgetSignalBinding("hvacAcWidget", MbCanSignal.HvacAcPower),
         WidgetSignalBinding("hvacAutoWidget", MbCanSignal.HvacAutoState),
         WidgetSignalBinding("hvacDefrosterFrontWidget", MbCanSignal.HvacDefrosterFront),
+        WidgetSignalBinding(HVAC_SYNC_WIDGET_DATA_KEY, MbCanSignal.HvacSync),
+        WidgetSignalBinding(HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY, MbCanSignal.HvacFanSpeed),
+        WidgetSignalBinding(HVAC_FAN_WIDGET_VERTICAL_DATA_KEY, MbCanSignal.HvacFanSpeed),
+        WidgetSignalBinding(HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY, MbCanSignal.HvacTempLeft),
+        WidgetSignalBinding(HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY, MbCanSignal.HvacTempLeft),
+        WidgetSignalBinding(HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY, MbCanSignal.HvacTempRight),
+        WidgetSignalBinding(HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY, MbCanSignal.HvacTempRight),
+        WidgetSignalBinding(HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY, MbCanSignal.HvacBlowMode),
+        WidgetSignalBinding(HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY, MbCanSignal.HvacBlowMode),
+        WidgetSignalBinding(HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY, MbCanSignal.HvacBlowMode),
+        WidgetSignalBinding(TRUNK_DOOR_WIDGET_DATA_KEY, MbCanSignal.TrunkDoor),
         WidgetSignalBinding(DRIVE_MODE_WIDGET_DATA_KEY, MbCanSignal.CarSettingsVehicleParams),
         WidgetSignalBinding("frontLeftSeatHeatVentWidget", MbCanSignal.FrontLeftSeatMode),
         WidgetSignalBinding("frontRightSeatHeatVentWidget", MbCanSignal.FrontRightSeatMode),
@@ -162,6 +193,11 @@ object MbCanRepository {
     private val pendingTelemetryPushes = mutableMapOf<MbCanSignal, Float?>()
     private var telemetryPushFlushScheduled = false
     private val flushTelemetryPushesRunnable = Runnable { flushPendingTelemetryPushes() }
+    private val trunkPushLock = Any()
+    private var pendingTrunkMoveDir: Int? = null
+    private var pendingTrunkSts: Int? = null
+    private var trunkPushFlushScheduled = false
+    private val flushTrunkPushRunnable = Runnable { flushPendingTrunkPush() }
     private val pendingPushDebugByKey = mutableMapOf<String, Pair<Int, String>>()
     private var pushDebugFlushScheduled = false
     private val flushPushDebugRunnable = Runnable { flushPendingPushDebugLogs() }
@@ -288,6 +324,7 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushAudioCfgPushesRunnable)
             cfgPushHandler.removeCallbacks(flushTelemetryPushesRunnable)
+            cfgPushHandler.removeCallbacks(flushTrunkPushRunnable)
             cfgPushHandler.removeCallbacks(flushPushDebugRunnable)
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
@@ -296,6 +333,11 @@ object MbCanRepository {
             synchronized(telemetryPushLock) {
                 pendingTelemetryPushes.clear()
                 telemetryPushFlushScheduled = false
+            }
+            synchronized(trunkPushLock) {
+                pendingTrunkMoveDir = null
+                pendingTrunkSts = null
+                trunkPushFlushScheduled = false
             }
             synchronized(pendingPushDebugByKey) {
                 pendingPushDebugByKey.clear()
@@ -329,6 +371,11 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.HVAC_POWER,
             MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
             MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,
+            MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
+            MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT,
+            MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED,
+            MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
+            MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
             MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH,
             in carSettingsCfgVehicleIds,
             MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
@@ -392,10 +439,22 @@ object MbCanRepository {
                         stateEngine.applyHvacAutoStateCandidate(
                             MbCanSignalStateEngine.decodeHvacAutoStateRaw(raw)
                         )
-                    MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION ->
+                    MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> {
                         stateEngine.applyHvacDefrosterFrontCandidate(
                             MbCanSignalStateEngine.decodeHvacFrontDefrostMbCanRaw(raw)
                         )
+                        HvacClimateCanRepository.applyBlowModeMbCan(raw)
+                    }
+                    MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT ->
+                        HvacClimateCanRepository.applyTempLeftMbCan(raw)
+                    MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT ->
+                        HvacClimateCanRepository.applyTempRightMbCan(raw)
+                    MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED ->
+                        HvacClimateCanRepository.applyFanSpeed(raw)
+                    MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
+                        HvacClimateCanRepository.applyFrontOffMbCan(raw)
+                    MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
+                        HvacClimateCanRepository.applySyncMbCan(raw)
                     MbCanKnownVehiclePropertyId.CHG_WIRELESS_SWITCH ->
                         stateEngine.applyWirelessChargingCandidate(
                             MbCanSignalStateEngine.decodeWirelessChargingRaw(raw)
@@ -486,6 +545,41 @@ object MbCanRepository {
             }
         }
         recordPushDebugEvent("telemetry/car_speed", "raw=$speed")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM push callback.
+     */
+    fun scheduleTrunkBcmPush(moveDir: Int?, trunkSts: Int?) {
+        synchronized(trunkPushLock) {
+            moveDir?.let { pendingTrunkMoveDir = it }
+            trunkSts?.let { pendingTrunkSts = it }
+            if (!trunkPushFlushScheduled) {
+                trunkPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTrunkPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent(
+            "telemetry/trunk_bcm",
+            "moveDir=$moveDir trunkSts=$trunkSts",
+        )
+    }
+
+    private fun flushPendingTrunkPush() {
+        val snapshot = synchronized(trunkPushLock) {
+            trunkPushFlushScheduled = false
+            pendingTrunkMoveDir to pendingTrunkSts
+        }
+        val (moveDir, trunkSts) = snapshot
+        if (moveDir == null && trunkSts == null) return
+        synchronized(trunkPushLock) {
+            pendingTrunkMoveDir = null
+            pendingTrunkSts = null
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            TrunkDoorRepository.applyBcmPush(moveDir, trunkSts)
+        }
     }
 
     private fun flushPendingAudioPushes() {
@@ -605,6 +699,7 @@ object MbCanRepository {
         return when (command) {
             is MbCanCommand.ToggleProperty -> executeToggleViaRegistry(command.propertyId)
             is MbCanCommand.SetProperty -> executeSetViaRegistry(command.propertyId, command.value)
+            is MbCanCommand.TrunkPulse -> executeTrunkPulse(command.value)
             is MbCanCommand.ToggleAudioProperty -> executeToggleAudioViaRegistry(command.propertyId)
             is MbCanCommand.SetAudioProperty -> executeSetAudioViaRegistry(command.propertyId, command.value)
             is MbCanCommand.RefreshSignal -> {
@@ -652,15 +747,42 @@ object MbCanRepository {
         MbCanDiagnostics.log("DEBUG", "executeSetProperty propertyId=$propertyId value=$value")
         val spec = MbCanCommandRegistry.get(propertyId)
             ?: return MbCanCommandResult(false, "No command policy for propertyId=$propertyId")
-        val policy = spec.policy as? MbCanCommandPolicy.SetExact
-            ?: return MbCanCommandResult(false, "Set unsupported by policy for propertyId=$propertyId")
-        if (!policy.allowedValues.contains(value)) {
+        val allowed = when (val policy = spec.policy) {
+            is MbCanCommandPolicy.SetExact -> policy.allowedValues
+            is MbCanCommandPolicy.ToggleHvacFrontDefrost -> setOf(
+                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE,
+                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FOOT,
+                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_FACE_FOOT,
+                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST,
+                MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION_DEFROST_FOOT,
+            )
+            else -> return MbCanCommandResult(false, "Set unsupported by policy for propertyId=$propertyId")
+        }
+        if (!allowed.contains(value)) {
             return MbCanCommandResult(false, "Value $value is not allowed for propertyId=$propertyId")
         }
         if (availability.value !is MbCanAvailability.Available) {
             return MbCanCommandResult(false, "mbCAN unavailable")
         }
         return applySetAndVerify(spec, value)
+    }
+
+    private suspend fun executeTrunkPulse(value: Int): MbCanCommandResult {
+        val allowed = setOf(1, 2)
+        if (value !in allowed) {
+            return MbCanCommandResult(false, "Trunk pulse value $value is not allowed")
+        }
+        val spec = MbCanCommandRegistry.get(MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL)
+            ?: return MbCanCommandResult(false, "No trunk command policy")
+        if (availability.value !is MbCanAvailability.Available) {
+            return MbCanCommandResult(false, "mbCAN unavailable")
+        }
+        val first = applySetAndVerify(spec, value)
+        if (!first.success) return first
+        delay(HvacClimateDomain.TRUNK_PULSE_RESET_MS)
+        MbCanEngineFacade.canSetVehicleParam(MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL, 0)
+        spec.refreshSignal?.let { refreshSignal(it) }
+        return MbCanCommandResult(true, "Trunk pulse sent")
     }
 
     private suspend fun applySetAndVerify(spec: MbCanCommandSpec, targetValue: Int): MbCanCommandResult {
@@ -744,6 +866,13 @@ object MbCanRepository {
             MbCanSignal.HvacAcPower -> refreshHvacAcPower()
             MbCanSignal.HvacAutoState -> refreshHvacAutoState()
             MbCanSignal.HvacDefrosterFront -> refreshHvacDefrosterFront()
+            MbCanSignal.HvacFrontOff -> refreshHvacFrontOff()
+            MbCanSignal.HvacTempLeft -> refreshHvacTempLeft()
+            MbCanSignal.HvacTempRight -> refreshHvacTempRight()
+            MbCanSignal.HvacFanSpeed -> refreshHvacFanSpeed()
+            MbCanSignal.HvacSync -> refreshHvacSync()
+            MbCanSignal.HvacBlowMode -> refreshHvacBlowMode()
+            MbCanSignal.TrunkDoor -> refreshTrunkDoor()
             MbCanSignal.WirelessChargingSwitch -> refreshWirelessCharging()
             MbCanSignal.CarSettingsVehicleParams -> refreshCarSettingsVehicleParams()
             MbCanSignal.AudioVolume -> refreshAudioVolume()
@@ -1055,6 +1184,96 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshHvacClimateIntParam(
+        propertyId: Int,
+        onUnavailable: () -> Unit,
+        onRaw: (Int) -> Unit,
+    ) {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                onUnavailable()
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                onUnavailable()
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(propertyId) ?: return@withContext
+            onRaw(raw)
+        }
+    }
+
+    private suspend fun refreshHvacFrontOff() {
+        refreshHvacClimateIntParam(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF,
+            onUnavailable = { HvacClimateCanRepository.applyFrontOffMbCan(0) },
+            onRaw = { HvacClimateCanRepository.applyFrontOffMbCan(it) },
+        )
+    }
+
+    private suspend fun refreshHvacTempLeft() {
+        refreshHvacClimateIntParam(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
+            onUnavailable = { HvacClimateCanRepository.applyTempLeftMbCan(-1) },
+            onRaw = { HvacClimateCanRepository.applyTempLeftMbCan(it) },
+        )
+    }
+
+    private suspend fun refreshHvacTempRight() {
+        refreshHvacClimateIntParam(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT,
+            onUnavailable = { HvacClimateCanRepository.applyTempRightMbCan(-1) },
+            onRaw = { HvacClimateCanRepository.applyTempRightMbCan(it) },
+        )
+    }
+
+    private suspend fun refreshHvacFanSpeed() {
+        refreshHvacClimateIntParam(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED,
+            onUnavailable = { HvacClimateCanRepository.applyFanSpeed(-1) },
+            onRaw = { HvacClimateCanRepository.applyFanSpeed(it) },
+        )
+    }
+
+    private suspend fun refreshHvacSync() {
+        refreshHvacClimateIntParam(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH,
+            onUnavailable = { HvacClimateCanRepository.applySyncMbCan(-1) },
+            onRaw = { HvacClimateCanRepository.applySyncMbCan(it) },
+        )
+    }
+
+    private suspend fun refreshHvacBlowMode() {
+        refreshHvacClimateIntParam(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,
+            onUnavailable = { HvacClimateCanRepository.applyBlowModeMbCan(-1) },
+            onRaw = { HvacClimateCanRepository.applyBlowModeMbCan(it) },
+        )
+    }
+
+    private suspend fun refreshTrunkDoor() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                TrunkDoorRepository.clear()
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                TrunkDoorRepository.clear()
+                return@withContext
+            }
+            val snapshot = MbCanEngineFacade.readVehicleBcmTrunkSnapshot()
+            if (snapshot != null) {
+                TrunkDoorRepository.applyBcmPush(snapshot.moveDir, snapshot.trunkSts)
+            }
+        }
+    }
+
     private suspend fun refreshWirelessCharging() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -1309,7 +1528,8 @@ object MbCanRepository {
         }
         val needsSettingsTelemetry = mergedSignals.contains(MbCanSignal.EngineRpm) ||
             mergedSignals.contains(MbCanSignal.EngineTemperature) ||
-            mergedSignals.contains(MbCanSignal.CarSpeed)
+            mergedSignals.contains(MbCanSignal.CarSpeed) ||
+            mergedSignals.contains(MbCanSignal.TrunkDoor)
         MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
         MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener)
         if (needsSettingsTelemetry) {

@@ -41,7 +41,7 @@ internal fun DashboardDualMetricRows(
         modifier = modifier
             .fillMaxWidth()
             .fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = widgetColumnHorizontalAlignment(LocalWidgetTextAlign.current)
     ) {
         if (singleLineDualMetrics) {
             Text(
@@ -49,7 +49,7 @@ internal fun DashboardDualMetricRows(
                 modifier = rowModifier.weight(1f),
                 style = valueStyle,
                 color = resolvedTextColor,
-                textAlign = TextAlign.Center,
+                textAlign = LocalWidgetTextAlign.current,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -59,7 +59,7 @@ internal fun DashboardDualMetricRows(
                 modifier = rowModifier.weight(1f),
                 style = valueStyle,
                 color = resolvedTextColor,
-                textAlign = TextAlign.Center,
+                textAlign = LocalWidgetTextAlign.current,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -68,7 +68,7 @@ internal fun DashboardDualMetricRows(
                 modifier = rowModifier.weight(1f),
                 style = valueStyle,
                 color = resolvedTextColor,
-                textAlign = TextAlign.Center,
+                textAlign = LocalWidgetTextAlign.current,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
