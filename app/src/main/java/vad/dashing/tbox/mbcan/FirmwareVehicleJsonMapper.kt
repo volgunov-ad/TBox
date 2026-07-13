@@ -23,6 +23,9 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_ENGINE_RPM_PROPERTY_ID = 289_414_951 // R_0900_EMS_1_EngineSpd
     const val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = 289_414_949 // R_0900_EMS1G_EngineCoolantTemperture
     const val VHAL_CAR_SPEED_PROPERTY_ID = 289_414_964 // R_0900_ICM_1_DisplayVehicleSpeed
+    const val VHAL_SLA_SPEED_LIMIT_RAW = 289_415_711 // R_0B00_FCM_2_SLASpdlimit
+    const val VHAL_SLA_ON_OFF_STATUS = 289_415_709 // R_0B00_FCM_2_SLAOnOffsts
+    const val VHAL_SLA_ON_OFF_REQ = 289_415_947 // T_0B01_IHU_8_SLAOnOffReq
 
     private data class Tables(
         val sendIds: Set<Int>,
@@ -74,6 +77,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE to 289412662, // T_0401_IHU_1_DVD_SET_EPSmode
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE to 289412695, // T_0401_IHU_9_DriveMode
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
+        MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH to VHAL_SLA_ON_OFF_REQ,
         // Audio
         MbCanKnownAudioPropertyId.VOLUME to 557849090, // AUDIO_CURRENT_MAIN_VOLUME
         MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849227, // AUDIO_VOL_VSC_MOD_REQ
@@ -114,6 +118,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE to 289412124, // R_0400_EPS_1_EPSModeSts
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE to 289412123, // R_0400_TCU_G_DriverMode_7
         MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET to 289412692, // T_0401_IHU_9_DriveMode_6DCT_Wet
+        MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH to VHAL_SLA_ON_OFF_STATUS,
         // Audio
         MbCanKnownAudioPropertyId.VOLUME to 557849090, // AUDIO_CURRENT_MAIN_VOLUME
         MbCanKnownAudioPropertyId.VOLUME_SPEED to 557849227, // AUDIO_VOL_VSC_MOD_REQ

@@ -431,6 +431,8 @@ object WidgetsRepository {
         "steeringWheelHeatWidget" to DataTitle(R.string.data_title_steering_wheel_heat_widget),
         WIPER_MAINTENANCE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_wiper_maintenance_widget),
         PARKING_RADAR_WIDGET_DATA_KEY to DataTitle(R.string.data_title_parking_radar_widget),
+        SLA_SPEED_LIMIT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_sla_speed_limit_widget),
+        SPEED_LIMITER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_speed_limiter_widget),
         "frontWindscreenHeatWidget" to DataTitle(R.string.data_title_front_windscreen_heat_widget),
         "rearWindowMirrorsDefrostWidget" to DataTitle(R.string.data_title_rear_window_mirrors_defrost_widget),
         "hvacAirRecirculationWidget" to DataTitle(R.string.data_title_hvac_air_recirculation_widget),
@@ -576,6 +578,13 @@ object WidgetsRepository {
         PARKING_RADAR_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_parking_radar,
             R.string.widget_actions_parking_radar,
+        ),
+        SLA_SPEED_LIMIT_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_sla_speed_limit,
+        ),
+        SPEED_LIMITER_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_speed_limiter,
+            R.string.widget_actions_speed_limiter,
         ),
         "frontWindscreenHeatWidget" to WidgetDescription(
             R.string.widget_desc_front_windscreen_heat,
@@ -775,6 +784,8 @@ object WidgetsRepository {
             "airQualityWidget",
             "steeringWheelHeatWidget",
             PARKING_RADAR_WIDGET_DATA_KEY,
+            SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
+            SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",
@@ -865,6 +876,8 @@ object WidgetsRepository {
             REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
             "steeringWheelHeatWidget",
             PARKING_RADAR_WIDGET_DATA_KEY,
+            SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
+            SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
             "hvacAirRecirculationWidget",

@@ -37,6 +37,8 @@ import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
+import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
+import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 
 private class CarPropertyBridge(private val context: Context) {
@@ -421,6 +423,12 @@ object Android10VhalRepository {
     val carSettingsDriveMode: StateFlow<Int?> = _carSettingsDriveMode.asStateFlow()
     private val _carSettingsDriveMode6dctWet = MutableStateFlow<Int?>(null)
     val carSettingsDriveMode6dctWet: StateFlow<Int?> = _carSettingsDriveMode6dctWet.asStateFlow()
+    private val _slaRecognizedSpeedLimitKmh = MutableStateFlow<Int?>(null)
+    val slaRecognizedSpeedLimitKmh: StateFlow<Int?> = _slaRecognizedSpeedLimitKmh.asStateFlow()
+    private val _slaOnOffState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val slaOnOffState: StateFlow<MbCanBinaryState> = _slaOnOffState.asStateFlow()
+    private val _speedLimiterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val speedLimiterState: StateFlow<MbCanBinaryState> = _speedLimiterState.asStateFlow()
 
     private val stateEngine = MbCanSignalStateEngine(
         steeringFlow = _steeringWheelHeatState,
@@ -663,6 +671,8 @@ object Android10VhalRepository {
                 HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY -> MbCanSignal.HvacBlowMode
                 TRUNK_DOOR_WIDGET_DATA_KEY -> MbCanSignal.TrunkDoor
                 DRIVE_MODE_WIDGET_DATA_KEY -> MbCanSignal.CarSettingsVehicleParams
+                SLA_SPEED_LIMIT_WIDGET_DATA_KEY -> MbCanSignal.SlaSpeedLimit
+                SPEED_LIMITER_WIDGET_DATA_KEY -> MbCanSignal.SpeedLimiter
                 "frontLeftSeatHeatVentWidget" -> MbCanSignal.FrontLeftSeatMode
                 "frontRightSeatHeatVentWidget" -> MbCanSignal.FrontRightSeatMode
                 FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY -> MbCanSignal.FrontLeftSeatMode
@@ -717,6 +727,8 @@ object Android10VhalRepository {
                 "hvacAutoWidget",
                 "hvacDefrosterFrontWidget",
                 DRIVE_MODE_WIDGET_DATA_KEY,
+                SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
+                SPEED_LIMITER_WIDGET_DATA_KEY,
                 "frontLeftSeatHeatVentWidget",
                 "frontRightSeatHeatVentWidget",
                 FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
@@ -779,6 +791,14 @@ object Android10VhalRepository {
                 resolved(MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE),
                 resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE),
                 resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
+            )
+            MbCanSignal.SlaSpeedLimit -> setOf(
+                FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW,
+                FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS,
+            )
+            MbCanSignal.SpeedLimiter -> setOfNotNull(
+                FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
+                    ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
             )
             MbCanSignal.FrontLeftSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH))
             MbCanSignal.FrontRightSeatMode -> setOf(resolved(MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH))
@@ -993,6 +1013,13 @@ object Android10VhalRepository {
                 _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(raw)
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET) ->
                 _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(raw)
+            FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW ->
+                _slaRecognizedSpeedLimitKmh.value = raw?.let(SlaSpeedLimitDomain::decodeRecognizedSpeedKmh)
+            FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS ->
+                _slaOnOffState.value = raw?.let(SlaSpeedLimitDomain::decodeSlaOnOffRaw) ?: MbCanBinaryState.Unknown
+            resolved(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH) ->
+                _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
+                    ?: MbCanBinaryState.Unknown
             resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) ->
                 raw?.let {
                     stateEngine.applySeatCandidate(MbCanSeatSlot.FrontLeft, MbCanSignalStateEngine.decodeSeatModeRaw(it))
@@ -1120,6 +1147,13 @@ object Android10VhalRepository {
                     _carSettingsDriveMode.value = null
                     _carSettingsDriveMode6dctWet.value = null
                 }
+                MbCanSignal.SlaSpeedLimit -> {
+                    _slaRecognizedSpeedLimitKmh.value = null
+                    _slaOnOffState.value = MbCanBinaryState.Unavailable(deniedReason)
+                }
+                MbCanSignal.SpeedLimiter -> {
+                    _speedLimiterState.value = MbCanBinaryState.Unavailable(deniedReason)
+                }
                 MbCanSignal.WirelessChargingSwitch -> Unit
             }
             return
@@ -1164,6 +1198,13 @@ object Android10VhalRepository {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
                     _carSettingsDriveMode6dctWet.value = null
+                }
+                MbCanSignal.SlaSpeedLimit -> {
+                    _slaRecognizedSpeedLimitKmh.value = null
+                    _slaOnOffState.value = MbCanBinaryState.Unavailable(reason)
+                }
+                MbCanSignal.SpeedLimiter -> {
+                    _speedLimiterState.value = MbCanBinaryState.Unavailable(reason)
                 }
                 MbCanSignal.WirelessChargingSwitch -> Unit
             }
@@ -1353,6 +1394,20 @@ object Android10VhalRepository {
             }
             MbCanSignal.CarSpeed -> {
                 _carSpeedState.value = readNumericProperty(VHAL_CAR_SPEED_PROPERTY_ID)?.coerceAtLeast(0f)
+            }
+            MbCanSignal.SlaSpeedLimit -> {
+                val limitRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW)
+                _slaRecognizedSpeedLimitKmh.value = limitRaw?.let(SlaSpeedLimitDomain::decodeRecognizedSpeedKmh)
+                val onOffRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS)
+                _slaOnOffState.value = onOffRaw?.let(SlaSpeedLimitDomain::decodeSlaOnOffRaw) ?: MbCanBinaryState.Unknown
+            }
+            MbCanSignal.SpeedLimiter -> {
+                val switchId = FirmwareVehicleJsonMapper
+                    .resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
+                    ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH
+                val raw = bridge?.getIntProperty(switchId)
+                _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
+                    ?: MbCanBinaryState.Unknown
             }
             MbCanSignal.WirelessChargingSwitch -> Unit
         }

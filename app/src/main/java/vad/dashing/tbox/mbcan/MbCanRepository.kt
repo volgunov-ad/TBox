@@ -35,6 +35,8 @@ import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
+import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
+import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
@@ -66,6 +68,10 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     EngineRpm(setOf("eMBCAN_VEHICLE_ENGINE")),
     EngineTemperature(setOf("eMBCAN_VEHICLE_ENGINE")),
     CarSpeed(setOf("eMBCAN_VEHICLE_SPEED")),
+    /** FCM SLA / recognized speed-limit sign (`eMBCAN_VEHICLE_LKA_STATUS`). */
+    SlaSpeedLimit(setOf("eMBCAN_VEHICLE_LKA_STATUS")),
+    /** Vehicle speed limiter switch and target (`eMBCAN_CFG_VEHICLE`). */
+    SpeedLimiter(setOf("eMBCAN_CFG_VEHICLE")),
 }
 
 sealed class MbCanBinaryState {
@@ -157,7 +163,9 @@ object MbCanRepository {
         WidgetSignalBinding(FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontLeftSeatMode),
         WidgetSignalBinding(FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY, MbCanSignal.FrontRightSeatMode),
         WidgetSignalBinding(REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY, MbCanSignal.RearLeftSeatMode),
-        WidgetSignalBinding(REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY, MbCanSignal.RearRightSeatMode)
+        WidgetSignalBinding(REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY, MbCanSignal.RearRightSeatMode),
+        WidgetSignalBinding(SLA_SPEED_LIMIT_WIDGET_DATA_KEY, MbCanSignal.SlaSpeedLimit),
+        WidgetSignalBinding(SPEED_LIMITER_WIDGET_DATA_KEY, MbCanSignal.SpeedLimiter),
     )
 
     private val signalByWidgetKey: Map<String, MbCanSignal> = widgetSignalRegistry
@@ -259,6 +267,12 @@ object MbCanRepository {
     val carSettingsDriveMode: StateFlow<Int?> = _carSettingsDriveMode.asStateFlow()
     private val _carSettingsDriveMode6dctWet = MutableStateFlow<Int?>(null)
     val carSettingsDriveMode6dctWet: StateFlow<Int?> = _carSettingsDriveMode6dctWet.asStateFlow()
+    private val _slaRecognizedSpeedLimitKmh = MutableStateFlow<Int?>(null)
+    val slaRecognizedSpeedLimitKmh: StateFlow<Int?> = _slaRecognizedSpeedLimitKmh.asStateFlow()
+    private val _slaOnOffState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val slaOnOffState: StateFlow<MbCanBinaryState> = _slaOnOffState.asStateFlow()
+    private val _speedLimiterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val speedLimiterState: StateFlow<MbCanBinaryState> = _speedLimiterState.asStateFlow()
 
     private val carSettingsCfgVehicleIds: Set<Int> = setOf(
         MbCanKnownVehiclePropertyId.VEHICLE_PROPERTY_EPS_MODE,
@@ -346,6 +360,7 @@ object MbCanRepository {
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
+            MbCanEngineFacade.syncLkaSlaStatusListener(false)
             reapplyJob?.cancel()
             reapplyJob = null
             boundScope = null
@@ -381,7 +396,10 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH,
             MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH,
             MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH,
-            MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH -> Unit
+            MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH,
+            MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH,
+            MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
+            MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET -> Unit
             else -> return
         }
         synchronized(pendingCfgPushes) {
@@ -480,8 +498,26 @@ object MbCanRepository {
                             MbCanSeatSlot.RearRight,
                             MbCanSignalStateEngine.decodeRearSeatHeatRaw(raw)
                         )
+                    MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH ->
+                        _slaOnOffState.value = SlaSpeedLimitDomain.decodeSlaOnOffRaw(raw)
+                    MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH ->
+                        _speedLimiterState.value = SlaSpeedLimitDomain.decodeSpeedLimiterSwitchRaw(raw)
+                    MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET -> Unit
                 }
             }
+        }
+    }
+
+    fun scheduleLkaSlaPush(slaOnOffRaw: Int?, slaLimitRaw: Int?) {
+        if (slaOnOffRaw == null && slaLimitRaw == null) return
+        recordPushDebugEvent(
+            "lka_sla",
+            "onOff=$slaOnOffRaw limit=$slaLimitRaw",
+        )
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            slaOnOffRaw?.let { _slaOnOffState.value = SlaSpeedLimitDomain.decodeSlaOnOffRaw(it) }
+            slaLimitRaw?.let { _slaRecognizedSpeedLimitKmh.value = SlaSpeedLimitDomain.decodeRecognizedSpeedKmh(it) }
         }
     }
 
@@ -884,6 +920,8 @@ object MbCanRepository {
             MbCanSignal.EngineRpm -> refreshEngineRpm()
             MbCanSignal.EngineTemperature -> refreshEngineTemperature()
             MbCanSignal.CarSpeed -> refreshCarSpeed()
+            MbCanSignal.SlaSpeedLimit -> refreshSlaSpeedLimit()
+            MbCanSignal.SpeedLimiter -> refreshSpeedLimiter()
         }
     }
 
@@ -1537,6 +1575,8 @@ object MbCanRepository {
         } else {
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
         }
+        val needsLkaSlaListener = mergedSignals.contains(MbCanSignal.SlaSpeedLimit)
+        MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
     }
 
     private fun widgetKeyToSignal(widgetKey: String): MbCanSignal? {
@@ -1601,6 +1641,63 @@ object MbCanRepository {
             _carSettingsDriveMode.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE)
             _carSettingsDriveMode6dctWet.value = readInt(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
             MbCanDiagnostics.log("DEBUG", "refreshCarSettingsVehicleParams refreshed")
+        }
+    }
+
+    private suspend fun refreshSlaSpeedLimit() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _slaRecognizedSpeedLimitKmh.value = null
+                _slaOnOffState.value = MbCanBinaryState.Unknown
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _slaRecognizedSpeedLimitKmh.value = null
+                _slaOnOffState.value = MbCanBinaryState.Unavailable(
+                    (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                )
+                return@withContext
+            }
+            val onOffRaw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH)
+            _slaOnOffState.value = onOffRaw?.let(SlaSpeedLimitDomain::decodeSlaOnOffRaw) ?: MbCanBinaryState.Unknown
+            // Recognized limit is delivered via LKA push; poll is best-effort via cached LKA object.
+            val lkaStatus = runCatching {
+                val engineClass = Class.forName("com.mengbo.mbCan.MBCanEngine")
+                val inst = engineClass.getMethod("getInstance").invoke(null) ?: return@runCatching null
+                val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+                val lkaCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleLkaSlaStatus")
+                getMbCanData.invoke(inst, 40, lkaCls)
+            }.getOrNull()
+            val limitRaw = lkaStatus?.let {
+                runCatching {
+                    it.javaClass.getMethod("getFCM_2_SLASpdlimit").invoke(it) as? Number
+                }.getOrNull()?.toInt()
+            }
+            _slaRecognizedSpeedLimitKmh.value = limitRaw?.let(SlaSpeedLimitDomain::decodeRecognizedSpeedKmh)
+        }
+    }
+
+    private suspend fun refreshSpeedLimiter() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _speedLimiterState.value = MbCanBinaryState.Unknown
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _speedLimiterState.value = MbCanBinaryState.Unavailable(
+                    (availability as? MbCanAvailability.Unavailable)?.reason ?: "Unavailable"
+                )
+                return@withContext
+            }
+            val raw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
+            _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
+                ?: MbCanBinaryState.Unknown
         }
     }
 }
