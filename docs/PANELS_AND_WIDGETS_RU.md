@@ -1,8 +1,10 @@
 # Панели и виджеты (плитки)
 
-Документ описывает три поверхности отображения **плиток** (виджетов) в TBox Monitor, общую модель данных и **как добавить новый виджет** в код.
+Документ описывает три поверхности отображения **плиток** (виджетов) в TBox Monitor (**0.16.1**), общую модель данных и **как добавить новый виджет** в код.
 
-Пользовательские шаги настройки — в [USER_GUIDE_RU.md](USER_GUIDE_RU.md) (§1.3–1.5). Экспорт панелей в темы — в [Themes.md](Themes.md).
+Пользовательские шаги настройки — в [USER_GUIDE_RU.md](USER_GUIDE_RU.md) (§1.3–1.5, §1.4b для дня/ночи и регулировки зеркал). Экспорт панелей в темы — в [Themes.md](Themes.md).
+
+Актуальное для 0.16.1: HVAC (вентилятор, температуры, обдув, SYNC), багажник, складывание/регулировка зеркал, тема день/ночь, stepper (громкость и HVAC), настраиваемый вид плитки (выравнивание, вес шрифта, положение заголовка, зазор сетки), описания типов в диалоге выбора.
 
 ---
 
@@ -145,6 +147,29 @@ flowchart TB
 ### Сторонний виджет Android
 
 `dataKey = externalAppWidget`. Выбор через `WidgetPickerActivity` (`ACTION_APPWIDGET_PICK`), не через радио-список. Рендер: `ExternalAppWidgetItem` + `AppWidgetHost`.
+
+---
+
+## Виджеты, пишущие Settings (день/ночь и регулировка зеркал)
+
+| Виджет | Код | Куда пишет | Разрешения |
+|--------|-----|------------|------------|
+| **Тема день/ночь** | `HeadUnitDayNightRepository` | `Settings.Global` (`com.mb.provider.night_mode_auto`) | `WRITE_SECURE_SETTINGS` (+ доступ «Изменение системных настроек») |
+| **Регулировка зеркал** (Android 9) | `MirrorAdjustModeRepository` | `Settings.Global` (`ro.mb.mirror.adjust.mode`) | то же |
+| **Регулировка зеркал** (Android 10) | `MirrorAdjustModeRepository` | `Settings.System` (`mirrorAdjustment`) | `WRITE_SETTINGS` (вкл. в UI Android) + `WRITE_SECURE_SETTINGS` по ADB |
+
+**Порядок выдачи прав (обязательно оба шага):**
+
+1. В настройках Android включите для **TBox Monitor** доступ к **изменению системных настроек**.
+2. Выполните ADB:
+
+```
+adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
+```
+
+Разрешения объявлены в `AndroidManifest.xml`. Без них плитки показывают состояние, но запись в штатные ключи не проходит. Виджет **«Складывание зеркал»** идет через mbCAN/VHAL и этих прав не требует.
+
+Пользовательские шаги: [USER_GUIDE_RU.md](USER_GUIDE_RU.md) §1.4b.
 
 ---
 
