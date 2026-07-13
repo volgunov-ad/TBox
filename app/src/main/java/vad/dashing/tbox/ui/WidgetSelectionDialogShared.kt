@@ -612,6 +612,23 @@ private fun FloatingDashboardWholeSettingsSection(
     }
 }
 
+internal data class WidgetSelectionDescriptionResources(
+    val descriptionRes: Int,
+    val actionsRes: Int?,
+)
+
+internal fun resolveWidgetSelectionDescriptionResources(
+    dataKey: String,
+    selectedDataKey: String,
+): WidgetSelectionDescriptionResources? {
+    if (dataKey != selectedDataKey) return null
+    val descriptionRes = WidgetsRepository.getDescriptionResForDataKey(dataKey) ?: return null
+    return WidgetSelectionDescriptionResources(
+        descriptionRes = descriptionRes,
+        actionsRes = WidgetsRepository.getActionsDescriptionResForDataKey(dataKey),
+    )
+}
+
 @Composable
 internal fun WidgetSelectionDialogForm(
     titleText: String,
@@ -1130,8 +1147,18 @@ internal fun WidgetSelectionDialogForm(
                     val needle = dataKeyFilterText.trim().lowercase()
                     fun optionMatches(pair: Pair<String, String>): Boolean {
                         if (needle.isEmpty()) return true
+                        val description = WidgetsRepository
+                            .getDescriptionResForDataKey(pair.first)
+                            ?.let(context::getString)
+                            .orEmpty()
+                        val actions = WidgetsRepository
+                            .getActionsDescriptionResForDataKey(pair.first)
+                            ?.let(context::getString)
+                            .orEmpty()
                         return pair.second.lowercase().contains(needle) ||
-                            pair.first.lowercase().contains(needle)
+                            pair.first.lowercase().contains(needle) ||
+                            description.lowercase().contains(needle) ||
+                            actions.lowercase().contains(needle)
                     }
                     val selectedPair = widgetPairs.find { it.first == initialListSelectedKey }
                     val filteredTileOptions = buildList {
@@ -1170,28 +1197,61 @@ internal fun WidgetSelectionDialogForm(
                     filteredTileOptions.forEach { (key, displayName) ->
                         key(key) {
                             val selectKey = rememberWrappedOnClick { state.applySelectedDataKey(key) }
-                            Row(
+                            val selected = state.selectedDataKey == key
+                            val descriptionResources = resolveWidgetSelectionDescriptionResources(
+                                dataKey = key,
+                                selectedDataKey = state.selectedDataKey,
+                            )
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickableWithSound {
                                         state.applySelectedDataKey(key)
                                     }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(vertical = 8.dp)
                             ) {
-                                RadioButton(
-                                    selected = state.selectedDataKey == key,
-                                    onClick = selectKey
-                                )
-                                Text(
-                                    text = displayName,
-                                    style = MaterialTheme.typography.tboxTitle,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .weight(1f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = selected,
+                                        onClick = selectKey
+                                    )
+                                    Text(
+                                        text = displayName,
+                                        style = MaterialTheme.typography.tboxTitle,
+                                        modifier = Modifier
+                                            .padding(start = 8.dp)
+                                            .weight(1f),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                if (descriptionResources != null) {
+                                    Text(
+                                        text = stringResource(descriptionResources.descriptionRes),
+                                        style = MaterialTheme.typography.tboxBody,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 56.dp, end = 8.dp)
+                                    )
+                                    val actionsRes = descriptionResources.actionsRes
+                                    if (actionsRes != null) {
+                                        Text(
+                                            text = stringResource(
+                                                R.string.widget_actions_template,
+                                                stringResource(actionsRes)
+                                            ),
+                                            style = MaterialTheme.typography.tboxCaption,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(
+                                                start = 56.dp,
+                                                top = 4.dp,
+                                                end = 8.dp
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

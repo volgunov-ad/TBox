@@ -176,8 +176,10 @@ flowchart TB
 Пример: новое поле из `CanDataRepository`.
 
 1. **Ключ** — константа `MY_WIDGET_DATA_KEY = "myWidget"` (в `*Widget.kt` или рядом с доменом).
-2. **Строки** — `data_title_my_widget` (+ unit) в `res/values/strings.xml` и flavor `en`.
-3. **Каталог** — запись в `WidgetsRepository.dataKeyTitlesWidgets` (`ViewModels.kt`).
+2. **Строки** — `data_title_my_widget` (+ unit), `widget_desc_my_widget` и, для
+   интерактивной плитки, `widget_actions_my_widget` в `res/values/strings.xml` и flavor `en`.
+3. **Каталог** — записи в `WidgetsRepository.dataKeyTitlesWidgets` и
+   `widgetDescriptions` (`ViewModels.kt`).
 4. **Данные** — ветка в `TboxDataProvider.createFlowForKey()`.
 5. **Флаги возможностей** — при необходимости `supportsShowUnit`, `supportsValueAccuracy`, `supportsUseMbCanVhal` и т.д.
 6. **Рендерер** — обычно **не нужен** (сработает `else` → `DashboardWidgetItem`).
