@@ -1,7 +1,9 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -25,8 +27,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
-private val SlaSignCircleColor = Color(0xFFE53935)
-private val SlaSignTextColor = Color.White
+/** Red ring of a round speed-limit road sign (R.3 / 3.24). */
+private val SlaSignRingColor = Color(0xFFE53935)
+private val SlaSignFaceColor = Color.White
+private val SlaSignTextColor = Color.Black
+/** Ring thickness as a fraction of the sign diameter (approx. real sign proportions). */
+private const val SlaSignRingFraction = 0.12f
 
 @Composable
 fun DashboardSlaSpeedLimitWidgetItem(
@@ -68,27 +74,34 @@ fun DashboardSlaSpeedLimitWidgetItem(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(if (showTitle) 1f else 1f),
+                    .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxHeight(0.82f)
-                        .aspectRatio(1f)
-                        .background(color = SlaSignCircleColor, shape = CircleShape),
-                    contentAlignment = Alignment.Center,
+                        .aspectRatio(1f),
                 ) {
-                    Text(
-                        text = limitLabel,
-                        color = SlaSignTextColor,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
-                        style = calculateResponsiveTextStyle(
-                            containerHeight = availableHeight,
-                            textType = TextType.VALUE,
-                        ),
-                        maxLines = 1,
-                    )
+                    val ringWidth = maxWidth * SlaSignRingFraction
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .border(width = ringWidth, color = SlaSignRingColor, shape = CircleShape)
+                            .background(color = SlaSignFaceColor, shape = CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = limitLabel,
+                            color = SlaSignTextColor,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            style = calculateResponsiveTextStyle(
+                                containerHeight = availableHeight,
+                                textType = TextType.VALUE,
+                            ),
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }

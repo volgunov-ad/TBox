@@ -75,7 +75,16 @@ fun DashboardSpeedLimiterWidgetItem(
         enableInnerInteractions = enableInnerInteractions,
         onDecrease = { applyTargetDelta(increase = false) },
         onIncrease = { applyTargetDelta(increase = true) },
-        onCenterClick = {},
+        onCenterClick = {
+            if (enableInnerInteractions) {
+                runLimiterInteraction(isDoubleTap = false)
+            }
+        },
+        onCenterDoubleClick = {
+            if (enableInnerInteractions) {
+                runLimiterInteraction(isDoubleTap = true)
+            }
+        },
         onClick = {
             if (!enableInnerInteractions) {
                 onClick()

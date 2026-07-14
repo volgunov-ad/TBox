@@ -48,6 +48,7 @@ fun DashboardStepperControlWidget(
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
     onCenterClick: () -> Unit,
+    onCenterDoubleClick: (() -> Unit)? = null,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onDoubleClick: (() -> Unit)? = null,
@@ -145,6 +146,7 @@ fun DashboardStepperControlWidget(
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onCenterClick,
+                        onDoubleClick = onCenterDoubleClick,
                         icon = centerIcon,
                         availableHeight = availableHeight,
                     )
@@ -194,6 +196,7 @@ fun DashboardStepperControlWidget(
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onCenterClick,
+                        onDoubleClick = onCenterDoubleClick,
                         icon = centerIcon,
                         availableHeight = availableHeight,
                     )
@@ -251,6 +254,7 @@ private fun StepperCenterButton(
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
+    onDoubleClick: (() -> Unit)? = null,
     icon: @Composable () -> Unit,
     availableHeight: Dp,
 ) {
@@ -259,6 +263,7 @@ private fun StepperCenterButton(
         interactionEnabled = interactionEnabled,
         onLongClick = onLongClick,
         onClick = onClick,
+        onDoubleClick = onDoubleClick,
         content = {
             if (showIcon) {
                 Column(
@@ -310,6 +315,7 @@ private fun StepperActionButton(
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
+    onDoubleClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Box(
@@ -317,7 +323,8 @@ private fun StepperActionButton(
             .combinedClickableWithSound(
                 enabled = interactionEnabled,
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onLongClick,
+                onDoubleClick = onDoubleClick,
             ),
         contentAlignment = Alignment.Center
     ) {
