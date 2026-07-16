@@ -8,6 +8,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.runBlocking
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
@@ -205,6 +208,39 @@ class ThemeRuntimeStateTest {
                 themeJson = themeJson,
                 actual = nor,
             ),
+        )
+    }
+
+    @Test
+    fun applyActivationOverrides_skipsWallpapersWhenTargetExcluded() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+        val settingsManager = SettingsManager(context)
+        val existing = MainScreenWallpaperSelectionsByPage.empty()
+            .withFileName(page = 1, forLightTheme = true, fileName = "keep.jpg")
+        settingsManager.saveMainScreenWallpaperSelectionsByPage(existing)
+
+        val dir = createTempDir(prefix = "runtime_apply_skip_wp_")
+        val themeJson = """
+            {
+              "mainScreen": {
+                "wallpaperSelectionByPage": {
+                  "light": { "1": "incoming.jpg" }
+                }
+              }
+            }
+        """.trimIndent()
+
+        val result = ThemeRuntimeState.applyActivationOverrides(
+            settingsManager = settingsManager,
+            cacheDir = dir,
+            themeJson = themeJson,
+            applyTargets = setOf(ThemeApplyTarget.MAIN_SCREEN_PANELS),
+        )
+
+        assertEquals("keep.jpg", result.fileNameFor(1, forLightTheme = true))
+        assertEquals(
+            "keep.jpg",
+            settingsManager.mainScreenWallpaperSelectionsSnapshot().fileNameFor(1, forLightTheme = true),
         )
     }
 }

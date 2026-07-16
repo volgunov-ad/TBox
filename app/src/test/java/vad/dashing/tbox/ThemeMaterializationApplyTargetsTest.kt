@@ -109,4 +109,79 @@ class ThemeMaterializationApplyTargetsTest {
         assertEquals(requested, resolved)
         assertTrue(available.contains(ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS))
     }
+
+    @Test
+    fun resolveApplyTargetsForMaterialize_preservesExistingTargetsOnSync() {
+        val themeJson = MINIMAL_MAIN_SCREEN_THEME_JSON
+        val parsed = parsedBundle(themeJson)
+        val existing = ThemeMaterialization.ThemeManifest(
+            cacheKey = "drive_mode_2_eco",
+            sourceUri = "content://theme/eco.tboxtheme",
+            sourceDisplayName = "eco.tboxtheme",
+            materializedAtMillis = 0L,
+            fingerprint = "fp",
+            sections = setOf(ThemeSection.MAIN_SCREEN),
+            applyTargets = setOf(ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS),
+        )
+
+        val resolved = ThemeMaterialization.resolveApplyTargetsForMaterialize(
+            parsed = parsed,
+            themeSections = setOf(ThemeSection.MAIN_SCREEN),
+            requestedTargets = null,
+            existingManifest = existing,
+        )
+
+        assertEquals(setOf(ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS), resolved)
+    }
+
+    @Test
+    fun resolveApplyTargetsForActivation_requestedTargetsIntersectAvailable() {
+        val manifest = ThemeMaterialization.ThemeManifest(
+            cacheKey = "MyTheme",
+            sourceUri = "content://theme/full.tboxtheme",
+            sourceDisplayName = "full.tboxtheme",
+            materializedAtMillis = 0L,
+            fingerprint = "fp",
+            sections = setOf(ThemeSection.MAIN_SCREEN),
+            applyTargets = setOf(
+                ThemeApplyTarget.MAIN_SCREEN_PANELS,
+                ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS,
+            ),
+        )
+        val available = setOf(ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS)
+
+        val resolved = ThemeMaterialization.resolveApplyTargetsForActivation(
+            manifest = manifest,
+            themeSections = setOf(ThemeSection.MAIN_SCREEN),
+            availableTargets = available,
+            requestedTargets = setOf(
+                ThemeApplyTarget.MAIN_SCREEN_PANELS,
+                ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS,
+            ),
+        )
+
+        assertEquals(setOf(ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS), resolved)
+    }
+
+    private fun parsedBundle(themeJson: String) = ThemeBundleExport.ParsedThemeBundle(
+        themeJson = themeJson,
+        icons = emptyMap(),
+        httpRequestIcons = emptyMap(),
+        tileBackgrounds = emptyMap(),
+        lightWallpapers = mapOf("a.jpg" to byteArrayOf(1)),
+        darkWallpapers = emptyMap(),
+    )
+
+    private companion object {
+        val MINIMAL_MAIN_SCREEN_THEME_JSON = """
+            {
+              "formatVersion": 1,
+              "type": "tbox_theme",
+              "sections": ["mainScreen"],
+              "mainScreen": {
+                "wallpaperSelectionByPage": { "light": {}, "dark": {} }
+              }
+            }
+        """.trimIndent()
+    }
 }
