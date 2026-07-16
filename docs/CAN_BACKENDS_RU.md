@@ -5,6 +5,8 @@
 - **Android 9**: через `mbCAN`.
 - **Android 10**: через `android.car` / VHAL (`CarPropertyManager`).
 
+Таблицы всех **используемых** property (чтение/запись, raw-декод, push/pull): [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md).
+
 ### Пометка про «Android 10» (Adayo)
 
 В проекте и в UI настроек название **«Android 10»** означает линейку ГУ **Adayo + VHAL** (в отличие от mbCAN). Это **продуктовое** имя, его оставляем.

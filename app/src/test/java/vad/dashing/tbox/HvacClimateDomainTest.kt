@@ -60,6 +60,22 @@ class HvacClimateDomainTest {
     }
 
     @Test
+    fun decodeHvacFrontOffVhalRaw_matchesStockZeroIsOn() {
+        assertEquals(MbCanBinaryState.On, HvacClimateDomain.decodeHvacFrontOffVhalRaw(0))
+        assertEquals(MbCanBinaryState.Off, HvacClimateDomain.decodeHvacFrontOffVhalRaw(1))
+        assertEquals(MbCanBinaryState.Off, HvacClimateDomain.decodeHvacFrontOffVhalRaw(2))
+        assertEquals(MbCanBinaryState.Off, HvacClimateDomain.decodeHvacFrontOffVhalRaw(3))
+    }
+
+    @Test
+    fun decodeHvacSyncVhalRaw_matchesStockOneIsOn() {
+        assertEquals(MbCanBinaryState.On, HvacClimateDomain.decodeHvacSyncVhalRaw(1))
+        assertEquals(MbCanBinaryState.Off, HvacClimateDomain.decodeHvacSyncVhalRaw(0))
+        assertEquals(MbCanBinaryState.Off, HvacClimateDomain.decodeHvacSyncVhalRaw(2))
+        assertEquals(MbCanBinaryState.Off, HvacClimateDomain.decodeHvacSyncVhalRaw(3))
+    }
+
+    @Test
     fun encodeHvacFrontOffWrite_matchesStatusEncoding() {
         assertEquals(2, HvacClimateDomain.encodeHvacFrontOffMbCanWrite(targetClimateOn = true))
         assertEquals(1, HvacClimateDomain.encodeHvacFrontOffMbCanWrite(targetClimateOn = false))

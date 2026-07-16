@@ -26,6 +26,7 @@ import vad.dashing.tbox.ui.theme.TboxFontFamily
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
@@ -406,6 +407,7 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}dashboard_grid_spacing_dp")
         private val CAN_DATA_SAVE_COUNT_KEY = intPreferencesKey("${KEY_PREFIX}can_data_save_count")
         private val FUEL_TANK_LITERS_KEY = intPreferencesKey("${KEY_PREFIX}fuel_tank_liters")
+        private val SPEED_LIMITER_TARGET_KMH_KEY = intPreferencesKey("${KEY_PREFIX}speed_limiter_target_kmh")
         private val FUEL_CALIBRATION_JSON_KEY = stringPreferencesKey("${KEY_PREFIX}fuel_calibration_json")
         private val FUEL_CALIBRATION_ZONE_COUNT_KEY =
             intPreferencesKey("${KEY_PREFIX}fuel_calibration_zone_count")
@@ -933,6 +935,13 @@ class SettingsManager(private val context: Context) {
 
     val fuelTankLitersFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[FUEL_TANK_LITERS_KEY] ?: DEFAULT_FUEL_TANK_LITERS }
+
+    val speedLimiterTargetKmhFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            SlaSpeedLimitDomain.clampLimiterTargetKmh(
+                preferences[SPEED_LIMITER_TARGET_KMH_KEY] ?: SlaSpeedLimitDomain.SPEED_LIMITER_KMH_DEFAULT
+            )
+        }
         .distinctUntilChanged()
 
     val fuelCalibrationJsonFlow: Flow<String> = context.settingsDataStore.data
@@ -2105,6 +2114,13 @@ class SettingsManager(private val context: Context) {
     suspend fun saveFuelTankLiters(liters: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[FUEL_TANK_LITERS_KEY] = liters.coerceIn(1, 500)
+        }
+    }
+
+    suspend fun saveSpeedLimiterTargetKmh(kmh: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[SPEED_LIMITER_TARGET_KMH_KEY] =
+                SlaSpeedLimitDomain.clampLimiterTargetKmh(kmh)
         }
     }
 

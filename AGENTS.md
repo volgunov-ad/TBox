@@ -13,7 +13,7 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v0.16.1). T
 | **Trips** | `trip/` (`TripRepository`, `TripRules`, `TripFuelAccounting`), `BackgroundService`, `UiTripsTab` | [docs/Trips.md](docs/Trips.md) |
 | **Refuels & fuel calibration** | `fuel/`, `fuellevelcalibration/`, `utils/CanFramesProcess.kt` | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) |
 | **Themes** (`.tboxtheme`) | `Theme*.kt`, `DriveModeThemeWatcher`, `ui/ThemesTabContent.kt` | [docs/Themes.md](docs/Themes.md) |
-| **CAN backends** | `mbcan/UniversalCanRepository.kt`, `HeadUnitCanMode.kt` | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) |
+| **CAN backends** | `mbcan/UniversalCanRepository.kt`, `HeadUnitCanMode.kt` | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md), [docs/MBCAN_VHAL_PARAMETERS_RU.md](docs/MBCAN_VHAL_PARAMETERS_RU.md) |
 | **TBox / network** | `TboxRepository`, `BackgroundService`, `TboxProtocol` | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md), [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) |
 | **Dashboard / widgets** | `ui/Dashboard*.kt`, `WidgetConfigCodec.kt` | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
 
@@ -61,3 +61,4 @@ Use **`preRelease`** for pre-release integration; merge to **`master`** when rea
 - Full end-to-end testing requires a physical Jetour Dashing head unit or hardware-mocking setup: TBox UDP, mbCAN/VHAL bind, and drive-mode CAN signals cannot be emulated here.
 - There is no emulator or device available in the cloud VM; builds and unit tests can be verified, but APKs cannot be installed/run here.
 - **CAN backend** (`mbCAN` vs `VHAL`) is a runtime head-unit choice, not a build flavor — see `docs/CAN_BACKENDS_RU.md` before changing `UniversalCanRepository` or bind logic.
+- **mbCAN/VHAL parameters**: read/write ids, raw decode, and push/pull behavior for widgets and settings are documented in [docs/MBCAN_VHAL_PARAMETERS_RU.md](docs/MBCAN_VHAL_PARAMETERS_RU.md). Use it when investigating or implementing CAN-backed UI. When adding or changing widgets, toggles, or settings that read or write vehicle properties, **update that doc in the same change** and keep it aligned with `MbCanCommandRegistry`, `FirmwareVehicleJsonMapper`, and domain decoders (`*Domain.kt`, `MbCanSignalStateEngine`).

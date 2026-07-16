@@ -19,3 +19,6 @@ local.properties
 
 # Local firmware unpack / analysis (large binaries)
 firmware_analysis/
+
+# Python bytecode
+tools/__pycache__/

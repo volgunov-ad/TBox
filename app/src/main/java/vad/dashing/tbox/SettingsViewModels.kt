@@ -26,6 +26,7 @@ import vad.dashing.tbox.ui.theme.TboxFontFamily
 import android.content.Context
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.ui.LeftMenuLayout
 
@@ -889,6 +890,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = 57
+        )
+
+    val speedLimiterTargetKmh = settingsManager.speedLimiterTargetKmhFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SlaSpeedLimitDomain.SPEED_LIMITER_KMH_DEFAULT,
         )
 
     val fuelCalibrationJson = settingsManager.fuelCalibrationJsonFlow
@@ -2021,6 +2029,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveFuelTankLiters(liters: Int) {
         viewModelScope.launch {
             settingsManager.saveFuelTankLiters(liters)
+        }
+    }
+
+    fun saveSpeedLimiterTargetKmh(kmh: Int) {
+        viewModelScope.launch {
+            settingsManager.saveSpeedLimiterTargetKmh(kmh)
         }
     }
 
