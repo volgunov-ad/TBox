@@ -1,6 +1,5 @@
 package com.mengbo.mbCan.defines;
 
-import androidx.core.view.InputDeviceCompat;
 import com.mengbo.mbclient.BuildConfig;
 
 /* loaded from: classes.dex */
@@ -261,7 +260,7 @@ public enum MBVehicleProperty {
     eVEHICLE_SPEEDLIMIT_SWITCH(254),
     eVEHICLE_REGENERATION_LEVELSET(255),
     eVEHICLE_OUTPUT_LIMITSOCSET(256),
-    eVEHICLE_SHIFT_VOICEREMIND_SWITCH(InputDeviceCompat.SOURCE_KEYBOARD),
+    eVEHICLE_SHIFT_VOICEREMIND_SWITCH(257),
     eVEHICLE_SHIFT_ERRORACTION_REMIND_SWITCH(258),
     eVEHICLE_HVAC_PTC_SWITCH(259),
     eVEHICLE_HVAC_CIRCULATION_SWITCH(260),
