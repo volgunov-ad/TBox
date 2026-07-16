@@ -5,6 +5,18 @@
 - **Android 9**: через `mbCAN`.
 - **Android 10**: через `android.car` / VHAL (`CarPropertyManager`).
 
+### Пометка про «Android 10» (Adayo)
+
+В проекте и в UI настроек название **«Android 10»** означает линейку ГУ **Adayo + VHAL** (в отличие от mbCAN). Это **продуктовое** имя, его оставляем.
+
+По выгрузке штатной прошивки Adayo (`D:\Dashing\Android10-VHAL`):
+
+- в заводском/сервисном UI версия часто берётся из `Build.VERSION.RELEASE` (например `SystemSettings` → factory, строка «Android版本» / `and_vertion`) и может отображаться как **10**;
+- при этом платформенный уровень API у штатных APK ориентирован на **API 28** (Pie): у `Launcher` `minSdkVersion`/`targetSdkVersion` = **28**; `FactoryMode` показывает и `SDK_INT`, и `RELEASE` отдельно;
+- `build.prop` в локальной выгрузке отсутствует, поэтому точный `ro.build.version.sdk` с устройства здесь не зафиксирован, но стек приложений и ключи Settings (`adayo_skin`, VHAL) соответствуют Adayo-линейке, а не «чистому» Android 10 AOSP.
+
+Итого: **не путать** маркетинговую/штатную надпись «Android 10» с `Build.VERSION.SDK_INT == 29`. Выбор бэкенда в TBox — ручной/авто через `HeadUnitCanMode`, а не только по `SDK_INT`.
+
 ---
 
 ## 1) Выбор между mbCAN и VHAL

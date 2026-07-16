@@ -23,6 +23,8 @@
 - **ГУ с Android 9** -> используется backend **mbCAN**.
 - **ГУ с Android 10** -> используется backend **VHAL** (`android.car` / `CarPropertyManager`).
 
+> «Android 10» здесь — название линейки Adayo/VHAL в приложении. На самом ГУ в заводском меню версия может отображаться как Android 10 (`Build.VERSION.RELEASE`), при этом API платформы часто остаётся 28 — подробнее в [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
+
 Переключение находится в настройках (две кнопки выбора типа ГУ).
 
 ### Что делает приложение при переключении
