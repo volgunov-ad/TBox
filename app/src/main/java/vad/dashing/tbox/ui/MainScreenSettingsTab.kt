@@ -726,17 +726,6 @@ fun MainScreenSettingsTab(
             maxValue = MAX_PANEL_GRID_SPACING_DP,
             enabled = hasMainScreenPanels,
         )
-        SettingSliderInt(
-            value = mainScreenPanelsLayoutSnapDp,
-            onValueChange = { settingsViewModel.saveMainScreenPanelsLayoutSnapDp(it) },
-            text = stringResource(
-                R.string.settings_panel_layout_snap_title,
-                mainScreenPanelsLayoutSnapDp,
-            ),
-            description = stringResource(R.string.settings_panel_layout_snap_desc),
-            minValue = MIN_PANEL_LAYOUT_SNAP_DP,
-            maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
-        )
         SettingDropdownGeneric(
             mainScreenPanelPageNumber,
             { page -> settingsViewModel.saveMainScreenPanelPageNumber(page) },
@@ -749,6 +738,17 @@ fun MainScreenSettingsTab(
             settingsViewModel = settingsViewModel,
             modifier = Modifier.padding(top = 8.dp),
             enabled = hasMainScreenPanels
+        )
+        SettingSliderInt(
+            value = mainScreenPanelsLayoutSnapDp,
+            onValueChange = { settingsViewModel.saveMainScreenPanelsLayoutSnapDp(it) },
+            text = stringResource(
+                R.string.settings_panel_layout_snap_title,
+                mainScreenPanelsLayoutSnapDp,
+            ),
+            description = stringResource(R.string.settings_panel_layout_snap_desc),
+            minValue = MIN_PANEL_LAYOUT_SNAP_DP,
+            maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
         )
         if (showMainScreenPanelOrderDialog) {
             PanelOrderConfigDialog(

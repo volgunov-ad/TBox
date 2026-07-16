@@ -1101,6 +1101,13 @@ fun FloatingPanelsSettingsTabContent(
             maxValue = MAX_PANEL_GRID_SPACING_DP,
             enabled = hasFloatingPanels,
         )
+        FloatingDashboardPositionSizeSettings(
+            settingsViewModel,
+            Modifier,
+            enabled = hasFloatingPanels,
+        )
+
+
         SettingSliderInt(
             value = floatingPanelsLayoutSnapDp,
             onValueChange = { settingsViewModel.saveFloatingPanelsLayoutSnapDp(it) },
@@ -1111,11 +1118,6 @@ fun FloatingPanelsSettingsTabContent(
             description = stringResource(R.string.settings_panel_layout_snap_desc),
             minValue = MIN_PANEL_LAYOUT_SNAP_DP,
             maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
-        )
-        FloatingDashboardPositionSizeSettings(
-            settingsViewModel,
-            Modifier,
-            enabled = hasFloatingPanels,
         )
 
         Text(
