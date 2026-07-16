@@ -24,31 +24,31 @@ class SlaSpeedLimitDomainTest {
     fun resolveSlaSignUiState_matchesStockAdasCard() {
         assertEquals(
             SlaSignUiState.Inactive,
-            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 1, slaStateRaw = 1, slaLimitRaw = 5),
+            SlaSpeedLimitDomain.resolveSlaSignUiState(slaOnOffRaw = 1, slaStateRaw = 1, slaLimitRaw = 5),
         )
         assertEquals(
             SlaSignUiState.Inactive,
-            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 0, slaLimitRaw = 5),
+            SlaSpeedLimitDomain.resolveSlaSignUiState(slaOnOffRaw = 2, slaStateRaw = 0, slaLimitRaw = 5),
         )
         assertEquals(
             SlaSignUiState.Inactive,
-            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 1, slaLimitRaw = 0),
+            SlaSpeedLimitDomain.resolveSlaSignUiState(slaOnOffRaw = 2, slaStateRaw = 1, slaLimitRaw = 0),
         )
         assertEquals(
             SlaSignUiState.EndOfRestriction,
-            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 1, slaLimitRaw = 1),
+            SlaSpeedLimitDomain.resolveSlaSignUiState(slaOnOffRaw = 2, slaStateRaw = 1, slaLimitRaw = 1),
         )
         assertEquals(
             SlaSignUiState.EndOfRestriction,
-            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 3, slaLimitRaw = 1),
+            SlaSpeedLimitDomain.resolveSlaSignUiState(slaOnOffRaw = 2, slaStateRaw = 3, slaLimitRaw = 1),
         )
         assertEquals(
             SlaSignUiState.Limit(60),
-            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 2, slaLimitRaw = 13),
+            SlaSpeedLimitDomain.resolveSlaSignUiState(slaOnOffRaw = 2, slaStateRaw = 2, slaLimitRaw = 13),
         )
         assertEquals(
             SlaSignUiState.Inactive,
-            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 4, slaLimitRaw = 13),
+            SlaSpeedLimitDomain.resolveSlaSignUiState(slaOnOffRaw = 2, slaStateRaw = 4, slaLimitRaw = 13),
         )
     }
 
