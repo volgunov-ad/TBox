@@ -2084,6 +2084,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     fun scheduleSaveMainScreenCurrentPage(page: Int) {
+        if (settingsManager.themeActivationInProgressFlow.value) return
         liveMainScreenCurrentPage.value = page
         pendingCurrentPage = page
         saveCurrentPageJob?.cancel()
@@ -2107,11 +2108,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     private suspend fun flushMainScreenCurrentPageInternal() {
         currentPageFlushMutex.withLock {
+            if (pendingCurrentPage == null) return
+            if (settingsManager.themeActivationInProgressFlow.value) return
             val toSave = pendingCurrentPage ?: return
             val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
             pendingCurrentPage = null
             settingsManager.saveMainScreenCurrentPage(toSave)
-            if (settingsManager.themeActivationInProgressFlow.value) return
             if (settingsManager.activeThemeUriFlow.first().trim() != syncCacheKey) return
             if (ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)) {
                 settingsManager.syncThemeCurrentPage(syncCacheKey, toSave)
