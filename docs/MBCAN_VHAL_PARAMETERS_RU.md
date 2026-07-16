@@ -49,14 +49,14 @@
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — SLA on/off | mbCAN **18** `eVEHICLE_PROPERTY_TSR_SPEED_LIMIT_SIGN` | **1** → Off, **2** → On (`decodeSlaOnOffRaw`) | mbCAN **18** | **1** → выкл, **2** → вкл (`encodeSlaSwitchOn`) | **Push:** cfg_vehicle item 18. **Pull:** `refreshSlaSpeedLimit()` (signal `SlaSpeedLimit`). LKA `FCM_2_SLAOnOffsts` **игнорируется** |
-| **Android 10** — SLA on/off | VHAL **289415709** `R_0B00_FCM_2_SLAOnOffsts` (read map от 18) | **0** → Off, **1** → On (`decodeSlaOnOffVhalRaw`) | VHAL **289415947** `T_0B01_IHU_8_SLAOnOffReq` (write map от 18) | **1** → выкл, **2** → вкл (mbCAN-семантика в `encodeSlaSwitchOn`) | **Push:** onChange 289415709. **Pull:** `refreshSignal(SlaSpeedLimit)` |
+| **Android 10** — SLA on/off | VHAL **289415709** `R_0B00_FCM_2_SLAOnOffsts` (read map от 18) | raw == 1 On (`decodeSlaOnOffVhalRaw`) | VHAL **289415947** `T_0B01_IHU_8_SLAOnOffReq` (write map от 18) | **1** → выкл, **2** → вкл (mbCAN-семантика в `encodeSlaSwitchOn`) | **Push:** onChange 289415709. **Pull:** `refreshSignal(SlaSpeedLimit)`. В штатных app (CarSettings / HVAC / Launcher ADAS / MediaService / SpeechHMI) **UI encode/decode не найден** — только ID в `VehiclePropertyIds` |
 
 ### Ограничитель скорости — переключатель
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — Limiter switch | mbCAN **254** `eVEHICLE_SPEEDLIMIT_SWITCH` | **1** → Off, **2** → On (`decodeSpeedLimiterSwitchRaw`) | mbCAN **254** | **1** / **2** (`encodeSpeedLimiterSwitchOn`) | **Push:** cfg_vehicle 254. **Pull:** `refreshSpeedLimiter()` |
-| **Android 10** — Limiter switch | VHAL id из `resolveReadPropertyId(254)` или **254** | **1** → Off, **2** → On | VHAL id из `resolveWritePropertyId(254)` или **254** | **1** / **2** (identity) | **Push:** onChange (если property в firmware). **Pull:** `refreshSignal(SpeedLimiter)` |
+| **Android 10** — Limiter switch | VHAL id из `resolveReadPropertyId(254)` или **254** | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`) | VHAL id из `resolveWritePropertyId(254)` или **254** | **1** / **2** (identity) | **Push:** onChange (если property в firmware). **Pull:** `refreshSignal(SpeedLimiter)` |
 
 ### Ограничитель скорости — целевая скорость (km/h)
 
@@ -70,22 +70,20 @@
 ## Кузов и комфорт (бинарные переключатели)
 
 Общая mbCAN-семантика для большинства toggles: **1 = Off, 2 = On** (`decodeSteeringWheelHeatRaw`).  
-На VHAL **чтение** часто: **1 = On, 0/2 = Off** (`decodeVhalBinaryOneIsOn`); **запись** — per-property (см. таблицу).
+На VHAL **чтение** бинарных ON/OFF как в штате: **selected = (raw == 1)** (`decodeVhalBinaryOneIsOn`); исключение — **Front OFF**: selected = `(raw == 0)`. **Запись** — per-property (см. таблицу).
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — Подогрев руля | **188** | 1 Off / 2 On | **188** | toggle: 1↔2 | cfg push **188** + pull `SteeringWheelHeat` |
-| **Android 10** — Подогрев руля | VHAL **289412111** ← 188 | 1 On / 0,2 Off | VHAL **289412679** ← 188 | **1** on / **2** off | onChange + pull |
-| **Android 9** — Обслуживание дворников | **185** | decode как 188 (1 Off / 2 On)* | **185** | toggle policy **inverted**: on→**1**, off→**2** | cfg push **185** + pull |
-| **Android 10** — Обслуживание дворников | VHAL **289412194** ← 185 | 1 On / 0,2 Off | VHAL **289412682** ← 185 | **1** on / **2** off | onChange + pull |
+| **Android 10** — Подогрев руля | VHAL **289412111** ← 188 | raw == 1 On | VHAL **289412679** ← 188 | **1** on / **2** off | onChange + pull |
+| **Android 9** — Обслуживание дворников | **185** | **1** Off (рабочий) / **2** On (сервис) | **185** | **2** on / **1** off (как TTG / доп. меню) | cfg push **185** + pull |
+| **Android 10** — Обслуживание дворников | VHAL **289412194** ← 185 | raw == 1 On | VHAL **289412682** ← 185 | **1** on / **2** off (как CarSettings) | onChange + pull |
 | **Android 9** — Парктроник (PAS) | **218** | 1 Off / 2 On | **218** | 1↔2 | cfg push + pull |
-| **Android 10** — Парктроник | VHAL **289412233** ← 218 | 1 On / 0,2 Off | VHAL **289415942** ← 218 | **2** on / **1** off | onChange + pull |
+| **Android 10** — Парктроник | VHAL **289412233** ← 218 | raw == 1 On | VHAL **289415942** ← 218 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Подогрев лобового стекла | **316** | 1 Off / 2 On | **316** | 1↔2 | cfg push + pull |
-| **Android 10** — Подогрев лобового | VHAL **289412114** ← 316 | 1 On / 0,2 Off | VHAL **289415309** ← 316 | **2** on / **1** off | onChange + pull |
+| **Android 10** — Подогрев лобового | VHAL **289412114** ← 316 | raw == 1 On | VHAL **289415309** ← 316 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Беспроводная зарядка | **264** | 1 Off / 2 On | **264** | 1↔2 | cfg push + pull `WirelessChargingSwitch` |
 | **Android 10** — Беспроводная зарядка | — (pull/push **не подключены**) | — | VHAL id из firmware для **264** (если есть) | 1↔2 | **Pull/push в A10 не реализованы** (`signalReadPropertyIds` = ∅) |
-
-\* На A9 для **185** в push/read используется `decodeSteeringWheelHeatRaw`, а toggle-policy в registry инвертирована (on=1, off=2) — см. `MbCanCommandRegistry`.
 
 ---
 
@@ -94,17 +92,17 @@
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — AC (компрессор) | **36** `HVAC_POWER` | 1 Off / 2 On | **36** | 1↔2 | cfg push + pull |
-| **Android 10** — AC | VHAL **289415180** ← 36 | 1 On / 0,2 Off | VHAL **289415300** ← 36 | **2** on / **1** off | onChange + pull |
+| **Android 10** — AC | VHAL **289415180** ← 36 | raw == 1 On | VHAL **289415300** ← 36 | **2** on / **1** off | onChange + pull |
 | **Android 9** — AUTO | **110** | 1 Off / 2 On | **110** | 1↔2 | cfg push + pull |
-| **Android 10** — AUTO | VHAL **289415182** ← 110 | 1 On / 0,2 Off | VHAL **289415311** ← 110 | **2** on / **1** off | onChange + pull |
+| **Android 10** — AUTO | VHAL **289415182** ← 110 | raw == 1 On | VHAL **289415311** ← 110 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Рециркуляция | **39** | **1** → On (внутри), **2** → Off (снаружи) | **39** | 1↔2 | cfg push + pull |
-| **Android 10** — Рециркуляция | VHAL **289415172** ← 39 | то же (mbCAN decode) | VHAL **289415302** ← 39 | **1** recirc on / **2** off | onChange + pull |
+| **Android 10** — Рециркуляция | VHAL **289415172** ← 39 | raw == 1 On (внутри); штат UI «снаружи» = raw == 2 | VHAL **289415302** ← 39 | **1** recirc on / **2** off | onChange + pull |
 | **Android 9** — Обогрев заднего стекла + зеркал | **41** `HVAC_DEFROSTER` | 1 Off / 2 On | **41** | 1↔2 | cfg push + pull |
-| **Android 10** — Обогрев заднего стекла | VHAL **289415177** ← 41 | 1 On / 0,2 Off | VHAL **289415299** ← 41 | **2** on / **1** off | onChange + pull |
+| **Android 10** — Обогрев заднего стекла | VHAL **289415177** ← 41 | raw == 1 On | VHAL **289415299** ← 41 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Front OFF (передняя зона выкл) | **90** | **1** → UI On (климат выкл), **2** → UI Off | **90** | **2** climate on / **1** off (`encodeHvacFrontOffMbCanWrite`) | cfg push + pull |
-| **Android 10** — Front OFF | VHAL **289415175** ← 90 | то же decode | VHAL **289415301** ← 90 | **1** on (climate off) / **2** off (`encodeVhalBinaryWriteValue`) | onChange + pull |
+| **Android 10** — Front OFF | VHAL **289415175** ← 90 | raw == **0** On (`decodeHvacFrontOffVhalRaw`) | VHAL **289415301** ← 90 | **1** on (climate off) / **2** off | onChange + pull |
 | **Android 9** — SYNC dual-zone | **94** | **2** On / **1** Off (`decodeHvacSyncMbCanRaw`) | **94** | **2** on / **1** off | cfg push + pull |
-| **Android 10** — SYNC | VHAL **289415181** ← 94 | **1** On / **0** Off (`decodeHvacSyncVhalRaw`) | VHAL **289415308** ← 94 | **2** on / **1** off | onChange + pull |
+| **Android 10** — SYNC | VHAL **289415181** ← 94 | raw == 1 On (`decodeHvacSyncVhalRaw`) | VHAL **289415308** ← 94 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Температура левая | **37** | raw 160…300 → °C = raw/10 (`mbCanTempRawToCelsius`) | **37** | 160…300, шаг 5 | cfg push + pull |
 | **Android 10** — Температура левая | VHAL **289415169** ← 37 | raw 32…60 → °C = raw/2 | VHAL **289415313** ← 37 | VHAL raw через `mbCanTempRawToVhalWrite` | onChange + pull |
 | **Android 9** — Температура правая | **111** | то же | **111** | то же | cfg push + pull |

@@ -29,7 +29,16 @@ class SlaSpeedLimitDomainTest {
     fun decodeSlaOnOffVhalRaw_mapsBinaryStates() {
         assertEquals(MbCanBinaryState.On, SlaSpeedLimitDomain.decodeSlaOnOffVhalRaw(1))
         assertEquals(MbCanBinaryState.Off, SlaSpeedLimitDomain.decodeSlaOnOffVhalRaw(0))
-        assertEquals(MbCanBinaryState.Unknown, SlaSpeedLimitDomain.decodeSlaOnOffVhalRaw(2))
+        assertEquals(MbCanBinaryState.Off, SlaSpeedLimitDomain.decodeSlaOnOffVhalRaw(2))
+        assertEquals(MbCanBinaryState.Off, SlaSpeedLimitDomain.decodeSlaOnOffVhalRaw(3))
+    }
+
+    @Test
+    fun decodeSpeedLimiterSwitchVhalRaw_mapsBinaryStates() {
+        assertEquals(MbCanBinaryState.On, SlaSpeedLimitDomain.decodeSpeedLimiterSwitchVhalRaw(1))
+        assertEquals(MbCanBinaryState.Off, SlaSpeedLimitDomain.decodeSpeedLimiterSwitchVhalRaw(0))
+        assertEquals(MbCanBinaryState.Off, SlaSpeedLimitDomain.decodeSpeedLimiterSwitchVhalRaw(2))
+        assertEquals(MbCanBinaryState.Off, SlaSpeedLimitDomain.decodeSpeedLimiterSwitchVhalRaw(3))
     }
 
     @Test

@@ -252,10 +252,11 @@ object MbCanCommandRegistry {
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+            // Same as TTG / доп. меню: service on=2, working/off=1.
             policy = MbCanCommandPolicy.ToggleBinary(
-                offValue = 2,
-                onValue = 1,
-                unknownFallbackValue = 1
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.WiperMaintenance
         ),

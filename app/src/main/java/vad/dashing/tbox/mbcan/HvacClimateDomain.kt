@@ -97,18 +97,16 @@ object HvacClimateDomain {
         else -> -1
     }
 
-    /** mbCAN / write: 1 off, 2 on. VHAL read: 1 on, 0 off. */
+    /** mbCAN / write: 1 off, 2 on. */
     fun decodeHvacSyncMbCanRaw(raw: Int): MbCanBinaryState = when (raw) {
         2 -> MbCanBinaryState.On
         1 -> MbCanBinaryState.Off
         else -> MbCanBinaryState.Unknown
     }
 
-    fun decodeHvacSyncVhalRaw(raw: Int): MbCanBinaryState = when (raw) {
-        1 -> MbCanBinaryState.On
-        0 -> MbCanBinaryState.Off
-        else -> MbCanBinaryState.Unknown
-    }
+    /** VHAL read: stock-style selected when raw == 1. */
+    fun decodeHvacSyncVhalRaw(raw: Int): MbCanBinaryState =
+        if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off
 
     fun encodeHvacSyncMbCanWrite(targetOn: Boolean): Int = if (targetOn) 2 else 1
 
@@ -124,7 +122,12 @@ object HvacClimateDomain {
         else -> MbCanBinaryState.Unknown
     }
 
-    fun decodeHvacFrontOffVhalRaw(raw: Int): MbCanBinaryState = decodeHvacFrontOffMbCanRaw(raw)
+    /**
+     * VHAL [R_0200_CEM_IPM_FrontOFFSts] as in stock AirConditioning:
+     * selected (front climate off) when raw == 0; otherwise not selected.
+     */
+    fun decodeHvacFrontOffVhalRaw(raw: Int): MbCanBinaryState =
+        if (raw == 0) MbCanBinaryState.On else MbCanBinaryState.Off
 
     /** Write [T_0201_IHU_5_FrontOFF_Req]: 2 = climate on, 1 = climate off. */
     fun encodeHvacFrontOffMbCanWrite(targetClimateOn: Boolean): Int = if (targetClimateOn) 2 else 1

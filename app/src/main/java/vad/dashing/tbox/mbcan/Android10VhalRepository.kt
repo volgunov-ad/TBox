@@ -841,12 +841,9 @@ object Android10VhalRepository {
 
     // For several VHAL read-status properties in stock apps, ON is encoded as 1 and OFF as 2.
     // Keep this decoder local to Android10VhalRepository to avoid affecting mbCAN behavior.
-    private fun decodeVhalBinaryOneIsOn(raw: Int): MbCanBinaryState = when (raw) {
-        1 -> MbCanBinaryState.On
-        // Stock UI checks "==1" for ON; everything else is treated as unchecked/off.
-        0, 2 -> MbCanBinaryState.Off
-        else -> MbCanBinaryState.Unknown
-    }
+    /** Stock VHAL binary ON/OFF read: selected when raw == 1, otherwise off. */
+    private fun decodeVhalBinaryOneIsOn(raw: Int): MbCanBinaryState =
+        if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off
 
     private fun isVhalBinaryToggleProperty(propertyId: Int): Boolean = when (propertyId) {
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
@@ -863,13 +860,12 @@ object Android10VhalRepository {
     }
 
     private fun decodeVhalBinaryReadState(propertyId: Int, raw: Int): MbCanBinaryState = when (propertyId) {
-        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION ->
-            MbCanSignalStateEngine.decodeHvacAirRecirculationRaw(raw)
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH,
+        MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION,
         MbCanKnownVehiclePropertyId.HVAC_POWER,
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE ->
             decodeVhalBinaryOneIsOn(raw)
@@ -883,9 +879,11 @@ object Android10VhalRepository {
     }
 
     private fun encodeVhalBinaryWriteValue(propertyId: Int, targetOn: Boolean): Int? = when (propertyId) {
-        // Stock: T_0401_SET_MFS_Heat and T_0401_SET_Wiper_Maintenance use 1=on, 2=off.
+        // Stock CarSettings/HVAC: T_0401_SET_MFS_Heat and T_0401_SET_Wiper_Maintenance use 1=on, 2=off.
         MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH,
-        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH ->
+        MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH,
+        // Stock HVAC: T_0201_IHU_5_FrontOFF_Req — selected (climate off) writes 1, else 2.
+        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
             if (targetOn) 1 else 2
         // Stock: these writes use 2=on, 1=off.
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH,
@@ -900,8 +898,6 @@ object Android10VhalRepository {
             else MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION_VALUE_OFF
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH ->
             HvacClimateDomain.encodeHvacSyncVhalWrite(targetOn)
-        MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
-            if (targetOn) 1 else 2
         else -> null
     }
 
@@ -967,7 +963,7 @@ object Android10VhalRepository {
                 }
             resolved(MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION) ->
                 raw?.let {
-                    stateEngine.applyHvacAirRecirculationCandidate(MbCanSignalStateEngine.decodeHvacAirRecirculationRaw(it))
+                    stateEngine.applyHvacAirRecirculationCandidate(decodeVhalBinaryOneIsOn(it))
                 }
             resolved(MbCanKnownVehiclePropertyId.HVAC_POWER) ->
                 raw?.let {
@@ -1018,7 +1014,7 @@ object Android10VhalRepository {
             FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS ->
                 _slaOnOffState.value = raw?.let(SlaSpeedLimitDomain::decodeSlaOnOffVhalRaw) ?: MbCanBinaryState.Unknown
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH) ->
-                _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
+                _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchVhalRaw)
                     ?: MbCanBinaryState.Unknown
             resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) ->
                 raw?.let {
@@ -1263,7 +1259,7 @@ object Android10VhalRepository {
                     ?: MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION
                 val raw = bridge?.getIntProperty(propertyId)
                 stateEngine.applyHvacAirRecirculationCandidate(
-                    raw?.let(MbCanSignalStateEngine::decodeHvacAirRecirculationRaw) ?: MbCanBinaryState.Unknown
+                    raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }
             MbCanSignal.HvacAcPower -> {
@@ -1406,7 +1402,7 @@ object Android10VhalRepository {
                     .resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
                     ?: MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH
                 val raw = bridge?.getIntProperty(switchId)
-                _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
+                _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchVhalRaw)
                     ?: MbCanBinaryState.Unknown
             }
             MbCanSignal.WirelessChargingSwitch -> Unit
