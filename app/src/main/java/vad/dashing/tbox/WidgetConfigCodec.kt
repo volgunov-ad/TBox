@@ -8,7 +8,11 @@ import kotlin.math.roundToInt
 
 private const val LEGACY_WIDGETS_SEPARATOR = "|"
 private const val LEGACY_APP_LAUNCHER_WIDGET_DATA_KEY = "launchAppWidget"
-private val REMOVED_WIDGET_DATA_KEYS = setOf("wirelessChargingWidget")
+private val REMOVED_WIDGET_DATA_KEYS = setOf(
+    "wirelessChargingWidget",
+    // Speed limiter widget: not offered until fully debugged (also commented out in WidgetsRepository).
+    SPEED_LIMITER_WIDGET_DATA_KEY,
+)
 const val DEFAULT_WIDGET_SCALE = 1.0f
 private const val MIN_WIDGET_SCALE = 0.1f
 private const val MAX_WIDGET_SCALE = 2f
