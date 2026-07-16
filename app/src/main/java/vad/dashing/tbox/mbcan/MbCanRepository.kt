@@ -516,7 +516,7 @@ object MbCanRepository {
         )
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            // Toggle UI reads VEHICLE_TSR_SWITCH only (cfg push + refresh); ignore FCM_2_SLAOnOffsts here.
+            // Toggle UI reads TSR_SPEED_LIMIT_SIGN (18) only (cfg push + refresh); ignore FCM_2_SLAOnOffsts here.
             slaLimitRaw?.let { _slaRecognizedSpeedLimitKmh.value = SlaSpeedLimitDomain.decodeRecognizedSpeedKmh(it) }
         }
     }

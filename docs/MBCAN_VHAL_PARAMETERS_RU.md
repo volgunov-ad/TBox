@@ -48,8 +48,8 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — SLA on/off | mbCAN **235** `eVEHICLE_TSR_SWITCH` | **1** → Off, **2** → On (`decodeSlaOnOffRaw`) | mbCAN **235** | **1** → выкл, **2** → вкл (`encodeSlaSwitchOn`) | **Push:** cfg_vehicle item 235. **Pull:** `refreshSlaSpeedLimit()` (signal `SlaSpeedLimit`). LKA `FCM_2_SLAOnOffsts` **игнорируется** |
-| **Android 10** — SLA on/off | VHAL **289415709** `R_0B00_FCM_2_SLAOnOffsts` (read map от 235) | **0** → Off, **1** → On (`decodeSlaOnOffVhalRaw`) | VHAL **289415947** `T_0B01_IHU_8_SLAOnOffReq` (write map от 235) | **1** → выкл, **2** → вкл (mbCAN-семантика в `encodeSlaSwitchOn`) | **Push:** onChange 289415709. **Pull:** `refreshSignal(SlaSpeedLimit)` |
+| **Android 9** — SLA on/off | mbCAN **18** `eVEHICLE_PROPERTY_TSR_SPEED_LIMIT_SIGN` | **1** → Off, **2** → On (`decodeSlaOnOffRaw`) | mbCAN **18** | **1** → выкл, **2** → вкл (`encodeSlaSwitchOn`) | **Push:** cfg_vehicle item 18. **Pull:** `refreshSlaSpeedLimit()` (signal `SlaSpeedLimit`). LKA `FCM_2_SLAOnOffsts` **игнорируется** |
+| **Android 10** — SLA on/off | VHAL **289415709** `R_0B00_FCM_2_SLAOnOffsts` (read map от 18) | **0** → Off, **1** → On (`decodeSlaOnOffVhalRaw`) | VHAL **289415947** `T_0B01_IHU_8_SLAOnOffReq` (write map от 18) | **1** → выкл, **2** → вкл (mbCAN-семантика в `encodeSlaSwitchOn`) | **Push:** onChange 289415709. **Pull:** `refreshSignal(SlaSpeedLimit)` |
 
 ### Ограничитель скорости — переключатель
 

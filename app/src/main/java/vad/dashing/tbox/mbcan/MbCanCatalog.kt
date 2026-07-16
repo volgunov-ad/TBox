@@ -187,8 +187,8 @@ object MbCanKnownVehiclePropertyId {
     const val VEHICLE_POWERMODE = 147
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_DRIVEMODE_6DCT_WET] — 0–6. */
     const val VEHICLE_DRIVEMODE_6DCT_WET = 149
-    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_TSR_SWITCH] — SLA/TSR; 1 off, 2 on. */
-    const val VEHICLE_TSR_SWITCH = 235
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_TSR_SPEED_LIMIT_SIGN] — SLA/TSR; 1 off, 2 on. */
+    const val VEHICLE_TSR_SWITCH = 18
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_VALUESET] — km/h 0..150. */
     const val VEHICLE_SPEEDLIMIT_VALUESET = 253
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_SWITCH] — 1 off, 2 on. */
