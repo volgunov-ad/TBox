@@ -15,18 +15,34 @@ object ThemeLayoutExport {
     private const val FORMAT_VERSION = 1
     private const val TYPE = "tbox_theme"
 
+    @JvmName("exportJsonFromSections")
     suspend fun exportJson(
         context: Context,
         settingsManager: SettingsManager,
         sections: Set<ThemeSection>,
+    ): String = exportJson(
+        context = context,
+        settingsManager = settingsManager,
+        applyTargets = ThemeApplyTarget.fromLegacySections(sections),
+    )
+
+    @JvmName("exportJsonFromApplyTargets")
+    suspend fun exportJson(
+        context: Context,
+        settingsManager: SettingsManager,
+        applyTargets: Set<ThemeApplyTarget>,
     ): String {
+        val sections = ThemeApplyTarget.exportSectionsFromTargets(applyTargets)
         val root = JSONObject()
         root.put("formatVersion", FORMAT_VERSION)
         root.put("type", TYPE)
         root.put("exportedAtMillis", System.currentTimeMillis())
         root.put("sections", ThemeSection.toJsonArray(sections))
         if (ThemeSection.MAIN_SCREEN in sections) {
-            root.put(ThemeSection.MAIN_SCREEN.jsonKey, buildMainScreenSection(context, settingsManager))
+            root.put(
+                ThemeSection.MAIN_SCREEN.jsonKey,
+                buildMainScreenSection(context, settingsManager, applyTargets),
+            )
         }
         if (ThemeSection.FLOATING_PANELS in sections) {
             root.put(ThemeSection.FLOATING_PANELS.jsonKey, buildFloatingPanelsSection(context, settingsManager))
@@ -37,11 +53,28 @@ object ThemeLayoutExport {
         return root.toString(2)
     }
 
+    @JvmName("importJsonFromSections")
     suspend fun importJson(
         context: Context,
         settingsManager: SettingsManager,
         json: String,
     ): Result<Set<ThemeSection>> {
+        val sections = parseSectionsFromThemeJson(json)
+        return importJson(
+            context = context,
+            settingsManager = settingsManager,
+            json = json,
+            applyTargets = ThemeApplyTarget.fromLegacySections(sections),
+        ).map { sections }
+    }
+
+    @JvmName("importJsonWithApplyTargets")
+    suspend fun importJson(
+        context: Context,
+        settingsManager: SettingsManager,
+        json: String,
+        applyTargets: Set<ThemeApplyTarget>,
+    ): Result<Unit> {
         val root = runCatching { JSONObject(json) }.getOrElse {
             return Result.failure(IllegalArgumentException("invalid_json"))
         }
@@ -54,15 +87,22 @@ object ThemeLayoutExport {
         val sections = ThemeSection.parseJsonArray(root.optJSONArray("sections"))
         return runCatching {
             if (ThemeSection.MAIN_SCREEN in sections && root.has(ThemeSection.MAIN_SCREEN.jsonKey)) {
-                importMainScreenSection(root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey), settingsManager)
+                importMainScreenSection(
+                    section = root.optJSONObject(ThemeSection.MAIN_SCREEN.jsonKey),
+                    sm = settingsManager,
+                    applyTargets = applyTargets,
+                )
             }
-            if (ThemeSection.FLOATING_PANELS in sections && root.has(ThemeSection.FLOATING_PANELS.jsonKey)) {
+            if (
+                ThemeApplyTarget.FLOATING_PANELS in applyTargets &&
+                ThemeSection.FLOATING_PANELS in sections &&
+                root.has(ThemeSection.FLOATING_PANELS.jsonKey)
+            ) {
                 importFloatingPanelsSection(
                     root.optJSONObject(ThemeSection.FLOATING_PANELS.jsonKey),
                     settingsManager,
                 )
             }
-            sections
         }
     }
 
@@ -158,34 +198,47 @@ object ThemeLayoutExport {
         return keys
     }
 
-    private suspend fun buildMainScreenSection(context: Context, sm: SettingsManager): JSONObject {
+    private suspend fun buildMainScreenSection(
+        context: Context,
+        sm: SettingsManager,
+        applyTargets: Set<ThemeApplyTarget>,
+    ): JSONObject {
+        val includePanels = ThemeApplyTarget.MAIN_SCREEN_PANELS in applyTargets
+        val includeWallpapers = ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS in applyTargets
         val o = JSONObject()
-        o.put("pageCount", sm.mainScreenPageCountFlow.first())
-        o.put("currentPage", sm.mainScreenCurrentPageFlow.first())
-        o.put("theme", buildVisualTheme(sm))
-        o.put("settingsButton", buildNormalizedPosition(sm.mainScreenSettingsButtonFlow.first()))
-        o.put("addButton", buildNormalizedPosition(sm.mainScreenAddButtonFlow.first()))
-        o.put("pagePrevButton", buildNormalizedPosition(sm.mainScreenPagePrevButtonFlow.first()))
-        o.put("pageNextButton", buildNormalizedPosition(sm.mainScreenPageNextButtonFlow.first()))
-        o.put(
-            MainScreenWallpaperSelectionsByPage.JSON_KEY,
-            sm.mainScreenWallpaperSelectionByPageFlow.first().toJson(),
-        )
-        val lightFolderStr = sm.mainScreenWallpaperLightFolderUriFlow.first()
-        if (lightFolderStr.isNotBlank()) {
-            val lightImages = listSortedWallpaperImagesInFolder(context, Uri.parse(lightFolderStr))
-            if (lightImages.isNotEmpty()) {
-                o.put("wallpaperLightFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_LIGHT_DIR)
+        if (includePanels) {
+            o.put("pageCount", sm.mainScreenPageCountFlow.first())
+            o.put("currentPage", sm.mainScreenCurrentPageFlow.first())
+            o.put("theme", buildVisualTheme(sm))
+            o.put("settingsButton", buildNormalizedPosition(sm.mainScreenSettingsButtonFlow.first()))
+            o.put("addButton", buildNormalizedPosition(sm.mainScreenAddButtonFlow.first()))
+            o.put("pagePrevButton", buildNormalizedPosition(sm.mainScreenPagePrevButtonFlow.first()))
+            o.put("pageNextButton", buildNormalizedPosition(sm.mainScreenPageNextButtonFlow.first()))
+            o.put("panels", buildMainScreenPanels(context, sm))
+        }
+        if (includeWallpapers) {
+            if (!includePanels) {
+                o.put("currentPage", sm.mainScreenCurrentPageFlow.first())
+            }
+            o.put(
+                MainScreenWallpaperSelectionsByPage.JSON_KEY,
+                sm.mainScreenWallpaperSelectionByPageFlow.first().toJson(),
+            )
+            val lightFolderStr = sm.mainScreenWallpaperLightFolderUriFlow.first()
+            if (lightFolderStr.isNotBlank()) {
+                val lightImages = listSortedWallpaperImagesInFolder(context, Uri.parse(lightFolderStr))
+                if (lightImages.isNotEmpty()) {
+                    o.put("wallpaperLightFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_LIGHT_DIR)
+                }
+            }
+            val darkFolderStr = sm.mainScreenWallpaperDarkFolderUriFlow.first()
+            if (darkFolderStr.isNotBlank()) {
+                val darkImages = listSortedWallpaperImagesInFolder(context, Uri.parse(darkFolderStr))
+                if (darkImages.isNotEmpty()) {
+                    o.put("wallpaperDarkFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_DARK_DIR)
+                }
             }
         }
-        val darkFolderStr = sm.mainScreenWallpaperDarkFolderUriFlow.first()
-        if (darkFolderStr.isNotBlank()) {
-            val darkImages = listSortedWallpaperImagesInFolder(context, Uri.parse(darkFolderStr))
-            if (darkImages.isNotEmpty()) {
-                o.put("wallpaperDarkFolderBundledPath", ThemeBundleExport.ASSETS_WALLPAPER_DARK_DIR)
-            }
-        }
-        o.put("panels", buildMainScreenPanels(context, sm))
         return o
     }
 
@@ -318,19 +371,20 @@ object ThemeLayoutExport {
         return arr
     }
 
-    private suspend fun importMainScreenSection(section: JSONObject?, sm: SettingsManager) {
+    private suspend fun importMainScreenSection(
+        section: JSONObject?,
+        sm: SettingsManager,
+        applyTargets: Set<ThemeApplyTarget>,
+    ) {
         if (section == null) return
-        if (section.has("pageCount")) {
-            sm.saveMainScreenPageCount(section.optInt("pageCount", SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT))
+        if (ThemeApplyTarget.MAIN_SCREEN_PANELS in applyTargets) {
+            if (section.has("pageCount")) {
+                sm.saveMainScreenPageCount(section.optInt("pageCount", SettingsManager.DEFAULT_MAIN_SCREEN_PAGE_COUNT))
+            }
+            importVisualTheme(section.optJSONObject("theme"), sm)
+            importMainScreenButtons(section, sm)
+            importMainScreenPanels(section.optJSONArray("panels"), sm)
         }
-        if (section.has("currentPage")) {
-            sm.saveMainScreenCurrentPage(
-                section.optInt("currentPage", SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE),
-            )
-        }
-        importVisualTheme(section.optJSONObject("theme"), sm)
-        importMainScreenButtons(section, sm)
-        importMainScreenPanels(section.optJSONArray("panels"), sm)
     }
 
     private suspend fun importVisualTheme(theme: JSONObject?, sm: SettingsManager) {

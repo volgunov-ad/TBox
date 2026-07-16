@@ -367,6 +367,14 @@
     <string name="themes_create_section_floating_panels">Настройки плавающих панелей</string>
     <string name="themes_create_section_app_icons">Иконки приложений и HTTP-запросов</string>
     <string name="themes_create_section_app_icons_hint">Кастомные иконки для виджетов «Ярлык приложения», музыкального плеера и «HTTP-запрос».</string>
+    <string name="themes_target_main_screen_wallpapers">Фоны главного экрана</string>
+    <string name="themes_target_tile_backgrounds">Фоны плиток</string>
+    <string name="themes_target_app_icons">Иконки приложений и HTTP-запросов</string>
+    <string name="themes_target_main_screen_panels">Панели главного экрана</string>
+    <string name="themes_target_floating_panels">Плавающие панели</string>
+    <string name="themes_apply_targets_dialog_title">Что применить из темы</string>
+    <string name="themes_apply_targets_dialog_hint">Выберите элементы, которые нужно применить. Недоступные пункты отсутствуют в файле темы.</string>
+    <string name="themes_apply_targets_select_one">Выберите хотя бы один пункт</string>
     <string name="themes_create_confirm">Создать</string>
     <string name="themes_create_file_name_label">Имя файла</string>
     <string name="themes_create_file_name_hint">Без расширения .tboxtheme</string>

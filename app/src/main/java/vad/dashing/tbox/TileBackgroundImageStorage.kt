@@ -52,9 +52,8 @@ object TileBackgroundImageStorage {
             ThemeCacheKeys.sanitizeCacheKey(cacheKey),
         ).resolve(ThemeMaterialization.TILE_BACKGROUNDS_DIR)
 
-    fun themeSectionsIncludeTileBackgrounds(lookup: LauncherAppIconPaths.Lookup): Boolean =
-        ThemeSection.MAIN_SCREEN in lookup.activeThemeSections ||
-            ThemeSection.FLOATING_PANELS in lookup.activeThemeSections
+    fun themeTargetsIncludeTileBackgrounds(lookup: LauncherAppIconPaths.Lookup): Boolean =
+        ThemeApplyTarget.TILE_BACKGROUNDS in lookup.activeThemeApplyTargets
 
     /** Shared folder only (export helpers, legacy). */
     fun resolveFile(context: Context, relPath: String?): File? =
@@ -65,7 +64,7 @@ object TileBackgroundImageStorage {
         relPath: String?,
         lookup: LauncherAppIconPaths.Lookup,
     ): File? {
-        if (themeSectionsIncludeTileBackgrounds(lookup)) {
+        if (themeTargetsIncludeTileBackgrounds(lookup)) {
             resolveThemeCacheFile(filesDir, relPath, lookup.activeThemeCacheKey)?.let { return it }
         }
         return resolveSharedFile(filesDir, relPath)
@@ -75,7 +74,7 @@ object TileBackgroundImageStorage {
         resolveSharedFile(filesDir, relPath) != null
 
     fun hasThemeCacheFile(filesDir: File, relPath: String?, lookup: LauncherAppIconPaths.Lookup): Boolean {
-        if (!themeSectionsIncludeTileBackgrounds(lookup)) return false
+        if (!themeTargetsIncludeTileBackgrounds(lookup)) return false
         return resolveThemeCacheFile(filesDir, relPath, lookup.activeThemeCacheKey) != null
     }
 

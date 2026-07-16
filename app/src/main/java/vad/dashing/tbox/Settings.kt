@@ -481,6 +481,8 @@ class SettingsManager(private val context: Context) {
             stringPreferencesKey("${KEY_PREFIX}active_theme_fingerprint")
         private val ACTIVE_THEME_SECTIONS_KEY =
             stringPreferencesKey("${KEY_PREFIX}active_theme_sections")
+        private val ACTIVE_THEME_APPLY_TARGETS_KEY =
+            stringPreferencesKey("${KEY_PREFIX}active_theme_apply_targets")
         private val DRIVE_MODE_THEME_PATHS_KEY =
             stringPreferencesKey("${KEY_PREFIX}drive_mode_theme_paths")
 
@@ -771,6 +773,18 @@ class SettingsManager(private val context: Context) {
             ThemeSection.parseJsonArray(
                 runCatching { JSONArray(preferences[ACTIVE_THEME_SECTIONS_KEY].orEmpty()) }.getOrNull()
             )
+        }
+        .distinctUntilChanged()
+
+    val activeThemeApplyTargetsFlow: Flow<Set<ThemeApplyTarget>> = context.settingsDataStore.data
+        .map { preferences ->
+            val targets = ThemeApplyTarget.parseJsonArray(
+                runCatching { JSONArray(preferences[ACTIVE_THEME_APPLY_TARGETS_KEY].orEmpty()) }.getOrNull()
+            )
+            val sections = ThemeSection.parseJsonArray(
+                runCatching { JSONArray(preferences[ACTIVE_THEME_SECTIONS_KEY].orEmpty()) }.getOrNull()
+            )
+            ThemeApplyTarget.resolveActive(targets, sections)
         }
         .distinctUntilChanged()
 
@@ -1404,7 +1418,12 @@ class SettingsManager(private val context: Context) {
         saveCustomString(MAIN_SCREEN_PAGE_NEXT_BUTTON_KEY, obj.toString())
     }
 
-    suspend fun saveActiveTheme(uri: String, fingerprint: String, sections: Set<ThemeSection>) {
+    suspend fun saveActiveTheme(
+        uri: String,
+        fingerprint: String,
+        sections: Set<ThemeSection>,
+        applyTargets: Set<ThemeApplyTarget> = emptySet(),
+    ) {
         context.settingsDataStore.edit { preferences ->
             if (uri.isBlank()) {
                 preferences.remove(ACTIVE_THEME_URI_KEY)
@@ -1421,11 +1440,17 @@ class SettingsManager(private val context: Context) {
             } else {
                 preferences[ACTIVE_THEME_SECTIONS_KEY] = ThemeSection.toJsonArray(sections).toString()
             }
+            if (applyTargets.isEmpty()) {
+                preferences.remove(ACTIVE_THEME_APPLY_TARGETS_KEY)
+            } else {
+                preferences[ACTIVE_THEME_APPLY_TARGETS_KEY] =
+                    ThemeApplyTarget.toJsonArray(applyTargets).toString()
+            }
         }
     }
 
     suspend fun clearActiveTheme() {
-        saveActiveTheme(uri = "", fingerprint = "", sections = emptySet())
+        saveActiveTheme(uri = "", fingerprint = "", sections = emptySet(), applyTargets = emptySet())
     }
 
     suspend fun saveDriveModeThemePaths(paths: Map<Int, String>) {
@@ -1732,7 +1757,7 @@ class SettingsManager(private val context: Context) {
     suspend fun launcherAppIconLookup(): LauncherAppIconPaths.Lookup =
         LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = activeThemeUriFlow.first().trim(),
-            activeThemeSections = activeThemeSectionsFlow.first(),
+            activeThemeApplyTargets = activeThemeApplyTargetsFlow.first(),
         )
 
     suspend fun clearCustomLauncherAppIcon(packageName: String) {
@@ -1840,7 +1865,7 @@ class SettingsManager(private val context: Context) {
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
                 val lookup = launcherAppIconLookup()
-                if (TileBackgroundImageStorage.themeSectionsIncludeTileBackgrounds(lookup) &&
+                if (TileBackgroundImageStorage.themeTargetsIncludeTileBackgrounds(lookup) &&
                     TileBackgroundImageStorage.deleteThemeCacheFile(
                         context.filesDir,
                         rel,
