@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import androidx.compose.ui.window.PopupProperties
@@ -728,6 +730,50 @@ fun SettingInt(
                 )
             }
         }
+    }
+}
+
+/**
+ * Integer setting controlled by a Material3 [Slider] (1-unit steps), same title/hint layout as scale.
+ */
+@Composable
+fun SettingSliderInt(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    text: String,
+    description: String,
+    minValue: Int,
+    maxValue: Int,
+    enabled: Boolean = true,
+) {
+    val safeMin = minOf(minValue, maxValue)
+    val safeMax = maxOf(minValue, maxValue)
+    val steps = (safeMax - safeMin - 1).coerceAtLeast(0)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (description.isNotEmpty()) {
+            Text(
+                text = description,
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = value.coerceIn(safeMin, safeMax).toFloat(),
+            onValueChange = { onValueChange(it.roundToInt().coerceIn(safeMin, safeMax)) },
+            valueRange = safeMin.toFloat()..safeMax.toFloat(),
+            steps = steps,
+            enabled = enabled,
+            modifier = Modifier.padding(top = 6.dp),
+        )
     }
 }
 

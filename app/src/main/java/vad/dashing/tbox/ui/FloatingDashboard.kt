@@ -56,7 +56,9 @@ import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.resolveDriveModeWidgetOption
+import vad.dashing.tbox.snapToGrid
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
@@ -159,6 +161,10 @@ fun FloatingDashboard(
     )
     val dashboardState by dashboardViewModel.dashboardManager.dashboardState.collectAsStateWithLifecycle()
     val panelConfig by settingsViewModel.floatingDashboardConfig(panelId).collectAsStateWithLifecycle()
+    val floatingPanelsLayoutSnapDp by
+        settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val layoutSnapDp = normalizePanelLayoutSnapDp(floatingPanelsLayoutSnapDp)
+    val layoutSnapStepPx = with(density) { layoutSnapDp.dp.toPx() }
     val widgetConfigs = panelConfig.widgetsConfig
     val dashboardRows = panelConfig.rows
     val dashboardCols = panelConfig.cols
@@ -297,7 +303,7 @@ fun FloatingDashboard(
                     .then(
                         if (canManipulatePanel) {
                             // Avoid width/height in keys: they change while resizing and cancel the drag.
-                            Modifier.pointerInput(panelId) {
+                            Modifier.pointerInput(panelId, layoutSnapStepPx) {
                                 detectDragGestures(
                                     onDragStart = { startOffset ->
                                         val isNearBottomRight = isInResizeHandleArea(
@@ -316,14 +322,26 @@ fun FloatingDashboard(
                                     onDrag = { change, dragAmount ->
                                         change.consume()
                                         if (isDraggingMode) {
-                                            val newX = (windowParams.x + dragAmount.x).toInt().coerceAtLeast(0)
-                                            val newY = (windowParams.y + dragAmount.y).toInt().coerceAtLeast(-100)
+                                            val newX = snapToGrid(
+                                                windowParams.x + dragAmount.x,
+                                                layoutSnapStepPx,
+                                            ).toInt().coerceAtLeast(0)
+                                            val newY = snapToGrid(
+                                                windowParams.y + dragAmount.y,
+                                                layoutSnapStepPx,
+                                            ).toInt().coerceAtLeast(-100)
                                             onUpdateWindowPosition(panelId, newX, newY)
                                         } else if (isResizingMode) {
-                                            val newWidth = (windowParams.width + dragAmount.x).toInt()
-                                                .coerceAtLeast(50)
-                                            val newHeight = (windowParams.height + dragAmount.y).toInt()
-                                                .coerceAtLeast(50)
+                                            val newWidth = snapToGrid(
+                                                (windowParams.width + dragAmount.x)
+                                                    .coerceAtLeast(50f),
+                                                layoutSnapStepPx,
+                                            ).toInt().coerceAtLeast(50)
+                                            val newHeight = snapToGrid(
+                                                (windowParams.height + dragAmount.y)
+                                                    .coerceAtLeast(50f),
+                                                layoutSnapStepPx,
+                                            ).toInt().coerceAtLeast(50)
                                             onUpdateWindowSize(panelId, newWidth, newHeight)
                                         }
                                     },

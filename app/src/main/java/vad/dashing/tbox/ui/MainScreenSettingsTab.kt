@@ -49,6 +49,8 @@ import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MIN_PANEL_LAYOUT_SNAP_DP
+import vad.dashing.tbox.MAX_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -82,6 +84,8 @@ fun MainScreenSettingsTab(
     val mainScreenPanelCols by settingsViewModel.mainScreenPanelCols.collectAsStateWithLifecycle()
     val mainScreenPanelGridSpacingDp by
         settingsViewModel.mainScreenPanelGridSpacingDp.collectAsStateWithLifecycle()
+    val mainScreenPanelsLayoutSnapDp by
+        settingsViewModel.mainScreenPanelsLayoutSnapDp.collectAsStateWithLifecycle()
     val isMainScreenOpenOnBootEnabled by
         settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
     val mainScreenOpenOnBootDelaySeconds by
@@ -710,13 +714,28 @@ fun MainScreenSettingsTab(
             hasMainScreenPanels,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
-        SettingInt(
+        SettingSliderInt(
             value = mainScreenPanelGridSpacingDp,
             onValueChange = { settingsViewModel.saveMainScreenPanelGridSpacingDp(it) },
-            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            text = stringResource(
+                R.string.settings_panel_grid_spacing_title,
+                mainScreenPanelGridSpacingDp,
+            ),
             description = stringResource(R.string.settings_panel_grid_spacing_desc),
             minValue = MIN_PANEL_GRID_SPACING_DP,
             maxValue = MAX_PANEL_GRID_SPACING_DP,
+            enabled = hasMainScreenPanels,
+        )
+        SettingSliderInt(
+            value = mainScreenPanelsLayoutSnapDp,
+            onValueChange = { settingsViewModel.saveMainScreenPanelsLayoutSnapDp(it) },
+            text = stringResource(
+                R.string.settings_panel_layout_snap_title,
+                mainScreenPanelsLayoutSnapDp,
+            ),
+            description = stringResource(R.string.settings_panel_layout_snap_desc),
+            minValue = MIN_PANEL_LAYOUT_SNAP_DP,
+            maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
         )
         SettingDropdownGeneric(
             mainScreenPanelPageNumber,

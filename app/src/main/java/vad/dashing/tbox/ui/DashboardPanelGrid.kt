@@ -220,6 +220,7 @@ internal fun DashboardPanelGridAndFrames(
                         val shapeDp = normalizeWidgetShape(widgetConfig.shape).dp
 
                         Box(modifier = Modifier.weight(1f)) {
+                            WidgetCellContentPadding(widgetConfig = widgetConfig) {
                             if (useTileBackgroundUnderlay) {
                                 DashboardTileBackgroundImageUnderlay(
                                     relPath = tileBgRelPath,
@@ -297,6 +298,7 @@ internal fun DashboardPanelGridAndFrames(
                                     enableInnerInteractions = enableInnerInteractions,
                                     panelStorageId = panelStorageId,
                                 )
+                            }
                             }
                         }
                     }

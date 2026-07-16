@@ -50,6 +50,8 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MIN_PANEL_LAYOUT_SNAP_DP
+import vad.dashing.tbox.MAX_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.update.UpdateChannel
@@ -554,10 +556,13 @@ fun SettingsTabContent(
             true,
             SettingsManager.MAIN_TAB_DASHBOARD_GRID_OPTIONS
         )
-        SettingInt(
+        SettingSliderInt(
             value = dashboardGridSpacingDp,
             onValueChange = { settingsViewModel.saveDashboardGridSpacingDp(it) },
-            text = stringResource(R.string.settings_dashboard_grid_spacing_title),
+            text = stringResource(
+                R.string.settings_dashboard_grid_spacing_title,
+                dashboardGridSpacingDp,
+            ),
             description = stringResource(R.string.settings_dashboard_grid_spacing_desc),
             minValue = MIN_PANEL_GRID_SPACING_DP,
             maxValue = MAX_PANEL_GRID_SPACING_DP,
@@ -970,6 +975,8 @@ fun FloatingPanelsSettingsTabContent(
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
     val floatingDashboardGridSpacingDp by
         settingsViewModel.floatingDashboardGridSpacingDp.collectAsStateWithLifecycle()
+    val floatingPanelsLayoutSnapDp by
+        settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
     val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
 
@@ -1082,13 +1089,28 @@ fun FloatingPanelsSettingsTabContent(
             hasFloatingPanels,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS,
         )
-        SettingInt(
+        SettingSliderInt(
             value = floatingDashboardGridSpacingDp,
             onValueChange = { settingsViewModel.saveFloatingDashboardGridSpacingDp(it) },
-            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            text = stringResource(
+                R.string.settings_panel_grid_spacing_title,
+                floatingDashboardGridSpacingDp,
+            ),
             description = stringResource(R.string.settings_panel_grid_spacing_desc),
             minValue = MIN_PANEL_GRID_SPACING_DP,
             maxValue = MAX_PANEL_GRID_SPACING_DP,
+            enabled = hasFloatingPanels,
+        )
+        SettingSliderInt(
+            value = floatingPanelsLayoutSnapDp,
+            onValueChange = { settingsViewModel.saveFloatingPanelsLayoutSnapDp(it) },
+            text = stringResource(
+                R.string.settings_panel_layout_snap_title,
+                floatingPanelsLayoutSnapDp,
+            ),
+            description = stringResource(R.string.settings_panel_layout_snap_desc),
+            minValue = MIN_PANEL_LAYOUT_SNAP_DP,
+            maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
         )
         FloatingDashboardPositionSizeSettings(
             settingsViewModel,

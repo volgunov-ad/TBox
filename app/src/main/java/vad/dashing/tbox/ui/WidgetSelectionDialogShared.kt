@@ -86,6 +86,7 @@ import vad.dashing.tbox.normalizeStepperAdjustIconStyle
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_ARROWS
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.normalizePanelGridSpacingDp
+import vad.dashing.tbox.normalizeWidgetPaddingPercent
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_CENTER
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_END
@@ -96,7 +97,9 @@ import vad.dashing.tbox.WIDGET_TITLE_POSITION_TOP
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.DEFAULT_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MAX_WIDGET_PADDING_PERCENT
 import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MIN_WIDGET_PADDING_PERCENT
 import vad.dashing.tbox.resolveDefaultTitlePositionForDataKey
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
@@ -161,6 +164,18 @@ internal class WidgetSelectionDialogState(
     )
     var scale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
     var shape by mutableIntStateOf(normalizeWidgetShape(initialConfig.shape))
+    var paddingTopPercent by mutableIntStateOf(
+        normalizeWidgetPaddingPercent(initialConfig.paddingTopPercent)
+    )
+    var paddingBottomPercent by mutableIntStateOf(
+        normalizeWidgetPaddingPercent(initialConfig.paddingBottomPercent)
+    )
+    var paddingStartPercent by mutableIntStateOf(
+        normalizeWidgetPaddingPercent(initialConfig.paddingStartPercent)
+    )
+    var paddingEndPercent by mutableIntStateOf(
+        normalizeWidgetPaddingPercent(initialConfig.paddingEndPercent)
+    )
     var textColorLight by mutableIntStateOf(initialConfig.textColorLight)
     var textColorDark by mutableIntStateOf(initialConfig.textColorDark)
     var backgroundColorLight by mutableIntStateOf(
@@ -530,13 +545,17 @@ private fun MainScreenPanelWholeSettingsSection(
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
-        SettingInt(
+        SettingSliderInt(
             value = state.wholePanelGridSpacingDp,
             onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
-            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            text = stringResource(
+                R.string.settings_panel_grid_spacing_title,
+                state.wholePanelGridSpacingDp,
+            ),
             description = stringResource(R.string.settings_panel_grid_spacing_desc),
             minValue = MIN_PANEL_GRID_SPACING_DP,
             maxValue = MAX_PANEL_GRID_SPACING_DP,
+            enabled = enabled,
         )
         SettingDropdownGeneric(
             state.wholePanelPageNumber,
@@ -601,13 +620,17 @@ private fun FloatingDashboardWholeSettingsSection(
             enabled,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
         )
-        SettingInt(
+        SettingSliderInt(
             value = state.wholePanelGridSpacingDp,
             onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
-            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            text = stringResource(
+                R.string.settings_panel_grid_spacing_title,
+                state.wholePanelGridSpacingDp,
+            ),
             description = stringResource(R.string.settings_panel_grid_spacing_desc),
             minValue = MIN_PANEL_GRID_SPACING_DP,
             maxValue = MAX_PANEL_GRID_SPACING_DP,
+            enabled = enabled,
         )
     }
 }
@@ -991,6 +1014,56 @@ internal fun WidgetSelectionDialogForm(
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
+                    SettingSliderInt(
+                        value = state.paddingTopPercent,
+                        onValueChange = {
+                            state.paddingTopPercent = normalizeWidgetPaddingPercent(it)
+                        },
+                        text = stringResource(R.string.widget_padding_top, state.paddingTopPercent),
+                        description = stringResource(R.string.widget_padding_hint),
+                        minValue = MIN_WIDGET_PADDING_PERCENT,
+                        maxValue = MAX_WIDGET_PADDING_PERCENT,
+                        enabled = state.togglesEnabled,
+                    )
+                    SettingSliderInt(
+                        value = state.paddingBottomPercent,
+                        onValueChange = {
+                            state.paddingBottomPercent = normalizeWidgetPaddingPercent(it)
+                        },
+                        text = stringResource(
+                            R.string.widget_padding_bottom,
+                            state.paddingBottomPercent,
+                        ),
+                        description = stringResource(R.string.widget_padding_hint),
+                        minValue = MIN_WIDGET_PADDING_PERCENT,
+                        maxValue = MAX_WIDGET_PADDING_PERCENT,
+                        enabled = state.togglesEnabled,
+                    )
+                    SettingSliderInt(
+                        value = state.paddingStartPercent,
+                        onValueChange = {
+                            state.paddingStartPercent = normalizeWidgetPaddingPercent(it)
+                        },
+                        text = stringResource(
+                            R.string.widget_padding_start,
+                            state.paddingStartPercent,
+                        ),
+                        description = stringResource(R.string.widget_padding_hint),
+                        minValue = MIN_WIDGET_PADDING_PERCENT,
+                        maxValue = MAX_WIDGET_PADDING_PERCENT,
+                        enabled = state.togglesEnabled,
+                    )
+                    SettingSliderInt(
+                        value = state.paddingEndPercent,
+                        onValueChange = {
+                            state.paddingEndPercent = normalizeWidgetPaddingPercent(it)
+                        },
+                        text = stringResource(R.string.widget_padding_end, state.paddingEndPercent),
+                        description = stringResource(R.string.widget_padding_hint),
+                        minValue = MIN_WIDGET_PADDING_PERCENT,
+                        maxValue = MAX_WIDGET_PADDING_PERCENT,
+                        enabled = state.togglesEnabled,
+                    )
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1560,6 +1633,10 @@ internal fun applyWidgetSelectionChanges(
             textAlign = normalizeWidgetTextAlign(state.textAlign),
             fontWeight = normalizeWidgetFontWeight(state.fontWeight),
             titlePosition = normalizeWidgetTitlePosition(state.titlePosition),
+            paddingTopPercent = normalizeWidgetPaddingPercent(state.paddingTopPercent),
+            paddingBottomPercent = normalizeWidgetPaddingPercent(state.paddingBottomPercent),
+            paddingStartPercent = normalizeWidgetPaddingPercent(state.paddingStartPercent),
+            paddingEndPercent = normalizeWidgetPaddingPercent(state.paddingEndPercent),
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")

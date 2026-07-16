@@ -104,10 +104,12 @@
     <string name="widget_font_weight_normal">Standard</string>
     <string name="widget_font_weight_medium">Medium</string>
     <string name="widget_font_weight_semi_bold">Semi-bold</string>
-    <string name="settings_dashboard_grid_spacing_title">Tile spacing</string>
+    <string name="settings_dashboard_grid_spacing_title">Tile spacing: %1$d dp</string>
     <string name="settings_dashboard_grid_spacing_desc">Gap between grid cells on the Tiles tab (0–32 dp)</string>
-    <string name="settings_panel_grid_spacing_title">Tile spacing</string>
+    <string name="settings_panel_grid_spacing_title">Tile spacing: %1$d dp</string>
     <string name="settings_panel_grid_spacing_desc">Gap between grid cells on the panel (0–32 dp)</string>
+    <string name="settings_panel_layout_snap_title">Panel snap grid: %1$d dp</string>
+    <string name="settings_panel_layout_snap_desc">Shared snap for move and resize of all panels of this type (1–50 dp). Applies only in gesture edit mode; not included in themes</string>
     <string name="widget_custom_title_label">Title</string>
     <string name="widget_custom_title_hint">Empty — default</string>
     <string name="widget_show_unit">Show unit</string>
@@ -144,6 +146,11 @@
     <string name="widget_color_theme_segment_dark">Dark theme settings</string>
     <string name="widget_scale">Widget scale: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
+    <string name="widget_padding_top">Top inset: %1$d%%</string>
+    <string name="widget_padding_bottom">Bottom inset: %1$d%%</string>
+    <string name="widget_padding_start">Start inset: %1$d%%</string>
+    <string name="widget_padding_end">End inset: %1$d%%</string>
+    <string name="widget_padding_hint">0–50%% of cell size</string>
     <string name="widget_shape">Corner rounding: %1$d</string>
     <string name="widget_shape_hint" formatted="false">0..50</string>
     <string name="widget_text_color_light">Text color (light theme)</string>

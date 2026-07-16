@@ -118,6 +118,14 @@ data class FloatingDashboardWidgetConfig(
     val fontWeight: Int = DEFAULT_WIDGET_FONT_WEIGHT,
     /** Title row position when [showTitle]: [WIDGET_TITLE_POSITION_TOP] or [WIDGET_TITLE_POSITION_BOTTOM]. */
     val titlePosition: Int = DEFAULT_WIDGET_TITLE_POSITION,
+    /** Inset from cell top edge as percent of cell height (0..[MAX_WIDGET_PADDING_PERCENT]). */
+    val paddingTopPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
+    /** Inset from cell bottom edge as percent of cell height (0..[MAX_WIDGET_PADDING_PERCENT]). */
+    val paddingBottomPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
+    /** Inset from cell start edge as percent of cell width (0..[MAX_WIDGET_PADDING_PERCENT]). */
+    val paddingStartPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
+    /** Inset from cell end edge as percent of cell width (0..[MAX_WIDGET_PADDING_PERCENT]). */
+    val paddingEndPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -405,6 +413,10 @@ class SettingsManager(private val context: Context) {
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
         private val DASHBOARD_GRID_SPACING_KEY =
             intPreferencesKey("${KEY_PREFIX}dashboard_grid_spacing_dp")
+        private val FLOATING_PANELS_LAYOUT_SNAP_DP_KEY =
+            intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
+        private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_dp")
         private val CAN_DATA_SAVE_COUNT_KEY = intPreferencesKey("${KEY_PREFIX}can_data_save_count")
         private val FUEL_TANK_LITERS_KEY = intPreferencesKey("${KEY_PREFIX}fuel_tank_liters")
         private val SPEED_LIMITER_TARGET_KMH_KEY = intPreferencesKey("${KEY_PREFIX}speed_limiter_target_kmh")
@@ -925,6 +937,22 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             normalizePanelGridSpacingDp(
                 preferences[DASHBOARD_GRID_SPACING_KEY] ?: DEFAULT_MAIN_TAB_DASHBOARD_GRID_SPACING_DP
+            )
+        }
+        .distinctUntilChanged()
+
+    val floatingPanelsLayoutSnapDpFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizePanelLayoutSnapDp(
+                preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] ?: DEFAULT_PANEL_LAYOUT_SNAP_DP
+            )
+        }
+        .distinctUntilChanged()
+
+    val mainScreenPanelsLayoutSnapDpFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizePanelLayoutSnapDp(
+                preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY] ?: DEFAULT_PANEL_LAYOUT_SNAP_DP
             )
         }
         .distinctUntilChanged()
@@ -2102,6 +2130,18 @@ class SettingsManager(private val context: Context) {
     suspend fun saveDashboardGridSpacingDp(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[DASHBOARD_GRID_SPACING_KEY] = normalizePanelGridSpacingDp(config)
+        }
+    }
+
+    suspend fun saveFloatingPanelsLayoutSnapDp(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] = normalizePanelLayoutSnapDp(config)
+        }
+    }
+
+    suspend fun saveMainScreenPanelsLayoutSnapDp(config: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY] = normalizePanelLayoutSnapDp(config)
         }
     }
 

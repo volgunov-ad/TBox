@@ -35,6 +35,14 @@ const val DEFAULT_PANEL_GRID_SPACING_DP = 0
 const val MIN_PANEL_GRID_SPACING_DP = 0
 const val MAX_PANEL_GRID_SPACING_DP = 32
 
+const val DEFAULT_WIDGET_PADDING_PERCENT = 0
+const val MIN_WIDGET_PADDING_PERCENT = 0
+const val MAX_WIDGET_PADDING_PERCENT = 50
+
+const val DEFAULT_PANEL_LAYOUT_SNAP_DP = 1
+const val MIN_PANEL_LAYOUT_SNAP_DP = 1
+const val MAX_PANEL_LAYOUT_SNAP_DP = 50
+
 fun normalizeWidgetTextAlign(raw: Int): Int =
     raw.coerceIn(WIDGET_TEXT_ALIGN_CENTER, WIDGET_TEXT_ALIGN_END)
 
@@ -46,6 +54,18 @@ fun normalizeWidgetTitlePosition(raw: Int): Int =
 
 fun normalizePanelGridSpacingDp(raw: Int): Int =
     raw.coerceIn(MIN_PANEL_GRID_SPACING_DP, MAX_PANEL_GRID_SPACING_DP)
+
+fun normalizeWidgetPaddingPercent(raw: Int): Int =
+    raw.coerceIn(MIN_WIDGET_PADDING_PERCENT, MAX_WIDGET_PADDING_PERCENT)
+
+fun normalizePanelLayoutSnapDp(raw: Int): Int =
+    raw.coerceIn(MIN_PANEL_LAYOUT_SNAP_DP, MAX_PANEL_LAYOUT_SNAP_DP)
+
+/** Rounds [value] to the nearest multiple of [stepPx] (step must be >= 1). */
+fun snapToGrid(value: Float, stepPx: Float): Float {
+    val step = stepPx.coerceAtLeast(1f)
+    return kotlin.math.round(value / step) * step
+}
 
 /** Default title position when the field is absent from persisted JSON. */
 fun resolveDefaultTitlePositionForDataKey(dataKey: String): Int =

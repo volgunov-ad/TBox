@@ -163,6 +163,22 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.titlePosition != defaultTitlePosition) {
             obj.put("titlePosition", normalizeWidgetTitlePosition(config.titlePosition))
         }
+        val paddingTop = normalizeWidgetPaddingPercent(config.paddingTopPercent)
+        if (paddingTop != DEFAULT_WIDGET_PADDING_PERCENT) {
+            obj.put("paddingTopPercent", paddingTop)
+        }
+        val paddingBottom = normalizeWidgetPaddingPercent(config.paddingBottomPercent)
+        if (paddingBottom != DEFAULT_WIDGET_PADDING_PERCENT) {
+            obj.put("paddingBottomPercent", paddingBottom)
+        }
+        val paddingStart = normalizeWidgetPaddingPercent(config.paddingStartPercent)
+        if (paddingStart != DEFAULT_WIDGET_PADDING_PERCENT) {
+            obj.put("paddingStartPercent", paddingStart)
+        }
+        val paddingEnd = normalizeWidgetPaddingPercent(config.paddingEndPercent)
+        if (paddingEnd != DEFAULT_WIDGET_PADDING_PERCENT) {
+            obj.put("paddingEndPercent", paddingEnd)
+        }
         array.put(obj)
     }
     return array
@@ -344,6 +360,18 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             resolveDefaultTitlePositionForDataKey(dataKey)
                         },
+                        paddingTopPercent = normalizeWidgetPaddingPercent(
+                            item.optInt("paddingTopPercent", DEFAULT_WIDGET_PADDING_PERCENT)
+                        ),
+                        paddingBottomPercent = normalizeWidgetPaddingPercent(
+                            item.optInt("paddingBottomPercent", DEFAULT_WIDGET_PADDING_PERCENT)
+                        ),
+                        paddingStartPercent = normalizeWidgetPaddingPercent(
+                            item.optInt("paddingStartPercent", DEFAULT_WIDGET_PADDING_PERCENT)
+                        ),
+                        paddingEndPercent = normalizeWidgetPaddingPercent(
+                            item.optInt("paddingEndPercent", DEFAULT_WIDGET_PADDING_PERCENT)
+                        ),
                     )
                 )
             }

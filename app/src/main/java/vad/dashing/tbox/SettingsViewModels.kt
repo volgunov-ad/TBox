@@ -395,6 +395,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_PANEL_GRID_SPACING_DP
         )
 
+    val floatingPanelsLayoutSnapDp = settingsManager.floatingPanelsLayoutSnapDpFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_PANEL_LAYOUT_SNAP_DP
+        )
+
     val floatingDashboardHeight = activeFloatingDashboardConfig
         .map { it.height }
         .stateIn(
@@ -801,6 +808,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_PANEL_GRID_SPACING_DP
+        )
+
+    val mainScreenPanelsLayoutSnapDp = settingsManager.mainScreenPanelsLayoutSnapDpFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_PANEL_LAYOUT_SNAP_DP
         )
 
     val mainScreenPanelPageNumber = activeMainScreenPanelConfig
@@ -1790,6 +1804,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMainScreenPanelsLayoutSnapDp(snapDp: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenPanelsLayoutSnapDp(snapDp)
+        }
+    }
+
     fun saveMainScreenPanelRelXPercent(percent: Int) {
         updateSelectedMainScreenPanel {
             it.copy(relX = (percent.coerceIn(0, 100)) / 100f)
@@ -1864,6 +1884,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             updateFloatingDashboard(panelId, update)
         } else {
             updateSelectedFloatingDashboard(update)
+        }
+    }
+
+    fun saveFloatingPanelsLayoutSnapDp(snapDp: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingPanelsLayoutSnapDp(snapDp)
         }
     }
 

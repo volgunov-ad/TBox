@@ -49,6 +49,8 @@ import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.normalizePanelLayoutSnapDp
+import vad.dashing.tbox.snapToGrid
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import kotlin.math.roundToInt
 
@@ -116,6 +118,10 @@ fun MainScreenDashboardPanel(
     val context = LocalContext.current
     val density = LocalDensity.current
     val minPanelPx = with(density) { 80.dp.toPx() }
+    val mainScreenPanelsLayoutSnapDp by
+        settingsViewModel.mainScreenPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val layoutSnapDp = normalizePanelLayoutSnapDp(mainScreenPanelsLayoutSnapDp)
+    val layoutSnapStepPx = with(density) { layoutSnapDp.dp.toPx() }
     val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
 
     DisposableEffect(appWidgetHost) {
@@ -289,7 +295,7 @@ fun MainScreenDashboardPanel(
             .then(
                 if (canManipulatePanel) {
                     // Do not use layoutPx width/height as keys — they change during resize and cancel the gesture.
-                    Modifier.pointerInput(panel.id, cw, ch, minPanelPx) {
+                    Modifier.pointerInput(panel.id, cw, ch, minPanelPx, layoutSnapStepPx) {
                         detectDragGestures(
                             onDragStart = { startOffset ->
                                 layoutInteraction = true
@@ -309,21 +315,25 @@ fun MainScreenDashboardPanel(
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 if (isDraggingMode) {
+                                    val maxX = (cw - layoutPx.width).coerceAtLeast(0f)
+                                    val maxY = (ch - layoutPx.height).coerceAtLeast(0f)
                                     layoutPx = layoutPx.copy(
-                                        x = (layoutPx.x + dragAmount.x).coerceIn(
-                                            0f,
-                                            (cw - layoutPx.width).coerceAtLeast(0f)
-                                        ),
-                                        y = (layoutPx.y + dragAmount.y).coerceIn(
-                                            0f,
-                                            (ch - layoutPx.height).coerceAtLeast(0f)
-                                        )
+                                        x = snapToGrid(layoutPx.x + dragAmount.x, layoutSnapStepPx)
+                                            .coerceIn(0f, maxX),
+                                        y = snapToGrid(layoutPx.y + dragAmount.y, layoutSnapStepPx)
+                                            .coerceIn(0f, maxY),
                                     )
                                 } else if (isResizingMode) {
-                                    val newW = (layoutPx.width + dragAmount.x)
-                                        .coerceIn(minPanelPx, cw - layoutPx.x)
-                                    val newH = (layoutPx.height + dragAmount.y)
-                                        .coerceIn(minPanelPx, ch - layoutPx.y)
+                                    val newW = snapToGrid(
+                                        (layoutPx.width + dragAmount.x)
+                                            .coerceIn(minPanelPx, cw - layoutPx.x),
+                                        layoutSnapStepPx,
+                                    ).coerceIn(minPanelPx, cw - layoutPx.x)
+                                    val newH = snapToGrid(
+                                        (layoutPx.height + dragAmount.y)
+                                            .coerceIn(minPanelPx, ch - layoutPx.y),
+                                        layoutSnapStepPx,
+                                    ).coerceIn(minPanelPx, ch - layoutPx.y)
                                     layoutPx = layoutPx.copy(width = newW, height = newH)
                                 }
                             },
