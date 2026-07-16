@@ -22,9 +22,17 @@ object SlaSpeedLimitDomain {
         return (slaLimitRaw - 1) * 5
     }
 
+    /** mbCAN / write: 1 off, 2 on. */
     fun decodeSlaOnOffRaw(raw: Int): MbCanBinaryState = when (raw) {
         SLA_SWITCH_ON -> MbCanBinaryState.On
         SLA_SWITCH_OFF -> MbCanBinaryState.Off
+        else -> MbCanBinaryState.Unknown
+    }
+
+    /** VHAL [R_0B00_FCM_2_SLAOnOffsts] read: 1 on, 0 off. */
+    fun decodeSlaOnOffVhalRaw(raw: Int): MbCanBinaryState = when (raw) {
+        1 -> MbCanBinaryState.On
+        0 -> MbCanBinaryState.Off
         else -> MbCanBinaryState.Unknown
     }
 

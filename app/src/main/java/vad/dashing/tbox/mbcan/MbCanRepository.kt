@@ -516,7 +516,7 @@ object MbCanRepository {
         )
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
-            slaOnOffRaw?.let { _slaOnOffState.value = SlaSpeedLimitDomain.decodeSlaOnOffRaw(it) }
+            // Toggle UI reads VEHICLE_TSR_SWITCH only (cfg push + refresh); ignore FCM_2_SLAOnOffsts here.
             slaLimitRaw?.let { _slaRecognizedSpeedLimitKmh.value = SlaSpeedLimitDomain.decodeRecognizedSpeedKmh(it) }
         }
     }
@@ -1663,20 +1663,7 @@ object MbCanRepository {
             }
             val onOffRaw = MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH)
             _slaOnOffState.value = onOffRaw?.let(SlaSpeedLimitDomain::decodeSlaOnOffRaw) ?: MbCanBinaryState.Unknown
-            // Recognized limit is delivered via LKA push; poll is best-effort via cached LKA object.
-            val lkaStatus = runCatching {
-                val engineClass = Class.forName("com.mengbo.mbCan.MBCanEngine")
-                val inst = engineClass.getMethod("getInstance").invoke(null) ?: return@runCatching null
-                val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
-                val lkaCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleLkaSlaStatus")
-                getMbCanData.invoke(inst, 40, lkaCls)
-            }.getOrNull()
-            val limitRaw = lkaStatus?.let {
-                runCatching {
-                    it.javaClass.getMethod("getFCM_2_SLASpdlimit").invoke(it) as? Number
-                }.getOrNull()?.toInt()
-            }
-            _slaRecognizedSpeedLimitKmh.value = limitRaw?.let(SlaSpeedLimitDomain::decodeRecognizedSpeedKmh)
+            // Recognized limit km/h is delivered only via LKA push (FCM_2_SLASpdlimit); not tied to on/off.
         }
     }
 

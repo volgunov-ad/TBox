@@ -1016,7 +1016,7 @@ object Android10VhalRepository {
             FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW ->
                 _slaRecognizedSpeedLimitKmh.value = raw?.let(SlaSpeedLimitDomain::decodeRecognizedSpeedKmh)
             FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS ->
-                _slaOnOffState.value = raw?.let(SlaSpeedLimitDomain::decodeSlaOnOffRaw) ?: MbCanBinaryState.Unknown
+                _slaOnOffState.value = raw?.let(SlaSpeedLimitDomain::decodeSlaOnOffVhalRaw) ?: MbCanBinaryState.Unknown
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH) ->
                 _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchRaw)
                     ?: MbCanBinaryState.Unknown
@@ -1399,7 +1399,7 @@ object Android10VhalRepository {
                 val limitRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW)
                 _slaRecognizedSpeedLimitKmh.value = limitRaw?.let(SlaSpeedLimitDomain::decodeRecognizedSpeedKmh)
                 val onOffRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS)
-                _slaOnOffState.value = onOffRaw?.let(SlaSpeedLimitDomain::decodeSlaOnOffRaw) ?: MbCanBinaryState.Unknown
+                _slaOnOffState.value = onOffRaw?.let(SlaSpeedLimitDomain::decodeSlaOnOffVhalRaw) ?: MbCanBinaryState.Unknown
             }
             MbCanSignal.SpeedLimiter -> {
                 val switchId = FirmwareVehicleJsonMapper

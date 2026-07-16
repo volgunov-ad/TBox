@@ -46,6 +46,7 @@ fun DashboardSlaSpeedLimitWidgetItem(
     titleOverride: String = "",
 ) {
     val recognizedLimitKmh by UniversalCanRepository.slaRecognizedSpeedLimitKmh.collectAsStateWithLifecycle()
+    // Sign km/h only; slaOnOffState (settings toggle) is intentionally not used here.
     val defaultTitle = stringResource(R.string.data_title_sla_speed_limit_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
     val limitLabel = recognizedLimitKmh?.toString() ?: stringResource(R.string.sla_speed_limit_no_sign)

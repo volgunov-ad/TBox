@@ -26,6 +26,13 @@ class SlaSpeedLimitDomainTest {
     }
 
     @Test
+    fun decodeSlaOnOffVhalRaw_mapsBinaryStates() {
+        assertEquals(MbCanBinaryState.On, SlaSpeedLimitDomain.decodeSlaOnOffVhalRaw(1))
+        assertEquals(MbCanBinaryState.Off, SlaSpeedLimitDomain.decodeSlaOnOffVhalRaw(0))
+        assertEquals(MbCanBinaryState.Unknown, SlaSpeedLimitDomain.decodeSlaOnOffVhalRaw(2))
+    }
+
+    @Test
     fun clampLimiterTargetKmh_roundsToStepAndAllowsZero() {
         assertEquals(0, SlaSpeedLimitDomain.clampLimiterTargetKmh(0))
         assertEquals(5, SlaSpeedLimitDomain.clampLimiterTargetKmh(3))
