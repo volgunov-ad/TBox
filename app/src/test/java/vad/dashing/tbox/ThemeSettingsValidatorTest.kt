@@ -1,14 +1,12 @@
 package vad.dashing.tbox
 
 import android.app.Application
-import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import java.io.File
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -42,7 +40,9 @@ class ThemeSettingsValidatorTest {
         val accessibleFile = File(context.cacheDir, "eco.tboxtheme").apply {
             writeBytes(byteArrayOf(0x50, 0x4B, 0x03, 0x04))
         }
-        val accessibleUri = Uri.fromFile(accessibleFile).toString()
+        // File.toURI() yields a cross-platform file:/C:/... path; Uri.fromFile on Windows
+        // produces file://C%3A%5C... which ThemeFileResolver cannot open via uri.path.
+        val accessibleUri = accessibleFile.toURI().toString()
 
         settingsManager.saveDriveModeThemePaths(
             mapOf(
