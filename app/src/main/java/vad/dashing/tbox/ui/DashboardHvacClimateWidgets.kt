@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,19 +80,20 @@ fun DashboardHvacSyncWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp).wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+        ) { contentModifier ->
             Box(
-                modifier = Modifier.fillMaxWidth().weight(if (showTitle) 2f else 1f),
+                modifier = contentModifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
@@ -337,21 +337,17 @@ fun DashboardHvacBlowModeCycleWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier.fillMaxSize().padding(4.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
+        ) { contentModifier ->
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (showTitle) 2f else 1f),
+                modifier = contentModifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 val mode = displayMode
@@ -409,23 +405,19 @@ fun DashboardHvacBlowModePanelWidgetItem(
         textColor = textColor,
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = 1f,
             modifier = Modifier.fillMaxSize().padding(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (showTitle) {
-                Text(
-                    text = titleText,
-                    color = resolvedTextColor,
-                    style = calculateResponsiveTextStyle(availableHeight, TextType.TITLE),
-                    textAlign = LocalWidgetTextAlign.current,
-                    maxLines = 1,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) { contentModifier ->
             if (isVertical) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = contentModifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     modes.forEach { mode ->
@@ -445,7 +437,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
                 }
             } else {
                 Row(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = contentModifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     modes.forEach { mode ->

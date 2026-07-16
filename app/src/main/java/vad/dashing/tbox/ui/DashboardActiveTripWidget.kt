@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -76,25 +77,22 @@ fun DashboardActiveTripWidgetItem(
             containerHeight = availableHeight,
             textType = TextType.TITLE
         )
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp),
+            verticalArrangement = Arrangement.Top,
+        ) { contentModifier ->
+        Column(
+            modifier = contentModifier.fillMaxWidth(),
             horizontalAlignment = Alignment.Start
         ) {
-            if (showTitle) {
-                Text(
-                    text = titleText,
-                    modifier = Modifier.fillMaxWidth(),
-                    style = titleStyle,
-
-                        color = resolvedTextColor,
-                    textAlign = LocalWidgetTextAlign.current,
-                    maxLines = 2,
-                    softWrap = true,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
             if (displayTrip == null) {
                 Text(
                     text = stringResource(R.string.trips_no_active),
@@ -107,7 +105,7 @@ fun DashboardActiveTripWidgetItem(
                     overflow = TextOverflow.Ellipsis
                 )
             } else {
-                val t = displayTrip ?: return@DashboardWidgetScaffold
+                val t = displayTrip!!
                 val rowStyle = titleStyle
                 val simplified = widget.dataKey == ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
                 val mini = widget.dataKey == ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
@@ -391,6 +389,7 @@ fun DashboardActiveTripWidgetItem(
                 )
                 }
             }
+        }
         }
     }
 }

@@ -1,9 +1,7 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -41,23 +39,19 @@ fun DashboardHideFloatingPanelsWidgetItem(
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
         val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
+        ) { contentModifier ->
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (showTitle) 2f else 1f),
+                modifier = contentModifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {

@@ -7,9 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -125,21 +123,20 @@ fun DashboardTrunkDoorWidgetItem(
         )
         val iconColor = resolveTrunkIconColor(iconTint)
 
-        Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp).wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = 1f,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .wrapContentHeight(Alignment.CenterVertically),
+        ) { contentModifier ->
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(if (showTitle) 1f else 1f),
+                modifier = contentModifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
                 Image(

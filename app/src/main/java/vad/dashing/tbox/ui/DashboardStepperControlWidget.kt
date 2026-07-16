@@ -96,31 +96,21 @@ fun DashboardStepperControlWidget(
         } else {
             resolvedTextColor
         }
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (showTitle) {
-                Text(
-                    text = titleText,
-                    color = resolvedTextColor,
-                    style = calculateResponsiveTextStyle(
-                        containerHeight = availableHeight,
-                        textType = TextType.TITLE
-                    ),
-                    textAlign = LocalWidgetTextAlign.current,
-                    maxLines = 1,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) { contentModifier ->
             if (isVertical) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = contentModifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     StepperActionButton(
@@ -168,9 +158,7 @@ fun DashboardStepperControlWidget(
                 }
             } else {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = contentModifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     StepperActionButton(

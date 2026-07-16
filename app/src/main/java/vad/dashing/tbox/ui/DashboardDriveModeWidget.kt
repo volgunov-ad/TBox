@@ -1,7 +1,5 @@
 package vad.dashing.tbox.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -69,32 +67,28 @@ fun DashboardDriveModeWidgetItem(
             resolvedTextColor
         }
 
-        Column(
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            titleWeight = 1f,
+            contentWeight = if (showTitle) 2f else 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            DashboardWidgetTitleRowIfVisible(
-                showTitle = showTitle,
-                titleText = titleText,
-                availableHeight = availableHeight,
-                resolvedTextColor = resolvedTextColor
-            )
+        ) { contentModifier ->
             val modeStyle = calculateResponsiveTextStyle(
                 containerHeight = availableHeight,
                 textType = TextType.VALUE
             )
             Text(
                 text = selectedMode.widgetLabel,
-                modifier = Modifier
-                    .weight(if (showTitle) 2f else 1f)
+                modifier = contentModifier
                     .fillMaxWidth()
                     .wrapContentHeight(Alignment.CenterVertically),
                 style = modeStyle,
-
                 color = modeTextColor,
                 textAlign = LocalWidgetTextAlign.current,
                 maxLines = 1,

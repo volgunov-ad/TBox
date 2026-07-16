@@ -47,9 +47,11 @@ import kotlin.math.roundToInt
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
+import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.embeddedWidgetSizeHintsMatch
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
+import vad.dashing.tbox.normalizeWidgetTitlePosition
 
 private const val EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS = 200L
 
@@ -159,8 +161,11 @@ fun ExternalAppWidgetItem(
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
                 val containerHeightForTitle = maxHeight
+                val titleAtBottom =
+                    normalizeWidgetTitlePosition(LocalWidgetTitlePosition.current) ==
+                        WIDGET_TITLE_POSITION_BOTTOM
                 Column(modifier = Modifier.fillMaxSize()) {
-                    if (showTitle) {
+                    if (showTitle && !titleAtBottom) {
                         val titleStyle = calculateResponsiveTextStyle(
                             containerHeight = containerHeightForTitle,
                             textType = TextType.TITLE
@@ -171,9 +176,8 @@ fun ExternalAppWidgetItem(
                                 .fillMaxWidth()
                                 .padding(start = 4.dp, top = 4.dp, end = 4.dp),
                             style = titleStyle,
-
-                                        color = resolvedColor,
-                            textAlign = TextAlign.Center,
+                            color = resolvedColor,
+                            textAlign = LocalWidgetTextAlign.current,
                             maxLines = 2,
                             softWrap = true,
                             overflow = TextOverflow.Ellipsis
@@ -297,6 +301,24 @@ fun ExternalAppWidgetItem(
                     )
                 }
             }
+                    }
+                    if (showTitle && titleAtBottom) {
+                        val titleStyle = calculateResponsiveTextStyle(
+                            containerHeight = containerHeightForTitle,
+                            textType = TextType.TITLE
+                        )
+                        Text(
+                            text = titleText,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, bottom = 4.dp, end = 4.dp),
+                            style = titleStyle,
+                            color = resolvedColor,
+                            textAlign = LocalWidgetTextAlign.current,
+                            maxLines = 2,
+                            softWrap = true,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
