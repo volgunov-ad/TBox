@@ -247,6 +247,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val slaSignUiState: StateFlow<SlaSignUiState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.slaSignUiState
+            } else {
+                Android10VhalRepository.slaSignUiState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, SlaSignUiState.Inactive)
+
     val slaOnOffState: StateFlow<MbCanBinaryState> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

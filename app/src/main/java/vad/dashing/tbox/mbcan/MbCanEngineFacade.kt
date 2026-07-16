@@ -517,10 +517,17 @@ object MbCanEngineFacade {
                 val slaOnOff = runCatching {
                     status.javaClass.getMethod("getFCM_2_SLAOnOffsts").invoke(status) as? Number
                 }.getOrNull()?.toInt()
+                val slaState = runCatching {
+                    status.javaClass.getMethod("getFCM_2_SLAState").invoke(status) as? Number
+                }.getOrNull()?.toInt()
                 val slaLimit = runCatching {
                     status.javaClass.getMethod("getFCM_2_SLASpdlimit").invoke(status) as? Number
                 }.getOrNull()?.toInt()
-                MbCanRepository.scheduleLkaSlaPush(slaOnOffRaw = slaOnOff, slaLimitRaw = slaLimit)
+                MbCanRepository.scheduleLkaSlaPush(
+                    slaOnOffRaw = slaOnOff,
+                    slaStateRaw = slaState,
+                    slaLimitRaw = slaLimit,
+                )
             }
             null
         }

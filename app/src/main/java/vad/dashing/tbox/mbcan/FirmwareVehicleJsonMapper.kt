@@ -25,6 +25,7 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_CAR_SPEED_PROPERTY_ID = 289_414_964 // R_0900_ICM_1_DisplayVehicleSpeed
     const val VHAL_SLA_SPEED_LIMIT_RAW = 289_415_711 // R_0B00_FCM_2_SLASpdlimit
     const val VHAL_SLA_ON_OFF_STATUS = 289_415_709 // R_0B00_FCM_2_SLAOnOffsts
+    const val VHAL_SLA_STATE = 289_415_708 // R_0B00_FCM_2_SLAState
     const val VHAL_SLA_ON_OFF_REQ = 289_415_947 // T_0B01_IHU_8_SLAOnOffReq
 
     private data class Tables(

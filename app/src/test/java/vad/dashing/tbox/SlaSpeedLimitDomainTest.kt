@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import vad.dashing.tbox.mbcan.MbCanBinaryState
+import vad.dashing.tbox.mbcan.SlaSignUiState
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 
 class SlaSpeedLimitDomainTest {
@@ -16,6 +17,39 @@ class SlaSpeedLimitDomainTest {
         assertEquals(30, SlaSpeedLimitDomain.decodeRecognizedSpeedKmh(7))
         assertEquals(50, SlaSpeedLimitDomain.decodeRecognizedSpeedKmh(11))
         assertEquals(110, SlaSpeedLimitDomain.decodeRecognizedSpeedKmh(23))
+        assertEquals(130, SlaSpeedLimitDomain.decodeRecognizedSpeedKmh(28))
+    }
+
+    @Test
+    fun resolveSlaSignUiState_matchesStockAdasCard() {
+        assertEquals(
+            SlaSignUiState.Inactive,
+            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 1, slaStateRaw = 1, slaLimitRaw = 5),
+        )
+        assertEquals(
+            SlaSignUiState.Inactive,
+            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 0, slaLimitRaw = 5),
+        )
+        assertEquals(
+            SlaSignUiState.Inactive,
+            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 1, slaLimitRaw = 0),
+        )
+        assertEquals(
+            SlaSignUiState.EndOfRestriction,
+            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 1, slaLimitRaw = 1),
+        )
+        assertEquals(
+            SlaSignUiState.EndOfRestriction,
+            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 3, slaLimitRaw = 1),
+        )
+        assertEquals(
+            SlaSignUiState.Limit(60),
+            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 2, slaLimitRaw = 13),
+        )
+        assertEquals(
+            SlaSignUiState.Inactive,
+            SlaSpeedLimitDomain.resolveSlaSignUiState(onOffRaw = 2, slaStateRaw = 4, slaLimitRaw = 13),
+        )
     }
 
     @Test

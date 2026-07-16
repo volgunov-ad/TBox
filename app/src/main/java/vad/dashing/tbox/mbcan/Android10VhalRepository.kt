@@ -427,6 +427,11 @@ object Android10VhalRepository {
     val slaRecognizedSpeedLimitKmh: StateFlow<Int?> = _slaRecognizedSpeedLimitKmh.asStateFlow()
     private val _slaOnOffState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val slaOnOffState: StateFlow<MbCanBinaryState> = _slaOnOffState.asStateFlow()
+    private var slaLkaOnOffRaw: Int? = null
+    private var slaLkaStateRaw: Int? = null
+    private var slaLkaLimitRaw: Int? = null
+    private val _slaSignUiState = MutableStateFlow<SlaSignUiState>(SlaSignUiState.Inactive)
+    val slaSignUiState: StateFlow<SlaSignUiState> = _slaSignUiState.asStateFlow()
     private val _speedLimiterState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val speedLimiterState: StateFlow<MbCanBinaryState> = _speedLimiterState.asStateFlow()
 
@@ -795,6 +800,7 @@ object Android10VhalRepository {
             MbCanSignal.SlaSpeedLimit -> setOf(
                 FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW,
                 FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS,
+                FirmwareVehicleJsonMapper.VHAL_SLA_STATE,
             )
             MbCanSignal.SpeedLimiter -> setOfNotNull(
                 FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
@@ -837,6 +843,21 @@ object Android10VhalRepository {
     private fun decodeCarSettingsIntZeroToSix(raw: Int?): Int? {
         val value = raw ?: return null
         return if (value in carSettingsZeroToSixRange) value else null
+    }
+
+    private fun publishSlaSignUiState() {
+        _slaSignUiState.value = SlaSpeedLimitDomain.resolveSlaSignUiState(
+            slaOnOffRaw = slaLkaOnOffRaw,
+            slaStateRaw = slaLkaStateRaw,
+            slaLimitRaw = slaLkaLimitRaw,
+        )
+    }
+
+    private fun clearSlaSignUiState() {
+        slaLkaOnOffRaw = null
+        slaLkaStateRaw = null
+        slaLkaLimitRaw = null
+        publishSlaSignUiState()
     }
 
     // For several VHAL read-status properties in stock apps, ON is encoded as 1 and OFF as 2.
@@ -1009,10 +1030,20 @@ object Android10VhalRepository {
                 _carSettingsDriveMode.value = decodeCarSettingsIntZeroToSix(raw)
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET) ->
                 _carSettingsDriveMode6dctWet.value = decodeCarSettingsIntZeroToSix(raw)
-            FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW ->
+            FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW -> {
+                slaLkaLimitRaw = raw
                 _slaRecognizedSpeedLimitKmh.value = raw?.let(SlaSpeedLimitDomain::decodeRecognizedSpeedKmh)
-            FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS ->
+                publishSlaSignUiState()
+            }
+            FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS -> {
+                slaLkaOnOffRaw = raw
                 _slaOnOffState.value = raw?.let(SlaSpeedLimitDomain::decodeSlaOnOffVhalRaw) ?: MbCanBinaryState.Unknown
+                publishSlaSignUiState()
+            }
+            FirmwareVehicleJsonMapper.VHAL_SLA_STATE -> {
+                slaLkaStateRaw = raw
+                publishSlaSignUiState()
+            }
             resolved(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH) ->
                 _speedLimiterState.value = raw?.let(SlaSpeedLimitDomain::decodeSpeedLimiterSwitchVhalRaw)
                     ?: MbCanBinaryState.Unknown
@@ -1146,6 +1177,7 @@ object Android10VhalRepository {
                 MbCanSignal.SlaSpeedLimit -> {
                     _slaRecognizedSpeedLimitKmh.value = null
                     _slaOnOffState.value = MbCanBinaryState.Unavailable(deniedReason)
+                    clearSlaSignUiState()
                 }
                 MbCanSignal.SpeedLimiter -> {
                     _speedLimiterState.value = MbCanBinaryState.Unavailable(deniedReason)
@@ -1198,6 +1230,7 @@ object Android10VhalRepository {
                 MbCanSignal.SlaSpeedLimit -> {
                     _slaRecognizedSpeedLimitKmh.value = null
                     _slaOnOffState.value = MbCanBinaryState.Unavailable(reason)
+                    clearSlaSignUiState()
                 }
                 MbCanSignal.SpeedLimiter -> {
                     _speedLimiterState.value = MbCanBinaryState.Unavailable(reason)
@@ -1393,9 +1426,13 @@ object Android10VhalRepository {
             }
             MbCanSignal.SlaSpeedLimit -> {
                 val limitRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW)
+                slaLkaLimitRaw = limitRaw
                 _slaRecognizedSpeedLimitKmh.value = limitRaw?.let(SlaSpeedLimitDomain::decodeRecognizedSpeedKmh)
                 val onOffRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS)
+                slaLkaOnOffRaw = onOffRaw
                 _slaOnOffState.value = onOffRaw?.let(SlaSpeedLimitDomain::decodeSlaOnOffVhalRaw) ?: MbCanBinaryState.Unknown
+                slaLkaStateRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_STATE)
+                publishSlaSignUiState()
             }
             MbCanSignal.SpeedLimiter -> {
                 val switchId = FirmwareVehicleJsonMapper

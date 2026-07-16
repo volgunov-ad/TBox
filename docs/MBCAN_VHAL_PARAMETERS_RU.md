@@ -28,7 +28,7 @@
 | Канал | Когда | Что обновляет |
 |-------|--------|---------------|
 | `eMBCAN_CFG_VEHICLE` → `scheduleVehicleCfgPush` | Изменение vehicle-cfg property | Бинарные переключатели, HVAC, сиденья, SLA/limiter switch, car settings EPS/drive |
-| `eMBCAN_VEHICLE_LKA_STATUS` → `scheduleLkaSlaPush` | LKA/SLA от камеры | **Только** распознанный знак (`FCM_2_SLASpdlimit`) |
+| `eMBCAN_VEHICLE_LKA_STATUS` → `scheduleLkaSlaPush` | LKA/SLA от камеры | Знак: `FCM_2_SLAOnOffsts` + `FCM_2_SLAState` + `FCM_2_SLASpdlimit` (AdasCard) |
 | BCM telemetry → `scheduleTrunkBcmPush` | Движение/статус багажника | `TrunkDoorRepository` |
 | `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed |
 | Engine/speed telemetry → `schedule*Push` | RPM, температура, скорость | Соответствующие `StateFlow` |
@@ -41,8 +41,8 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Распознанный знак SLA | — (не property; поле `FCM_2_SLASpdlimit` в LKA push) | raw ≤ 1 → `null` (виджет «—»); raw ≥ 2 → **(raw − 1) × 5** км/ч (`decodeRecognizedSpeedKmh`) | — (только чтение) | — | **Push:** LKA `scheduleLkaSlaPush` (coalesce 200 ms). **Pull:** не используется для знака |
-| **Android 10** — Распознанный знак SLA | VHAL **289415711** `R_0B00_FCM_2_SLASpdlimit` | То же: raw ≤ 1 → нет знака; иначе **(raw − 1) × 5** км/ч | — | — | **Push:** VHAL onChange. **Pull:** `refreshSignal(SlaSpeedLimit)` каждые 30 с / burst |
+| **Android 9** — Распознанный знак SLA | LKA `FCM_2_SLAOnOffsts` + `FCM_2_SLAState` + `FCM_2_SLASpdlimit` | UI как AdasCard (`resolveSlaSignUiState`): OnOff=**2** и State∈{1,2,3}: Spdlimit **1** → «конец ограничения»; Spdlimit≥2 → **(raw−1)×5** км/ч (cap 130); иначе полупрозрачный «—». State **0**=скрыто/неактивно, **4**=fault (у нас как inactive) | — (только чтение) | — | **Push:** LKA `scheduleLkaSlaPush`. **Pull:** не для знака |
+| **Android 10** — Распознанный знак SLA | VHAL **289415709** + **289415708** + **289415711** | То же `resolveSlaSignUiState` | — | — | **Push:** onChange. **Pull:** `refreshSignal(SlaSpeedLimit)` |
 
 ### Переключатель «Распознавание дорожных знаков» (SLA on/off)
 
@@ -217,6 +217,7 @@
 |------|---------|---------|
 | Знак (read) | 289415711 | `R_0B00_FCM_2_SLASpdlimit` |
 | SLA status (read) | 289415709 | `R_0B00_FCM_2_SLAOnOffsts` |
+| SLA state (read) | 289415708 | `R_0B00_FCM_2_SLAState` (0 off, 1–3 active, 4 fault) |
 | SLA request (write) | 289415947 | `T_0B01_IHU_8_SLAOnOffReq` |
 
 ---
