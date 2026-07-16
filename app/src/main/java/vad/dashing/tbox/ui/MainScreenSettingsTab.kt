@@ -47,6 +47,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
+import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
@@ -78,6 +80,8 @@ fun MainScreenSettingsTab(
         settingsViewModel.isMainScreenPanelShowTboxDisconnectIndicator.collectAsStateWithLifecycle()
     val mainScreenPanelRows by settingsViewModel.mainScreenPanelRows.collectAsStateWithLifecycle()
     val mainScreenPanelCols by settingsViewModel.mainScreenPanelCols.collectAsStateWithLifecycle()
+    val mainScreenPanelGridSpacingDp by
+        settingsViewModel.mainScreenPanelGridSpacingDp.collectAsStateWithLifecycle()
     val isMainScreenOpenOnBootEnabled by
         settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
     val mainScreenOpenOnBootDelaySeconds by
@@ -705,6 +709,14 @@ fun MainScreenSettingsTab(
             "",
             hasMainScreenPanels,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
+        )
+        SettingInt(
+            value = mainScreenPanelGridSpacingDp,
+            onValueChange = { settingsViewModel.saveMainScreenPanelGridSpacingDp(it) },
+            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            description = stringResource(R.string.settings_panel_grid_spacing_desc),
+            minValue = MIN_PANEL_GRID_SPACING_DP,
+            maxValue = MAX_PANEL_GRID_SPACING_DP,
         )
         SettingDropdownGeneric(
             mainScreenPanelPageNumber,

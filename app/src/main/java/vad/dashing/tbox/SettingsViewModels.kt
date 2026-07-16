@@ -387,6 +387,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_FLOATING_DASHBOARD_COLS
         )
 
+    val floatingDashboardGridSpacingDp = activeFloatingDashboardConfig
+        .map { normalizePanelGridSpacingDp(it.gridSpacingDp) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_PANEL_GRID_SPACING_DP
+        )
+
     val floatingDashboardHeight = activeFloatingDashboardConfig
         .map { it.height }
         .stateIn(
@@ -785,6 +793,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_MAIN_SCREEN_PANEL_COLS
+        )
+
+    val mainScreenPanelGridSpacingDp = activeMainScreenPanelConfig
+        .map { normalizePanelGridSpacingDp(it.gridSpacingDp) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_PANEL_GRID_SPACING_DP
         )
 
     val mainScreenPanelPageNumber = activeMainScreenPanelConfig
@@ -1763,6 +1779,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMainScreenPanelGridSpacingDp(spacingDp: Int, panelId: String? = null) {
+        val normalized = normalizePanelGridSpacingDp(spacingDp)
+        val update: (MainScreenPanelConfig) -> MainScreenPanelConfig =
+            { it.copy(gridSpacingDp = normalized) }
+        if (panelId != null) {
+            updateMainScreenPanel(panelId, update)
+        } else {
+            updateSelectedMainScreenPanel(update)
+        }
+    }
+
     fun saveMainScreenPanelRelXPercent(percent: Int) {
         updateSelectedMainScreenPanel {
             it.copy(relX = (percent.coerceIn(0, 100)) / 100f)
@@ -1822,6 +1849,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         if (cols !in 1..SettingsManager.DASHBOARD_PANEL_MAX_GRID_DIMENSION) return
         val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
             { it.copy(cols = cols) }
+        if (panelId != null) {
+            updateFloatingDashboard(panelId, update)
+        } else {
+            updateSelectedFloatingDashboard(update)
+        }
+    }
+
+    fun saveFloatingDashboardGridSpacingDp(spacingDp: Int, panelId: String? = null) {
+        val normalized = normalizePanelGridSpacingDp(spacingDp)
+        val update: (FloatingDashboardConfig) -> FloatingDashboardConfig =
+            { it.copy(gridSpacingDp = normalized) }
         if (panelId != null) {
             updateFloatingDashboard(panelId, update)
         } else {

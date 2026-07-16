@@ -968,6 +968,8 @@ fun FloatingPanelsSettingsTabContent(
     val hasFloatingPanels = floatingDashboardsList.isNotEmpty()
     val floatingDashboardRows by settingsViewModel.floatingDashboardRows.collectAsStateWithLifecycle()
     val floatingDashboardCols by settingsViewModel.floatingDashboardCols.collectAsStateWithLifecycle()
+    val floatingDashboardGridSpacingDp by
+        settingsViewModel.floatingDashboardGridSpacingDp.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
     val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
 
@@ -1079,6 +1081,14 @@ fun FloatingPanelsSettingsTabContent(
             "",
             hasFloatingPanels,
             SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS,
+        )
+        SettingInt(
+            value = floatingDashboardGridSpacingDp,
+            onValueChange = { settingsViewModel.saveFloatingDashboardGridSpacingDp(it) },
+            text = stringResource(R.string.settings_panel_grid_spacing_title),
+            description = stringResource(R.string.settings_panel_grid_spacing_desc),
+            minValue = MIN_PANEL_GRID_SPACING_DP,
+            maxValue = MAX_PANEL_GRID_SPACING_DP,
         )
         FloatingDashboardPositionSizeSettings(
             settingsViewModel,
