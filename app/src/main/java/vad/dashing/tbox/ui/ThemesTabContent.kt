@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -45,11 +43,13 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.ThemeApply
+import vad.dashing.tbox.ThemeApplyTarget
+import vad.dashing.tbox.ThemeApplyTargetAvailability
 import vad.dashing.tbox.ThemeBundleExport
 import vad.dashing.tbox.ThemeCacheKeys
 import vad.dashing.tbox.ThemeFileResolver
 import vad.dashing.tbox.ThemeMaterialization
-import vad.dashing.tbox.ThemeSection
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 
 @Composable
@@ -87,10 +87,15 @@ fun ThemesTabContent(
     var showClearSharedIconsDialog by remember { mutableStateOf(false) }
     var showClearSharedHttpRequestIconsDialog by remember { mutableStateOf(false) }
     var showClearSharedTileBackgroundsDialog by remember { mutableStateOf(false) }
-    var includeMainScreen by remember { mutableStateOf(true) }
+    var includeMainScreenPanels by remember { mutableStateOf(true) }
+    var includeMainScreenWallpapers by remember { mutableStateOf(true) }
+    var includeTileBackgrounds by remember { mutableStateOf(true) }
     var includeFloatingPanels by remember { mutableStateOf(true) }
     var includeAppIcons by remember { mutableStateOf(true) }
     var themeExportBaseName by remember { mutableStateOf("") }
+
+    var pendingThemeApply by remember { mutableStateOf<PendingThemeApply?>(null) }
+    var pendingDriveModeApply by remember { mutableStateOf<PendingDriveModeThemeApply?>(null) }
 
     var pendingDriveModeRawValue by rememberSaveable { mutableIntStateOf(-1) }
     var showReplaceDownloadsDialog by remember { mutableStateOf(false) }
@@ -134,7 +139,7 @@ fun ThemesTabContent(
             scope.launch {
                 val result = settingsViewModel.exportThemeBundleToDownloads(
                     context,
-                    pending.sections,
+                    pending.applyTargets,
                     pending.baseName,
                 )
                 withContext(Dispatchers.Main) { showThemeExportResult(result) }
@@ -149,9 +154,15 @@ fun ThemesTabContent(
     }
 
     fun launchThemeExport() {
-        val sections = buildThemeSections(includeMainScreen, includeFloatingPanels, includeAppIcons)
-        if (sections.isEmpty()) {
-            Toast.makeText(context, R.string.themes_create_select_section, Toast.LENGTH_SHORT).show()
+        val applyTargets = buildApplyTargets(
+            mainScreenPanels = includeMainScreenPanels,
+            mainScreenWallpapers = includeMainScreenWallpapers,
+            tileBackgrounds = includeTileBackgrounds,
+            floatingPanels = includeFloatingPanels,
+            appIcons = includeAppIcons,
+        )
+        if (applyTargets.isEmpty()) {
+            Toast.makeText(context, R.string.themes_apply_targets_select_one, Toast.LENGTH_SHORT).show()
             return
         }
         val baseName = ThemeBundleExport.sanitizeThemeExportBaseName(themeExportBaseName)
@@ -159,9 +170,113 @@ fun ThemesTabContent(
             Toast.makeText(context, R.string.themes_create_invalid_name, Toast.LENGTH_SHORT).show()
             return
         }
-        val pending = PendingThemeExport(sections = sections, baseName = baseName)
+        val pending = PendingThemeExport(applyTargets = applyTargets, baseName = baseName)
         showCreateDialog = false
         exportThemeToDownloads(pending)
+    }
+
+    suspend fun beginThemeApply(uri: Uri) {
+        val uriString = uri.toString()
+        val bytes = ThemeFileResolver.openBytes(context, uriString)
+            ?: run {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_theme_apply_error, "theme_file_not_readable"),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+                return
+            }
+        val availableTargets = ThemeApply.peekAvailableApplyTargets(bytes).getOrElse { emptySet() }
+        if (availableTargets.isEmpty()) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_theme_apply_error, "theme_apply_targets_empty"),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            return
+        }
+        val cacheKey = ThemeCacheKeys.resolveUniqueManualCacheKey(context, uriString)
+        val isFirstMaterialize = !ThemeMaterialization.isMaterialized(context, cacheKey)
+        if (isFirstMaterialize) {
+            withContext(Dispatchers.Main) {
+                pendingThemeApply = PendingThemeApply(
+                    uriString = uriString,
+                    availableTargets = availableTargets,
+                    selectedTargets = ThemeApplyTargetAvailability.defaultEnabled(availableTargets),
+                )
+            }
+            return
+        }
+        val result = settingsViewModel.applyThemeFromUri(context, uriString)
+        withContext(Dispatchers.Main) {
+            if (result.isSuccess) {
+                Toast.makeText(context, R.string.toast_theme_apply_ok, Toast.LENGTH_LONG).show()
+            } else {
+                val msg = result.exceptionOrNull()?.message.orEmpty()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_theme_apply_error, msg),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+
+    suspend fun beginDriveModeThemeAssign(uri: Uri, rawValue: Int) {
+        val uriString = uri.toString()
+        val bytes = ThemeFileResolver.openBytes(context, uriString)
+            ?: run {
+                pendingDriveModeRawValue = -1
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.toast_theme_drive_mode_error, "theme_file_not_readable"),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+                return
+            }
+        val availableTargets = ThemeApply.peekAvailableApplyTargets(bytes).getOrElse { emptySet() }
+        if (availableTargets.isEmpty()) {
+            pendingDriveModeRawValue = -1
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_theme_drive_mode_error, "theme_apply_targets_empty"),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            return
+        }
+        val cacheKey = ThemeCacheKeys.driveModeCacheKey(rawValue)
+        val isFirstMaterialize = !ThemeMaterialization.isMaterialized(context, cacheKey)
+        if (isFirstMaterialize) {
+            withContext(Dispatchers.Main) {
+                pendingDriveModeApply = PendingDriveModeThemeApply(
+                    uriString = uriString,
+                    rawValue = rawValue,
+                    availableTargets = availableTargets,
+                    selectedTargets = ThemeApplyTargetAvailability.defaultEnabled(availableTargets),
+                )
+            }
+            return
+        }
+        val result = settingsViewModel.assignDriveModeTheme(context, rawValue, uriString)
+        pendingDriveModeRawValue = -1
+        withContext(Dispatchers.Main) {
+            if (result.isFailure) {
+                val msg = result.exceptionOrNull()?.message.orEmpty()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.toast_theme_drive_mode_error, msg),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
     }
 
     val applyThemeLauncher = rememberLauncherForActivityResult(
@@ -169,26 +284,14 @@ fun ThemesTabContent(
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.takePersistableUriPermission(
-                        uri,
-                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                    )
-                }
-                settingsViewModel.applyThemeFromUri(context, uri.toString())
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
             }
-            withContext(Dispatchers.Main) {
-                if (result.isSuccess) {
-                    Toast.makeText(context, R.string.toast_theme_apply_ok, Toast.LENGTH_LONG).show()
-                } else {
-                    val msg = result.exceptionOrNull()?.message.orEmpty()
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.toast_theme_apply_error, msg),
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
+            withContext(Dispatchers.IO) {
+                beginThemeApply(uri)
             }
         }
     }
@@ -205,17 +308,8 @@ fun ThemesTabContent(
                     android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
                 )
             }
-            val result = settingsViewModel.assignDriveModeTheme(context, rawValue, uri.toString())
-            pendingDriveModeRawValue = -1
-            withContext(Dispatchers.Main) {
-                if (result.isFailure) {
-                    val msg = result.exceptionOrNull()?.message.orEmpty()
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.toast_theme_drive_mode_error, msg),
-                        Toast.LENGTH_LONG,
-                    ).show()
-                }
+            withContext(Dispatchers.IO) {
+                beginDriveModeThemeAssign(uri, rawValue)
             }
         }
     }
@@ -488,26 +582,24 @@ fun ThemesTabContent(
                             .fillMaxWidth()
                             .padding(top = 12.dp),
                     )
-                    ThemeSectionCheckboxRow(
-                        checked = includeMainScreen,
-                        onCheckedChange = { includeMainScreen = it },
-                        label = stringResource(R.string.themes_create_section_main_screen),
-                    )
-                    ThemeSectionCheckboxRow(
-                        checked = includeFloatingPanels,
-                        onCheckedChange = { includeFloatingPanels = it },
-                        label = stringResource(R.string.themes_create_section_floating_panels),
-                    )
-                    ThemeSectionCheckboxRow(
-                        checked = includeAppIcons,
-                        onCheckedChange = { includeAppIcons = it },
-                        label = stringResource(R.string.themes_create_section_app_icons),
-                    )
-                    Text(
-                        text = stringResource(R.string.themes_create_section_app_icons_hint),
-                        style = MaterialTheme.typography.tboxCaption,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 48.dp, top = 4.dp),
+                    ThemeApplyTargetCheckboxList(
+                        availableTargets = ThemeApplyTarget.entries.toSet(),
+                        selectedTargets = buildApplyTargets(
+                            mainScreenPanels = includeMainScreenPanels,
+                            mainScreenWallpapers = includeMainScreenWallpapers,
+                            tileBackgrounds = includeTileBackgrounds,
+                            floatingPanels = includeFloatingPanels,
+                            appIcons = includeAppIcons,
+                        ),
+                        onTargetCheckedChange = { target, checked ->
+                            when (target) {
+                                ThemeApplyTarget.MAIN_SCREEN_PANELS -> includeMainScreenPanels = checked
+                                ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS -> includeMainScreenWallpapers = checked
+                                ThemeApplyTarget.TILE_BACKGROUNDS -> includeTileBackgrounds = checked
+                                ThemeApplyTarget.FLOATING_PANELS -> includeFloatingPanels = checked
+                                ThemeApplyTarget.APP_ICONS -> includeAppIcons = checked
+                            }
+                        },
                     )
                 }
             },
@@ -702,40 +794,178 @@ fun ThemesTabContent(
             },
         )
     }
-}
 
-@Composable
-private fun ThemeSectionCheckboxRow(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    label: String,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-        Text(
-            text = label,
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurface,
+    pendingThemeApply?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { pendingThemeApply = null },
+            title = { AppAlertDialogTitle(stringResource(R.string.themes_apply_targets_dialog_title)) },
+            text = {
+                Column {
+                    AppAlertDialogText(stringResource(R.string.themes_apply_targets_dialog_hint))
+                    ThemeApplyTargetCheckboxList(
+                        availableTargets = pending.availableTargets,
+                        selectedTargets = pending.selectedTargets,
+                        onTargetCheckedChange = { target, checked ->
+                            pendingThemeApply = pending.copy(
+                                selectedTargets = if (checked) {
+                                    pending.selectedTargets + target
+                                } else {
+                                    pending.selectedTargets - target
+                                },
+                            )
+                        },
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        val current = pendingThemeApply ?: return@rememberWrappedOnClick
+                        if (current.selectedTargets.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                R.string.themes_apply_targets_select_one,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            return@rememberWrappedOnClick
+                        }
+                        pendingThemeApply = null
+                        scope.launch {
+                            val result = settingsViewModel.applyThemeFromUri(
+                                context = context,
+                                uriString = current.uriString,
+                                applyTargets = current.selectedTargets,
+                            )
+                            withContext(Dispatchers.Main) {
+                                if (result.isSuccess) {
+                                    Toast.makeText(context, R.string.toast_theme_apply_ok, Toast.LENGTH_LONG).show()
+                                } else {
+                                    val msg = result.exceptionOrNull()?.message.orEmpty()
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.toast_theme_apply_error, msg),
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        }
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.themes_apply))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = rememberWrappedOnClick { pendingThemeApply = null }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    pendingDriveModeApply?.let { pending ->
+        AlertDialog(
+            onDismissRequest = {
+                pendingDriveModeApply = null
+                pendingDriveModeRawValue = -1
+            },
+            title = { AppAlertDialogTitle(stringResource(R.string.themes_apply_targets_dialog_title)) },
+            text = {
+                Column {
+                    AppAlertDialogText(stringResource(R.string.themes_apply_targets_dialog_hint))
+                    ThemeApplyTargetCheckboxList(
+                        availableTargets = pending.availableTargets,
+                        selectedTargets = pending.selectedTargets,
+                        onTargetCheckedChange = { target, checked ->
+                            pendingDriveModeApply = pending.copy(
+                                selectedTargets = if (checked) {
+                                    pending.selectedTargets + target
+                                } else {
+                                    pending.selectedTargets - target
+                                },
+                            )
+                        },
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        val current = pendingDriveModeApply ?: return@rememberWrappedOnClick
+                        if (current.selectedTargets.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                R.string.themes_apply_targets_select_one,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            return@rememberWrappedOnClick
+                        }
+                        pendingDriveModeApply = null
+                        pendingDriveModeRawValue = -1
+                        scope.launch {
+                            val result = settingsViewModel.assignDriveModeTheme(
+                                context = context,
+                                rawValue = current.rawValue,
+                                sourceUri = current.uriString,
+                                applyTargets = current.selectedTargets,
+                            )
+                            withContext(Dispatchers.Main) {
+                                if (result.isFailure) {
+                                    val msg = result.exceptionOrNull()?.message.orEmpty()
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.toast_theme_drive_mode_error, msg),
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        }
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.themes_drive_mode_pick))
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = rememberWrappedOnClick {
+                        pendingDriveModeApply = null
+                        pendingDriveModeRawValue = -1
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
         )
     }
 }
 
-private fun buildThemeSections(
-    mainScreen: Boolean,
+private fun buildApplyTargets(
+    mainScreenPanels: Boolean,
+    mainScreenWallpapers: Boolean,
+    tileBackgrounds: Boolean,
     floatingPanels: Boolean,
     appIcons: Boolean,
-): Set<ThemeSection> = buildSet {
-    if (mainScreen) add(ThemeSection.MAIN_SCREEN)
-    if (floatingPanels) add(ThemeSection.FLOATING_PANELS)
-    if (appIcons) add(ThemeSection.APP_ICONS)
+): Set<ThemeApplyTarget> = buildSet {
+    if (mainScreenPanels) add(ThemeApplyTarget.MAIN_SCREEN_PANELS)
+    if (mainScreenWallpapers) add(ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS)
+    if (tileBackgrounds) add(ThemeApplyTarget.TILE_BACKGROUNDS)
+    if (floatingPanels) add(ThemeApplyTarget.FLOATING_PANELS)
+    if (appIcons) add(ThemeApplyTarget.APP_ICONS)
 }
 
 private data class PendingThemeExport(
-    val sections: Set<ThemeSection>,
+    val applyTargets: Set<ThemeApplyTarget>,
     val baseName: String,
+)
+
+private data class PendingThemeApply(
+    val uriString: String,
+    val availableTargets: Set<ThemeApplyTarget>,
+    val selectedTargets: Set<ThemeApplyTarget>,
+)
+
+private data class PendingDriveModeThemeApply(
+    val uriString: String,
+    val rawValue: Int,
+    val availableTargets: Set<ThemeApplyTarget>,
+    val selectedTargets: Set<ThemeApplyTarget>,
 )

@@ -8,6 +8,7 @@ object ThemeApply {
 
     data class ApplyResult(
         val sections: Set<ThemeSection>,
+        val applyTargets: Set<ThemeApplyTarget> = emptySet(),
         val iconsImported: Int,
         val tileBackgroundsImported: Int,
         val httpRequestIconsImported: Int = 0,
@@ -18,6 +19,7 @@ object ThemeApply {
         settingsManager: SettingsManager,
         settingsViewModel: SettingsViewModel?,
         uriString: String,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): Result<ApplyResult> {
         val trimmed = uriString.trim()
         if (trimmed.isEmpty()) {
@@ -38,6 +40,7 @@ object ThemeApply {
             bytes = bytes,
             sourceUri = trimmed,
             cacheKey = ThemeCacheKeys.resolveUniqueManualCacheKey(context, trimmed),
+            applyTargets = applyTargets,
         )
     }
 
@@ -47,6 +50,7 @@ object ThemeApply {
         settingsViewModel: SettingsViewModel?,
         bytes: ByteArray,
         sourceUri: String,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): Result<ApplyResult> {
         return materializeAndActivateFromBytes(
             context = context,
@@ -55,6 +59,7 @@ object ThemeApply {
             bytes = bytes,
             sourceUri = sourceUri,
             cacheKey = ThemeCacheKeys.resolveUniqueManualCacheKey(context, sourceUri),
+            applyTargets = applyTargets,
         )
     }
 
@@ -63,6 +68,7 @@ object ThemeApply {
         settingsManager: SettingsManager,
         rawValue: Int,
         sourceUri: String,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): Result<ThemeMaterialization.MaterializeResult> {
         val trimmed = sourceUri.trim()
         if (trimmed.isEmpty()) {
@@ -85,6 +91,7 @@ object ThemeApply {
                     cacheKey = cacheKey,
                     sourceUri = trimmed,
                     syncExisting = ThemeMaterialization.isMaterialized(context, cacheKey),
+                    applyTargets = applyTargets,
                 )
             }
         }
@@ -111,6 +118,7 @@ object ThemeApply {
         bytes: ByteArray,
         sourceUri: String,
         cacheKey: String,
+        applyTargets: Set<ThemeApplyTarget>? = null,
     ): Result<ApplyResult> {
         return ThemeMaterialization.materializeAndActivateFromCache(
             context = context,
@@ -120,6 +128,13 @@ object ThemeApply {
             cacheKey = cacheKey,
             sourceUri = sourceUri,
             syncExisting = ThemeMaterialization.isMaterialized(context, cacheKey),
+            applyTargets = applyTargets,
         )
     }
+
+    fun peekAvailableApplyTargets(bytes: ByteArray): Result<Set<ThemeApplyTarget>> =
+        runCatching {
+            val parsed = ThemeBundleExport.parseBundleBytes(bytes).getOrThrow()
+            ThemeApplyTargetAvailability.detectAvailable(parsed)
+        }
 }

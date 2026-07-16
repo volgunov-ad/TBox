@@ -34,7 +34,7 @@ object HttpRequestIconPaths {
     }
 
     fun resolveIconFile(filesDir: File, iconKey: String, lookup: LauncherAppIconPaths.Lookup): File? {
-        if (ThemeSection.APP_ICONS in lookup.activeThemeSections) {
+        if (ThemeApplyTarget.APP_ICONS in lookup.activeThemeApplyTargets) {
             val cacheKey = lookup.activeThemeCacheKey.trim()
             if (ThemeCacheKeys.isLikelyCacheKey(cacheKey)) {
                 resolveStoredIconFile(themeIconsDir(filesDir, cacheKey), iconKey)?.let { return it }
@@ -45,7 +45,7 @@ object HttpRequestIconPaths {
     }
 
     fun hasThemeCacheIcon(filesDir: File, iconKey: String, lookup: LauncherAppIconPaths.Lookup): Boolean {
-        if (ThemeSection.APP_ICONS !in lookup.activeThemeSections) return false
+        if (ThemeApplyTarget.APP_ICONS !in lookup.activeThemeApplyTargets) return false
         val cacheKey = lookup.activeThemeCacheKey.trim()
         if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
         return resolveStoredIconFile(themeIconsDir(filesDir, cacheKey), iconKey) != null
@@ -55,7 +55,7 @@ object HttpRequestIconPaths {
         resolveIconFile(filesDir, iconKey, lookup) != null
 
     fun deleteThemeCacheIcon(filesDir: File, iconKey: String, lookup: LauncherAppIconPaths.Lookup): Boolean {
-        if (ThemeSection.APP_ICONS !in lookup.activeThemeSections) return false
+        if (ThemeApplyTarget.APP_ICONS !in lookup.activeThemeApplyTargets) return false
         val cacheKey = lookup.activeThemeCacheKey.trim()
         if (!ThemeCacheKeys.isLikelyCacheKey(cacheKey)) return false
         val file = resolveStoredIconFile(themeIconsDir(filesDir, cacheKey), iconKey) ?: return false

@@ -364,6 +364,14 @@
     <string name="themes_create_section_floating_panels">Floating panel settings</string>
     <string name="themes_create_section_app_icons">App icons</string>
     <string name="themes_create_section_app_icons_hint">Custom icons for App launcher widgets.</string>
+    <string name="themes_target_main_screen_wallpapers">Main screen backgrounds</string>
+    <string name="themes_target_tile_backgrounds">Tile backgrounds</string>
+    <string name="themes_target_app_icons">App and HTTP request icons</string>
+    <string name="themes_target_main_screen_panels">Main screen panels</string>
+    <string name="themes_target_floating_panels">Floating panels</string>
+    <string name="themes_apply_targets_dialog_title">What to apply from theme</string>
+    <string name="themes_apply_targets_dialog_hint">Choose which elements to apply. Unavailable items are not present in the theme file.</string>
+    <string name="themes_apply_targets_select_one">Select at least one item</string>
     <string name="themes_create_confirm">Create</string>
     <string name="themes_create_file_name_label">File name</string>
     <string name="themes_create_file_name_hint">Without the .tboxtheme extension</string>

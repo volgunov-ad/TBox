@@ -112,7 +112,11 @@ object ThemeRuntimeState {
         settingsManager: SettingsManager,
         cacheDir: File,
         themeJson: String,
+        applyTargets: Set<ThemeApplyTarget>,
     ): MainScreenWallpaperSelectionsByPage {
+        if (ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS !in applyTargets) {
+            return settingsManager.mainScreenWallpaperSelectionsSnapshot()
+        }
         val selections = resolveWallpaperSelectionsForActivation(cacheDir, themeJson)
         settingsManager.saveMainScreenWallpaperSelectionsByPage(selections)
         val runtime = read(cacheDir)

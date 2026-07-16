@@ -23,7 +23,7 @@ class TileBackgroundImageStorageTest {
         }
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "my_theme",
-            activeThemeSections = setOf(ThemeSection.MAIN_SCREEN),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.TILE_BACKGROUNDS),
         )
         val resolved = TileBackgroundImageStorage.resolveFile(root, rel, lookup)
         assertNotNull(resolved)
@@ -42,7 +42,7 @@ class TileBackgroundImageStorageTest {
         }
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "theme_b",
-            activeThemeSections = setOf(ThemeSection.FLOATING_PANELS),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.TILE_BACKGROUNDS, ThemeApplyTarget.FLOATING_PANELS),
         )
         val resolved = TileBackgroundImageStorage.resolveFile(root, rel, lookup)
         assertNotNull(resolved)
@@ -59,7 +59,7 @@ class TileBackgroundImageStorageTest {
         sharedFile.writeBytes(byteArrayOf(4))
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "theme_d",
-            activeThemeSections = setOf(ThemeSection.MAIN_SCREEN),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.TILE_BACKGROUNDS),
         )
         val resolved = TileBackgroundImageStorage.resolveFile(root, rel, lookup)
         assertNotNull(resolved)
@@ -81,7 +81,7 @@ class TileBackgroundImageStorageTest {
         sharedFile.writeBytes(byteArrayOf(5))
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "theme_c",
-            activeThemeSections = setOf(ThemeSection.APP_ICONS),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.APP_ICONS),
         )
         val resolved = TileBackgroundImageStorage.resolveFile(root, rel, lookup)
         assertNotNull(resolved)
@@ -103,7 +103,7 @@ class TileBackgroundImageStorageTest {
         }
         val lookup = LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = "theme_e",
-            activeThemeSections = setOf(ThemeSection.MAIN_SCREEN),
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.TILE_BACKGROUNDS),
         )
         assertTrue(TileBackgroundImageStorage.hasThemeCacheFile(root, rel, lookup))
         assertTrue(TileBackgroundImageStorage.deleteThemeCacheFile(root, rel, "theme_e"))
