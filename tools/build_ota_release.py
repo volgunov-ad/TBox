@@ -16,7 +16,7 @@
   Релиз      -> C:\\Users\\volgu\\AndroidStudioProjects\\TBM\\release
 
 Changelog для version.json берётся из Changelog.dm (секция текущей versionName),
-если не передан --changelog.
+если не передан --changelog. Markdown (**жирный**, `код`, *курсив*) снимается.
 
 Запуск из корня репозитория:
   python tools/build_ota_release.py
@@ -47,6 +47,9 @@ GRADLE_FILE = Path("app/build.gradle.kts")
 CHANGELOG_FILE = Path("Changelog.dm")
 FLAVORS = ("ru", "en")
 VERSION_HEADER_RE = re.compile(r"^\d+\.\d+(?:\.\d+)*$")
+MARKDOWN_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+MARKDOWN_ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
+MARKDOWN_CODE_RE = re.compile(r"`([^`]+)`")
 
 
 @dataclass(frozen=True)
@@ -211,6 +214,14 @@ def copy_apk(source: Path, destination_dir: Path, destination_name: str) -> Path
     return destination
 
 
+def strip_changelog_formatting(text: str) -> str:
+    """Remove Markdown markers used in Changelog.dm for plain text in version.json."""
+    cleaned = MARKDOWN_BOLD_RE.sub(r"\1", text)
+    cleaned = MARKDOWN_CODE_RE.sub(r"\1", cleaned)
+    cleaned = MARKDOWN_ITALIC_RE.sub(r"\1", cleaned)
+    return cleaned
+
+
 def read_changelog_section(changelog_path: Path, version_name: str) -> str:
     """Extract the numbered entries for version_name from Changelog.dm."""
     if not changelog_path.is_file():
@@ -252,7 +263,7 @@ def resolve_changelog(
     version_name: str,
 ) -> str:
     if args.changelog is not None:
-        return args.changelog
+        return strip_changelog_formatting(args.changelog)
 
     changelog_path = (
         args.changelog_file
@@ -262,7 +273,9 @@ def resolve_changelog(
     if not changelog_path.is_absolute():
         changelog_path = project_dir / changelog_path
 
-    return read_changelog_section(changelog_path, version_name)
+    return strip_changelog_formatting(
+        read_changelog_section(changelog_path, version_name)
+    )
 
 
 def build_version_json(

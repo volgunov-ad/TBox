@@ -33,9 +33,11 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanAvailability
+import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.MbCanSignal
 
@@ -90,11 +92,16 @@ fun CarSettingsTab(
     val epsMode by UniversalCanRepository.carSettingsEpsMode.collectAsStateWithLifecycle()
     val driveMode by UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     val driveMode6dctWet by UniversalCanRepository.carSettingsDriveMode6dctWet.collectAsStateWithLifecycle()
+    val slaOnOffState by UniversalCanRepository.slaOnOffState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         UniversalCanRepository.setSourceSignals(
             CAR_SETTINGS_MB_CAN_SOURCE_ID,
-            setOf(MbCanSignal.AudioVolumeSpeed, MbCanSignal.CarSettingsVehicleParams),
+            setOf(
+                MbCanSignal.AudioVolumeSpeed,
+                MbCanSignal.CarSettingsVehicleParams,
+                MbCanSignal.SlaSpeedLimit,
+            ),
         )
     }
     DisposableEffect(Unit) {
@@ -166,6 +173,18 @@ fun CarSettingsTab(
                     )
                 }
             }
+        )
+
+        SettingSwitch(
+            isChecked = slaOnOffState is MbCanBinaryState.On,
+            onCheckedChange = { enabled ->
+                coroutineScope.launch {
+                    UniversalCanRepository.setSlaRecognitionEnabled(enabled)
+                }
+            },
+            text = stringResource(R.string.car_settings_sla_recognition_title),
+            description = stringResource(R.string.car_settings_sla_recognition_desc),
+            enabled = mbCanOk,
         )
     }
 }

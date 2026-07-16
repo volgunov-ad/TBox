@@ -237,6 +237,46 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val slaRecognizedSpeedLimitKmh: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.slaRecognizedSpeedLimitKmh
+            } else {
+                Android10VhalRepository.slaRecognizedSpeedLimitKmh
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val slaSignUiState: StateFlow<SlaSignUiState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.slaSignUiState
+            } else {
+                Android10VhalRepository.slaSignUiState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, SlaSignUiState.Inactive)
+
+    val slaOnOffState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.slaOnOffState
+            } else {
+                Android10VhalRepository.slaOnOffState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val speedLimiterState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.speedLimiterState
+            } else {
+                Android10VhalRepository.speedLimiterState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
     val engineRpmState: StateFlow<Float?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -353,6 +393,39 @@ object UniversalCanRepository {
         } else {
             Android10VhalRepository.audioVolumeRestoreCandidate(defaultValue)
         }
+    }
+
+    suspend fun setSlaRecognitionEnabled(on: Boolean): MbCanCommandResult {
+        return execute(
+            MbCanCommand.SetProperty(
+                MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH,
+                SlaSpeedLimitDomain.encodeSlaSwitchOn(on),
+            )
+        )
+    }
+
+    suspend fun setSpeedLimiterTargetKmh(kmh: Int): MbCanCommandResult {
+        val clamped = SlaSpeedLimitDomain.clampLimiterTargetKmh(kmh)
+        return execute(
+            MbCanCommand.SetProperty(
+                MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
+                clamped,
+            )
+        )
+    }
+
+    suspend fun setSpeedLimiterEnabled(on: Boolean): MbCanCommandResult {
+        return execute(
+            MbCanCommand.SetProperty(
+                MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
+                SlaSpeedLimitDomain.encodeSpeedLimiterSwitchOn(on),
+            )
+        )
+    }
+
+    suspend fun enableSpeedLimiter(targetKmh: Int): MbCanCommandResult {
+        setSpeedLimiterTargetKmh(targetKmh)
+        return setSpeedLimiterEnabled(true)
     }
 
     suspend fun autoResolveModeOnStartup(

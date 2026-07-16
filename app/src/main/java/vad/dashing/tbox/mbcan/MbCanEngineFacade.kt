@@ -32,10 +32,13 @@ object MbCanEngineFacade {
     private var settingsTelemetryProxy: Any? = null
     private var registCmdListenerMethod: Method? = null
     private var unRegistCmdListenerMethod: Method? = null
+    private var registerLkaSlaListenerMethod: Method? = null
+    private var unregisterLkaSlaListenerMethod: Method? = null
     private var cfgVehicleDataType: Any? = null
     private var cfgAudioDataType: Any? = null
     private var vehicleCfgCmdListenerProxy: Any? = null
     private var audioCfgCmdListenerProxy: Any? = null
+    private var lkaSlaStatusListenerProxy: Any? = null
     private var initialized = false
 
     val availability: MbCanAvailability
@@ -86,6 +89,15 @@ object MbCanEngineFacade {
                 Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
             )
             unRegistCmdListenerMethod = engineClass.getMethod("unRegistCMDListener", Class.forName(DATA_TYPE_CLASS))
+            registerLkaSlaListenerMethod = runCatching {
+                engineClass.getMethod(
+                    "registIMBCanVehicleLkaSlaStatusListener",
+                    Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleLkaSlaStatusCallback")
+                )
+            }.getOrNull()
+            unregisterLkaSlaListenerMethod = runCatching {
+                engineClass.getMethod("unRegistIMBCanVehicleLkaSlaStatusListener")
+            }.getOrNull()
             val dataTypeClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
             cfgVehicleDataType = java.lang.Enum.valueOf(dataTypeClass, "eMBCAN_CFG_VEHICLE")
             cfgAudioDataType = java.lang.Enum.valueOf(dataTypeClass, "eMBCAN_CFG_AUDIO")
@@ -481,6 +493,64 @@ object MbCanEngineFacade {
         } catch (t: Throwable) {
             "mbCAN_motion_err=${t.javaClass.simpleName}:${t.message}"
         }
+    }
+
+    @Synchronized
+    fun syncLkaSlaStatusListener(active: Boolean) {
+        if (!active) {
+            unregisterLkaSlaStatusListener()
+            return
+        }
+        if (lkaSlaStatusListenerProxy != null) return
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        val inst = engineInstance ?: return
+        val register = registerLkaSlaListenerMethod ?: return
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCanVehicleLkaSlaStatusCallback")
+        } catch (_: Throwable) {
+            return
+        }
+        val loader = iface.classLoader ?: return
+        val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
+            if (method.name == "onVehicleLkaSlaStatus") {
+                val status = args?.getOrNull(0) ?: return@InvocationHandler null
+                val slaOnOff = runCatching {
+                    status.javaClass.getMethod("getFCM_2_SLAOnOffsts").invoke(status) as? Number
+                }.getOrNull()?.toInt()
+                val slaState = runCatching {
+                    status.javaClass.getMethod("getFCM_2_SLAState").invoke(status) as? Number
+                }.getOrNull()?.toInt()
+                val slaLimit = runCatching {
+                    status.javaClass.getMethod("getFCM_2_SLASpdlimit").invoke(status) as? Number
+                }.getOrNull()?.toInt()
+                MbCanRepository.scheduleLkaSlaPush(
+                    slaOnOffRaw = slaOnOff,
+                    slaStateRaw = slaState,
+                    slaLimitRaw = slaLimit,
+                )
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        lkaSlaStatusListenerProxy = proxy
+        try {
+            register.invoke(inst, proxy)
+        } catch (_: Throwable) {
+            lkaSlaStatusListenerProxy = null
+        }
+    }
+
+    @Synchronized
+    private fun unregisterLkaSlaStatusListener() {
+        val inst = engineInstance
+        val unregister = unregisterLkaSlaListenerMethod
+        if (inst != null && lkaSlaStatusListenerProxy != null && unregister != null) {
+            try {
+                unregister.invoke(inst)
+            } catch (_: Throwable) {
+            }
+        }
+        lkaSlaStatusListenerProxy = null
     }
 }
 

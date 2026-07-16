@@ -48,6 +48,8 @@ import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_FOLD_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
+import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
+import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 
@@ -334,6 +336,36 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 scale = widgetConfig.scale
+            )
+        }
+
+        SLA_SPEED_LIMIT_WIDGET_DATA_KEY -> {
+            DashboardSlaSpeedLimitWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
+        SPEED_LIMITER_WIDGET_DATA_KEY -> {
+            DashboardSpeedLimiterWidgetItem(
+                settingsViewModel = settingsViewModel,
+                isVertical = true,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
             )
         }
 

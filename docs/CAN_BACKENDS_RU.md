@@ -5,6 +5,8 @@
 - **Android 9**: через `mbCAN`.
 - **Android 10**: через `android.car` / VHAL (`CarPropertyManager`).
 
+Таблицы всех **используемых** property (чтение/запись, raw-декод, push/pull): [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md).
+
 ---
 
 ## 1) Выбор между mbCAN и VHAL

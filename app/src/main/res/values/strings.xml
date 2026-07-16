@@ -75,6 +75,8 @@
     <string name="car_settings_source_station_mode_desc">eSOURCE_STATION_MODE</string>
     <string name="car_settings_vehwash_mode_title">Режим мойки автомобиля</string>
     <string name="car_settings_vehwash_mode_desc">eVEHICLE_VEHWASH_MODESET</string>
+    <string name="car_settings_sla_recognition_title">Распознавание дорожных знаков</string>
+    <string name="car_settings_sla_recognition_desc">SLA/TSR — ограничение скорости по знакам</string>
     <string name="menu_hide">Скрыть меню</string>
     <string name="menu_show">Показать меню</string>
     <string name="menu_navigate_home">Главная</string>
@@ -790,6 +792,9 @@
     <string name="data_title_steering_wheel_heat_widget">Виджет обогрева рулевого колеса</string>
     <string name="data_title_wiper_maintenance_widget">Виджет режима обслуживания стеклоочистителей</string>
     <string name="data_title_parking_radar_widget">Виджет парковочного радара</string>
+    <string name="data_title_sla_speed_limit_widget">Ограничение по знаку</string>
+    <string name="data_title_speed_limiter_widget">Ограничитель скорости</string>
+    <string name="sla_speed_limit_no_sign">—</string>
     <string name="data_title_front_windscreen_heat_widget">Виджет обогрева лобового стекла</string>
     <string name="data_title_rear_window_mirrors_defrost_widget">Виджет обогрева заднего стекла и зеркал</string>
     <string name="data_title_hvac_air_recirculation_widget">Виджет рециркуляции воздуха</string>
@@ -1019,6 +1024,11 @@
     <string name="widget_actions_steering_wheel_heat">На главной или плавающей панели: одиночное нажатие — включить или выключить обогрев руля.</string>
     <string name="widget_actions_wiper_maintenance">На главной или плавающей панели: одиночное нажатие — включить или выключить сервисное положение.</string>
     <string name="widget_actions_parking_radar">На главной или плавающей панели: одиночное нажатие — включить или выключить парковочный радар.</string>
+    <string name="widget_desc_sla_speed_limit">Текущее ограничение скорости, распознанное системой SLA/TSR.</string>
+    <string name="widget_desc_speed_limiter">Ограничитель скорости: выбранное значение 0–150 км/ч.</string>
+    <string name="widget_actions_speed_limiter">Свайп вверх/вниз или кнопки ± — изменить скорость; двойное нажатие — включить; одиночное — выключить.</string>
+    <string name="widget_speed_limiter_action_decrease">Уменьшить ограничение скорости</string>
+    <string name="widget_speed_limiter_action_increase">Увеличить ограничение скорости</string>
     <string name="widget_actions_front_windscreen_heat">На главной или плавающей панели: одиночное нажатие — включить или выключить обогрев.</string>
     <string name="widget_actions_rear_window_mirrors_defrost">На главной или плавающей панели: одиночное нажатие — включить или выключить обогрев.</string>
     <string name="widget_actions_hvac_air_recirculation">На главной или плавающей панели: одиночное нажатие — включить или выключить рециркуляцию.</string>

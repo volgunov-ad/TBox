@@ -75,6 +75,8 @@
     <string name="car_settings_source_station_mode_desc">eSOURCE_STATION_MODE</string>
     <string name="car_settings_vehwash_mode_title">Car wash mode</string>
     <string name="car_settings_vehwash_mode_desc">eVEHICLE_VEHWASH_MODESET</string>
+    <string name="car_settings_sla_recognition_title">Traffic sign recognition</string>
+    <string name="car_settings_sla_recognition_desc">SLA/TSR — speed limit from road signs</string>
     <string name="menu_hide">Hide menu</string>
     <string name="menu_show">Show menu</string>
     <string name="menu_navigate_home">Home</string>
@@ -783,6 +785,9 @@
     <string name="data_title_steering_wheel_heat_widget">Steering wheel heating widget</string>
     <string name="data_title_wiper_maintenance_widget">Wiper maintenance mode widget</string>
     <string name="data_title_parking_radar_widget">Parking radar widget</string>
+    <string name="data_title_sla_speed_limit_widget">Sign speed limit</string>
+    <string name="data_title_speed_limiter_widget">Speed limiter</string>
+    <string name="sla_speed_limit_no_sign">—</string>
     <string name="data_title_front_windscreen_heat_widget">Front windscreen heating widget</string>
     <string name="data_title_rear_window_mirrors_defrost_widget">Rear window and mirror defrost widget</string>
     <string name="data_title_hvac_air_recirculation_widget">HVAC air recirculation widget</string>
@@ -996,6 +1001,11 @@
     <string name="widget_actions_steering_wheel_heat">On a home or floating panel: single tap — turn steering wheel heating on or off.</string>
     <string name="widget_actions_wiper_maintenance">On a home or floating panel: single tap — enable or disable the maintenance position.</string>
     <string name="widget_actions_parking_radar">On a home or floating panel: single tap — turn the parking radar on or off.</string>
+    <string name="widget_desc_sla_speed_limit">Current speed limit recognized by SLA/TSR.</string>
+    <string name="widget_desc_speed_limiter">Speed limiter: selected value 0–150 km/h.</string>
+    <string name="widget_actions_speed_limiter">Swipe up/down or ± buttons — change speed; double tap — enable; single tap — disable.</string>
+    <string name="widget_speed_limiter_action_decrease">Decrease speed limit</string>
+    <string name="widget_speed_limiter_action_increase">Increase speed limit</string>
     <string name="widget_actions_front_windscreen_heat">On a home or floating panel: single tap — turn heating on or off.</string>
     <string name="widget_actions_rear_window_mirrors_defrost">On a home or floating panel: single tap — turn heating on or off.</string>
     <string name="widget_actions_hvac_air_recirculation">On a home or floating panel: single tap — turn air recirculation on or off.</string>

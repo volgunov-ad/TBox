@@ -200,9 +200,9 @@
 - `Steering wheel heat`
   - Read: `R_0400_RBCM_MFS_HeatSts (289412111)` -> `1=ON`, `2=OFF`
   - Write: `T_0401_SET_MFS_Heat (289412679)` -> `1=ON`, `2=OFF`
-- `Wiper maintenance`
-  - Read: `R_0400_CEM_Wiper_MaintenanceSts (289412194)` -> `1=ON`, `2=OFF`
-  - Write: `T_0401_SET_Wiper_Maintenance (289412682)` -> `1=ON`, `2=OFF`
+- `Wiper maintenance` (as stock CarSettings)
+  - Read: `R_0400_CEM_Wiper_MaintenanceSts (289412194)` -> `1=ON` (else OFF)
+  - Write: `T_0401_SET_Wiper_Maintenance (289412682)` -> `1=service ON`, `2=working/OFF`
 - `Front windscreen heat`
   - Read: `R_0400_RBCM_FGHeat_Request_CommandFeedb (289412114)` -> `1=ON`, `2=OFF`
   - Write: `T_0201_SET_FrontWindscreenHeatiReq (289415309)` -> `2=ON`, `1=OFF`
@@ -210,7 +210,7 @@
   - Read: `R_0200_CEM_IPM_RearDefrosts (289415177)` -> `1=ON`, `2=OFF`
   - Write: `T_0201_IHU_5_RearDefrostSwitch_Req (289415299)` -> `2=ON`, `1=OFF`
 - `Air recirculation`
-  - Read: `R_0200_CEM_IPM_RecyMode (289415172)` -> `1=inside/recirc ON`, `2=outside/recirc OFF`
+  - Read: `R_0200_CEM_IPM_RecyMode (289415172)` -> `1=ON` (inside; stock UI «outside» uses `==2`)
   - Write: `T_0201_IHU_5_CirculationMode_Req (289415302)` -> `1=inside/recirc ON`, `2=outside/recirc OFF`
 
 ### Небинарные параметры (доп. проверка)
