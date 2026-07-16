@@ -106,6 +106,7 @@ object ThemeMaterialization {
                         cacheKey = cacheKey,
                         sourceUri = sourceUri,
                         syncExisting = syncExisting,
+                        applyTargets = applyTargets,
                     )
                     activateFromCacheLocked(
                         context = context,
