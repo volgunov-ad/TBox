@@ -33,6 +33,7 @@ object StartupRepositoryLoader {
             tripsListFromJson(snapshot.tripsJson),
             favoritesSetFromJson(snapshot.tripFavoritesJson),
         )
+        TripRepository.ensurePersistentTrip(defaultName = "")
     }
 
     internal fun applyRefuels(snapshot: AppDataStartupSnapshot) {

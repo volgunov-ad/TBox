@@ -80,6 +80,20 @@ class AppDataViewModel(
         }
     }
 
+    fun resetPersistentTrip(defaultName: String) {
+        viewModelScope.launch {
+            synchronized(TripRepository.lock) {
+                TripRepository.resetPersistentTrip(
+                    defaultName = defaultName,
+                    odometerStartKm = CanDataRepository.odometer.value,
+                    fuelBaselinePercent = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat(),
+                    fuelBaselineLiters = CanDataRepository.fuelLevelCalibratedLiters.value,
+                )
+            }
+            persistTripsIfNeeded()
+        }
+    }
+
     fun setTripFavorite(id: String, favorite: Boolean) {
         viewModelScope.launch {
             synchronized(TripRepository.lock) {

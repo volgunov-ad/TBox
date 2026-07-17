@@ -690,10 +690,10 @@
     <string name="data_title_motor_hours">Моточасы двигателя</string>
     <string name="data_title_motor_hours_trip">Моточасы двигателя за поездку</string>
     <string name="data_title_motor_hours_widget">Виджет моточасов</string>
-    <string name="data_title_active_trip_widget">Текущая поездка</string>
-    <string name="data_title_active_trip_widget_simple">Текущая поездка (упрощённый)</string>
-    <string name="data_title_active_trip_widget_mini">Текущая поездка (мини)</string>
-    <string name="data_title_active_trip_widget_custom">Текущая поездка (настраиваемый)</string>
+    <string name="data_title_active_trip_widget">Поездка</string>
+    <string name="data_title_active_trip_widget_simple">Поездка (упрощённый)</string>
+    <string name="data_title_active_trip_widget_mini">Поездка (мини)</string>
+    <string name="data_title_active_trip_widget_custom">Поездка (настраиваемый)</string>
 
     <string name="settings_fuel_tank_liters_title">Объём бака, л</string>
     <string name="settings_fuel_price_fuel_type_title">Тип топлива для расчёта цены</string>
@@ -709,12 +709,19 @@
     <string name="trips_delete_confirm_title">Удалить поездку?</string>
     <string name="trips_delete_confirm_message">Запись поездки и связанные с ней данные в журнале будут удалены без восстановления.</string>
     <string name="trips_finish">Завершить</string>
+    <string name="trips_reset_persistent">Сбросить</string>
+    <string name="trips_reset_persistent_confirm_title">Сбросить суточную поездку?</string>
+    <string name="trips_reset_persistent_confirm_message">Текущие данные суточной поездки будут сохранены в истории как завершённая запись, и начнётся новая суточная поездка.</string>
     <string name="trips_name_label">Название поездки</string>
     <string name="trips_add_favorite">В избранное</string>
     <string name="trips_remove_favorite">Убрать из избранного</string>
     <string name="trips_empty">Нет сохранённых поездок</string>
     <string name="trips_no_active">Нет активной поездки</string>
     <string name="trips_active_trip">Текущая поездка</string>
+    <string name="trips_persistent_trip">Суточная поездка</string>
+    <string name="trips_widget_source_title">Источник данных</string>
+    <string name="trips_widget_source_current">Текущая поездка</string>
+    <string name="trips_widget_source_persistent">Суточная поездка</string>
     <string name="trips_last_trip_widget_title">Последняя поездка</string>
     <string name="trips_start_time">Начало</string>
     <string name="trips_end_time">Окончание</string>
@@ -976,8 +983,8 @@
     <string name="widget_desc_motor_hours_widget">Общие моточасы и моточасы текущей поездки.</string>
     <string name="widget_desc_time">Текущее системное время.</string>
     <string name="widget_desc_date">Текущая системная дата.</string>
-    <string name="widget_desc_active_trip">Подробные показатели текущей поездки.</string>
-    <string name="widget_desc_active_trip_simple">Основные показатели текущей поездки в упрощённом виде.</string>
+    <string name="widget_desc_active_trip">Подробные показатели поездки.</string>
+    <string name="widget_desc_active_trip_simple">Основные показатели поездки в упрощённом виде.</string>
     <string name="widget_desc_active_trip_mini">Краткие показатели поездки для небольшой плитки.</string>
     <string name="widget_desc_active_trip_custom">Показатели поездки с настраиваемым составом строк.</string>
     <string name="widget_desc_net_signal">Уровень сигнала мобильной сети.</string>
