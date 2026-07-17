@@ -134,21 +134,15 @@ fun DashboardHvacFanWidgetItem(
     DashboardStepperControlWidget(
         isVertical = isVertical,
         centerLabel = centerLabel,
-        centerDimmed = frontOffActive,
         decreaseContentDescriptionRes = R.string.widget_hvac_fan_decrease,
         increaseContentDescriptionRes = R.string.widget_hvac_fan_increase,
         adjustIconStyle = stepperAdjustIconStyle,
-        centerUseActiveBackground = !frontOffActive,
-        centerIcon = {
-            val controls = LocalWidgetControlAppearance.current
+        controlsActive = !frontOffActive,
+        centerIcon = { contentColor ->
             Icon(
                 painter = painterResource(R.drawable.ic_widget_hvac_fan),
                 contentDescription = stringResource(R.string.widget_hvac_front_off_toggle),
-                tint = if (frontOffActive) {
-                    controls.inactiveContent.copy(alpha = 0.35f)
-                } else {
-                    controls.activeContent
-                },
+                tint = contentColor,
                 modifier = Modifier.fillMaxSize(),
             )
         },
@@ -264,11 +258,11 @@ private fun HvacTempStepperWidget(
     DashboardStepperControlWidget(
         isVertical = isVertical,
         centerLabel = centerLabel,
-        centerDimmed = frontOffActive,
         showCenterIcon = false,
         decreaseContentDescriptionRes = R.string.widget_hvac_temp_decrease,
         increaseContentDescriptionRes = R.string.widget_hvac_temp_increase,
         adjustIconStyle = stepperAdjustIconStyle,
+        controlsActive = !frontOffActive,
         enableInnerInteractions = enableInnerInteractions,
         onDecrease = {
             UniversalCanRepository.launchHvacClimateCommand(scope) {
