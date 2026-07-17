@@ -83,6 +83,7 @@ fun DashboardTrunkDoorWidgetItem(
 ) {
     val scope = rememberCoroutineScope()
     val trunkState by TrunkDoorRepository.displayState.collectAsStateWithLifecycle()
+    val controls = LocalWidgetControlAppearance.current
     val defaultTitle = stringResource(R.string.data_title_trunk_door_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
@@ -117,8 +118,8 @@ fun DashboardTrunkDoorWidgetItem(
     ) { availableHeight, resolvedTextColor ->
         val iconTint = TrunkDoorDomain.resolveIconTint(
             state = trunkState,
-            idleColor = resolvedTextColor,
-            openColor = WidgetActiveColors.Primary,
+            idleColor = controls.inactiveContent,
+            openColor = controls.activeContent,
             openingAccentColor = WidgetActiveColors.Secondary,
         )
         val iconColor = resolveTrunkIconColor(iconTint)
@@ -139,13 +140,25 @@ fun DashboardTrunkDoorWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_widget_trunk),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
-                    colorFilter = ColorFilter.tint(iconColor)
-                )
+                // Open or moving → active control chrome; closed/unknown → inactive.
+                val useActiveBackground = trunkState.isOpen == true || trunkState.isMoving
+                WidgetControlChrome(
+                    background = if (useActiveBackground) {
+                        controls.activeBackground
+                    } else {
+                        controls.inactiveBackground
+                    },
+                    shapeDp = controls.shapeDp,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_widget_trunk),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize().scale(scale),
+                        colorFilter = ColorFilter.tint(iconColor)
+                    )
+                }
             }
         }
     }

@@ -158,6 +158,14 @@
     <string name="widget_background_color_light">Background color (light theme)</string>
     <string name="widget_background_color_dark">Background color (dark theme)</string>
     <string name="widget_reset_text_background_colors">Reset text and background colors</string>
+    <string name="widget_control_colors_section">Control elements</string>
+    <string name="widget_control_colors_use_defaults">Default colors</string>
+    <string name="widget_control_state_segment_inactive">Inactive state</string>
+    <string name="widget_control_state_segment_active">Active state</string>
+    <string name="widget_control_content_color">Icon / text color</string>
+    <string name="widget_control_background_color">Background color</string>
+    <string name="widget_control_shape">Control corner radius: %1$d</string>
+    <string name="widget_control_shape_hint" formatted="false">0..50</string>
     <string name="widget_color_value_label">Color value</string>
     <string name="widget_color_value_hint">Format: #AARRGGBB, #RRGGBB, 0xAARRGGBB or Int</string>
     <string name="widget_color_alpha">Opacity: %1$d%%</string>

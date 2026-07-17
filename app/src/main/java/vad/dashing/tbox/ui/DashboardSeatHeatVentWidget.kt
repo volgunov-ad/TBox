@@ -308,17 +308,18 @@ private fun SeatHeatVentWidget(
         seatActionBlockedUntil = now + SEAT_ACTION_LOCKOUT_MS
         sendSetMbCanProperty(context, propertyId, value)
     }
+    val controls = LocalWidgetControlAppearance.current
     val iconColor = when (mode) {
         is MbCanSeatModeState.Unavailable -> {
-            textColor.copy(alpha = 0.25f)
+            controls.inactiveContent.copy(alpha = 0.25f)
         }
 
         is MbCanSeatModeState.Unknown -> {
-            textColor.copy(alpha = 0.25f)
+            controls.inactiveContent.copy(alpha = 0.25f)
         }
 
         else -> {
-            textColor
+            controls.inactiveContent
         }
     }
 
@@ -553,6 +554,10 @@ private fun SeatActionButton(
     onHorizontalSwipeConfirmed: () -> Unit = {},
     scale: Float = 1f
 ) {
+    val controls = LocalWidgetControlAppearance.current
+    val useDefaults = LocalWidgetControlUsesDefaults.current
+    val heatOn = if (useDefaults) WidgetActiveColors.Secondary else controls.activeContent
+    val ventOn = if (useDefaults) WidgetActiveColors.Primary else controls.activeContent
     val swipeModifier = if (horizontalSwipeThresholdPx != null) {
         Modifier.pointerInput(horizontalSwipeThresholdPx, horizontalSwipePointerKey) {
             var dragAccum = 0f
@@ -572,7 +577,10 @@ private fun SeatActionButton(
     } else {
         Modifier
     }
-    Box(
+    val levelActive = level in listOf(1, 2, 3)
+    WidgetControlChrome(
+        background = if (levelActive) controls.activeBackground else controls.inactiveBackground,
+        shapeDp = controls.shapeDp,
         modifier = modifier
             .then(swipeModifier)
             .combinedClickableWithSound(
@@ -582,7 +590,6 @@ private fun SeatActionButton(
             )
             .graphicsLayer { scaleX =
                 if (side in listOf(SeatSide.FrontLeft, SeatSide.BackLeft)) { 1f } else { -1f } },
-        contentAlignment = Alignment.Center
     ) {
         Image(
             painter = painterResource(id = R.drawable.ic_widget_seat),
@@ -623,7 +630,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) WidgetActiveColors.Secondary else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -632,7 +639,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) WidgetActiveColors.Secondary else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -641,7 +648,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level == 3) WidgetActiveColors.Secondary else iconColor),
+                colorFilter = ColorFilter.tint(if (level == 3) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
         } else if (modeType == "vent") {
@@ -651,7 +658,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) WidgetActiveColors.Primary else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -660,7 +667,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) WidgetActiveColors.Primary else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -669,7 +676,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) WidgetActiveColors.Primary else iconColor),
+                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -678,7 +685,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(scale),
-                colorFilter = ColorFilter.tint(if (level == 3) WidgetActiveColors.Primary else iconColor),
+                colorFilter = ColorFilter.tint(if (level == 3) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
         }

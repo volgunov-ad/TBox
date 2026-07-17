@@ -76,8 +76,11 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.normalizeWidgetControlShape
+import vad.dashing.tbox.usesDefaultControlColors
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.normalizeWidgetScale
+import androidx.compose.ui.graphics.toArgb
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
@@ -305,6 +308,104 @@ internal class WidgetSelectionDialogState(
         ),
     )
 
+    /** 0 = inactive control colors, 1 = active (paired with [advancedColorThemeSegment]). */
+    var controlStateSegment by mutableIntStateOf(0)
+    var controlColorsUseDefaults by mutableStateOf(initialConfig.usesDefaultControlColors())
+    var controlInactiveColorLight by mutableIntStateOf(
+        initialConfig.controlInactiveColorLight ?: DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+    )
+    var controlInactiveColorDark by mutableIntStateOf(
+        initialConfig.controlInactiveColorDark ?: DEFAULT_WIDGET_TEXT_COLOR_DARK
+    )
+    var controlActiveColorLight by mutableIntStateOf(
+        initialConfig.controlActiveColorLight ?: 0xFF2180F3.toInt()
+    )
+    var controlActiveColorDark by mutableIntStateOf(
+        initialConfig.controlActiveColorDark ?: 0xFF2180F3.toInt()
+    )
+    var controlInactiveBackgroundColorLight by mutableIntStateOf(
+        initialConfig.controlInactiveBackgroundColorLight ?: 0x00000000
+    )
+    var controlInactiveBackgroundColorDark by mutableIntStateOf(
+        initialConfig.controlInactiveBackgroundColorDark ?: 0x00000000
+    )
+    var controlActiveBackgroundColorLight by mutableIntStateOf(
+        initialConfig.controlActiveBackgroundColorLight ?: 0x00000000
+    )
+    var controlActiveBackgroundColorDark by mutableIntStateOf(
+        initialConfig.controlActiveBackgroundColorDark ?: 0x00000000
+    )
+    /** `null` = class default shape; otherwise explicit 0..50. */
+    var controlShape by mutableStateOf(initialConfig.controlShape)
+
+    fun clearControlColorsToDefaults() {
+        controlColorsUseDefaults = true
+        controlInactiveColorLight = DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+        controlInactiveColorDark = DEFAULT_WIDGET_TEXT_COLOR_DARK
+        controlActiveColorLight = 0xFF2180F3.toInt()
+        controlActiveColorDark = 0xFF2180F3.toInt()
+        controlInactiveBackgroundColorLight = 0x00000000
+        controlInactiveBackgroundColorDark = 0x00000000
+        controlActiveBackgroundColorLight = 0x00000000
+        controlActiveBackgroundColorDark = 0x00000000
+    }
+
+    fun applyControlColorSeed(seed: ControlColorSeed) {
+        controlColorsUseDefaults = false
+        controlInactiveColorLight = seed.inactiveColorLight
+        controlInactiveColorDark = seed.inactiveColorDark
+        controlActiveColorLight = seed.activeColorLight
+        controlActiveColorDark = seed.activeColorDark
+        controlInactiveBackgroundColorLight = seed.inactiveBackgroundLight
+        controlInactiveBackgroundColorDark = seed.inactiveBackgroundDark
+        controlActiveBackgroundColorLight = seed.activeBackgroundLight
+        controlActiveBackgroundColorDark = seed.activeBackgroundDark
+    }
+
+    fun controlContentColorForEditor(): Int {
+        val light = advancedColorThemeSegment == 0
+        val inactive = controlStateSegment == 0
+        return when {
+            light && inactive -> controlInactiveColorLight
+            light && !inactive -> controlActiveColorLight
+            !light && inactive -> controlInactiveColorDark
+            else -> controlActiveColorDark
+        }
+    }
+
+    fun setControlContentColorForEditor(color: Int) {
+        val light = advancedColorThemeSegment == 0
+        val inactive = controlStateSegment == 0
+        when {
+            light && inactive -> controlInactiveColorLight = color
+            light && !inactive -> controlActiveColorLight = color
+            !light && inactive -> controlInactiveColorDark = color
+            else -> controlActiveColorDark = color
+        }
+    }
+
+    fun controlBackgroundColorForEditor(): Int {
+        val light = advancedColorThemeSegment == 0
+        val inactive = controlStateSegment == 0
+        return when {
+            light && inactive -> controlInactiveBackgroundColorLight
+            light && !inactive -> controlActiveBackgroundColorLight
+            !light && inactive -> controlInactiveBackgroundColorDark
+            else -> controlActiveBackgroundColorDark
+        }
+    }
+
+    fun setControlBackgroundColorForEditor(color: Int) {
+        val light = advancedColorThemeSegment == 0
+        val inactive = controlStateSegment == 0
+        when {
+            light && inactive -> controlInactiveBackgroundColorLight = color
+            light && !inactive -> controlActiveBackgroundColorLight = color
+            !light && inactive -> controlInactiveBackgroundColorDark = color
+            else -> controlActiveBackgroundColorDark = color
+        }
+    }
+
     fun applySelectedDataKey(key: String) {
         selectedDataKey = key
         if (!WidgetsRepository.supportsSingleLineDualMetrics(key)) {
@@ -419,6 +520,38 @@ internal fun WidgetColorThemeSegmentRow(
     onSegmentSelected: (Int) -> Unit,
     enabled: Boolean,
 ) {
+    WidgetTwoSegmentRow(
+        selectedSegment = selectedSegment,
+        onSegmentSelected = onSegmentSelected,
+        enabled = enabled,
+        label0 = stringResource(R.string.widget_color_theme_segment_light),
+        label1 = stringResource(R.string.widget_color_theme_segment_dark),
+    )
+}
+
+@Composable
+internal fun WidgetControlStateSegmentRow(
+    selectedSegment: Int,
+    onSegmentSelected: (Int) -> Unit,
+    enabled: Boolean,
+) {
+    WidgetTwoSegmentRow(
+        selectedSegment = selectedSegment,
+        onSegmentSelected = onSegmentSelected,
+        enabled = enabled,
+        label0 = stringResource(R.string.widget_control_state_segment_inactive),
+        label1 = stringResource(R.string.widget_control_state_segment_active),
+    )
+}
+
+@Composable
+private fun WidgetTwoSegmentRow(
+    selectedSegment: Int,
+    onSegmentSelected: (Int) -> Unit,
+    enabled: Boolean,
+    label0: String,
+    label1: String,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -451,7 +584,7 @@ internal fun WidgetColorThemeSegmentRow(
             )
         ) {
             Text(
-                text = stringResource(R.string.widget_color_theme_segment_light),
+                text = label0,
                 style = MaterialTheme.typography.tboxCaption,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -483,7 +616,7 @@ internal fun WidgetColorThemeSegmentRow(
             )
         ) {
             Text(
-                text = stringResource(R.string.widget_color_theme_segment_dark),
+                text = label1,
                 style = MaterialTheme.typography.tboxCaption,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -1209,6 +1342,90 @@ internal fun WidgetSelectionDialogForm(
                             style = MaterialTheme.typography.tboxBody
                         )
                     }
+
+                    Text(
+                        text = stringResource(R.string.widget_control_colors_section),
+                        style = MaterialTheme.typography.tboxTitle,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    )
+                    val musicStepperBgArgb = MaterialTheme.colorScheme.surfaceVariant
+                        .copy(alpha = DEFAULT_MUSIC_STEPPER_CONTROL_BG_ALPHA)
+                        .toArgb()
+                    SettingSwitch(
+                        state.controlColorsUseDefaults,
+                        { enabled ->
+                            if (enabled) {
+                                state.clearControlColorsToDefaults()
+                            } else {
+                                val kind = controlAppearanceKindForDataKey(state.selectedDataKey)
+                                state.applyControlColorSeed(
+                                    seedControlColorsFromDefaults(
+                                        kind = kind,
+                                        tileTextColorLight = state.textColorLight,
+                                        tileTextColorDark = state.textColorDark,
+                                        musicStepperBgArgb = musicStepperBgArgb,
+                                        dataKey = state.selectedDataKey,
+                                    )
+                                )
+                            }
+                        },
+                        stringResource(R.string.widget_control_colors_use_defaults),
+                        "",
+                        state.togglesEnabled,
+                    )
+                    val controlEditorsEnabled =
+                        state.togglesEnabled && !state.controlColorsUseDefaults
+                    WidgetControlStateSegmentRow(
+                        selectedSegment = state.controlStateSegment,
+                        onSegmentSelected = { state.controlStateSegment = it },
+                        enabled = controlEditorsEnabled,
+                    )
+                    WidgetColorSetting(
+                        title = stringResource(R.string.widget_control_content_color),
+                        colorValue = state.controlContentColorForEditor(),
+                        enabled = controlEditorsEnabled,
+                        onColorChange = { state.setControlContentColorForEditor(it) },
+                        presetSlots = widgetColorPresetSlots,
+                        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+                        valueTextStyle = MaterialTheme.typography.tboxTitle,
+                        valueLabelStyle = MaterialTheme.typography.tboxBody,
+                    )
+                    WidgetColorSetting(
+                        title = stringResource(R.string.widget_control_background_color),
+                        colorValue = state.controlBackgroundColorForEditor(),
+                        enabled = controlEditorsEnabled,
+                        onColorChange = { state.setControlBackgroundColorForEditor(it) },
+                        presetSlots = widgetColorPresetSlots,
+                        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+                        valueTextStyle = MaterialTheme.typography.tboxTitle,
+                        valueLabelStyle = MaterialTheme.typography.tboxBody,
+                    )
+                    val controlShapeDisplay = state.controlShape
+                        ?: defaultControlShapeDpForKind(
+                            controlAppearanceKindForDataKey(state.selectedDataKey)
+                        )
+                    Text(
+                        text = stringResource(R.string.widget_control_shape, controlShapeDisplay),
+                        style = MaterialTheme.typography.tboxTitle,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.widget_control_shape_hint),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Slider(
+                        value = controlShapeDisplay.toFloat(),
+                        onValueChange = { newValue ->
+                            state.controlShape = normalizeWidgetControlShape(newValue.toInt())
+                        },
+                        valueRange = 0f..50f,
+                        steps = 49,
+                        enabled = state.togglesEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    )
                 }
                 }
 
@@ -1637,6 +1854,47 @@ internal fun applyWidgetSelectionChanges(
             paddingBottomPercent = normalizeWidgetPaddingPercent(state.paddingBottomPercent),
             paddingStartPercent = normalizeWidgetPaddingPercent(state.paddingStartPercent),
             paddingEndPercent = normalizeWidgetPaddingPercent(state.paddingEndPercent),
+            controlInactiveColorLight = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlInactiveColorLight
+            },
+            controlInactiveColorDark = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlInactiveColorDark
+            },
+            controlActiveColorLight = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlActiveColorLight
+            },
+            controlActiveColorDark = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlActiveColorDark
+            },
+            controlInactiveBackgroundColorLight = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlInactiveBackgroundColorLight
+            },
+            controlInactiveBackgroundColorDark = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlInactiveBackgroundColorDark
+            },
+            controlActiveBackgroundColorLight = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlActiveBackgroundColorLight
+            },
+            controlActiveBackgroundColorDark = if (state.controlColorsUseDefaults) {
+                null
+            } else {
+                state.controlActiveBackgroundColorDark
+            },
+            controlShape = state.controlShape?.let { normalizeWidgetControlShape(it) },
         )
     } else {
         FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")

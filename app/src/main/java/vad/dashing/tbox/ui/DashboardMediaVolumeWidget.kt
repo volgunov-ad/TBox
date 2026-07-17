@@ -70,6 +70,7 @@ fun DashboardMediaVolumeWidgetItem(
     val volumeTitleText = titleOverride.trim().ifBlank { defaultVolumeTitle }
     val resolvedTextColor = textColor ?: MaterialTheme.colorScheme.onSurface
     val resolvedBackgroundColor = backgroundColor ?: MaterialTheme.colorScheme.surface
+    val controls = LocalWidgetControlAppearance.current
     val centerIconRes = if (volumeState.muted) {
         R.drawable.ic_media_volume_mute
     } else {
@@ -167,7 +168,7 @@ fun DashboardMediaVolumeWidgetItem(
             Icon(
                 painter = painterResource(id = centerIconRes),
                 contentDescription = stringResource(R.string.widget_media_volume_action_mute),
-                tint = resolvedTextColor,
+                tint = controls.inactiveContent,
                 modifier = Modifier.fillMaxSize(),
             )
         },

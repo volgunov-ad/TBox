@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.R
-import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 @Composable
 fun DashboardDayNightThemeWidgetItem(
@@ -46,22 +45,23 @@ fun DashboardDayNightThemeWidgetItem(
     }
     val mode = HeadUnitDayNightRepository.modeState.collectAsStateWithLifecycle().value
         ?: HeadUnitDayNightRepository.readMode(context)
+    val controls = LocalWidgetControlAppearance.current
 
     val (iconRes, iconColor) = when (mode) {
         HeadUnitDayNightRepository.Mode.LightManual -> {
-            R.drawable.ic_widget_day_night_light_mode to WidgetActiveColors.Secondary
+            R.drawable.ic_widget_day_night_light_mode to controls.activeContent
         }
 
         HeadUnitDayNightRepository.Mode.LightAuto -> {
-            R.drawable.ic_widget_day_night_light_mode_auto to WidgetActiveColors.Secondary
+            R.drawable.ic_widget_day_night_light_mode_auto to controls.activeContent
         }
 
         HeadUnitDayNightRepository.Mode.DarkManual -> {
-            R.drawable.ic_widget_day_night_dark_mode to WidgetActiveColors.Primary
+            R.drawable.ic_widget_day_night_dark_mode to controls.inactiveContent
         }
 
         HeadUnitDayNightRepository.Mode.DarkAuto -> {
-            R.drawable.ic_widget_day_night_dark_mode_auto to WidgetActiveColors.Primary
+            R.drawable.ic_widget_day_night_dark_mode_auto to controls.inactiveContent
         }
     }
 
@@ -104,13 +104,29 @@ fun DashboardDayNightThemeWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(iconRes),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize().scale(scale),
-                    colorFilter = ColorFilter.tint(iconColor)
-                )
+                val useActiveBackground = when (mode) {
+                    HeadUnitDayNightRepository.Mode.LightManual,
+                    HeadUnitDayNightRepository.Mode.LightAuto,
+                    -> true
+                    else -> false
+                }
+                WidgetControlChrome(
+                    background = if (useActiveBackground) {
+                        controls.activeBackground
+                    } else {
+                        controls.inactiveBackground
+                    },
+                    shapeDp = controls.shapeDp,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Image(
+                        painter = painterResource(iconRes),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.matchParentSize().scale(scale),
+                        colorFilter = ColorFilter.tint(iconColor)
+                    )
+                }
             }
         }
     }

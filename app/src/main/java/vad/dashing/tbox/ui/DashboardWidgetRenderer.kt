@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import android.appwidget.AppWidgetHost
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
@@ -52,6 +53,7 @@ import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.usesDefaultControlColors
 
 @Composable
 fun DashboardWidgetRenderer(
@@ -91,6 +93,17 @@ fun DashboardWidgetRenderer(
     val activeTripSimpleLayout by settingsViewModel.activeTripSimpleWidgetLayout.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
+    val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
+    val controlAppearance = rememberResolvedControlAppearance(
+        config = widgetConfig,
+        currentTheme = currentTheme,
+        tileTextColor = widgetTextColor,
+        dataKey = widget.dataKey,
+    )
+    CompositionLocalProvider(
+        LocalWidgetControlAppearance provides controlAppearance,
+        LocalWidgetControlUsesDefaults provides widgetConfig.usesDefaultControlColors(),
+    ) {
     when (widget.dataKey) {
         "netWidget" -> {
             DashboardNetWidgetItem(
@@ -1107,5 +1120,6 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor
             )
         }
+    }
     }
 }

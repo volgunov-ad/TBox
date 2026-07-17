@@ -126,6 +126,33 @@ data class FloatingDashboardWidgetConfig(
     val paddingStartPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
     /** Inset from cell end edge as percent of cell width (0..[MAX_WIDGET_PADDING_PERCENT]). */
     val paddingEndPercent: Int = DEFAULT_WIDGET_PADDING_PERCENT,
+    /**
+     * Control-element icon/text color when inactive (light theme).
+     * `null` — widget-specific default (usually tile text color).
+     */
+    val controlInactiveColorLight: Int? = null,
+    /** Control-element icon/text color when inactive (dark theme). */
+    val controlInactiveColorDark: Int? = null,
+    /**
+     * Control-element icon/text color when active (light theme).
+     * `null` — widget-specific default (e.g. [vad.dashing.tbox.ui.theme.WidgetActiveColors]).
+     */
+    val controlActiveColorLight: Int? = null,
+    /** Control-element icon/text color when active (dark theme). */
+    val controlActiveColorDark: Int? = null,
+    /** Control-element background when inactive (light). `null` — widget default. */
+    val controlInactiveBackgroundColorLight: Int? = null,
+    /** Control-element background when inactive (dark). */
+    val controlInactiveBackgroundColorDark: Int? = null,
+    /** Control-element background when active (light). `null` — widget default. */
+    val controlActiveBackgroundColorLight: Int? = null,
+    /** Control-element background when active (dark). */
+    val controlActiveBackgroundColorDark: Int? = null,
+    /**
+     * Corner radius in dp for control elements inside the tile.
+     * `null` — class default (music/stepper → 10, others → 0).
+     */
+    val controlShape: Int? = null,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -401,8 +428,10 @@ class SettingsManager(private val context: Context) {
         private val MAIN_SCREEN_CANVAS_BG_DARK_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_canvas_bg_dark")
 
-        /** Global user palette for [vad.dashing.tbox.ui.WidgetColorSetting] (six ARGB slots). */
-        private val WIDGET_COLOR_PRESET_KEYS = Array(6) { i ->
+        const val WIDGET_COLOR_PRESET_SLOT_COUNT = 8
+
+        /** Global user palette for [vad.dashing.tbox.ui.WidgetColorSetting] (eight ARGB slots). */
+        private val WIDGET_COLOR_PRESET_KEYS = Array(WIDGET_COLOR_PRESET_SLOT_COUNT) { i ->
             intPreferencesKey("${KEY_PREFIX}widget_color_preset_$i")
         }
 
@@ -541,8 +570,6 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_CANVAS_BG_LIGHT = LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
         private const val DEFAULT_MAIN_SCREEN_CANVAS_BG_DARK = DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 
-        const val WIDGET_COLOR_PRESET_SLOT_COUNT = 6
-
         /** Default ARGB for each preset slot when nothing is stored yet in DataStore. */
         val DEFAULT_WIDGET_COLOR_PRESET_SLOTS: List<Int> = listOf(
             (0xFF131C2D).toInt(),
@@ -550,7 +577,9 @@ class SettingsManager(private val context: Context) {
             (0xFF1A1C1E).toInt(),
             (0xFFE2E2E6).toInt(),
             (0xFFF8F9FA).toInt(),
-            Color.WHITE
+            Color.WHITE,
+            (0xFF2180F3).toInt(), // WidgetActiveColors.Primary
+            (0xFFF3A721).toInt(), // WidgetActiveColors.Secondary
         )
 
         // Кэш ключей для производительности
@@ -907,7 +936,7 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
-    /** Six global ARGB colors for quick pick in color editors; missing keys use [DEFAULT_WIDGET_COLOR_PRESET_SLOTS]. */
+    /** Eight global ARGB colors for quick pick in color editors; missing keys use [DEFAULT_WIDGET_COLOR_PRESET_SLOTS]. */
     val widgetColorPresetSlotsFlow: Flow<List<Int>> = context.settingsDataStore.data
         .map { preferences ->
             List(WIDGET_COLOR_PRESET_SLOT_COUNT) { i ->

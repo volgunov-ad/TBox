@@ -22,7 +22,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 @Composable
 fun DashboardHvacAcWidgetItem(
@@ -37,10 +36,11 @@ fun DashboardHvacAcWidgetItem(
     scale: Float = 1f
 ) {
     val state by UniversalCanRepository.hvacAcPowerState.collectAsStateWithLifecycle()
+    val controls = LocalWidgetControlAppearance.current
     val iconColor = when (state) {
-        is MbCanBinaryState.On -> WidgetActiveColors.Primary
-        is MbCanBinaryState.Off -> textColor
-        else -> textColor.copy(alpha = 0.25f)
+        is MbCanBinaryState.On -> controls.activeContent
+        is MbCanBinaryState.Off -> controls.inactiveContent
+        else -> controls.inactiveContent.copy(alpha = 0.25f)
     }
     val defaultTitle = stringResource(R.string.data_title_hvac_ac_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
@@ -64,15 +64,16 @@ fun DashboardHvacAcWidgetItem(
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
-            Box(
+            WidgetControlChrome(
+                background = if (state is MbCanBinaryState.On) controls.activeBackground else controls.inactiveBackground,
+                shapeDp = controls.shapeDp,
                 modifier = contentModifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_widget_hvac_ac),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.matchParentSize().scale(scale),
+                    modifier = Modifier.fillMaxSize().scale(scale),
                     colorFilter = ColorFilter.tint(iconColor)
                 )
             }

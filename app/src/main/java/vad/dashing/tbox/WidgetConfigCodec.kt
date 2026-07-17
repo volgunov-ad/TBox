@@ -39,6 +39,21 @@ fun normalizeWidgetShape(rawShape: Int): Int {
     return rawShape.coerceIn(MIN_WIDGET_SHAPE, MAX_WIDGET_SHAPE)
 }
 
+/** Same range as [normalizeWidgetShape]; used when [FloatingDashboardWidgetConfig.controlShape] is set. */
+fun normalizeWidgetControlShape(rawShape: Int): Int = normalizeWidgetShape(rawShape)
+
+/** True when all eight control color fields are null (UI «colors by default»). */
+fun FloatingDashboardWidgetConfig.usesDefaultControlColors(): Boolean {
+    return controlInactiveColorLight == null &&
+        controlInactiveColorDark == null &&
+        controlActiveColorLight == null &&
+        controlActiveColorDark == null &&
+        controlInactiveBackgroundColorLight == null &&
+        controlInactiveBackgroundColorDark == null &&
+        controlActiveBackgroundColorLight == null &&
+        controlActiveBackgroundColorDark == null
+}
+
 fun parseWidgetConfigsFromAny(rawValue: Any?): List<FloatingDashboardWidgetConfig> {
     return when (rawValue) {
         is JSONArray -> parseWidgetConfigsFromJsonArray(rawValue)
@@ -179,6 +194,23 @@ fun serializeWidgetConfigsToJsonArray(
         if (paddingEnd != DEFAULT_WIDGET_PADDING_PERCENT) {
             obj.put("paddingEndPercent", paddingEnd)
         }
+        config.controlInactiveColorLight?.let { obj.put("controlInactiveColorLight", it) }
+        config.controlInactiveColorDark?.let { obj.put("controlInactiveColorDark", it) }
+        config.controlActiveColorLight?.let { obj.put("controlActiveColorLight", it) }
+        config.controlActiveColorDark?.let { obj.put("controlActiveColorDark", it) }
+        config.controlInactiveBackgroundColorLight?.let {
+            obj.put("controlInactiveBackgroundColorLight", it)
+        }
+        config.controlInactiveBackgroundColorDark?.let {
+            obj.put("controlInactiveBackgroundColorDark", it)
+        }
+        config.controlActiveBackgroundColorLight?.let {
+            obj.put("controlActiveBackgroundColorLight", it)
+        }
+        config.controlActiveBackgroundColorDark?.let {
+            obj.put("controlActiveBackgroundColorDark", it)
+        }
+        config.controlShape?.let { obj.put("controlShape", normalizeWidgetControlShape(it)) }
         array.put(obj)
     }
     return array
@@ -372,6 +404,43 @@ private fun parseWidgetConfigsFromJsonArray(
                         paddingEndPercent = normalizeWidgetPaddingPercent(
                             item.optInt("paddingEndPercent", DEFAULT_WIDGET_PADDING_PERCENT)
                         ),
+                        controlInactiveColorLight = parseBackgroundColor(
+                            item,
+                            "controlInactiveColorLight",
+                        ),
+                        controlInactiveColorDark = parseBackgroundColor(
+                            item,
+                            "controlInactiveColorDark",
+                        ),
+                        controlActiveColorLight = parseBackgroundColor(
+                            item,
+                            "controlActiveColorLight",
+                        ),
+                        controlActiveColorDark = parseBackgroundColor(
+                            item,
+                            "controlActiveColorDark",
+                        ),
+                        controlInactiveBackgroundColorLight = parseBackgroundColor(
+                            item,
+                            "controlInactiveBackgroundColorLight",
+                        ),
+                        controlInactiveBackgroundColorDark = parseBackgroundColor(
+                            item,
+                            "controlInactiveBackgroundColorDark",
+                        ),
+                        controlActiveBackgroundColorLight = parseBackgroundColor(
+                            item,
+                            "controlActiveBackgroundColorLight",
+                        ),
+                        controlActiveBackgroundColorDark = parseBackgroundColor(
+                            item,
+                            "controlActiveBackgroundColorDark",
+                        ),
+                        controlShape = if (item.has("controlShape")) {
+                            normalizeWidgetControlShape(item.optInt("controlShape"))
+                        } else {
+                            null
+                        },
                     )
                 )
             }

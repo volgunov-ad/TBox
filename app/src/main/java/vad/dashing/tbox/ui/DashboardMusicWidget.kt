@@ -430,7 +430,7 @@ fun DashboardMusicWidgetItem(
                             .fillMaxHeight(),
                         iconRes = R.drawable.skip_previous,
                         contentDescription = stringResource(R.string.widget_music_action_previous),
-                        iconTint = resolvedTextColor,
+                        iconTint = LocalWidgetControlAppearance.current.inactiveContent,
                         actionEnabled = canSendSkip,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
@@ -447,7 +447,7 @@ fun DashboardMusicWidgetItem(
                             .fillMaxHeight(),
                         iconRes = playPauseIcon,
                         contentDescription = stringResource(R.string.widget_music_action_play_pause),
-                        iconTint = resolvedTextColor,
+                        iconTint = LocalWidgetControlAppearance.current.inactiveContent,
                         actionEnabled = canSendPlay,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
@@ -466,7 +466,7 @@ fun DashboardMusicWidgetItem(
                             .fillMaxHeight(),
                         iconRes = R.drawable.next_track,
                         contentDescription = stringResource(R.string.widget_music_action_next),
-                        iconTint = resolvedTextColor,
+                        iconTint = LocalWidgetControlAppearance.current.inactiveContent,
                         actionEnabled = canSendSkip,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
@@ -665,16 +665,11 @@ private fun MediaControlActionButton(
     onLongClick: () -> Unit,
     onClick: () -> Unit
 ) {
-    Box(
+    val controls = LocalWidgetControlAppearance.current
+    WidgetControlChrome(
+        background = controls.inactiveBackground,
+        shapeDp = controls.shapeDp,
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(
-                if (actionEnabled) {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
-                }
-            )
             .combinedClickableWithSound(
                 enabled = interactionEnabled,
                 onClick = {
@@ -684,7 +679,6 @@ private fun MediaControlActionButton(
                 },
                 onLongClick = onLongClick
             ),
-        contentAlignment = Alignment.Center
     ) {
         Icon(
             painter = painterResource(id = iconRes),

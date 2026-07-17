@@ -120,12 +120,14 @@ flowchart TB
 
 Сохраняется в JSON (общий для всех трёх типов панелей):
 
-- `dataKey`, `showTitle`, `scale`, `shape`, цвета light/dark
+- `dataKey`, `showTitle`, `scale`, `shape`, цвета light/dark текста и фона плитки
+- цвета элементов управления (опционально; `null` = дефолт виджета): `controlInactiveColorLight/Dark`, `controlActiveColorLight/Dark`, `controlInactiveBackgroundColorLight/Dark`, `controlActiveBackgroundColorLight/Dark`
+- скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
 - `mediaPlayers` (музыка), `appWidgetId` (сторонний виджет Android)
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` и др.
 
-Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки».
+Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
 
 ---
 
@@ -142,8 +144,10 @@ flowchart TB
 Вкладки диалога:
 
 1. **Список типов** — `WidgetsRepository.getAvailableDataKeysWidgets()` + поиск.
-2. **Дополнительно** — заголовок, цвета, масштаб, скругление, опции по типу виджета.
+2. **Дополнительно** — заголовок, цвета плитки (сегмент Светлая/Тёмная), блок **элементов управления** (переключатель «Цвета по умолчанию», сегмент Неактивное/Активное в паре с темой, цвет иконки/фона контрола, скругление контролов), масштаб, скругление плитки, опции по типу виджета.
 3. **Вся панель** — только для панелей главного экрана и floating (не для вкладки «Плитки» в том же виде).
+
+Глобальная палитра пресетов цвета в редакторе: **8** слотов (`SettingsManager.WIDGET_COLOR_PRESET_SLOT_COUNT`), включая типовые голубой `#2180F3` и оранжевый `#F3A721`.
 
 ### Сторонний виджет Android
 

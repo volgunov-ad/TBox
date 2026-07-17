@@ -44,6 +44,8 @@ fun DashboardStepperControlWidget(
     adjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
     centerIcon: @Composable () -> Unit = {},
     showCenterIcon: Boolean = true,
+    /** When true, center button uses active control background (e.g. HVAC fan while climate on). */
+    centerUseActiveBackground: Boolean = false,
     enableInnerInteractions: Boolean,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
@@ -60,6 +62,7 @@ fun DashboardStepperControlWidget(
     titleText: String,
 ) {
     var swipeAccumulator by remember(isVertical) { mutableFloatStateOf(0f) }
+    val controls = LocalWidgetControlAppearance.current
     val rootSwipeModifier = if (enableInnerInteractions) {
         modifier.pointerInput(isVertical) {
             detectDragGestures(
@@ -92,9 +95,9 @@ fun DashboardStepperControlWidget(
         backgroundColor = backgroundColor
     ) { availableHeight, resolvedTextColor ->
         val centerTextColor = if (centerDimmed) {
-            resolvedTextColor.copy(alpha = 0.35f)
+            controls.inactiveContent.copy(alpha = 0.35f)
         } else {
-            resolvedTextColor
+            controls.inactiveContent
         }
         DashboardWidgetContentWithOptionalTitle(
             showTitle = showTitle,
@@ -123,7 +126,7 @@ fun DashboardStepperControlWidget(
                                 increase = true,
                                 isVertical = true,
                                 adjustIconStyle = adjustIconStyle,
-                                tint = resolvedTextColor,
+                                tint = controls.inactiveContent,
                                 contentDescriptionRes = increaseContentDescriptionRes,
                             )
                         },
@@ -133,6 +136,7 @@ fun DashboardStepperControlWidget(
                         label = centerLabel,
                         labelColor = centerTextColor,
                         showIcon = showCenterIcon,
+                        useActiveBackground = centerUseActiveBackground,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onCenterClick,
@@ -150,7 +154,7 @@ fun DashboardStepperControlWidget(
                                 increase = false,
                                 isVertical = true,
                                 adjustIconStyle = adjustIconStyle,
-                                tint = resolvedTextColor,
+                                tint = controls.inactiveContent,
                                 contentDescriptionRes = decreaseContentDescriptionRes,
                             )
                         },
@@ -171,7 +175,7 @@ fun DashboardStepperControlWidget(
                                 increase = false,
                                 isVertical = false,
                                 adjustIconStyle = adjustIconStyle,
-                                tint = resolvedTextColor,
+                                tint = controls.inactiveContent,
                                 contentDescriptionRes = decreaseContentDescriptionRes,
                             )
                         },
@@ -181,6 +185,7 @@ fun DashboardStepperControlWidget(
                         label = centerLabel,
                         labelColor = centerTextColor,
                         showIcon = showCenterIcon,
+                        useActiveBackground = centerUseActiveBackground,
                         interactionEnabled = enableInnerInteractions,
                         onLongClick = onLongClick,
                         onClick = onCenterClick,
@@ -198,7 +203,7 @@ fun DashboardStepperControlWidget(
                                 increase = true,
                                 isVertical = false,
                                 adjustIconStyle = adjustIconStyle,
-                                tint = resolvedTextColor,
+                                tint = controls.inactiveContent,
                                 contentDescriptionRes = increaseContentDescriptionRes,
                             )
                         },
@@ -239,6 +244,7 @@ private fun StepperCenterButton(
     label: String,
     labelColor: Color,
     showIcon: Boolean,
+    useActiveBackground: Boolean,
     interactionEnabled: Boolean,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
@@ -249,6 +255,7 @@ private fun StepperCenterButton(
     StepperActionButton(
         modifier = modifier,
         interactionEnabled = interactionEnabled,
+        useActiveBackground = useActiveBackground,
         onLongClick = onLongClick,
         onClick = onClick,
         onDoubleClick = onDoubleClick,
@@ -301,12 +308,20 @@ private fun StepperCenterButton(
 private fun StepperActionButton(
     modifier: Modifier,
     interactionEnabled: Boolean,
+    useActiveBackground: Boolean = false,
     onLongClick: () -> Unit,
     onClick: () -> Unit,
     onDoubleClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    Box(
+    val controls = LocalWidgetControlAppearance.current
+    WidgetControlChrome(
+        background = if (useActiveBackground) {
+            controls.activeBackground
+        } else {
+            controls.inactiveBackground
+        },
+        shapeDp = controls.shapeDp,
         modifier = modifier
             .combinedClickableWithSound(
                 enabled = interactionEnabled,
@@ -314,7 +329,6 @@ private fun StepperActionButton(
                 onLongClick = onLongClick,
                 onDoubleClick = onDoubleClick,
             ),
-        contentAlignment = Alignment.Center
     ) {
         content()
     }

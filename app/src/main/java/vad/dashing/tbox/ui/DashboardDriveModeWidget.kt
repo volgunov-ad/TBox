@@ -50,6 +50,8 @@ fun DashboardDriveModeWidgetItem(
         else -> UniversalCanRepository.carSettingsDriveMode.collectAsStateWithLifecycle()
     }
     val isSelectedModeActive = currentDriveMode == selectedMode.propertyValue
+    val controls = LocalWidgetControlAppearance.current
+    val useDefaults = LocalWidgetControlUsesDefaults.current
     val defaultTitle = stringResource(R.string.data_title_drive_mode_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
 
@@ -62,9 +64,9 @@ fun DashboardDriveModeWidgetItem(
         backgroundColor = backgroundColor,
     ) { availableHeight, resolvedTextColor ->
         val modeTextColor = if (isSelectedModeActive) {
-            selectedMode.activeColor()
+            if (useDefaults) selectedMode.activeColor() else controls.activeContent
         } else {
-            resolvedTextColor
+            controls.inactiveContent
         }
 
         DashboardWidgetContentWithOptionalTitle(
@@ -79,22 +81,32 @@ fun DashboardDriveModeWidgetItem(
                 .padding(4.dp)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
-            val modeStyle = calculateResponsiveTextStyle(
-                containerHeight = availableHeight,
-                textType = TextType.VALUE
-            )
-            Text(
-                text = selectedMode.widgetLabel,
-                modifier = contentModifier
-                    .fillMaxWidth()
-                    .wrapContentHeight(Alignment.CenterVertically),
-                style = modeStyle,
-                color = modeTextColor,
-                textAlign = LocalWidgetTextAlign.current,
-                maxLines = 1,
-                softWrap = true,
-                overflow = TextOverflow.Ellipsis
-            )
+            WidgetControlChrome(
+                background = if (isSelectedModeActive) {
+                    controls.activeBackground
+                } else {
+                    controls.inactiveBackground
+                },
+                shapeDp = controls.shapeDp,
+                modifier = contentModifier.fillMaxWidth(),
+            ) {
+                val modeStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.VALUE
+                )
+                Text(
+                    text = selectedMode.widgetLabel,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight(Alignment.CenterVertically),
+                    style = modeStyle,
+                    color = modeTextColor,
+                    textAlign = LocalWidgetTextAlign.current,
+                    maxLines = 1,
+                    softWrap = true,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
