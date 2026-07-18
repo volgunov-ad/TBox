@@ -226,6 +226,33 @@ object MbCanEngineFacade {
                     MbCanRepository.scheduleEngineRpmPush(rpm)
                     MbCanRepository.scheduleEngineTemperaturePush(temperature)
                 }
+                "onCanVehicleFuelLevel" -> {
+                    val fuel = args?.getOrNull(0)
+                    val pct = runCatching {
+                        val getter = fuel?.javaClass?.getMethod("getFuelLevel")
+                        (getter?.invoke(fuel) as? Number)?.toInt()
+                    }.getOrNull()
+                    val validated = pct?.takeIf { it in 0..100 }?.toUInt()
+                        ?: readVehicleFuelLevelPercent()
+                    MbCanRepository.scheduleFuelLevelPush(validated)
+                }
+                "onVehicleTotalOdoMeterChange" -> {
+                    val odo = args?.getOrNull(0)
+                    val km = runCatching {
+                        when (odo) {
+                            is Number -> odo.toFloat()
+                            else -> {
+                                val getter = odo?.javaClass?.methods?.firstOrNull {
+                                    it.name == "getOdometer" && it.parameterCount == 0
+                                }
+                                (getter?.invoke(odo) as? Number)?.toFloat()
+                            }
+                        }
+                    }.getOrNull()
+                    val asUInt = km?.takeIf { it.isFinite() && it >= 0f }?.toInt()?.toUInt()
+                        ?: readTotalOdometerKm()
+                    MbCanRepository.scheduleTotalOdometerPush(asUInt)
+                }
                 "onVehicleBcmStatusChange" -> {
                     val bcm = args?.getOrNull(0) ?: return@InvocationHandler null
                     val moveDir = runCatching {
@@ -436,6 +463,54 @@ object MbCanEngineFacade {
             val speedObj = getMbCanData.invoke(inst, 1, speedCls) ?: return null
             val speed = speedCls.getMethod("getSpeed").invoke(speedObj) as? Number
             speed?.toFloat()
+        }.getOrNull()
+    }
+
+    /** Fuel % from [MBCanVehicleFuelLevel.getFuelLevel]; valid range 0…100. Data type 12. */
+    fun readVehicleFuelLevelPercent(): UInt? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val fuelCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleFuelLevel")
+            val fuelObj = getMbCanData.invoke(inst, 12, fuelCls) ?: return null
+            val level = (fuelCls.getMethod("getFuelLevel").invoke(fuelObj) as? Number)?.toInt() ?: return null
+            if (level in 0..100) level.toUInt() else null
+        }.getOrNull()
+    }
+
+    /** Total odometer km from [MBCanTotalOdometer.getOdometer]. Data type 16. */
+    fun readTotalOdometerKm(): UInt? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val odoCls = Class.forName("com.mengbo.mbCan.entity.MBCanTotalOdometer")
+            val odoObj = getMbCanData.invoke(inst, 16, odoCls) ?: return null
+            val km = (odoCls.getMethod("getOdometer").invoke(odoObj) as? Number)?.toFloat() ?: return null
+            if (!km.isFinite() || km < 0f) null else km.toInt().coerceAtLeast(0).toUInt()
+        }.getOrNull()
+    }
+
+    /**
+     * Outside temp °C from [MBCanVehicleExternalTemp.getExternalTemperatureRaw].
+     * Raw byte is already °C; sentinel 87 = invalid. Data type 38.
+     */
+    fun readOutsideTemperatureC(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val tempCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleExternalTemp")
+            val tempObj = getMbCanData.invoke(inst, 38, tempCls) ?: return null
+            val raw = (tempCls.getMethod("getExternalTemperatureRaw").invoke(tempObj) as? Number)?.toInt()
+                ?: return null
+            // Signed byte may arrive as signed Number; treat 87 as invalid sentinel (TTG).
+            val asByte = raw.toByte().toInt()
+            if (asByte == 87 || raw == 87) null else asByte.toFloat()
         }.getOrNull()
     }
 

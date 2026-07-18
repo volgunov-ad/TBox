@@ -307,6 +307,36 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val fuelLevelPercentState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.fuelLevelPercentState
+            } else {
+                Android10VhalRepository.fuelLevelPercentState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val odometerKmState: StateFlow<UInt?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.odometerKmState
+            } else {
+                Android10VhalRepository.odometerKmState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val outsideTemperatureState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.outsideTemperatureState
+            } else {
+                Android10VhalRepository.outsideTemperatureState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     suspend fun setMode(mode: HeadUnitCanMode) {
         modeSwitchMutex.withLock {
             setModeLocked(mode, rebindIfBound = true)
