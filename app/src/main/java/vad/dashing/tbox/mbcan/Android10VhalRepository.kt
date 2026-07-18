@@ -332,6 +332,10 @@ object Android10VhalRepository {
     private val VHAL_ENGINE_RPM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID
     private val VHAL_ENGINE_TEMPERATURE_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_ENGINE_TEMPERATURE_PROPERTY_ID
     private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
+    private val VHAL_FUEL_LEVEL_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_FUEL_LEVEL_PROPERTY_ID
+    private val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID
+    private val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID
     private const val VHAL_ENGINE_RPM_SCALE = 4f
     private const val VHAL_ENGINE_TEMPERATURE_SCALE = 0.75f
     private const val VHAL_ENGINE_TEMPERATURE_OFFSET = -48f
@@ -407,6 +411,12 @@ object Android10VhalRepository {
     val engineTemperatureState: StateFlow<Float?> = _engineTemperatureState.asStateFlow()
     private val _carSpeedState = MutableStateFlow<Float?>(null)
     val carSpeedState: StateFlow<Float?> = _carSpeedState.asStateFlow()
+    private val _fuelLevelPercentState = MutableStateFlow<UInt?>(null)
+    val fuelLevelPercentState: StateFlow<UInt?> = _fuelLevelPercentState.asStateFlow()
+    private val _odometerKmState = MutableStateFlow<UInt?>(null)
+    val odometerKmState: StateFlow<UInt?> = _odometerKmState.asStateFlow()
+    private val _outsideTemperatureState = MutableStateFlow<Float?>(null)
+    val outsideTemperatureState: StateFlow<Float?> = _outsideTemperatureState.asStateFlow()
 
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
@@ -632,6 +642,9 @@ object Android10VhalRepository {
         logDebug("unbind()")
         pollJob?.cancel()
         pollJob = null
+        _fuelLevelPercentState.value = null
+        _odometerKmState.value = null
+        _outsideTemperatureState.value = null
         pushCoalesceHandler.removeCallbacks(flushPushStateRunnable)
         pushCoalesceHandler.removeCallbacks(flushPushDebugRunnable)
         synchronized(pendingPushStateLock) {
@@ -814,6 +827,9 @@ object Android10VhalRepository {
             MbCanSignal.EngineRpm -> setOf(VHAL_ENGINE_RPM_PROPERTY_ID)
             MbCanSignal.EngineTemperature -> setOf(VHAL_ENGINE_TEMPERATURE_PROPERTY_ID)
             MbCanSignal.CarSpeed -> setOf(VHAL_CAR_SPEED_PROPERTY_ID)
+            MbCanSignal.FuelLevel -> setOf(VHAL_FUEL_LEVEL_PROPERTY_ID)
+            MbCanSignal.TotalOdometer -> setOf(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
+            MbCanSignal.OutsideTemperature -> setOf(VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID)
         }
     }
 
@@ -838,6 +854,25 @@ object Android10VhalRepository {
 
     private fun decodeCarSpeed(raw: Any?): Float? {
         return (raw as? Number)?.toFloat()?.coerceAtLeast(0f)
+    }
+
+    private fun decodeFuelLevelPercent(raw: Any?): UInt? {
+        val value = (raw as? Int) ?: return null
+        return value.takeIf { it in 0..100 }?.toUInt()
+    }
+
+    private fun decodeOdometerKm(raw: Any?): UInt? {
+        return when (raw) {
+            is Int -> raw.takeIf { it >= 0 }?.toUInt()
+            is Float -> raw.takeIf { it.isFinite() && it >= 0f }?.toUInt()
+            else -> null
+        }
+    }
+
+    private fun decodeOutsideTemperature(raw: Any?): Float? {
+        val value = (raw as? Int) ?: return null
+        val signedValue = value.toByte().toInt()
+        return if (value == 87 || signedValue == 87) null else signedValue.toFloat()
     }
 
     private fun decodeCarSettingsIntZeroToSix(raw: Int?): Int? {
@@ -1069,6 +1104,12 @@ object Android10VhalRepository {
                 _engineTemperatureState.value = decodeEngineTemperature(rawValue)
             VHAL_CAR_SPEED_PROPERTY_ID ->
                 _carSpeedState.value = decodeCarSpeed(rawValue)
+            VHAL_FUEL_LEVEL_PROPERTY_ID ->
+                _fuelLevelPercentState.value = decodeFuelLevelPercent(rawValue)
+            VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID ->
+                _odometerKmState.value = decodeOdometerKm(rawValue)
+            VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID ->
+                _outsideTemperatureState.value = decodeOutsideTemperature(rawValue)
         }
     }
 
@@ -1169,6 +1210,9 @@ object Android10VhalRepository {
                 MbCanSignal.EngineRpm -> _engineRpmState.value = null
                 MbCanSignal.EngineTemperature -> _engineTemperatureState.value = null
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
+                MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
+                MbCanSignal.TotalOdometer -> _odometerKmState.value = null
+                MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = null
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
@@ -1222,6 +1266,9 @@ object Android10VhalRepository {
                 MbCanSignal.EngineRpm -> _engineRpmState.value = null
                 MbCanSignal.EngineTemperature -> _engineTemperatureState.value = null
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
+                MbCanSignal.FuelLevel -> _fuelLevelPercentState.value = null
+                MbCanSignal.TotalOdometer -> _odometerKmState.value = null
+                MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = null
                 MbCanSignal.CarSettingsVehicleParams -> {
                     _carSettingsEpsMode.value = null
                     _carSettingsDriveMode.value = null
@@ -1423,6 +1470,20 @@ object Android10VhalRepository {
             }
             MbCanSignal.CarSpeed -> {
                 _carSpeedState.value = readNumericProperty(VHAL_CAR_SPEED_PROPERTY_ID)?.coerceAtLeast(0f)
+            }
+            MbCanSignal.FuelLevel -> {
+                _fuelLevelPercentState.value =
+                    decodeFuelLevelPercent(bridge?.getIntProperty(VHAL_FUEL_LEVEL_PROPERTY_ID))
+            }
+            MbCanSignal.TotalOdometer -> {
+                val raw = bridge?.getIntProperty(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
+                    ?: bridge?.getFloatProperty(VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID)
+                _odometerKmState.value = decodeOdometerKm(raw)
+            }
+            MbCanSignal.OutsideTemperature -> {
+                _outsideTemperatureState.value = decodeOutsideTemperature(
+                    bridge?.getIntProperty(VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID)
+                )
             }
             MbCanSignal.SlaSpeedLimit -> {
                 val limitRaw = bridge?.getIntProperty(FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW)

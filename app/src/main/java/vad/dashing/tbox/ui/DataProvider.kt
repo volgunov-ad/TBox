@@ -50,6 +50,9 @@ object DashboardCompositeTileFlowKeys {
 const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
 const val ENGINE_TEMPERATURE_CAN_FLOW_KEY = "engineTemperature_can"
 const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
+const val ODOMETER_CAN_FLOW_KEY = "odometer_can"
+const val FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY = "fuelLevelPercentage_can"
+const val OUTSIDE_TEMPERATURE_CAN_FLOW_KEY = "outsideTemperature_can"
 
 private data class ValueFlowCacheKey(
     val key: String,
@@ -161,12 +164,15 @@ class TboxDataProvider(
             }
             "cruiseSetSpeed" -> canViewModel.cruiseSetSpeed.mapState { valueToString(it, eff(1)) }
             "odometer" -> canViewModel.odometer.mapState { valueToString(it, eff(1)) }
+            ODOMETER_CAN_FLOW_KEY -> UniversalCanRepository.odometerKmState.mapState { valueToString(it, eff(1)) }
             "distanceToNextMaintenance" -> canViewModel.distanceToNextMaintenance.mapState {
                 valueToString(it, eff(1))
             }
             "distanceToFuelEmpty" -> canViewModel.distanceToFuelEmpty.mapState { valueToString(it, eff(1)) }
             "breakingForce" -> canViewModel.breakingForce.mapState { valueToString(it, eff(1)) }
             "fuelLevelPercentage" -> canViewModel.fuelLevelPercentage.mapState { valueToString(it, eff(1)) }
+            FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY ->
+                UniversalCanRepository.fuelLevelPercentState.mapState { valueToString(it, eff(1)) }
             "fuelLevelPercentageFiltered" -> canViewModel.fuelLevelPercentageFiltered.mapState {
                 valueToString(it, eff(1))
             }
@@ -234,6 +240,8 @@ class TboxDataProvider(
                 it?.let { locationUpdateTime -> timeFormat.format(locationUpdateTime) } ?: ""
             }
             "outsideTemperature" -> canViewModel.outsideTemperature.mapState { valueToString(it, eff(1)) }
+            OUTSIDE_TEMPERATURE_CAN_FLOW_KEY ->
+                UniversalCanRepository.outsideTemperatureState.mapState { valueToString(it, eff(1)) }
             "insideTemperature" -> canViewModel.insideTemperature.mapState { valueToString(it, eff(1)) }
             "outsideAirQuality" -> canViewModel.outsideAirQuality.mapState { valueToString(it, eff(1)) }
             "insideAirQuality" -> canViewModel.insideAirQuality.mapState { valueToString(it, eff(1)) }

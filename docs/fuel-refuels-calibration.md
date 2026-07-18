@@ -11,14 +11,16 @@
 | Поток | Поле в репозитории | Откуда | Назначение |
 |--------|---------------------|--------|------------|
 | **Сырой % с CAN** | `fuelLevelPercentage` | Каждый кадр `CAN_ID_SPEED_VOLTAGE_FUEL` | Диагностика, «Данные авто»; обновляется **всегда**, вне зависимости от поездки |
-| **Стабильный отфильтрованный %** | `fuelLevelPercentageFiltered` | Буфер `FuelLevelBuffer` (15 одинаковых подряд значений) — **только при активной поездке** | Поля заправки «до/после %», плитки; при отсутствии калиброванных литров — линейный fallback для учёта |
+| **Стабильный отфильтрованный %** | `fuelLevelPercentageFiltered` | Dwell-фильтр `FuelLevelDwellFilter` (**15 с** одного и того же %) — **только при активной поездке** (`FuelLevelStableApply`) | Поля заправки «до/после %», плитки; при отсутствии калиброванных литров — линейный fallback для учёта |
 | **Откалиброванные литры** | `fuelLevelCalibratedLiters` | Тот же стабильный % + **JSON калибровки** + **температура снаружи** (если включено «Учитывать заправки»); иначе **линейно** `filtered % × бак` | Учёт расхода и заправок в поездке (`TripFuelAccounting.applyFuelCalibratedLitersStep`) |
 
 Калибровка **не** подменяет сырые проценты CAN; она даёт вторую оценку объёма в литрах.
 
 ### 1.1. Почему буфер и калибровка только в активной поездке
 
-В `CanFramesProcess` стабильный filtered и пересчёт литров выполняются **только если** `TripRepository.activeTrip != null`. Литры пишутся через `FuelCalibrationLive`: при включённом «Учитывать заправки» — `getCorrectedLiters`, при выключенном — линейно `filtered % × объём бака` без `FuelSmartEstimator`.
+В `FuelLevelStableApply` (HU и TBox) стабильный filtered и пересчёт литров выполняются **только если** `TripRepository.activeTrip != null`. Литры пишутся через `FuelCalibrationLive`: при включённом «Учитывать заправки» — `getCorrectedLiters`, при выключенном — линейно `filtered % × объём бака` без `FuelSmartEstimator`.
+
+Фильтр — **по времени** (15 с стабильного %), а не по числу сэмплов: так же работает на частых кадрах TBox и на редком poll mbCAN/VHAL (~30 с).
 
 - пока двигатель заглушен и поездки нет, скачок уровня после заправки **не проходит** через буфер сглаживания — при следующем старте поездки учёт увидит полный скачок;
 - на стоянке без активной поездки сырой `fuelLevelPercentage` всё равно обновляется с шины (если кадры приходят).
@@ -200,7 +202,7 @@
 | Калибровка | `fuellevelcalibration/*`, в т.ч. `FuelSmartEstimator`, `FuelPhysics`, `CalibrationStore`, `FuelCalibrationJson`, `FuelFilter` |
 | Настройки и сбросы | `Settings.kt` (`saveFuelTankLitersAndClearFuelCalibration`, …), `AppDataViewModels.kt` |
 | UI | `UiRefuelsTab.kt` |
-| Буфер и gate по активной поездке | `CanFramesProcess.kt` (`FuelLevelBuffer`), `utils/Buffers.kt` |
+| Буфер и gate по активной поездке | `FuelLevelStableApply` / `FuelLevelDwellFilter`, `CanFramesProcess.kt`, `VehicleTelemetryBridge` |
 | Поток откалиброванных литров | `FuelCalibrationLive`, `BackgroundService.startFuelCalibratedLitersWatcher`, сохранение при остановке двигателя |
 | Источник сырого % CAN | [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) (CRT), [Trips.md](Trips.md) (gate по поездке) |
 

@@ -41,6 +41,9 @@ import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
+import vad.dashing.tbox.isMbCanVhalOdometerEnabled
+import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
+import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
 import vad.dashing.tbox.normalizeWidgetConfigs
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
@@ -102,6 +105,15 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
+    }
+    val panelNeedsMbCanVhalOdometer = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalOdometerEnabled() }
+    }
+    val panelNeedsMbCanVhalFuelLevel = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalFuelLevelPercentageEnabled() }
+    }
+    val panelNeedsMbCanVhalOutsideTemp = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalOutsideTemperatureEnabled() }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
@@ -166,6 +178,45 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-car-speed")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalOdometer) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-odometer",
+                setOf(MbCanSignal.TotalOdometer)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-odometer")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalFuelLevel) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-fuel-level",
+                setOf(MbCanSignal.FuelLevel)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-fuel-level")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalOutsideTemp) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-outside-temp",
+                setOf(MbCanSignal.OutsideTemperature)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-outside-temp")
             }
         }
     }
