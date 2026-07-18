@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
@@ -42,9 +44,11 @@ import vad.dashing.tbox.MainScreenAddButtonPosition
 import vad.dashing.tbox.MainScreenPageNextButtonPosition
 import vad.dashing.tbox.MainScreenPagePrevButtonPosition
 import vad.dashing.tbox.MainScreenSettingsButtonPosition
+import vad.dashing.tbox.MainScreenWindowModeExitButtonPosition
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.freeform.WindowModeUiGuard
 
 private const val MAIN_SCREEN_PANEL_FADE_MS = 300
 
@@ -59,7 +63,11 @@ fun MainScreen(
     onTboxRestart: () -> Unit,
     onTripFinishAndStart: () -> Unit,
     modifier: Modifier = Modifier,
+    /** When true, this is the window-mode overlay: show exit corner button, hide activity-only chrome extras. */
+    windowMode: Boolean = false,
+    onExitWindowMode: (() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     val mainPanels by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
     val pageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
     val currentPage by settingsViewModel.mainScreenCurrentPage.collectAsStateWithLifecycle()
@@ -67,6 +75,7 @@ fun MainScreen(
     val addBtnPos by settingsViewModel.mainScreenAddButtonPosition.collectAsStateWithLifecycle()
     val pagePrevBtnPos by settingsViewModel.mainScreenPagePrevButtonPosition.collectAsStateWithLifecycle()
     val pageNextBtnPos by settingsViewModel.mainScreenPageNextButtonPosition.collectAsStateWithLifecycle()
+    val exitWindowBtnPos by settingsViewModel.mainScreenWindowModeExitButtonPosition.collectAsStateWithLifecycle()
     val cornerBtnSizeDp by settingsViewModel.mainScreenCornerButtonSizeDp.collectAsStateWithLifecycle()
     val cornerBtnBgLight by settingsViewModel.mainScreenCornerButtonBackgroundLight.collectAsStateWithLifecycle()
     val cornerBtnBgDark by settingsViewModel.mainScreenCornerButtonBackgroundDark.collectAsStateWithLifecycle()
@@ -190,6 +199,7 @@ fun MainScreen(
                         settingsViewModel = settingsViewModel,
                         onRebootTbox = onTboxRestart,
                         onTripFinishAndStart = onTripFinishAndStart,
+                        windowMode = windowMode,
                         modifier = Modifier.graphicsLayer { alpha = panelAlpha },
                     )
                 }
@@ -207,6 +217,7 @@ fun MainScreen(
                 settingsViewModel = settingsViewModel,
                 onRebootTbox = onTboxRestart,
                 onTripFinishAndStart = onTripFinishAndStart,
+                windowMode = windowMode,
             )
         }
 
@@ -226,23 +237,25 @@ fun MainScreen(
             onClick = onOpenConsole,
         )
 
-        MainScreenDraggableCornerButton(
-            icon = Icons.Filled.Add,
-            contentDescription = stringResource(R.string.main_screen_add_panel_cd),
-            iconSize = cornerIconSize,
-            backgroundColor = cornerBackgroundColor,
-            iconTint = cornerIconTint,
-            maxWidthPx = maxWpx,
-            maxHeightPx = maxHpx,
-            normalizedX = addBtnPos.x,
-            normalizedY = addBtnPos.y,
-            onSaveNormalized = { x, y ->
-                settingsViewModel.saveMainScreenAddButton(MainScreenAddButtonPosition(x, y))
-            },
-            onClick = {
-                settingsViewModel.addMainScreenDashboard(newMainPanelDefaultName, currentPage)
-            },
-        )
+        if (!windowMode) {
+            MainScreenDraggableCornerButton(
+                icon = Icons.Filled.Add,
+                contentDescription = stringResource(R.string.main_screen_add_panel_cd),
+                iconSize = cornerIconSize,
+                backgroundColor = cornerBackgroundColor,
+                iconTint = cornerIconTint,
+                maxWidthPx = maxWpx,
+                maxHeightPx = maxHpx,
+                normalizedX = addBtnPos.x,
+                normalizedY = addBtnPos.y,
+                onSaveNormalized = { x, y ->
+                    settingsViewModel.saveMainScreenAddButton(MainScreenAddButtonPosition(x, y))
+                },
+                onClick = {
+                    settingsViewModel.addMainScreenDashboard(newMainPanelDefaultName, currentPage)
+                },
+            )
+        }
 
         if (showWallpaperNavButtons) {
             MainScreenDraggableCornerButton(
@@ -279,14 +292,43 @@ fun MainScreen(
             )
         }
 
-        floatingOverlayEditRequest?.let { (panelId, widgetIndex) ->
-            MainScreenFloatingOverlayEdit(
-                panelId = panelId,
-                widgetIndex = widgetIndex,
-                settingsViewModel = settingsViewModel,
-                currentTheme = currentTheme,
-                onDismiss = { floatingOverlayEditRequest = null },
+        if (windowMode && onExitWindowMode != null) {
+            MainScreenDraggableCornerButton(
+                icon = Icons.Filled.Close,
+                contentDescription = stringResource(R.string.main_screen_window_mode_exit_cd),
+                iconSize = cornerIconSize,
+                backgroundColor = cornerBackgroundColor,
+                iconTint = cornerIconTint,
+                maxWidthPx = maxWpx,
+                maxHeightPx = maxHpx,
+                normalizedX = exitWindowBtnPos.x,
+                normalizedY = exitWindowBtnPos.y,
+                onSaveNormalized = { x, y ->
+                    settingsViewModel.saveMainScreenWindowModeExitButton(
+                        MainScreenWindowModeExitButtonPosition(x, y),
+                    )
+                },
+                onClick = onExitWindowMode,
             )
+        }
+
+        LaunchedEffect(floatingOverlayEditRequest, windowMode) {
+            if (windowMode && floatingOverlayEditRequest != null) {
+                floatingOverlayEditRequest = null
+                WindowModeUiGuard.toastEditingBlocked(context)
+            }
+        }
+
+        if (!windowMode) {
+            floatingOverlayEditRequest?.let { (panelId, widgetIndex) ->
+                MainScreenFloatingOverlayEdit(
+                    panelId = panelId,
+                    widgetIndex = widgetIndex,
+                    settingsViewModel = settingsViewModel,
+                    currentTheme = currentTheme,
+                    onDismiss = { floatingOverlayEditRequest = null },
+                )
+            }
         }
     }
 }

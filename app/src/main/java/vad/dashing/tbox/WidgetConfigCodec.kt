@@ -3,6 +3,8 @@ package vad.dashing.tbox
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import kotlin.math.roundToInt
 
@@ -110,6 +112,14 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("mediaKeepPlayerForeground", config.mediaKeepPlayerForeground)
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
+        }
+        if (config.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY && config.launcherFreeformEnabled) {
+            obj.put("launcherFreeformEnabled", true)
+            obj.put("launcherFreeformSide", config.launcherFreeformSide.storageKey)
+            obj.put(
+                "launcherFreeformPercent",
+                FreeformLaunchBounds.normalizePercent(config.launcherFreeformPercent),
+            )
         }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
@@ -341,6 +351,25 @@ private fun parseWidgetConfigsFromJsonArray(
                             launcherAppPackage
                         } else {
                             ""
+                        },
+                        launcherFreeformEnabled = dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            item.optBoolean("launcherFreeformEnabled", false),
+                        launcherFreeformSide = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                            FreeformLaunchSide.fromStorageKey(
+                                item.optString("launcherFreeformSide", ""),
+                            )
+                        } else {
+                            FreeformLaunchSide.DEFAULT
+                        },
+                        launcherFreeformPercent = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                            FreeformLaunchBounds.normalizePercent(
+                                item.optInt(
+                                    "launcherFreeformPercent",
+                                    FreeformLaunchBounds.DEFAULT_PERCENT,
+                                ),
+                            )
+                        } else {
+                            FreeformLaunchBounds.DEFAULT_PERCENT
                         },
                         httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)

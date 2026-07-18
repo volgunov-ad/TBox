@@ -50,6 +50,8 @@ import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.FreeformLaunchSide
 
 internal data class LaunchableAppEntry(
     val packageName: String,
@@ -223,6 +225,51 @@ internal fun AppLauncherWidgetSettingsSection(
         }
     }
     Column(modifier = modifier.fillMaxWidth()) {
+        SettingSwitch(
+            isChecked = state.launcherFreeformEnabled,
+            onCheckedChange = { state.launcherFreeformEnabled = it },
+            text = stringResource(R.string.widget_app_launcher_freeform_enable),
+            description = stringResource(R.string.widget_app_launcher_freeform_enable_desc),
+            enabled = state.togglesEnabled,
+        )
+        if (state.launcherFreeformEnabled) {
+            val localizedSideOptions = FreeformLaunchSide.entries.map { side ->
+                FreeformSideDropdownOption(side, stringResource(side.labelRes))
+            }
+            SettingDropdownGeneric(
+                selectedValue = localizedSideOptions.first {
+                    it.side == state.launcherFreeformSide
+                },
+                onValueChange = { state.launcherFreeformSide = it.side },
+                text = stringResource(R.string.widget_app_launcher_freeform_side),
+                description = "",
+                enabled = state.togglesEnabled,
+                options = localizedSideOptions,
+                selectorWidth = 160.dp,
+            )
+            val percentOptions = remember {
+                (FreeformLaunchBounds.MIN_PERCENT..FreeformLaunchBounds.MAX_PERCENT step 5).toList()
+            }
+            SettingDropdownGeneric(
+                selectedValue = FreeformLaunchBounds.normalizePercent(state.launcherFreeformPercent)
+                    .let { current ->
+                        percentOptions.minByOrNull { kotlin.math.abs(it - current) }
+                            ?: FreeformLaunchBounds.DEFAULT_PERCENT
+                    },
+                onValueChange = { state.launcherFreeformPercent = it },
+                text = stringResource(R.string.widget_app_launcher_freeform_percent),
+                description = stringResource(R.string.widget_app_launcher_freeform_percent_desc),
+                enabled = state.togglesEnabled,
+                options = percentOptions,
+                selectorWidth = 100.dp,
+            )
+            Text(
+                text = stringResource(R.string.widget_app_launcher_freeform_hint),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
         Text(
             text = if (selectedLabel != null) {
                 stringResource(R.string.widget_app_launcher_selected, selectedLabel)
@@ -358,4 +405,11 @@ internal fun AppLauncherWidgetSettingsSection(
             )
         }
     }
+}
+
+private data class FreeformSideDropdownOption(
+    val side: FreeformLaunchSide,
+    val label: String,
+) {
+    override fun toString(): String = label
 }

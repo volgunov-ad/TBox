@@ -52,6 +52,7 @@ import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.snapToGrid
 import vad.dashing.tbox.resolveDriveModeWidgetOption
+import vad.dashing.tbox.freeform.WindowModeUiGuard
 import kotlin.math.roundToInt
 
 private data class PanelPxLayout(
@@ -114,6 +115,7 @@ fun MainScreenDashboardPanel(
     settingsViewModel: SettingsViewModel,
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
+    windowMode: Boolean = false,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -395,7 +397,11 @@ fun MainScreenDashboardPanel(
             onWidgetClick = { index ->
                 val cfg = widgetConfigs.getOrNull(index)
                 if (isEditMode && !isDraggingMode && !isResizingMode) {
-                    showDialogForIndex = index
+                    if (windowMode) {
+                        WindowModeUiGuard.toastEditingBlocked(context)
+                    } else {
+                        showDialogForIndex = index
+                    }
                 } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
                     sendToggleSteeringWheelHeat(context)
                 } else if (cfg?.dataKey == MIRROR_ADJUST_MODE_WIDGET_DATA_KEY) {
@@ -429,7 +435,7 @@ fun MainScreenDashboardPanel(
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                     cfg.launcherAppPackage.isNotBlank()
                 ) {
-                    launchAppFromWidget(context, cfg.launcherAppPackage)
+                    launchAppFromWidget(context, cfg)
                 } else if (
                     panel.clickAction &&
                     cfg != null &&
@@ -439,9 +445,13 @@ fun MainScreenDashboardPanel(
                 }
             },
             onWidgetLongClick = {
-                isEditMode = !isEditMode
-                isDraggingMode = false
-                isResizingMode = false
+                if (windowMode) {
+                    WindowModeUiGuard.toastEditingBlocked(context)
+                } else {
+                    isEditMode = !isEditMode
+                    isDraggingMode = false
+                    isResizingMode = false
+                }
             },
             onMusicSelectedPlayerChange = { index, selectedPackage ->
                 pendingMusicSelection = index to selectedPackage
@@ -496,17 +506,19 @@ fun MainScreenDashboardPanel(
         }
     }
 
-    showDialogForIndex?.let { index ->
-        MainScreenPanelWidgetSelectionDialog(
-            dashboardManager = dashboardViewModel.dashboardManager,
-            settingsViewModel = settingsViewModel,
-            panelId = panel.id,
-            widgetIndex = index,
-            currentWidgets = dashboardState.widgets,
-            currentWidgetConfigs = widgetConfigs,
-            currentTheme = currentTheme,
-            onDismiss = { showDialogForIndex = null },
-            onDeletePanel = { settingsViewModel.deleteMainScreenDashboard(panel.id) }
-        )
+    if (!windowMode) {
+        showDialogForIndex?.let { index ->
+            MainScreenPanelWidgetSelectionDialog(
+                dashboardManager = dashboardViewModel.dashboardManager,
+                settingsViewModel = settingsViewModel,
+                panelId = panel.id,
+                widgetIndex = index,
+                currentWidgets = dashboardState.widgets,
+                currentWidgetConfigs = widgetConfigs,
+                currentTheme = currentTheme,
+                onDismiss = { showDialogForIndex = null },
+                onDeletePanel = { settingsViewModel.deleteMainScreenDashboard(panel.id) }
+            )
+        }
     }
 }

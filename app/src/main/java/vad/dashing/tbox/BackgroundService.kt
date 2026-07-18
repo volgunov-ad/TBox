@@ -61,6 +61,8 @@ import vad.dashing.tbox.fuel.RefuelRepository
 import vad.dashing.tbox.fuel.ambientTempForCalibrationC
 import vad.dashing.tbox.fuel.refuelsListFromJson
 import vad.dashing.tbox.fuel.refuelsListToJson
+import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformInvisibleAnchorActivity
 import vad.dashing.tbox.trip.TripFuelAccounting
 import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
@@ -154,6 +156,8 @@ class BackgroundService : Service() {
     private var usageStatsFloatingHideJob: Job? = null
     private var lastUsageStatsOverlayRules: UsageStatsOverlayRulesState? = null
     private var usageStatsStableForegroundPackage: String? = null
+    /** Elapsed realtime when foreground first left companion/TBox during window mode; 0 = not lost. */
+    private var windowModeCompanionLostSinceElapsedMs: Long = 0L
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -368,6 +372,11 @@ class BackgroundService : Service() {
         const val MBCAN_COMMAND_TOGGLE_PROPERTY = "TOGGLE_PROPERTY"
         const val MBCAN_COMMAND_SET_PROPERTY = "SET_PROPERTY"
 
+        /** Show MainScreen as a dedicated window-mode overlay (beside freeform companion). */
+        const val ACTION_SHOW_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.SHOW_MAIN_SCREEN_WINDOW"
+        /** Hide the MainScreen window-mode overlay. */
+        const val ACTION_HIDE_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.HIDE_MAIN_SCREEN_WINDOW"
+
         /** First and subsequent intervals for [mbCanDebugProbeJob] (vehicle + audio param batch log). */
         private const val MBCAN_DEBUG_PROBE_INTERVAL_MS = 15_000L
 
@@ -402,6 +411,17 @@ class BackgroundService : Service() {
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
         /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
         private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 4_000L
+        /** Debounce before tearing down window-mode overlay when companion is no longer foreground. */
+        private const val WINDOW_MODE_COMPANION_LOST_DEBOUNCE_MS = 3_000L
+        private val WINDOW_MODE_TRANSIENT_FOREGROUND_PACKAGES = setOf(
+            "android",
+            "com.android.systemui",
+            "com.android.launcher",
+            "com.android.launcher3",
+            "com.google.android.apps.nexuslauncher",
+            "com.android.permissioncontroller",
+            "com.google.android.permissioncontroller",
+        )
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -918,6 +938,19 @@ class BackgroundService : Service() {
                     val enabled = intent.getBooleanExtra(EXTRA_MBCAN_DIAGNOSTICS_ENABLED, false)
                     MbCanDiagnostics.setEnabled(enabled)
                     MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
+                }
+            }
+            ACTION_SHOW_MAIN_SCREEN_WINDOW -> {
+                if (isRunning) {
+                    scope.launch {
+                        overlayController.showMainScreenWindow()
+                    }
+                }
+            }
+            ACTION_HIDE_MAIN_SCREEN_WINDOW -> {
+                windowModeCompanionLostSinceElapsedMs = 0L
+                scope.launch {
+                    overlayController.hideMainScreenWindow()
                 }
             }
         }
@@ -2593,8 +2626,64 @@ class BackgroundService : Service() {
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
                 applyUsageStatsOverlayRulesIfChanged()
+                maybeDismissMainScreenWindowModeIfCompanionLost()
             }
         }
+    }
+
+    /**
+     * While freeform window mode is active, dismiss the MainScreen overlay (and clear the session)
+     * if the foreground app is neither the companion nor TBox for longer than a short debounce.
+     */
+    private suspend fun maybeDismissMainScreenWindowModeIfCompanionLost() {
+        if (!FreeformCompanionSession.isActive || !overlayController.isMainScreenWindowVisible) {
+            windowModeCompanionLostSinceElapsedMs = 0L
+            return
+        }
+        val companion = FreeformCompanionSession.companionPackage() ?: run {
+            windowModeCompanionLostSinceElapsedMs = 0L
+            return
+        }
+        if (!UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)) {
+            return
+        }
+        val fg = UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
+            this@BackgroundService,
+            windowMs = 25_000L,
+        )?.trim()?.takeIf { it.isNotEmpty() } ?: return
+
+        val myPkg = packageName
+        val stillOurs = fg.equals(companion, ignoreCase = true) ||
+            fg.equals(myPkg, ignoreCase = true) ||
+            WINDOW_MODE_TRANSIENT_FOREGROUND_PACKAGES.any { it.equals(fg, ignoreCase = true) }
+        if (stillOurs) {
+            windowModeCompanionLostSinceElapsedMs = 0L
+            return
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        if (windowModeCompanionLostSinceElapsedMs == 0L) {
+            windowModeCompanionLostSinceElapsedMs = now
+            return
+        }
+        if (now - windowModeCompanionLostSinceElapsedMs < WINDOW_MODE_COMPANION_LOST_DEBOUNCE_MS) {
+            return
+        }
+
+        windowModeCompanionLostSinceElapsedMs = 0L
+        FreeformCompanionSession.clear()
+        try {
+            sendBroadcast(
+                Intent(FreeformInvisibleAnchorActivity.ACTION_FINISH).setPackage(packageName),
+            )
+        } catch (_: Exception) {
+        }
+        overlayController.hideMainScreenWindow()
+        TboxRepository.addLog(
+            "INFO",
+            "WindowMode",
+            "Dismissed overlay: companion lost (fg=$fg)",
+        )
     }
 
     private suspend fun applyUsageStatsOverlayRulesIfChanged() {
@@ -2670,6 +2759,7 @@ class BackgroundService : Service() {
         usageStatsFloatingHideJob = null
         lastUsageStatsOverlayRules = null
         usageStatsStableForegroundPackage = null
+        windowModeCompanionLostSinceElapsedMs = 0L
         scope.launch {
             overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
             overlayController.syncFloatingDashboards(floatingDashboards.value)

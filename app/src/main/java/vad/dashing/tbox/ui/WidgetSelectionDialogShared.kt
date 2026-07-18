@@ -48,6 +48,8 @@ import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
+import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
@@ -277,6 +279,23 @@ internal class WidgetSelectionDialogState(
             initialConfig.launcherAppPackage
         } else {
             ""
+        }
+    )
+    var launcherFreeformEnabled by mutableStateOf(
+        initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY && initialConfig.launcherFreeformEnabled
+    )
+    var launcherFreeformSide by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherFreeformSide
+        } else {
+            FreeformLaunchSide.DEFAULT
+        }
+    )
+    var launcherFreeformPercent by mutableIntStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            FreeformLaunchBounds.normalizePercent(initialConfig.launcherFreeformPercent)
+        } else {
+            FreeformLaunchBounds.DEFAULT_PERCENT
         }
     )
     var httpRequestYaml by mutableStateOf(
@@ -1819,6 +1838,18 @@ internal fun applyWidgetSelectionChanges(
                 state.launcherAppPackage.trim()
             } else {
                 ""
+            },
+            launcherFreeformEnabled = state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                state.launcherFreeformEnabled,
+            launcherFreeformSide = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                state.launcherFreeformSide
+            } else {
+                FreeformLaunchSide.DEFAULT
+            },
+            launcherFreeformPercent = if (state.selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                FreeformLaunchBounds.normalizePercent(state.launcherFreeformPercent)
+            } else {
+                FreeformLaunchBounds.DEFAULT_PERCENT
             },
             httpRequestYaml = if (state.selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                 state.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }

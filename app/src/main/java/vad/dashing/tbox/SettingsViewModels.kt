@@ -542,6 +542,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = MainScreenAddButtonPosition.Default
         )
 
+    val mainScreenWindowModeGeometry = settingsManager.mainScreenWindowModeGeometryFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null,
+        )
+
+    val mainScreenWindowModeExitButtonPosition = settingsManager.mainScreenWindowModeExitButtonFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainScreenWindowModeExitButtonPosition.Default,
+        )
+
+    val mainScreenWindowModeAutoGeometry = settingsManager.mainScreenWindowModeAutoGeometryFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
     val mainScreenPageCount = settingsManager.mainScreenPageCountFlow
         .stateIn(
             scope = viewModelScope,
@@ -1389,6 +1410,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenAddButton(position: MainScreenAddButtonPosition) {
         viewModelScope.launch {
             settingsManager.saveMainScreenAddButton(position)
+        }
+    }
+
+    fun saveMainScreenWindowModeGeometry(geometry: MainScreenWindowModeGeometry) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWindowModeGeometry(geometry)
+        }
+    }
+
+    fun saveMainScreenWindowModeExitButton(position: MainScreenWindowModeExitButtonPosition) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWindowModeExitButton(position)
+        }
+    }
+
+    fun saveMainScreenWindowModeAutoGeometry(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWindowModeAutoGeometry(enabled)
         }
     }
 

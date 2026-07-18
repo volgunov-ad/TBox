@@ -2,7 +2,9 @@ package vad.dashing.tbox
 
 import android.app.Service
 import android.graphics.PixelFormat
+import android.os.Build
 import android.provider.Settings
+import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
@@ -12,9 +14,13 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.ui.FloatingDashboardUI
+import vad.dashing.tbox.ui.MainScreenWindowOverlayUI
 import vad.dashing.tbox.ui.MyLifecycleOwner
+import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformLaunchBounds
 
 /**
  * Foreground package + persisted usage-stats rule sets from [BackgroundService] polling.
@@ -91,12 +97,20 @@ internal class FloatingOverlayController(
     private var overlaysSuspended = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
 
+    /** Dedicated MainScreen window-mode overlay (not a floating panel id). */
+    private var mainScreenWindowView: ComposeView? = null
+    private var mainScreenWindowParams: WindowManager.LayoutParams? = null
+
     companion object {
         private const val TAG = "Floating Dashboard"
         private const val MAX_OVERLAY_RETRIES = 3
         private const val MIN_OVERLAY_SIZE = 50
         private const val OVERLAY_FADE_MS = 300L
+        private const val MAIN_SCREEN_WINDOW_TAG = "MainScreenWindow"
     }
+
+    val isMainScreenWindowVisible: Boolean
+        get() = mainScreenWindowView != null
 
     fun suspendOverlays() {
         overlaysSuspended = true
@@ -119,6 +133,7 @@ internal class FloatingOverlayController(
     fun closeAllOverlays() {
         val ids = overlayViews.keys.toList()
         ids.forEach { closeOverlay(it) }
+        hideMainScreenWindowInternal()
     }
 
     fun onDestroy() {
@@ -131,6 +146,175 @@ internal class FloatingOverlayController(
         overlayOffIds.clear()
         overlayParams.clear()
         windowManager = null
+    }
+
+    /**
+     * Shows the full MainScreen as a TYPE_APPLICATION_OVERLAY using geometry from settings.
+     * Not part of floating-panel sync / edit mode.
+     */
+    suspend fun showMainScreenWindow() {
+        withContext(Dispatchers.Main) {
+            if (overlaysSuspended) return@withContext
+            ensureWindowManager()
+            if (windowManager == null) return@withContext
+            if (!Settings.canDrawOverlays(service)) {
+                TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Cannot draw overlay")
+                return@withContext
+            }
+            val (displayW, displayH) = displaySizePx()
+            val autoGeometry = settingsManager.mainScreenWindowModeAutoGeometryFlow.first()
+            val session = FreeformCompanionSession.state.value
+            val geometry = when {
+                autoGeometry && session != null -> {
+                    FreeformLaunchBounds.computeComplementOverlayGeometry(
+                        activityDisplayWidth = session.activityDisplayWidth,
+                        activityDisplayHeight = session.activityDisplayHeight,
+                        overlayDisplayWidth = displayW,
+                        overlayDisplayHeight = displayH,
+                        side = session.side,
+                        percent = session.percent,
+                    )
+                }
+                else -> {
+                    (
+                        settingsManager.mainScreenWindowModeGeometryFlow.first()
+                            ?: MainScreenWindowModeGeometry.defaultForDisplay(displayW, displayH)
+                        ).normalized()
+                }
+            }
+
+            val existing = mainScreenWindowView
+            val existingParams = mainScreenWindowParams
+            if (existing != null && existingParams != null) {
+                existingParams.width = geometry.width.coerceAtLeast(MIN_OVERLAY_SIZE)
+                existingParams.height = geometry.height.coerceAtLeast(MIN_OVERLAY_SIZE)
+                existingParams.x = geometry.startX.coerceAtLeast(0)
+                existingParams.y = geometry.startY.coerceAtLeast(0)
+                try {
+                    if (existing.isAttachedToWindow) {
+                        windowManager?.updateViewLayout(existing, existingParams)
+                    }
+                } catch (e: Exception) {
+                    Log.e(MAIN_SCREEN_WINDOW_TAG, "Failed to update layout", e)
+                }
+                return@withContext
+            }
+
+            val layoutParams = WindowManager.LayoutParams(
+                geometry.width.coerceAtLeast(MIN_OVERLAY_SIZE),
+                geometry.height.coerceAtLeast(MIN_OVERLAY_SIZE),
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+                PixelFormat.TRANSLUCENT,
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = geometry.startX.coerceAtLeast(0)
+                y = geometry.startY.coerceAtLeast(0)
+            }
+
+            val composeView = ComposeView(service)
+            try {
+                composeView.apply {
+                    setViewTreeLifecycleOwner(lifecycleOwner)
+                    setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                    setViewTreeViewModelStoreOwner(lifecycleOwner)
+                    setContent {
+                        MainScreenWindowOverlayUI(
+                            settingsManager = settingsManager,
+                            appDataManager = appDataManager,
+                            onRebootTbox = onRebootTbox,
+                            onTripFinishAndStart = onTripFinishAndStart,
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(MAIN_SCREEN_WINDOW_TAG, "Error creating view", e)
+                TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Failed to create: ${e.message}")
+                return@withContext
+            }
+
+            try {
+                composeView.alpha = 0f
+                windowManager?.addView(composeView, layoutParams)
+                mainScreenWindowView = composeView
+                mainScreenWindowParams = layoutParams
+                composeView.animate()
+                    .alpha(1f)
+                    .setDuration(OVERLAY_FADE_MS)
+                    .start()
+                if (!lifecycleOwner.isInitialized ||
+                    lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.DESTROYED)
+                ) {
+                    lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
+                }
+                TboxRepository.addLog("DEBUG", MAIN_SCREEN_WINDOW_TAG, "Shown")
+            } catch (e: Exception) {
+                Log.e(MAIN_SCREEN_WINDOW_TAG, "Error adding view", e)
+                TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Failed to show: ${e.message}")
+            }
+        }
+    }
+
+    suspend fun hideMainScreenWindow() {
+        withContext(Dispatchers.Main) {
+            hideMainScreenWindowInternal()
+        }
+    }
+
+    private fun hideMainScreenWindowInternal() {
+        val view = mainScreenWindowView ?: return
+        mainScreenWindowView = null
+        mainScreenWindowParams = null
+
+        fun finishClose() {
+            try {
+                if (view.isAttachedToWindow) {
+                    windowManager?.removeView(view)
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Error removing view")
+                Log.e(MAIN_SCREEN_WINDOW_TAG, "Error removing view", e)
+            }
+            TboxRepository.addLog("DEBUG", MAIN_SCREEN_WINDOW_TAG, "Closed")
+        }
+
+        if (view.isAttachedToWindow && view.alpha > 0f) {
+            view.animate()
+                .alpha(0f)
+                .setDuration(OVERLAY_FADE_MS)
+                .withEndAction { finishClose() }
+                .start()
+        } else {
+            finishClose()
+        }
+    }
+
+    private fun ensureWindowManager() {
+        if (windowManager != null) return
+        try {
+            windowManager = service.getSystemService(WindowManager::class.java)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating Window manager", e)
+            TboxRepository.addLog("ERROR", TAG, "Error creating Window manager: ${e.message}")
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun displaySizePx(): Pair<Int, Int> {
+        val wm = windowManager ?: service.getSystemService(WindowManager::class.java)
+            ?: return 1280 to 720
+        // Overlays use the full physical display, not the HU virtual/app display.
+        return if (Build.VERSION.SDK_INT >= 30) {
+            val bounds = wm.maximumWindowMetrics.bounds
+            bounds.width() to bounds.height()
+        } else {
+            val metrics = DisplayMetrics()
+            wm.defaultDisplay.getRealMetrics(metrics)
+            metrics.widthPixels to metrics.heightPixels
+        }
     }
 
     /**
@@ -249,19 +433,8 @@ internal class FloatingOverlayController(
     }
 
     private fun openOverlay(config: FloatingDashboardConfig, myPackageName: String) {
-        if (windowManager == null) {
-            try {
-                windowManager = service.getSystemService(WindowManager::class.java)
-            } catch (e: Exception) {
-                Log.e("FloatingDashboard", "Error creating Window manager", e)
-                TboxRepository.addLog(
-                    "ERROR",
-                    TAG,
-                    "Error creating Window manager: ${e.message}"
-                )
-                return
-            }
-        }
+        ensureWindowManager()
+        if (windowManager == null) return
 
         if (!config.enabled && !usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPackageName)) {
             TboxRepository.addLog("DEBUG", TAG, "Setting off: ${config.id}")

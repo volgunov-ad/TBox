@@ -22,14 +22,16 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import vad.dashing.tbox.ui.theme.TboxFontFamily
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
+import vad.dashing.tbox.ui.theme.TboxFontFamily
 
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
@@ -72,6 +74,18 @@ data class FloatingDashboardWidgetConfig(
     val mediaKeepPlayerForeground: Boolean = false,
     /** Package name of the app to launch (only for `appLauncherWidget`). */
     val launcherAppPackage: String = "",
+    /**
+     * When true, [launcherAppPackage] launches in freeform beside TBox
+     * ([launcherFreeformSide] + [launcherFreeformPercent]). Only for `appLauncherWidget`.
+     */
+    val launcherFreeformEnabled: Boolean = false,
+    /** Edge of the display occupied by the companion app when [launcherFreeformEnabled]. */
+    val launcherFreeformSide: FreeformLaunchSide = FreeformLaunchSide.DEFAULT,
+    /**
+     * Percent of display width (left/right) or height (top/bottom) for the companion app.
+     * Clamped to [FreeformLaunchBounds.MIN_PERCENT]..[FreeformLaunchBounds.MAX_PERCENT].
+     */
+    val launcherFreeformPercent: Int = FreeformLaunchBounds.DEFAULT_PERCENT,
     /** YAML request config for `httpRequestWidget`. */
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
@@ -199,6 +213,49 @@ data class MainScreenPageNextButtonPosition(
 ) {
     companion object {
         val Default = MainScreenPageNextButtonPosition(0.92f, 0.92f)
+    }
+}
+
+/**
+ * Pixel geometry for the main-screen window-mode overlay (beside a freeform companion app).
+ * Empty / invalid stored values resolve via [defaultForDisplay] at show time.
+ */
+data class MainScreenWindowModeGeometry(
+    val startX: Int,
+    val startY: Int,
+    val width: Int,
+    val height: Int,
+) {
+    fun normalized(): MainScreenWindowModeGeometry = MainScreenWindowModeGeometry(
+        startX = startX.coerceAtLeast(0),
+        startY = startY.coerceAtLeast(0),
+        width = width.coerceAtLeast(MIN_SIZE),
+        height = height.coerceAtLeast(MIN_SIZE),
+    )
+
+    companion object {
+        const val MIN_SIZE = 100
+
+        fun defaultForDisplay(displayWidth: Int, displayHeight: Int): MainScreenWindowModeGeometry {
+            val w = displayWidth.coerceAtLeast(MIN_SIZE)
+            val h = displayHeight.coerceAtLeast(MIN_SIZE)
+            return MainScreenWindowModeGeometry(
+                startX = 0,
+                startY = 0,
+                width = (w / 2).coerceAtLeast(MIN_SIZE),
+                height = h,
+            )
+        }
+    }
+}
+
+/** Normalized position of the «exit window mode» corner button (only on the overlay MainScreen). */
+data class MainScreenWindowModeExitButtonPosition(
+    val x: Float,
+    val y: Float,
+) {
+    companion object {
+        val Default = MainScreenWindowModeExitButtonPosition(0.04f, 0.04f)
     }
 }
 
@@ -511,6 +568,10 @@ class SettingsManager(private val context: Context) {
         private const val MAIN_SCREEN_ADD_BUTTON_KEY = "main_screen_add_button"
         private const val MAIN_SCREEN_PAGE_PREV_BUTTON_KEY = "main_screen_page_prev_button"
         private const val MAIN_SCREEN_PAGE_NEXT_BUTTON_KEY = "main_screen_page_next_button"
+        private const val MAIN_SCREEN_WINDOW_MODE_GEOMETRY_KEY = "main_screen_window_mode_geometry"
+        private const val MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY = "main_screen_window_mode_exit_button"
+        private val MAIN_SCREEN_WINDOW_MODE_AUTO_GEOMETRY_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_window_mode_auto_geometry")
 
         const val MIN_MAIN_SCREEN_PAGE_COUNT = 1
         const val MAX_MAIN_SCREEN_PAGE_COUNT = 5
@@ -807,6 +868,33 @@ class SettingsManager(private val context: Context) {
                 )
             }
             .distinctUntilChanged()
+
+    val mainScreenWindowModeGeometryFlow: Flow<MainScreenWindowModeGeometry?> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenWindowModeGeometryJson(
+                    preferences[getStringKey(MAIN_SCREEN_WINDOW_MODE_GEOMETRY_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
+
+    val mainScreenWindowModeExitButtonFlow: Flow<MainScreenWindowModeExitButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenWindowModeExitButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY)] ?: ""
+                )
+            }
+            .distinctUntilChanged()
+
+    /**
+     * When true (default), main-screen window overlay fills the complementary area beside the
+     * freeform companion (mapped from activity/virtual display into overlay/full-screen coords).
+     * When false, uses [mainScreenWindowModeGeometryFlow].
+     */
+    val mainScreenWindowModeAutoGeometryFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_WINDOW_MODE_AUTO_GEOMETRY_KEY] ?: true }
+        .distinctUntilChanged()
 
     val activeThemeUriFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[ACTIVE_THEME_URI_KEY] ?: "" }
@@ -1487,6 +1575,29 @@ class SettingsManager(private val context: Context) {
         obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
         obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
         saveCustomString(MAIN_SCREEN_PAGE_NEXT_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenWindowModeGeometry(geometry: MainScreenWindowModeGeometry) {
+        val g = geometry.normalized()
+        val obj = JSONObject()
+        obj.put("startX", g.startX)
+        obj.put("startY", g.startY)
+        obj.put("width", g.width)
+        obj.put("height", g.height)
+        saveCustomString(MAIN_SCREEN_WINDOW_MODE_GEOMETRY_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenWindowModeExitButton(position: MainScreenWindowModeExitButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenWindowModeAutoGeometry(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WINDOW_MODE_AUTO_GEOMETRY_KEY] = enabled
+        }
     }
 
     suspend fun saveActiveTheme(
@@ -2404,6 +2515,39 @@ class SettingsManager(private val context: Context) {
             )
         } catch (_: Exception) {
             MainScreenPageNextButtonPosition.Default
+        }
+    }
+
+    /** Null when never configured — caller should use [MainScreenWindowModeGeometry.defaultForDisplay]. */
+    private fun parseMainScreenWindowModeGeometryJson(raw: String): MainScreenWindowModeGeometry? {
+        if (raw.isBlank()) return null
+        return try {
+            val o = JSONObject(raw)
+            MainScreenWindowModeGeometry(
+                startX = o.optInt("startX", 0),
+                startY = o.optInt("startY", 0),
+                width = o.optInt("width", MainScreenWindowModeGeometry.MIN_SIZE),
+                height = o.optInt("height", MainScreenWindowModeGeometry.MIN_SIZE),
+            ).normalized()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun parseMainScreenWindowModeExitButtonJson(raw: String): MainScreenWindowModeExitButtonPosition {
+        if (raw.isBlank()) return MainScreenWindowModeExitButtonPosition.Default
+        return try {
+            val o = JSONObject(raw)
+            MainScreenWindowModeExitButtonPosition(
+                x = o.optDouble("x", MainScreenWindowModeExitButtonPosition.Default.x.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+                y = o.optDouble("y", MainScreenWindowModeExitButtonPosition.Default.y.toDouble())
+                    .toFloat()
+                    .coerceIn(0f, 1f),
+            )
+        } catch (_: Exception) {
+            MainScreenWindowModeExitButtonPosition.Default
         }
     }
 
