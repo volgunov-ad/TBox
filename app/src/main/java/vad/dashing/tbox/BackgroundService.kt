@@ -2666,6 +2666,11 @@ class BackgroundService : Service() {
         val now = SystemClock.elapsedRealtime()
         if (windowModeCompanionLostSinceElapsedMs == 0L) {
             windowModeCompanionLostSinceElapsedMs = now
+            TboxRepository.addLog(
+                "DEBUG",
+                "WindowMode",
+                "companion lost debounce start fg=$fg companion=$companion",
+            )
             return
         }
         if (now - windowModeCompanionLostSinceElapsedMs < WINDOW_MODE_COMPANION_LOST_DEBOUNCE_MS) {

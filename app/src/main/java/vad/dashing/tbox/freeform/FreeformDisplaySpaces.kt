@@ -62,6 +62,41 @@ object FreeformDisplaySpaces {
         }
     }
 
+    /** Compact one-line list of displays for rare WindowMode debug logs. */
+    fun summarizeDisplays(context: Context): String {
+        return try {
+            val dm = context.getSystemService(DisplayManager::class.java) ?: return "no-dm"
+            dm.displays.joinToString(",") { d ->
+                @Suppress("DEPRECATION")
+                val metrics = DisplayMetrics()
+                d.getMetrics(metrics)
+                "${d.displayId}:${metrics.widthPixels}x${metrics.heightPixels}"
+            }.ifEmpty { "none" }
+        } catch (e: Exception) {
+            "err:${e.message}"
+        }
+    }
+
+    /**
+     * One-shot diagnostic: default WM size vs display-bound WM (same instance? size mismatch?).
+     */
+    fun describeOverlayWm(context: Context, displayId: Int): String {
+        return try {
+            val defaultWm = context.getSystemService(WindowManager::class.java)
+            val (defW, defH) = if (defaultWm != null) {
+                sizePxForWindowManager(defaultWm)
+            } else {
+                -1 to -1
+            }
+            val overlayWm = windowManagerForDisplay(context, displayId)
+            val (ovW, ovH) = sizePxForWindowManager(overlayWm)
+            val sameInstance = defaultWm != null && overlayWm === defaultWm
+            "displayId=$displayId defaultWm=${defW}x${defH} overlayWm=${ovW}x${ovH} sameWm=$sameInstance"
+        } catch (e: Exception) {
+            "displayId=$displayId err=${e.message}"
+        }
+    }
+
     private fun windowManagerForDisplayId(context: Context, displayId: Int): WindowManager? {
         return try {
             val dm = context.getSystemService(DisplayManager::class.java) ?: return null

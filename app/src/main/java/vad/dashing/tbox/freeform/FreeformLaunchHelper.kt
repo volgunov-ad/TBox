@@ -15,6 +15,7 @@ import android.widget.Toast
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.R
+import vad.dashing.tbox.TboxRepository
 
 /**
  * Freeform launch for companion apps only (Taskbar-style).
@@ -22,6 +23,7 @@ import vad.dashing.tbox.R
  */
 object FreeformLaunchHelper {
     private const val TAG = "FreeformLaunch"
+    private const val LOG_TAG = "WindowMode"
     private const val ANCHOR_DELAY_MS = 120L
     /** Extra settle time after tearing down the previous freeform companion / anchor. */
     private const val REPLACE_COMPANION_DELAY_MS = 280L
@@ -30,6 +32,11 @@ object FreeformLaunchHelper {
     private const val WINDOWING_MODE_FREEFORM = 5
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private fun dbg(message: String) {
+        TboxRepository.addLog("DEBUG", LOG_TAG, message)
+        Log.d(TAG, message)
+    }
 
     fun hasFreeformSupport(context: Context): Boolean {
         val pm = context.packageManager
@@ -83,7 +90,7 @@ object FreeformLaunchHelper {
         val activityDisplay = FreeformDisplaySpaces.resolveActivityDisplay(context)
         val displayW = activityDisplay.widthPx
         val displayH = activityDisplay.heightPx
-        val (appBounds, _) = FreeformLaunchBounds.computeAppAndTboxBounds(
+        val (appBounds, tboxBounds) = FreeformLaunchBounds.computeAppAndTboxBounds(
             displayW,
             displayH,
             side,
@@ -111,6 +118,13 @@ object FreeformLaunchHelper {
         val replacingExisting = FreeformCompanionSession.isActive
         mainHandler.removeCallbacksAndMessages(null)
 
+        dbg(
+            "launch start pkg=$pkg side=${side.storageKey} pct=$percent " +
+                "displayId=${activityDisplay.displayId} act=${displayW}x${displayH} " +
+                "appBounds=$appBounds tboxBounds=$tboxBounds replace=$replacingExisting " +
+                "displays=[${FreeformDisplaySpaces.summarizeDisplays(context)}]",
+        )
+
         fun startCompanionAfterAnchor() {
             ensureFreeformAnchor(appContext, displayW, displayH)
             mainHandler.postDelayed({
@@ -124,10 +138,15 @@ object FreeformLaunchHelper {
                         activityDisplayHeight = displayH,
                         activityDisplayId = activityDisplay.displayId,
                     )
+                    dbg(
+                        "launch ok pkg=$pkg displayId=${activityDisplay.displayId} " +
+                            "act=${displayW}x${displayH} side=${side.storageKey} pct=$percent",
+                    )
                     requestShowMainScreenWindow(appContext)
                     MainActivityIntentHelper.requestFinishForWindowMode(appContext)
                 } catch (e: Exception) {
                     Log.w(TAG, "Freeform companion launch failed", e)
+                    dbg("launch fail pkg=$pkg err=${e.message}")
                     Toast.makeText(
                         appContext,
                         appContext.getString(R.string.widget_app_launcher_freeform_launch_failed),
@@ -163,18 +182,25 @@ object FreeformLaunchHelper {
     fun exitWindowMode(context: Context) {
         mainHandler.removeCallbacksAndMessages(null)
         val appContext = context.applicationContext
+        val prev = FreeformCompanionSession.state.value
         // Clear session first so usage-stats dismiss / multiwindow callbacks cannot race.
         FreeformCompanionSession.clear()
         requestHideMainScreenWindow(appContext)
         finishFreeformAnchor(appContext)
+        dbg(
+            "exit start prevPkg=${prev?.packageName} side=${prev?.side?.storageKey} " +
+                "displayId=${prev?.activityDisplayId}",
+        )
         // Plain startActivity — do not pass freeform/fullscreen ActivityOptions; on multi-display
         // HUs those options are a common crash source when restoring MainActivity.
         mainHandler.postDelayed({
             val intent = MainActivityIntentHelper.createBringToFrontIntent(appContext)
             try {
                 appContext.startActivity(intent)
+                dbg("exit MainActivity restored")
             } catch (e: Exception) {
                 Log.w(TAG, "Fullscreen restore failed", e)
+                dbg("exit MainActivity restore fail err=${e.message}")
             }
         }, ANCHOR_DELAY_MS)
     }

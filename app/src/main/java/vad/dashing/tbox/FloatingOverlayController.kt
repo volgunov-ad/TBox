@@ -200,6 +200,14 @@ internal class FloatingOverlayController(
 
             val existing = mainScreenWindowView
             val existingParams = mainScreenWindowParams
+            val geomSummary =
+                "x=${geometry.startX} y=${geometry.startY} w=${geometry.width} h=${geometry.height}"
+            val sessionSummary = if (session != null) {
+                "pkg=${session.packageName} side=${session.side.storageKey} pct=${session.percent} " +
+                    "act=${session.activityDisplayWidth}x${session.activityDisplayHeight}"
+            } else {
+                "session=null"
+            }
             if (existing != null && existingParams != null && mainScreenWindowManager === msWm) {
                 existingParams.width = geometry.width.coerceAtLeast(MIN_OVERLAY_SIZE)
                 existingParams.height = geometry.height.coerceAtLeast(MIN_OVERLAY_SIZE)
@@ -208,6 +216,11 @@ internal class FloatingOverlayController(
                 try {
                     if (existing.isAttachedToWindow) {
                         msWm.updateViewLayout(existing, existingParams)
+                        TboxRepository.addLog(
+                            "DEBUG",
+                            "WindowMode",
+                            "overlay update auto=$autoGeometry $sessionSummary wm=${displayW}x${displayH} geo=$geomSummary",
+                        )
                     }
                 } catch (e: Exception) {
                     Log.e(MAIN_SCREEN_WINDOW_TAG, "Failed to update layout", e)
@@ -272,8 +285,9 @@ internal class FloatingOverlayController(
                 }
                 TboxRepository.addLog(
                     "DEBUG",
-                    MAIN_SCREEN_WINDOW_TAG,
-                    "Shown displayId=${activityDisplay.displayId} ${displayW}x${displayH}",
+                    "WindowMode",
+                    "overlay shown auto=$autoGeometry $sessionSummary geo=$geomSummary " +
+                        FreeformDisplaySpaces.describeOverlayWm(service, activityDisplay.displayId),
                 )
             } catch (e: Exception) {
                 Log.e(MAIN_SCREEN_WINDOW_TAG, "Error adding view", e)
@@ -297,7 +311,7 @@ internal class FloatingOverlayController(
 
         fun finishClose() {
             removeAttachedView(wm, view)
-            TboxRepository.addLog("DEBUG", MAIN_SCREEN_WINDOW_TAG, "Closed")
+            TboxRepository.addLog("DEBUG", "WindowMode", "overlay closed")
         }
 
         if (view.isAttachedToWindow && view.alpha > 0f) {
