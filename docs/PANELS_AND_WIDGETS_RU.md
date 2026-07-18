@@ -125,7 +125,7 @@ flowchart TB
 - скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
 - `mediaPlayers` (музыка), `appWidgetId` (сторонний виджет Android)
-- `launcherAppPackage` + опционально freeform: `launcherFreeformEnabled`, `launcherFreeformSide` (`left`/`right`/`top`/`bottom`), `launcherFreeformPercent` (30–70) — для ярлыка приложения
+- `launcherAppPackage` + опционально freeform: `launcherFreeformEnabled`, `launcherFreeformSide` (`left`/`right`/`top`/`bottom`), `launcherFreeformPercent` (20–80, шаг 10) — для ярлыка приложения
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` и др.
 
 Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.

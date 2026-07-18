@@ -45,7 +45,7 @@ class FreeformCompanionSessionTest {
         assertEquals("com.b", FreeformCompanionSession.companionPackage())
         assertFalse(FreeformCompanionSession.isActiveFor("com.a"))
         assertEquals(FreeformLaunchSide.RIGHT, FreeformCompanionSession.state.value!!.side)
-        assertEquals(35, FreeformCompanionSession.state.value!!.percent)
+        assertEquals(40, FreeformCompanionSession.state.value!!.percent)
         assertEquals(1920, FreeformCompanionSession.state.value!!.activityDisplayWidth)
         assertEquals(3, FreeformCompanionSession.state.value!!.activityDisplayId)
     }

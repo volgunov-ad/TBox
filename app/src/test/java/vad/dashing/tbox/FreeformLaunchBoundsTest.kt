@@ -13,10 +13,12 @@ import vad.dashing.tbox.freeform.FreeformLaunchSide
 class FreeformLaunchBoundsTest {
 
     @Test
-    fun normalizePercent_clampsToRange() {
-        assertEquals(30, FreeformLaunchBounds.normalizePercent(10))
-        assertEquals(70, FreeformLaunchBounds.normalizePercent(90))
+    fun normalizePercent_clampsAndSnapsToStep() {
+        assertEquals(20, FreeformLaunchBounds.normalizePercent(10))
+        assertEquals(80, FreeformLaunchBounds.normalizePercent(90))
         assertEquals(50, FreeformLaunchBounds.normalizePercent(50))
+        assertEquals(40, FreeformLaunchBounds.normalizePercent(35))
+        assertEquals(30, FreeformLaunchBounds.normalizePercent(34))
     }
 
     @Test

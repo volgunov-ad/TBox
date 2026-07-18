@@ -245,11 +245,8 @@ internal fun AppLauncherWidgetSettingsSection(
                 description = "",
                 enabled = state.togglesEnabled,
                 options = localizedSideOptions,
-                selectorWidth = 160.dp,
             )
-            val percentOptions = remember {
-                (FreeformLaunchBounds.MIN_PERCENT..FreeformLaunchBounds.MAX_PERCENT step 5).toList()
-            }
+            val percentOptions = remember { FreeformLaunchBounds.percentOptions() }
             SettingDropdownGeneric(
                 selectedValue = FreeformLaunchBounds.normalizePercent(state.launcherFreeformPercent)
                     .let { current ->
@@ -261,7 +258,6 @@ internal fun AppLauncherWidgetSettingsSection(
                 description = stringResource(R.string.widget_app_launcher_freeform_percent_desc),
                 enabled = state.togglesEnabled,
                 options = percentOptions,
-                selectorWidth = 100.dp,
             )
             Text(
                 text = stringResource(R.string.widget_app_launcher_freeform_hint),

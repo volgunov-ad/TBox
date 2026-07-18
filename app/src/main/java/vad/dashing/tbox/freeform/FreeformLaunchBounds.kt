@@ -4,11 +4,20 @@ import android.graphics.Rect
 import vad.dashing.tbox.MainScreenWindowModeGeometry
 
 object FreeformLaunchBounds {
-    const val MIN_PERCENT = 30
-    const val MAX_PERCENT = 70
+    const val MIN_PERCENT = 20
+    const val MAX_PERCENT = 80
     const val DEFAULT_PERCENT = 50
+    const val PERCENT_STEP = 10
 
-    fun normalizePercent(percent: Int): Int = percent.coerceIn(MIN_PERCENT, MAX_PERCENT)
+    /** Clamp and snap to [PERCENT_STEP] within [MIN_PERCENT]..[MAX_PERCENT]. */
+    fun normalizePercent(percent: Int): Int {
+        val clamped = percent.coerceIn(MIN_PERCENT, MAX_PERCENT)
+        val snapped = ((clamped + PERCENT_STEP / 2) / PERCENT_STEP) * PERCENT_STEP
+        return snapped.coerceIn(MIN_PERCENT, MAX_PERCENT)
+    }
+
+    fun percentOptions(): List<Int> =
+        (MIN_PERCENT..MAX_PERCENT step PERCENT_STEP).toList()
 
     /**
      * @return Pair(appBounds, tboxBounds) in display pixels for the given [side] and
