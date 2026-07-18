@@ -190,7 +190,7 @@
 |--------------------------|-----------------|-------------------------------|-----------------|-------------|
 | **Android 9** — Engine RPM | `readVehicleEngineRpm()` (telemetry) | float ≥ 0 | — | **Push:** telemetry bridge. **Pull:** `refreshEngineRpm` (30 s / burst) |
 | **Android 10** — Engine RPM | VHAL **289414951** `R_0900_EMS_1_EngineSpd` | raw × **4** (`decodeEngineRpm`) | — | onChange + pull |
-| **Android 9** — Coolant temp | telemetry float | °C as-is from facade | — | push + pull |
+| **Android 9** — Coolant temp | telemetry float | °C as-is from facade; **на практике с mbCAN всегда `0.0`** (VHAL ок) | — | push + pull |
 | **Android 10** — Coolant temp | VHAL **289414949** | raw × **0,75 − 48** | — | onChange + pull |
 | **Android 9** — Vehicle speed | telemetry float | km/h ≥ 0 | — | push + pull |
 | **Android 10** — Vehicle speed | VHAL **289414964** | float ≥ 0 | — | onChange + pull |

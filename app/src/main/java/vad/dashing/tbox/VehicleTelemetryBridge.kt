@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.fuellevelcalibration.FuelLevelStableApply
+import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
@@ -18,10 +19,15 @@ import vad.dashing.tbox.mbcan.UniversalCanRepository
  * - Engine coolant + gearbox oil temps: TBox first; HU coolant only if TBox stale/absent
  *
  * After [FRESHNESS_MS] with no RPM from either source, forces RPM to 0 so trips can close.
+ *
+ * When [MbCanDiagnostics] is enabled, emits a DEBUG snapshot every [DEBUG_SNAPSHOT_MS]
+ * (tag `TripFuel`) with active source per signal and current CDR values.
  */
 object VehicleTelemetryBridge {
     const val FRESHNESS_MS: Long = 45_000L
     const val TRIP_ACCOUNTING_SOURCE_ID: String = "trip-accounting-telemetry"
+    private const val DEBUG_SNAPSHOT_MS: Long = 15_000L
+    private const val DEBUG_TAG: String = "TripFuel"
 
     private val tripSignals: Set<MbCanSignal> = setOf(
         MbCanSignal.EngineRpm,
@@ -42,13 +48,14 @@ object VehicleTelemetryBridge {
         GearboxOilTemp,
     }
 
-    private enum class Source { Hu, Tbox }
-
     @Volatile
     private var collectJob: Job? = null
 
     @Volatile
     private var staleWatchJob: Job? = null
+
+    @Volatile
+    private var debugSnapshotJob: Job? = null
 
     private val lastHuElapsedMs = LongArray(Signal.entries.size) { -1L }
     private val lastTboxElapsedMs = LongArray(Signal.entries.size) { -1L }
@@ -115,6 +122,12 @@ object VehicleTelemetryBridge {
                 maybeClearStaleRpm()
             }
         }
+        debugSnapshotJob = scope.launch {
+            while (isActive) {
+                delay(DEBUG_SNAPSHOT_MS)
+                logAccountingDebugSnapshot()
+            }
+        }
     }
 
     /** Visible for unit tests. */
@@ -137,6 +150,8 @@ object VehicleTelemetryBridge {
         collectJob = null
         staleWatchJob?.cancel()
         staleWatchJob = null
+        debugSnapshotJob?.cancel()
+        debugSnapshotJob = null
         UniversalCanRepository.enqueueClearSource(TRIP_ACCOUNTING_SOURCE_ID)
         synchronized(lock) {
             lastHuElapsedMs.fill(-1L)
@@ -198,5 +213,69 @@ object VehicleTelemetryBridge {
         if (clear) {
             CanDataRepository.updateEngineRPM(0f)
         }
+    }
+
+    private fun logAccountingDebugSnapshot() {
+        if (!MbCanDiagnostics.enabled.value) return
+        MbCanDiagnostics.log("DEBUG", DEBUG_TAG, buildAccountingDebugSnapshot())
+    }
+
+    /** Visible for unit tests. */
+    internal fun buildAccountingDebugSnapshot(
+        nowElapsedMs: Long = SystemClock.elapsedRealtime(),
+    ): String {
+        val sources = synchronized(lock) {
+            fun fmt(signal: Signal): String {
+                val huLast = lastHuElapsedMs[signal.ordinal]
+                val tboxLast = lastTboxElapsedMs[signal.ordinal]
+                val huAge = if (huLast >= 0L) nowElapsedMs - huLast else null
+                val tboxAge = if (tboxLast >= 0L) nowElapsedMs - tboxLast else null
+                val huFresh = huAge != null && huAge <= FRESHNESS_MS
+                val tboxFresh = tboxAge != null && tboxAge <= FRESHNESS_MS
+                val active = when (signal) {
+                    Signal.EngineTemp -> when {
+                        tboxFresh -> "TBox"
+                        huFresh -> "HU"
+                        else -> "-"
+                    }
+                    Signal.GearboxOilTemp -> when {
+                        tboxFresh -> "TBox"
+                        else -> "-"
+                    }
+                    else -> when {
+                        huFresh -> "HU"
+                        tboxFresh -> "TBox"
+                        else -> "-"
+                    }
+                }
+                val ages = buildString {
+                    append("hu=")
+                    append(huAge?.toString() ?: "-")
+                    append("ms tbox=")
+                    append(tboxAge?.toString() ?: "-")
+                    append("ms")
+                }
+                return "${signal.name}=$active($ages)"
+            }
+            listOf(
+                Signal.Rpm,
+                Signal.Speed,
+                Signal.Fuel,
+                Signal.Odometer,
+                Signal.OutsideTemp,
+                Signal.EngineTemp,
+                Signal.GearboxOilTemp,
+            ).joinToString("; ") { fmt(it) }
+        }
+        val rpm = CanDataRepository.engineRPM.value
+        val speed = CanDataRepository.carSpeed.value
+        val fuelRaw = CanDataRepository.fuelLevelPercentage.value
+        val fuelFilt = CanDataRepository.fuelLevelPercentageFiltered.value
+        val liters = CanDataRepository.fuelLevelCalibratedLiters.value
+        val odo = CanDataRepository.odometer.value
+        val outside = CanDataRepository.outsideTemperature.value
+        val engTemp = CanDataRepository.engineTemperature.value
+        return "sources[$sources] values[rpm=$rpm speed=$speed fuelRaw%=$fuelRaw fuelFilt%=$fuelFilt " +
+            "liters=$liters odoKm=$odo outsideC=$outside engTempC=$engTemp]"
     }
 }

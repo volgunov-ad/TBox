@@ -435,6 +435,9 @@ object MbCanEngineFacade {
 
     /**
      * Reads coolant temperature from [com.mengbo.mbCan.entity.MBCanVehicleEngine#getfTemperture()].
+     *
+     * Observed on Android 9 (mbCAN): push/pull always report `0.0` even with live RPM.
+     * Android 10 (VHAL) coolant decode appears fine — prefer VHAL / TBox for real °C.
      */
     fun readVehicleEngineTemperature(): Float? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null

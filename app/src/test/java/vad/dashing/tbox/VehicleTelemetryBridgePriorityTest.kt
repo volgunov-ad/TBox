@@ -39,14 +39,23 @@ class VehicleTelemetryBridgePriorityTest {
     }
 
     @Test
-    fun tboxAcceptedAfterHuStale() {
+    fun debugSnapshotShowsHuWhenFresh() {
         val now = SystemClock.elapsedRealtime()
-        VehicleTelemetryBridge.noteHuForTest(VehicleTelemetryBridge.Signal.Odometer, now)
+        VehicleTelemetryBridge.noteHuForTest(VehicleTelemetryBridge.Signal.Fuel, now)
+        VehicleTelemetryBridge.noteHuForTest(VehicleTelemetryBridge.Signal.Rpm, now)
+        val snap = VehicleTelemetryBridge.buildAccountingDebugSnapshot(now + 500L)
+        assertTrue(snap.contains("Fuel=HU("))
+        assertTrue(snap.contains("Rpm=HU("))
+        assertTrue(snap.contains("values["))
+    }
+
+    @Test
+    fun debugSnapshotShowsTboxWhenHuAbsent() {
+        val now = SystemClock.elapsedRealtime()
         assertTrue(
-            VehicleTelemetryBridge.acceptTboxHuPriority(
-                VehicleTelemetryBridge.Signal.Odometer,
-                now + VehicleTelemetryBridge.FRESHNESS_MS + 1L,
-            )
+            VehicleTelemetryBridge.acceptTboxHuPriority(VehicleTelemetryBridge.Signal.Fuel, now)
         )
+        val snap = VehicleTelemetryBridge.buildAccountingDebugSnapshot(now + 100L)
+        assertTrue(snap.contains("Fuel=TBox("))
     }
 }
