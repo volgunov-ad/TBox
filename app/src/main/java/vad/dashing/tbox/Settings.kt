@@ -256,7 +256,9 @@ data class BackgroundServiceSettingsSnapshot(
     val autoPreventTboxRestart: Boolean,
     val getCanFrame: Boolean,
     val getCycleSignal: Boolean,
+    /** True when [locationSource] is [vad.dashing.tbox.esp.LocationSource.TBOX] (legacy name kept for callers). */
     val getLocData: Boolean,
+    val locationSource: vad.dashing.tbox.esp.LocationSource,
     val widgetShowIndicator: Boolean,
     val widgetShowLocIndicator: Boolean,
     val mockLocation: Boolean,
@@ -378,6 +380,7 @@ class SettingsManager(private val context: Context) {
         private val GET_CAN_FRAME_KEY = booleanPreferencesKey("${KEY_PREFIX}get_can_frame")
         private val GET_CYCLE_SIGNAL_KEY = booleanPreferencesKey("${KEY_PREFIX}get_cycle_signal")
         private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
+        private val LOCATION_SOURCE_KEY = stringPreferencesKey("${KEY_PREFIX}location_source")
         private val WIDGET_SHOW_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_indicator")
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
@@ -723,8 +726,13 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[GET_CYCLE_SIGNAL_KEY] ?: false }
         .distinctUntilChanged()
 
-    val getLocDataFlow: Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[GET_LOC_DATA_KEY] ?: true }
+    val locationSourceFlow: Flow<vad.dashing.tbox.esp.LocationSource> = context.settingsDataStore.data
+        .map { preferences -> resolveLocationSource(preferences) }
+        .distinctUntilChanged()
+
+    /** Legacy: true when location source is TBox (subscribe to LOC). */
+    val getLocDataFlow: Flow<Boolean> = locationSourceFlow
+        .map { it == vad.dashing.tbox.esp.LocationSource.TBOX }
         .distinctUntilChanged()
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1120,7 +1128,8 @@ class SettingsManager(private val context: Context) {
             autoPreventTboxRestart = preferences[AUTO_PREVENT_TBOX_RESTART_KEY] ?: false,
             getCanFrame = preferences[GET_CAN_FRAME_KEY] ?: true,
             getCycleSignal = preferences[GET_CYCLE_SIGNAL_KEY] ?: false,
-            getLocData = preferences[GET_LOC_DATA_KEY] ?: true,
+            locationSource = resolveLocationSource(preferences),
+            getLocData = resolveLocationSource(preferences) == vad.dashing.tbox.esp.LocationSource.TBOX,
             widgetShowIndicator = preferences[WIDGET_SHOW_INDICATOR] ?: false,
             widgetShowLocIndicator = preferences[WIDGET_SHOW_LOC_INDICATOR] ?: false,
             mockLocation = preferences[MOCK_LOCATION] ?: false,
@@ -1269,9 +1278,30 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveGetLocDataSetting(enabled: Boolean) {
+        saveLocationSourceSetting(
+            if (enabled) {
+                vad.dashing.tbox.esp.LocationSource.TBOX
+            } else {
+                vad.dashing.tbox.esp.LocationSource.ANDROID
+            }
+        )
+    }
+
+    suspend fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
         context.settingsDataStore.edit { preferences ->
-            preferences[GET_LOC_DATA_KEY] = enabled
+            preferences[LOCATION_SOURCE_KEY] = source.name
+            preferences[GET_LOC_DATA_KEY] = source == vad.dashing.tbox.esp.LocationSource.TBOX
         }
+    }
+
+    private fun resolveLocationSource(preferences: Preferences): vad.dashing.tbox.esp.LocationSource {
+        val raw = preferences[LOCATION_SOURCE_KEY]
+        if (!raw.isNullOrBlank()) {
+            return vad.dashing.tbox.esp.LocationSource.fromStorage(raw)
+        }
+        return vad.dashing.tbox.esp.LocationSource.fromLegacyGetLocData(
+            preferences[GET_LOC_DATA_KEY]
+        )
     }
 
     suspend fun saveExpertModeSetting(enabled: Boolean) {

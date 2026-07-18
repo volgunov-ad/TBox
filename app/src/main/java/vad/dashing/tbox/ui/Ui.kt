@@ -381,7 +381,11 @@ fun TboxScreen(
                 when (selectedTab) {
                     LeftMenuTabField.MODEM.id -> ModemTab(viewModel, onServiceCommand)
                     LeftMenuTabField.AT_COMMANDS.id -> ATcmdTab(viewModel, onServiceCommand)
-                    LeftMenuTabField.GEOPOSITION.id -> LocationTab(viewModel, onServiceCommand)
+                    LeftMenuTabField.GEOPOSITION.id -> LocationTab(
+                        viewModel,
+                        settingsViewModel,
+                        onServiceCommand,
+                    )
                     LeftMenuTabField.CAR_DATA.id -> CarDataTab(
                         canViewModel,
                         cycleViewModel,
@@ -519,11 +523,13 @@ fun SettingsTab(
 @Composable
 fun LocationTab(
     viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit,
 ) {
     LocationTabContent(
         viewModel = viewModel,
         onServiceCommand = onServiceCommand,
+        settingsViewModel = settingsViewModel,
     )
 }
 

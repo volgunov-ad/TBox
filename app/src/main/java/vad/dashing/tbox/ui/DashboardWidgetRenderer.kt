@@ -1097,6 +1097,42 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "espRelay0", "espRelay1", "espRelay2", "espRelay3" -> {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val channel = when (widget.dataKey) {
+                "espRelay0" -> 0
+                "espRelay1" -> 1
+                "espRelay2" -> 2
+                else -> 3
+            }
+            DashboardWidgetItem(
+                widget = widget,
+                dataProvider = dataProvider,
+                onClick = {
+                    if (enableInnerInteractions && !isEditMode) {
+                        context.startService(
+                            android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
+                                action = vad.dashing.tbox.BackgroundService.ACTION_ESP_RELAY_TOGGLE
+                                putExtra(vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_CHANNEL, channel)
+                            }
+                        )
+                    } else {
+                        onClick()
+                    }
+                },
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = false,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+            )
+        }
+
         else -> {
             DashboardWidgetItem(
                 widget = widget,

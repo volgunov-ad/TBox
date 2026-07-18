@@ -65,6 +65,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import vad.dashing.tbox.utils.MockLocationUtils
 import vad.dashing.tbox.utils.canUseMockLocation
+import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.LocationSource
 
 @Composable
 fun ModemTabContent(
@@ -269,6 +271,7 @@ fun SettingsTabContent(
     val isGetCanFrameEnabled by settingsViewModel.isGetCanFrameEnabled.collectAsStateWithLifecycle()
     val isGetCycleSignalEnabled by settingsViewModel.isGetCycleSignalEnabled.collectAsStateWithLifecycle()
     val isGetLocDataEnabled by settingsViewModel.isGetLocDataEnabled.collectAsStateWithLifecycle()
+    val locationSource by settingsViewModel.locationSource.collectAsStateWithLifecycle()
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
@@ -522,7 +525,7 @@ fun SettingsTabContent(
             },
             stringResource(R.string.settings_widget_location_indicator_title),
             stringResource(R.string.settings_widget_location_indicator_desc),
-            isGetLocDataEnabled
+            true
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -579,14 +582,21 @@ fun SettingsTabContent(
             "",
             true
         )
-        SettingSwitch(
-            isGetLocDataEnabled,
-            { enabled ->
-                settingsViewModel.saveGetLocDataSetting(enabled)
-            },
-            stringResource(R.string.settings_get_geo_data_title),
-            "",
-            true
+        val locationSourceOptions = listOf(
+            LocationSourceOption(LocationSource.TBOX, stringResource(R.string.settings_location_source_tbox)),
+            LocationSourceOption(LocationSource.ESP32, stringResource(R.string.settings_location_source_esp32)),
+            LocationSourceOption(LocationSource.ANDROID, stringResource(R.string.settings_location_source_android)),
+        )
+        val selectedLocationSourceOption = locationSourceOptions.firstOrNull { it.source == locationSource }
+            ?: locationSourceOptions.first()
+        SettingDropdownGeneric(
+            selectedLocationSourceOption,
+            { option -> settingsViewModel.saveLocationSourceSetting(option.source) },
+            stringResource(R.string.settings_location_source_title),
+            stringResource(R.string.settings_location_source_desc),
+            true,
+            locationSourceOptions,
+            selectorWidth = 160.dp,
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -688,30 +698,33 @@ fun SettingsTabContent(
                 1,
                 3600
             )
-//            SettingSwitch(
-//                isMockLocationEnabled,
-//                { enabled ->
-//                    onMockLocationSettingChanged(enabled)
-//                },
-//                stringResource(R.string.settings_mock_location_title),
-//                if (canUseMockLocation) {
-//                    stringResource(R.string.settings_mock_location_ready)
-//                } else {
-//                    stringResource(R.string.settings_mock_location_requirements)
-//                },
-//                true
-//            )
-//
-//            if (!canUseMockLocation) {
-//                Text(
-//                    text = stringResource(R.string.settings_mock_location_requirements_link),
-//                    style = MaterialTheme.typography.tboxBody,
-//                    color = MaterialTheme.colorScheme.primary,
-//                    modifier = Modifier
-//                        .clickableWithSound { showLocationRequirementsDialog(context) }
-//                        .padding(top = 4.dp)
-//                )
-//            }
+            val mockEnabledForSource = locationSource != LocationSource.ANDROID
+            SettingSwitch(
+                isMockLocationEnabled && mockEnabledForSource,
+                { enabled ->
+                    if (mockEnabledForSource) {
+                        onMockLocationSettingChanged(enabled)
+                    }
+                },
+                stringResource(R.string.settings_mock_location_title),
+                when {
+                    !mockEnabledForSource -> stringResource(R.string.settings_mock_location_android_disabled)
+                    canUseMockLocation -> stringResource(R.string.settings_mock_location_ready)
+                    else -> stringResource(R.string.settings_mock_location_requirements)
+                },
+                mockEnabledForSource
+            )
+
+            if (mockEnabledForSource && !canUseMockLocation) {
+                Text(
+                    text = stringResource(R.string.settings_mock_location_requirements_link),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clickableWithSound { showLocationRequirementsDialog(context) }
+                        .padding(top = 4.dp)
+                )
+            }
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -1243,13 +1256,20 @@ private fun showOverlayRequirementsDialog(context: Context) {
 fun LocationTabContent(
     viewModel: TboxViewModel,
     onServiceCommand: (String, String, String) -> Unit,
+    settingsViewModel: SettingsViewModel,
 ) {
+    val context = LocalContext.current
     val yesLabel = stringResource(R.string.value_yes)
     val noLabel = stringResource(R.string.value_no)
     val locValues by viewModel.locValues.collectAsStateWithLifecycle()
     val locationUpdateTime by viewModel.locationUpdateTime.collectAsStateWithLifecycle()
     val isLocValuesTrue by viewModel.isLocValuesTrue.collectAsStateWithLifecycle()
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+    val locationSource by settingsViewModel.locationSource.collectAsStateWithLifecycle()
+    val espConnected by EspCompanionRepository.connected.collectAsStateWithLifecycle()
+    val espInfo by EspCompanionRepository.deviceInfo.collectAsStateWithLifecycle()
+    val gpioMask by EspCompanionRepository.gpioMask.collectAsStateWithLifecycle()
+    val relayMask by EspCompanionRepository.relayMask.collectAsStateWithLifecycle()
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -1282,6 +1302,16 @@ fun LocationTabContent(
             .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
+            item {
+                StatusRow(
+                    stringResource(R.string.location_source_label),
+                    when (locationSource) {
+                        LocationSource.TBOX -> stringResource(R.string.settings_location_source_tbox)
+                        LocationSource.ESP32 -> stringResource(R.string.settings_location_source_esp32)
+                        LocationSource.ANDROID -> stringResource(R.string.settings_location_source_android)
+                    },
+                )
+            }
             item { StatusRow(stringResource(R.string.location_last_update), lastRefresh) }
             item { StatusRow(stringResource(R.string.location_last_change), lastUpdate) }
             item { StatusRow(stringResource(R.string.location_fixation), if (locValues.locateStatus) yesLabel else noLabel) }
@@ -1296,6 +1326,90 @@ fun LocationTabContent(
             item { StatusRow(stringResource(R.string.location_magnetic_direction), String.format(Locale.getDefault(), "%.1f", locValues.magneticDirection)) }
             item { StatusRow(stringResource(R.string.location_utc), dateTime) }
             item { StatusRow(stringResource(R.string.location_raw_data), locValues.rawValue) }
+
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.esp_status_title),
+                    style = MaterialTheme.typography.tboxHeadline,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.esp_status_title),
+                    if (espConnected) {
+                        stringResource(R.string.esp_connected)
+                    } else {
+                        stringResource(R.string.esp_disconnected)
+                    },
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.esp_firmware),
+                    espInfo.firmwareVersion.ifBlank { "—" },
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.esp_gpio_inputs),
+                    Integer.toBinaryString(gpioMask).padStart(8, '0'),
+                )
+            }
+            item {
+                StatusRow(
+                    stringResource(R.string.esp_relays),
+                    Integer.toBinaryString(relayMask).padStart(4, '0'),
+                )
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for (ch in 0 until 4) {
+                        val on = (relayMask and (1 shl ch)) != 0
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick {
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_ESP_RELAY_TOGGLE
+                                        putExtra(BackgroundService.EXTRA_ESP_RELAY_CHANNEL, ch)
+                                    }
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.esp_relay_n, ch) + if (on) " ●" else " ○",
+                                style = MaterialTheme.typography.tboxCaption,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
+            }
+            item {
+                Button(
+                    onClick = rememberWrappedOnClick {
+                        context.startService(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = BackgroundService.ACTION_ESP_TRY_CONNECT
+                            }
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                ) {
+                    Text(stringResource(R.string.esp_try_connect), style = MaterialTheme.typography.tboxButton)
+                }
+            }
         }
 
         Row(
@@ -1475,6 +1589,13 @@ fun InfoTabContent(
 
 private data class UpdateChannelDropdownOption(
     val channel: UpdateChannel,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class LocationSourceOption(
+    val source: LocationSource,
     val label: String,
 ) {
     override fun toString(): String = label

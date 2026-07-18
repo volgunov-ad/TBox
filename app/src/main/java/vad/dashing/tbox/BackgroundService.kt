@@ -19,6 +19,9 @@ import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
 import vad.dashing.tbox.location.LocationMockManager
+import vad.dashing.tbox.esp.EspCompanionManager
+import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.LocationSource
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.SharingStarted
@@ -96,6 +99,8 @@ class BackgroundService : Service() {
     private lateinit var getCanFrame: StateFlow<Boolean>
     private lateinit var getCycleSignal: StateFlow<Boolean>
     private lateinit var getLocData: StateFlow<Boolean>
+    private lateinit var locationSource: StateFlow<LocationSource>
+    private var espCompanionManager: EspCompanionManager? = null
     private lateinit var widgetShowIndicator: StateFlow<Boolean>
     private lateinit var widgetShowLocIndicator: StateFlow<Boolean>
     private lateinit var mockLocation: StateFlow<Boolean>
@@ -360,6 +365,11 @@ class BackgroundService : Service() {
             "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
         const val ACTION_MBCAN_COMMAND = "vad.dashing.tbox.ACTION_MBCAN_COMMAND"
         const val ACTION_SET_MBCAN_DIAGNOSTICS = "vad.dashing.tbox.ACTION_SET_MBCAN_DIAGNOSTICS"
+        const val ACTION_ESP_RELAY_SET = "vad.dashing.tbox.ESP_RELAY_SET"
+        const val ACTION_ESP_RELAY_TOGGLE = "vad.dashing.tbox.ESP_RELAY_TOGGLE"
+        const val EXTRA_ESP_RELAY_MASK = "esp_relay_mask"
+        const val EXTRA_ESP_RELAY_CHANNEL = "esp_relay_channel"
+        const val ACTION_ESP_TRY_CONNECT = "vad.dashing.tbox.ESP_TRY_CONNECT"
         const val EXTRA_MBCAN_COMMAND_TYPE = "vad.dashing.tbox.EXTRA_MBCAN_COMMAND_TYPE"
         const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
         const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
@@ -429,6 +439,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, settingsSnap.getCanFrame)
             getCycleSignal = settingsManager.getCycleSignalFlow
                 .stateIn(scope, eager, settingsSnap.getCycleSignal)
+            locationSource = settingsManager.locationSourceFlow
+                .stateIn(scope, warmOnCollect, settingsSnap.locationSource)
             getLocData = settingsManager.getLocDataFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.getLocData)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
@@ -490,6 +502,8 @@ class BackgroundService : Service() {
                 .stateIn(scope, eager, true)
             getCycleSignal = settingsManager.getCycleSignalFlow
                 .stateIn(scope, eager, false)
+            locationSource = settingsManager.locationSourceFlow
+                .stateIn(scope, warmOnCollect, LocationSource.TBOX)
             getLocData = settingsManager.getLocDataFlow
                 .stateIn(scope, warmOnCollect, true)
             widgetShowIndicator = settingsManager.widgetShowIndicatorFlow
@@ -919,6 +933,17 @@ class BackgroundService : Service() {
                     MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
                 }
             }
+            ACTION_ESP_RELAY_SET -> {
+                val mask = intent.getIntExtra(EXTRA_ESP_RELAY_MASK, 0)
+                espCompanionManager?.setRelayMask(mask)
+            }
+            ACTION_ESP_RELAY_TOGGLE -> {
+                val channel = intent.getIntExtra(EXTRA_ESP_RELAY_CHANNEL, -1)
+                if (channel >= 0) {
+                    espCompanionManager?.toggleRelay(channel)
+                }
+            }
+            ACTION_ESP_TRY_CONNECT -> espCompanionManager?.tryReconnect()
         }
     }
 
@@ -933,6 +958,7 @@ class BackgroundService : Service() {
         openMainActivityJob = null
         isRunning = false
         TboxRepository.addLog("INFO", "Service", "Stop service")
+        stopEspCompanion()
         stopNetUpdater()
         stopAPNUpdater()
         stopCheckConnection()
@@ -975,6 +1001,7 @@ class BackgroundService : Service() {
                 connectTboxClient()
                 timingMark("startup_tbox_connected")
                 startSettingsListener()
+                startEspCompanion()
                 yield()
                 startNetUpdater()
                 yield()
@@ -2367,15 +2394,52 @@ class BackgroundService : Service() {
         FuelCalibrationLive.reset()
     }
 
+    private fun startEspCompanion() {
+        if (espCompanionManager != null) return
+        if (!::locationSource.isInitialized) return
+        espCompanionManager = EspCompanionManager(
+            context = this,
+            scope = scope,
+            locationSource = locationSource,
+            mockLocation = mockLocation,
+            locationMockManager = locationMockManager,
+            isLocValuesTrueEvaluator = { loc ->
+                if (!getCanFrame.value) {
+                    loc.locateStatus
+                } else {
+                    val speed = CanDataRepository.carSpeed.value
+                    if (speed == null) {
+                        loc.locateStatus
+                    } else {
+                        loc.speed in (speed - 10f)..(speed + 10f)
+                    }
+                }
+            },
+        ).also { it.start() }
+    }
+
+    private fun stopEspCompanion() {
+        espCompanionManager?.stop()
+        espCompanionManager = null
+    }
+
     private fun startSettingsListener() {
         settingsListenerJob = scope.launch {
             // Запускаем коллектинг в параллельных потоках для независимой работы
             launch {
-                getLocData.collect { isGetLocData ->
-                    if (!isGetLocData) {
-                        TboxRepository.updateLocValues(LocValues())
-                        TboxRepository.updateIsLocValuesTrue(false)
-                        locSubscribe(false)
+                locationSource.collect { source ->
+                    when (source) {
+                        LocationSource.TBOX -> {
+                            if (TboxRepository.tboxConnected.value) {
+                                locSubscribe(true)
+                            }
+                        }
+                        LocationSource.ESP32, LocationSource.ANDROID -> {
+                            locSubscribe(false)
+                            if (source == LocationSource.ANDROID) {
+                                locationMockManager.stopMockLocation()
+                            }
+                        }
                     }
                 }
             }
@@ -2384,7 +2448,7 @@ class BackgroundService : Service() {
                 mockLocation
                     .drop(1) // Пропускаем начальное значение
                     .collect { isMockLocation ->
-                    if (!isMockLocation) {
+                    if (!isMockLocation || locationSource.value == LocationSource.ANDROID) {
                         locationMockManager.stopMockLocation()
                     }
                 }
@@ -3198,7 +3262,7 @@ class BackgroundService : Service() {
             putExtra(EXTRA_APN_STATUS, (TboxRepository.apnStatus.value))
             putExtra(EXTRA_THEME, TboxRepository.currentTheme.value)
             putExtra(EXTRA_WIDGET_SHOW_INDICATOR, widgetShowIndicator.value)
-            putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value && getLocData.value)
+            putExtra(EXTRA_WIDGET_SHOW_LOC_INDICATOR, widgetShowLocIndicator.value)
             putExtra(EXTRA_LOC_SET_POSITION, TboxRepository.locValues.value.locateStatus)
 
             /*val isTruePosition = if (getCanFrame.value) {
@@ -4338,21 +4402,19 @@ class BackgroundService : Service() {
                     updateTime = Date()
                 )
 
-                TboxRepository.updateLocationUpdateTime()
+                if (locationSource.value == LocationSource.TBOX) {
+                    TboxRepository.updateLocationUpdateTime()
 
-                if (rawValue != TboxRepository.locValues.value.rawValue) {
-                    TboxRepository.updateLocValues(
-                        locValues
-                    )
+                    if (rawValue != TboxRepository.locValues.value.rawValue) {
+                        TboxRepository.updateLocValues(locValues)
+                    }
+
+                    if ((longitude == 0.0 && latitude == 0.0 && altitude == 0.0) || !locateStatus) {
+                        TboxRepository.updateIsLocValuesTrue(false)
+                    }
+
+                    espCompanionManager?.onTboxLocValues(locValues)
                 }
-
-                if ((longitude == 0.0 && latitude == 0.0 && altitude == 0.0) || !locateStatus) {
-                    TboxRepository.updateIsLocValuesTrue(false)
-                }
-
-//                if (mockLocation.value) {
-//                    locationMockManager.setMockLocation(locValues)
-//                }
 
                 TboxRepository.addLog(
                     "DEBUG", "LOC response",

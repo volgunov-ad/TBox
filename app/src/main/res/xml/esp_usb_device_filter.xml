@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Espressif Systems -->
+    <usb-device vendor-id="12346" />
+    <!-- CDC data class fallback (class=10) -->
+    <usb-device class="10" />
+</resources>

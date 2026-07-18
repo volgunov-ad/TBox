@@ -271,6 +271,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val locationSource = settingsManager.locationSourceFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), vad.dashing.tbox.esp.LocationSource.TBOX)
+
     val isGetLocDataEnabled = settingsManager.getLocDataFlow
         .stateIn(
             scope = viewModelScope,
@@ -1325,6 +1328,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveGetLocDataSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveGetLocDataSetting(enabled)
+        }
+    }
+
+    fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
+        viewModelScope.launch {
+            settingsManager.saveLocationSourceSetting(source)
         }
     }
 

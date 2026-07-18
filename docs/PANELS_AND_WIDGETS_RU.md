@@ -272,7 +272,12 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 ## См. также
 
+### ESP32 companion (USB)
+
+Плитки `espConnected`, `espGpioMask` / `espGpioIn0…3`, `espRelayMask` / `espRelay0…3` (тап по реле переключает канал). Источник геопозиции (TBox / ESP32 / Android) выбирается в настройках; при ESP32 координаты UM980 питают те же ключи `latitude` / `locWidget` и т.д. Подробнее: [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md).
+
 - [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) — данные TBox для плиток
 - [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md) — mbCAN/VHAL и `useMbCanVhal`
 - [Themes.md](Themes.md) — перенос панелей в `.tboxtheme`
 - [Trips.md](Trips.md) — виджеты поездок
+- [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md) — USB-компаньон ESP32-S3

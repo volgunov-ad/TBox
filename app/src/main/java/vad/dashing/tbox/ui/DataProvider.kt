@@ -253,6 +253,39 @@ class TboxDataProvider(
                 createDateTimeFlow(key, dateTimeFormat)
             }
             "restartTbox" -> restartFlow
+            "espConnected" -> vad.dashing.tbox.esp.EspCompanionRepository.connected.mapState {
+                valueToString(it, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espGpioMask" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
+                Integer.toBinaryString(it).padStart(8, '0')
+            }
+            "espRelayMask" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
+                Integer.toBinaryString(it).padStart(4, '0')
+            }
+            "espGpioIn0" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
+                valueToString((it and 1) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espGpioIn1" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
+                valueToString((it and 2) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espGpioIn2" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
+                valueToString((it and 4) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espGpioIn3" -> vad.dashing.tbox.esp.EspCompanionRepository.gpioMask.mapState {
+                valueToString((it and 8) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espRelay0" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
+                valueToString((it and 1) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espRelay1" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
+                valueToString((it and 2) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espRelay2" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
+                valueToString((it and 4) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
+            "espRelay3" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
+                valueToString((it and 8) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
+            }
             else -> emptyFlow
         }
     }
