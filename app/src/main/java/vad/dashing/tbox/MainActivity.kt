@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
-import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.ui.TboxApp
 import vad.dashing.tbox.ui.disposeAppLauncherPickerIconCache
 import vad.dashing.tbox.update.InstallPermissionHelper
@@ -263,13 +262,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-    }
-
-    override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: android.content.res.Configuration) {
-        super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
-        if (!isInMultiWindowMode) {
-            FreeformCompanionSession.clear()
-        }
     }
 
     override fun onDestroy() {

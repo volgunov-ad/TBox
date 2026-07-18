@@ -15,6 +15,8 @@ object FreeformCompanionSession {
         /** Display size used for freeform launch bounds (activity / virtual display). */
         val activityDisplayWidth: Int,
         val activityDisplayHeight: Int,
+        /** [android.view.Display.getDisplayId] for the app / virtual display. */
+        val activityDisplayId: Int,
     )
 
     private val _state = MutableStateFlow<State?>(null)
@@ -37,6 +39,7 @@ object FreeformCompanionSession {
         percent: Int,
         activityDisplayWidth: Int,
         activityDisplayHeight: Int,
+        activityDisplayId: Int,
     ) {
         val pkg = packageName.trim()
         if (pkg.isEmpty()) {
@@ -49,6 +52,7 @@ object FreeformCompanionSession {
             percent = FreeformLaunchBounds.normalizePercent(percent),
             activityDisplayWidth = activityDisplayWidth.coerceAtLeast(1),
             activityDisplayHeight = activityDisplayHeight.coerceAtLeast(1),
+            activityDisplayId = activityDisplayId,
         )
     }
 

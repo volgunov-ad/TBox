@@ -47,12 +47,12 @@ object FreeformLaunchBounds {
         Rect(0, 0, displayWidth.coerceAtLeast(1), displayHeight.coerceAtLeast(1))
 
     /**
-     * Complementary TBox area beside the freeform companion, expressed in
-     * **overlay / full-screen** coordinates.
+     * Complementary TBox area beside the freeform companion in the **same** coordinate space
+     * as freeform launch bounds (app / virtual display). Prefer attaching the overlay WM to
+     * that display so no physical-panel offset is required.
      *
-     * Freeform launch bounds are computed in the activity (often virtual) display.
-     * Overlays use the real display. Activity display is assumed nested at top-start
-     * `(0, 0)` inside the overlay display (typical HU chrome below / beside the app area).
+     * [activityOriginInOverlayX]/[activityOriginInOverlayY] are used only when the overlay
+     * WM still uses a larger parent space (legacy fallback).
      */
     fun computeComplementOverlayGeometry(
         activityDisplayWidth: Int,
@@ -61,30 +61,37 @@ object FreeformLaunchBounds {
         overlayDisplayHeight: Int,
         side: FreeformLaunchSide,
         percent: Int,
+        activityOriginInOverlayX: Int = 0,
+        activityOriginInOverlayY: Int = 0,
     ): MainScreenWindowModeGeometry {
         val actW = activityDisplayWidth.coerceAtLeast(1)
         val actH = activityDisplayHeight.coerceAtLeast(1)
-        val ovW = overlayDisplayWidth.coerceAtLeast(1)
-        val ovH = overlayDisplayHeight.coerceAtLeast(1)
         val (_, tbox) = computeAppAndTboxBounds(actW, actH, side, percent)
-        return mapActivityRectToOverlay(tbox, ovW, ovH)
+        return mapActivityRectToOverlay(
+            activityRect = tbox,
+            overlayDisplayWidth = overlayDisplayWidth,
+            overlayDisplayHeight = overlayDisplayHeight,
+            activityOriginX = activityOriginInOverlayX,
+            activityOriginY = activityOriginInOverlayY,
+        )
     }
 
     /**
-     * Maps a rect in activity/virtual-display coordinates into overlay/full-screen space
-     * (activity display nested at top-start of the overlay display).
+     * Maps a rect in activity/virtual-display coordinates into overlay WM space.
      */
     fun mapActivityRectToOverlay(
         activityRect: Rect,
         overlayDisplayWidth: Int,
         overlayDisplayHeight: Int,
+        activityOriginX: Int = 0,
+        activityOriginY: Int = 0,
     ): MainScreenWindowModeGeometry {
         val ovW = overlayDisplayWidth.coerceAtLeast(1)
         val ovH = overlayDisplayHeight.coerceAtLeast(1)
-        val left = activityRect.left.coerceIn(0, ovW)
-        val top = activityRect.top.coerceIn(0, ovH)
-        val right = activityRect.right.coerceIn(left, ovW)
-        val bottom = activityRect.bottom.coerceIn(top, ovH)
+        val left = (activityOriginX + activityRect.left).coerceIn(0, ovW)
+        val top = (activityOriginY + activityRect.top).coerceIn(0, ovH)
+        val right = (activityOriginX + activityRect.right).coerceIn(left, ovW)
+        val bottom = (activityOriginY + activityRect.bottom).coerceIn(top, ovH)
         return MainScreenWindowModeGeometry(
             startX = left,
             startY = top,

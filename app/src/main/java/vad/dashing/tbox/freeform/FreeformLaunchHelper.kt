@@ -10,9 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.util.DisplayMetrics
 import android.util.Log
-import android.view.WindowManager
 import android.widget.Toast
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.MainActivityIntentHelper
@@ -30,8 +28,6 @@ object FreeformLaunchHelper {
 
     private const val FREEFORM_STACK_ID = 2
     private const val WINDOWING_MODE_FREEFORM = 5
-    private const val FULLSCREEN_STACK_ID = 1
-    private const val WINDOWING_MODE_FULLSCREEN = 1
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -84,7 +80,9 @@ object FreeformLaunchHelper {
             return false
         }
 
-        val (displayW, displayH) = displaySizePx(context)
+        val activityDisplay = FreeformDisplaySpaces.resolveActivityDisplay(context)
+        val displayW = activityDisplay.widthPx
+        val displayH = activityDisplay.heightPx
         val (appBounds, _) = FreeformLaunchBounds.computeAppAndTboxBounds(
             displayW,
             displayH,
@@ -118,7 +116,14 @@ object FreeformLaunchHelper {
             mainHandler.postDelayed({
                 try {
                     appContext.startActivity(launchIntent, appBundle)
-                    FreeformCompanionSession.set(pkg, side, percent, displayW, displayH)
+                    FreeformCompanionSession.set(
+                        packageName = pkg,
+                        side = side,
+                        percent = percent,
+                        activityDisplayWidth = displayW,
+                        activityDisplayHeight = displayH,
+                        activityDisplayId = activityDisplay.displayId,
+                    )
                     requestShowMainScreenWindow(appContext)
                     MainActivityIntentHelper.requestFinishForWindowMode(appContext)
                 } catch (e: Exception) {
@@ -158,27 +163,18 @@ object FreeformLaunchHelper {
     fun exitWindowMode(context: Context) {
         mainHandler.removeCallbacksAndMessages(null)
         val appContext = context.applicationContext
+        // Clear session first so usage-stats dismiss / multiwindow callbacks cannot race.
+        FreeformCompanionSession.clear()
         requestHideMainScreenWindow(appContext)
         finishFreeformAnchor(appContext)
-        FreeformCompanionSession.clear()
-        // Let the overlay detach before starting MainActivity (avoids dual MainScreen / token races).
+        // Plain startActivity — do not pass freeform/fullscreen ActivityOptions; on multi-display
+        // HUs those options are a common crash source when restoring MainActivity.
         mainHandler.postDelayed({
-            val (displayW, displayH) = displaySizePx(appContext)
-            val full = FreeformLaunchBounds.fullscreenBounds(displayW, displayH)
-            val bundle = activityOptionsBundle(fullscreenWindowingModeId(), full)
             val intent = MainActivityIntentHelper.createBringToFrontIntent(appContext)
             try {
-                if (bundle != null) {
-                    appContext.startActivity(intent, bundle)
-                } else {
-                    appContext.startActivity(intent)
-                }
+                appContext.startActivity(intent)
             } catch (e: Exception) {
                 Log.w(TAG, "Fullscreen restore failed", e)
-                try {
-                    appContext.startActivity(intent)
-                } catch (_: Exception) {
-                }
             }
         }, ANCHOR_DELAY_MS)
     }
@@ -237,9 +233,6 @@ object FreeformLaunchHelper {
     private fun freeformWindowingModeId(): Int =
         if (Build.VERSION.SDK_INT >= 28) WINDOWING_MODE_FREEFORM else FREEFORM_STACK_ID
 
-    private fun fullscreenWindowingModeId(): Int =
-        if (Build.VERSION.SDK_INT >= 28) WINDOWING_MODE_FULLSCREEN else FULLSCREEN_STACK_ID
-
     private fun windowingModeMethodName(): String =
         if (Build.VERSION.SDK_INT >= 28) "setLaunchWindowingMode" else "setLaunchStackId"
 
@@ -263,21 +256,6 @@ object FreeformLaunchHelper {
         } catch (e: Exception) {
             Log.w(TAG, "Hidden ActivityOptions windowing API unavailable", e)
             null
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun displaySizePx(context: Context): Pair<Int, Int> {
-        val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        // Freeform bounds are in the activity / virtual-display coordinate space (HU apps),
-        // not the full physical panel used by TYPE_APPLICATION_OVERLAY.
-        return if (Build.VERSION.SDK_INT >= 30) {
-            val bounds = wm.currentWindowMetrics.bounds
-            bounds.width() to bounds.height()
-        } else {
-            val metrics = DisplayMetrics()
-            wm.defaultDisplay.getMetrics(metrics)
-            metrics.widthPixels to metrics.heightPixels
         }
     }
 }

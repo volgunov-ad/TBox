@@ -20,6 +20,7 @@ import vad.dashing.tbox.ui.FloatingDashboardUI
 import vad.dashing.tbox.ui.MainScreenWindowOverlayUI
 import vad.dashing.tbox.ui.MyLifecycleOwner
 import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformDisplaySpaces
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 
 /**
@@ -100,6 +101,11 @@ internal class FloatingOverlayController(
     /** Dedicated MainScreen window-mode overlay (not a floating panel id). */
     private var mainScreenWindowView: ComposeView? = null
     private var mainScreenWindowParams: WindowManager.LayoutParams? = null
+    /**
+     * WM for the MainScreen overlay — preferably the HU app/virtual display context
+     * so x/y match freeform companion bounds (not the full physical panel).
+     */
+    private var mainScreenWindowManager: WindowManager? = null
 
     companion object {
         private const val TAG = "Floating Dashboard"
@@ -155,15 +161,24 @@ internal class FloatingOverlayController(
     suspend fun showMainScreenWindow() {
         withContext(Dispatchers.Main) {
             if (overlaysSuspended) return@withContext
-            ensureWindowManager()
-            if (windowManager == null) return@withContext
             if (!Settings.canDrawOverlays(service)) {
                 TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Cannot draw overlay")
                 return@withContext
             }
-            val (displayW, displayH) = displaySizePx()
-            val autoGeometry = settingsManager.mainScreenWindowModeAutoGeometryFlow.first()
             val session = FreeformCompanionSession.state.value
+            val activityDisplay = if (session != null) {
+                FreeformDisplaySpaces.ActivityDisplay(
+                    displayId = session.activityDisplayId,
+                    widthPx = session.activityDisplayWidth,
+                    heightPx = session.activityDisplayHeight,
+                )
+            } else {
+                FreeformDisplaySpaces.resolveActivityDisplay(service)
+            }
+            val msWm = FreeformDisplaySpaces.windowManagerForDisplay(service, activityDisplay.displayId)
+            val (displayW, displayH) = FreeformDisplaySpaces.sizePxForWindowManager(msWm)
+            val autoGeometry = settingsManager.mainScreenWindowModeAutoGeometryFlow.first()
+            // Same coordinate space as freeform (app VD): origin (0,0) on that display.
             val geometry = when {
                 autoGeometry && session != null -> {
                     FreeformLaunchBounds.computeComplementOverlayGeometry(
@@ -185,19 +200,23 @@ internal class FloatingOverlayController(
 
             val existing = mainScreenWindowView
             val existingParams = mainScreenWindowParams
-            if (existing != null && existingParams != null) {
+            if (existing != null && existingParams != null && mainScreenWindowManager === msWm) {
                 existingParams.width = geometry.width.coerceAtLeast(MIN_OVERLAY_SIZE)
                 existingParams.height = geometry.height.coerceAtLeast(MIN_OVERLAY_SIZE)
                 existingParams.x = geometry.startX.coerceAtLeast(0)
                 existingParams.y = geometry.startY.coerceAtLeast(0)
                 try {
                     if (existing.isAttachedToWindow) {
-                        windowManager?.updateViewLayout(existing, existingParams)
+                        msWm.updateViewLayout(existing, existingParams)
                     }
                 } catch (e: Exception) {
                     Log.e(MAIN_SCREEN_WINDOW_TAG, "Failed to update layout", e)
                 }
                 return@withContext
+            }
+            if (existing != null) {
+                // Re-bind to a different display WM — remove immediately (no fade race).
+                removeMainScreenWindowImmediate()
             }
 
             val layoutParams = WindowManager.LayoutParams(
@@ -238,7 +257,8 @@ internal class FloatingOverlayController(
 
             try {
                 composeView.alpha = 0f
-                windowManager?.addView(composeView, layoutParams)
+                msWm.addView(composeView, layoutParams)
+                mainScreenWindowManager = msWm
                 mainScreenWindowView = composeView
                 mainScreenWindowParams = layoutParams
                 composeView.animate()
@@ -250,7 +270,11 @@ internal class FloatingOverlayController(
                 ) {
                     lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
                 }
-                TboxRepository.addLog("DEBUG", MAIN_SCREEN_WINDOW_TAG, "Shown")
+                TboxRepository.addLog(
+                    "DEBUG",
+                    MAIN_SCREEN_WINDOW_TAG,
+                    "Shown displayId=${activityDisplay.displayId} ${displayW}x${displayH}",
+                )
             } catch (e: Exception) {
                 Log.e(MAIN_SCREEN_WINDOW_TAG, "Error adding view", e)
                 TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Failed to show: ${e.message}")
@@ -266,18 +290,13 @@ internal class FloatingOverlayController(
 
     private fun hideMainScreenWindowInternal() {
         val view = mainScreenWindowView ?: return
+        val wm = mainScreenWindowManager ?: windowManager
         mainScreenWindowView = null
         mainScreenWindowParams = null
+        mainScreenWindowManager = null
 
         fun finishClose() {
-            try {
-                if (view.isAttachedToWindow) {
-                    windowManager?.removeView(view)
-                }
-            } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Error removing view")
-                Log.e(MAIN_SCREEN_WINDOW_TAG, "Error removing view", e)
-            }
+            removeAttachedView(wm, view)
             TboxRepository.addLog("DEBUG", MAIN_SCREEN_WINDOW_TAG, "Closed")
         }
 
@@ -289,6 +308,30 @@ internal class FloatingOverlayController(
                 .start()
         } else {
             finishClose()
+        }
+    }
+
+    private fun removeMainScreenWindowImmediate() {
+        val view = mainScreenWindowView ?: return
+        val wm = mainScreenWindowManager ?: windowManager
+        mainScreenWindowView = null
+        mainScreenWindowParams = null
+        mainScreenWindowManager = null
+        try {
+            view.animate().cancel()
+        } catch (_: Exception) {
+        }
+        removeAttachedView(wm, view)
+    }
+
+    private fun removeAttachedView(wm: WindowManager?, view: ComposeView) {
+        try {
+            if (view.isAttachedToWindow) {
+                wm?.removeView(view)
+            }
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Error removing view")
+            Log.e(MAIN_SCREEN_WINDOW_TAG, "Error removing view", e)
         }
     }
 
@@ -306,7 +349,8 @@ internal class FloatingOverlayController(
     private fun displaySizePx(): Pair<Int, Int> {
         val wm = windowManager ?: service.getSystemService(WindowManager::class.java)
             ?: return 1280 to 720
-        // Overlays use the full physical display, not the HU virtual/app display.
+        // Floating panels: full physical metrics (unchanged). MainScreen window uses
+        // FreeformDisplaySpaces / mainScreenWindowManager instead.
         return if (Build.VERSION.SDK_INT >= 30) {
             val bounds = wm.maximumWindowMetrics.bounds
             bounds.width() to bounds.height()

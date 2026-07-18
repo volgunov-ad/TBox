@@ -74,6 +74,26 @@ class MainScreenWindowModeGeometryTest {
     }
 
     @Test
+    fun computeComplementOverlay_withActivityOriginOffset() {
+        // App VD inset: origin (200, 80) on a larger overlay parent space.
+        val g = FreeformLaunchBounds.computeComplementOverlayGeometry(
+            activityDisplayWidth = 1600,
+            activityDisplayHeight = 720,
+            overlayDisplayWidth = 1920,
+            overlayDisplayHeight = 1080,
+            side = FreeformLaunchSide.RIGHT,
+            percent = 50,
+            activityOriginInOverlayX = 200,
+            activityOriginInOverlayY = 80,
+        )
+        // Companion right half of 1600 → TBox left [0,800) → overlay x=200
+        assertEquals(200, g.startX)
+        assertEquals(80, g.startY)
+        assertEquals(800, g.width)
+        assertEquals(720, g.height)
+    }
+
+    @Test
     fun mapActivityRectToOverlay_clampsToOverlay() {
         val g = FreeformLaunchBounds.mapActivityRectToOverlay(
             activityRect = Rect(100, 50, 500, 400),
