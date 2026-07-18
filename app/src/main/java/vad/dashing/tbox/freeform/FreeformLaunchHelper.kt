@@ -159,7 +159,7 @@ object FreeformLaunchHelper {
         return try {
             if (replacingExisting) {
                 // Tear down previous freeform slot + overlay geometry, then relaunch.
-                requestHideMainScreenWindow(appContext)
+                requestHideMainScreenWindow(appContext, immediate = true)
                 finishFreeformAnchor(appContext)
                 FreeformCompanionSession.clear()
                 mainHandler.postDelayed({ startCompanionAfterAnchor() }, REPLACE_COMPANION_DELAY_MS)
@@ -182,27 +182,21 @@ object FreeformLaunchHelper {
     fun exitWindowMode(context: Context) {
         mainHandler.removeCallbacksAndMessages(null)
         val appContext = context.applicationContext
-        val prev = FreeformCompanionSession.state.value
-        // Clear session first so usage-stats dismiss / multiwindow callbacks cannot race.
-        FreeformCompanionSession.clear()
-        requestHideMainScreenWindow(appContext)
-        finishFreeformAnchor(appContext)
-        dbg(
-            "exit start prevPkg=${prev?.packageName} side=${prev?.side?.storageKey} " +
-                "displayId=${prev?.activityDisplayId}",
-        )
-        // Plain startActivity — do not pass freeform/fullscreen ActivityOptions; on multi-display
-        // HUs those options are a common crash source when restoring MainActivity.
-        mainHandler.postDelayed({
-            val intent = MainActivityIntentHelper.createBringToFrontIntent(appContext)
+        // Defer off the overlay Compose click so we do not tear down the tree mid-gesture.
+        mainHandler.post {
+            FreeformCompanionSession.clear()
+            dbg("exit request → service")
             try {
-                appContext.startActivity(intent)
-                dbg("exit MainActivity restored")
+                appContext.startService(
+                    Intent(appContext, BackgroundService::class.java).apply {
+                        action = BackgroundService.ACTION_EXIT_WINDOW_MODE
+                    },
+                )
             } catch (e: Exception) {
-                Log.w(TAG, "Fullscreen restore failed", e)
-                dbg("exit MainActivity restore fail err=${e.message}")
+                Log.w(TAG, "Failed to request window-mode exit", e)
+                dbg("exit request fail err=${e.message}")
             }
-        }, ANCHOR_DELAY_MS)
+        }
     }
 
     /** Alias used by UI that previously called [exitToFullscreen]. */
@@ -220,11 +214,12 @@ object FreeformLaunchHelper {
         }
     }
 
-    fun requestHideMainScreenWindow(context: Context) {
+    fun requestHideMainScreenWindow(context: Context, immediate: Boolean = false) {
         try {
             context.startService(
                 Intent(context, BackgroundService::class.java).apply {
                     action = BackgroundService.ACTION_HIDE_MAIN_SCREEN_WINDOW
+                    putExtra(BackgroundService.EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE, immediate)
                 },
             )
         } catch (e: Exception) {

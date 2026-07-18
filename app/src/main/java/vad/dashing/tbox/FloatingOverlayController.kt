@@ -296,9 +296,13 @@ internal class FloatingOverlayController(
         }
     }
 
-    suspend fun hideMainScreenWindow() {
+    suspend fun hideMainScreenWindow(immediate: Boolean = false) {
         withContext(Dispatchers.Main) {
-            hideMainScreenWindowInternal()
+            if (immediate) {
+                removeMainScreenWindowImmediate()
+            } else {
+                hideMainScreenWindowInternal()
+            }
         }
     }
 
@@ -336,9 +340,14 @@ internal class FloatingOverlayController(
         } catch (_: Exception) {
         }
         removeAttachedView(wm, view)
+        TboxRepository.addLog("DEBUG", "WindowMode", "overlay closed immediate")
     }
 
     private fun removeAttachedView(wm: WindowManager?, view: ComposeView) {
+        try {
+            view.disposeComposition()
+        } catch (_: Exception) {
+        }
         try {
             if (view.isAttachedToWindow) {
                 wm?.removeView(view)

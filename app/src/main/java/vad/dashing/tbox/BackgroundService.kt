@@ -376,6 +376,15 @@ class BackgroundService : Service() {
         const val ACTION_SHOW_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.SHOW_MAIN_SCREEN_WINDOW"
         /** Hide the MainScreen window-mode overlay. */
         const val ACTION_HIDE_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.HIDE_MAIN_SCREEN_WINDOW"
+        /**
+         * Exit window mode on the service main thread: immediate overlay teardown, finish freeform
+         * anchor, then restore [MainActivity] after a short settle (avoids dual-MainScreen races).
+         */
+        const val ACTION_EXIT_WINDOW_MODE = "vad.dashing.tbox.EXIT_WINDOW_MODE"
+        const val EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE = "vad.dashing.tbox.EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE"
+
+        /** Settle after tearing down freeform overlay/anchor before starting MainActivity. */
+        private const val WINDOW_MODE_EXIT_RESTORE_DELAY_MS = 400L
 
         /** First and subsequent intervals for [mbCanDebugProbeJob] (vehicle + audio param batch log). */
         private const val MBCAN_DEBUG_PROBE_INTERVAL_MS = 15_000L
@@ -949,13 +958,53 @@ class BackgroundService : Service() {
             }
             ACTION_HIDE_MAIN_SCREEN_WINDOW -> {
                 windowModeCompanionLostSinceElapsedMs = 0L
+                val immediate = intent.getBooleanExtra(EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE, false)
                 scope.launch {
-                    overlayController.hideMainScreenWindow()
+                    overlayController.hideMainScreenWindow(immediate = immediate)
+                }
+            }
+            ACTION_EXIT_WINDOW_MODE -> {
+                windowModeCompanionLostSinceElapsedMs = 0L
+                // Do not gate on isRunning — overlay may still be up during stop races.
+                scope.launch {
+                    exitWindowModeFromService()
                 }
             }
         }
     }
 
+    /**
+     * Ordered exit: clear session → remove overlay immediately → finish freeform anchor →
+     * settle → start [MainActivity]. Must run on the service coroutine (not from overlay click).
+     */
+    private suspend fun exitWindowModeFromService() {
+        val prev = FreeformCompanionSession.state.value
+        FreeformCompanionSession.clear()
+        TboxRepository.addLog(
+            "DEBUG",
+            "WindowMode",
+            "exit svc start prevPkg=${prev?.packageName} side=${prev?.side?.storageKey} " +
+                "displayId=${prev?.activityDisplayId}",
+        )
+        overlayController.hideMainScreenWindow(immediate = true)
+        try {
+            sendBroadcast(
+                Intent(FreeformInvisibleAnchorActivity.ACTION_FINISH).setPackage(packageName),
+            )
+        } catch (_: Exception) {
+        }
+        delay(WINDOW_MODE_EXIT_RESTORE_DELAY_MS)
+        try {
+            startActivity(MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService))
+            TboxRepository.addLog("DEBUG", "WindowMode", "exit svc MainActivity restored")
+        } catch (e: Exception) {
+            TboxRepository.addLog(
+                "DEBUG",
+                "WindowMode",
+                "exit svc MainActivity restore fail err=${e.message}",
+            )
+        }
+    }
     private suspend fun performServiceStopIfRunning() {
         if (!isRunning) return
         servicePhase = ServiceLifecyclePhase.Stopping
@@ -2685,7 +2734,7 @@ class BackgroundService : Service() {
             )
         } catch (_: Exception) {
         }
-        overlayController.hideMainScreenWindow()
+        overlayController.hideMainScreenWindow(immediate = true)
         TboxRepository.addLog(
             "INFO",
             "WindowMode",
