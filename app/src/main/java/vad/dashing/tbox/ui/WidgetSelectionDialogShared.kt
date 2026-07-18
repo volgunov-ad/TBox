@@ -60,6 +60,9 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.isValidDateTimeWidgetFormat
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.isActiveTripWidgetDataKey
+import vad.dashing.tbox.normalizeTripWidgetSource
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.normalizeDateTimeWidgetFormat
 import vad.dashing.tbox.previewDateTimeWidgetFormat
@@ -142,6 +145,13 @@ internal data class WidgetTitlePositionDropdownEntry(
 internal data class StepperAdjustIconStyleDropdownEntry(
     private val display: String,
     val stored: Int,
+) {
+    override fun toString(): String = display
+}
+
+internal data class TripWidgetSourceDropdownEntry(
+    val source: Int,
+    val display: String,
 ) {
     override fun toString(): String = display
 }
@@ -306,6 +316,9 @@ internal class WidgetSelectionDialogState(
         TripWidgetTileDisplay.normalizeLabelColumnWidthPercent(
             initialConfig.tripWidgetLabelColumnWidthPercent,
         ),
+    )
+    var tripWidgetSource by mutableIntStateOf(
+        normalizeTripWidgetSource(initialConfig.tripWidgetSource),
     )
 
     /** 0 = inactive control colors, 1 = active (paired with [advancedColorThemeSegment]). */
@@ -1105,6 +1118,28 @@ internal fun WidgetSelectionDialogForm(
                         )
                     }
                     if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                        val sourceOptions = listOf(
+                            TripWidgetSourceDropdownEntry(
+                                TRIP_WIDGET_SOURCE_CURRENT,
+                                stringResource(R.string.trips_widget_source_current),
+                            ),
+                            TripWidgetSourceDropdownEntry(
+                                TRIP_WIDGET_SOURCE_PERSISTENT,
+                                stringResource(R.string.trips_widget_source_persistent),
+                            ),
+                        )
+                        val selectedSource = sourceOptions.firstOrNull {
+                            it.source == normalizeTripWidgetSource(state.tripWidgetSource)
+                        } ?: sourceOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedSource,
+                            onValueChange = { state.tripWidgetSource = it.source },
+                            text = stringResource(R.string.trips_widget_source_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = sourceOptions,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
                         SettingSwitch(
                             state.tripWidgetShowRowDividers,
                             { state.tripWidgetShowRowDividers = it },
@@ -1846,6 +1881,11 @@ internal fun applyWidgetSelectionChanges(
                 )
             } else {
                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
+            },
+            tripWidgetSource = if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                normalizeTripWidgetSource(state.tripWidgetSource)
+            } else {
+                TRIP_WIDGET_SOURCE_CURRENT
             },
             textAlign = normalizeWidgetTextAlign(state.textAlign),
             fontWeight = normalizeWidgetFontWeight(state.fontWeight),

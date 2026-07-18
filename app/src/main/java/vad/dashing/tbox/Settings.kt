@@ -112,6 +112,11 @@ data class FloatingDashboardWidgetConfig(
     val tripWidgetShowRowDividers: Boolean = TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
     /** First column width (percent) for trip widget row layout. */
     val tripWidgetLabelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
+    /**
+     * Trip tile data source: [TRIP_WIDGET_SOURCE_CURRENT] (default) or [TRIP_WIDGET_SOURCE_PERSISTENT].
+     * Only used when [isActiveTripWidgetDataKey] is true.
+     */
+    val tripWidgetSource: Int = TRIP_WIDGET_SOURCE_CURRENT,
     /** Horizontal text alignment: [WIDGET_TEXT_ALIGN_CENTER], [WIDGET_TEXT_ALIGN_START], [WIDGET_TEXT_ALIGN_END]. */
     val textAlign: Int = DEFAULT_WIDGET_TEXT_ALIGN,
     /** Font weight: [WIDGET_FONT_WEIGHT_NORMAL], [WIDGET_FONT_WEIGHT_MEDIUM], [WIDGET_FONT_WEIGHT_SEMI_BOLD]. */

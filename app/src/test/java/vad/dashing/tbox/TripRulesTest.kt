@@ -86,4 +86,57 @@ class TripRulesTest {
             TripRules.findResumeCandidate(listOf(ended), nowMs = end - 1, splitWindowMs = splitMs)
         )
     }
+
+    @Test
+    fun findResumeCandidate_endedBeyondSplit_returnsNull() {
+        val end = 1_000_000L
+        val ended = TripRecord(id = "e", startTimeEpochMs = 0L, endTimeEpochMs = end)
+        assertEquals(
+            null,
+            TripRules.findResumeCandidate(
+                listOf(ended),
+                nowMs = end + splitMs + 1,
+                splitWindowMs = splitMs,
+            )
+        )
+    }
+
+    @Test
+    fun findResumeCandidate_prefersEndedInWindowOverOlderBeyondWindow() {
+        val endIn = 1_000_000L
+        val endOut = endIn - splitMs - 60_000L
+        val inWindow = TripRecord(id = "in", startTimeEpochMs = 10L, endTimeEpochMs = endIn)
+        val outWindow = TripRecord(id = "out", startTimeEpochMs = 1L, endTimeEpochMs = endOut)
+        val now = endIn + 30_000L
+        val picked = TripRules.findResumeCandidate(
+            listOf(outWindow, inWindow),
+            nowMs = now,
+            splitWindowMs = splitMs,
+        )
+        assertEquals("in", picked?.id)
+    }
+
+    @Test
+    fun findResumeCandidate_ignoresOriginPersistentArchiveInSplitWindow() {
+        val end = 1_000_000L
+        val archive = TripRecord(
+            id = "arch",
+            startTimeEpochMs = 0L,
+            endTimeEpochMs = end,
+            originPersistent = true,
+        )
+        val normal = TripRecord(
+            id = "n",
+            startTimeEpochMs = 1L,
+            endTimeEpochMs = end - 10_000L,
+        )
+        val now = end + 30_000L
+        val picked = TripRules.findResumeCandidate(
+            listOf(archive, normal),
+            nowMs = now,
+            splitWindowMs = splitMs,
+        )
+        assertEquals("n", picked?.id)
+        assertFalse(TripRules.shouldResumeLastTripOnColdStart(archive, now, splitMs))
+    }
 }

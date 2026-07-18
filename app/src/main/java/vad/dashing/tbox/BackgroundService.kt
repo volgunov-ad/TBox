@@ -259,6 +259,7 @@ class BackgroundService : Service() {
     private var tripLastFuelLitersCalibrated: Float? = null
     private var tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
     private var tripLastPersistedSnapshot: TripRecord? = null
+    private var tripLastPersistedPersistentSnapshot: TripRecord? = null
     /** First periodic sample after service start or reload: special-case resume vs new trip without double-counting. */
     private var tripFirstSampleAfterSessionStart = true
     private var isLastSMS: Boolean = false
@@ -1563,6 +1564,11 @@ class BackgroundService : Service() {
         var refueledLiters = 0f
         var percentBefore: Float? = pctNow
         val trackRefuels = trackRefuelsSetting.value
+        var mirroredConsumedDelta = 0f
+        var mirroredRefuelCountDelta = 0
+        var mirroredRefueledLitersDelta = 0f
+        var mirroredBaselinePercent: Float? = null
+        var mirroredBaselineLiters: Float? = null
         TripRepository.updateActiveTrip { cur ->
             val beforePct = tripLastFuelPercent
             if (beforePct != null) {
@@ -1582,14 +1588,34 @@ class BackgroundService : Service() {
                 refuelTripId = cur.id
                 refueledLiters = step.refueledLitersThisStep
             }
+            mirroredConsumedDelta = step.consumedLiters - cur.fuelConsumedLiters
+            mirroredRefuelCountDelta = if (trackRefuels && step.refuelDetected) 1 else 0
+            mirroredRefueledLitersDelta = if (trackRefuels) step.refueledLitersThisStep else 0f
+            mirroredBaselinePercent = step.baselinePercent
+            mirroredBaselineLiters = step.baselineCalibratedLiters
             cur.copy(
                 fuelConsumedLiters = step.consumedLiters,
-                refuelCount = cur.refuelCount + if (trackRefuels && step.refuelDetected) 1 else 0,
-                fuelRefueledLiters = cur.fuelRefueledLiters +
-                    if (trackRefuels) step.refueledLitersThisStep else 0f,
+                refuelCount = cur.refuelCount + mirroredRefuelCountDelta,
+                fuelRefueledLiters = cur.fuelRefueledLiters + mirroredRefueledLitersDelta,
                 fuelBaselinePercent = step.baselinePercent,
                 fuelBaselineLiters = step.baselineCalibratedLiters,
             )
+        }
+        // Mirror fuel counters into daily; RefuelRepository rows stay tied to current trip id only.
+        if (mirroredConsumedDelta != 0f ||
+            mirroredRefuelCountDelta != 0 ||
+            mirroredRefueledLitersDelta != 0f ||
+            mirroredBaselinePercent != null
+        ) {
+            TripRepository.updatePersistentTrip { cur ->
+                cur.copy(
+                    fuelConsumedLiters = (cur.fuelConsumedLiters + mirroredConsumedDelta).coerceAtLeast(0f),
+                    refuelCount = cur.refuelCount + mirroredRefuelCountDelta,
+                    fuelRefueledLiters = cur.fuelRefueledLiters + mirroredRefueledLitersDelta,
+                    fuelBaselinePercent = mirroredBaselinePercent ?: cur.fuelBaselinePercent,
+                    fuelBaselineLiters = mirroredBaselineLiters ?: cur.fuelBaselineLiters,
+                )
+            }
         }
         val tripId = refuelTripId ?: return
         val fuelType = FuelTypes.optionFor(fuelPriceFuelIdSetting.value)
@@ -1716,6 +1742,10 @@ class BackgroundService : Service() {
                 tripPendingSplitTripId = null
                 return false
             }
+        if (TripRules.isExcludedFromCurrentTripResume(trip)) {
+            tripPendingSplitTripId = null
+            return false
+        }
         val endedAt = trip.endTimeEpochMs
             ?: run {
                 tripPendingSplitTripId = null
@@ -1727,6 +1757,7 @@ class BackgroundService : Service() {
             return false
         }
         TripRepository.replaceTrip(trip.copy(endTimeEpochMs = null))
+        // Parking for current only; daily already accumulated parking per-tick while rpm==0.
         TripRepository.updateActiveTrip { cur ->
             cur.copy(parkingTimeMs = cur.parkingTimeMs + pauseMs)
         }
@@ -1790,6 +1821,12 @@ class BackgroundService : Service() {
                     } else {
                         TripRepository.updateActiveTrip { cur ->
                             cur.copy(engineStartCount = cur.engineStartCount + 1)
+                        }
+                        TripRepository.updatePersistentTrip { cur ->
+                            cur.copy(
+                                engineStartCount = cur.engineStartCount + 1,
+                                lastSampleWallMs = wallNow,
+                            )
                         }
                     }
                     return@synchronized
@@ -1864,29 +1901,24 @@ class BackgroundService : Service() {
                 val out = CanDataRepository.outsideTemperature.value
                 val odo = CanDataRepository.odometer.value
                 val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
+                var distanceDelta = 0f
+                val lastOBefore = tripLastOdometer
+                if (odo != null && lastOBefore != null && odo >= lastOBefore) {
+                    distanceDelta = (odo - lastOBefore).toFloat()
+                }
+                tripLastOdometer = odo ?: tripLastOdometer
+                val movingDelta = if (speed > 0f) dt else 0L
+                val idleDelta = if (speed > 0f) 0L else dt
                 TripRepository.updateActiveTrip { cur ->
-                    var d = cur.distanceKm
-                    val lastO = tripLastOdometer
-                    if (odo != null && lastO != null && odo >= lastO) {
-                        d += (odo - lastO).toFloat()
-                    }
-                    tripLastOdometer = odo ?: tripLastOdometer
-                    var mov = cur.movingTimeMs
-                    var idl = cur.idleTimeMs
-                    if (speed > 0f) {
-                        mov += dt
-                    } else {
-                        idl += dt
-                    }
                     val outside = TripRepository.mergeOutsideTemp(
                         cur.minOutsideTemp,
                         cur.maxOutsideTemp,
                         out
                     )
                     cur.copy(
-                        distanceKm = d,
-                        movingTimeMs = mov,
-                        idleTimeMs = idl,
+                        distanceKm = cur.distanceKm + distanceDelta,
+                        movingTimeMs = cur.movingTimeMs + movingDelta,
+                        idleTimeMs = cur.idleTimeMs + idleDelta,
                         maxSpeed = max(cur.maxSpeed, speed),
                         maxEngineTemp = TripRepository.updateMaxEngineTemp(cur.maxEngineTemp, eng),
                         maxGearboxOilTemp = TripRepository.updateMaxGearboxTemp(cur.maxGearboxOilTemp, gb),
@@ -1895,7 +1927,71 @@ class BackgroundService : Service() {
                         engineStartCount = cur.engineStartCount + addEngineStart,
                     )
                 }
+                // Mirror drive metrics into live daily (parking is per-tick when rpm==0, not here).
+                TripRepository.updatePersistentTrip { cur ->
+                    val outside = TripRepository.mergeOutsideTemp(
+                        cur.minOutsideTemp,
+                        cur.maxOutsideTemp,
+                        out
+                    )
+                    cur.copy(
+                        distanceKm = cur.distanceKm + distanceDelta,
+                        movingTimeMs = cur.movingTimeMs + movingDelta,
+                        idleTimeMs = cur.idleTimeMs + idleDelta,
+                        maxSpeed = max(cur.maxSpeed, speed),
+                        maxEngineTemp = TripRepository.updateMaxEngineTemp(cur.maxEngineTemp, eng),
+                        maxGearboxOilTemp = TripRepository.updateMaxGearboxTemp(cur.maxGearboxOilTemp, gb),
+                        minOutsideTemp = outside.first,
+                        maxOutsideTemp = outside.second,
+                        engineStartCount = cur.engineStartCount + addEngineStart,
+                        lastSampleWallMs = wallNow,
+                    )
+                }
                 applyActiveTripFuelStep(tankL)
+            } else if (rpm > 0f && TripRepository.persistentTrip() != null) {
+                // Engine on but no current trip yet: still accumulate on daily this tick.
+                val dt = if (tripLastSampleElapsedMs == 0L) {
+                    0L
+                } else {
+                    (nowElapsedMs - tripLastSampleElapsedMs).coerceAtLeast(0L)
+                }
+                val speed = CanDataRepository.carSpeed.value ?: 0f
+                val eng = CanDataRepository.engineTemperature.value
+                val gb = CanDataRepository.gearBoxOilTemperature.value
+                val out = CanDataRepository.outsideTemperature.value
+                val odo = CanDataRepository.odometer.value
+                val addEngineStart = if (isTripEngineStartEdge(prevRpm, rpm)) 1 else 0
+                var distanceDelta = 0f
+                val lastOBefore = tripLastOdometer
+                if (odo != null && lastOBefore != null && odo >= lastOBefore) {
+                    distanceDelta = (odo - lastOBefore).toFloat()
+                }
+                // Do not advance tripLastOdometer here when current trip may start same tick later —
+                // current trip path owns odometer cursor when active exists. When inactive, keep cursor.
+                if (TripRepository.activeTrip.value == null) {
+                    tripLastOdometer = odo ?: tripLastOdometer
+                }
+                val movingDelta = if (speed > 0f) dt else 0L
+                val idleDelta = if (speed > 0f) 0L else dt
+                TripRepository.updatePersistentTrip { cur ->
+                    val outside = TripRepository.mergeOutsideTemp(
+                        cur.minOutsideTemp,
+                        cur.maxOutsideTemp,
+                        out
+                    )
+                    cur.copy(
+                        distanceKm = cur.distanceKm + distanceDelta,
+                        movingTimeMs = cur.movingTimeMs + movingDelta,
+                        idleTimeMs = cur.idleTimeMs + idleDelta,
+                        maxSpeed = max(cur.maxSpeed, speed),
+                        maxEngineTemp = TripRepository.updateMaxEngineTemp(cur.maxEngineTemp, eng),
+                        maxGearboxOilTemp = TripRepository.updateMaxGearboxTemp(cur.maxGearboxOilTemp, gb),
+                        minOutsideTemp = outside.first,
+                        maxOutsideTemp = outside.second,
+                        engineStartCount = cur.engineStartCount + addEngineStart,
+                        lastSampleWallMs = wallNow,
+                    )
+                }
             }
 
             // Engine-off edge: end active trip; same trip may reopen above if RPM returns within split window.
@@ -1944,6 +2040,27 @@ class BackgroundService : Service() {
                 }
             }
 
+            // Daily parking while engine off (continuous, including overnight while service is up).
+            if (rpm == 0f) {
+                val dtPark = if (tripLastSampleElapsedMs == 0L) {
+                    0L
+                } else {
+                    (nowElapsedMs - tripLastSampleElapsedMs).coerceAtLeast(0L)
+                }
+                if (dtPark > 0L) {
+                    TripRepository.updatePersistentTrip { cur ->
+                        cur.copy(
+                            parkingTimeMs = cur.parkingTimeMs + dtPark,
+                            lastSampleWallMs = wallNow,
+                        )
+                    }
+                } else {
+                    TripRepository.updatePersistentTrip { cur ->
+                        cur.copy(lastSampleWallMs = wallNow)
+                    }
+                }
+            }
+
             tripLastSampleElapsedMs = nowElapsedMs
             tripPrevRpmForStart = rpm
 
@@ -1952,13 +2069,23 @@ class BackgroundService : Service() {
             if (rtNow - tripLastPeriodicPersistAt >= TRIPS_PERSIST_INTERVAL_MS) {
                 tripLastPeriodicPersistAt = rtNow
                 val curActive = TripRepository.activeTrip.value
+                val curPersistent = TripRepository.persistentTrip()
                 val shouldWrite = TripRepository.needsPersistence() &&
-                    (curActive == null ||
-                        tripLastPersistedSnapshot == null ||
-                        TripRepository.tripChangedEnough(tripLastPersistedSnapshot!!, curActive))
+                    (
+                        curActive == null ||
+                            tripLastPersistedSnapshot == null ||
+                            TripRepository.tripChangedEnough(tripLastPersistedSnapshot!!, curActive) ||
+                            (curPersistent != null && tripLastPersistedPersistentSnapshot != null &&
+                                TripRepository.tripChangedEnough(
+                                    tripLastPersistedPersistentSnapshot!!,
+                                    curPersistent,
+                                )) ||
+                            (curPersistent != null && tripLastPersistedPersistentSnapshot == null)
+                        )
                 if (shouldWrite) {
                     maybePersistTrips(force = false)
                     tripLastPersistedSnapshot = curActive
+                    tripLastPersistedPersistentSnapshot = curPersistent
                 }
             }
         }
@@ -2058,8 +2185,10 @@ class BackgroundService : Service() {
             tripRpmWasPositiveSinceService = false
             tripPendingSplitTripId = null
             val nowWall = System.currentTimeMillis()
+            ensurePersistentDailyTripLocked(nowWall)
+            applyPersistentParkingGapLocked(nowWall)
             val candidate = TripRules.findResumeCandidate(TripRepository.trips.value, nowWall, splitWindowMs)
-            if (candidate != null && !candidate.isActive) {
+            if (candidate != null && !candidate.isCurrentActive) {
                 tripPendingSplitTripId = candidate.id
             }
             tripRpmZeroAtMs = null
@@ -2070,7 +2199,37 @@ class BackgroundService : Service() {
             tripLastFuelLitersCalibrated = null
             tripLastPeriodicPersistAt = SystemClock.elapsedRealtime()
             tripLastPersistedSnapshot = TripRepository.activeTrip.value
+            tripLastPersistedPersistentSnapshot = TripRepository.persistentTrip()
             tripFirstSampleAfterSessionStart = true
+        }
+    }
+
+    private fun ensurePersistentDailyTripLocked(nowWall: Long) {
+        val tankL = fuelTankLitersSetting.value.coerceAtLeast(1).toFloat()
+        val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
+        val baselineL = p?.let { baselineCalibratedStandardLitersFromPercent(it, tankL) }
+            ?: currentFuelAccountingLiters(tankL)
+        TripRepository.ensurePersistentTrip(
+            defaultName = getString(R.string.trips_persistent_trip),
+            nowMs = nowWall,
+            odometerStartKm = CanDataRepository.odometer.value,
+            fuelBaselinePercent = p,
+            fuelBaselineLiters = baselineL,
+        )
+    }
+
+    /** While HU/service was off, attribute wall-clock gap to daily parking. */
+    private fun applyPersistentParkingGapLocked(wallNow: Long) {
+        TripRepository.updatePersistentTrip { cur ->
+            val last = cur.lastSampleWallMs
+            if (last == null || wallNow <= last) {
+                cur.copy(lastSampleWallMs = wallNow)
+            } else {
+                cur.copy(
+                    parkingTimeMs = cur.parkingTimeMs + (wallNow - last),
+                    lastSampleWallMs = wallNow,
+                )
+            }
         }
     }
 
@@ -2157,6 +2316,7 @@ class BackgroundService : Service() {
             tripLastFuelPercent = null
             tripLastFuelLitersCalibrated = null
             tripLastPersistedSnapshot = null
+            tripLastPersistedPersistentSnapshot = null
             tripFirstSampleAfterSessionStart = true
         }
         if (TripRepository.needsPersistence()) {

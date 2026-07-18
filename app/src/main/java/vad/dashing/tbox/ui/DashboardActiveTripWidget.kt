@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +25,9 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.DashboardWidget
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
+import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.trip.formatTripDurationHuman
 import vad.dashing.tbox.R
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
@@ -44,6 +48,7 @@ fun DashboardActiveTripWidgetItem(
     simpleTripLayout: ActiveTripCustomWidgetLayout? = null,
     showRowDividers: Boolean = TripWidgetTileDisplay.DEFAULT_SHOW_ROW_DIVIDERS,
     labelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
+    tripWidgetSource: Int = TRIP_WIDGET_SOURCE_CURRENT,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
     onDoubleClick: () -> Unit = {},
@@ -55,13 +60,26 @@ fun DashboardActiveTripWidgetItem(
     val context = LocalContext.current
     val activeTrip by appDataViewModel.activeTrip.collectAsStateWithLifecycle()
     val trips by appDataViewModel.trips.collectAsStateWithLifecycle()
-    val displayTrip = activeTrip ?: TripRepository.latestFinishedTrip(trips)
-    val showingLastFinishedTrip = displayTrip != null && !displayTrip.isActive
+    val source = normalizeTripWidgetSource(tripWidgetSource)
+    val persistentTrip = remember(trips) { trips.firstOrNull { it.isPersistent } }
+    val displayTrip = if (source == TRIP_WIDGET_SOURCE_PERSISTENT) {
+        persistentTrip
+    } else {
+        activeTrip ?: TripRepository.latestFinishedTrip(trips)
+    }
+    val showingLastFinishedTrip =
+        source == TRIP_WIDGET_SOURCE_CURRENT && displayTrip != null && !displayTrip.isActive
+    val showingPersistent = source == TRIP_WIDGET_SOURCE_PERSISTENT
     val dateFmt = rememberTripDateFormat()
     val defaultActiveTitle = stringResource(R.string.trips_active_trip)
     val defaultLastTitle = stringResource(R.string.trips_last_trip_widget_title)
+    val defaultPersistentTitle = stringResource(R.string.trips_persistent_trip)
     val titleText = titleOverride.trim().ifBlank {
-        if (showingLastFinishedTrip) defaultLastTitle else defaultActiveTitle
+        when {
+            showingPersistent -> defaultPersistentTitle
+            showingLastFinishedTrip -> defaultLastTitle
+            else -> defaultActiveTitle
+        }
     }
 
     DashboardWidgetScaffold(

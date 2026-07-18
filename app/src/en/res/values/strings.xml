@@ -683,10 +683,10 @@
     <string name="data_title_motor_hours">Engine hours</string>
     <string name="data_title_motor_hours_trip">Trip engine hours</string>
     <string name="data_title_motor_hours_widget">Engine hours widget</string>
-    <string name="data_title_active_trip_widget">Current trip</string>
-    <string name="data_title_active_trip_widget_simple">Current trip (simple)</string>
-    <string name="data_title_active_trip_widget_mini">Current trip (mini)</string>
-    <string name="data_title_active_trip_widget_custom">Current trip (custom)</string>
+    <string name="data_title_active_trip_widget">Trip</string>
+    <string name="data_title_active_trip_widget_simple">Trip (simple)</string>
+    <string name="data_title_active_trip_widget_mini">Trip (mini)</string>
+    <string name="data_title_active_trip_widget_custom">Trip (custom)</string>
 
     <string name="settings_fuel_tank_liters_title">Fuel tank volume, l</string>
     <string name="settings_fuel_price_fuel_type_title">Fuel for price lookup</string>
@@ -702,12 +702,19 @@
     <string name="trips_delete_confirm_title">Delete trip?</string>
     <string name="trips_delete_confirm_message">This trip and related data in the log will be removed permanently.</string>
     <string name="trips_finish">Finish</string>
+    <string name="trips_reset_persistent">Reset</string>
+    <string name="trips_reset_persistent_confirm_title">Reset daily trip?</string>
+    <string name="trips_reset_persistent_confirm_message">Current daily trip data will be saved in history as a finished trip, and a new daily trip will start.</string>
     <string name="trips_name_label">Trip name</string>
     <string name="trips_add_favorite">Add to favorites</string>
     <string name="trips_remove_favorite">Remove from favorites</string>
     <string name="trips_empty">No saved trips</string>
     <string name="trips_no_active">No active trip</string>
     <string name="trips_active_trip">Current trip</string>
+    <string name="trips_persistent_trip">Daily trip</string>
+    <string name="trips_widget_source_title">Data source</string>
+    <string name="trips_widget_source_current">Current trip</string>
+    <string name="trips_widget_source_persistent">Daily trip</string>
     <string name="trips_last_trip_widget_title">Last trip</string>
     <string name="trips_start_time">Start</string>
     <string name="trips_end_time">End</string>
@@ -953,8 +960,8 @@
     <string name="widget_desc_motor_hours_widget">Total and current-trip engine hours.</string>
     <string name="widget_desc_time">Current system time.</string>
     <string name="widget_desc_date">Current system date.</string>
-    <string name="widget_desc_active_trip">Detailed current trip metrics.</string>
-    <string name="widget_desc_active_trip_simple">Main current trip metrics in a simplified layout.</string>
+    <string name="widget_desc_active_trip">Detailed trip metrics.</string>
+    <string name="widget_desc_active_trip_simple">Main trip metrics in a simplified layout.</string>
     <string name="widget_desc_active_trip_mini">Brief trip metrics for a small tile.</string>
     <string name="widget_desc_active_trip_custom">Trip metrics with a configurable set of rows.</string>
     <string name="widget_desc_net_signal">Mobile network signal strength.</string>

@@ -167,6 +167,9 @@ fun serializeWidgetConfigsToJsonArray(
                     ),
                 )
             }
+            if (config.tripWidgetSource != TRIP_WIDGET_SOURCE_CURRENT) {
+                obj.put("tripWidgetSource", normalizeTripWidgetSource(config.tripWidgetSource))
+            }
         }
         if (config.textAlign != DEFAULT_WIDGET_TEXT_ALIGN) {
             obj.put("textAlign", normalizeWidgetTextAlign(config.textAlign))
@@ -381,6 +384,13 @@ private fun parseWidgetConfigsFromJsonArray(
                                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
                             ),
                         ),
+                        tripWidgetSource = if (isActiveTripWidgetDataKey(dataKey)) {
+                            normalizeTripWidgetSource(
+                                item.optInt("tripWidgetSource", TRIP_WIDGET_SOURCE_CURRENT),
+                            )
+                        } else {
+                            TRIP_WIDGET_SOURCE_CURRENT
+                        },
                         textAlign = normalizeWidgetTextAlign(
                             item.optInt("textAlign", DEFAULT_WIDGET_TEXT_ALIGN)
                         ),
