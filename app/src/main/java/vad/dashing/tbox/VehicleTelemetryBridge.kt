@@ -7,7 +7,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.fuellevelcalibration.FuelLevelStableApply
-import vad.dashing.tbox.mbcan.MbCanDiagnostics
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
@@ -20,8 +19,8 @@ import vad.dashing.tbox.mbcan.UniversalCanRepository
  *
  * After [FRESHNESS_MS] with no RPM from either source, forces RPM to 0 so trips can close.
  *
- * When [MbCanDiagnostics] is enabled, emits a DEBUG snapshot every [DEBUG_SNAPSHOT_MS]
- * (tag `TripFuel`) with active source per signal and current CDR values.
+ * Emits a DEBUG snapshot every [DEBUG_SNAPSHOT_MS] (tag `TripFuel`) with active source per
+ * signal and current CDR values via [TboxRepository.addLog] (not gated by CAN diagnostics).
  */
 object VehicleTelemetryBridge {
     const val FRESHNESS_MS: Long = 45_000L
@@ -216,8 +215,7 @@ object VehicleTelemetryBridge {
     }
 
     private fun logAccountingDebugSnapshot() {
-        if (!MbCanDiagnostics.enabled.value) return
-        MbCanDiagnostics.log("DEBUG", DEBUG_TAG, buildAccountingDebugSnapshot())
+        TboxRepository.addLog("DEBUG", DEBUG_TAG, buildAccountingDebugSnapshot())
     }
 
     /** Visible for unit tests. */

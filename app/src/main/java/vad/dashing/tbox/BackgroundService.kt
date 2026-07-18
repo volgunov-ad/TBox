@@ -1819,25 +1819,50 @@ class BackgroundService : Service() {
         return FuelCoordinates(latitude = loc.latitude, longitude = loc.longitude)
     }
 
+    private fun logTripDebug(message: String) {
+        TboxRepository.addLog("DEBUG", "Trip", message)
+    }
+
+    private fun tripTelemetryDebugSnippet(): String {
+        val rpm = CanDataRepository.engineRPM.value
+        val speed = CanDataRepository.carSpeed.value
+        val odo = CanDataRepository.odometer.value
+        val fuel = CanDataRepository.fuelLevelPercentageFiltered.value
+        return "rpm=$rpm speed=$speed odoKm=$odo fuelFilt%=$fuel"
+    }
+
+    private fun tripRecordDebugSnippet(t: TripRecord): String {
+        return "id=${t.id} distKm=${t.distanceKm} movingMs=${t.movingTimeMs} idleMs=${t.idleTimeMs} " +
+            "parkingMs=${t.parkingTimeMs} odoStart=${t.odometerStartKm} fuelUsedL=${t.fuelConsumedLiters} " +
+            "maxSpd=${t.maxSpeed}"
+    }
+
     private fun tryOpenPendingSplitTripOnEngineStart(wallNow: Long, splitWindowMs: Long): Boolean {
         val pendingId = tripPendingSplitTripId ?: return false
         val trip = TripRepository.trips.value.firstOrNull { it.id == pendingId && !it.isActive }
             ?: run {
                 tripPendingSplitTripId = null
+                logTripDebug("pending_drop id=$pendingId reason=missing_or_active ${tripTelemetryDebugSnippet()}")
                 return false
             }
         if (TripRules.isExcludedFromCurrentTripResume(trip)) {
             tripPendingSplitTripId = null
+            logTripDebug("pending_drop id=$pendingId reason=excluded ${tripTelemetryDebugSnippet()}")
             return false
         }
         val endedAt = trip.endTimeEpochMs
             ?: run {
                 tripPendingSplitTripId = null
+                logTripDebug("pending_drop id=$pendingId reason=no_end_time ${tripTelemetryDebugSnippet()}")
                 return false
             }
         val pauseMs = wallNow - endedAt
         if (pauseMs < 0L || pauseMs > splitWindowMs) {
             tripPendingSplitTripId = null
+            logTripDebug(
+                "pending_expired id=$pendingId pauseMs=$pauseMs splitMs=$splitWindowMs " +
+                    tripTelemetryDebugSnippet(),
+            )
             return false
         }
         TripRepository.replaceTrip(trip.copy(endTimeEpochMs = null))
@@ -1855,6 +1880,12 @@ class BackgroundService : Service() {
             ?: tripLastFuelPercent?.let { baselineCalibratedStandardLitersFromPercent(it, tankLReopen) }
             ?: currentFuelAccountingLiters(tankLReopen)
         tripPendingSplitTripId = null
+        val reopened = TripRepository.activeTrip.value
+        logTripDebug(
+            "resume reason=split_reopen pauseMs=$pauseMs " +
+                (reopened?.let { tripRecordDebugSnippet(it) } ?: "id=$pendingId") +
+                " ${tripTelemetryDebugSnippet()}",
+        )
         return true
     }
 
@@ -1886,6 +1917,12 @@ class BackgroundService : Service() {
                 tripFirstSampleAfterSessionStart = false
                 if (TripRepository.activeTrip.value != null) {
                     // Resumed or still-active trip from store: do not advance moving/idle until next sample.
+                    val continued = TripRepository.activeTrip.value
+                    logTripDebug(
+                        "continue reason=session_first_sample " +
+                            (continued?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                            " ${tripTelemetryDebugSnippet()}",
+                    )
                     tripLastSampleElapsedMs = nowElapsedMs
                     tripPrevRpmForStart = rpm
                     maybeBackfillActiveTripFuelBaselineLiters()
@@ -1957,6 +1994,12 @@ class BackgroundService : Service() {
                     tripLastSampleElapsedMs = nowElapsedMs
                     maybePersistTrips(force = true)
                     tripPrevRpmForStart = rpm
+                    val started = TripRepository.activeTrip.value
+                    logTripDebug(
+                        "start reason=session_engine_on " +
+                            (started?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                            " ${tripTelemetryDebugSnippet()}",
+                    )
                     return@synchronized
                 }
             }
@@ -2082,10 +2125,16 @@ class BackgroundService : Service() {
             active = TripRepository.activeTrip.value
             if (active != null && prevRpm > 0f && rpm == 0f) {
                 val endedTripId = active.id
+                logTripDebug(
+                    "end reason=engine_off ${tripRecordDebugSnippet(active)} ${tripTelemetryDebugSnippet()}",
+                )
                 TripRepository.updateActiveTrip { it.copy(endTimeEpochMs = wallNow) }
                 tripRpmZeroAtMs = wallNow
                 // Must capture id before updateActiveTrip clears _activeTrip (ended trip is not "active").
                 tripPendingSplitTripId = endedTripId
+                logTripDebug(
+                    "pending_seed id=$endedTripId reason=engine_off splitMs=$splitWindowMs",
+                )
                 maybePersistTrips(force = true)
             }
 
@@ -2121,6 +2170,12 @@ class BackgroundService : Service() {
                     tripRpmZeroAtMs = null
                     tripLastSampleElapsedMs = nowElapsedMs
                     maybePersistTrips(force = true)
+                    val started = TripRepository.activeTrip.value
+                    logTripDebug(
+                        "start reason=rpm_edge " +
+                            (started?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                            " ${tripTelemetryDebugSnippet()}",
+                    )
                 }
             }
 
@@ -2274,6 +2329,10 @@ class BackgroundService : Service() {
             val candidate = TripRules.findResumeCandidate(TripRepository.trips.value, nowWall, splitWindowMs)
             if (candidate != null && !candidate.isCurrentActive) {
                 tripPendingSplitTripId = candidate.id
+                logTripDebug(
+                    "pending_seed id=${candidate.id} reason=service_start_recent_end " +
+                        "splitMs=$splitWindowMs ${tripTelemetryDebugSnippet()}",
+                )
             }
             tripRpmZeroAtMs = null
             tripLastSampleElapsedMs = 0L
@@ -2338,6 +2397,11 @@ class BackgroundService : Service() {
                 ?: live?.let { baselineCalibratedStandardLitersFromPercent(it, tankLResume) }
             tripRpmZeroAtMs = null
             tripPendingSplitTripId = null
+            logTripDebug(
+                "resume reason=service_start_active " +
+                    (active?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                    " ${tripTelemetryDebugSnippet()}",
+            )
         }
         if (resumedActiveTrip) {
             maybePersistTrips(force = true)
@@ -2348,6 +2412,9 @@ class BackgroundService : Service() {
         val wallNow = System.currentTimeMillis()
         synchronized(TripRepository.lock) {
             TripRepository.activeTrip.value?.let { cur ->
+                logTripDebug(
+                    "end reason=manual ${tripRecordDebugSnippet(cur)} ${tripTelemetryDebugSnippet()}",
+                )
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
             val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
@@ -2373,6 +2440,12 @@ class BackgroundService : Service() {
             tripPendingSplitTripId = null
             tripPrevRpmForStart = rpmNow
             tripRpmWasPositiveSinceService = rpmNow > 0f
+            val started = TripRepository.activeTrip.value
+            logTripDebug(
+                "start reason=manual_new " +
+                    (started?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                    " ${tripTelemetryDebugSnippet()}",
+            )
         }
         val tripsJson = tripsListToJson(TripRepository.trips.value)
         val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
@@ -2388,6 +2461,9 @@ class BackgroundService : Service() {
         synchronized(TripRepository.lock) {
             val active = TripRepository.activeTrip.value
             if (active != null) {
+                logTripDebug(
+                    "end reason=service_stop ${tripRecordDebugSnippet(active)} ${tripTelemetryDebugSnippet()}",
+                )
                 TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
             }
             tripPrevRpmForStart = 0f
