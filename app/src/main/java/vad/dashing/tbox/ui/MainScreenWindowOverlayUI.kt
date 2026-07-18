@@ -51,13 +51,13 @@ fun MainScreenWindowOverlayUI(
                 settingsViewModel.saveSelectedTab(
                     LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
                 )
-                FreeformLaunchHelper.exitWindowMode(context)
+                FreeformLaunchHelper.exitWindowMode(context.applicationContext)
             },
             onTboxRestart = onRebootTbox,
             onTripFinishAndStart = onTripFinishAndStart,
             windowMode = true,
             onExitWindowMode = {
-                FreeformLaunchHelper.exitWindowMode(context)
+                FreeformLaunchHelper.exitWindowMode(context.applicationContext)
             },
             modifier = Modifier.fillMaxSize(),
         )

@@ -63,6 +63,7 @@ import vad.dashing.tbox.fuel.refuelsListFromJson
 import vad.dashing.tbox.fuel.refuelsListToJson
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformInvisibleAnchorActivity
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.trip.TripFuelAccounting
 import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
@@ -384,7 +385,7 @@ class BackgroundService : Service() {
         const val EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE = "vad.dashing.tbox.EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE"
 
         /** Settle after tearing down freeform overlay/anchor before starting MainActivity. */
-        private const val WINDOW_MODE_EXIT_RESTORE_DELAY_MS = 400L
+        private const val WINDOW_MODE_EXIT_RESTORE_DELAY_MS = 550L
 
         /** First and subsequent intervals for [mbCanDebugProbeJob] (vehicle + audio param batch log). */
         private const val MBCAN_DEBUG_PROBE_INTERVAL_MS = 15_000L
@@ -978,31 +979,35 @@ class BackgroundService : Service() {
      * settle → start [MainActivity]. Must run on the service coroutine (not from overlay click).
      */
     private suspend fun exitWindowModeFromService() {
-        val prev = FreeformCompanionSession.state.value
-        FreeformCompanionSession.clear()
-        TboxRepository.addLog(
-            "DEBUG",
-            "WindowMode",
-            "exit svc start prevPkg=${prev?.packageName} side=${prev?.side?.storageKey} " +
-                "displayId=${prev?.activityDisplayId}",
-        )
-        overlayController.hideMainScreenWindow(immediate = true)
         try {
-            sendBroadcast(
-                Intent(FreeformInvisibleAnchorActivity.ACTION_FINISH).setPackage(packageName),
-            )
-        } catch (_: Exception) {
-        }
-        delay(WINDOW_MODE_EXIT_RESTORE_DELAY_MS)
-        try {
-            startActivity(MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService))
-            TboxRepository.addLog("DEBUG", "WindowMode", "exit svc MainActivity restored")
-        } catch (e: Exception) {
+            val prev = FreeformCompanionSession.state.value
+            FreeformCompanionSession.clear()
             TboxRepository.addLog(
                 "DEBUG",
                 "WindowMode",
-                "exit svc MainActivity restore fail err=${e.message}",
+                "exit svc start prevPkg=${prev?.packageName} side=${prev?.side?.storageKey} " +
+                    "displayId=${prev?.activityDisplayId}",
             )
+            overlayController.hideMainScreenWindow(immediate = true)
+            try {
+                sendBroadcast(
+                    Intent(FreeformInvisibleAnchorActivity.ACTION_FINISH).setPackage(packageName),
+                )
+            } catch (_: Exception) {
+            }
+            delay(WINDOW_MODE_EXIT_RESTORE_DELAY_MS)
+            try {
+                startActivity(MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService))
+                TboxRepository.addLog("DEBUG", "WindowMode", "exit svc MainActivity restored")
+            } catch (e: Exception) {
+                TboxRepository.addLog(
+                    "DEBUG",
+                    "WindowMode",
+                    "exit svc MainActivity restore fail err=${e.message}",
+                )
+            }
+        } finally {
+            FreeformLaunchHelper.markExitFinished()
         }
     }
     private suspend fun performServiceStopIfRunning() {

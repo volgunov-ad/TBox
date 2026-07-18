@@ -27,11 +27,15 @@ object FreeformLaunchHelper {
     private const val ANCHOR_DELAY_MS = 120L
     /** Extra settle time after tearing down the previous freeform companion / anchor. */
     private const val REPLACE_COMPANION_DELAY_MS = 280L
+    /** Let the overlay click/gesture finish before tearing down Compose. */
+    private const val EXIT_DEFER_FROM_CLICK_MS = 80L
 
     private const val FREEFORM_STACK_ID = 2
     private const val WINDOWING_MODE_FREEFORM = 5
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile
+    private var exitInProgress = false
 
     private fun dbg(message: String) {
         TboxRepository.addLog("DEBUG", LOG_TAG, message)
@@ -180,10 +184,15 @@ object FreeformLaunchHelper {
 
     /** Hide overlay, finish anchor, bring MainActivity fullscreen, clear session. */
     fun exitWindowMode(context: Context) {
+        if (exitInProgress) {
+            dbg("exit ignored (already in progress)")
+            return
+        }
+        exitInProgress = true
         mainHandler.removeCallbacksAndMessages(null)
         val appContext = context.applicationContext
-        // Defer off the overlay Compose click so we do not tear down the tree mid-gesture.
-        mainHandler.post {
+        // Defer past the overlay Compose click so we do not tear down mid-gesture.
+        mainHandler.postDelayed({
             FreeformCompanionSession.clear()
             dbg("exit request → service")
             try {
@@ -193,14 +202,20 @@ object FreeformLaunchHelper {
                     },
                 )
             } catch (e: Exception) {
+                exitInProgress = false
                 Log.w(TAG, "Failed to request window-mode exit", e)
                 dbg("exit request fail err=${e.message}")
             }
-        }
+        }, EXIT_DEFER_FROM_CLICK_MS)
     }
 
     /** Alias used by UI that previously called [exitToFullscreen]. */
     fun exitToFullscreen(context: Context) = exitWindowMode(context)
+
+    /** Called by [BackgroundService] when the exit sequence finishes (success or fail). */
+    fun markExitFinished() {
+        exitInProgress = false
+    }
 
     fun requestShowMainScreenWindow(context: Context) {
         try {

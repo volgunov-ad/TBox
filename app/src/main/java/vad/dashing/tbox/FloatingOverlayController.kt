@@ -106,6 +106,11 @@ internal class FloatingOverlayController(
      * so x/y match freeform companion bounds (not the full physical panel).
      */
     private var mainScreenWindowManager: WindowManager? = null
+    /**
+     * Separate from [lifecycleOwner] used by floating panels — sharing ViewModelStore with a
+     * full MainScreen composition caused process crashes on dispose during window-mode exit.
+     */
+    private var mainScreenLifecycleOwner: MyLifecycleOwner? = null
 
     companion object {
         private const val TAG = "Floating Dashboard"
@@ -139,7 +144,7 @@ internal class FloatingOverlayController(
     fun closeAllOverlays() {
         val ids = overlayViews.keys.toList()
         ids.forEach { closeOverlay(it) }
-        hideMainScreenWindowInternal()
+        removeMainScreenWindowImmediate()
     }
 
     fun onDestroy() {
@@ -152,6 +157,7 @@ internal class FloatingOverlayController(
         overlayOffIds.clear()
         overlayParams.clear()
         windowManager = null
+        mainScreenWindowManager = null
     }
 
     /**
@@ -232,6 +238,12 @@ internal class FloatingOverlayController(
                 removeMainScreenWindowImmediate()
             }
 
+            val owner = MyLifecycleOwner().also { created ->
+                created.setCurrentState(Lifecycle.State.CREATED)
+                created.setCurrentState(Lifecycle.State.STARTED)
+            }
+            mainScreenLifecycleOwner = owner
+
             val layoutParams = WindowManager.LayoutParams(
                 geometry.width.coerceAtLeast(MIN_OVERLAY_SIZE),
                 geometry.height.coerceAtLeast(MIN_OVERLAY_SIZE),
@@ -250,9 +262,9 @@ internal class FloatingOverlayController(
             val composeView = ComposeView(service)
             try {
                 composeView.apply {
-                    setViewTreeLifecycleOwner(lifecycleOwner)
-                    setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-                    setViewTreeViewModelStoreOwner(lifecycleOwner)
+                    setViewTreeLifecycleOwner(owner)
+                    setViewTreeSavedStateRegistryOwner(owner)
+                    setViewTreeViewModelStoreOwner(owner)
                     setContent {
                         MainScreenWindowOverlayUI(
                             settingsManager = settingsManager,
@@ -265,6 +277,7 @@ internal class FloatingOverlayController(
             } catch (e: Exception) {
                 Log.e(MAIN_SCREEN_WINDOW_TAG, "Error creating view", e)
                 TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Failed to create: ${e.message}")
+                destroyMainScreenLifecycleOwner()
                 return@withContext
             }
 
@@ -278,11 +291,6 @@ internal class FloatingOverlayController(
                     .alpha(1f)
                     .setDuration(OVERLAY_FADE_MS)
                     .start()
-                if (!lifecycleOwner.isInitialized ||
-                    lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.DESTROYED)
-                ) {
-                    lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
-                }
                 TboxRepository.addLog(
                     "DEBUG",
                     "WindowMode",
@@ -292,6 +300,7 @@ internal class FloatingOverlayController(
             } catch (e: Exception) {
                 Log.e(MAIN_SCREEN_WINDOW_TAG, "Error adding view", e)
                 TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Failed to show: ${e.message}")
+                destroyMainScreenLifecycleOwner()
             }
         }
     }
@@ -307,26 +316,8 @@ internal class FloatingOverlayController(
     }
 
     private fun hideMainScreenWindowInternal() {
-        val view = mainScreenWindowView ?: return
-        val wm = mainScreenWindowManager ?: windowManager
-        mainScreenWindowView = null
-        mainScreenWindowParams = null
-        mainScreenWindowManager = null
-
-        fun finishClose() {
-            removeAttachedView(wm, view)
-            TboxRepository.addLog("DEBUG", "WindowMode", "overlay closed")
-        }
-
-        if (view.isAttachedToWindow && view.alpha > 0f) {
-            view.animate()
-                .alpha(0f)
-                .setDuration(OVERLAY_FADE_MS)
-                .withEndAction { finishClose() }
-                .start()
-        } else {
-            finishClose()
-        }
+        // Prefer immediate teardown — fade + disposeComposition races with gesture/MainActivity.
+        removeMainScreenWindowImmediate()
     }
 
     private fun removeMainScreenWindowImmediate() {
@@ -339,22 +330,52 @@ internal class FloatingOverlayController(
             view.animate().cancel()
         } catch (_: Exception) {
         }
-        removeAttachedView(wm, view)
-        TboxRepository.addLog("DEBUG", "WindowMode", "overlay closed immediate")
-    }
-
-    private fun removeAttachedView(wm: WindowManager?, view: ComposeView) {
+        // Stop collectors / ViewModels before tearing down Compose (shared-owner bugs crash here).
         try {
-            view.disposeComposition()
+            mainScreenLifecycleOwner?.setCurrentState(Lifecycle.State.DESTROYED)
         } catch (_: Exception) {
         }
         try {
+            mainScreenLifecycleOwner?.clear()
+        } catch (_: Exception) {
+        }
+        try {
+            view.setContent { }
+        } catch (_: Exception) {
+        }
+        try {
+            view.disposeComposition()
+        } catch (e: Exception) {
+            Log.w(MAIN_SCREEN_WINDOW_TAG, "disposeComposition failed", e)
+        }
+        try {
             if (view.isAttachedToWindow) {
-                wm?.removeView(view)
+                try {
+                    wm?.removeViewImmediate(view)
+                } catch (_: Exception) {
+                    wm?.removeView(view)
+                }
             }
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", MAIN_SCREEN_WINDOW_TAG, "Error removing view")
             Log.e(MAIN_SCREEN_WINDOW_TAG, "Error removing view", e)
+        }
+        destroyMainScreenLifecycleOwner()
+        TboxRepository.addLog("DEBUG", "WindowMode", "overlay closed immediate")
+    }
+
+    private fun destroyMainScreenLifecycleOwner() {
+        val owner = mainScreenLifecycleOwner ?: return
+        mainScreenLifecycleOwner = null
+        try {
+            if (owner.lifecycle.currentState != Lifecycle.State.DESTROYED) {
+                owner.setCurrentState(Lifecycle.State.DESTROYED)
+            }
+        } catch (_: Exception) {
+        }
+        try {
+            owner.clear()
+        } catch (_: Exception) {
         }
     }
 
