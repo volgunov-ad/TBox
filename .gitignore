@@ -20,5 +20,9 @@ local.properties
 # Local firmware unpack / analysis (large binaries)
 firmware_analysis/
 
+# JVM crash dumps (HotSpot)
+hs_err_pid*.log
+replay_pid*.log
+
 # Python bytecode
 tools/__pycache__/
