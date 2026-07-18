@@ -5,6 +5,9 @@ const val MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY = "mediaVolumeWidgetVertical"
 const val ENGINE_RPM_WIDGET_DATA_KEY = "engineRPM"
 const val ENGINE_TEMPERATURE_WIDGET_DATA_KEY = "engineTemperature"
 const val CAR_SPEED_WIDGET_DATA_KEY = "carSpeed"
+const val ODOMETER_WIDGET_DATA_KEY = "odometer"
+const val FUEL_LEVEL_PERCENTAGE_WIDGET_DATA_KEY = "fuelLevelPercentage"
+const val OUTSIDE_TEMPERATURE_WIDGET_DATA_KEY = "outsideTemperature"
 const val WIPER_MAINTENANCE_WIDGET_DATA_KEY = "wiperMaintenanceWidget"
 const val PARKING_RADAR_WIDGET_DATA_KEY = "parkingRadarWidget"
 
@@ -39,6 +42,30 @@ fun isCarSpeedWidgetDataKey(dataKey: String): Boolean {
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalCarSpeedEnabled(): Boolean {
     return isCarSpeedWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isOdometerWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == ODOMETER_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalOdometerEnabled(): Boolean {
+    return isOdometerWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isFuelLevelPercentageWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == FUEL_LEVEL_PERCENTAGE_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalFuelLevelPercentageEnabled(): Boolean {
+    return isFuelLevelPercentageWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isOutsideTemperatureWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == OUTSIDE_TEMPERATURE_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalOutsideTemperatureEnabled(): Boolean {
+    return isOutsideTemperatureWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
 }
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalWidgetEnabled(): Boolean {

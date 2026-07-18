@@ -941,6 +941,7 @@ class BackgroundService : Service() {
         stopPeriodicJob()
         stopSettingsListener()
         stopDataListener()
+        VehicleTelemetryBridge.stop()
         stopFuelCalibratedLitersWatcher()
         scope.launch { finalizeTripsOnServiceStop() }
         stopStateBroadcastListener()
@@ -990,6 +991,7 @@ class BackgroundService : Service() {
                 refreshFuelCalibrationRepositoryOutputs()
                 yield()
                 startDataListener()
+                VehicleTelemetryBridge.start(scope)
                 startFuelCalibratedLitersWatcher()
                 timingMark("startup_listeners")
                 if (startFromBoot) {

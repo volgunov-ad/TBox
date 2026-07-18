@@ -260,6 +260,7 @@ Polling остаётся fallback-механизмом: даже при push-с�
 Диагностика `mbCAN` и `VHAL` включается **единой** опцией (`ACTION_SET_MBCAN_DIAGNOSTICS`):
 
 - `MBCAN_TMP` и `VHAL_A10` пишутся только когда включён флаг `MbCanDiagnostics.enabled`;
+- при том же флаге `VehicleTelemetryBridge` раз в **15 с** пишет DEBUG с тегом `TripFuel` (источник HU/TBox по сигналам учёта поездок/заправок + текущие значения CDR);
 - флаг сессионный (не сохраняется между перезапусками `BackgroundService`).
 
 Логи `VHAL_A10` содержат:
@@ -345,6 +346,9 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `engineRPM`
 - `engineTemperature`
 - `carSpeed`
+- `odometer`
+- `fuelLevelPercentage`
+- `outsideTemperature`
 
 Поведение:
 
@@ -371,7 +375,15 @@ Polling остаётся fallback-механизмом: даже при push-с�
   - interest: `MbCanSignal.CarSpeed`
   - чтение: `UniversalCanRepository.carSpeedState`
   - запись не используется (read-only сигнал).
-
+- `odometer`
+  - interest: `MbCanSignal.TotalOdometer`
+  - чтение: `UniversalCanRepository.odometerKmState`
+- `fuelLevelPercentage`
+  - interest: `MbCanSignal.FuelLevel`
+  - чтение: `UniversalCanRepository.fuelLevelPercentState`
+- `outsideTemperature`
+  - interest: `MbCanSignal.OutsideTemperature`
+  - чтение: `UniversalCanRepository.outsideTemperatureState`
 Полный список штатных VHAL push-подписок (ID/имена), извлечённый из `CarSettings`/`AirConditioning`/`Launcher`,
 сохранён отдельно: `docs/STOCK_PUSH_SUBSCRIPTIONS_RU.md`.
 
