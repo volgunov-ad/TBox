@@ -216,7 +216,7 @@ class EspUsbSerialSession(
                 } catch (_: Exception) {
                     -1
                 }
-                if (n == null || n <= 0) continue
+                if (n <= 0) continue
                 val chunk = String(buf, 0, n, charset)
                 synchronized(lineBuffer) {
                     lineBuffer.append(chunk)
