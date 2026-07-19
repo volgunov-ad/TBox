@@ -38,16 +38,19 @@ object FreeformDisplaySpaces {
 
     /**
      * WindowManager bound to [displayId] when possible so overlay coordinates match that display.
-     * Falls back to the context's default WM.
+     * Falls back to the context's default WM; returns null only if no WM is available at all.
      */
-    fun windowManagerForDisplay(context: Context, displayId: Int): WindowManager {
-        val defaultWm = context.getSystemService(WindowManager::class.java)
-            ?: error("WindowManager unavailable")
-        if (displayId == Display.DEFAULT_DISPLAY) {
-            // Still prefer an explicit display context — DEFAULT may be the inset app VD.
-            return windowManagerForDisplayId(context, displayId) ?: defaultWm
-        }
-        return windowManagerForDisplayId(context, displayId) ?: defaultWm
+    fun windowManagerForDisplay(context: Context, displayId: Int): WindowManager? {
+        val displayWm = windowManagerForDisplayId(context, displayId)
+        if (displayWm != null) return displayWm
+        return defaultWindowManager(context)
+    }
+
+    private fun defaultWindowManager(context: Context): WindowManager? {
+        return context.getSystemService(WindowManager::class.java)
+            ?: context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            ?: context.applicationContext.getSystemService(WindowManager::class.java)
+            ?: context.applicationContext.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
     }
 
     fun sizePxForWindowManager(wm: WindowManager): Pair<Int, Int> {
@@ -82,13 +85,16 @@ object FreeformDisplaySpaces {
      */
     fun describeOverlayWm(context: Context, displayId: Int): String {
         return try {
-            val defaultWm = context.getSystemService(WindowManager::class.java)
+            val defaultWm = defaultWindowManager(context)
             val (defW, defH) = if (defaultWm != null) {
                 sizePxForWindowManager(defaultWm)
             } else {
                 -1 to -1
             }
             val overlayWm = windowManagerForDisplay(context, displayId)
+            if (overlayWm == null) {
+                return "displayId=$displayId defaultWm=${defW}x${defH} overlayWm=null"
+            }
             val (ovW, ovH) = sizePxForWindowManager(overlayWm)
             val sameInstance = defaultWm != null && overlayWm === defaultWm
             "displayId=$displayId defaultWm=${defW}x${defH} overlayWm=${ovW}x${ovH} sameWm=$sameInstance"

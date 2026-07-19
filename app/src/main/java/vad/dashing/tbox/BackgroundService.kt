@@ -156,7 +156,11 @@ class BackgroundService : Service() {
     private var dataListenerJob: Job? = null
     private var usageStatsFloatingHideJob: Job? = null
     private var lastUsageStatsOverlayRules: UsageStatsOverlayRulesState? = null
+    /** Last foreground package accepted after [USAGE_STATS_FG_STABLE_POLLS] consecutive matches. */
     private var usageStatsStableForegroundPackage: String? = null
+    /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
+    private var usageStatsPendingForegroundPackage: String? = null
+    private var usageStatsPendingForegroundStablePolls: Int = 0
     /** Elapsed realtime when foreground first left companion/TBox during window mode; 0 = not lost. */
     private var windowModeCompanionLostSinceElapsedMs: Long = 0L
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
@@ -385,7 +389,7 @@ class BackgroundService : Service() {
         const val EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE = "vad.dashing.tbox.EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE"
 
         /** Settle after tearing down freeform overlay/anchor before starting MainActivity. */
-        private const val WINDOW_MODE_EXIT_RESTORE_DELAY_MS = 550L
+        private const val WINDOW_MODE_EXIT_RESTORE_DELAY_MS = 900L
 
         /** First and subsequent intervals for [mbCanDebugProbeJob] (vehicle + audio param batch log). */
         private const val MBCAN_DEBUG_PROBE_INTERVAL_MS = 15_000L
@@ -421,6 +425,11 @@ class BackgroundService : Service() {
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
         /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
         private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 4_000L
+        /**
+         * Same foreground package must be sampled this many consecutive polls before hide/show rules
+         * switch (reduces thrashing from noisy UsageStats on the HU).
+         */
+        private const val USAGE_STATS_FG_STABLE_POLLS = 2
         /** Debounce before tearing down window-mode overlay when companion is no longer foreground. */
         private const val WINDOW_MODE_COMPANION_LOST_DEBOUNCE_MS = 3_000L
         private val WINDOW_MODE_TRANSIENT_FOREGROUND_PACKAGES = setOf(
@@ -982,6 +991,7 @@ class BackgroundService : Service() {
         try {
             val prev = FreeformCompanionSession.state.value
             FreeformCompanionSession.clear()
+            invalidateUsageStatsOverlayRulesCache()
             TboxRepository.addLog(
                 "DEBUG",
                 "WindowMode",
@@ -1005,6 +1015,12 @@ class BackgroundService : Service() {
                     "WindowMode",
                     "exit svc MainActivity restore fail err=${e.message}",
                 )
+            }
+            // Re-apply floating hide/show now that the MainScreen overlay is gone.
+            try {
+                applyUsageStatsOverlayRulesIfChanged()
+            } catch (e: Exception) {
+                Log.e("BackgroundService", "UsageStats reapply after window exit failed", e)
             }
         } finally {
             FreeformLaunchHelper.markExitFinished()
@@ -2751,14 +2767,38 @@ class BackgroundService : Service() {
         if (usageStatsFloatingHideJob?.isActive == true) return
         usageStatsFloatingHideJob = scope.launch {
             launch {
-                FloatingPanelEditModeTracker.suppressUsageStatsHide.collect {
-                    applyUsageStatsOverlayRulesIfChanged()
+                try {
+                    FloatingPanelEditModeTracker.suppressUsageStatsHide.collect {
+                        try {
+                            applyUsageStatsOverlayRulesIfChanged()
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "UsageStats suppress collect apply failed", e)
+                            TboxRepository.addLog(
+                                "ERROR",
+                                "UsageStats",
+                                "suppress apply: ${e.message}",
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats suppress collect failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "suppress collect: ${e.message}")
                 }
             }
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
-                applyUsageStatsOverlayRulesIfChanged()
-                maybeDismissMainScreenWindowModeIfCompanionLost()
+                try {
+                    applyUsageStatsOverlayRulesIfChanged()
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats overlay rules apply failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "rules apply: ${e.message}")
+                }
+                try {
+                    maybeDismissMainScreenWindowModeIfCompanionLost()
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "WindowMode companion-lost check failed", e)
+                    TboxRepository.addLog("ERROR", "WindowMode", "companion-lost: ${e.message}")
+                }
             }
         }
     }
@@ -2809,6 +2849,7 @@ class BackgroundService : Service() {
 
         windowModeCompanionLostSinceElapsedMs = 0L
         FreeformCompanionSession.clear()
+        invalidateUsageStatsOverlayRulesCache()
         try {
             sendBroadcast(
                 Intent(FreeformInvisibleAnchorActivity.ACTION_FINISH).setPackage(packageName),
@@ -2821,15 +2862,51 @@ class BackgroundService : Service() {
             "WindowMode",
             "Dismissed overlay: companion lost (fg=$fg)",
         )
+        try {
+            applyUsageStatsOverlayRulesIfChanged()
+        } catch (e: Exception) {
+            Log.e("BackgroundService", "UsageStats reapply after companion-lost failed", e)
+        }
     }
 
     private suspend fun applyUsageStatsOverlayRulesIfChanged() {
         val newState = buildUsageStatsOverlayRulesState()
         if (newState == lastUsageStatsOverlayRules) return
+        val prevFg = lastUsageStatsOverlayRules?.foregroundPackage
         lastUsageStatsOverlayRules = newState
         overlayController.setUsageStatsOverlayRulesState(newState)
-        overlayController.syncFloatingDashboards(floatingDashboards.value)
-        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+        TboxRepository.addLog(
+            "DEBUG",
+            "UsageStats",
+            "floating sync fg=${newState.foregroundPackage} prevFg=$prevFg " +
+                "hidePanels=${newState.hidePanelIds.size} showPanels=${newState.showPanelIds.size} " +
+                "suppress=${newState.suppressFloatingPanelUsageStatsHide}",
+        )
+        // No z-order reorder and no fade: usage-stats thrashing previously raced removeView
+        // with ensure + reorder. Periodic ensure reopens any missing panels later.
+        overlayController.syncFloatingDashboards(
+            floatingDashboards.value,
+            reorderZOrder = false,
+            closeImmediate = true,
+        )
+    }
+
+    /**
+     * Force the next usage-stats apply to re-evaluate floating visibility (e.g. after window-mode
+     * exit). Keeps the last stable foreground; only clears in-progress pending debounce and the
+     * applied-state cache.
+     */
+    private fun invalidateUsageStatsOverlayRulesCache() {
+        lastUsageStatsOverlayRules = null
+        usageStatsPendingForegroundPackage = null
+        usageStatsPendingForegroundStablePolls = 0
+        windowModeCompanionLostSinceElapsedMs = 0L
+    }
+
+    private fun clearUsageStatsForegroundDebounce() {
+        usageStatsStableForegroundPackage = null
+        usageStatsPendingForegroundPackage = null
+        usageStatsPendingForegroundStablePolls = 0
     }
 
     private fun buildUsageStatsOverlayRulesState(): UsageStatsOverlayRulesState {
@@ -2841,7 +2918,7 @@ class BackgroundService : Service() {
         val hasShowRules = watchShow.isNotEmpty() && showPanels.isNotEmpty()
         val hasAnyRules = hasHideRules || hasShowRules
         if (!hasAnyRules) {
-            usageStatsStableForegroundPackage = null
+            clearUsageStatsForegroundDebounce()
         }
         val isMainActivityInForeground = hasAnyRules &&
             MainActivityForegroundTracker.isMainActivityInForeground.value
@@ -2865,18 +2942,10 @@ class BackgroundService : Service() {
         val effectiveForeground = if (!hasAnyRules) {
             null
         } else {
-            when {
-                candidateForeground.isNullOrBlank() -> {
-                    if (usageStatsStableForegroundPackage == packageName && !isMainActivityInForeground) {
-                        usageStatsStableForegroundPackage = null
-                    }
-                    usageStatsStableForegroundPackage
-                }
-                else -> {
-                    usageStatsStableForegroundPackage = candidateForeground
-                    usageStatsStableForegroundPackage
-                }
-            }
+            resolveDebouncedUsageStatsForeground(
+                candidateForeground = candidateForeground,
+                isMainActivityInForeground = isMainActivityInForeground,
+            )
         }
         return UsageStatsOverlayRulesState(
             foregroundPackage = effectiveForeground,
@@ -2891,11 +2960,52 @@ class BackgroundService : Service() {
         )
     }
 
+    /**
+     * Accept a new UsageStats foreground package only after [USAGE_STATS_FG_STABLE_POLLS]
+     * consecutive identical samples. Gaps keep the last stable package (sticky).
+     */
+    private fun resolveDebouncedUsageStatsForeground(
+        candidateForeground: String?,
+        isMainActivityInForeground: Boolean,
+    ): String? {
+        when {
+            candidateForeground.isNullOrBlank() -> {
+                usageStatsPendingForegroundPackage = null
+                usageStatsPendingForegroundStablePolls = 0
+                if (usageStatsStableForegroundPackage == packageName && !isMainActivityInForeground) {
+                    usageStatsStableForegroundPackage = null
+                }
+            }
+            candidateForeground == usageStatsStableForegroundPackage -> {
+                usageStatsPendingForegroundPackage = null
+                usageStatsPendingForegroundStablePolls = 0
+            }
+            candidateForeground == usageStatsPendingForegroundPackage -> {
+                usageStatsPendingForegroundStablePolls++
+                if (usageStatsPendingForegroundStablePolls >= USAGE_STATS_FG_STABLE_POLLS) {
+                    usageStatsStableForegroundPackage = candidateForeground
+                    usageStatsPendingForegroundPackage = null
+                    usageStatsPendingForegroundStablePolls = 0
+                }
+            }
+            else -> {
+                usageStatsPendingForegroundPackage = candidateForeground
+                usageStatsPendingForegroundStablePolls = 1
+                if (USAGE_STATS_FG_STABLE_POLLS <= 1) {
+                    usageStatsStableForegroundPackage = candidateForeground
+                    usageStatsPendingForegroundPackage = null
+                    usageStatsPendingForegroundStablePolls = 0
+                }
+            }
+        }
+        return usageStatsStableForegroundPackage
+    }
+
     private fun stopUsageStatsFloatingHideWatcher() {
         usageStatsFloatingHideJob?.cancel()
         usageStatsFloatingHideJob = null
         lastUsageStatsOverlayRules = null
-        usageStatsStableForegroundPackage = null
+        clearUsageStatsForegroundDebounce()
         windowModeCompanionLostSinceElapsedMs = 0L
         scope.launch {
             overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)

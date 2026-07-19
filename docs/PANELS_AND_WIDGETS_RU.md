@@ -101,7 +101,7 @@ flowchart TB
 - Позиция и размер в **пикселях** (`startX`, `startY`, `width`, `height`); **глобальный** `floatingPanelsLayoutSnapDp` — шаг привязки при drag/resize всех плавающих панелей в режиме редактирования (ручной ввод px в настройках не снапится; в темы не входит).
 - **Долгое нажатие** — режим редактирования (drag + resize).
 - **Короткое нажатие** на ячейку в edit mode открывает диалог в **главном окне** `MainActivity` (overlay не может показать фокусируемый диалог).
-- Видимость: флаг `enabled`, правила скрытия по foreground-приложению, временное скрытие виджетом «Скрыть плавающие панели».
+- Видимость: флаг `enabled`, правила скрытия по foreground-приложению (Usage Stats: смена fg принимается после 2 одинаковых опросов подряд; sync без reorder/fade и без немедленного ensure), временное скрытие виджетом «Скрыть плавающие панели».
 - Порядок наложения — в **«Настройки плавающих панелей»** → «Порядок панелей».
 
 ### Настройка (UI)
@@ -141,8 +141,8 @@ flowchart TB
    - если авто выключено — геометрия из **Настройки главного экрана → Оконный режим** (компактные поля W/H и X/Y, как у плавающих панелей).
 3. При входе в оконный режим **`MainActivity` закрывается** (broadcast `ACTION_FINISH_FOR_WINDOW_MODE`), чтобы не было двух экземпляров главной; выход снова поднимает fullscreen `MainActivity` обычным `startActivity` **без** freeform/fullscreen `ActivityOptions` (на multi-display ГУ options при restore часто дают краш).
 4. В overlay — перемещаемая угловая кнопка выхода: скрыть overlay, вернуть `MainActivity` fullscreen, сбросить сессию (`FreeformCompanionSession`). Companion force-stop не делается. На fullscreen-главной эта кнопка не показывается.
-5. Если companion уходит из foreground (другой fullscreen / смена приложения) дольше короткого debounce — overlay закрывается и сессия очищается (нужен доступ Usage Access).
-6. Смена companion (другой ярлык / другая сторона): сброс якоря freeform + новый `setLaunchBounds` без `CLEAR_TOP`/`REORDER_TO_FRONT` (иначе OEM часто оставляет второе приложение в прежнем freeform-слоте). Предыдущее приложение force-stop не делается.
+5. Если companion уходит из foreground (другой fullscreen / смена приложения) дольше короткого debounce — overlay закрывается и сессия очищается (нужен доступ Usage Access). Правила скрытия/показа плавающих панелей по Usage Stats продолжают работать и в оконном режиме (с debounce и безопасным sync).
+6. Смена companion (другой ярлык с оконным режимом): полный выход из оконного режима (как кнопка закрытия: снять overlay, якорь, вернуть `MainActivity`), пауза settle, затем запуск нового companion. Предыдущее приложение force-stop не делается.
 
 Требуется freeform на ГУ. Код: `freeform/FreeformLaunchHelper.kt`, `FreeformDisplaySpaces`, `FreeformLaunchBounds`, `FreeformCompanionSession`, `MainScreenWindowOverlayUI`, `BackgroundService` `ACTION_SHOW/HIDE_MAIN_SCREEN_WINDOW`.
 

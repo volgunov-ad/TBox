@@ -24,11 +24,14 @@ import vad.dashing.tbox.TboxRepository
 object FreeformLaunchHelper {
     private const val TAG = "FreeformLaunch"
     private const val LOG_TAG = "WindowMode"
-    private const val ANCHOR_DELAY_MS = 120L
-    /** Extra settle time after tearing down the previous freeform companion / anchor. */
-    private const val REPLACE_COMPANION_DELAY_MS = 280L
+    private const val ANCHOR_DELAY_MS = 200L
     /** Let the overlay click/gesture finish before tearing down Compose. */
-    private const val EXIT_DEFER_FROM_CLICK_MS = 80L
+    private const val EXIT_DEFER_FROM_CLICK_MS = 150L
+    /**
+     * After a full exit finishes (overlay gone, MainActivity restored), wait before launching
+     * another companion so the HU freeform stack can settle.
+     */
+    private const val AFTER_FULL_EXIT_RELAUNCH_DELAY_MS = 700L
 
     private const val FREEFORM_STACK_ID = 2
     private const val WINDOWING_MODE_FREEFORM = 5
@@ -36,10 +39,41 @@ object FreeformLaunchHelper {
     private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile
     private var exitInProgress = false
+    private var pendingExitRunnable: Runnable? = null
+    private var pendingAnchorLaunchRunnable: Runnable? = null
+    private var pendingRelaunchRunnable: Runnable? = null
+
+    private data class PendingCompanionLaunch(
+        val packageName: String,
+        val side: FreeformLaunchSide,
+        val percent: Int,
+    )
+
+    @Volatile
+    private var pendingAfterExit: PendingCompanionLaunch? = null
+    @Volatile
+    private var pendingAppContext: Context? = null
 
     private fun dbg(message: String) {
         TboxRepository.addLog("DEBUG", LOG_TAG, message)
         Log.d(TAG, message)
+    }
+
+    /**
+     * Removes posted exit / launch / relaunch work. When [clearExitInProgress] is true and an
+     * exit was still pending, resets [exitInProgress] so it cannot stick after cancel.
+     */
+    private fun cancelPostedWork(clearExitInProgress: Boolean) {
+        pendingExitRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingExitRunnable = null
+        pendingAnchorLaunchRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingAnchorLaunchRunnable = null
+        pendingRelaunchRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingRelaunchRunnable = null
+        if (clearExitInProgress && exitInProgress) {
+            exitInProgress = false
+            dbg("exitInProgress cleared (posted work cancelled)")
+        }
     }
 
     fun hasFreeformSupport(context: Context): Boolean {
@@ -60,9 +94,8 @@ object FreeformLaunchHelper {
      * Launch [packageName] in freeform on [side], then ask [BackgroundService] to show the
      * main-screen window overlay. Returns false if freeform launch was not started.
      *
-     * If another companion session is already active, resets the freeform workspace first so
-     * new [side]/[percent] bounds are applied (OEM stacks often ignore bounds when reusing
-     * the previous freeform window).
+     * If another companion session is already active, performs a **full** window-mode exit
+     * (same as the overlay close button), then launches the new companion after settle.
      */
     fun launchCompanion(
         context: Context,
@@ -82,7 +115,7 @@ object FreeformLaunchHelper {
             return false
         }
 
-        val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg) ?: run {
+        if (context.packageManager.getLaunchIntentForPackage(pkg) == null) {
             Toast.makeText(
                 context,
                 context.getString(R.string.widget_app_launcher_freeform_launch_failed),
@@ -91,7 +124,43 @@ object FreeformLaunchHelper {
             return false
         }
 
-        val activityDisplay = FreeformDisplaySpaces.resolveActivityDisplay(context)
+        val appContext = context.applicationContext
+
+        // Switching companion: exit completely (like the X button), then relaunch.
+        if (FreeformCompanionSession.isActive || exitInProgress) {
+            pendingAppContext = appContext
+            pendingAfterExit = PendingCompanionLaunch(pkg, side, percent)
+            dbg(
+                "queue launch after full exit pkg=$pkg side=${side.storageKey} pct=$percent " +
+                    "exitInProgress=$exitInProgress session=${FreeformCompanionSession.isActive}",
+            )
+            if (!exitInProgress) {
+                beginExitWindowMode(appContext, EXIT_DEFER_FROM_CLICK_MS)
+            }
+            return true
+        }
+
+        pendingAfterExit = null
+        pendingAppContext = null
+        return startCompanionLaunch(appContext, pkg, side, percent)
+    }
+
+    private fun startCompanionLaunch(
+        appContext: Context,
+        pkg: String,
+        side: FreeformLaunchSide,
+        percent: Int,
+    ): Boolean {
+        val launchIntent = appContext.packageManager.getLaunchIntentForPackage(pkg) ?: run {
+            Toast.makeText(
+                appContext,
+                appContext.getString(R.string.widget_app_launcher_freeform_launch_failed),
+                Toast.LENGTH_SHORT,
+            ).show()
+            return false
+        }
+
+        val activityDisplay = FreeformDisplaySpaces.resolveActivityDisplay(appContext)
         val displayW = activityDisplay.widthPx
         val displayH = activityDisplay.heightPx
         val (appBounds, tboxBounds) = FreeformLaunchBounds.computeAppAndTboxBounds(
@@ -102,36 +171,33 @@ object FreeformLaunchHelper {
         )
         val appBundle = activityOptionsBundle(freeformWindowingModeId(), appBounds) ?: run {
             Toast.makeText(
-                context,
-                context.getString(R.string.widget_app_launcher_freeform_unsupported),
+                appContext,
+                appContext.getString(R.string.widget_app_launcher_freeform_unsupported),
                 Toast.LENGTH_LONG,
             ).show()
             return false
         }
 
-        // Freeform-specific flags only. Do NOT use applyExternalAppLaunchFlags
-        // (CLEAR_TOP / SINGLE_TOP / REORDER_TO_FRONT) — those reuse the previous freeform
-        // task and ignore setLaunchBounds (e.g. second companion stays on the right).
         launchIntent.addFlags(
             Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
                 Intent.FLAG_ACTIVITY_NO_ANIMATION,
         )
 
-        val appContext = context.applicationContext
-        val replacingExisting = FreeformCompanionSession.isActive
-        mainHandler.removeCallbacksAndMessages(null)
+        // Drop any prior deferred exit/relaunch so this launch is not racing cancelled work.
+        cancelPostedWork(clearExitInProgress = true)
 
         dbg(
             "launch start pkg=$pkg side=${side.storageKey} pct=$percent " +
                 "displayId=${activityDisplay.displayId} act=${displayW}x${displayH} " +
-                "appBounds=$appBounds tboxBounds=$tboxBounds replace=$replacingExisting " +
-                "displays=[${FreeformDisplaySpaces.summarizeDisplays(context)}]",
+                "appBounds=$appBounds tboxBounds=$tboxBounds " +
+                "displays=[${FreeformDisplaySpaces.summarizeDisplays(appContext)}]",
         )
 
-        fun startCompanionAfterAnchor() {
+        return try {
             ensureFreeformAnchor(appContext, displayW, displayH)
-            mainHandler.postDelayed({
+            val launchRunnable = Runnable {
+                pendingAnchorLaunchRunnable = null
                 try {
                     appContext.startActivity(launchIntent, appBundle)
                     FreeformCompanionSession.set(
@@ -157,25 +223,15 @@ object FreeformLaunchHelper {
                         Toast.LENGTH_SHORT,
                     ).show()
                 }
-            }, ANCHOR_DELAY_MS)
-        }
-
-        return try {
-            if (replacingExisting) {
-                // Tear down previous freeform slot + overlay geometry, then relaunch.
-                requestHideMainScreenWindow(appContext, immediate = true)
-                finishFreeformAnchor(appContext)
-                FreeformCompanionSession.clear()
-                mainHandler.postDelayed({ startCompanionAfterAnchor() }, REPLACE_COMPANION_DELAY_MS)
-            } else {
-                startCompanionAfterAnchor()
             }
+            pendingAnchorLaunchRunnable = launchRunnable
+            mainHandler.postDelayed(launchRunnable, ANCHOR_DELAY_MS)
             true
         } catch (e: Exception) {
             Log.w(TAG, "Freeform companion launch failed", e)
             Toast.makeText(
-                context,
-                context.getString(R.string.widget_app_launcher_freeform_launch_failed),
+                appContext,
+                appContext.getString(R.string.widget_app_launcher_freeform_launch_failed),
                 Toast.LENGTH_SHORT,
             ).show()
             false
@@ -184,15 +240,22 @@ object FreeformLaunchHelper {
 
     /** Hide overlay, finish anchor, bring MainActivity fullscreen, clear session. */
     fun exitWindowMode(context: Context) {
+        // Explicit exit (X / same-tile toggle) — do not relaunch a queued companion.
+        pendingAfterExit = null
+        pendingAppContext = null
         if (exitInProgress) {
             dbg("exit ignored (already in progress)")
             return
         }
+        beginExitWindowMode(context.applicationContext, EXIT_DEFER_FROM_CLICK_MS)
+    }
+
+    private fun beginExitWindowMode(appContext: Context, deferMs: Long) {
+        // Replace any prior deferred exit/relaunch; keep flag true for the new exit.
+        cancelPostedWork(clearExitInProgress = false)
         exitInProgress = true
-        mainHandler.removeCallbacksAndMessages(null)
-        val appContext = context.applicationContext
-        // Defer past the overlay Compose click so we do not tear down mid-gesture.
-        mainHandler.postDelayed({
+        val exitRunnable = Runnable {
+            pendingExitRunnable = null
             FreeformCompanionSession.clear()
             dbg("exit request → service")
             try {
@@ -203,10 +266,14 @@ object FreeformLaunchHelper {
                 )
             } catch (e: Exception) {
                 exitInProgress = false
+                pendingAfterExit = null
+                pendingAppContext = null
                 Log.w(TAG, "Failed to request window-mode exit", e)
                 dbg("exit request fail err=${e.message}")
             }
-        }, EXIT_DEFER_FROM_CLICK_MS)
+        }
+        pendingExitRunnable = exitRunnable
+        mainHandler.postDelayed(exitRunnable, deferMs)
     }
 
     /** Alias used by UI that previously called [exitToFullscreen]. */
@@ -214,7 +281,31 @@ object FreeformLaunchHelper {
 
     /** Called by [BackgroundService] when the exit sequence finishes (success or fail). */
     fun markExitFinished() {
-        exitInProgress = false
+        // Service coroutine may call this off the main thread — serialize on the handler.
+        mainHandler.post {
+            exitInProgress = false
+            pendingExitRunnable = null
+            val pending = pendingAfterExit
+            val appContext = pendingAppContext
+            pendingAfterExit = null
+            pendingAppContext = null
+            if (pending == null || appContext == null) return@post
+            dbg(
+                "exit done → relaunch ${pending.packageName} side=${pending.side.storageKey} " +
+                    "pct=${pending.percent} after ${AFTER_FULL_EXIT_RELAUNCH_DELAY_MS}ms",
+            )
+            val relaunchRunnable = Runnable {
+                pendingRelaunchRunnable = null
+                startCompanionLaunch(
+                    appContext = appContext,
+                    pkg = pending.packageName,
+                    side = pending.side,
+                    percent = pending.percent,
+                )
+            }
+            pendingRelaunchRunnable = relaunchRunnable
+            mainHandler.postDelayed(relaunchRunnable, AFTER_FULL_EXIT_RELAUNCH_DELAY_MS)
+        }
     }
 
     fun requestShowMainScreenWindow(context: Context) {
@@ -258,12 +349,6 @@ object FreeformLaunchHelper {
         } catch (e: Exception) {
             Log.w(TAG, "Failed to start freeform anchor", e)
         }
-    }
-
-    private fun finishFreeformAnchor(context: Context) {
-        context.sendBroadcast(
-            Intent(FreeformInvisibleAnchorActivity.ACTION_FINISH).setPackage(context.packageName),
-        )
     }
 
     private fun freeformWindowingModeId(): Int =
