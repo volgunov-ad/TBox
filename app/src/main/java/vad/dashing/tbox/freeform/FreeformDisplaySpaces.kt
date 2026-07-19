@@ -14,11 +14,15 @@ import android.view.WindowManager
  *
  * On multi-display head units, [TYPE_APPLICATION_OVERLAY][android.view.WindowManager.LayoutParams]
  * added via the service default WM often uses the full physical panel, while apps run on an
- * inset virtual display. Prefer a [Context.createDisplayContext] WM for that app display so
- * overlay x/y match freeform bounds (origin = top-start of the app display).
+ * inset virtual display (e.g. display 5 @ 1320×856 while default is 1920×981). Prefer that
+ * inset VD for freeform bounds and overlay WM so x/y match.
  */
 object FreeformDisplaySpaces {
     private const val TAG = "FreeformDisplay"
+
+    /** Ignore status/cluster strips and tiny secondary panels. */
+    private const val MIN_APP_SHORT_SIDE_PX = 400
+    private const val MIN_APP_LONG_SIDE_PX = 800
 
     data class ActivityDisplay(
         val displayId: Int,
@@ -26,14 +30,80 @@ object FreeformDisplaySpaces {
         val heightPx: Int,
     )
 
+    data class DisplaySize(
+        val displayId: Int,
+        val widthPx: Int,
+        val heightPx: Int,
+    ) {
+        val area: Long get() = widthPx.toLong() * heightPx
+        val shortSide: Int get() = minOf(widthPx, heightPx)
+        val longSide: Int get() = maxOf(widthPx, heightPx)
+    }
+
     fun resolveActivityDisplay(context: Context): ActivityDisplay {
-        val display = currentDisplay(context)
-        val (w, h) = sizePx(context, display)
-        return ActivityDisplay(
-            displayId = display?.displayId ?: Display.DEFAULT_DISPLAY,
-            widthPx = w,
-            heightPx = h,
-        )
+        val catalog = listDisplaySizes(context)
+        val fromContext = currentDisplay(context)?.let { display ->
+            val (w, h) = sizePxForDisplay(display)
+            DisplaySize(display.displayId, w, h)
+        }
+        return resolveFromCatalog(catalog, contextDisplay = fromContext)
+    }
+
+    /**
+     * Pure resolve used by [resolveActivityDisplay] and unit tests.
+     * Prefers [pickAppVirtualDisplay] so applicationContext / overlay Context on display 0
+     * still resolve to the HU inset app VD.
+     */
+    internal fun resolveFromCatalog(
+        catalog: List<DisplaySize>,
+        contextDisplay: DisplaySize?,
+    ): ActivityDisplay {
+        pickAppVirtualDisplay(catalog)?.let { picked ->
+            return ActivityDisplay(picked.displayId, picked.widthPx, picked.heightPx)
+        }
+        val fallback = contextDisplay
+            ?: catalog.firstOrNull { it.displayId == Display.DEFAULT_DISPLAY }
+            ?: DisplaySize(Display.DEFAULT_DISPLAY, 1280, 720)
+        return ActivityDisplay(fallback.displayId, fallback.widthPx, fallback.heightPx)
+    }
+
+    /**
+     * Context bound to [displayId] for [Context.startActivity] so freeform companions land on
+     * the same virtual display as launch bounds / overlay (not the default panel).
+     */
+    fun contextForDisplay(context: Context, displayId: Int): Context {
+        if (displayId == Display.DEFAULT_DISPLAY) return context.applicationContext
+        return try {
+            val dm = context.getSystemService(DisplayManager::class.java) ?: return context.applicationContext
+            val display = dm.getDisplay(displayId) ?: return context.applicationContext
+            context.applicationContext.createDisplayContext(display)
+        } catch (e: Exception) {
+            Log.w(TAG, "contextForDisplay($displayId) failed", e)
+            context.applicationContext
+        }
+    }
+
+    /**
+     * Among HU displays, prefer the largest non-default surface that looks like the app /
+     * freeform canvas (not a status strip): shorter side ≥ [MIN_APP_SHORT_SIDE_PX], longer
+     * side ≥ [MIN_APP_LONG_SIDE_PX], and area strictly smaller than the default display when
+     * a default exists (inset VD).
+     *
+     * Jetour sample: `0:1920x981` (default) + `5:1320x856` (app) → picks 5.
+     */
+    internal fun pickAppVirtualDisplay(displays: List<DisplaySize>): DisplaySize? {
+        if (displays.isEmpty()) return null
+        val defaultArea = displays
+            .firstOrNull { it.displayId == Display.DEFAULT_DISPLAY }
+            ?.area
+            ?: 0L
+        val candidates = displays.filter { d ->
+            d.displayId != Display.DEFAULT_DISPLAY &&
+                d.shortSide >= MIN_APP_SHORT_SIDE_PX &&
+                d.longSide >= MIN_APP_LONG_SIDE_PX &&
+                (defaultArea <= 0L || d.area < defaultArea)
+        }
+        return candidates.maxByOrNull { it.area }
     }
 
     /**
@@ -68,12 +138,8 @@ object FreeformDisplaySpaces {
     /** Compact one-line list of displays for rare WindowMode debug logs. */
     fun summarizeDisplays(context: Context): String {
         return try {
-            val dm = context.getSystemService(DisplayManager::class.java) ?: return "no-dm"
-            dm.displays.joinToString(",") { d ->
-                @Suppress("DEPRECATION")
-                val metrics = DisplayMetrics()
-                d.getMetrics(metrics)
-                "${d.displayId}:${metrics.widthPixels}x${metrics.heightPixels}"
+            listDisplaySizes(context).joinToString(",") { d ->
+                "${d.displayId}:${d.widthPx}x${d.heightPx}"
             }.ifEmpty { "none" }
         } catch (e: Exception) {
             "err:${e.message}"
@@ -100,6 +166,14 @@ object FreeformDisplaySpaces {
             "displayId=$displayId defaultWm=${defW}x${defH} overlayWm=${ovW}x${ovH} sameWm=$sameInstance"
         } catch (e: Exception) {
             "displayId=$displayId err=${e.message}"
+        }
+    }
+
+    private fun listDisplaySizes(context: Context): List<DisplaySize> {
+        val dm = context.getSystemService(DisplayManager::class.java) ?: return emptyList()
+        return dm.displays.map { display ->
+            val (w, h) = sizePxForDisplay(display)
+            DisplaySize(display.displayId, w, h)
         }
     }
 
@@ -138,21 +212,9 @@ object FreeformDisplaySpaces {
     }
 
     @Suppress("DEPRECATION")
-    private fun sizePx(context: Context, display: Display?): Pair<Int, Int> {
-        if (Build.VERSION.SDK_INT >= 30) {
-            val wm = context.getSystemService(WindowManager::class.java)
-            if (wm != null) {
-                val bounds = wm.currentWindowMetrics.bounds
-                return bounds.width().coerceAtLeast(1) to bounds.height().coerceAtLeast(1)
-            }
-        }
+    private fun sizePxForDisplay(display: Display): Pair<Int, Int> {
         val metrics = DisplayMetrics()
-        if (display != null) {
-            display.getMetrics(metrics)
-        } else {
-            (context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager)
-                ?.defaultDisplay?.getMetrics(metrics)
-        }
+        display.getMetrics(metrics)
         return metrics.widthPixels.coerceAtLeast(1) to metrics.heightPixels.coerceAtLeast(1)
     }
 }

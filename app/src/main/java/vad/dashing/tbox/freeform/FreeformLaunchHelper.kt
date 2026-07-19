@@ -163,13 +163,21 @@ object FreeformLaunchHelper {
         val activityDisplay = FreeformDisplaySpaces.resolveActivityDisplay(appContext)
         val displayW = activityDisplay.widthPx
         val displayH = activityDisplay.heightPx
+        val launchContext = FreeformDisplaySpaces.contextForDisplay(
+            appContext,
+            activityDisplay.displayId,
+        )
         val (appBounds, tboxBounds) = FreeformLaunchBounds.computeAppAndTboxBounds(
             displayW,
             displayH,
             side,
             percent,
         )
-        val appBundle = activityOptionsBundle(freeformWindowingModeId(), appBounds) ?: run {
+        val appBundle = activityOptionsBundle(
+            freeformWindowingModeId(),
+            appBounds,
+            launchDisplayId = activityDisplay.displayId,
+        ) ?: run {
             Toast.makeText(
                 appContext,
                 appContext.getString(R.string.widget_app_launcher_freeform_unsupported),
@@ -195,11 +203,16 @@ object FreeformLaunchHelper {
         )
 
         return try {
-            ensureFreeformAnchor(appContext, displayW, displayH)
+            ensureFreeformAnchor(
+                launchContext,
+                displayW,
+                displayH,
+                displayId = activityDisplay.displayId,
+            )
             val launchRunnable = Runnable {
                 pendingAnchorLaunchRunnable = null
                 try {
-                    appContext.startActivity(launchIntent, appBundle)
+                    launchContext.startActivity(launchIntent, appBundle)
                     FreeformCompanionSession.set(
                         packageName = pkg,
                         side = side,
@@ -333,11 +346,11 @@ object FreeformLaunchHelper {
         }
     }
 
-    private fun ensureFreeformAnchor(context: Context, displayW: Int, displayH: Int) {
+    private fun ensureFreeformAnchor(context: Context, displayW: Int, displayH: Int, displayId: Int) {
         if (FreeformInvisibleAnchorActivity.isRunning) return
         val freeformMode = freeformWindowingModeId()
         val tiny = Rect(displayW, displayH, displayW + 1, displayH + 1)
-        val bundle = activityOptionsBundle(freeformMode, tiny) ?: return
+        val bundle = activityOptionsBundle(freeformMode, tiny, launchDisplayId = displayId) ?: return
         val intent = Intent(context, FreeformInvisibleAnchorActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -357,7 +370,11 @@ object FreeformLaunchHelper {
     private fun windowingModeMethodName(): String =
         if (Build.VERSION.SDK_INT >= 28) "setLaunchWindowingMode" else "setLaunchStackId"
 
-    private fun activityOptionsBundle(windowingMode: Int, bounds: Rect): Bundle? {
+    private fun activityOptionsBundle(
+        windowingMode: Int,
+        bounds: Rect,
+        launchDisplayId: Int,
+    ): Bundle? {
         val options = try {
             ActivityOptions.makeBasic()
         } catch (e: Exception) {
@@ -373,10 +390,29 @@ object FreeformLaunchHelper {
             if (Build.VERSION.SDK_INT >= 24) {
                 options.setLaunchBounds(bounds)
             }
+            if (Build.VERSION.SDK_INT >= 26) {
+                applyLaunchDisplayId(options, launchDisplayId)
+            }
             options.toBundle()
         } catch (e: Exception) {
             Log.w(TAG, "Hidden ActivityOptions windowing API unavailable", e)
             null
+        }
+    }
+
+    private fun applyLaunchDisplayId(options: ActivityOptions, displayId: Int) {
+        try {
+            options.setLaunchDisplayId(displayId)
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "setLaunchDisplayId($displayId) direct failed, trying reflection", e)
+        }
+        try {
+            ActivityOptions::class.java
+                .getMethod("setLaunchDisplayId", Int::class.javaPrimitiveType)
+                .invoke(options, displayId)
+        } catch (e: Exception) {
+            Log.w(TAG, "setLaunchDisplayId($displayId) reflection failed", e)
         }
     }
 }

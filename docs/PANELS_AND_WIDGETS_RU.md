@@ -137,7 +137,7 @@ flowchart TB
 1. Якорь 1×1 (`FreeformInvisibleAnchorActivity`) + `setLaunchWindowingMode(5)` / `setLaunchBounds` для приложения-компаньона (координаты **виртуального / activity-дисплея** ГУ, не всей физической панели).
 2. Рядом — overlay с `MainScreen` (`FloatingOverlayController.showMainScreenWindow`):
    - по умолчанию **авто-геометрия**: complementary-прямоугольник рядом с companion в том же пространстве, что и freeform;
-   - overlay вешается через `WindowManager` из `createDisplayContext` / `createWindowContext` для сохранённого `activityDisplayId` (`FreeformDisplaySpaces`), чтобы x/y совпадали с bounds companion на multi-VD ГУ;
+   - overlay вешается через `WindowManager` из `createDisplayContext` / `createWindowContext` для сохранённого `activityDisplayId` (`FreeformDisplaySpaces`): выбирается inset app VD (на Jetour обычно не `displayId=0`, а меньший VD вроде `5:1320×856`), иначе проценты считаются от «почти полного» экрана;
    - если авто выключено — геометрия из **Настройки главного экрана → Оконный режим** (компактные поля W/H и X/Y, как у плавающих панелей).
 3. При входе в оконный режим **`MainActivity` закрывается** (broadcast `ACTION_FINISH_FOR_WINDOW_MODE`), чтобы не было двух экземпляров главной; выход снова поднимает fullscreen `MainActivity` обычным `startActivity` **без** freeform/fullscreen `ActivityOptions` (на multi-display ГУ options при restore часто дают краш).
 4. В overlay — перемещаемая угловая кнопка выхода: скрыть overlay, вернуть `MainActivity` fullscreen, сбросить сессию (`FreeformCompanionSession`). Companion force-stop не делается. На fullscreen-главной эта кнопка не показывается.
