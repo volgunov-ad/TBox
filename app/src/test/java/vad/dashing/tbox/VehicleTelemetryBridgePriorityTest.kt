@@ -58,4 +58,39 @@ class VehicleTelemetryBridgePriorityTest {
         val snap = VehicleTelemetryBridge.buildAccountingDebugSnapshot(now + 100L)
         assertTrue(snap.contains("Fuel=TBox("))
     }
+
+    @Test
+    fun a9RejectsHuEngineTempEvenWhenTboxAbsent() {
+        VehicleTelemetryBridge.setA9EngineTempTboxOnlyForTest(true)
+        var written = false
+        VehicleTelemetryBridge.tryWriteHuForTest(VehicleTelemetryBridge.Signal.EngineTemp) {
+            written = true
+        }
+        assertFalse(written)
+    }
+
+    @Test
+    fun a10AllowsHuEngineTempWhenTboxAbsent() {
+        VehicleTelemetryBridge.setA9EngineTempTboxOnlyForTest(false)
+        var written = false
+        VehicleTelemetryBridge.tryWriteHuForTest(VehicleTelemetryBridge.Signal.EngineTemp) {
+            written = true
+        }
+        assertTrue(written)
+    }
+
+    @Test
+    fun a10BlocksHuEngineTempWhileTboxFresh() {
+        VehicleTelemetryBridge.setA9EngineTempTboxOnlyForTest(false)
+        val now = SystemClock.elapsedRealtime()
+        VehicleTelemetryBridge.noteTboxTempPriority(
+            VehicleTelemetryBridge.Signal.EngineTemp,
+            now,
+        )
+        var written = false
+        VehicleTelemetryBridge.tryWriteHuForTest(VehicleTelemetryBridge.Signal.EngineTemp) {
+            written = true
+        }
+        assertFalse(written)
+    }
 }

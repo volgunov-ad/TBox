@@ -183,8 +183,9 @@ object MbCanEngineFacade {
     }
 
     /**
-     * Single [com.mengbo.mbCan.interfaces.IMBCanSettingsCallback] on [MBCanEngine] — forwards speed/engine
-     * pushes into [MbCanRepository]. Safe to call once after [ensureInitialized]; no-op if already registered.
+     * Single [com.mengbo.mbCan.interfaces.IMBCanSettingsCallback] on [MBCanEngine] — forwards speed/engine/
+     * fuel/odometer/outside-temp/BCM pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
+     * no-op if already registered.
      */
     @Synchronized
     fun registerSettingsTelemetryBridge() {
@@ -235,6 +236,16 @@ object MbCanEngineFacade {
                     val validated = pct?.takeIf { it in 0..100 }?.toUInt()
                         ?: readVehicleFuelLevelPercent()
                     MbCanRepository.scheduleFuelLevelPush(validated)
+                }
+                "onCanVehicleExternalTemp" -> {
+                    val tempObj = args?.getOrNull(0)
+                    val celsius = runCatching {
+                        val getter = tempObj?.javaClass?.getMethod("getExternalTemperatureRaw")
+                        val raw = (getter?.invoke(tempObj) as? Number)?.toInt() ?: return@runCatching null
+                        val asByte = raw.toByte().toInt()
+                        if (asByte == 87 || raw == 87) null else asByte.toFloat()
+                    }.getOrNull() ?: readOutsideTemperatureC()
+                    MbCanRepository.scheduleOutsideTemperaturePush(celsius)
                 }
                 "onVehicleTotalOdoMeterChange" -> {
                     val odo = args?.getOrNull(0)

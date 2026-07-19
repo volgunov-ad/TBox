@@ -15,7 +15,10 @@ import vad.dashing.tbox.mbcan.UniversalCanRepository
  *
  * Priority (freshness window [FRESHNESS_MS]):
  * - RPM, speed, odometer, fuel %, outside temp: HU first; TBox only if HU stale/absent
- * - Engine coolant + gearbox oil temps: TBox first; HU coolant only if TBox stale/absent
+ * - Engine coolant:
+ *   - Android 9 (mbCAN): **TBox only** (HU coolant is always `0.0` in practice)
+ *   - Android 10 (VHAL): TBox first; HU only if TBox stale/absent
+ * - Gearbox oil temp: TBox only
  *
  * After [FRESHNESS_MS] with no RPM from either source, forces RPM to 0 so trips can close.
  *
@@ -55,6 +58,10 @@ object VehicleTelemetryBridge {
 
     @Volatile
     private var debugSnapshotJob: Job? = null
+
+    /** Test override: null = use [UniversalCanRepository.mode]; true = A9 TBox-only coolant policy. */
+    @Volatile
+    private var a9EngineTempTboxOnlyForTest: Boolean? = null
 
     private val lastHuElapsedMs = LongArray(Signal.entries.size) { -1L }
     private val lastTboxElapsedMs = LongArray(Signal.entries.size) { -1L }
@@ -142,6 +149,17 @@ object VehicleTelemetryBridge {
             lastHuElapsedMs.fill(-1L)
             lastTboxElapsedMs.fill(-1L)
         }
+        a9EngineTempTboxOnlyForTest = null
+    }
+
+    /** Visible for unit tests: force A9 TBox-only coolant policy (`true`) or A10 fallback (`false`). */
+    internal fun setA9EngineTempTboxOnlyForTest(enabled: Boolean?) {
+        a9EngineTempTboxOnlyForTest = enabled
+    }
+
+    /** Visible for unit tests. */
+    internal fun tryWriteHuForTest(signal: Signal, write: () -> Unit) {
+        tryWriteHu(signal, write)
     }
 
     fun stop() {
@@ -177,17 +195,28 @@ object VehicleTelemetryBridge {
         }
     }
 
+    private fun isA9EngineTempTboxOnly(): Boolean {
+        a9EngineTempTboxOnlyForTest?.let { return it }
+        return UniversalCanRepository.mode.value == HeadUnitCanMode.Android9MbCan
+    }
+
     private fun tryWriteHu(signal: Signal, write: () -> Unit) {
         val now = SystemClock.elapsedRealtime()
         val allow = synchronized(lock) {
             when (signal) {
                 Signal.EngineTemp -> {
-                    val tboxLast = lastTboxElapsedMs[signal.ordinal]
-                    val tboxFresh = tboxLast >= 0L && now - tboxLast <= FRESHNESS_MS
-                    if (tboxFresh) false
-                    else {
-                        lastHuElapsedMs[signal.ordinal] = now
-                        true
+                    // A9 mbCAN coolant is always 0.0 — trips must not take HU over TBox.
+                    if (isA9EngineTempTboxOnly()) {
+                        false
+                    } else {
+                        val tboxLast = lastTboxElapsedMs[signal.ordinal]
+                        val tboxFresh = tboxLast >= 0L && now - tboxLast <= FRESHNESS_MS
+                        if (tboxFresh) {
+                            false
+                        } else {
+                            lastHuElapsedMs[signal.ordinal] = now
+                            true
+                        }
                     }
                 }
                 Signal.GearboxOilTemp -> false
@@ -222,6 +251,7 @@ object VehicleTelemetryBridge {
     internal fun buildAccountingDebugSnapshot(
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
     ): String {
+        val a9CoolantTboxOnly = isA9EngineTempTboxOnly()
         val sources = synchronized(lock) {
             fun fmt(signal: Signal): String {
                 val huLast = lastHuElapsedMs[signal.ordinal]
@@ -232,6 +262,10 @@ object VehicleTelemetryBridge {
                 val tboxFresh = tboxAge != null && tboxAge <= FRESHNESS_MS
                 val active = when (signal) {
                     Signal.EngineTemp -> when {
+                        a9CoolantTboxOnly -> when {
+                            tboxFresh -> "TBox"
+                            else -> "-"
+                        }
                         tboxFresh -> "TBox"
                         huFresh -> "HU"
                         else -> "-"
