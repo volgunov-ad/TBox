@@ -210,6 +210,7 @@ onDataReceived → поток tbox-packet-processor → responseWork(packet)
 | Служба и протокол | `BackgroundService.kt`, `TboxProtocol.kt` |
 | Состояние | `TboxRepository.kt`, `CanDataRepository.kt` |
 | Декод CAN | `utils/CanFramesProcess.kt` |
+| Формулы raw→физ. | [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md) |
 | Зависимость | `gradle/libs.versions.toml` → `tboxProxy` |
 | Broadcast | `TboxBroadcastSender.kt`, `TBoxBroadcastReceiver.kt` |
 | Boot | `BootCompleteReceiver.kt` |
@@ -220,5 +221,6 @@ onDataReceived → поток tbox-packet-processor → responseWork(packet)
 
 - [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — интерфейс, программы TBox, перезагрузки
 - [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md) — mbCAN и VHAL на ГУ
+- [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md) — формулы пересчёта сырых значений
 - [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) — плитки и источники данных
 - [Trips.md](Trips.md) — поездки и учёт топлива по CAN TBox
