@@ -38,6 +38,9 @@ const val DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK = 0xFF616161.toInt()
 
 const val DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP = false
 
+/** Shared collapse/expand animation length for main-screen and floating panels. */
+const val PANEL_COLLAPSE_ANIMATION_MS = 180
+
 fun normalizePanelCollapseStripThicknessDp(raw: Int): Int =
     raw.coerceIn(MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP, MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
 

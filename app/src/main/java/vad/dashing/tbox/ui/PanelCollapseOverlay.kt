@@ -20,6 +20,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.PanelCollapseEdge
+import vad.dashing.tbox.PANEL_COLLAPSE_ANIMATION_MS
 
 internal data class PanelCollapseEdgeDropdownOption(
     val edge: PanelCollapseEdge,
@@ -32,7 +33,7 @@ internal data class PanelCollapseEdgeDropdownOption(
 internal fun rememberPanelCollapseProgress(collapsed: Boolean): State<Float> =
     animateFloatAsState(
         targetValue = if (collapsed) 1f else 0f,
-        animationSpec = tween(durationMillis = 180),
+        animationSpec = tween(durationMillis = PANEL_COLLAPSE_ANIMATION_MS),
         label = "panelCollapseProgress",
     )
 

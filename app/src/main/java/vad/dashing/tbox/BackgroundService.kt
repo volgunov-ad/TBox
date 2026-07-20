@@ -2737,15 +2737,6 @@ class BackgroundService : Service() {
                     }
             }
             launch {
-                settingsManager.panelCollapseStatesFlow
-                    .drop(1)
-                    .collect {
-                        // Collapse state lives outside theme/config JSON, so it needs its own
-                        // overlay layout refresh.
-                        overlayController.syncFloatingDashboards(floatingDashboards.value)
-                    }
-            }
-            launch {
                 FloatingPanelEditModeTracker.overlayEditEpoch
                     .drop(1)
                     .collect {

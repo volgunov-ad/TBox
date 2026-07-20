@@ -66,3 +66,30 @@ object FloatingPanelEditModeTracker {
             overlayEditPanelIds.isNotEmpty() || tileEditDialogPanelIds.isNotEmpty()
     }
 }
+
+/**
+ * While a floating panel runs its in-Compose collapse/expand animation, overlay sync must keep
+ * the WindowManager frame at the **expanded** size so the animation has room to play.
+ */
+object FloatingPanelCollapseAnimationGate {
+    private val lock = Any()
+    private val animatingPanelIds = mutableSetOf<String>()
+
+    fun setAnimating(panelId: String, animating: Boolean) {
+        if (panelId.isBlank()) return
+        synchronized(lock) {
+            if (animating) {
+                animatingPanelIds.add(panelId)
+            } else {
+                animatingPanelIds.remove(panelId)
+            }
+        }
+    }
+
+    fun isAnimating(panelId: String): Boolean {
+        if (panelId.isBlank()) return false
+        synchronized(lock) {
+            return panelId in animatingPanelIds
+        }
+    }
+}

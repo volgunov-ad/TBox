@@ -62,6 +62,7 @@ import vad.dashing.tbox.collapseEdgeOrNone
 import vad.dashing.tbox.collapsedPanelBounds
 import vad.dashing.tbox.lerpPanelBounds
 import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
+import vad.dashing.tbox.PANEL_COLLAPSE_ANIMATION_MS
 import vad.dashing.tbox.resolveStripColor
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import kotlin.math.roundToInt
@@ -298,7 +299,7 @@ fun MainScreenDashboardPanel(
     val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
     val collapseProgress by animateFloatAsState(
         targetValue = if (effectiveCollapsed) 1f else 0f,
-        animationSpec = tween(durationMillis = 180),
+        animationSpec = tween(durationMillis = PANEL_COLLAPSE_ANIMATION_MS),
         label = "mainPanelCollapse",
     )
     val expandedBounds = PanelPxBounds(
