@@ -61,7 +61,7 @@ data class TripRecord(
      */
     val fuelBaselinePercent: Float? = null,
     /**
-     * Последний уровень в калиброванных литрах (стандарт +15 °C, как [vad.dashing.tbox.CanDataRepository.fuelLevelCalibratedLiters]).
+     * Последний уровень в калиброванных литрах (стандарт +15 °C, как [vad.dashing.tbox.TripTelemetryRepository.fuelLevelCalibratedLiters]).
      */
     val fuelBaselineLiters: Float? = null,
     /**

@@ -257,7 +257,7 @@ class TboxBroadcastSender(
                         sendUInt(CanDataRepository.fuelLevelPercentage.value, arrayOf(packageName, extraName, extraValue), extraValue)
                     }
                     FUEL_LEVEL_PERCENTAGE_FILTERED -> {
-                        sendUInt(CanDataRepository.fuelLevelPercentageFiltered.value, arrayOf(packageName, extraName, extraValue), extraValue)
+                        sendUInt(TripTelemetryRepository.fuelLevelPercentageFiltered.value, arrayOf(packageName, extraName, extraValue), extraValue)
                     }
                     CRUISE_SET_SPEED -> {
                         sendUInt(CanDataRepository.cruiseSetSpeed.value, arrayOf(packageName, extraName, extraValue), extraValue)
@@ -713,7 +713,7 @@ class TboxBroadcastSender(
             }
 
             launch {
-                CanDataRepository.fuelLevelPercentageFiltered
+                TripTelemetryRepository.fuelLevelPercentageFiltered
                     .sampleWithTimeout(periodMillis = 5000, timeoutMillis = 60000)
                     .collect { fuelLevelPercentageFiltered ->
                         if (carStateSubscribers.isNotEmpty()) {

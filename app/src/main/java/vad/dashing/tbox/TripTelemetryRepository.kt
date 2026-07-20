@@ -4,28 +4,32 @@ import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.fuellevelcalibration.FuelLevelStableApply
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.utils.InOutTemperatureNullDebounce
 
 /**
- * Bridges mbCAN/VHAL telemetry into [CanDataRepository] for trip/refuel accounting.
+ * Mixed HU + TBox telemetry for trip/refuel accounting (not [CanDataRepository]).
  *
  * Priority (freshness window [FRESHNESS_MS]):
  * - RPM, speed, odometer, fuel %, outside temp: HU first; TBox only if HU stale/absent
  * - Engine coolant:
  *   - Android 9 (mbCAN): **TBox only** (HU coolant is always `0.0` in practice)
  *   - Android 10 (VHAL): TBox first; HU only if TBox stale/absent
- * - Gearbox oil temp: TBox only
+ * - Gearbox oil temp: TBox only (tracked for freshness/debug; value stays on CDR)
  *
  * After [FRESHNESS_MS] with no RPM from either source, forces RPM to 0 so trips can close.
  *
- * Emits a DEBUG snapshot every [DEBUG_SNAPSHOT_MS] (tag `TripFuel`) with active source per
- * signal and current CDR values via [TboxRepository.addLog] (not gated by CAN diagnostics).
+ * Filtered fuel % and calibrated liters live here only. Emits DEBUG `TripFuel` every
+ * [DEBUG_SNAPSHOT_MS] via [TboxRepository.addLog].
  */
-object VehicleTelemetryBridge {
+object TripTelemetryRepository {
     const val FRESHNESS_MS: Long = 45_000L
     const val TRIP_ACCOUNTING_SOURCE_ID: String = "trip-accounting-telemetry"
     private const val DEBUG_SNAPSHOT_MS: Long = 15_000L
@@ -50,6 +54,37 @@ object VehicleTelemetryBridge {
         GearboxOilTemp,
     }
 
+    private val _engineRpm = MutableStateFlow<Float?>(null)
+    val engineRpm: StateFlow<Float?> = _engineRpm.asStateFlow()
+
+    private val _carSpeed = MutableStateFlow<Float?>(null)
+    val carSpeed: StateFlow<Float?> = _carSpeed.asStateFlow()
+
+    private val _odometerKm = MutableStateFlow<UInt?>(null)
+    val odometerKm: StateFlow<UInt?> = _odometerKm.asStateFlow()
+
+    private val _fuelLevelPercentage = MutableStateFlow<UInt?>(null)
+    val fuelLevelPercentage: StateFlow<UInt?> = _fuelLevelPercentage.asStateFlow()
+
+    private val _fuelLevelPercentageFiltered = MutableStateFlow<UInt?>(null)
+    val fuelLevelPercentageFiltered: StateFlow<UInt?> = _fuelLevelPercentageFiltered.asStateFlow()
+
+    private val _fuelLevelCalibratedLiters = MutableStateFlow<Float?>(null)
+    val fuelLevelCalibratedLiters: StateFlow<Float?> = _fuelLevelCalibratedLiters.asStateFlow()
+
+    private val _fuelLevelCalibratedLitersActual = MutableStateFlow<Float?>(null)
+    val fuelLevelCalibratedLitersActual: StateFlow<Float?> = _fuelLevelCalibratedLitersActual.asStateFlow()
+
+    private val _fuelCalibrationConfidence = MutableStateFlow<Float?>(null)
+    val fuelCalibrationConfidence: StateFlow<Float?> = _fuelCalibrationConfidence.asStateFlow()
+
+    private val _outsideTemperature = MutableStateFlow<Float?>(null)
+    val outsideTemperature: StateFlow<Float?> = _outsideTemperature.asStateFlow()
+    private var outsideTemperatureLastTimeNotNull: Long? = null
+
+    private val _engineTemperature = MutableStateFlow<Float?>(null)
+    val engineTemperature: StateFlow<Float?> = _engineTemperature.asStateFlow()
+
     @Volatile
     private var collectJob: Job? = null
 
@@ -67,6 +102,12 @@ object VehicleTelemetryBridge {
     private val lastTboxElapsedMs = LongArray(Signal.entries.size) { -1L }
     private val lock = Any()
 
+    private fun <T> MutableStateFlow<T>.setIfChanged(newValue: T) {
+        if (value != newValue) {
+            value = newValue
+        }
+    }
+
     fun start(scope: CoroutineScope) {
         stop()
         collectJob = scope.launch {
@@ -75,7 +116,7 @@ object VehicleTelemetryBridge {
                 UniversalCanRepository.engineRpmState.collect { rpm ->
                     rpm ?: return@collect
                     tryWriteHu(Signal.Rpm) {
-                        CanDataRepository.updateEngineRPM(rpm)
+                        _engineRpm.setIfChanged(rpm)
                     }
                 }
             }
@@ -83,7 +124,7 @@ object VehicleTelemetryBridge {
                 UniversalCanRepository.carSpeedState.collect { speed ->
                     speed ?: return@collect
                     tryWriteHu(Signal.Speed) {
-                        CanDataRepository.updateCarSpeed(speed)
+                        _carSpeed.setIfChanged(speed)
                     }
                 }
             }
@@ -91,7 +132,7 @@ object VehicleTelemetryBridge {
                 UniversalCanRepository.engineTemperatureState.collect { temp ->
                     temp ?: return@collect
                     tryWriteHu(Signal.EngineTemp) {
-                        CanDataRepository.updateEngineTemperature(temp)
+                        _engineTemperature.setIfChanged(temp)
                     }
                 }
             }
@@ -99,7 +140,7 @@ object VehicleTelemetryBridge {
                 UniversalCanRepository.fuelLevelPercentState.collect { pct ->
                     pct ?: return@collect
                     tryWriteHu(Signal.Fuel) {
-                        CanDataRepository.updateFuelLevelPercentage(pct)
+                        _fuelLevelPercentage.setIfChanged(pct)
                         FuelLevelStableApply.onRawFuelPercent(pct)
                     }
                 }
@@ -108,16 +149,15 @@ object VehicleTelemetryBridge {
                 UniversalCanRepository.odometerKmState.collect { km ->
                     km ?: return@collect
                     tryWriteHu(Signal.Odometer) {
-                        CanDataRepository.updateOdometer(km)
+                        _odometerKm.setIfChanged(km)
                     }
                 }
             }
             launch {
                 UniversalCanRepository.outsideTemperatureState.collect { temp ->
-                    // null from HU means invalid (e.g. raw 87); do not clear via bridge
                     temp ?: return@collect
                     tryWriteHu(Signal.OutsideTemp) {
-                        CanDataRepository.updateOutsideTemperature(temp)
+                        _outsideTemperature.setIfChanged(temp)
                     }
                 }
             }
@@ -134,6 +174,106 @@ object VehicleTelemetryBridge {
                 logAccountingDebugSnapshot()
             }
         }
+    }
+
+    fun stop() {
+        collectJob?.cancel()
+        collectJob = null
+        staleWatchJob?.cancel()
+        staleWatchJob = null
+        debugSnapshotJob?.cancel()
+        debugSnapshotJob = null
+        UniversalCanRepository.enqueueClearSource(TRIP_ACCOUNTING_SOURCE_ID)
+        synchronized(lock) {
+            lastHuElapsedMs.fill(-1L)
+            lastTboxElapsedMs.fill(-1L)
+        }
+    }
+
+    /** Gate for TBox [CanFramesProcess] writes of HU-priority signals into this repo. */
+    fun acceptTboxHuPriority(signal: Signal, nowElapsedMs: Long = SystemClock.elapsedRealtime()): Boolean {
+        synchronized(lock) {
+            val huLast = lastHuElapsedMs[signal.ordinal]
+            val huFresh = huLast >= 0L && nowElapsedMs - huLast <= FRESHNESS_MS
+            if (huFresh) return false
+            lastTboxElapsedMs[signal.ordinal] = nowElapsedMs
+            return true
+        }
+    }
+
+    /** Gate for TBox writes of TBox-priority temps (coolant / gearbox oil). Always accept. */
+    fun noteTboxTempPriority(signal: Signal, nowElapsedMs: Long = SystemClock.elapsedRealtime()) {
+        require(signal == Signal.EngineTemp || signal == Signal.GearboxOilTemp)
+        synchronized(lock) {
+            lastTboxElapsedMs[signal.ordinal] = nowElapsedMs
+        }
+    }
+
+    fun applyTboxRpm(rpm: Float) {
+        if (acceptTboxHuPriority(Signal.Rpm)) {
+            _engineRpm.setIfChanged(rpm)
+        }
+    }
+
+    fun applyTboxSpeed(speed: Float) {
+        if (acceptTboxHuPriority(Signal.Speed)) {
+            _carSpeed.setIfChanged(speed)
+        }
+    }
+
+    fun applyTboxOdometer(km: UInt) {
+        if (acceptTboxHuPriority(Signal.Odometer)) {
+            _odometerKm.setIfChanged(km)
+        }
+    }
+
+    fun applyTboxFuelPercent(percent: UInt) {
+        if (acceptTboxHuPriority(Signal.Fuel)) {
+            _fuelLevelPercentage.setIfChanged(percent)
+            FuelLevelStableApply.onRawFuelPercent(percent)
+        }
+    }
+
+    fun applyTboxEngineTemperature(celsius: Float) {
+        noteTboxTempPriority(Signal.EngineTemp)
+        _engineTemperature.setIfChanged(celsius)
+    }
+
+    fun applyTboxOutsideTemperature(decodedCelsius: Float, nowElapsedMs: Long = SystemClock.elapsedRealtime()) {
+        if (!acceptTboxHuPriority(Signal.OutsideTemp, nowElapsedMs)) return
+        val resolved = InOutTemperatureNullDebounce.resolveAfterProbe(
+            current = _outsideTemperature.value,
+            lastTimeNotNull = outsideTemperatureLastTimeNotNull,
+            decodedCelsius = decodedCelsius,
+            now = nowElapsedMs,
+            debounceMs = InOutTemperatureNullDebounce.DEFAULT_NULL_DEBOUNCE_MS,
+        )
+        outsideTemperatureLastTimeNotNull = resolved.lastTimeNotNull
+        _outsideTemperature.setIfChanged(resolved.value)
+    }
+
+    fun noteTboxGearboxOilTemp() {
+        noteTboxTempPriority(Signal.GearboxOilTemp)
+    }
+
+    fun updateFuelLevelPercentageFiltered(newValue: UInt) {
+        _fuelLevelPercentageFiltered.setIfChanged(newValue)
+    }
+
+    fun updateFuelLevelCalibratedLiters(newValue: Float?) {
+        _fuelLevelCalibratedLiters.setIfChanged(newValue)
+    }
+
+    fun updateFuelLevelCalibratedLitersActual(newValue: Float?) {
+        _fuelLevelCalibratedLitersActual.setIfChanged(newValue)
+    }
+
+    fun updateFuelCalibrationConfidence(newValue: Float?) {
+        _fuelCalibrationConfidence.setIfChanged(newValue)
+    }
+
+    fun updateFuelLevelPercentage(newValue: UInt) {
+        _fuelLevelPercentage.setIfChanged(newValue)
     }
 
     /** Visible for unit tests. */
@@ -162,39 +302,6 @@ object VehicleTelemetryBridge {
         tryWriteHu(signal, write)
     }
 
-    fun stop() {
-        collectJob?.cancel()
-        collectJob = null
-        staleWatchJob?.cancel()
-        staleWatchJob = null
-        debugSnapshotJob?.cancel()
-        debugSnapshotJob = null
-        UniversalCanRepository.enqueueClearSource(TRIP_ACCOUNTING_SOURCE_ID)
-        synchronized(lock) {
-            lastHuElapsedMs.fill(-1L)
-            lastTboxElapsedMs.fill(-1L)
-        }
-    }
-
-    /** Gate for TBox [CanFramesProcess] writes of HU-priority signals. */
-    fun acceptTboxHuPriority(signal: Signal, nowElapsedMs: Long = SystemClock.elapsedRealtime()): Boolean {
-        synchronized(lock) {
-            val huLast = lastHuElapsedMs[signal.ordinal]
-            val huFresh = huLast >= 0L && nowElapsedMs - huLast <= FRESHNESS_MS
-            if (huFresh) return false
-            lastTboxElapsedMs[signal.ordinal] = nowElapsedMs
-            return true
-        }
-    }
-
-    /** Gate for TBox writes of TBox-priority temps (coolant / gearbox oil). Always accept. */
-    fun noteTboxTempPriority(signal: Signal, nowElapsedMs: Long = SystemClock.elapsedRealtime()) {
-        require(signal == Signal.EngineTemp || signal == Signal.GearboxOilTemp)
-        synchronized(lock) {
-            lastTboxElapsedMs[signal.ordinal] = nowElapsedMs
-        }
-    }
-
     private fun isA9EngineTempTboxOnly(): Boolean {
         a9EngineTempTboxOnlyForTest?.let { return it }
         return UniversalCanRepository.mode.value == HeadUnitCanMode.Android9MbCan
@@ -205,7 +312,6 @@ object VehicleTelemetryBridge {
         val allow = synchronized(lock) {
             when (signal) {
                 Signal.EngineTemp -> {
-                    // A9 mbCAN coolant is always 0.0 — trips must not take HU over TBox.
                     if (isA9EngineTempTboxOnly()) {
                         false
                     } else {
@@ -236,10 +342,10 @@ object VehicleTelemetryBridge {
             val tboxLast = lastTboxElapsedMs[Signal.Rpm.ordinal]
             val huFresh = huLast >= 0L && now - huLast <= FRESHNESS_MS
             val tboxFresh = tboxLast >= 0L && now - tboxLast <= FRESHNESS_MS
-            !huFresh && !tboxFresh && (CanDataRepository.engineRPM.value ?: 0f) > 0f
+            !huFresh && !tboxFresh && (_engineRpm.value ?: 0f) > 0f
         }
         if (clear) {
-            CanDataRepository.updateEngineRPM(0f)
+            _engineRpm.setIfChanged(0f)
         }
     }
 
@@ -299,15 +405,9 @@ object VehicleTelemetryBridge {
                 Signal.GearboxOilTemp,
             ).joinToString("; ") { fmt(it) }
         }
-        val rpm = CanDataRepository.engineRPM.value
-        val speed = CanDataRepository.carSpeed.value
-        val fuelRaw = CanDataRepository.fuelLevelPercentage.value
-        val fuelFilt = CanDataRepository.fuelLevelPercentageFiltered.value
-        val liters = CanDataRepository.fuelLevelCalibratedLiters.value
-        val odo = CanDataRepository.odometer.value
-        val outside = CanDataRepository.outsideTemperature.value
-        val engTemp = CanDataRepository.engineTemperature.value
-        return "sources[$sources] values[rpm=$rpm speed=$speed fuelRaw%=$fuelRaw fuelFilt%=$fuelFilt " +
-            "liters=$liters odoKm=$odo outsideC=$outside engTempC=$engTemp]"
+        return "sources[$sources] values[rpm=${_engineRpm.value} speed=${_carSpeed.value} " +
+            "fuelRaw%=${_fuelLevelPercentage.value} fuelFilt%=${_fuelLevelPercentageFiltered.value} " +
+            "liters=${_fuelLevelCalibratedLiters.value} odoKm=${_odometerKm.value} " +
+            "outsideC=${_outsideTemperature.value} engTempC=${_engineTemperature.value}]"
     }
 }

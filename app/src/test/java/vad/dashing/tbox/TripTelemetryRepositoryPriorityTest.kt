@@ -11,28 +11,28 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
-class VehicleTelemetryBridgePriorityTest {
+class TripTelemetryRepositoryPriorityTest {
     @Before
     fun setUp() {
-        VehicleTelemetryBridge.stop()
-        VehicleTelemetryBridge.resetFreshnessForTest()
+        TripTelemetryRepository.stop()
+        TripTelemetryRepository.resetFreshnessForTest()
     }
 
     @Test
     fun tboxAcceptedWhenHuAbsent() {
         val now = SystemClock.elapsedRealtime()
         assertTrue(
-            VehicleTelemetryBridge.acceptTboxHuPriority(VehicleTelemetryBridge.Signal.Rpm, now)
+            TripTelemetryRepository.acceptTboxHuPriority(TripTelemetryRepository.Signal.Rpm, now)
         )
     }
 
     @Test
     fun tboxBlockedWhileHuFresh() {
         val now = SystemClock.elapsedRealtime()
-        VehicleTelemetryBridge.noteHuForTest(VehicleTelemetryBridge.Signal.Fuel, now)
+        TripTelemetryRepository.noteHuForTest(TripTelemetryRepository.Signal.Fuel, now)
         assertFalse(
-            VehicleTelemetryBridge.acceptTboxHuPriority(
-                VehicleTelemetryBridge.Signal.Fuel,
+            TripTelemetryRepository.acceptTboxHuPriority(
+                TripTelemetryRepository.Signal.Fuel,
                 now + 1_000L,
             )
         )
@@ -41,9 +41,9 @@ class VehicleTelemetryBridgePriorityTest {
     @Test
     fun debugSnapshotShowsHuWhenFresh() {
         val now = SystemClock.elapsedRealtime()
-        VehicleTelemetryBridge.noteHuForTest(VehicleTelemetryBridge.Signal.Fuel, now)
-        VehicleTelemetryBridge.noteHuForTest(VehicleTelemetryBridge.Signal.Rpm, now)
-        val snap = VehicleTelemetryBridge.buildAccountingDebugSnapshot(now + 500L)
+        TripTelemetryRepository.noteHuForTest(TripTelemetryRepository.Signal.Fuel, now)
+        TripTelemetryRepository.noteHuForTest(TripTelemetryRepository.Signal.Rpm, now)
+        val snap = TripTelemetryRepository.buildAccountingDebugSnapshot(now + 500L)
         assertTrue(snap.contains("Fuel=HU("))
         assertTrue(snap.contains("Rpm=HU("))
         assertTrue(snap.contains("values["))
@@ -53,17 +53,17 @@ class VehicleTelemetryBridgePriorityTest {
     fun debugSnapshotShowsTboxWhenHuAbsent() {
         val now = SystemClock.elapsedRealtime()
         assertTrue(
-            VehicleTelemetryBridge.acceptTboxHuPriority(VehicleTelemetryBridge.Signal.Fuel, now)
+            TripTelemetryRepository.acceptTboxHuPriority(TripTelemetryRepository.Signal.Fuel, now)
         )
-        val snap = VehicleTelemetryBridge.buildAccountingDebugSnapshot(now + 100L)
+        val snap = TripTelemetryRepository.buildAccountingDebugSnapshot(now + 100L)
         assertTrue(snap.contains("Fuel=TBox("))
     }
 
     @Test
     fun a9RejectsHuEngineTempEvenWhenTboxAbsent() {
-        VehicleTelemetryBridge.setA9EngineTempTboxOnlyForTest(true)
+        TripTelemetryRepository.setA9EngineTempTboxOnlyForTest(true)
         var written = false
-        VehicleTelemetryBridge.tryWriteHuForTest(VehicleTelemetryBridge.Signal.EngineTemp) {
+        TripTelemetryRepository.tryWriteHuForTest(TripTelemetryRepository.Signal.EngineTemp) {
             written = true
         }
         assertFalse(written)
@@ -71,9 +71,9 @@ class VehicleTelemetryBridgePriorityTest {
 
     @Test
     fun a10AllowsHuEngineTempWhenTboxAbsent() {
-        VehicleTelemetryBridge.setA9EngineTempTboxOnlyForTest(false)
+        TripTelemetryRepository.setA9EngineTempTboxOnlyForTest(false)
         var written = false
-        VehicleTelemetryBridge.tryWriteHuForTest(VehicleTelemetryBridge.Signal.EngineTemp) {
+        TripTelemetryRepository.tryWriteHuForTest(TripTelemetryRepository.Signal.EngineTemp) {
             written = true
         }
         assertTrue(written)
@@ -81,14 +81,14 @@ class VehicleTelemetryBridgePriorityTest {
 
     @Test
     fun a10BlocksHuEngineTempWhileTboxFresh() {
-        VehicleTelemetryBridge.setA9EngineTempTboxOnlyForTest(false)
+        TripTelemetryRepository.setA9EngineTempTboxOnlyForTest(false)
         val now = SystemClock.elapsedRealtime()
-        VehicleTelemetryBridge.noteTboxTempPriority(
-            VehicleTelemetryBridge.Signal.EngineTemp,
+        TripTelemetryRepository.noteTboxTempPriority(
+            TripTelemetryRepository.Signal.EngineTemp,
             now,
         )
         var written = false
-        VehicleTelemetryBridge.tryWriteHuForTest(VehicleTelemetryBridge.Signal.EngineTemp) {
+        TripTelemetryRepository.tryWriteHuForTest(TripTelemetryRepository.Signal.EngineTemp) {
             written = true
         }
         assertFalse(written)

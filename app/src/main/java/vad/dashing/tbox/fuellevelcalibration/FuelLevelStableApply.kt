@@ -1,11 +1,12 @@
 package vad.dashing.tbox.fuellevelcalibration
 
-import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.utils.FuelLevelDwellFilter
 
 /**
  * Shared HU + TBox path: dwell-filter raw fuel % and apply calibration while a trip is active.
+ * Writes filtered % / liters into [TripTelemetryRepository] only.
  */
 object FuelLevelStableApply {
     private val dwellFilter = FuelLevelDwellFilter()
@@ -18,7 +19,7 @@ object FuelLevelStableApply {
             dwellFilter.onSample(percent)
         } ?: return
         FuelCalibrationLive.applyFromStableFilteredPercent(accepted)
-        CanDataRepository.updateFuelLevelPercentageFiltered(accepted)
+        TripTelemetryRepository.updateFuelLevelPercentageFiltered(accepted)
     }
 
     fun resetDwell() {
