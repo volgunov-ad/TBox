@@ -101,7 +101,7 @@ flowchart TB
 - Позиция и размер в **пикселях** (`startX`, `startY`, `width`, `height`); **глобальный** `floatingPanelsLayoutSnapDp` — шаг привязки при drag/resize всех плавающих панелей в режиме редактирования (ручной ввод px в настройках не снапится; в темы не входит).
 - **Долгое нажатие** — режим редактирования (drag + resize).
 - **Короткое нажатие** на ячейку в edit mode открывает диалог в **главном окне** `MainActivity` (overlay не может показать фокусируемый диалог).
-- Видимость: флаг `enabled`, правила скрытия по foreground-приложению, временное скрытие виджетом «Скрыть плавающие панели».
+- Видимость: флаг `enabled`, правила скрытия по foreground-приложению (Usage Stats: опрос ~3 с, смена fg принимается после 2 одинаковых опросов подряд; sync без reorder/fade и без немедленного ensure), временное скрытие виджетом «Скрыть плавающие панели».
 - Порядок наложения — в **«Настройки плавающих панелей»** → «Порядок панелей».
 
 ### Настройка (UI)
@@ -125,9 +125,29 @@ flowchart TB
 - скругление контролов: `controlShape` (`null` = дефолт класса: music/stepper → 10, остальные → 0)
 - отступы контента от краёв ячейки: `paddingTopPercent` / `paddingBottomPercent` / `paddingStartPercent` / `paddingEndPercent` (0–50 %, по умолчанию 0)
 - `mediaPlayers` (музыка), `appWidgetId` (сторонний виджет Android)
+- `launcherAppPackage` + опционально freeform: `launcherFreeformEnabled`, `launcherFreeformSide` (`left`/`right`/`top`/`bottom`), `launcherFreeformPercent` (20–80, шаг 10) — для ярлыка приложения
 - `useMbCanVhal`, `httpRequestYaml`, поля поездки, `selectedDriveMode` и др.
 
 Сериализация: `WidgetConfigCodec.kt`. Загрузка в runtime: `loadWidgetsFromConfig()`. Отступы применяются обёрткой `WidgetCellContentPadding` в сетке панели / вкладки «Плитки». Цвета контролов резолвятся в `WidgetControlAppearance` и прокидываются через `LocalWidgetControlAppearance`.
+
+### Ярлык приложения: режим окна (freeform + overlay)
+
+Не системный split-screen, а **freeform companion** (как farmerbb/Taskbar) плюс **отдельный overlay** с полноценным главным экраном TBox:
+
+1. Якорь 1×1 (`FreeformInvisibleAnchorActivity`) + `setLaunchWindowingMode(5)` / `setLaunchBounds` для приложения-компаньона (координаты **виртуального / activity-дисплея** ГУ, не всей физической панели).
+2. Рядом — overlay с `MainScreen` (`FloatingOverlayController.showMainScreenWindow`):
+   - по умолчанию **авто-геометрия**: complementary-прямоугольник рядом с companion в том же пространстве, что и freeform;
+   - overlay вешается через `WindowManager` из `createDisplayContext` / `createWindowContext` для сохранённого `activityDisplayId` (`FreeformDisplaySpaces`): выбирается inset app VD (на Jetour обычно не `displayId=0`, а меньший VD вроде `5:1320×856`), иначе проценты считаются от «почти полного» экрана;
+   - если авто выключено — геометрия из **Настройки главного экрана → Оконный режим** (компактные поля W/H и X/Y, как у плавающих панелей).
+3. При входе в оконный режим **`MainActivity` закрывается** (broadcast `ACTION_FINISH_FOR_WINDOW_MODE`), чтобы не было двух экземпляров главной.
+4. В overlay — две перемещаемые угловые кнопки (только в оконном режиме):
+   - **×** — выход из оконного режима (снять overlay и якорь, сбросить сессию); `MainActivity` не поднимается;
+   - **□** — то же плюс снова открыть fullscreen `MainActivity` (как прежнее поведение ×).
+   Companion force-stop не делается. На fullscreen-главной эти кнопки не показываются.
+5. Правила скрытия/показа плавающих панелей по Usage Stats продолжают работать и в оконном режиме (с debounce и безопасным sync). Смена foreground сама по себе оконный режим не закрывает.
+6. Смена companion (другой ярлык с оконным режимом): полный выход из оконного режима (как кнопка закрытия: снять overlay и якорь, без MainActivity), пауза settle, затем запуск нового companion. Предыдущее приложение force-stop не делается.
+
+Требуется freeform на ГУ. Код: `freeform/FreeformLaunchHelper.kt`, `FreeformDisplaySpaces`, `FreeformLaunchBounds`, `FreeformCompanionSession`, `MainScreenWindowOverlayUI`, `BackgroundService` `ACTION_SHOW/HIDE_MAIN_SCREEN_WINDOW`.
 
 ---
 

@@ -33,6 +33,7 @@ import com.mengbo.mbCan.entity.MBCanVehicleConsumption;
 import com.mengbo.mbCan.entity.MBCanVehicleDoor;
 import com.mengbo.mbCan.entity.MBCanVehicleEbsSoc;
 import com.mengbo.mbCan.entity.MBCanVehicleEngine;
+import com.mengbo.mbCan.entity.MBCanVehicleExternalTemp;
 import com.mengbo.mbCan.entity.MBCanVehicleFrag;
 import com.mengbo.mbCan.entity.MBCanVehicleFrmDectInfo;
 import com.mengbo.mbCan.entity.MBCanVehicleFuelLevel;
@@ -545,6 +546,16 @@ public class MBCanEngine extends MBCanClient {
                                 }
                             }, 1L);
                         } else if (MBCanDataType.eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW.getValue() == i) {
+                            // Stock OEM left this branch empty (no settings callback). Forward for trip/telemetry.
+                            MBCanEngine.this.canHandler.postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (obj != null && MBCanEngine.this.mCanSettingsCallback != null) {
+                                        MBCanEngine.this.mCanSettingsCallback.onCanVehicleExternalTemp(
+                                                (MBCanVehicleExternalTemp) obj);
+                                    }
+                                }
+                            }, 1L);
                         } else {
                             if (MBCanDataType.eMBCAN_VEHICLE_EBS_SOC.getValue() == i) {
                                 MBCanEngine.this.canHandler.postDelayed(new Runnable() { // from class: com.mengbo.mbCan.MBCanEngine.1.33

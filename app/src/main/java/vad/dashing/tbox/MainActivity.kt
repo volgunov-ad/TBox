@@ -1,7 +1,10 @@
 package vad.dashing.tbox
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -15,6 +18,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -38,6 +42,13 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+    }
+
+    private val finishForWindowModeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != MainActivityIntentHelper.ACTION_FINISH_FOR_WINDOW_MODE) return
+            finish()
+        }
     }
 
     // Контракт для стандартных разрешений (Android 10-)
@@ -183,6 +194,12 @@ class MainActivity : ComponentActivity() {
         startBackgroundService()
         MainActivityLoadTimings.mark("main_after_start_service")
         scheduleMainActivityFirstLayoutTiming()
+        ContextCompat.registerReceiver(
+            this,
+            finishForWindowModeReceiver,
+            IntentFilter(MainActivityIntentHelper.ACTION_FINISH_FOR_WINDOW_MODE),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     private fun scheduleMainActivityFirstLayoutTiming() {
@@ -245,6 +262,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+    }
+
+    override fun onDestroy() {
+        try {
+            unregisterReceiver(finishForWindowModeReceiver)
+        } catch (_: Exception) {
+        }
+        super.onDestroy()
     }
 
     private fun startBackgroundService() {

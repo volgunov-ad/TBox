@@ -61,6 +61,9 @@ import vad.dashing.tbox.fuel.RefuelRepository
 import vad.dashing.tbox.fuel.ambientTempForCalibrationC
 import vad.dashing.tbox.fuel.refuelsListFromJson
 import vad.dashing.tbox.fuel.refuelsListToJson
+import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformInvisibleAnchorActivity
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.trip.TripFuelAccounting
 import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
@@ -153,7 +156,11 @@ class BackgroundService : Service() {
     private var dataListenerJob: Job? = null
     private var usageStatsFloatingHideJob: Job? = null
     private var lastUsageStatsOverlayRules: UsageStatsOverlayRulesState? = null
+    /** Last foreground package accepted after [USAGE_STATS_FG_STABLE_POLLS] consecutive matches. */
     private var usageStatsStableForegroundPackage: String? = null
+    /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
+    private var usageStatsPendingForegroundPackage: String? = null
+    private var usageStatsPendingForegroundStablePolls: Int = 0
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -368,6 +375,24 @@ class BackgroundService : Service() {
         const val MBCAN_COMMAND_TOGGLE_PROPERTY = "TOGGLE_PROPERTY"
         const val MBCAN_COMMAND_SET_PROPERTY = "SET_PROPERTY"
 
+        /** Show MainScreen as a dedicated window-mode overlay (beside freeform companion). */
+        const val ACTION_SHOW_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.SHOW_MAIN_SCREEN_WINDOW"
+        /** Hide the MainScreen window-mode overlay. */
+        const val ACTION_HIDE_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.HIDE_MAIN_SCREEN_WINDOW"
+        /**
+         * Exit window mode on the service main thread: immediate overlay teardown and finish
+         * freeform anchor. Optionally restores [MainActivity] after a short settle when
+         * [EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN] is true.
+         */
+        const val ACTION_EXIT_WINDOW_MODE = "vad.dashing.tbox.EXIT_WINDOW_MODE"
+        const val EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE = "vad.dashing.tbox.EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE"
+        /** When true with [ACTION_EXIT_WINDOW_MODE], bring [MainActivity] to front after teardown. */
+        const val EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN =
+            "vad.dashing.tbox.EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN"
+
+        /** Settle after tearing down freeform overlay/anchor before starting MainActivity. */
+        private const val WINDOW_MODE_EXIT_RESTORE_DELAY_MS = 900L
+
         /** First and subsequent intervals for [mbCanDebugProbeJob] (vehicle + audio param batch log). */
         private const val MBCAN_DEBUG_PROBE_INTERVAL_MS = 15_000L
 
@@ -401,7 +426,12 @@ class BackgroundService : Service() {
         private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
         /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
-        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 4_000L
+        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 3_000L
+        /**
+         * Same foreground package must be sampled this many consecutive polls before hide/show rules
+         * switch (reduces thrashing from noisy UsageStats on the HU).
+         */
+        private const val USAGE_STATS_FG_STABLE_POLLS = 2
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -920,9 +950,76 @@ class BackgroundService : Service() {
                     MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
                 }
             }
+            ACTION_SHOW_MAIN_SCREEN_WINDOW -> {
+                if (isRunning) {
+                    scope.launch {
+                        overlayController.showMainScreenWindow()
+                    }
+                }
+            }
+            ACTION_HIDE_MAIN_SCREEN_WINDOW -> {
+                val immediate = intent.getBooleanExtra(EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE, false)
+                scope.launch {
+                    overlayController.hideMainScreenWindow(immediate = immediate)
+                }
+            }
+            ACTION_EXIT_WINDOW_MODE -> {
+                // Do not gate on isRunning — overlay may still be up during stop races.
+                val restoreMain = intent.getBooleanExtra(EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN, false)
+                scope.launch {
+                    exitWindowModeFromService(restoreMainActivity = restoreMain)
+                }
+            }
         }
     }
 
+    /**
+     * Ordered exit: clear session → remove overlay immediately → finish freeform anchor.
+     * When [restoreMainActivity] is true, settles then starts [MainActivity] (square / fullscreen button).
+     * Must run on the service coroutine (not from overlay click).
+     */
+    private suspend fun exitWindowModeFromService(restoreMainActivity: Boolean) {
+        try {
+            val prev = FreeformCompanionSession.state.value
+            FreeformCompanionSession.clear()
+            invalidateUsageStatsOverlayRulesCache()
+            TboxRepository.addLog(
+                "DEBUG",
+                "WindowMode",
+                "exit svc start restoreMain=$restoreMainActivity prevPkg=${prev?.packageName} " +
+                    "side=${prev?.side?.storageKey} displayId=${prev?.activityDisplayId}",
+            )
+            overlayController.hideMainScreenWindow(immediate = true)
+            try {
+                sendBroadcast(
+                    Intent(FreeformInvisibleAnchorActivity.ACTION_FINISH).setPackage(packageName),
+                )
+            } catch (_: Exception) {
+            }
+            if (restoreMainActivity) {
+                delay(WINDOW_MODE_EXIT_RESTORE_DELAY_MS)
+                try {
+                    startActivity(MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService))
+                    TboxRepository.addLog("DEBUG", "WindowMode", "exit svc MainActivity restored")
+                } catch (e: Exception) {
+                    TboxRepository.addLog(
+                        "DEBUG",
+                        "WindowMode",
+                        "exit svc MainActivity restore fail err=${e.message}",
+                    )
+                }
+            } else {
+                TboxRepository.addLog("DEBUG", "WindowMode", "exit svc done (no MainActivity restore)")
+            }
+            try {
+                applyUsageStatsOverlayRulesIfChanged()
+            } catch (e: Exception) {
+                Log.e("BackgroundService", "UsageStats reapply after window exit failed", e)
+            }
+        } finally {
+            FreeformLaunchHelper.markExitFinished()
+        }
+    }
     private suspend fun performServiceStopIfRunning() {
         if (!isRunning) return
         servicePhase = ServiceLifecyclePhase.Stopping
@@ -1737,25 +1834,50 @@ class BackgroundService : Service() {
         return FuelCoordinates(latitude = loc.latitude, longitude = loc.longitude)
     }
 
+    private fun logTripDebug(message: String) {
+        TboxRepository.addLog("DEBUG", "Trip", message)
+    }
+
+    private fun tripTelemetryDebugSnippet(): String {
+        val rpm = CanDataRepository.engineRPM.value
+        val speed = CanDataRepository.carSpeed.value
+        val odo = CanDataRepository.odometer.value
+        val fuel = CanDataRepository.fuelLevelPercentageFiltered.value
+        return "rpm=$rpm speed=$speed odoKm=$odo fuelFilt%=$fuel"
+    }
+
+    private fun tripRecordDebugSnippet(t: TripRecord): String {
+        return "id=${t.id} distKm=${t.distanceKm} movingMs=${t.movingTimeMs} idleMs=${t.idleTimeMs} " +
+            "parkingMs=${t.parkingTimeMs} odoStart=${t.odometerStartKm} fuelUsedL=${t.fuelConsumedLiters} " +
+            "maxSpd=${t.maxSpeed}"
+    }
+
     private fun tryOpenPendingSplitTripOnEngineStart(wallNow: Long, splitWindowMs: Long): Boolean {
         val pendingId = tripPendingSplitTripId ?: return false
         val trip = TripRepository.trips.value.firstOrNull { it.id == pendingId && !it.isActive }
             ?: run {
                 tripPendingSplitTripId = null
+                logTripDebug("pending_drop id=$pendingId reason=missing_or_active ${tripTelemetryDebugSnippet()}")
                 return false
             }
         if (TripRules.isExcludedFromCurrentTripResume(trip)) {
             tripPendingSplitTripId = null
+            logTripDebug("pending_drop id=$pendingId reason=excluded ${tripTelemetryDebugSnippet()}")
             return false
         }
         val endedAt = trip.endTimeEpochMs
             ?: run {
                 tripPendingSplitTripId = null
+                logTripDebug("pending_drop id=$pendingId reason=no_end_time ${tripTelemetryDebugSnippet()}")
                 return false
             }
         val pauseMs = wallNow - endedAt
         if (pauseMs < 0L || pauseMs > splitWindowMs) {
             tripPendingSplitTripId = null
+            logTripDebug(
+                "pending_expired id=$pendingId pauseMs=$pauseMs splitMs=$splitWindowMs " +
+                    tripTelemetryDebugSnippet(),
+            )
             return false
         }
         TripRepository.replaceTrip(trip.copy(endTimeEpochMs = null))
@@ -1773,6 +1895,12 @@ class BackgroundService : Service() {
             ?: tripLastFuelPercent?.let { baselineCalibratedStandardLitersFromPercent(it, tankLReopen) }
             ?: currentFuelAccountingLiters(tankLReopen)
         tripPendingSplitTripId = null
+        val reopened = TripRepository.activeTrip.value
+        logTripDebug(
+            "resume reason=split_reopen pauseMs=$pauseMs " +
+                (reopened?.let { tripRecordDebugSnippet(it) } ?: "id=$pendingId") +
+                " ${tripTelemetryDebugSnippet()}",
+        )
         return true
     }
 
@@ -1804,6 +1932,12 @@ class BackgroundService : Service() {
                 tripFirstSampleAfterSessionStart = false
                 if (TripRepository.activeTrip.value != null) {
                     // Resumed or still-active trip from store: do not advance moving/idle until next sample.
+                    val continued = TripRepository.activeTrip.value
+                    logTripDebug(
+                        "continue reason=session_first_sample " +
+                            (continued?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                            " ${tripTelemetryDebugSnippet()}",
+                    )
                     tripLastSampleElapsedMs = nowElapsedMs
                     tripPrevRpmForStart = rpm
                     maybeBackfillActiveTripFuelBaselineLiters()
@@ -1875,6 +2009,12 @@ class BackgroundService : Service() {
                     tripLastSampleElapsedMs = nowElapsedMs
                     maybePersistTrips(force = true)
                     tripPrevRpmForStart = rpm
+                    val started = TripRepository.activeTrip.value
+                    logTripDebug(
+                        "start reason=session_engine_on " +
+                            (started?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                            " ${tripTelemetryDebugSnippet()}",
+                    )
                     return@synchronized
                 }
             }
@@ -2000,10 +2140,16 @@ class BackgroundService : Service() {
             active = TripRepository.activeTrip.value
             if (active != null && prevRpm > 0f && rpm == 0f) {
                 val endedTripId = active.id
+                logTripDebug(
+                    "end reason=engine_off ${tripRecordDebugSnippet(active)} ${tripTelemetryDebugSnippet()}",
+                )
                 TripRepository.updateActiveTrip { it.copy(endTimeEpochMs = wallNow) }
                 tripRpmZeroAtMs = wallNow
                 // Must capture id before updateActiveTrip clears _activeTrip (ended trip is not "active").
                 tripPendingSplitTripId = endedTripId
+                logTripDebug(
+                    "pending_seed id=$endedTripId reason=engine_off splitMs=$splitWindowMs",
+                )
                 maybePersistTrips(force = true)
             }
 
@@ -2039,6 +2185,12 @@ class BackgroundService : Service() {
                     tripRpmZeroAtMs = null
                     tripLastSampleElapsedMs = nowElapsedMs
                     maybePersistTrips(force = true)
+                    val started = TripRepository.activeTrip.value
+                    logTripDebug(
+                        "start reason=rpm_edge " +
+                            (started?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                            " ${tripTelemetryDebugSnippet()}",
+                    )
                 }
             }
 
@@ -2192,6 +2344,10 @@ class BackgroundService : Service() {
             val candidate = TripRules.findResumeCandidate(TripRepository.trips.value, nowWall, splitWindowMs)
             if (candidate != null && !candidate.isCurrentActive) {
                 tripPendingSplitTripId = candidate.id
+                logTripDebug(
+                    "pending_seed id=${candidate.id} reason=service_start_recent_end " +
+                        "splitMs=$splitWindowMs ${tripTelemetryDebugSnippet()}",
+                )
             }
             tripRpmZeroAtMs = null
             tripLastSampleElapsedMs = 0L
@@ -2256,6 +2412,11 @@ class BackgroundService : Service() {
                 ?: live?.let { baselineCalibratedStandardLitersFromPercent(it, tankLResume) }
             tripRpmZeroAtMs = null
             tripPendingSplitTripId = null
+            logTripDebug(
+                "resume reason=service_start_active " +
+                    (active?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                    " ${tripTelemetryDebugSnippet()}",
+            )
         }
         if (resumedActiveTrip) {
             maybePersistTrips(force = true)
@@ -2266,6 +2427,9 @@ class BackgroundService : Service() {
         val wallNow = System.currentTimeMillis()
         synchronized(TripRepository.lock) {
             TripRepository.activeTrip.value?.let { cur ->
+                logTripDebug(
+                    "end reason=manual ${tripRecordDebugSnippet(cur)} ${tripTelemetryDebugSnippet()}",
+                )
                 TripRepository.replaceTrip(cur.copy(endTimeEpochMs = wallNow))
             }
             val p = CanDataRepository.fuelLevelPercentageFiltered.value?.toFloat()
@@ -2291,6 +2455,12 @@ class BackgroundService : Service() {
             tripPendingSplitTripId = null
             tripPrevRpmForStart = rpmNow
             tripRpmWasPositiveSinceService = rpmNow > 0f
+            val started = TripRepository.activeTrip.value
+            logTripDebug(
+                "start reason=manual_new " +
+                    (started?.let { tripRecordDebugSnippet(it) } ?: "id=-") +
+                    " ${tripTelemetryDebugSnippet()}",
+            )
         }
         val tripsJson = tripsListToJson(TripRepository.trips.value)
         val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
@@ -2306,6 +2476,9 @@ class BackgroundService : Service() {
         synchronized(TripRepository.lock) {
             val active = TripRepository.activeTrip.value
             if (active != null) {
+                logTripDebug(
+                    "end reason=service_stop ${tripRecordDebugSnippet(active)} ${tripTelemetryDebugSnippet()}",
+                )
                 TripRepository.replaceTrip(active.copy(endTimeEpochMs = wallNow))
             }
             tripPrevRpmForStart = 0f
@@ -2588,13 +2761,32 @@ class BackgroundService : Service() {
         if (usageStatsFloatingHideJob?.isActive == true) return
         usageStatsFloatingHideJob = scope.launch {
             launch {
-                FloatingPanelEditModeTracker.suppressUsageStatsHide.collect {
-                    applyUsageStatsOverlayRulesIfChanged()
+                try {
+                    FloatingPanelEditModeTracker.suppressUsageStatsHide.collect {
+                        try {
+                            applyUsageStatsOverlayRulesIfChanged()
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "UsageStats suppress collect apply failed", e)
+                            TboxRepository.addLog(
+                                "ERROR",
+                                "UsageStats",
+                                "suppress apply: ${e.message}",
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats suppress collect failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "suppress collect: ${e.message}")
                 }
             }
             while (isActive) {
                 delay(USAGE_STATS_FLOATING_HIDE_POLL_MS)
-                applyUsageStatsOverlayRulesIfChanged()
+                try {
+                    applyUsageStatsOverlayRulesIfChanged()
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "UsageStats overlay rules apply failed", e)
+                    TboxRepository.addLog("ERROR", "UsageStats", "rules apply: ${e.message}")
+                }
             }
         }
     }
@@ -2602,10 +2794,40 @@ class BackgroundService : Service() {
     private suspend fun applyUsageStatsOverlayRulesIfChanged() {
         val newState = buildUsageStatsOverlayRulesState()
         if (newState == lastUsageStatsOverlayRules) return
+        val prevFg = lastUsageStatsOverlayRules?.foregroundPackage
         lastUsageStatsOverlayRules = newState
         overlayController.setUsageStatsOverlayRulesState(newState)
-        overlayController.syncFloatingDashboards(floatingDashboards.value)
-        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+        TboxRepository.addLog(
+            "DEBUG",
+            "UsageStats",
+            "floating sync fg=${newState.foregroundPackage} prevFg=$prevFg " +
+                "hidePanels=${newState.hidePanelIds.size} showPanels=${newState.showPanelIds.size} " +
+                "suppress=${newState.suppressFloatingPanelUsageStatsHide}",
+        )
+        // No z-order reorder and no fade: usage-stats thrashing previously raced removeView
+        // with ensure + reorder. Periodic ensure reopens any missing panels later.
+        overlayController.syncFloatingDashboards(
+            floatingDashboards.value,
+            reorderZOrder = false,
+            closeImmediate = true,
+        )
+    }
+
+    /**
+     * Force the next usage-stats apply to re-evaluate floating visibility (e.g. after window-mode
+     * exit). Keeps the last stable foreground; only clears in-progress pending debounce and the
+     * applied-state cache.
+     */
+    private fun invalidateUsageStatsOverlayRulesCache() {
+        lastUsageStatsOverlayRules = null
+        usageStatsPendingForegroundPackage = null
+        usageStatsPendingForegroundStablePolls = 0
+    }
+
+    private fun clearUsageStatsForegroundDebounce() {
+        usageStatsStableForegroundPackage = null
+        usageStatsPendingForegroundPackage = null
+        usageStatsPendingForegroundStablePolls = 0
     }
 
     private fun buildUsageStatsOverlayRulesState(): UsageStatsOverlayRulesState {
@@ -2617,7 +2839,7 @@ class BackgroundService : Service() {
         val hasShowRules = watchShow.isNotEmpty() && showPanels.isNotEmpty()
         val hasAnyRules = hasHideRules || hasShowRules
         if (!hasAnyRules) {
-            usageStatsStableForegroundPackage = null
+            clearUsageStatsForegroundDebounce()
         }
         val isMainActivityInForeground = hasAnyRules &&
             MainActivityForegroundTracker.isMainActivityInForeground.value
@@ -2641,18 +2863,10 @@ class BackgroundService : Service() {
         val effectiveForeground = if (!hasAnyRules) {
             null
         } else {
-            when {
-                candidateForeground.isNullOrBlank() -> {
-                    if (usageStatsStableForegroundPackage == packageName && !isMainActivityInForeground) {
-                        usageStatsStableForegroundPackage = null
-                    }
-                    usageStatsStableForegroundPackage
-                }
-                else -> {
-                    usageStatsStableForegroundPackage = candidateForeground
-                    usageStatsStableForegroundPackage
-                }
-            }
+            resolveDebouncedUsageStatsForeground(
+                candidateForeground = candidateForeground,
+                isMainActivityInForeground = isMainActivityInForeground,
+            )
         }
         return UsageStatsOverlayRulesState(
             foregroundPackage = effectiveForeground,
@@ -2667,11 +2881,52 @@ class BackgroundService : Service() {
         )
     }
 
+    /**
+     * Accept a new UsageStats foreground package only after [USAGE_STATS_FG_STABLE_POLLS]
+     * consecutive identical samples. Gaps keep the last stable package (sticky).
+     */
+    private fun resolveDebouncedUsageStatsForeground(
+        candidateForeground: String?,
+        isMainActivityInForeground: Boolean,
+    ): String? {
+        when {
+            candidateForeground.isNullOrBlank() -> {
+                usageStatsPendingForegroundPackage = null
+                usageStatsPendingForegroundStablePolls = 0
+                if (usageStatsStableForegroundPackage == packageName && !isMainActivityInForeground) {
+                    usageStatsStableForegroundPackage = null
+                }
+            }
+            candidateForeground == usageStatsStableForegroundPackage -> {
+                usageStatsPendingForegroundPackage = null
+                usageStatsPendingForegroundStablePolls = 0
+            }
+            candidateForeground == usageStatsPendingForegroundPackage -> {
+                usageStatsPendingForegroundStablePolls++
+                if (usageStatsPendingForegroundStablePolls >= USAGE_STATS_FG_STABLE_POLLS) {
+                    usageStatsStableForegroundPackage = candidateForeground
+                    usageStatsPendingForegroundPackage = null
+                    usageStatsPendingForegroundStablePolls = 0
+                }
+            }
+            else -> {
+                usageStatsPendingForegroundPackage = candidateForeground
+                usageStatsPendingForegroundStablePolls = 1
+                if (USAGE_STATS_FG_STABLE_POLLS <= 1) {
+                    usageStatsStableForegroundPackage = candidateForeground
+                    usageStatsPendingForegroundPackage = null
+                    usageStatsPendingForegroundStablePolls = 0
+                }
+            }
+        }
+        return usageStatsStableForegroundPackage
+    }
+
     private fun stopUsageStatsFloatingHideWatcher() {
         usageStatsFloatingHideJob?.cancel()
         usageStatsFloatingHideJob = null
         lastUsageStatsOverlayRules = null
-        usageStatsStableForegroundPackage = null
+        clearUsageStatsForegroundDebounce()
         scope.launch {
             overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
             overlayController.syncFloatingDashboards(floatingDashboards.value)

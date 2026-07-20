@@ -79,7 +79,8 @@
 
 - Расход и автоматические **заправки** считаются только пока поездка **активна** (`BackgroundService.applyActiveTripFuelStep`).
 - Пороги в `TripFuelAccounting`: заправка — рост калиброванных литров ≥ **4%** бака за шаг; шум расхода — падение менее **0,3%** бака.
-- **Отфильтрованный** процент и **калиброванные литры** обновляются **только при активной поездке** (`FuelLevelStableApply`, dwell **15 с** одного %). Источник сырого % — TBox и/или mbCAN/VHAL через `VehicleTelemetryBridge` (приоритет HU; freshness **45 с**). При включённой диагностике CAN (`MbCanDiagnostics`) bridge раз в **15 с** пишет DEBUG `TripFuel` со снимком источника (HU/TBox) и текущих значений CDR.
+- **Отфильтрованный** процент и **калиброванные литры** обновляются **только при активной поездке** (`FuelLevelStableApply`, dwell **15 с** одного %). Источник сырого % — TBox и/или mbCAN/VHAL через `VehicleTelemetryBridge` (приоритет HU; freshness **45 с**). Bridge раз в **15 с** пишет DEBUG `TripFuel` со снимком источника (HU/TBox) и текущих значений CDR (через `TboxRepository`, без флага диагностики CAN). Температура ОЖ в поездках: на Android 9 — **только TBox** (mbCAN даёт `0.0`); на Android 10 — TBox first, HU при stale TBox.
+- Жизненный цикл текущей поездки пишет DEBUG с тегом `Trip`: `start` / `resume` / `continue` / `end` / `pending_seed` / `pending_expired` (и связанные `pending_drop`).
 - Сырой `fuelLevelPercentage` обновляется с шины независимо от поездки.
 - При остановке двигателя последний filtered % и калиброванные литры сохраняются; при старте службы подставляются до CAN.
 - Подробности — [fuel-refuels-calibration.md](fuel-refuels-calibration.md).

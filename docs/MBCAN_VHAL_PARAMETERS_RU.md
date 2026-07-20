@@ -190,18 +190,18 @@
 |--------------------------|-----------------|-------------------------------|-----------------|-------------|
 | **Android 9** — Engine RPM | `readVehicleEngineRpm()` (telemetry) | float ≥ 0 | — | **Push:** telemetry bridge. **Pull:** `refreshEngineRpm` (30 s / burst) |
 | **Android 10** — Engine RPM | VHAL **289414951** `R_0900_EMS_1_EngineSpd` | raw × **4** (`decodeEngineRpm`) | — | onChange + pull |
-| **Android 9** — Coolant temp | telemetry float | °C as-is from facade; **на практике с mbCAN всегда `0.0`** (VHAL ок) | — | push + pull |
-| **Android 10** — Coolant temp | VHAL **289414949** | raw × **0,75 − 48** | — | onChange + pull |
+| **Android 9** — Coolant temp | telemetry float | °C as-is from facade; **на практике с mbCAN всегда `0.0`** | — | push + pull; **в учёте поездок не используется** (только TBox CRT) |
+| **Android 10** — Coolant temp | VHAL **289414949** | raw × **0,75 − 48** | — | onChange + pull; в поездках приоритет TBox, HU если TBox stale |
 | **Android 9** — Vehicle speed | telemetry float | km/h ≥ 0 | — | push + pull |
 | **Android 10** — Vehicle speed | VHAL **289414964** | float ≥ 0 | — | onChange + pull |
 | **Android 9** — Fuel level % | `readVehicleFuelLevelPercent()` / `getFuelLevel()` | **0…100**; иначе null | — | push `onCanVehicleFuelLevel` + pull |
 | **Android 10** — Fuel level % | VHAL **289414929** `R_0900_ICM_1_FuelLevel` | int **0…100** | — | onChange + pull |
 | **Android 9** — Total odometer | `readTotalOdometerKm()` / `getOdometer()` | float km → UInt | — | push `onVehicleTotalOdoMeterChange` + pull |
 | **Android 10** — Total odometer | VHAL **289414930** `R_0900_ICM_1_TotalOdometer_Km` | int km as-is | — | onChange + pull |
-| **Android 9** — Outside temp | `readOutsideTemperatureC()` / `getExternalTemperatureRaw()` | raw byte **°C**; **87** = invalid | — | pull (тип 38); push при наличии |
+| **Android 9** — Outside temp | `readOutsideTemperatureC()` / `getExternalTemperatureRaw()` | raw byte **°C**; **87** = invalid | — | **Push:** `onCanVehicleExternalTemp` (ветка в `MBCanEngine` ранее была пустой) + pull |
 | **Android 10** — Outside temp | VHAL **289412223** `R_0400_CEM_IPM_3_ExternalTemperatureRaw` | int °C; **87** = null | — | onChange + pull |
 
-Поездки/заправки читают `CanDataRepository`; `VehicleTelemetryBridge` заливает HU-телеметрию туда с приоритетом HU (кроме t° ОЖ / масла КПП — приоритет TBox при свежих данных). Freshness **45 с**.
+Поездки/заправки читают `CanDataRepository`; `VehicleTelemetryBridge` заливает HU-телеметрию туда с приоритетом HU (RPM/speed/odo/fuel/outside). Температура ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox. Freshness **45 с**.
 
 ---
 

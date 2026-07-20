@@ -214,6 +214,11 @@ object ThemeLayoutExport {
             o.put("addButton", buildNormalizedPosition(sm.mainScreenAddButtonFlow.first()))
             o.put("pagePrevButton", buildNormalizedPosition(sm.mainScreenPagePrevButtonFlow.first()))
             o.put("pageNextButton", buildNormalizedPosition(sm.mainScreenPageNextButtonFlow.first()))
+            o.put("exitWindowModeButton", buildNormalizedPosition(sm.mainScreenWindowModeExitButtonFlow.first()))
+            o.put(
+                "restoreWindowModeButton",
+                buildNormalizedPosition(sm.mainScreenWindowModeRestoreButtonFlow.first()),
+            )
             o.put("panels", buildMainScreenPanels(context, sm))
         }
         if (includeWallpapers) {
@@ -294,6 +299,12 @@ object ThemeLayoutExport {
         }
 
     private fun buildNormalizedPosition(pos: MainScreenPageNextButtonPosition): JSONObject =
+        JSONObject().apply {
+            put("x", pos.x.toDouble())
+            put("y", pos.y.toDouble())
+        }
+
+    private fun buildNormalizedPosition(pos: MainScreenWindowModeExitButtonPosition): JSONObject =
         JSONObject().apply {
             put("x", pos.x.toDouble())
             put("y", pos.y.toDouble())
@@ -452,6 +463,34 @@ object ThemeLayoutExport {
                 MainScreenPageNextButtonPosition(
                     x = btn.optDouble("x", MainScreenPageNextButtonPosition.Default.x.toDouble()).toFloat(),
                     y = btn.optDouble("y", MainScreenPageNextButtonPosition.Default.y.toDouble()).toFloat(),
+                ),
+            )
+        }
+        section.optJSONObject("exitWindowModeButton")?.let { btn ->
+            sm.saveMainScreenWindowModeExitButton(
+                MainScreenWindowModeExitButtonPosition(
+                    x = btn.optDouble(
+                        "x",
+                        MainScreenWindowModeExitButtonPosition.Default.x.toDouble(),
+                    ).toFloat(),
+                    y = btn.optDouble(
+                        "y",
+                        MainScreenWindowModeExitButtonPosition.Default.y.toDouble(),
+                    ).toFloat(),
+                ),
+            )
+        }
+        section.optJSONObject("restoreWindowModeButton")?.let { btn ->
+            sm.saveMainScreenWindowModeRestoreButton(
+                MainScreenWindowModeExitButtonPosition(
+                    x = btn.optDouble(
+                        "x",
+                        MainScreenWindowModeExitButtonPosition.RestoreFullscreenDefault.x.toDouble(),
+                    ).toFloat(),
+                    y = btn.optDouble(
+                        "y",
+                        MainScreenWindowModeExitButtonPosition.RestoreFullscreenDefault.y.toDouble(),
+                    ).toFloat(),
                 ),
             )
         }

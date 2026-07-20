@@ -60,6 +60,7 @@ import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.snapToGrid
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
+import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
 @Composable
@@ -398,15 +399,17 @@ fun FloatingDashboard(
                     onWidgetClick = { index ->
                         val cfg = widgetConfigs.getOrNull(index)
                         if (isEditMode && !isDraggingMode && !isResizingMode) {
-                            try {
-                                context.startActivity(
-                                    MainActivityIntentHelper.createFloatingDashboardTileEditIntent(
-                                        context,
-                                        panelId,
-                                        index
+                            if (!WindowModeUiGuard.blockEditingIfActive(context)) {
+                                try {
+                                    context.startActivity(
+                                        MainActivityIntentHelper.createFloatingDashboardTileEditIntent(
+                                            context,
+                                            panelId,
+                                            index
+                                        )
                                     )
-                                )
-                            } catch (_: Exception) {
+                                } catch (_: Exception) {
+                                }
                             }
                         } else if (cfg?.dataKey == "steeringWheelHeatWidget") {
                             sendToggleSteeringWheelHeat(context)
@@ -441,7 +444,7 @@ fun FloatingDashboard(
                             cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                             cfg.launcherAppPackage.isNotBlank()
                         ) {
-                            launchAppFromWidget(context, cfg.launcherAppPackage)
+                            launchAppFromWidget(context, cfg)
                         } else if (isFloatingDashboardClickAction) {
                             if (cfg != null && isActiveTripWidgetDataKey(cfg.dataKey)) {
                                 settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_TAB_KEY)

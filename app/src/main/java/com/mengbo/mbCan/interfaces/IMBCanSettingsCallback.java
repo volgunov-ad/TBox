@@ -8,6 +8,7 @@ import com.mengbo.mbCan.entity.MBCanVehicleBcmStatus;
 import com.mengbo.mbCan.entity.MBCanVehicleConsumption;
 import com.mengbo.mbCan.entity.MBCanVehicleEbsSoc;
 import com.mengbo.mbCan.entity.MBCanVehicleEngine;
+import com.mengbo.mbCan.entity.MBCanVehicleExternalTemp;
 import com.mengbo.mbCan.entity.MBCanVehicleFrag;
 import com.mengbo.mbCan.entity.MBCanVehicleFuelLevel;
 import com.mengbo.mbCan.entity.MBCanVehicleFuelTank;
@@ -23,6 +24,8 @@ import com.mengbo.mbCan.entity.MBCanWpcStatus;
 /* loaded from: classes.dex */
 public interface IMBCanSettingsCallback {
     void onCanVehicleAqsStatus(MBCanVehicleAqsStatus mBCanVehicleAqsStatus);
+
+    void onCanVehicleExternalTemp(MBCanVehicleExternalTemp mBCanVehicleExternalTemp);
 
     void onCanVehicleFuelLevel(MBCanVehicleFuelLevel mBCanVehicleFuelLevel);
 
