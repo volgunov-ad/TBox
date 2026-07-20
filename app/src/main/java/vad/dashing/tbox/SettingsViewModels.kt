@@ -556,6 +556,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = MainScreenWindowModeExitButtonPosition.Default,
         )
 
+    val mainScreenWindowModeRestoreButtonPosition =
+        settingsManager.mainScreenWindowModeRestoreButtonFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = MainScreenWindowModeExitButtonPosition.RestoreFullscreenDefault,
+            )
+
     val mainScreenWindowModeAutoGeometry = settingsManager.mainScreenWindowModeAutoGeometryFlow
         .stateIn(
             scope = viewModelScope,
@@ -1422,6 +1430,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenWindowModeExitButton(position: MainScreenWindowModeExitButtonPosition) {
         viewModelScope.launch {
             settingsManager.saveMainScreenWindowModeExitButton(position)
+        }
+    }
+
+    fun saveMainScreenWindowModeRestoreButton(position: MainScreenWindowModeExitButtonPosition) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenWindowModeRestoreButton(position)
         }
     }
 

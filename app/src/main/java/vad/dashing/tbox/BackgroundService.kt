@@ -161,8 +161,6 @@ class BackgroundService : Service() {
     /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
     private var usageStatsPendingForegroundPackage: String? = null
     private var usageStatsPendingForegroundStablePolls: Int = 0
-    /** Elapsed realtime when foreground first left companion/TBox during window mode; 0 = not lost. */
-    private var windowModeCompanionLostSinceElapsedMs: Long = 0L
     /** Пересчёт литров в баке по калибровке при изменении % или настроек. */
     private var fuelCalibratedLitersJob: Job? = null
     private var getSMSJob: Job? = null
@@ -382,11 +380,15 @@ class BackgroundService : Service() {
         /** Hide the MainScreen window-mode overlay. */
         const val ACTION_HIDE_MAIN_SCREEN_WINDOW = "vad.dashing.tbox.HIDE_MAIN_SCREEN_WINDOW"
         /**
-         * Exit window mode on the service main thread: immediate overlay teardown, finish freeform
-         * anchor, then restore [MainActivity] after a short settle (avoids dual-MainScreen races).
+         * Exit window mode on the service main thread: immediate overlay teardown and finish
+         * freeform anchor. Optionally restores [MainActivity] after a short settle when
+         * [EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN] is true.
          */
         const val ACTION_EXIT_WINDOW_MODE = "vad.dashing.tbox.EXIT_WINDOW_MODE"
         const val EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE = "vad.dashing.tbox.EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE"
+        /** When true with [ACTION_EXIT_WINDOW_MODE], bring [MainActivity] to front after teardown. */
+        const val EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN =
+            "vad.dashing.tbox.EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN"
 
         /** Settle after tearing down freeform overlay/anchor before starting MainActivity. */
         private const val WINDOW_MODE_EXIT_RESTORE_DELAY_MS = 900L
@@ -424,23 +426,12 @@ class BackgroundService : Service() {
         private const val REFUEL_PRICE_COORDINATE_WAIT_MS = 5 * 60 * 1000L
         private const val REFUEL_PRICE_COORDINATE_POLL_MS = 5 * 1000L
         /** Interval for usage-stats foreground check that drives temporary floating panel hiding. */
-        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 4_000L
+        private const val USAGE_STATS_FLOATING_HIDE_POLL_MS = 3_000L
         /**
          * Same foreground package must be sampled this many consecutive polls before hide/show rules
          * switch (reduces thrashing from noisy UsageStats on the HU).
          */
         private const val USAGE_STATS_FG_STABLE_POLLS = 2
-        /** Debounce before tearing down window-mode overlay when companion is no longer foreground. */
-        private const val WINDOW_MODE_COMPANION_LOST_DEBOUNCE_MS = 3_000L
-        private val WINDOW_MODE_TRANSIENT_FOREGROUND_PACKAGES = setOf(
-            "android",
-            "com.android.systemui",
-            "com.android.launcher",
-            "com.android.launcher3",
-            "com.google.android.apps.nexuslauncher",
-            "com.android.permissioncontroller",
-            "com.google.android.permissioncontroller",
-        )
     }
 
     private fun bindSettingsStateFlows(settingsSnap: BackgroundServiceSettingsSnapshot?) {
@@ -967,27 +958,27 @@ class BackgroundService : Service() {
                 }
             }
             ACTION_HIDE_MAIN_SCREEN_WINDOW -> {
-                windowModeCompanionLostSinceElapsedMs = 0L
                 val immediate = intent.getBooleanExtra(EXTRA_MAIN_SCREEN_WINDOW_IMMEDIATE, false)
                 scope.launch {
                     overlayController.hideMainScreenWindow(immediate = immediate)
                 }
             }
             ACTION_EXIT_WINDOW_MODE -> {
-                windowModeCompanionLostSinceElapsedMs = 0L
                 // Do not gate on isRunning — overlay may still be up during stop races.
+                val restoreMain = intent.getBooleanExtra(EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN, false)
                 scope.launch {
-                    exitWindowModeFromService()
+                    exitWindowModeFromService(restoreMainActivity = restoreMain)
                 }
             }
         }
     }
 
     /**
-     * Ordered exit: clear session → remove overlay immediately → finish freeform anchor →
-     * settle → start [MainActivity]. Must run on the service coroutine (not from overlay click).
+     * Ordered exit: clear session → remove overlay immediately → finish freeform anchor.
+     * When [restoreMainActivity] is true, settles then starts [MainActivity] (square / fullscreen button).
+     * Must run on the service coroutine (not from overlay click).
      */
-    private suspend fun exitWindowModeFromService() {
+    private suspend fun exitWindowModeFromService(restoreMainActivity: Boolean) {
         try {
             val prev = FreeformCompanionSession.state.value
             FreeformCompanionSession.clear()
@@ -995,8 +986,8 @@ class BackgroundService : Service() {
             TboxRepository.addLog(
                 "DEBUG",
                 "WindowMode",
-                "exit svc start prevPkg=${prev?.packageName} side=${prev?.side?.storageKey} " +
-                    "displayId=${prev?.activityDisplayId}",
+                "exit svc start restoreMain=$restoreMainActivity prevPkg=${prev?.packageName} " +
+                    "side=${prev?.side?.storageKey} displayId=${prev?.activityDisplayId}",
             )
             overlayController.hideMainScreenWindow(immediate = true)
             try {
@@ -1005,18 +996,21 @@ class BackgroundService : Service() {
                 )
             } catch (_: Exception) {
             }
-            delay(WINDOW_MODE_EXIT_RESTORE_DELAY_MS)
-            try {
-                startActivity(MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService))
-                TboxRepository.addLog("DEBUG", "WindowMode", "exit svc MainActivity restored")
-            } catch (e: Exception) {
-                TboxRepository.addLog(
-                    "DEBUG",
-                    "WindowMode",
-                    "exit svc MainActivity restore fail err=${e.message}",
-                )
+            if (restoreMainActivity) {
+                delay(WINDOW_MODE_EXIT_RESTORE_DELAY_MS)
+                try {
+                    startActivity(MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService))
+                    TboxRepository.addLog("DEBUG", "WindowMode", "exit svc MainActivity restored")
+                } catch (e: Exception) {
+                    TboxRepository.addLog(
+                        "DEBUG",
+                        "WindowMode",
+                        "exit svc MainActivity restore fail err=${e.message}",
+                    )
+                }
+            } else {
+                TboxRepository.addLog("DEBUG", "WindowMode", "exit svc done (no MainActivity restore)")
             }
-            // Re-apply floating hide/show now that the MainScreen overlay is gone.
             try {
                 applyUsageStatsOverlayRulesIfChanged()
             } catch (e: Exception) {
@@ -2793,79 +2787,7 @@ class BackgroundService : Service() {
                     Log.e("BackgroundService", "UsageStats overlay rules apply failed", e)
                     TboxRepository.addLog("ERROR", "UsageStats", "rules apply: ${e.message}")
                 }
-                try {
-                    maybeDismissMainScreenWindowModeIfCompanionLost()
-                } catch (e: Exception) {
-                    Log.e("BackgroundService", "WindowMode companion-lost check failed", e)
-                    TboxRepository.addLog("ERROR", "WindowMode", "companion-lost: ${e.message}")
-                }
             }
-        }
-    }
-
-    /**
-     * While freeform window mode is active, dismiss the MainScreen overlay (and clear the session)
-     * if the foreground app is neither the companion nor TBox for longer than a short debounce.
-     */
-    private suspend fun maybeDismissMainScreenWindowModeIfCompanionLost() {
-        if (!FreeformCompanionSession.isActive || !overlayController.isMainScreenWindowVisible) {
-            windowModeCompanionLostSinceElapsedMs = 0L
-            return
-        }
-        val companion = FreeformCompanionSession.companionPackage() ?: run {
-            windowModeCompanionLostSinceElapsedMs = 0L
-            return
-        }
-        if (!UsageStatsHideFloatingHelper.hasUsageAccessPermission(this@BackgroundService)) {
-            return
-        }
-        val fg = UsageStatsHideFloatingHelper.lastForegroundPackageWithin(
-            this@BackgroundService,
-            windowMs = 25_000L,
-        )?.trim()?.takeIf { it.isNotEmpty() } ?: return
-
-        val myPkg = packageName
-        val stillOurs = fg.equals(companion, ignoreCase = true) ||
-            fg.equals(myPkg, ignoreCase = true) ||
-            WINDOW_MODE_TRANSIENT_FOREGROUND_PACKAGES.any { it.equals(fg, ignoreCase = true) }
-        if (stillOurs) {
-            windowModeCompanionLostSinceElapsedMs = 0L
-            return
-        }
-
-        val now = SystemClock.elapsedRealtime()
-        if (windowModeCompanionLostSinceElapsedMs == 0L) {
-            windowModeCompanionLostSinceElapsedMs = now
-            TboxRepository.addLog(
-                "DEBUG",
-                "WindowMode",
-                "companion lost debounce start fg=$fg companion=$companion",
-            )
-            return
-        }
-        if (now - windowModeCompanionLostSinceElapsedMs < WINDOW_MODE_COMPANION_LOST_DEBOUNCE_MS) {
-            return
-        }
-
-        windowModeCompanionLostSinceElapsedMs = 0L
-        FreeformCompanionSession.clear()
-        invalidateUsageStatsOverlayRulesCache()
-        try {
-            sendBroadcast(
-                Intent(FreeformInvisibleAnchorActivity.ACTION_FINISH).setPackage(packageName),
-            )
-        } catch (_: Exception) {
-        }
-        overlayController.hideMainScreenWindow(immediate = true)
-        TboxRepository.addLog(
-            "INFO",
-            "WindowMode",
-            "Dismissed overlay: companion lost (fg=$fg)",
-        )
-        try {
-            applyUsageStatsOverlayRulesIfChanged()
-        } catch (e: Exception) {
-            Log.e("BackgroundService", "UsageStats reapply after companion-lost failed", e)
         }
     }
 
@@ -2900,7 +2822,6 @@ class BackgroundService : Service() {
         lastUsageStatsOverlayRules = null
         usageStatsPendingForegroundPackage = null
         usageStatsPendingForegroundStablePolls = 0
-        windowModeCompanionLostSinceElapsedMs = 0L
     }
 
     private fun clearUsageStatsForegroundDebounce() {
@@ -3006,7 +2927,6 @@ class BackgroundService : Service() {
         usageStatsFloatingHideJob = null
         lastUsageStatsOverlayRules = null
         clearUsageStatsForegroundDebounce()
-        windowModeCompanionLostSinceElapsedMs = 0L
         scope.launch {
             overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
             overlayController.syncFloatingDashboards(floatingDashboards.value)

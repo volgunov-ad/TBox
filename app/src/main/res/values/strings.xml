@@ -342,8 +342,9 @@
     <string name="settings_main_screen_window_mode_y">Y окна, px</string>
     <string name="settings_main_screen_window_mode_width">Ширина окна, px</string>
     <string name="settings_main_screen_window_mode_height">Высота окна, px</string>
-    <string name="main_screen_window_mode_exit_cd">Вернуть главный экран на весь экран</string>
-    <string name="main_screen_window_mode_edit_blocked_toast">В оконном режиме недоступно. Сначала закройте оконный режим (кнопка ×).</string>
+    <string name="main_screen_window_mode_exit_cd">Закрыть оконный режим</string>
+    <string name="main_screen_window_mode_restore_cd">Вернуть главный экран на весь экран</string>
+    <string name="main_screen_window_mode_edit_blocked_toast">В оконном режиме недоступно. Сначала закройте оконный режим (кнопка × или □).</string>
     <string name="settings_main_screen_wallpaper_title">Фон главного экрана</string>
     <string name="settings_main_screen_wallpaper_light">Папка с обоями (светлая тема)</string>
     <string name="settings_main_screen_wallpaper_dark">Папка с обоями (тёмная тема)</string>

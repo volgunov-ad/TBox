@@ -28,8 +28,8 @@ object FreeformLaunchHelper {
     /** Let the overlay click/gesture finish before tearing down Compose. */
     private const val EXIT_DEFER_FROM_CLICK_MS = 150L
     /**
-     * After a full exit finishes (overlay gone, MainActivity restored), wait before launching
-     * another companion so the HU freeform stack can settle.
+     * After a full exit finishes (overlay gone), wait before launching another companion so the
+     * HU freeform stack can settle.
      */
     private const val AFTER_FULL_EXIT_RELAUNCH_DELAY_MS = 700L
 
@@ -135,7 +135,11 @@ object FreeformLaunchHelper {
                     "exitInProgress=$exitInProgress session=${FreeformCompanionSession.isActive}",
             )
             if (!exitInProgress) {
-                beginExitWindowMode(appContext, EXIT_DEFER_FROM_CLICK_MS)
+                beginExitWindowMode(
+                    appContext,
+                    EXIT_DEFER_FROM_CLICK_MS,
+                    restoreMainActivity = false,
+                )
             }
             return true
         }
@@ -251,30 +255,51 @@ object FreeformLaunchHelper {
         }
     }
 
-    /** Hide overlay, finish anchor, bring MainActivity fullscreen, clear session. */
+    /** Hide overlay, finish freeform anchor, clear session. Does not start MainActivity (X button). */
     fun exitWindowMode(context: Context) {
-        // Explicit exit (X / same-tile toggle) — do not relaunch a queued companion.
+        requestExitWindowMode(context, restoreMainActivity = false)
+    }
+
+    /** Exit window mode and bring MainActivity fullscreen (square button). */
+    fun exitWindowModeToFullscreen(context: Context) {
+        requestExitWindowMode(context, restoreMainActivity = true)
+    }
+
+    private fun requestExitWindowMode(context: Context, restoreMainActivity: Boolean) {
+        // Explicit exit — do not relaunch a queued companion.
         pendingAfterExit = null
         pendingAppContext = null
         if (exitInProgress) {
-            dbg("exit ignored (already in progress)")
+            dbg("exit ignored (already in progress) restoreMain=$restoreMainActivity")
             return
         }
-        beginExitWindowMode(context.applicationContext, EXIT_DEFER_FROM_CLICK_MS)
+        beginExitWindowMode(
+            context.applicationContext,
+            EXIT_DEFER_FROM_CLICK_MS,
+            restoreMainActivity = restoreMainActivity,
+        )
     }
 
-    private fun beginExitWindowMode(appContext: Context, deferMs: Long) {
+    private fun beginExitWindowMode(
+        appContext: Context,
+        deferMs: Long,
+        restoreMainActivity: Boolean,
+    ) {
         // Replace any prior deferred exit/relaunch; keep flag true for the new exit.
         cancelPostedWork(clearExitInProgress = false)
         exitInProgress = true
         val exitRunnable = Runnable {
             pendingExitRunnable = null
             FreeformCompanionSession.clear()
-            dbg("exit request → service")
+            dbg("exit request → service restoreMain=$restoreMainActivity")
             try {
                 appContext.startService(
                     Intent(appContext, BackgroundService::class.java).apply {
                         action = BackgroundService.ACTION_EXIT_WINDOW_MODE
+                        putExtra(
+                            BackgroundService.EXTRA_EXIT_WINDOW_MODE_RESTORE_MAIN,
+                            restoreMainActivity,
+                        )
                     },
                 )
             } catch (e: Exception) {
@@ -289,7 +314,7 @@ object FreeformLaunchHelper {
         mainHandler.postDelayed(exitRunnable, deferMs)
     }
 
-    /** Alias used by UI that previously called [exitToFullscreen]. */
+    /** Alias: exit without restoring MainActivity (same as [exitWindowMode]). */
     fun exitToFullscreen(context: Context) = exitWindowMode(context)
 
     /** Called by [BackgroundService] when the exit sequence finishes (success or fail). */

@@ -143,7 +143,7 @@ assets/tile_backgrounds/
 
 #### 1. `mainScreen`
 
-Страницы, визуальная тема (фон холста, угловые кнопки, обрезка обоев), позиции кнопок, **все панели главного экрана** с плитками, выбранные файлы обоев.
+Страницы, визуальная тема (фон холста, угловые кнопки `cornerButtons`, обрезка обоев), позиции всех угловых кнопок (`settingsButton`, `addButton`, `pagePrevButton`, `pageNextButton`, `exitWindowModeButton` ×, `restoreWindowModeButton` □), **все панели главного экрана** с плитками, выбранные файлы обоев.
 
 #### 2. `floatingPanels`
 

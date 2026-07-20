@@ -25,8 +25,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -52,6 +55,33 @@ import vad.dashing.tbox.freeform.WindowModeUiGuard
 
 private const val MAIN_SCREEN_PANEL_FADE_MS = 300
 
+/** Outline square (icons-core has no CropSquare); restore-fullscreen in window mode. */
+private val WindowModeRestoreSquareIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "WindowModeRestoreSquare",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            fill = SolidColor(Color.Black),
+            pathFillType = PathFillType.EvenOdd,
+        ) {
+            moveTo(5f, 5f)
+            lineTo(19f, 5f)
+            lineTo(19f, 19f)
+            lineTo(5f, 19f)
+            close()
+            moveTo(7f, 7f)
+            lineTo(7f, 17f)
+            lineTo(17f, 17f)
+            lineTo(17f, 7f)
+            close()
+        }
+    }.build()
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(
@@ -63,9 +93,12 @@ fun MainScreen(
     onTboxRestart: () -> Unit,
     onTripFinishAndStart: () -> Unit,
     modifier: Modifier = Modifier,
-    /** When true, this is the window-mode overlay: show exit corner button, hide activity-only chrome extras. */
+    /** When true, this is the window-mode overlay: show exit corner buttons, hide activity-only chrome extras. */
     windowMode: Boolean = false,
+    /** Close window mode without restoring MainActivity (X). */
     onExitWindowMode: (() -> Unit)? = null,
+    /** Close window mode and restore MainActivity fullscreen (square). */
+    onExitWindowModeToFullscreen: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val mainPanels by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
@@ -76,6 +109,8 @@ fun MainScreen(
     val pagePrevBtnPos by settingsViewModel.mainScreenPagePrevButtonPosition.collectAsStateWithLifecycle()
     val pageNextBtnPos by settingsViewModel.mainScreenPageNextButtonPosition.collectAsStateWithLifecycle()
     val exitWindowBtnPos by settingsViewModel.mainScreenWindowModeExitButtonPosition.collectAsStateWithLifecycle()
+    val restoreWindowBtnPos by
+        settingsViewModel.mainScreenWindowModeRestoreButtonPosition.collectAsStateWithLifecycle()
     val cornerBtnSizeDp by settingsViewModel.mainScreenCornerButtonSizeDp.collectAsStateWithLifecycle()
     val cornerBtnBgLight by settingsViewModel.mainScreenCornerButtonBackgroundLight.collectAsStateWithLifecycle()
     val cornerBtnBgDark by settingsViewModel.mainScreenCornerButtonBackgroundDark.collectAsStateWithLifecycle()
@@ -309,6 +344,26 @@ fun MainScreen(
                     )
                 },
                 onClick = onExitWindowMode,
+            )
+        }
+
+        if (windowMode && onExitWindowModeToFullscreen != null) {
+            MainScreenDraggableCornerButton(
+                icon = WindowModeRestoreSquareIcon,
+                contentDescription = stringResource(R.string.main_screen_window_mode_restore_cd),
+                iconSize = cornerIconSize,
+                backgroundColor = cornerBackgroundColor,
+                iconTint = cornerIconTint,
+                maxWidthPx = maxWpx,
+                maxHeightPx = maxHpx,
+                normalizedX = restoreWindowBtnPos.x,
+                normalizedY = restoreWindowBtnPos.y,
+                onSaveNormalized = { x, y ->
+                    settingsViewModel.saveMainScreenWindowModeRestoreButton(
+                        MainScreenWindowModeExitButtonPosition(x, y),
+                    )
+                },
+                onClick = onExitWindowModeToFullscreen,
             )
         }
 

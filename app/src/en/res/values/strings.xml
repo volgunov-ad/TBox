@@ -339,8 +339,9 @@
     <string name="settings_main_screen_window_mode_y">Window Y, px</string>
     <string name="settings_main_screen_window_mode_width">Window width, px</string>
     <string name="settings_main_screen_window_mode_height">Window height, px</string>
-    <string name="main_screen_window_mode_exit_cd">Restore main screen to full screen</string>
-    <string name="main_screen_window_mode_edit_blocked_toast">Not available in window mode. Exit window mode first (× button).</string>
+    <string name="main_screen_window_mode_exit_cd">Close window mode</string>
+    <string name="main_screen_window_mode_restore_cd">Restore main screen to full screen</string>
+    <string name="main_screen_window_mode_edit_blocked_toast">Not available in window mode. Exit window mode first (× or □ button).</string>
     <string name="settings_main_screen_wallpaper_title">Main screen background</string>
     <string name="settings_main_screen_wallpaper_light">Wallpaper folder (light theme)</string>
     <string name="settings_main_screen_wallpaper_dark">Wallpaper folder (dark theme)</string>

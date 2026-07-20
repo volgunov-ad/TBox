@@ -256,6 +256,8 @@ data class MainScreenWindowModeExitButtonPosition(
 ) {
     companion object {
         val Default = MainScreenWindowModeExitButtonPosition(0.04f, 0.04f)
+        /** Default for «restore fullscreen» (square) button — to the right of [Default]. */
+        val RestoreFullscreenDefault = MainScreenWindowModeExitButtonPosition(0.12f, 0.04f)
     }
 }
 
@@ -570,6 +572,8 @@ class SettingsManager(private val context: Context) {
         private const val MAIN_SCREEN_PAGE_NEXT_BUTTON_KEY = "main_screen_page_next_button"
         private const val MAIN_SCREEN_WINDOW_MODE_GEOMETRY_KEY = "main_screen_window_mode_geometry"
         private const val MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY = "main_screen_window_mode_exit_button"
+        private const val MAIN_SCREEN_WINDOW_MODE_RESTORE_BUTTON_KEY =
+            "main_screen_window_mode_restore_button"
         private val MAIN_SCREEN_WINDOW_MODE_AUTO_GEOMETRY_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_window_mode_auto_geometry")
 
@@ -882,7 +886,18 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.data
             .map { preferences ->
                 parseMainScreenWindowModeExitButtonJson(
-                    preferences[getStringKey(MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY)] ?: ""
+                    preferences[getStringKey(MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY)] ?: "",
+                    default = MainScreenWindowModeExitButtonPosition.Default,
+                )
+            }
+            .distinctUntilChanged()
+
+    val mainScreenWindowModeRestoreButtonFlow: Flow<MainScreenWindowModeExitButtonPosition> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                parseMainScreenWindowModeExitButtonJson(
+                    preferences[getStringKey(MAIN_SCREEN_WINDOW_MODE_RESTORE_BUTTON_KEY)] ?: "",
+                    default = MainScreenWindowModeExitButtonPosition.RestoreFullscreenDefault,
                 )
             }
             .distinctUntilChanged()
@@ -1592,6 +1607,13 @@ class SettingsManager(private val context: Context) {
         obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
         obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
         saveCustomString(MAIN_SCREEN_WINDOW_MODE_EXIT_BUTTON_KEY, obj.toString())
+    }
+
+    suspend fun saveMainScreenWindowModeRestoreButton(position: MainScreenWindowModeExitButtonPosition) {
+        val obj = JSONObject()
+        obj.put("x", position.x.coerceIn(0f, 1f).toDouble())
+        obj.put("y", position.y.coerceIn(0f, 1f).toDouble())
+        saveCustomString(MAIN_SCREEN_WINDOW_MODE_RESTORE_BUTTON_KEY, obj.toString())
     }
 
     suspend fun saveMainScreenWindowModeAutoGeometry(enabled: Boolean) {
@@ -2534,20 +2556,23 @@ class SettingsManager(private val context: Context) {
         }
     }
 
-    private fun parseMainScreenWindowModeExitButtonJson(raw: String): MainScreenWindowModeExitButtonPosition {
-        if (raw.isBlank()) return MainScreenWindowModeExitButtonPosition.Default
+    private fun parseMainScreenWindowModeExitButtonJson(
+        raw: String,
+        default: MainScreenWindowModeExitButtonPosition,
+    ): MainScreenWindowModeExitButtonPosition {
+        if (raw.isBlank()) return default
         return try {
             val o = JSONObject(raw)
             MainScreenWindowModeExitButtonPosition(
-                x = o.optDouble("x", MainScreenWindowModeExitButtonPosition.Default.x.toDouble())
+                x = o.optDouble("x", default.x.toDouble())
                     .toFloat()
                     .coerceIn(0f, 1f),
-                y = o.optDouble("y", MainScreenWindowModeExitButtonPosition.Default.y.toDouble())
+                y = o.optDouble("y", default.y.toDouble())
                     .toFloat()
                     .coerceIn(0f, 1f),
             )
         } catch (_: Exception) {
-            MainScreenWindowModeExitButtonPosition.Default
+            default
         }
     }
 

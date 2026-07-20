@@ -75,6 +75,51 @@ class ThemeLayoutExportApplyTargetsTest {
         )
     }
 
+    @Test
+    fun exportImport_panels_roundTripsWindowModeButtonPositions() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+        val settingsManager = SettingsManager(context)
+        seedLocalState(settingsManager)
+        settingsManager.saveMainScreenWindowModeExitButton(
+            MainScreenWindowModeExitButtonPosition(0.21f, 0.31f),
+        )
+        settingsManager.saveMainScreenWindowModeRestoreButton(
+            MainScreenWindowModeExitButtonPosition(0.41f, 0.51f),
+        )
+
+        val json = ThemeLayoutExport.exportJson(
+            context = context,
+            settingsManager = settingsManager,
+            applyTargets = setOf(ThemeApplyTarget.MAIN_SCREEN_PANELS),
+        )
+        val mainScreen = JSONObject(json).getJSONObject(ThemeSection.MAIN_SCREEN.jsonKey)
+        assertTrue(mainScreen.has("exitWindowModeButton"))
+        assertTrue(mainScreen.has("restoreWindowModeButton"))
+        assertEquals(0.21, mainScreen.getJSONObject("exitWindowModeButton").getDouble("x"), 1e-6)
+        assertEquals(0.41, mainScreen.getJSONObject("restoreWindowModeButton").getDouble("x"), 1e-6)
+
+        settingsManager.saveMainScreenWindowModeExitButton(
+            MainScreenWindowModeExitButtonPosition.Default,
+        )
+        settingsManager.saveMainScreenWindowModeRestoreButton(
+            MainScreenWindowModeExitButtonPosition.RestoreFullscreenDefault,
+        )
+
+        ThemeLayoutExport.importJson(
+            context = context,
+            settingsManager = settingsManager,
+            json = json,
+            applyTargets = setOf(ThemeApplyTarget.MAIN_SCREEN_PANELS),
+        ).getOrThrow()
+
+        val exit = settingsManager.mainScreenWindowModeExitButtonFlow.first()
+        val restore = settingsManager.mainScreenWindowModeRestoreButtonFlow.first()
+        assertEquals(0.21f, exit.x, 1e-5f)
+        assertEquals(0.31f, exit.y, 1e-5f)
+        assertEquals(0.41f, restore.x, 1e-5f)
+        assertEquals(0.51f, restore.y, 1e-5f)
+    }
+
     private suspend fun seedLocalState(settingsManager: SettingsManager) {
         settingsManager.saveMainScreenDashboards(listOf(localPanel("local-panel")))
         settingsManager.saveMainScreenWallpaperSelectionsByPage(

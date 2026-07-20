@@ -113,7 +113,7 @@ import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
 /** Width of value dropdowns in the tile / panel settings dialog. */
-private val WidgetDialogDropdownSelectorWidth = 300.dp
+val WidgetDialogDropdownSelectorWidth = 300.dp
 
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
 internal data class ValueAccuracyDropdownEntry(
