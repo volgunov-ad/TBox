@@ -108,7 +108,7 @@ object VehicleTelemetryBridge {
             }
             launch {
                 UniversalCanRepository.outsideTemperatureState.collect { temp ->
-                    // null from HU means invalid (e.g. raw 87); do not clear via bridge
+                    // null from HU means invalid / out-of-range; do not clear via bridge
                     temp ?: return@collect
                     tryWriteHu(Signal.OutsideTemp) {
                         CanDataRepository.updateOutsideTemperature(temp)
