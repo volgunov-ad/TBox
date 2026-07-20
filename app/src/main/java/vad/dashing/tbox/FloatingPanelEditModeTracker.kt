@@ -21,15 +21,22 @@ object FloatingPanelEditModeTracker {
     private val _suppressUsageStatsHide = MutableStateFlow(false)
     val suppressUsageStatsHide: StateFlow<Boolean> = _suppressUsageStatsHide.asStateFlow()
 
+    private val _overlayEditEpoch = MutableStateFlow(0)
+    /** Bumps when overlay edit membership changes — overlays re-layout (e.g. expand while collapsed). */
+    val overlayEditEpoch: StateFlow<Int> = _overlayEditEpoch.asStateFlow()
+
     fun setOverlayEditMode(panelId: String, editing: Boolean) {
         if (panelId.isBlank()) return
         synchronized(lock) {
-            if (editing) {
+            val changed = if (editing) {
                 overlayEditPanelIds.add(panelId)
             } else {
                 overlayEditPanelIds.remove(panelId)
             }
             publishLocked()
+            if (changed) {
+                _overlayEditEpoch.value = _overlayEditEpoch.value + 1
+            }
         }
     }
 
@@ -42,6 +49,13 @@ object FloatingPanelEditModeTracker {
                 tileEditDialogPanelIds.remove(panelId)
             }
             publishLocked()
+        }
+    }
+
+    fun isOverlayInEditMode(panelId: String): Boolean {
+        if (panelId.isBlank()) return false
+        synchronized(lock) {
+            return panelId in overlayEditPanelIds
         }
     }
 

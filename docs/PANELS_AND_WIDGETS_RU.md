@@ -216,6 +216,10 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 Интерактивные виджеты (климат, сиденья) регистрируют интересы CAN через `UniversalCanRepository.setSourceWidgetKeys` при появлении на видимой панели (`DashboardPanelGridAndFrames`).
 
+### Сворачивание панели (W-11)
+
+Во вкладке «Вся панель» можно задать край свайпа, толщину полоски, цвета light/dark и авто-сворачивание по тапу. Свёрнутое состояние хранится в DataStore (`panel_collapse_states`, map `panelId → bool`) **независимо от темы**. Плавающий overlay при сворачивании сжимается до полоски.
+
 ---
 
 ## Как добавить новый виджет (разработчик)

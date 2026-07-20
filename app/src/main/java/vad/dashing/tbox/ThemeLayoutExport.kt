@@ -346,6 +346,7 @@ object ThemeLayoutExport {
             o.put("clickAction", panel.clickAction)
             o.put("showTboxDisconnectIndicator", panel.showTboxDisconnectIndicator)
             o.put("pageNumber", panel.pageNumber)
+            putPanelCollapseFields(o, panel)
             o.put("widgets", serializeWidgetConfigsToJsonArray(panel.widgetsConfig))
             arr.put(o)
         }
@@ -376,6 +377,7 @@ object ThemeLayoutExport {
             o.put("background", panel.background)
             o.put("clickAction", panel.clickAction)
             o.put("showTboxDisconnectIndicator", panel.showTboxDisconnectIndicator)
+            putPanelCollapseFields(o, panel)
             o.put("widgets", serializeWidgetConfigsToJsonArray(panel.widgetsConfig))
             arr.put(o)
         }
@@ -551,6 +553,23 @@ object ThemeLayoutExport {
                         grid?.optInt("spacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
                             ?: DEFAULT_PANEL_GRID_SPACING_DP
                     ),
+                    collapseEdge = PanelCollapseEdge.fromStorage(o.optString("collapseEdge")).storageValue,
+                    collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                        o.optInt(
+                            "collapseStripThicknessDp",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+                        ),
+                    ),
+                    collapseStripColorLight = colorHexToIntOrNull(
+                        o.optString("collapseStripColorLight"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+                    collapseStripColorDark = colorHexToIntOrNull(
+                        o.optString("collapseStripColorDark"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+                    collapseOnTileTap = o.optBoolean(
+                        "collapseOnTileTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+                    ),
                 ),
             )
         }
@@ -592,11 +611,76 @@ object ThemeLayoutExport {
                         grid?.optInt("spacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
                             ?: DEFAULT_PANEL_GRID_SPACING_DP
                     ),
+                    collapseEdge = PanelCollapseEdge.fromStorage(o.optString("collapseEdge")).storageValue,
+                    collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                        o.optInt(
+                            "collapseStripThicknessDp",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+                        ),
+                    ),
+                    collapseStripColorLight = colorHexToIntOrNull(
+                        o.optString("collapseStripColorLight"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+                    collapseStripColorDark = colorHexToIntOrNull(
+                        o.optString("collapseStripColorDark"),
+                    ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+                    collapseOnTileTap = o.optBoolean(
+                        "collapseOnTileTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+                    ),
                 ),
             )
         }
         if (configs.isNotEmpty()) {
             sm.saveFloatingDashboards(configs)
+        }
+    }
+
+    private fun putPanelCollapseFields(o: JSONObject, panel: MainScreenPanelConfig) {
+        putPanelCollapseFields(
+            o = o,
+            collapseEdge = panel.collapseEdge,
+            collapseStripThicknessDp = panel.collapseStripThicknessDp,
+            collapseStripColorLight = panel.collapseStripColorLight,
+            collapseStripColorDark = panel.collapseStripColorDark,
+            collapseOnTileTap = panel.collapseOnTileTap,
+        )
+    }
+
+    private fun putPanelCollapseFields(o: JSONObject, panel: FloatingDashboardConfig) {
+        putPanelCollapseFields(
+            o = o,
+            collapseEdge = panel.collapseEdge,
+            collapseStripThicknessDp = panel.collapseStripThicknessDp,
+            collapseStripColorLight = panel.collapseStripColorLight,
+            collapseStripColorDark = panel.collapseStripColorDark,
+            collapseOnTileTap = panel.collapseOnTileTap,
+        )
+    }
+
+    private fun putPanelCollapseFields(
+        o: JSONObject,
+        collapseEdge: String,
+        collapseStripThicknessDp: Int,
+        collapseStripColorLight: Int,
+        collapseStripColorDark: Int,
+        collapseOnTileTap: Boolean,
+    ) {
+        val edge = PanelCollapseEdge.fromStorage(collapseEdge)
+        if (edge != PanelCollapseEdge.NONE) {
+            o.put("collapseEdge", edge.storageValue)
+        }
+        if (collapseStripThicknessDp != DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP) {
+            o.put("collapseStripThicknessDp", collapseStripThicknessDp)
+        }
+        if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
+            o.put("collapseStripColorLight", colorIntToHex(collapseStripColorLight))
+        }
+        if (collapseStripColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK) {
+            o.put("collapseStripColorDark", colorIntToHex(collapseStripColorDark))
+        }
+        if (collapseOnTileTap) {
+            o.put("collapseOnTileTap", true)
         }
     }
 }

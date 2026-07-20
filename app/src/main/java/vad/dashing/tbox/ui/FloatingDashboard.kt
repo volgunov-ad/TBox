@@ -39,6 +39,8 @@ import vad.dashing.tbox.FloatingPanelEditModeTracker
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.MainActivityIntentHelper
+import vad.dashing.tbox.PanelCollapseEdge
+import vad.dashing.tbox.PanelCollapseStates
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
@@ -60,6 +62,9 @@ import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.snapToGrid
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
+import vad.dashing.tbox.collapseEdgeOrNone
+import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
+import vad.dashing.tbox.resolveStripColor
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
@@ -174,6 +179,7 @@ fun FloatingDashboard(
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
     }
     val isFloatingDashboardClickAction = panelConfig.clickAction
+    val panelCollapseStates by settingsViewModel.panelCollapseStates.collectAsStateWithLifecycle()
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -184,6 +190,9 @@ fun FloatingDashboard(
     var pendingMusicSelection by remember(panelId) { mutableStateOf<Pair<Int, String>?>(null) }
     var pendingSeatHeatVentVariant by remember(panelId) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode
+    val collapseEdge = panelConfig.collapseEdgeOrNone()
+    val panelCollapsed = PanelCollapseStates.isCollapsed(panelCollapseStates, panelId)
+    val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
 
     DisposableEffect(panelId, isEditMode) {
@@ -374,6 +383,17 @@ fun FloatingDashboard(
                         }
                     )
             ) {
+                CollapsiblePanelFrame(
+                    edge = collapseEdge,
+                    collapsed = effectiveCollapsed,
+                    stripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                        panelConfig.collapseStripThicknessDp,
+                    ),
+                    stripColor = Color(panelConfig.resolveStripColor(currentTheme)),
+                    isEditMode = isEditMode,
+                    onCollapsedChange = { settingsViewModel.setPanelCollapsed(panelId, it) },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                 DashboardPanelGridAndFrames(
                     mbCanInterestSourceId = "floating-$panelId",
                     dashboardRows = dashboardRows,
@@ -451,6 +471,12 @@ fun FloatingDashboard(
                             }
                             openMainActivityFromWidget(context)
                         }
+                        if (!isEditMode &&
+                            panelConfig.collapseOnTileTap &&
+                            collapseEdge != PanelCollapseEdge.NONE
+                        ) {
+                            settingsViewModel.setPanelCollapsed(panelId, true)
+                        }
                     },
                     onWidgetLongClick = {
                         isEditMode = !isEditMode
@@ -493,6 +519,7 @@ fun FloatingDashboard(
                     gridSpacingDp = panelConfig.gridSpacingDp.dp,
                     externalWidgetHost = appWidgetHost,
                 )
+                }
                 if (isEditMode) {
                     // Reserve panel resize corner to avoid accidental tile long-press there.
                     Box(

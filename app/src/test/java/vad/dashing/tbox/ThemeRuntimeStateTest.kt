@@ -42,6 +42,21 @@ class ThemeRuntimeStateTest {
     }
 
     @Test
+    fun patch_writesWindowModeCurrentPage() {
+        val dir = createTempDir(prefix = "runtime_window_page_")
+        ThemeRuntimeState.patch(dir, currentPage = 1)
+        ThemeRuntimeState.patch(dir, currentPageWindowMode = 2)
+
+        val json = JSONObject(File(dir, ThemeRuntimeState.RUNTIME_JSON_FILE).readText())
+        assertEquals(1, json.getInt(ThemeRuntimeState.KEY_CURRENT_PAGE))
+        assertEquals(2, json.getInt(ThemeRuntimeState.KEY_CURRENT_PAGE_WINDOW_MODE))
+
+        val state = ThemeRuntimeState.read(dir)
+        assertTrue(state.hasCurrentPageWindowMode)
+        assertEquals(2, state.currentPageWindowMode)
+    }
+
+    @Test
     fun read_preservesFieldPresenceFlags() {
         val dir = createTempDir(prefix = "runtime_read_")
         val selections = MainScreenWallpaperSelectionsByPage.empty()

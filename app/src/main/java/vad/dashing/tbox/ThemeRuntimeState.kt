@@ -14,15 +14,18 @@ object ThemeRuntimeState {
 
     const val KEY_WALLPAPER_SELECTION_BY_PAGE = MainScreenWallpaperSelectionsByPage.JSON_KEY
     const val KEY_CURRENT_PAGE = "currentPage"
+    const val KEY_CURRENT_PAGE_WINDOW_MODE = "currentPageWindowMode"
 
     data class State(
         val wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
         val hasWallpaperSelections: Boolean = false,
         val currentPage: Int? = null,
         val hasCurrentPage: Boolean = false,
+        val currentPageWindowMode: Int? = null,
+        val hasCurrentPageWindowMode: Boolean = false,
     ) {
         val isEmpty: Boolean
-            get() = !hasWallpaperSelections && !hasCurrentPage
+            get() = !hasWallpaperSelections && !hasCurrentPage && !hasCurrentPageWindowMode
     }
 
     fun readRawText(cacheDir: File): String? {
@@ -47,6 +50,12 @@ object ThemeRuntimeState {
                 null
             },
             hasCurrentPage = obj.has(KEY_CURRENT_PAGE),
+            currentPageWindowMode = if (obj.has(KEY_CURRENT_PAGE_WINDOW_MODE)) {
+                obj.optInt(KEY_CURRENT_PAGE_WINDOW_MODE, SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
+            } else {
+                null
+            },
+            hasCurrentPageWindowMode = obj.has(KEY_CURRENT_PAGE_WINDOW_MODE),
         )
     }
 
@@ -66,6 +75,12 @@ object ThemeRuntimeState {
         if (state.hasCurrentPage) {
             json.put(KEY_CURRENT_PAGE, state.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE)
         }
+        if (state.hasCurrentPageWindowMode) {
+            json.put(
+                KEY_CURRENT_PAGE_WINDOW_MODE,
+                state.currentPageWindowMode ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+            )
+        }
         file.writeText(json.toString(2))
     }
 
@@ -73,6 +88,7 @@ object ThemeRuntimeState {
         cacheDir: File,
         wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
         currentPage: Int? = null,
+        currentPageWindowMode: Int? = null,
     ): State {
         val existing = read(cacheDir)
         val mergedSelections = when {
@@ -85,6 +101,8 @@ object ThemeRuntimeState {
             hasWallpaperSelections = wallpaperSelections != null || existing.hasWallpaperSelections,
             currentPage = currentPage ?: existing.currentPage,
             hasCurrentPage = currentPage != null || existing.hasCurrentPage,
+            currentPageWindowMode = currentPageWindowMode ?: existing.currentPageWindowMode,
+            hasCurrentPageWindowMode = currentPageWindowMode != null || existing.hasCurrentPageWindowMode,
         )
         write(cacheDir, merged)
         return merged
@@ -99,6 +117,11 @@ object ThemeRuntimeState {
         if (state.hasCurrentPage) {
             settingsManager.saveMainScreenCurrentPage(
                 state.currentPage ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+            )
+        }
+        if (state.hasCurrentPageWindowMode) {
+            settingsManager.saveMainScreenWindowModeCurrentPage(
+                state.currentPageWindowMode ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
             )
         }
     }
@@ -132,6 +155,11 @@ object ThemeRuntimeState {
         )
         if (resolvedPage != null) {
             settingsManager.saveMainScreenCurrentPage(resolvedPage)
+        }
+        if (runtime.hasCurrentPageWindowMode) {
+            settingsManager.saveMainScreenWindowModeCurrentPage(
+                runtime.currentPageWindowMode ?: SettingsManager.DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+            )
         }
         return selections
     }

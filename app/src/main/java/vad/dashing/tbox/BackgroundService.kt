@@ -2736,6 +2736,22 @@ class BackgroundService : Service() {
                         }
                     }
             }
+            launch {
+                settingsManager.panelCollapseStatesFlow
+                    .drop(1)
+                    .collect {
+                        // Collapse state lives outside theme/config JSON, so it needs its own
+                        // overlay layout refresh.
+                        overlayController.syncFloatingDashboards(floatingDashboards.value)
+                    }
+            }
+            launch {
+                FloatingPanelEditModeTracker.overlayEditEpoch
+                    .drop(1)
+                    .collect {
+                        overlayController.syncFloatingDashboards(floatingDashboards.value)
+                    }
+            }
         }
         startUsageStatsFloatingHideWatcher()
     }
@@ -2753,7 +2769,8 @@ class BackgroundService : Service() {
     private fun buildFloatingOverlayLayoutSignature(configs: List<FloatingDashboardConfig>): String {
         if (configs.isEmpty()) return "empty"
         return configs.mapIndexed { index, cfg ->
-            "$index|${cfg.id}|${cfg.enabled}|${cfg.startX}|${cfg.startY}|${cfg.width}|${cfg.height}"
+            "$index|${cfg.id}|${cfg.enabled}|${cfg.startX}|${cfg.startY}|${cfg.width}|${cfg.height}|" +
+                "${cfg.collapseEdge}|${cfg.collapseStripThicknessDp}"
         }.joinToString("||")
     }
 

@@ -42,6 +42,11 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val clickAction: Boolean,
     val pageNumber: Int,
     val gridSpacingDp: Int,
+    val collapseEdge: String,
+    val collapseStripThicknessDp: Int,
+    val collapseStripColorLight: Int,
+    val collapseStripColorDark: Int,
+    val collapseOnTileTap: Boolean,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -51,6 +56,11 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val showTboxDisconnectIndicator: Boolean,
     val clickAction: Boolean,
     val gridSpacingDp: Int,
+    val collapseEdge: String,
+    val collapseStripThicknessDp: Int,
+    val collapseStripColorLight: Int,
+    val collapseStripColorDark: Int,
+    val collapseOnTileTap: Boolean,
 )
 
 /** Merges widget list and optional whole-panel draft; used by [SettingsViewModel] and unit tests. */
@@ -69,6 +79,11 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         clickAction = w.clickAction,
         pageNumber = w.pageNumber.coerceAtLeast(1),
         gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
+        collapseEdge = PanelCollapseEdge.fromStorage(w.collapseEdge).storageValue,
+        collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        collapseStripColorLight = w.collapseStripColorLight,
+        collapseStripColorDark = w.collapseStripColorDark,
+        collapseOnTileTap = w.collapseOnTileTap,
     )
 }
 
@@ -86,6 +101,11 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         showTboxDisconnectIndicator = w.showTboxDisconnectIndicator,
         clickAction = w.clickAction,
         gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
+        collapseEdge = PanelCollapseEdge.fromStorage(w.collapseEdge).storageValue,
+        collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        collapseStripColorLight = w.collapseStripColorLight,
+        collapseStripColorDark = w.collapseStripColorDark,
+        collapseOnTileTap = w.collapseOnTileTap,
     )
 }
 
@@ -298,6 +318,19 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    val panelCollapseStates = settingsManager.panelCollapseStatesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap(),
+        )
+
+    fun setPanelCollapsed(panelId: String, collapsed: Boolean) {
+        viewModelScope.launch {
+            settingsManager.setPanelCollapsed(panelId, collapsed)
+        }
+    }
 
     val usageStatsHideFloatingWatchPackages = settingsManager.usageStatsHideFloatingWatchPackagesFlow
         .stateIn(
@@ -582,6 +615,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     val mainScreenCurrentPage: StateFlow<Int> = liveMainScreenCurrentPage.asStateFlow()
 
+    private val liveMainScreenWindowModeCurrentPage = MutableStateFlow<Int?>(null)
+
+    val mainScreenWindowModeCurrentPage: StateFlow<Int?> =
+        liveMainScreenWindowModeCurrentPage.asStateFlow()
+
     val mainScreenPagePrevButtonPosition = settingsManager.mainScreenPagePrevButtonFlow
         .stateIn(
             scope = viewModelScope,
@@ -613,7 +651,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyMap())
 
     private var saveCurrentPageJob: Job? = null
+    private var saveWindowModeCurrentPageJob: Job? = null
     private var pendingCurrentPage: Int? = null
+    private var pendingWindowModeCurrentPage: Int? = null
     private val currentPageFlushMutex = Mutex()
 
     private var saveWallpaperSelectionJob: Job? = null
@@ -627,8 +667,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         saveWallpaperSelectionJob = null
         saveCurrentPageJob?.cancel()
         saveCurrentPageJob = null
+        saveWindowModeCurrentPageJob?.cancel()
+        saveWindowModeCurrentPageJob = null
         flushMainScreenWallpaperSelectionInternal()
         flushMainScreenCurrentPageInternal()
+        flushMainScreenCurrentPageInternal(windowMode = true)
         if (ThemeCacheKeys.isLikelyCacheKey(outgoingCacheKey)) {
             settingsManager.snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)
         }
@@ -1075,12 +1118,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             }
         }
         viewModelScope.launch {
+            settingsManager.mainScreenWindowModeCurrentPageFlow.collect { stored ->
+                if (pendingWindowModeCurrentPage == null) {
+                    liveMainScreenWindowModeCurrentPage.value = stored
+                }
+            }
+        }
+        viewModelScope.launch {
             settingsManager.themeActivationInProgressFlow.collect { activating ->
                 if (activating) {
                     saveWallpaperSelectionJob?.cancel()
                     saveWallpaperSelectionJob = null
                     saveCurrentPageJob?.cancel()
                     saveCurrentPageJob = null
+                    saveWindowModeCurrentPageJob?.cancel()
+                    saveWindowModeCurrentPageJob = null
                     pendingWallpaperPatches.clear()
                     pendingWallpaperPatchesFlow.value = emptyMap()
                     return@collect
@@ -1089,10 +1141,15 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 saveWallpaperSelectionJob = null
                 saveCurrentPageJob?.cancel()
                 saveCurrentPageJob = null
+                saveWindowModeCurrentPageJob?.cancel()
+                saveWindowModeCurrentPageJob = null
                 pendingWallpaperPatches.clear()
                 pendingWallpaperPatchesFlow.value = emptyMap()
                 pendingCurrentPage = null
+                pendingWindowModeCurrentPage = null
                 liveMainScreenCurrentPage.value = settingsManager.mainScreenCurrentPageFlow.first()
+                liveMainScreenWindowModeCurrentPage.value =
+                    settingsManager.mainScreenWindowModeCurrentPageFlow.first()
             }
         }
         viewModelScope.launch {
@@ -2211,11 +2268,25 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 liveMainScreenCurrentPage.value,
                 normalized,
             )
+            liveMainScreenWindowModeCurrentPage.value =
+                liveMainScreenWindowModeCurrentPage.value?.let {
+                    PagingStateNormalizer.normalizeCurrentPage(it, normalized)
+                }
         }
     }
 
-    fun scheduleSaveMainScreenCurrentPage(page: Int) {
+    fun scheduleSaveMainScreenCurrentPage(page: Int, windowMode: Boolean = false) {
         if (settingsManager.themeActivationInProgressFlow.value) return
+        if (windowMode) {
+            liveMainScreenWindowModeCurrentPage.value = page
+            pendingWindowModeCurrentPage = page
+            saveWindowModeCurrentPageJob?.cancel()
+            saveWindowModeCurrentPageJob = viewModelScope.launch {
+                delay(MAIN_SCREEN_CURRENT_PAGE_SAVE_DEBOUNCE_MS)
+                flushMainScreenCurrentPageInternal(windowMode = true)
+            }
+            return
+        }
         liveMainScreenCurrentPage.value = page
         pendingCurrentPage = page
         saveCurrentPageJob?.cancel()
@@ -2225,29 +2296,48 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun flushMainScreenCurrentPage() {
-        saveCurrentPageJob?.cancel()
-        saveCurrentPageJob = null
-        val toSave = pendingCurrentPage
+    fun flushMainScreenCurrentPage(windowMode: Boolean = false) {
+        if (windowMode) {
+            saveWindowModeCurrentPageJob?.cancel()
+            saveWindowModeCurrentPageJob = null
+        } else {
+            saveCurrentPageJob?.cancel()
+            saveCurrentPageJob = null
+        }
+        val toSave = if (windowMode) pendingWindowModeCurrentPage else pendingCurrentPage
         if (toSave != null) {
-            liveMainScreenCurrentPage.value = toSave
+            if (windowMode) {
+                liveMainScreenWindowModeCurrentPage.value = toSave
+            } else {
+                liveMainScreenCurrentPage.value = toSave
+            }
         }
         viewModelScope.launch {
-            flushMainScreenCurrentPageInternal()
+            flushMainScreenCurrentPageInternal(windowMode)
         }
     }
 
-    private suspend fun flushMainScreenCurrentPageInternal() {
+    private suspend fun flushMainScreenCurrentPageInternal(windowMode: Boolean = false) {
         currentPageFlushMutex.withLock {
-            if (pendingCurrentPage == null) return
+            val pending = if (windowMode) pendingWindowModeCurrentPage else pendingCurrentPage
+            if (pending == null) return
             if (settingsManager.themeActivationInProgressFlow.value) return
-            val toSave = pendingCurrentPage ?: return
+            val toSave = pending
             val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
-            pendingCurrentPage = null
-            settingsManager.saveMainScreenCurrentPage(toSave)
+            if (windowMode) {
+                pendingWindowModeCurrentPage = null
+                settingsManager.saveMainScreenWindowModeCurrentPage(toSave)
+            } else {
+                pendingCurrentPage = null
+                settingsManager.saveMainScreenCurrentPage(toSave)
+            }
             if (settingsManager.activeThemeUriFlow.first().trim() != syncCacheKey) return
             if (ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)) {
-                settingsManager.syncThemeCurrentPage(syncCacheKey, toSave)
+                if (windowMode) {
+                    settingsManager.syncThemeWindowModeCurrentPage(syncCacheKey, toSave)
+                } else {
+                    settingsManager.syncThemeCurrentPage(syncCacheKey, toSave)
+                }
             }
         }
     }
