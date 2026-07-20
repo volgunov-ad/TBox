@@ -10,7 +10,7 @@
 - Android 10: `Android10VhalRepository.kt`
 - Общий API: `UniversalCanRepository.kt`
 
-См. также: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
+См. также: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), сводная таблица scale/offset — [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).
 
 ---
 
