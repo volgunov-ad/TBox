@@ -95,7 +95,8 @@ object LocPayloadParser {
     fun parseNmea(gpsPayload: ByteArray, updateTime: Date = Date()): LocValues {
         val text = String(gpsPayload, Charsets.US_ASCII)
             .trim { it <= ' ' || it == '\u0000' }
-        val rawValue = toHexString(gpsPayload)
+        // Prefer readable NMEA text in UI "Сырые данные"; fall back to hex if empty.
+        val rawValue = text.ifBlank { toHexString(gpsPayload) }
 
         var locateStatus = false
         var latitude = 0.0

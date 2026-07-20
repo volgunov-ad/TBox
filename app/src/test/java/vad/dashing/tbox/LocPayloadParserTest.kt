@@ -29,9 +29,10 @@ class LocPayloadParserTest {
         assertEquals(10, loc.utcTime?.day)
         assertEquals(12, loc.utcTime?.month)
         assertEquals(25, loc.utcTime?.year)
-        // Full hex is preserved (no hard 39-byte cut)
-        assertTrue(loc.rawValue.contains("24 47 4E 52 4D 43"))
-        assertTrue(loc.rawValue.trim().endsWith("4E") || loc.rawValue.contains("4E"))
+        // NMEA rawValue is readable ASCII (full payload, not a 39-byte hex cut)
+        assertTrue(loc.rawValue.startsWith("\$GNRMC"))
+        assertTrue(loc.rawValue.contains("030152.83"))
+        assertTrue(loc.rawValue.contains(",V,"))
     }
 
     @Test
