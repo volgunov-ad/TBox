@@ -59,8 +59,9 @@ import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
+import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_FRACTION
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
-import vad.dashing.tbox.snapToGrid
+import vad.dashing.tbox.maybeSnapToGrid
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.collapseEdgeOrNone
 import vad.dashing.tbox.collapsedPanelBounds
@@ -100,8 +101,8 @@ private fun panelLayoutFromRel(
 }
 
 private fun panelPxToRel(layout: PanelPxLayout, containerW: Float, containerH: Float): MainScreenRelLayout {
-    val relW = (layout.width / containerW).coerceIn(0.08f, 1f)
-    val relH = (layout.height / containerH).coerceIn(0.08f, 1f)
+    val relW = (layout.width / containerW).coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
+    val relH = (layout.height / containerH).coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
     val w = relW * containerW
     val h = relH * containerH
     val rangeX = (containerW - w).coerceAtLeast(1f)
@@ -136,11 +137,15 @@ fun MainScreenDashboardPanel(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val minPanelPx = with(density) { 80.dp.toPx() }
+    val minPanelPx = with(density) { 50.dp.toPx() }
     val mainScreenPanelsLayoutSnapDp by
         settingsViewModel.mainScreenPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val mainScreenPanelsLayoutSnapEnabled by
+        settingsViewModel.mainScreenPanelsLayoutSnapEnabled.collectAsStateWithLifecycle()
     val layoutSnapDp = normalizePanelLayoutSnapDp(mainScreenPanelsLayoutSnapDp)
     val layoutSnapStepPx = with(density) { layoutSnapDp.dp.toPx() }
+    val effectiveLayoutSnapStepPx =
+        if (mainScreenPanelsLayoutSnapEnabled) layoutSnapStepPx else 0f
     val appWidgetHost = remember(context) { ExternalWidgetHostManager.acquireHost(context) }
 
     DisposableEffect(appWidgetHost) {
@@ -341,7 +346,7 @@ fun MainScreenDashboardPanel(
             .then(
                 if (canManipulatePanel) {
                     // Do not use layoutPx width/height as keys — they change during resize and cancel the gesture.
-                    Modifier.pointerInput(panel.id, cw, ch, minPanelPx, layoutSnapStepPx) {
+                    Modifier.pointerInput(panel.id, cw, ch, minPanelPx, effectiveLayoutSnapStepPx) {
                         detectDragGestures(
                             onDragStart = { startOffset ->
                                 layoutInteraction = true
@@ -364,21 +369,25 @@ fun MainScreenDashboardPanel(
                                     val maxX = (cw - layoutPx.width).coerceAtLeast(0f)
                                     val maxY = (ch - layoutPx.height).coerceAtLeast(0f)
                                     layoutPx = layoutPx.copy(
-                                        x = snapToGrid(layoutPx.x + dragAmount.x, layoutSnapStepPx)
-                                            .coerceIn(0f, maxX),
-                                        y = snapToGrid(layoutPx.y + dragAmount.y, layoutSnapStepPx)
-                                            .coerceIn(0f, maxY),
+                                        x = maybeSnapToGrid(
+                                            layoutPx.x + dragAmount.x,
+                                            effectiveLayoutSnapStepPx,
+                                        ).coerceIn(0f, maxX),
+                                        y = maybeSnapToGrid(
+                                            layoutPx.y + dragAmount.y,
+                                            effectiveLayoutSnapStepPx,
+                                        ).coerceIn(0f, maxY),
                                     )
                                 } else if (isResizingMode) {
-                                    val newW = snapToGrid(
+                                    val newW = maybeSnapToGrid(
                                         (layoutPx.width + dragAmount.x)
                                             .coerceIn(minPanelPx, cw - layoutPx.x),
-                                        layoutSnapStepPx,
+                                        effectiveLayoutSnapStepPx,
                                     ).coerceIn(minPanelPx, cw - layoutPx.x)
-                                    val newH = snapToGrid(
+                                    val newH = maybeSnapToGrid(
                                         (layoutPx.height + dragAmount.y)
                                             .coerceIn(minPanelPx, ch - layoutPx.y),
-                                        layoutSnapStepPx,
+                                        effectiveLayoutSnapStepPx,
                                     ).coerceIn(minPanelPx, ch - layoutPx.y)
                                     layoutPx = layoutPx.copy(width = newW, height = newH)
                                 }

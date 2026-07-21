@@ -905,6 +905,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_PANEL_LAYOUT_SNAP_DP
         )
 
+    val mainScreenPanelsLayoutSnapEnabled = settingsManager.mainScreenPanelsLayoutSnapEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val mainScreenShowLayoutGrid = settingsManager.mainScreenShowLayoutGridFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val mainScreenPanelPageNumber = activeMainScreenPanelConfig
         .map { it.pageNumber }
         .stateIn(
@@ -930,7 +944,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val mainScreenPanelRelWidthPercent = activeMainScreenPanelConfig
-        .map { (it.relWidth * 100f).toInt().coerceIn(8, 100) }
+        .map { (it.relWidth * 100f).toInt().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -938,7 +952,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val mainScreenPanelRelHeightPercent = activeMainScreenPanelConfig
-        .map { (it.relHeight * 100f).toInt().coerceIn(8, 100) }
+        .map { (it.relHeight * 100f).toInt().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100) }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -1809,8 +1823,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             it.copy(
                 relX = relX.coerceIn(0f, 1f),
                 relY = relY.coerceIn(0f, 1f),
-                relWidth = relWidth.coerceIn(0.08f, 1f),
-                relHeight = relHeight.coerceIn(0.08f, 1f)
+                relWidth = relWidth.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f),
+                relHeight = relHeight.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
             )
         }
     }
@@ -1936,6 +1950,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMainScreenPanelsLayoutSnapEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenPanelsLayoutSnapEnabled(enabled)
+        }
+    }
+
+    fun saveMainScreenShowLayoutGrid(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveMainScreenShowLayoutGrid(enabled)
+        }
+    }
+
     fun saveMainScreenPanelRelXPercent(percent: Int) {
         updateSelectedMainScreenPanel {
             it.copy(relX = (percent.coerceIn(0, 100)) / 100f)
@@ -1950,13 +1976,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun saveMainScreenPanelRelWidthPercent(percent: Int) {
         updateSelectedMainScreenPanel {
-            it.copy(relWidth = (percent.coerceIn(8, 100)) / 100f)
+            it.copy(relWidth = (percent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f)
         }
     }
 
     fun saveMainScreenPanelRelHeightPercent(percent: Int) {
         updateSelectedMainScreenPanel {
-            it.copy(relHeight = (percent.coerceIn(8, 100)) / 100f)
+            it.copy(relHeight = (percent.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)) / 100f)
         }
     }
 

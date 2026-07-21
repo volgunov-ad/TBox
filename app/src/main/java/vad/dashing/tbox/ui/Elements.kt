@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
+import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_PERCENT
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
@@ -1156,7 +1157,7 @@ fun MainScreenPanelRelativeLayoutSettings(
                 IntInputField(
                     value = relW,
                     onValueChange = { newValue ->
-                        if (newValue in 8..100) {
+                        if (newValue in MIN_MAIN_SCREEN_PANEL_REL_PERCENT..100) {
                             settingsViewModel.saveMainScreenPanelRelWidthPercent(newValue)
                         }
                     },
@@ -1174,7 +1175,7 @@ fun MainScreenPanelRelativeLayoutSettings(
                 IntInputField(
                     value = relH,
                     onValueChange = { newValue ->
-                        if (newValue in 8..100) {
+                        if (newValue in MIN_MAIN_SCREEN_PANEL_REL_PERCENT..100) {
                             settingsViewModel.saveMainScreenPanelRelHeightPercent(newValue)
                         }
                     },

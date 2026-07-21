@@ -110,6 +110,12 @@
     <string name="settings_panel_grid_spacing_desc">Gap between grid cells on the panel (0–32 dp)</string>
     <string name="settings_panel_layout_snap_title">Panel snap grid: %1$d dp</string>
     <string name="settings_panel_layout_snap_desc">Shared snap for move and resize of all panels of this type (1–50 dp). Applies only in gesture edit mode; not included in themes</string>
+    <string name="settings_main_screen_layout_snap_step_title">Grid step: %1$d dp</string>
+    <string name="settings_main_screen_layout_snap_step_desc">Snap step for moving and resizing panels and corner buttons (1–50 dp). Snapping applies only when “Snap to grid” is on; not included in themes</string>
+    <string name="settings_main_screen_layout_snap_enabled_title">Snap to grid</string>
+    <string name="settings_main_screen_layout_snap_enabled_desc">Snap panels and corner buttons to the grid step when moving or resizing</string>
+    <string name="settings_main_screen_show_layout_grid_title">Show grid</string>
+    <string name="settings_main_screen_show_layout_grid_desc">Draw grid lines on the main screen when the step is greater than 5 dp (layout guide)</string>
     <string name="widget_custom_title_label">Title</string>
     <string name="widget_custom_title_hint">Empty — default</string>
     <string name="widget_show_unit">Show unit</string>

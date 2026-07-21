@@ -530,6 +530,10 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_dp")
+        private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_enabled")
+        private val MAIN_SCREEN_SHOW_LAYOUT_GRID_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}main_screen_show_layout_grid")
         private val CAN_DATA_SAVE_COUNT_KEY = intPreferencesKey("${KEY_PREFIX}can_data_save_count")
         private val FUEL_TANK_LITERS_KEY = intPreferencesKey("${KEY_PREFIX}fuel_tank_liters")
         private val SPEED_LIMITER_TARGET_KMH_KEY = intPreferencesKey("${KEY_PREFIX}speed_limiter_target_kmh")
@@ -1146,6 +1150,14 @@ class SettingsManager(private val context: Context) {
                 preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY] ?: DEFAULT_PANEL_LAYOUT_SNAP_DP
             )
         }
+        .distinctUntilChanged()
+
+    val mainScreenPanelsLayoutSnapEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val mainScreenShowLayoutGridFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAIN_SCREEN_SHOW_LAYOUT_GRID_KEY] ?: false }
         .distinctUntilChanged()
 
     val canDataSaveCountFlow: Flow<Int> = context.settingsDataStore.data
@@ -2355,8 +2367,8 @@ class SettingsManager(private val context: Context) {
                     cols = it.cols.coerceIn(1, DASHBOARD_PANEL_MAX_GRID_DIMENSION),
                     relX = it.relX.coerceIn(0f, 1f),
                     relY = it.relY.coerceIn(0f, 1f),
-                    relWidth = it.relWidth.coerceIn(0.08f, 1f),
-                    relHeight = it.relHeight.coerceIn(0.08f, 1f)
+                    relWidth = it.relWidth.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f),
+                    relHeight = it.relHeight.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
                 )
             }
         saveCustomString(MAIN_SCREEN_DASHBOARDS_LIST_KEY, serializeMainScreenDashboards(normalized))
@@ -2420,6 +2432,18 @@ class SettingsManager(private val context: Context) {
     suspend fun saveMainScreenPanelsLayoutSnapDp(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY] = normalizePanelLayoutSnapDp(config)
+        }
+    }
+
+    suspend fun saveMainScreenPanelsLayoutSnapEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveMainScreenShowLayoutGrid(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_SHOW_LAYOUT_GRID_KEY] = enabled
         }
     }
 
@@ -2755,9 +2779,9 @@ class SettingsManager(private val context: Context) {
             relY = obj.optDouble("relY", DEFAULT_MAIN_SCREEN_PANEL_REL_Y.toDouble()).toFloat()
                 .coerceIn(0f, 1f),
             relWidth = obj.optDouble("relWidth", DEFAULT_MAIN_SCREEN_PANEL_REL_WIDTH.toDouble())
-                .toFloat().coerceIn(0.08f, 1f),
+                .toFloat().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f),
             relHeight = obj.optDouble("relHeight", DEFAULT_MAIN_SCREEN_PANEL_REL_HEIGHT.toDouble())
-                .toFloat().coerceIn(0.08f, 1f),
+                .toFloat().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f),
             background = obj.optBoolean("background", DEFAULT_MAIN_SCREEN_PANEL_BACKGROUND),
             clickAction = obj.optBoolean("clickAction", DEFAULT_MAIN_SCREEN_PANEL_CLICK_ACTION),
             showTboxDisconnectIndicator = obj.optBoolean(

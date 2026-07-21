@@ -89,6 +89,10 @@ fun MainScreenSettingsTab(
         settingsViewModel.mainScreenPanelGridSpacingDp.collectAsStateWithLifecycle()
     val mainScreenPanelsLayoutSnapDp by
         settingsViewModel.mainScreenPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val mainScreenPanelsLayoutSnapEnabled by
+        settingsViewModel.mainScreenPanelsLayoutSnapEnabled.collectAsStateWithLifecycle()
+    val mainScreenShowLayoutGrid by
+        settingsViewModel.mainScreenShowLayoutGrid.collectAsStateWithLifecycle()
     val isMainScreenOpenOnBootEnabled by
         settingsViewModel.isMainScreenOpenOnBootEnabled.collectAsStateWithLifecycle()
     val mainScreenOpenOnBootDelaySeconds by
@@ -872,12 +876,26 @@ fun MainScreenSettingsTab(
             value = mainScreenPanelsLayoutSnapDp,
             onValueChange = { settingsViewModel.saveMainScreenPanelsLayoutSnapDp(it) },
             text = stringResource(
-                R.string.settings_panel_layout_snap_title,
+                R.string.settings_main_screen_layout_snap_step_title,
                 mainScreenPanelsLayoutSnapDp,
             ),
-            description = stringResource(R.string.settings_panel_layout_snap_desc),
+            description = stringResource(R.string.settings_main_screen_layout_snap_step_desc),
             minValue = MIN_PANEL_LAYOUT_SNAP_DP,
             maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
+        )
+        SettingSwitch(
+            mainScreenPanelsLayoutSnapEnabled,
+            { enabled -> settingsViewModel.saveMainScreenPanelsLayoutSnapEnabled(enabled) },
+            stringResource(R.string.settings_main_screen_layout_snap_enabled_title),
+            stringResource(R.string.settings_main_screen_layout_snap_enabled_desc),
+            true,
+        )
+        SettingSwitch(
+            mainScreenShowLayoutGrid,
+            { enabled -> settingsViewModel.saveMainScreenShowLayoutGrid(enabled) },
+            stringResource(R.string.settings_main_screen_show_layout_grid_title),
+            stringResource(R.string.settings_main_screen_show_layout_grid_desc),
+            true,
         )
         if (showMainScreenPanelOrderDialog) {
             PanelOrderConfigDialog(

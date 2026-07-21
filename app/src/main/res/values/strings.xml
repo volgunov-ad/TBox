@@ -110,6 +110,12 @@
     <string name="settings_panel_grid_spacing_desc">Зазор между ячейками сетки на панели (0–32 dp)</string>
     <string name="settings_panel_layout_snap_title">Шаг сетки панелей: %1$d dp</string>
     <string name="settings_panel_layout_snap_desc">Общая привязка перемещения и изменения размера всех панелей этого типа к сетке (1–50 dp). Действует только в режиме редактирования жестами; в темы не входит</string>
+    <string name="settings_main_screen_layout_snap_step_title">Шаг сетки: %1$d dp</string>
+    <string name="settings_main_screen_layout_snap_step_desc">Шаг сетки для перемещения и изменения размера панелей и угловых кнопок (1–50 dp). Привязка действует только при включённом переключателе «Привязка к сетке»; в темы не входит</string>
+    <string name="settings_main_screen_layout_snap_enabled_title">Привязка к сетке</string>
+    <string name="settings_main_screen_layout_snap_enabled_desc">Привязывать панели и угловые кнопки к шагу сетки при перемещении и изменении размера</string>
+    <string name="settings_main_screen_show_layout_grid_title">Показывать сетку</string>
+    <string name="settings_main_screen_show_layout_grid_desc">Рисовать линии сетки на главном экране, если шаг больше 5 dp (для ориентира при раскладке)</string>
     <string name="widget_custom_title_label">Заголовок</string>
     <string name="widget_custom_title_hint">Пусто — по умолчанию</string>
     <string name="widget_show_unit">Отображать единицу измерения</string>

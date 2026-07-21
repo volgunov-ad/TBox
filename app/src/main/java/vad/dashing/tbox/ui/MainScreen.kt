@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
@@ -43,6 +45,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.FloatingDashboardTileEditRequestBus
+import vad.dashing.tbox.MAIN_SCREEN_LAYOUT_GRID_MIN_SNAP_DP_EXCLUSIVE
 import vad.dashing.tbox.MainScreenAddButtonPosition
 import vad.dashing.tbox.MainScreenPageNextButtonPosition
 import vad.dashing.tbox.MainScreenPagePrevButtonPosition
@@ -52,6 +55,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.freeform.WindowModeUiGuard
+import vad.dashing.tbox.normalizePanelLayoutSnapDp
 
 private const val MAIN_SCREEN_PANEL_FADE_MS = 300
 
@@ -119,6 +123,9 @@ fun MainScreen(
     val cornerBtnBgDark by settingsViewModel.mainScreenCornerButtonBackgroundDark.collectAsStateWithLifecycle()
     val cornerBtnIconLight by settingsViewModel.mainScreenCornerButtonIconLight.collectAsStateWithLifecycle()
     val cornerBtnIconDark by settingsViewModel.mainScreenCornerButtonIconDark.collectAsStateWithLifecycle()
+    val layoutSnapDp by settingsViewModel.mainScreenPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val layoutSnapEnabled by settingsViewModel.mainScreenPanelsLayoutSnapEnabled.collectAsStateWithLifecycle()
+    val showLayoutGrid by settingsViewModel.mainScreenShowLayoutGrid.collectAsStateWithLifecycle()
     val folderLight by settingsViewModel.mainScreenWallpaperLightFolderUri.collectAsStateWithLifecycle()
     val folderDark by settingsViewModel.mainScreenWallpaperDarkFolderUri.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -131,6 +138,13 @@ fun MainScreen(
     val cornerIconTint = Color(
         if (currentTheme == 2) cornerBtnIconDark else cornerBtnIconLight
     )
+    val density = LocalDensity.current
+    val normalizedSnapDp = normalizePanelLayoutSnapDp(layoutSnapDp)
+    val layoutSnapStepPx = with(density) { normalizedSnapDp.dp.toPx() }
+    val effectiveLayoutSnapStepPx = if (layoutSnapEnabled) layoutSnapStepPx else 0f
+    val drawLayoutGrid =
+        showLayoutGrid && normalizedSnapDp > MAIN_SCREEN_LAYOUT_GRID_MIN_SNAP_DP_EXCLUSIVE
+    val layoutGridColor = MaterialTheme.colorScheme.onSurface
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
     val wallpaperController = remember { MainScreenWallpaperController() }
     var wallpaperCount by remember { mutableIntStateOf(0) }
@@ -164,6 +178,11 @@ fun MainScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            .mainScreenLayoutGrid(
+                enabled = drawLayoutGrid,
+                stepPx = layoutSnapStepPx,
+                lineColor = layoutGridColor,
+            )
             .onGloballyPositioned {
                 if (!themeActivationReadyMarked) {
                     themeActivationReadyMarked = true
@@ -273,6 +292,7 @@ fun MainScreen(
                 settingsViewModel.saveMainScreenSettingsButton(MainScreenSettingsButtonPosition(x, y))
             },
             onClick = onOpenConsole,
+            layoutSnapStepPx = effectiveLayoutSnapStepPx,
         )
 
         if (!windowMode) {
@@ -292,6 +312,7 @@ fun MainScreen(
                 onClick = {
                     settingsViewModel.addMainScreenDashboard(newMainPanelDefaultName, currentPage)
                 },
+                layoutSnapStepPx = effectiveLayoutSnapStepPx,
             )
         }
 
@@ -311,6 +332,7 @@ fun MainScreen(
                 },
                 onClick = { wallpaperController.step(-1) },
                 onHorizontalSwipe = wallpaperController::step,
+                layoutSnapStepPx = effectiveLayoutSnapStepPx,
             )
             MainScreenDraggableCornerButton(
                 icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -327,6 +349,7 @@ fun MainScreen(
                 },
                 onClick = { wallpaperController.step(1) },
                 onHorizontalSwipe = wallpaperController::step,
+                layoutSnapStepPx = effectiveLayoutSnapStepPx,
             )
         }
 
@@ -347,6 +370,7 @@ fun MainScreen(
                     )
                 },
                 onClick = onExitWindowMode,
+                layoutSnapStepPx = effectiveLayoutSnapStepPx,
             )
         }
 
@@ -367,6 +391,7 @@ fun MainScreen(
                     )
                 },
                 onClick = onExitWindowModeToFullscreen,
+                layoutSnapStepPx = effectiveLayoutSnapStepPx,
             )
         }
 

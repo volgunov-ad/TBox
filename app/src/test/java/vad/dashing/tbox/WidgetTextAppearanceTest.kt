@@ -56,4 +56,18 @@ class WidgetTextAppearanceTest {
         assertEquals(20f, snapToGrid(15f, 10f), 0.001f)
         assertEquals(8f, snapToGrid(7.6f, 1f), 0.001f)
     }
+
+    @Test
+    fun maybeSnapToGrid_skipsWhenStepBelowOne() {
+        assertEquals(12.3f, maybeSnapToGrid(12.3f, 0f), 0.001f)
+        assertEquals(12.3f, maybeSnapToGrid(12.3f, 0.5f), 0.001f)
+        assertEquals(10f, maybeSnapToGrid(12f, 10f), 0.001f)
+    }
+
+    @Test
+    fun mainScreenPanelRelMinPercent_matchesFraction() {
+        assertEquals(3, MIN_MAIN_SCREEN_PANEL_REL_PERCENT)
+        assertEquals(0.03f, MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 0.0001f)
+        assertEquals(5, MAIN_SCREEN_LAYOUT_GRID_MIN_SNAP_DP_EXCLUSIVE)
+    }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.maybeSnapToGrid
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -44,6 +45,7 @@ internal fun MainScreenDraggableCornerButton(
     onSaveNormalized: (Float, Float) -> Unit,
     onClick: () -> Unit,
     onHorizontalSwipe: ((direction: Int) -> Unit)? = null,
+    layoutSnapStepPx: Float = 0f,
 ) {
     val savedState by rememberUpdatedState(Pair(normalizedX, normalizedY))
 
@@ -100,15 +102,17 @@ internal fun MainScreenDraggableCornerButton(
                         Modifier
                     }
                 )
-                .pointerInput(maxW, maxH, btnPx) {
+                .pointerInput(maxW, maxH, btnPx, layoutSnapStepPx) {
                     detectDragGesturesAfterLongPress(
                         onDrag = { change, dragAmount ->
                             change.consume()
                             val rangeW = (maxW - btnPx).coerceAtLeast(0f)
                             val rangeH = (maxH - btnPx).coerceAtLeast(0f)
                             offsetPx = Offset(
-                                x = (offsetPx.x + dragAmount.x).coerceIn(0f, rangeW),
-                                y = (offsetPx.y + dragAmount.y).coerceIn(0f, rangeH)
+                                x = maybeSnapToGrid(offsetPx.x + dragAmount.x, layoutSnapStepPx)
+                                    .coerceIn(0f, rangeW),
+                                y = maybeSnapToGrid(offsetPx.y + dragAmount.y, layoutSnapStepPx)
+                                    .coerceIn(0f, rangeH),
                             )
                         },
                         onDragEnd = {
