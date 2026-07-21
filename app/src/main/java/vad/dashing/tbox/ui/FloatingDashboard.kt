@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -31,7 +32,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
@@ -48,6 +51,7 @@ import vad.dashing.tbox.PANEL_COLLAPSE_ANIMATION_MS
 import vad.dashing.tbox.PanelCollapseEdge
 import vad.dashing.tbox.PanelCollapseStates
 import vad.dashing.tbox.PanelPxBounds
+import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
@@ -74,6 +78,7 @@ import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.collapseEdgeOrNone
 import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
 import vad.dashing.tbox.resolveStripColor
+import vad.dashing.tbox.resolveStripExpandedColor
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 import kotlin.math.abs
@@ -203,6 +208,8 @@ fun FloatingDashboard(
     var pendingMusicSelection by remember(panelId) { mutableStateOf<Pair<Int, String>?>(null) }
     var pendingSeatHeatVentVariant by remember(panelId) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode
+    val collapseAfterTapScope = rememberCoroutineScope()
+    var collapseAfterTapJob by remember(panelId) { mutableStateOf<Job?>(null) }
     val collapseEdge = panelConfig.collapseEdgeOrNone()
     val panelCollapsed = PanelCollapseStates.isCollapsed(panelCollapseStates, panelId)
     val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
@@ -307,6 +314,8 @@ fun FloatingDashboard(
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
+            collapseAfterTapJob?.cancel()
+            collapseAfterTapJob = null
             delay(300000)
             if (isEditMode) {
                 isEditMode = false
@@ -519,6 +528,7 @@ fun FloatingDashboard(
                         panelConfig.collapseStripThicknessDp,
                     ),
                     stripColor = Color(panelConfig.resolveStripColor(currentTheme)),
+                    stripExpandedColor = Color(panelConfig.resolveStripExpandedColor(currentTheme)),
                     isEditMode = isEditMode,
                     onCollapsedChange = { settingsViewModel.setPanelCollapsed(panelId, it) },
                     modifier = Modifier.fillMaxSize(),
@@ -604,7 +614,14 @@ fun FloatingDashboard(
                             panelConfig.collapseOnTileTap &&
                             collapseEdge != PanelCollapseEdge.NONE
                         ) {
-                            settingsViewModel.setPanelCollapsed(panelId, true)
+                            collapseAfterTapJob?.cancel()
+                            val delaySec = normalizePanelCollapseOnTileTapDelaySec(
+                                panelConfig.collapseOnTileTapDelaySec,
+                            )
+                            collapseAfterTapJob = collapseAfterTapScope.launch {
+                                delay(delaySec * 1_000L)
+                                settingsViewModel.setPanelCollapsed(panelId, true)
+                            }
                         }
                     },
                     onWidgetLongClick = {

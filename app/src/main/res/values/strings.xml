@@ -1121,6 +1121,12 @@
     <string name="settings_panel_collapse_thickness_desc">Размер полосы после сворачивания.</string>
     <string name="settings_panel_collapse_strip_color_title">Цвет полосы</string>
     <string name="settings_panel_collapse_strip_color_desc">Выберите отдельные цвета для светлой и тёмной темы.</string>
+    <string name="settings_panel_collapse_strip_color_collapsed_title">Цвет полосы (свёрнута)</string>
+    <string name="settings_panel_collapse_strip_color_collapsed_desc">Цвет полоски, когда панель свёрнута. Отдельно для светлой и тёмной темы.</string>
+    <string name="settings_panel_collapse_strip_color_expanded_title">Цвет полосы (развёрнута)</string>
+    <string name="settings_panel_collapse_strip_color_expanded_desc">Цвет зоны свайпа на развёрнутой панели. Отдельно для светлой и тёмной темы (можно задать прозрачность).</string>
     <string name="settings_panel_collapse_on_tile_tap_title">Сворачивать после нажатия плитки</string>
-    <string name="settings_panel_collapse_on_tile_tap_desc">После одиночного нажатия на плитку панель будет свёрнута.</string>
+    <string name="settings_panel_collapse_on_tile_tap_desc">После одиночного нажатия на плитку панель свернётся с заданной задержкой. Работает только если выбран край сворачивания.</string>
+    <string name="settings_panel_collapse_on_tile_tap_delay_title">Задержка автосворачивания: %1$d с</string>
+    <string name="settings_panel_collapse_on_tile_tap_delay_desc">Через сколько секунд после нажатия на плитку свернуть панель (0–10 с).</string>
 </resources>

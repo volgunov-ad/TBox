@@ -36,13 +36,29 @@ const val DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT = 0xFFBDBDBD.toInt()
 /** Opaque Material Grey 700. */
 const val DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK = 0xFF616161.toInt()
 
+/**
+ * Default expanded swipe-zone color: same RGB as collapsed strip with ~20% alpha
+ * (previous hard-coded visual).
+ */
+const val DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT = 0x33BDBDBD.toInt()
+
+const val DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK = 0x33616161.toInt()
+
 const val DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP = false
+
+/** Delay before auto-collapse after a tile tap (seconds). */
+const val DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC = 1
+const val MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC = 0
+const val MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC = 10
 
 /** Shared collapse/expand animation length for main-screen and floating panels. */
 const val PANEL_COLLAPSE_ANIMATION_MS = 180
 
 fun normalizePanelCollapseStripThicknessDp(raw: Int): Int =
     raw.coerceIn(MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP, MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+
+fun normalizePanelCollapseOnTileTapDelaySec(raw: Int): Int =
+    raw.coerceIn(MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC, MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC)
 
 /** Pixel layout of a panel (overlay or main-screen absolute box). */
 data class PanelPxBounds(
@@ -167,3 +183,9 @@ fun MainScreenPanelConfig.resolveStripColor(currentTheme: Int): Int =
 
 fun FloatingDashboardConfig.resolveStripColor(currentTheme: Int): Int =
     if (currentTheme == 2) collapseStripColorDark else collapseStripColorLight
+
+fun MainScreenPanelConfig.resolveStripExpandedColor(currentTheme: Int): Int =
+    if (currentTheme == 2) collapseStripExpandedColorDark else collapseStripExpandedColorLight
+
+fun FloatingDashboardConfig.resolveStripExpandedColor(currentTheme: Int): Int =
+    if (currentTheme == 2) collapseStripExpandedColorDark else collapseStripExpandedColorLight

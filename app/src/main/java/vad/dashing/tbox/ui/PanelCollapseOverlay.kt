@@ -45,6 +45,7 @@ internal fun CollapsiblePanelFrame(
     collapsed: Boolean,
     stripThicknessDp: Int,
     stripColor: Color,
+    stripExpandedColor: Color,
     isEditMode: Boolean,
     onCollapsedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -114,7 +115,7 @@ internal fun CollapsiblePanelFrame(
                 modifier = Modifier
                     .align(zoneAlignment)
                     .then(zoneSize)
-                    .background(stripColor.copy(alpha = 0.2f))
+                    .background(stripExpandedColor)
                     .then(swipeModifier),
             )
         }

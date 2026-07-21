@@ -46,7 +46,10 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val collapseStripThicknessDp: Int,
     val collapseStripColorLight: Int,
     val collapseStripColorDark: Int,
+    val collapseStripExpandedColorLight: Int,
+    val collapseStripExpandedColorDark: Int,
     val collapseOnTileTap: Boolean,
+    val collapseOnTileTapDelaySec: Int,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -60,7 +63,10 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val collapseStripThicknessDp: Int,
     val collapseStripColorLight: Int,
     val collapseStripColorDark: Int,
+    val collapseStripExpandedColorLight: Int,
+    val collapseStripExpandedColorDark: Int,
     val collapseOnTileTap: Boolean,
+    val collapseOnTileTapDelaySec: Int,
 )
 
 /** Merges widget list and optional whole-panel draft; used by [SettingsViewModel] and unit tests. */
@@ -83,7 +89,12 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
         collapseStripColorLight = w.collapseStripColorLight,
         collapseStripColorDark = w.collapseStripColorDark,
+        collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
+        collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
         collapseOnTileTap = w.collapseOnTileTap,
+        collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+            w.collapseOnTileTapDelaySec,
+        ),
     )
 }
 
@@ -105,7 +116,12 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
         collapseStripColorLight = w.collapseStripColorLight,
         collapseStripColorDark = w.collapseStripColorDark,
+        collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
+        collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
         collapseOnTileTap = w.collapseOnTileTap,
+        collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+            w.collapseOnTileTapDelaySec,
+        ),
     )
 }
 

@@ -292,7 +292,10 @@ data class MainScreenPanelConfig(
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+    val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+    val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+    val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
 )
 
 data class FloatingDashboardConfig(
@@ -315,7 +318,10 @@ data class FloatingDashboardConfig(
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+    val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+    val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+    val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
 )
 
 /**
@@ -2777,9 +2783,23 @@ class SettingsManager(private val context: Context) {
                 "collapseStripColorDark",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
             ),
+            collapseStripExpandedColorLight = obj.optInt(
+                "collapseStripExpandedColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+            ),
+            collapseStripExpandedColorDark = obj.optInt(
+                "collapseStripExpandedColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
             collapseOnTileTap = obj.optBoolean(
                 "collapseOnTileTap",
                 DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+            ),
+            collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+                obj.optInt(
+                    "collapseOnTileTapDelaySec",
+                    DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+                ),
             ),
         )
     }
@@ -2865,9 +2885,23 @@ class SettingsManager(private val context: Context) {
                 "collapseStripColorDark",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
             ),
+            collapseStripExpandedColorLight = obj.optInt(
+                "collapseStripExpandedColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+            ),
+            collapseStripExpandedColorDark = obj.optInt(
+                "collapseStripExpandedColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
             collapseOnTileTap = obj.optBoolean(
                 "collapseOnTileTap",
                 DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+            ),
+            collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+                obj.optInt(
+                    "collapseOnTileTapDelaySec",
+                    DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+                ),
             ),
         )
     }
@@ -2905,7 +2939,10 @@ class SettingsManager(private val context: Context) {
             collapseStripThicknessDp = config.collapseStripThicknessDp,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
+            collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
             collapseOnTileTap = config.collapseOnTileTap,
+            collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
         )
     }
 
@@ -2916,7 +2953,10 @@ class SettingsManager(private val context: Context) {
             collapseStripThicknessDp = config.collapseStripThicknessDp,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
+            collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
             collapseOnTileTap = config.collapseOnTileTap,
+            collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
         )
     }
 
@@ -2926,7 +2966,10 @@ class SettingsManager(private val context: Context) {
         collapseStripThicknessDp: Int,
         collapseStripColorLight: Int,
         collapseStripColorDark: Int,
+        collapseStripExpandedColorLight: Int,
+        collapseStripExpandedColorDark: Int,
         collapseOnTileTap: Boolean,
+        collapseOnTileTapDelaySec: Int,
     ) {
         val edge = PanelCollapseEdge.fromStorage(collapseEdge)
         if (edge != PanelCollapseEdge.NONE) {
@@ -2941,8 +2984,20 @@ class SettingsManager(private val context: Context) {
         if (collapseStripColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK) {
             o.put("collapseStripColorDark", collapseStripColorDark)
         }
+        if (collapseStripExpandedColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT) {
+            o.put("collapseStripExpandedColorLight", collapseStripExpandedColorLight)
+        }
+        if (collapseStripExpandedColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK) {
+            o.put("collapseStripExpandedColorDark", collapseStripExpandedColorDark)
+        }
         if (collapseOnTileTap != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP) {
             o.put("collapseOnTileTap", collapseOnTileTap)
+        }
+        if (collapseOnTileTapDelaySec != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC) {
+            o.put(
+                "collapseOnTileTapDelaySec",
+                normalizePanelCollapseOnTileTapDelaySec(collapseOnTileTapDelaySec),
+            )
         }
     }
 

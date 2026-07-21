@@ -15,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -27,7 +28,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
@@ -38,6 +41,7 @@ import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.PanelCollapseEdge
+import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.PanelCollapseStates
 import vad.dashing.tbox.PanelPxBounds
 import vad.dashing.tbox.SettingsManager
@@ -64,6 +68,7 @@ import vad.dashing.tbox.lerpPanelBounds
 import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
 import vad.dashing.tbox.PANEL_COLLAPSE_ANIMATION_MS
 import vad.dashing.tbox.resolveStripColor
+import vad.dashing.tbox.resolveStripExpandedColor
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import kotlin.math.roundToInt
 
@@ -172,6 +177,8 @@ fun MainScreenDashboardPanel(
     var pendingSeatHeatVentVariant by remember(panel.id) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode && showDialogForIndex == null
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
+    val collapseAfterTapScope = rememberCoroutineScope()
+    var collapseAfterTapJob by remember(panel.id) { mutableStateOf<Job?>(null) }
 
     var layoutInteraction by remember { mutableStateOf(false) }
     var layoutPx by remember(panel.id) {
@@ -203,6 +210,8 @@ fun MainScreenDashboardPanel(
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
+            collapseAfterTapJob?.cancel()
+            collapseAfterTapJob = null
             delay(300000)
             if (isEditMode) {
                 isEditMode = false
@@ -412,6 +421,7 @@ fun MainScreenDashboardPanel(
             collapsed = effectiveCollapsed,
             stripThicknessDp = normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp),
             stripColor = Color(panel.resolveStripColor(currentTheme)),
+            stripExpandedColor = Color(panel.resolveStripExpandedColor(currentTheme)),
             isEditMode = isEditMode,
             onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
             modifier = Modifier.fillMaxSize(),
@@ -491,7 +501,14 @@ fun MainScreenDashboardPanel(
                     panel.collapseOnTileTap &&
                     collapseEdge != PanelCollapseEdge.NONE
                 ) {
-                    settingsViewModel.setPanelCollapsed(panel.id, true)
+                    collapseAfterTapJob?.cancel()
+                    val delaySec = normalizePanelCollapseOnTileTapDelaySec(
+                        panel.collapseOnTileTapDelaySec,
+                    )
+                    collapseAfterTapJob = collapseAfterTapScope.launch {
+                        delay(delaySec * 1_000L)
+                        settingsViewModel.setPanelCollapsed(panel.id, true)
+                    }
                 }
             },
             onWidgetLongClick = {
