@@ -114,6 +114,7 @@ internal fun CollapsiblePanelFrame(
                 modifier = Modifier
                     .align(zoneAlignment)
                     .then(zoneSize)
+                    .background(stripColor.copy(alpha = 0.2f))
                     .then(swipeModifier),
             )
         }
