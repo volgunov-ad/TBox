@@ -42,6 +42,7 @@ import vad.dashing.tbox.utils.CanFramesProcess
 import vad.dashing.tbox.utils.CanFramesProcess.toFloat
 import vad.dashing.tbox.utils.CanFramesProcess.toUInt
 import vad.dashing.tbox.utils.CsnOperatorResolver
+import vad.dashing.tbox.utils.LocPayloadParser
 import vad.dashing.tbox.utils.MotorHoursBuffer
 import vad.dashing.tbox.utils.ThemeObserver
 import vad.dashing.tbox.mbcan.MbCanAvailability
@@ -4672,7 +4673,7 @@ class BackgroundService : Service() {
     }
 
     private fun ansLOCValues(data: ByteArray): Boolean {
-        if (data.copyOfRange(0, 4)
+        if (data.size >= 4 && data.copyOfRange(0, 4)
                 .contentEquals(byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()))
         ) {
             TboxRepository.addLog("ERROR", "LOC response", "Error location")
@@ -4683,105 +4684,46 @@ class BackgroundService : Service() {
             if (data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
                 TboxRepository.addLog("DEBUG", "LOC response", "Location subscribe command complete")
             }
-        } else if (data.size >= 45) {
-            try {
-                //TboxRepository.updateLocationSubscribed(true)
-                val rawValue = toHexString(data.copyOfRange(6, 45))
+            return true
+        }
 
-                val gpsData = data.copyOfRange(6, 45)
-                val buffer = ByteBuffer.wrap(gpsData).order(ByteOrder.LITTLE_ENDIAN)
+        if (data.size <= 6) {
+            TboxRepository.addLog("DEBUG", "LOC response", "Get unknown location values")
+            return false
+        }
 
-                // 1. Статус позиционирования (1 байт)
-                val locateStatus = buffer.get().toInt() and 0xFF != 0
-
-                // 2. Время UTC (8 байт)
-                val utcTime = UtcTime(
-                    year = buffer.get().toInt() and 0xFF,
-                    month = buffer.get().toInt() and 0xFF,
-                    day = buffer.get().toInt() and 0xFF,
-                    hour = buffer.get().toInt() and 0xFF,
-                    minute = buffer.get().toInt() and 0xFF,
-                    second = buffer.get().toInt() and 0xFF
-                )
-
-                // Пропускаем 1 байт (выравнивание или reserved)
-                val longitudeDirection = buffer.get().toInt() and 0xFF
-
-                // 3. Долгота (4 байта, int32)
-                val rawLongitude = buffer.int
-                val longitude = rawLongitude.toDouble() / 1000000.0 * if (longitudeDirection == 1) -1 else 1
-
-                // Пропускаем 1 байт (выравнивание или reserved)
-                val latitudeDirection = buffer.get().toInt() and 0xFF
-
-                // 4. Широта (4 байта, int32)
-                val rawLatitude = buffer.int
-                val latitude = rawLatitude.toDouble() / 1000000.0 * if (latitudeDirection == 1) -1 else 1
-
-                // 5. Высота (4 байта, int32)
-                val rawAltitude = buffer.int
-                val altitude = rawAltitude.toDouble() / 1000000.0
-
-                // 6. Видимые спутники (1 байт)
-                val visibleSatellites = buffer.get().toInt() and 0xFF
-
-                // 7. Используемые спутники (1 байт)
-                val usingSatellites = buffer.get().toInt() and 0xFF
-
-                // 8. Скорость (2 байта, uint16)
-                val rawSpeed = buffer.short.toInt() and 0xFFFF
-                val speed = rawSpeed.toFloat() / 10f
-
-                // 9. Истинное направление (2 байта, uint16)
-                val rawTrueDirection = buffer.short.toInt() and 0xFFFF
-                val trueDirection = rawTrueDirection.toFloat() / 10f
-
-                // 10. Магнитное направление (2 байта, uint16)
-                val rawMagneticDirection = buffer.short.toInt() and 0xFFFF
-                val magneticDirection = rawMagneticDirection.toFloat() / 10f
-
-                val locValues = LocValues(
-                    rawValue = rawValue,
-                    locateStatus = locateStatus,
-                    utcTime = utcTime,
-                    longitude = longitude,
-                    latitude = latitude,
-                    altitude = altitude,
-                    visibleSatellites = visibleSatellites,
-                    usingSatellites = usingSatellites,
-                    speed = speed,
-                    trueDirection = trueDirection,
-                    magneticDirection = magneticDirection,
-                    updateTime = Date()
-                )
-
-                TboxRepository.updateLocationUpdateTime()
-
-                if (rawValue != TboxRepository.locValues.value.rawValue) {
-                    TboxRepository.updateLocValues(
-                        locValues
-                    )
-                }
-
-                if ((longitude == 0.0 && latitude == 0.0 && altitude == 0.0) || !locateStatus) {
-                    TboxRepository.updateIsLocValuesTrue(false)
-                }
-
-//                if (mockLocation.value) {
-//                    locationMockManager.setMockLocation(locValues)
-//                }
-
+        try {
+            // Header is 6 bytes (status + meta); GPS body may be classic 39-byte binary
+            // or variable-length NMEA text on some TBox / LOC firmware versions.
+            val gpsPayload = data.copyOfRange(6, data.size)
+            val locValues = LocPayloadParser.parse(gpsPayload) ?: run {
                 TboxRepository.addLog(
-                    "DEBUG", "LOC response",
-                    "Get location values: $longitude, $latitude"
+                    "DEBUG",
+                    "LOC response",
+                    "Get unknown location values (${gpsPayload.size} bytes)"
                 )
-            } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", "LOC response", "Error parsing location data: ${e.message}")
                 return false
             }
-        } else {
-            TboxRepository.addLog("DEBUG", "LOC response",
-                "Get unknown location values")
+
+            TboxRepository.updateLocationUpdateTime()
+
+            if (locValues.rawValue != TboxRepository.locValues.value.rawValue) {
+                TboxRepository.updateLocValues(locValues)
+            }
+
+            if ((locValues.longitude == 0.0 && locValues.latitude == 0.0 && locValues.altitude == 0.0) ||
+                !locValues.locateStatus
+            ) {
+                TboxRepository.updateIsLocValuesTrue(false)
+            }
+
+            TboxRepository.addLog(
+                "DEBUG", "LOC response",
+                "Get location values: ${locValues.longitude}, ${locValues.latitude}" +
+                    if (LocPayloadParser.looksLikeNmea(gpsPayload)) " (NMEA)" else ""
+            )
+        } catch (e: Exception) {
+            TboxRepository.addLog("ERROR", "LOC response", "Error parsing location data: ${e.message}")
             return false
         }
         return true
