@@ -24,6 +24,7 @@ import vad.dashing.tbox.ui.MyLifecycleOwner
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformDisplaySpaces
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import kotlin.math.roundToInt
 
 /**
  * Foreground package + persisted usage-stats rule sets from [BackgroundService] polling.
@@ -538,7 +539,7 @@ internal class FloatingOverlayController(
         return usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPackageName)
     }
 
-    private fun openOverlay(config: FloatingDashboardConfig, myPackageName: String) {
+    private suspend fun openOverlay(config: FloatingDashboardConfig, myPackageName: String) {
         ensureWindowManager()
         if (windowManager == null) return
 
@@ -556,9 +557,10 @@ internal class FloatingOverlayController(
             return
         }
 
+        val bounds = effectiveOverlayBounds(config)
         val layoutParams = WindowManager.LayoutParams(
-            config.width.coerceAtLeast(MIN_OVERLAY_SIZE),
-            config.height.coerceAtLeast(MIN_OVERLAY_SIZE),
+            bounds.width,
+            bounds.height,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
@@ -567,8 +569,8 @@ internal class FloatingOverlayController(
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = config.startX.coerceAtLeast(0)
-            y = config.startY.coerceAtLeast(0)
+            x = bounds.x
+            y = bounds.y
         }
 
         val newComposeView = ComposeView(service)
@@ -588,6 +590,9 @@ internal class FloatingOverlayController(
                         },
                         onUpdateWindowPosition = { panelId, x, y ->
                             updateWindowPosition(panelId, x, y)
+                        },
+                        onUpdateWindowFrame = { panelId, x, y, width, height ->
+                            updateOverlayFrame(panelId, x, y, width, height)
                         },
                         onRebootTbox = onRebootTbox,
                         onTripFinishAndStart = onTripFinishAndStart,
@@ -694,12 +699,41 @@ internal class FloatingOverlayController(
         }
     }
 
-    private fun updateOverlayLayout(config: FloatingDashboardConfig) {
+    /**
+     * Sets overlay frame without the edit-resize [MIN_OVERLAY_SIZE] floor so collapsed strips
+     * can be thinner than 50px.
+     */
+    private fun updateOverlayFrame(panelId: String, x: Int, y: Int, width: Int, height: Int) {
+        val params = overlayParams[panelId] ?: return
+        val newX = x.coerceAtLeast(0)
+        val newY = y
+        val newW = width.coerceAtLeast(1)
+        val newH = height.coerceAtLeast(1)
+        if (params.x == newX && params.y == newY && params.width == newW && params.height == newH) {
+            return
+        }
+        params.x = newX
+        params.y = newY
+        params.width = newW
+        params.height = newH
+        overlayViews[panelId]?.let { view ->
+            try {
+                if (view.isAttachedToWindow) {
+                    windowManager?.updateViewLayout(view, params)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "updateOverlayFrame failed for $panelId", e)
+            }
+        }
+    }
+
+    private suspend fun updateOverlayLayout(config: FloatingDashboardConfig) {
         val params = overlayParams[config.id] ?: return
-        val newWidth = config.width.coerceAtLeast(MIN_OVERLAY_SIZE)
-        val newHeight = config.height.coerceAtLeast(MIN_OVERLAY_SIZE)
-        val newX = config.startX.coerceAtLeast(0)
-        val newY = config.startY.coerceAtLeast(0)
+        val bounds = effectiveOverlayBounds(config)
+        val newWidth = bounds.width
+        val newHeight = bounds.height
+        val newX = bounds.x
+        val newY = bounds.y
         if (params.width == newWidth &&
             params.height == newHeight &&
             params.x == newX &&
@@ -720,6 +754,27 @@ internal class FloatingOverlayController(
                 Log.w(TAG, "updateOverlayLayout failed for ${config.id}", e)
             }
         }
+    }
+
+    private suspend fun effectiveOverlayBounds(config: FloatingDashboardConfig): PanelPxBounds {
+        val expanded = PanelPxBounds(
+            x = config.startX.coerceAtLeast(0),
+            y = config.startY.coerceAtLeast(0),
+            width = config.width.coerceAtLeast(1),
+            height = config.height.coerceAtLeast(1),
+        )
+        val edge = config.collapseEdgeOrNone()
+        if (edge == PanelCollapseEdge.NONE) return expanded
+        // While editing or animating collapse in Compose, keep the full frame.
+        if (FloatingPanelEditModeTracker.isOverlayInEditMode(config.id)) return expanded
+        if (FloatingPanelCollapseAnimationGate.isAnimating(config.id)) return expanded
+        val states = settingsManager.panelCollapseStatesFlow.first()
+        if (!PanelCollapseStates.isCollapsed(states, config.id)) return expanded
+        val thicknessPx = (
+            normalizePanelCollapseStripThicknessDp(config.collapseStripThicknessDp) *
+                service.resources.displayMetrics.density
+            ).roundToInt()
+        return collapsedPanelBounds(expanded, edge, thicknessPx)
     }
 
     /**

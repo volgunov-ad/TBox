@@ -134,12 +134,12 @@ flowchart TB
 
 Не системный split-screen, а **freeform companion** (как farmerbb/Taskbar) плюс **отдельный overlay** с полноценным главным экраном TBox:
 
-1. Якорь 1×1 (`FreeformInvisibleAnchorActivity`) + `setLaunchWindowingMode(5)` / `setLaunchBounds` для приложения-компаньона (координаты **виртуального / activity-дисплея** ГУ, не всей физической панели).
+1. Якорь 1×1 (`FreeformInvisibleAnchorActivity`) + `setLaunchWindowingMode(5)` / `setLaunchBounds` для приложения-компаньона (координаты **виртуального / activity-дисплея** ГУ, не всей физической панели). Если выбран `displayId=0` (эмулятор / один экран), `setLaunchDisplayId` **не** вызывается — иначе на части образов freeform bounds сбрасываются в fullscreen. На inset app VD (`displayId≠0`) — `createDisplayContext` + `setLaunchDisplayId`.
 2. Рядом — overlay с `MainScreen` (`FloatingOverlayController.showMainScreenWindow`):
    - по умолчанию **авто-геометрия**: complementary-прямоугольник рядом с companion в том же пространстве, что и freeform;
    - overlay вешается через `WindowManager` из `createDisplayContext` / `createWindowContext` для сохранённого `activityDisplayId` (`FreeformDisplaySpaces`): выбирается inset app VD (на Jetour обычно не `displayId=0`, а меньший VD вроде `5:1320×856`), иначе проценты считаются от «почти полного» экрана;
    - если авто выключено — геометрия из **Настройки главного экрана → Оконный режим** (компактные поля W/H и X/Y, как у плавающих панелей).
-3. При входе в оконный режим **`MainActivity` закрывается** (broadcast `ACTION_FINISH_FOR_WINDOW_MODE`), чтобы не было двух экземпляров главной.
+3. При входе в оконный режим **`MainActivity` закрывается** (broadcast `ACTION_FINISH_FOR_WINDOW_MODE`), чтобы не было двух экземпляров главной. Если пользователь снова вручную запускает `MainActivity`, пока overlay главного экрана ещё открыт, оконный режим завершается (overlay и якорь снимаются; companion force-stop не делается).
 4. В overlay — две перемещаемые угловые кнопки (только в оконном режиме):
    - **×** — выход из оконного режима (снять overlay и якорь, сбросить сессию); `MainActivity` не поднимается;
    - **□** — то же плюс снова открыть fullscreen `MainActivity` (как прежнее поведение ×).
@@ -215,6 +215,10 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 | Составные | `DashboardCompositeTileFlowKeys` |
 
 Интерактивные виджеты (климат, сиденья) регистрируют интересы CAN через `UniversalCanRepository.setSourceWidgetKeys` при появлении на видимой панели (`DashboardPanelGridAndFrames`).
+
+### Сворачивание панели (W-11)
+
+Во вкладке «Вся панель» можно задать край свайпа, толщину полоски, цвета полоски в свёрнутом и развёрнутом состоянии (light/dark) и авто-сворачивание по тапу с задержкой 0–10 с (только если выбран край сворачивания). Свёрнутое состояние хранится в DataStore (`panel_collapse_states`, map `panelId → bool`) **независимо от темы**. Плавающий overlay при сворачивании сжимается до полоски.
 
 ---
 

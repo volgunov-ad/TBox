@@ -284,6 +284,18 @@ data class MainScreenPanelConfig(
     val pageNumber: Int = SettingsManager.DEFAULT_MAIN_SCREEN_PANEL_PAGE_NUMBER,
     /** Gap between tile cells in dp (0..[MAX_PANEL_GRID_SPACING_DP]). */
     val gridSpacingDp: Int = DEFAULT_PANEL_GRID_SPACING_DP,
+    /**
+     * Swipe-to-collapse edge ([PanelCollapseEdge.storageValue]).
+     * Collapsed/expanded flag is stored separately in [PanelCollapseStates] (theme-independent).
+     */
+    val collapseEdge: String = PanelCollapseEdge.NONE.storageValue,
+    val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+    val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+    val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+    val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+    val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+    val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
 )
 
 data class FloatingDashboardConfig(
@@ -302,6 +314,14 @@ data class FloatingDashboardConfig(
     val showTboxDisconnectIndicator: Boolean = true,
     /** Gap between tile cells in dp (0..[MAX_PANEL_GRID_SPACING_DP]). */
     val gridSpacingDp: Int = DEFAULT_PANEL_GRID_SPACING_DP,
+    val collapseEdge: String = PanelCollapseEdge.NONE.storageValue,
+    val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+    val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+    val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+    val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+    val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+    val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
 )
 
 /**
@@ -589,6 +609,12 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}main_screen_page_count")
         private val MAIN_SCREEN_CURRENT_PAGE_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_current_page")
+        /** Last page while main-screen window (freeform companion) overlay is active. Absent = never set. */
+        private val MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY =
+            intPreferencesKey("${KEY_PREFIX}main_screen_window_mode_current_page")
+        /** Theme-independent panelId → collapsed map ([PanelCollapseStates]). */
+        private val PANEL_COLLAPSE_STATES_KEY =
+            stringPreferencesKey("${KEY_PREFIX}${PanelCollapseStates.DATASTORE_KEY}")
         private val ACTIVE_THEME_URI_KEY = stringPreferencesKey("${KEY_PREFIX}active_theme_uri")
         private val ACTIVE_THEME_FINGERPRINT_KEY =
             stringPreferencesKey("${KEY_PREFIX}active_theme_fingerprint")
@@ -852,6 +878,34 @@ class SettingsManager(private val context: Context) {
                 preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
                 pageCount,
             )
+        }
+        .distinctUntilChanged()
+
+    /**
+     * Window-mode page when the user has set one; `null` means “never set” —
+     * on first enter, keep the current (normal) page.
+     */
+    val mainScreenWindowModeCurrentPageFlow: Flow<Int?> = context.settingsDataStore.data
+        .map { preferences ->
+            if (!preferences.contains(MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY)) {
+                null
+            } else {
+                val pageCount = PagingStateNormalizer.normalizePageCount(
+                    preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+                )
+                PagingStateNormalizer.normalizeCurrentPage(
+                    preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY]
+                        ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE,
+                    pageCount,
+                )
+            }
+        }
+        .distinctUntilChanged()
+
+    /** Theme-independent collapsed flags keyed by panel id. */
+    val panelCollapseStatesFlow: Flow<Map<String, Boolean>> = context.settingsDataStore.data
+        .map { preferences ->
+            PanelCollapseStates.parse(preferences[PANEL_COLLAPSE_STATES_KEY])
         }
         .distinctUntilChanged()
 
@@ -1563,6 +1617,12 @@ class SettingsManager(private val context: Context) {
             val current = preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE
             preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] =
                 PagingStateNormalizer.normalizeCurrentPage(current, normalized)
+            if (preferences.contains(MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY)) {
+                val windowPage = preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY]
+                    ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE
+                preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY] =
+                    PagingStateNormalizer.normalizeCurrentPage(windowPage, normalized)
+            }
         }
         saveMainScreenDashboards(adjusted)
     }
@@ -1575,6 +1635,42 @@ class SettingsManager(private val context: Context) {
         val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] = normalized
+        }
+    }
+
+    suspend fun saveMainScreenWindowModeCurrentPage(page: Int) {
+        val pageCount = PagingStateNormalizer.normalizePageCount(
+            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
+                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+        )
+        val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY] = normalized
+        }
+    }
+
+    suspend fun savePanelCollapseStates(states: Map<String, Boolean>) {
+        val json = PanelCollapseStates.serialize(states)
+        context.settingsDataStore.edit { preferences ->
+            if (json.isBlank()) {
+                preferences.remove(PANEL_COLLAPSE_STATES_KEY)
+            } else {
+                preferences[PANEL_COLLAPSE_STATES_KEY] = json
+            }
+        }
+    }
+
+    suspend fun setPanelCollapsed(panelId: String, collapsed: Boolean) {
+        if (panelId.isBlank()) return
+        context.settingsDataStore.edit { preferences ->
+            val current = PanelCollapseStates.parse(preferences[PANEL_COLLAPSE_STATES_KEY])
+            val updated = PanelCollapseStates.withCollapsed(current, panelId, collapsed)
+            val json = PanelCollapseStates.serialize(updated)
+            if (json.isBlank()) {
+                preferences.remove(PANEL_COLLAPSE_STATES_KEY)
+            } else {
+                preferences[PANEL_COLLAPSE_STATES_KEY] = json
+            }
         }
     }
 
@@ -1885,11 +1981,13 @@ class SettingsManager(private val context: Context) {
     suspend fun snapshotMainScreenRuntimeToThemeCache(cacheKey: String) {
         val selections = mainScreenWallpaperSelectionByPageFlow.first()
         val page = mainScreenCurrentPageFlow.first()
+        val windowModePage = mainScreenWindowModeCurrentPageFlow.first()
         ThemeMaterialization.syncRuntimeStateToThemeCache(
             context = context,
             cacheKey = cacheKey,
             wallpaperSelections = selections,
             currentPage = page,
+            currentPageWindowMode = windowModePage,
         )
     }
 
@@ -1903,11 +2001,24 @@ class SettingsManager(private val context: Context) {
         return syncThemeCurrentPage(cacheKey, currentPage)
     }
 
+    suspend fun syncActiveThemeWindowModeCurrentPage(currentPage: Int): Boolean {
+        val cacheKey = activeThemeUriFlow.first().trim()
+        return syncThemeWindowModeCurrentPage(cacheKey, currentPage)
+    }
+
     suspend fun syncThemeCurrentPage(cacheKey: String, currentPage: Int): Boolean {
         return ThemeMaterialization.syncRuntimeStateToThemeCache(
             context = context,
             cacheKey = cacheKey,
             currentPage = currentPage,
+        )
+    }
+
+    suspend fun syncThemeWindowModeCurrentPage(cacheKey: String, currentPage: Int): Boolean {
+        return ThemeMaterialization.syncRuntimeStateToThemeCache(
+            context = context,
+            cacheKey = cacheKey,
+            currentPageWindowMode = currentPage,
         )
     }
 
@@ -2660,6 +2771,36 @@ class SettingsManager(private val context: Context) {
             gridSpacingDp = normalizePanelGridSpacingDp(
                 obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
             ),
+            collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
+            collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+            ),
+            collapseStripColorLight = obj.optInt(
+                "collapseStripColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+            ),
+            collapseStripColorDark = obj.optInt(
+                "collapseStripColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+            ),
+            collapseStripExpandedColorLight = obj.optInt(
+                "collapseStripExpandedColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+            ),
+            collapseStripExpandedColorDark = obj.optInt(
+                "collapseStripExpandedColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
+            collapseOnTileTap = obj.optBoolean(
+                "collapseOnTileTap",
+                DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+            ),
+            collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+                obj.optInt(
+                    "collapseOnTileTapDelaySec",
+                    DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+                ),
+            ),
         )
     }
 
@@ -2684,6 +2825,7 @@ class SettingsManager(private val context: Context) {
             if (config.gridSpacingDp != DEFAULT_PANEL_GRID_SPACING_DP) {
                 o.put("gridSpacingDp", config.gridSpacingDp)
             }
+            putPanelCollapseFields(o, config)
             array.put(o)
         }
         return array.toString()
@@ -2731,6 +2873,36 @@ class SettingsManager(private val context: Context) {
             gridSpacingDp = normalizePanelGridSpacingDp(
                 obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
             ),
+            collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
+            collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+            ),
+            collapseStripColorLight = obj.optInt(
+                "collapseStripColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+            ),
+            collapseStripColorDark = obj.optInt(
+                "collapseStripColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+            ),
+            collapseStripExpandedColorLight = obj.optInt(
+                "collapseStripExpandedColorLight",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+            ),
+            collapseStripExpandedColorDark = obj.optInt(
+                "collapseStripExpandedColorDark",
+                DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
+            collapseOnTileTap = obj.optBoolean(
+                "collapseOnTileTap",
+                DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
+            ),
+            collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
+                obj.optInt(
+                    "collapseOnTileTapDelaySec",
+                    DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+                ),
+            ),
         )
     }
 
@@ -2754,9 +2926,79 @@ class SettingsManager(private val context: Context) {
             if (config.gridSpacingDp != DEFAULT_PANEL_GRID_SPACING_DP) {
                 obj.put("gridSpacingDp", config.gridSpacingDp)
             }
+            putPanelCollapseFields(obj, config)
             array.put(obj)
         }
         return array.toString()
+    }
+
+    private fun putPanelCollapseFields(o: JSONObject, config: MainScreenPanelConfig) {
+        putPanelCollapseFields(
+            o = o,
+            collapseEdge = config.collapseEdge,
+            collapseStripThicknessDp = config.collapseStripThicknessDp,
+            collapseStripColorLight = config.collapseStripColorLight,
+            collapseStripColorDark = config.collapseStripColorDark,
+            collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
+            collapseOnTileTap = config.collapseOnTileTap,
+            collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
+        )
+    }
+
+    private fun putPanelCollapseFields(o: JSONObject, config: FloatingDashboardConfig) {
+        putPanelCollapseFields(
+            o = o,
+            collapseEdge = config.collapseEdge,
+            collapseStripThicknessDp = config.collapseStripThicknessDp,
+            collapseStripColorLight = config.collapseStripColorLight,
+            collapseStripColorDark = config.collapseStripColorDark,
+            collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
+            collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
+            collapseOnTileTap = config.collapseOnTileTap,
+            collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
+        )
+    }
+
+    private fun putPanelCollapseFields(
+        o: JSONObject,
+        collapseEdge: String,
+        collapseStripThicknessDp: Int,
+        collapseStripColorLight: Int,
+        collapseStripColorDark: Int,
+        collapseStripExpandedColorLight: Int,
+        collapseStripExpandedColorDark: Int,
+        collapseOnTileTap: Boolean,
+        collapseOnTileTapDelaySec: Int,
+    ) {
+        val edge = PanelCollapseEdge.fromStorage(collapseEdge)
+        if (edge != PanelCollapseEdge.NONE) {
+            o.put("collapseEdge", edge.storageValue)
+        }
+        if (collapseStripThicknessDp != DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP) {
+            o.put("collapseStripThicknessDp", collapseStripThicknessDp)
+        }
+        if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
+            o.put("collapseStripColorLight", collapseStripColorLight)
+        }
+        if (collapseStripColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK) {
+            o.put("collapseStripColorDark", collapseStripColorDark)
+        }
+        if (collapseStripExpandedColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT) {
+            o.put("collapseStripExpandedColorLight", collapseStripExpandedColorLight)
+        }
+        if (collapseStripExpandedColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK) {
+            o.put("collapseStripExpandedColorDark", collapseStripExpandedColorDark)
+        }
+        if (collapseOnTileTap != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP) {
+            o.put("collapseOnTileTap", collapseOnTileTap)
+        }
+        if (collapseOnTileTapDelaySec != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC) {
+            o.put(
+                "collapseOnTileTapDelaySec",
+                normalizePanelCollapseOnTileTapDelaySec(collapseOnTileTapDelaySec),
+            )
+        }
     }
 
     suspend fun exportFullBackupJson(

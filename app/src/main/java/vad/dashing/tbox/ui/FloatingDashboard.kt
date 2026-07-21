@@ -1,12 +1,15 @@
 package vad.dashing.tbox.ui
 
 import android.view.WindowManager
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -16,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -24,10 +28,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
@@ -35,10 +42,16 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_LIGHT_FLOATING
 import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.FloatingPanelCollapseAnimationGate
 import vad.dashing.tbox.FloatingPanelEditModeTracker
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.MainActivityIntentHelper
+import vad.dashing.tbox.PANEL_COLLAPSE_ANIMATION_MS
+import vad.dashing.tbox.PanelCollapseEdge
+import vad.dashing.tbox.PanelCollapseStates
+import vad.dashing.tbox.PanelPxBounds
+import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
@@ -55,14 +68,21 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
+import vad.dashing.tbox.collapsedPanelBounds
+import vad.dashing.tbox.lerpPanelBounds
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.snapToGrid
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
+import vad.dashing.tbox.collapseEdgeOrNone
+import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
+import vad.dashing.tbox.resolveStripColor
+import vad.dashing.tbox.resolveStripExpandedColor
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.ui.theme.TboxAppTheme
-
+import kotlin.math.abs
+import kotlin.math.roundToInt
 @Composable
 private fun FloatingDashboardAppLauncherIconCacheDisposeEffect(panelId: String) {
     DisposableEffect(panelId) {
@@ -76,6 +96,7 @@ fun FloatingDashboardUI(
     appDataManager: AppDataManager,
     onUpdateWindowSize: (String, Int, Int) -> Unit,
     onUpdateWindowPosition: (String, Int, Int) -> Unit,
+    onUpdateWindowFrame: (String, Int, Int, Int, Int) -> Unit,
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
     panelId: String,
@@ -124,6 +145,7 @@ fun FloatingDashboardUI(
                     panelId = panelId,
                     onUpdateWindowSize = onUpdateWindowSize,
                     onUpdateWindowPosition = onUpdateWindowPosition,
+                    onUpdateWindowFrame = onUpdateWindowFrame,
                     onRebootTbox = onRebootTbox,
                     onTripFinishAndStart = onTripFinishAndStart,
                     windowParams = params
@@ -142,6 +164,7 @@ fun FloatingDashboard(
     panelId: String,
     onUpdateWindowSize: (String, Int, Int) -> Unit,
     onUpdateWindowPosition: (String, Int, Int) -> Unit,
+    onUpdateWindowFrame: (String, Int, Int, Int, Int) -> Unit,
     onRebootTbox: () -> Unit,
     onTripFinishAndStart: () -> Unit,
     windowParams: WindowManager.LayoutParams
@@ -174,6 +197,7 @@ fun FloatingDashboard(
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
     }
     val isFloatingDashboardClickAction = panelConfig.clickAction
+    val panelCollapseStates by settingsViewModel.panelCollapseStates.collectAsStateWithLifecycle()
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -184,7 +208,102 @@ fun FloatingDashboard(
     var pendingMusicSelection by remember(panelId) { mutableStateOf<Pair<Int, String>?>(null) }
     var pendingSeatHeatVentVariant by remember(panelId) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode
+    val collapseAfterTapScope = rememberCoroutineScope()
+    var collapseAfterTapJob by remember(panelId) { mutableStateOf<Job?>(null) }
+    val collapseEdge = panelConfig.collapseEdgeOrNone()
+    val panelCollapsed = PanelCollapseStates.isCollapsed(panelCollapseStates, panelId)
+    val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
+    val collapseProgress = remember(panelId) {
+        Animatable(if (effectiveCollapsed) 1f else 0f)
+    }
+    /** True while WM is held at expanded size so Compose can animate the strip/content. */
+    var hostExpandedForCollapseAnim by remember(panelId) {
+        mutableStateOf(!effectiveCollapsed)
+    }
+    val thicknessPx = with(density) {
+        normalizePanelCollapseStripThicknessDp(panelConfig.collapseStripThicknessDp).dp.roundToPx()
+    }
+    val expandedBounds = remember(
+        panelConfig.startX,
+        panelConfig.startY,
+        panelConfig.width,
+        panelConfig.height,
+    ) {
+        PanelPxBounds(
+            x = panelConfig.startX.coerceAtLeast(0),
+            y = panelConfig.startY.coerceAtLeast(0),
+            width = panelConfig.width.coerceAtLeast(1),
+            height = panelConfig.height.coerceAtLeast(1),
+        )
+    }
+    val collapsedBounds = remember(expandedBounds, collapseEdge, thicknessPx) {
+        collapsedPanelBounds(expandedBounds, collapseEdge, thicknessPx)
+    }
+
+    LaunchedEffect(
+        effectiveCollapsed,
+        collapseEdge,
+        expandedBounds,
+        collapsedBounds,
+    ) {
+        if (collapseEdge == PanelCollapseEdge.NONE) {
+            FloatingPanelCollapseAnimationGate.setAnimating(panelId, false)
+            hostExpandedForCollapseAnim = true
+            if (collapseProgress.value != 0f) {
+                collapseProgress.snapTo(0f)
+            }
+            onUpdateWindowFrame(
+                panelId,
+                expandedBounds.x,
+                expandedBounds.y,
+                expandedBounds.width,
+                expandedBounds.height,
+            )
+            return@LaunchedEffect
+        }
+        val target = if (effectiveCollapsed) 1f else 0f
+        if (abs(collapseProgress.value - target) < 0.001f) {
+            val rest = if (effectiveCollapsed) collapsedBounds else expandedBounds
+            hostExpandedForCollapseAnim = !effectiveCollapsed
+            onUpdateWindowFrame(panelId, rest.x, rest.y, rest.width, rest.height)
+            return@LaunchedEffect
+        }
+        FloatingPanelCollapseAnimationGate.setAnimating(panelId, true)
+        try {
+            // Always animate inside an expanded WM frame, then shrink when fully collapsed.
+            onUpdateWindowFrame(
+                panelId,
+                expandedBounds.x,
+                expandedBounds.y,
+                expandedBounds.width,
+                expandedBounds.height,
+            )
+            hostExpandedForCollapseAnim = true
+            collapseProgress.animateTo(
+                targetValue = target,
+                animationSpec = tween(durationMillis = PANEL_COLLAPSE_ANIMATION_MS),
+            )
+            if (effectiveCollapsed) {
+                onUpdateWindowFrame(
+                    panelId,
+                    collapsedBounds.x,
+                    collapsedBounds.y,
+                    collapsedBounds.width,
+                    collapsedBounds.height,
+                )
+                hostExpandedForCollapseAnim = false
+            }
+        } finally {
+            FloatingPanelCollapseAnimationGate.setAnimating(panelId, false)
+        }
+    }
+
+    DisposableEffect(panelId) {
+        onDispose {
+            FloatingPanelCollapseAnimationGate.setAnimating(panelId, false)
+        }
+    }
 
     DisposableEffect(panelId, isEditMode) {
         FloatingPanelEditModeTracker.setOverlayEditMode(panelId, isEditMode)
@@ -195,6 +314,8 @@ fun FloatingDashboard(
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
+            collapseAfterTapJob?.cancel()
+            collapseAfterTapJob = null
             delay(300000)
             if (isEditMode) {
                 isEditMode = false
@@ -374,7 +495,45 @@ fun FloatingDashboard(
                         }
                     )
             ) {
-                DashboardPanelGridAndFrames(
+                val progress = collapseProgress.value
+                val animateInsideExpandedHost =
+                    collapseEdge != PanelCollapseEdge.NONE && hostExpandedForCollapseAnim
+                val panelContentModifier = if (animateInsideExpandedHost) {
+                    val localExpanded = PanelPxBounds(
+                        x = 0,
+                        y = 0,
+                        width = expandedBounds.width,
+                        height = expandedBounds.height,
+                    )
+                    val localCollapsed = collapsedPanelBounds(
+                        expanded = localExpanded,
+                        edge = collapseEdge,
+                        thicknessPx = thicknessPx,
+                    )
+                    val visual = lerpPanelBounds(localExpanded, localCollapsed, progress)
+                    Modifier
+                        .offset { IntOffset(visual.x, visual.y) }
+                        .size(
+                            width = with(density) { visual.width.toDp() },
+                            height = with(density) { visual.height.toDp() },
+                        )
+                } else {
+                    Modifier.fillMaxSize()
+                }
+                Box(modifier = panelContentModifier) {
+                CollapsiblePanelFrame(
+                    edge = collapseEdge,
+                    collapsed = effectiveCollapsed,
+                    stripThicknessDp = normalizePanelCollapseStripThicknessDp(
+                        panelConfig.collapseStripThicknessDp,
+                    ),
+                    stripColor = Color(panelConfig.resolveStripColor(currentTheme)),
+                    stripExpandedColor = Color(panelConfig.resolveStripExpandedColor(currentTheme)),
+                    isEditMode = isEditMode,
+                    onCollapsedChange = { settingsViewModel.setPanelCollapsed(panelId, it) },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                        DashboardPanelGridAndFrames(
                     mbCanInterestSourceId = "floating-$panelId",
                     dashboardRows = dashboardRows,
                     dashboardCols = dashboardCols,
@@ -451,6 +610,19 @@ fun FloatingDashboard(
                             }
                             openMainActivityFromWidget(context)
                         }
+                        if (!isEditMode &&
+                            panelConfig.collapseOnTileTap &&
+                            collapseEdge != PanelCollapseEdge.NONE
+                        ) {
+                            collapseAfterTapJob?.cancel()
+                            val delaySec = normalizePanelCollapseOnTileTapDelaySec(
+                                panelConfig.collapseOnTileTapDelaySec,
+                            )
+                            collapseAfterTapJob = collapseAfterTapScope.launch {
+                                delay(delaySec * 1_000L)
+                                settingsViewModel.setPanelCollapsed(panelId, true)
+                            }
+                        }
                     },
                     onWidgetLongClick = {
                         isEditMode = !isEditMode
@@ -493,6 +665,8 @@ fun FloatingDashboard(
                     gridSpacingDp = panelConfig.gridSpacingDp.dp,
                     externalWidgetHost = appWidgetHost,
                 )
+                }
+                }
                 if (isEditMode) {
                     // Reserve panel resize corner to avoid accidental tile long-press there.
                     Box(

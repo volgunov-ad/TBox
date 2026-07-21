@@ -4,14 +4,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -24,7 +28,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING
@@ -34,6 +40,10 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
+import vad.dashing.tbox.PanelCollapseEdge
+import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
+import vad.dashing.tbox.PanelCollapseStates
+import vad.dashing.tbox.PanelPxBounds
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
@@ -52,6 +62,13 @@ import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.snapToGrid
 import vad.dashing.tbox.resolveDriveModeWidgetOption
+import vad.dashing.tbox.collapseEdgeOrNone
+import vad.dashing.tbox.collapsedPanelBounds
+import vad.dashing.tbox.lerpPanelBounds
+import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
+import vad.dashing.tbox.PANEL_COLLAPSE_ANIMATION_MS
+import vad.dashing.tbox.resolveStripColor
+import vad.dashing.tbox.resolveStripExpandedColor
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import kotlin.math.roundToInt
 
@@ -150,6 +167,7 @@ fun MainScreenDashboardPanel(
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val themeActivating by settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
+    val panelCollapseStates by settingsViewModel.panelCollapseStates.collectAsStateWithLifecycle()
 
     var isEditMode by remember { mutableStateOf(false) }
     var showDialogForIndex by remember { mutableStateOf<Int?>(null) }
@@ -159,6 +177,8 @@ fun MainScreenDashboardPanel(
     var pendingSeatHeatVentVariant by remember(panel.id) { mutableStateOf<Pair<Int, Int>?>(null) }
     val canManipulatePanel = isEditMode && showDialogForIndex == null
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
+    val collapseAfterTapScope = rememberCoroutineScope()
+    var collapseAfterTapJob by remember(panel.id) { mutableStateOf<Job?>(null) }
 
     var layoutInteraction by remember { mutableStateOf(false) }
     var layoutPx by remember(panel.id) {
@@ -190,6 +210,8 @@ fun MainScreenDashboardPanel(
 
     LaunchedEffect(isEditMode) {
         if (isEditMode) {
+            collapseAfterTapJob?.cancel()
+            collapseAfterTapJob = null
             delay(300000)
             if (isEditMode) {
                 isEditMode = false
@@ -281,17 +303,39 @@ fun MainScreenDashboardPanel(
 
     val cw = containerWidthPx.coerceAtLeast(1f)
     val ch = containerHeightPx.coerceAtLeast(1f)
+    val collapseEdge = panel.collapseEdgeOrNone()
+    val panelCollapsed = PanelCollapseStates.isCollapsed(panelCollapseStates, panel.id)
+    val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
+    val collapseProgress by animateFloatAsState(
+        targetValue = if (effectiveCollapsed) 1f else 0f,
+        animationSpec = tween(durationMillis = PANEL_COLLAPSE_ANIMATION_MS),
+        label = "mainPanelCollapse",
+    )
+    val expandedBounds = PanelPxBounds(
+        x = layoutPx.x.roundToInt(),
+        y = layoutPx.y.roundToInt(),
+        width = layoutPx.width.roundToInt(),
+        height = layoutPx.height.roundToInt(),
+    )
+    val collapsedBounds = collapsedPanelBounds(
+        expanded = expandedBounds,
+        edge = collapseEdge,
+        thicknessPx = with(density) {
+            normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp).dp.roundToPx()
+        },
+    )
+    val displayedBounds = lerpPanelBounds(expandedBounds, collapsedBounds, collapseProgress)
     val resizeHandleWidthDp = with(density) { resizeHandleOffsetForDimension(layoutPx.width).toDp() }
     val resizeHandleHeightDp = with(density) { resizeHandleOffsetForDimension(layoutPx.height).toDp() }
 
     Box(
         modifier = Modifier
             .offset {
-                IntOffset(layoutPx.x.roundToInt(), layoutPx.y.roundToInt())
+                IntOffset(displayedBounds.x, displayedBounds.y)
             }
             .size(
-                width = with(density) { layoutPx.width.toDp() },
-                height = with(density) { layoutPx.height.toDp() }
+                width = with(density) { displayedBounds.width.toDp() },
+                height = with(density) { displayedBounds.height.toDp() }
             )
             .background(Color.Transparent)
             .then(
@@ -372,6 +416,16 @@ fun MainScreenDashboardPanel(
                 }
             )
     ) {
+        CollapsiblePanelFrame(
+            edge = collapseEdge,
+            collapsed = effectiveCollapsed,
+            stripThicknessDp = normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp),
+            stripColor = Color(panel.resolveStripColor(currentTheme)),
+            stripExpandedColor = Color(panel.resolveStripExpandedColor(currentTheme)),
+            isEditMode = isEditMode,
+            onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
+            modifier = Modifier.fillMaxSize(),
+        ) {
         DashboardPanelGridAndFrames(
             mbCanInterestSourceId = "main-screen-${panel.id}",
             dashboardRows = dashboardRows,
@@ -443,6 +497,19 @@ fun MainScreenDashboardPanel(
                 ) {
                     settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_TAB_KEY)
                 }
+                if (!isEditMode &&
+                    panel.collapseOnTileTap &&
+                    collapseEdge != PanelCollapseEdge.NONE
+                ) {
+                    collapseAfterTapJob?.cancel()
+                    val delaySec = normalizePanelCollapseOnTileTapDelaySec(
+                        panel.collapseOnTileTapDelaySec,
+                    )
+                    collapseAfterTapJob = collapseAfterTapScope.launch {
+                        delay(delaySec * 1_000L)
+                        settingsViewModel.setPanelCollapsed(panel.id, true)
+                    }
+                }
             },
             onWidgetLongClick = {
                 if (windowMode) {
@@ -490,6 +557,7 @@ fun MainScreenDashboardPanel(
             gridSpacingDp = panel.gridSpacingDp.dp,
             externalWidgetHost = appWidgetHost
         )
+        }
         if (isEditMode) {
             // Reserve the panel-level resize corner so long-press there cannot toggle tile edit mode.
             Box(

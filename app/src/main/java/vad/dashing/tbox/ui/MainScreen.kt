@@ -103,7 +103,10 @@ fun MainScreen(
     val context = LocalContext.current
     val mainPanels by settingsViewModel.mainScreenDashboards.collectAsStateWithLifecycle()
     val pageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
-    val currentPage by settingsViewModel.mainScreenCurrentPage.collectAsStateWithLifecycle()
+    val normalCurrentPage by settingsViewModel.mainScreenCurrentPage.collectAsStateWithLifecycle()
+    val windowModeCurrentPage by
+        settingsViewModel.mainScreenWindowModeCurrentPage.collectAsStateWithLifecycle()
+    val currentPage = if (windowMode) windowModeCurrentPage ?: normalCurrentPage else normalCurrentPage
     val settingsBtnPos by settingsViewModel.mainScreenSettingsButtonPosition.collectAsStateWithLifecycle()
     val addBtnPos by settingsViewModel.mainScreenAddButtonPosition.collectAsStateWithLifecycle()
     val pagePrevBtnPos by settingsViewModel.mainScreenPagePrevButtonPosition.collectAsStateWithLifecycle()
@@ -137,13 +140,13 @@ fun MainScreen(
     val showWallpaperNavButtons = multiPage && wallpaperCount > 1
 
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        settingsViewModel.flushMainScreenCurrentPage()
+        settingsViewModel.flushMainScreenCurrentPage(windowMode)
         settingsViewModel.flushMainScreenWallpaperSelection()
     }
 
     DisposableEffect(Unit) {
         onDispose {
-            settingsViewModel.flushMainScreenCurrentPage()
+            settingsViewModel.flushMainScreenCurrentPage(windowMode)
             settingsViewModel.flushMainScreenWallpaperSelection()
         }
     }
@@ -205,7 +208,7 @@ fun MainScreen(
                         .collect { settled ->
                             val page = (settled + 1).coerceIn(1, pageCount)
                             if (page != currentPageState) {
-                                settingsViewModel.scheduleSaveMainScreenCurrentPage(page)
+                                settingsViewModel.scheduleSaveMainScreenCurrentPage(page, windowMode)
                             }
                         }
                 }

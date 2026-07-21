@@ -1087,4 +1087,23 @@
     <string name="widget_actions_external_app">Gestures are defined by the third-party widget.</string>
     <string name="widget_actions_hide_floating_panels">Double tap — hide or show the other panels.</string>
     <string name="widget_actions_toggle_floating_panels_enabled">Double tap — change panel state.</string>
+    <string name="settings_panel_collapse_edge_title">Collapse edge</string>
+    <string name="settings_panel_collapse_edge_desc">Swipe from this edge to collapse the panel.</string>
+    <string name="settings_panel_collapse_edge_none">Do not collapse</string>
+    <string name="settings_panel_collapse_edge_left">Left</string>
+    <string name="settings_panel_collapse_edge_right">Right</string>
+    <string name="settings_panel_collapse_edge_top">Top</string>
+    <string name="settings_panel_collapse_edge_bottom">Bottom</string>
+    <string name="settings_panel_collapse_thickness_title">Strip thickness: %1$d dp</string>
+    <string name="settings_panel_collapse_thickness_desc">Size of the strip after collapse.</string>
+    <string name="settings_panel_collapse_strip_color_title">Strip color</string>
+    <string name="settings_panel_collapse_strip_color_desc">Choose separate colors for light and dark themes.</string>
+    <string name="settings_panel_collapse_strip_color_collapsed_title">Strip color (collapsed)</string>
+    <string name="settings_panel_collapse_strip_color_collapsed_desc">Color of the strip when the panel is collapsed. Separate for light and dark themes.</string>
+    <string name="settings_panel_collapse_strip_color_expanded_title">Strip color (expanded)</string>
+    <string name="settings_panel_collapse_strip_color_expanded_desc">Color of the swipe zone on the expanded panel. Separate for light and dark themes (alpha supported).</string>
+    <string name="settings_panel_collapse_on_tile_tap_title">Collapse after tile tap</string>
+    <string name="settings_panel_collapse_on_tile_tap_desc">After a single tile tap the panel collapses with the configured delay. Only works when a collapse edge is selected.</string>
+    <string name="settings_panel_collapse_on_tile_tap_delay_title">Auto-collapse delay: %1$d s</string>
+    <string name="settings_panel_collapse_on_tile_tap_delay_desc">How many seconds after a tile tap before collapsing the panel (0–10 s).</string>
 </resources>

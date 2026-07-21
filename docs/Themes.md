@@ -78,7 +78,7 @@
 | Файл | Когда создаётся | Когда меняется | Роль при активации |
 |------|-----------------|----------------|-------------------|
 | **`theme.json`** | Materialize (распаковка ZIP) | Повторный apply/sync того же ключа | Импорт панелей, цветов, pageCount; дефолтные обои, если нет runtime |
-| **`runtime.json`** | Первый materialize (`seedFromThemeJsonIfMissing`) или первая запись UI | Свайп обоев, смена страницы, snapshot при смене темы | **Приоритет** над `theme.json` для обоев и `currentPage` |
+| **`runtime.json`** | Первый materialize (`seedFromThemeJsonIfMissing`) или первая запись UI | Свайп обоев, смена страницы (обычный и оконный режим), snapshot при смене темы | **Приоритет** над `theme.json` для обоев, `currentPage` и `currentPageWindowMode` |
 
 **Важно:** существующий `runtime.json` при повторной materialize **не перезаписывается** целиком — только точечно через `ThemeRuntimeState.patch` (merge).
 
@@ -90,10 +90,13 @@
     "light": { "1": "wallpaper_a.jpg" },
     "dark":  { "1": "wallpaper_b.jpg" }
   },
-  "currentPage": 1
+  "currentPage": 1,
+  "currentPageWindowMode": 2
 }
 ```
 
+- `currentPage` — страница главного экрана в обычном (fullscreen) режиме.
+- `currentPageWindowMode` — страница в оконном режиме (freeform companion); отсутствует, пока пользователь ни разу не листал страницы в оконном режиме (при первом входе сохраняется текущая).
 ---
 
 ## Где в интерфейсе

@@ -30,6 +30,8 @@ import androidx.core.net.toUri
 import vad.dashing.tbox.ui.TboxApp
 import vad.dashing.tbox.ui.disposeAppLauncherPickerIconCache
 import vad.dashing.tbox.update.InstallPermissionHelper
+import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -258,6 +260,16 @@ class MainActivity : ComponentActivity() {
     override fun onRestart() {
         super.onRestart()
         startBackgroundService()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Manual launch / bring-to-front while window-mode overlay is up: drop the overlay
+        // (and freeform session) so MainActivity is not covered. Do not restore MainActivity
+        // again — it is already starting.
+        if (FreeformCompanionSession.isActive) {
+            FreeformLaunchHelper.exitWindowMode(this)
+        }
     }
 
     override fun onResume() {

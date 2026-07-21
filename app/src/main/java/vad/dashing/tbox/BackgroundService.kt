@@ -2737,6 +2737,13 @@ class BackgroundService : Service() {
                         }
                     }
             }
+            launch {
+                FloatingPanelEditModeTracker.overlayEditEpoch
+                    .drop(1)
+                    .collect {
+                        overlayController.syncFloatingDashboards(floatingDashboards.value)
+                    }
+            }
         }
         startUsageStatsFloatingHideWatcher()
     }
@@ -2754,7 +2761,8 @@ class BackgroundService : Service() {
     private fun buildFloatingOverlayLayoutSignature(configs: List<FloatingDashboardConfig>): String {
         if (configs.isEmpty()) return "empty"
         return configs.mapIndexed { index, cfg ->
-            "$index|${cfg.id}|${cfg.enabled}|${cfg.startX}|${cfg.startY}|${cfg.width}|${cfg.height}"
+            "$index|${cfg.id}|${cfg.enabled}|${cfg.startX}|${cfg.startY}|${cfg.width}|${cfg.height}|" +
+                "${cfg.collapseEdge}|${cfg.collapseStripThicknessDp}"
         }.joinToString("||")
     }
 

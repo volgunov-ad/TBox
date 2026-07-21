@@ -468,6 +468,7 @@ object ThemeMaterialization {
         cacheKey: String,
         wallpaperSelections: MainScreenWallpaperSelectionsByPage? = null,
         currentPage: Int? = null,
+        currentPageWindowMode: Int? = null,
     ): Boolean = withContext(Dispatchers.IO) {
         val normalizedKey = cacheKey.trim()
         if (!ThemeCacheKeys.isLikelyCacheKey(normalizedKey)) return@withContext false
@@ -477,6 +478,7 @@ object ThemeMaterialization {
             cacheDir = dir,
             wallpaperSelections = wallpaperSelections,
             currentPage = currentPage,
+            currentPageWindowMode = currentPageWindowMode,
         )
         true
     }

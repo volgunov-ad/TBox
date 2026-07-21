@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.Display
 import android.widget.Toast
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.MainActivityIntentHelper
@@ -167,10 +168,15 @@ object FreeformLaunchHelper {
         val activityDisplay = FreeformDisplaySpaces.resolveActivityDisplay(appContext)
         val displayW = activityDisplay.widthPx
         val displayH = activityDisplay.heightPx
-        val launchContext = FreeformDisplaySpaces.contextForDisplay(
-            appContext,
-            activityDisplay.displayId,
-        )
+        // On default display, omit setLaunchDisplayId (pre-38b343c path): some images
+        // drop freeform windowing/bounds when launchDisplayId is set even to 0.
+        // On inset app VDs (HU), keep display-bound context + setLaunchDisplayId.
+        val bindLaunchToDisplay = activityDisplay.displayId != Display.DEFAULT_DISPLAY
+        val launchContext = if (bindLaunchToDisplay) {
+            FreeformDisplaySpaces.contextForDisplay(appContext, activityDisplay.displayId)
+        } else {
+            appContext
+        }
         val (appBounds, tboxBounds) = FreeformLaunchBounds.computeAppAndTboxBounds(
             displayW,
             displayH,
@@ -180,7 +186,7 @@ object FreeformLaunchHelper {
         val appBundle = activityOptionsBundle(
             freeformWindowingModeId(),
             appBounds,
-            launchDisplayId = activityDisplay.displayId,
+            launchDisplayId = if (bindLaunchToDisplay) activityDisplay.displayId else null,
         ) ?: run {
             Toast.makeText(
                 appContext,
@@ -201,7 +207,8 @@ object FreeformLaunchHelper {
 
         dbg(
             "launch start pkg=$pkg side=${side.storageKey} pct=$percent " +
-                "displayId=${activityDisplay.displayId} act=${displayW}x${displayH} " +
+                "displayId=${activityDisplay.displayId} bindDisplay=$bindLaunchToDisplay " +
+                "act=${displayW}x${displayH} " +
                 "appBounds=$appBounds tboxBounds=$tboxBounds " +
                 "displays=[${FreeformDisplaySpaces.summarizeDisplays(appContext)}]",
         )
@@ -211,7 +218,7 @@ object FreeformLaunchHelper {
                 launchContext,
                 displayW,
                 displayH,
-                displayId = activityDisplay.displayId,
+                launchDisplayId = if (bindLaunchToDisplay) activityDisplay.displayId else null,
             )
             val launchRunnable = Runnable {
                 pendingAnchorLaunchRunnable = null
@@ -227,6 +234,7 @@ object FreeformLaunchHelper {
                     )
                     dbg(
                         "launch ok pkg=$pkg displayId=${activityDisplay.displayId} " +
+                            "bindDisplay=$bindLaunchToDisplay " +
                             "act=${displayW}x${displayH} side=${side.storageKey} pct=$percent",
                     )
                     requestShowMainScreenWindow(appContext)
@@ -371,11 +379,16 @@ object FreeformLaunchHelper {
         }
     }
 
-    private fun ensureFreeformAnchor(context: Context, displayW: Int, displayH: Int, displayId: Int) {
+    private fun ensureFreeformAnchor(
+        context: Context,
+        displayW: Int,
+        displayH: Int,
+        launchDisplayId: Int?,
+    ) {
         if (FreeformInvisibleAnchorActivity.isRunning) return
         val freeformMode = freeformWindowingModeId()
         val tiny = Rect(displayW, displayH, displayW + 1, displayH + 1)
-        val bundle = activityOptionsBundle(freeformMode, tiny, launchDisplayId = displayId) ?: return
+        val bundle = activityOptionsBundle(freeformMode, tiny, launchDisplayId) ?: return
         val intent = Intent(context, FreeformInvisibleAnchorActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -395,10 +408,14 @@ object FreeformLaunchHelper {
     private fun windowingModeMethodName(): String =
         if (Build.VERSION.SDK_INT >= 28) "setLaunchWindowingMode" else "setLaunchStackId"
 
+    /**
+     * @param launchDisplayId when non-null, sets [ActivityOptions.setLaunchDisplayId] (inset VD).
+     *   Null keeps the pre-multi-VD path so freeform bounds are not dropped on default display.
+     */
     private fun activityOptionsBundle(
         windowingMode: Int,
         bounds: Rect,
-        launchDisplayId: Int,
+        launchDisplayId: Int?,
     ): Bundle? {
         val options = try {
             ActivityOptions.makeBasic()
@@ -415,7 +432,7 @@ object FreeformLaunchHelper {
             if (Build.VERSION.SDK_INT >= 24) {
                 options.setLaunchBounds(bounds)
             }
-            if (Build.VERSION.SDK_INT >= 26) {
+            if (launchDisplayId != null && Build.VERSION.SDK_INT >= 26) {
                 applyLaunchDisplayId(options, launchDisplayId)
             }
             options.toBundle()
