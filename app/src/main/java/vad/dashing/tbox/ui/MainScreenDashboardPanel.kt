@@ -311,6 +311,21 @@ fun MainScreenDashboardPanel(
     val collapseEdge = panel.collapseEdgeOrNone()
     val panelCollapsed = PanelCollapseStates.isCollapsed(panelCollapseStates, panel.id)
     val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
+    val notifyPanelTileTap: () -> Unit = {
+        if (!isEditMode &&
+            panel.collapseOnTileTap &&
+            collapseEdge != PanelCollapseEdge.NONE
+        ) {
+            collapseAfterTapJob?.cancel()
+            val delaySec = normalizePanelCollapseOnTileTapDelaySec(
+                panel.collapseOnTileTapDelaySec,
+            )
+            collapseAfterTapJob = collapseAfterTapScope.launch {
+                delay(delaySec * 1_000L)
+                settingsViewModel.setPanelCollapsed(panel.id, true)
+            }
+        }
+    }
     val collapseProgress by animateFloatAsState(
         targetValue = if (effectiveCollapsed) 1f else 0f,
         animationSpec = tween(durationMillis = PANEL_COLLAPSE_ANIMATION_MS),
@@ -506,19 +521,6 @@ fun MainScreenDashboardPanel(
                 ) {
                     settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_TAB_KEY)
                 }
-                if (!isEditMode &&
-                    panel.collapseOnTileTap &&
-                    collapseEdge != PanelCollapseEdge.NONE
-                ) {
-                    collapseAfterTapJob?.cancel()
-                    val delaySec = normalizePanelCollapseOnTileTapDelaySec(
-                        panel.collapseOnTileTapDelaySec,
-                    )
-                    collapseAfterTapJob = collapseAfterTapScope.launch {
-                        delay(delaySec * 1_000L)
-                        settingsViewModel.setPanelCollapsed(panel.id, true)
-                    }
-                }
             },
             onWidgetLongClick = {
                 if (windowMode) {
@@ -564,7 +566,8 @@ fun MainScreenDashboardPanel(
             showTboxDisconnectIndicator = panel.showTboxDisconnectIndicator,
             enableInnerInteractions = !isEditMode,
             gridSpacingDp = panel.gridSpacingDp.dp,
-            externalWidgetHost = appWidgetHost
+            externalWidgetHost = appWidgetHost,
+            onPanelTileTap = notifyPanelTileTap,
         )
         }
         if (isEditMode) {

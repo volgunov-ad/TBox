@@ -89,6 +89,7 @@ internal fun DashboardPanelGridAndFrames(
     externalWidgetHost: AppWidgetHost? = null,
     gridSpacingDp: Dp = 0.dp,
     panelStorageId: String = mbCanInterestSourceId,
+    onPanelTileTap: () -> Unit = {},
 ) {
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
     val panelNeedsMbCan = remember(widgetConfigs) {
@@ -302,7 +303,8 @@ internal fun DashboardPanelGridAndFrames(
                                 LocalWidgetTitlePosition provides normalizeWidgetTitlePosition(
                                     widgetConfig.titlePosition
                                 ),
-                                LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy
+                                LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy,
+                                LocalNotifyPanelTileTap provides onPanelTileTap,
                             ) {
                                 DashboardWidgetRenderer(
                                     widget = widget,

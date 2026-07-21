@@ -213,6 +213,21 @@ fun FloatingDashboard(
     val collapseEdge = panelConfig.collapseEdgeOrNone()
     val panelCollapsed = PanelCollapseStates.isCollapsed(panelCollapseStates, panelId)
     val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
+    val notifyPanelTileTap: () -> Unit = {
+        if (!isEditMode &&
+            panelConfig.collapseOnTileTap &&
+            collapseEdge != PanelCollapseEdge.NONE
+        ) {
+            collapseAfterTapJob?.cancel()
+            val delaySec = normalizePanelCollapseOnTileTapDelaySec(
+                panelConfig.collapseOnTileTapDelaySec,
+            )
+            collapseAfterTapJob = collapseAfterTapScope.launch {
+                delay(delaySec * 1_000L)
+                settingsViewModel.setPanelCollapsed(panelId, true)
+            }
+        }
+    }
     val latestWidgetConfigs by rememberUpdatedState(widgetConfigs)
     val collapseProgress = remember(panelId) {
         Animatable(if (effectiveCollapsed) 1f else 0f)
@@ -610,19 +625,6 @@ fun FloatingDashboard(
                             }
                             openMainActivityFromWidget(context)
                         }
-                        if (!isEditMode &&
-                            panelConfig.collapseOnTileTap &&
-                            collapseEdge != PanelCollapseEdge.NONE
-                        ) {
-                            collapseAfterTapJob?.cancel()
-                            val delaySec = normalizePanelCollapseOnTileTapDelaySec(
-                                panelConfig.collapseOnTileTapDelaySec,
-                            )
-                            collapseAfterTapJob = collapseAfterTapScope.launch {
-                                delay(delaySec * 1_000L)
-                                settingsViewModel.setPanelCollapsed(panelId, true)
-                            }
-                        }
                     },
                     onWidgetLongClick = {
                         isEditMode = !isEditMode
@@ -664,6 +666,7 @@ fun FloatingDashboard(
                     enableInnerInteractions = !isEditMode,
                     gridSpacingDp = panelConfig.gridSpacingDp.dp,
                     externalWidgetHost = appWidgetHost,
+                    onPanelTileTap = notifyPanelTileTap,
                 )
                 }
                 }

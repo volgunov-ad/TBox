@@ -38,12 +38,21 @@ fun DashboardWidgetScaffold(
     val resolvedInteractionPolicy = LocalDashboardWidgetInteractionPolicy.current
     val useCardClickable = resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD
     val playClick = rememberPlaySystemClickSound()
-    val wrappedOnClick = remember(onClick, playClick) {
-        { playClick(); onClick() }
+    val notifyPanelTileTap = LocalNotifyPanelTileTap.current
+    val wrappedOnClick = remember(onClick, playClick, notifyPanelTileTap) {
+        {
+            playClick()
+            onClick()
+            notifyPanelTileTap()
+        }
     }
     val wrappedOnDouble = if (onDoubleClick != null) {
-        remember(onDoubleClick, playClick) {
-            { playClick(); onDoubleClick() }
+        remember(onDoubleClick, playClick, notifyPanelTileTap) {
+            {
+                playClick()
+                onDoubleClick()
+                notifyPanelTileTap()
+            }
         }
     } else {
         null
@@ -51,6 +60,7 @@ fun DashboardWidgetScaffold(
     val cardInteractionSource = remember { MutableInteractionSource() }
     val cardIndication = LocalIndication.current
     val onClickForPointer by rememberUpdatedState(onClick)
+    val notifyPanelTileTapForPointer by rememberUpdatedState(notifyPanelTileTap)
     Card(
         modifier = modifier
             .fillMaxSize()
@@ -99,6 +109,7 @@ fun DashboardWidgetScaffold(
                                         ) {
                                             playClick()
                                             onClickForPointer()
+                                            notifyPanelTileTapForPointer()
                                         }
                                     },
                                     onLongPress = { offset ->

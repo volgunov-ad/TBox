@@ -1109,7 +1109,7 @@
     <string name="settings_panel_collapse_strip_color_expanded_title">Strip color (expanded)</string>
     <string name="settings_panel_collapse_strip_color_expanded_desc">Color of the swipe zone on the expanded panel. Separate for light and dark themes (alpha supported).</string>
     <string name="settings_panel_collapse_on_tile_tap_title">Collapse after tile tap</string>
-    <string name="settings_panel_collapse_on_tile_tap_desc">After a single tile tap the panel collapses with the configured delay. Only works when a collapse edge is selected.</string>
+    <string name="settings_panel_collapse_on_tile_tap_desc">After a single or double tile tap (including inner controls) the panel collapses with the configured delay. Only works when a collapse edge is selected.</string>
     <string name="settings_panel_collapse_on_tile_tap_delay_title">Auto-collapse delay: %1$d s</string>
     <string name="settings_panel_collapse_on_tile_tap_delay_desc">How many seconds after a tile tap before collapsing the panel (0–10 s).</string>
 </resources>

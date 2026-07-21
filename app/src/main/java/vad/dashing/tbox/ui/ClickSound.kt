@@ -105,17 +105,20 @@ fun Modifier.combinedClickableWithSound(
     val interactionSource = remember { MutableInteractionSource() }
     val indication = LocalIndication.current
     val play = rememberPlaySystemClickSound()
-    val wrappedClick = remember(onClick, play) {
+    val notifyPanelTileTap = LocalNotifyPanelTileTap.current
+    val wrappedClick = remember(onClick, play, notifyPanelTileTap) {
         {
             play()
             onClick()
+            notifyPanelTileTap()
         }
     }
     val wrappedDouble = if (onDoubleClick != null) {
-        remember(onDoubleClick, play) {
+        remember(onDoubleClick, play, notifyPanelTileTap) {
             {
                 play()
                 onDoubleClick()
+                notifyPanelTileTap()
             }
         }
     } else {
