@@ -95,6 +95,9 @@ object FreeformLaunchHelper {
      * Launch [packageName] in freeform on [side], then ask [BackgroundService] to show the
      * main-screen window overlay. Returns false if freeform launch was not started.
      *
+     * Same package already active: re-assert freeform launch and show/update the overlay
+     * (idempotent — no duplicate MainScreen overlay).
+     *
      * If another companion session is already active, performs a **full** window-mode exit
      * (same as the overlay close button), then launches the new companion after settle.
      */
@@ -127,7 +130,15 @@ object FreeformLaunchHelper {
 
         val appContext = context.applicationContext
 
-        // Switching companion: exit completely (like the X button), then relaunch.
+        // Same companion still active: re-launch in freeform and ensure overlay is shown.
+        if (FreeformCompanionSession.isActiveFor(pkg) && !exitInProgress) {
+            pendingAfterExit = null
+            pendingAppContext = null
+            dbg("re-assert same companion pkg=$pkg side=${side.storageKey} pct=$percent")
+            return startCompanionLaunch(appContext, pkg, side, percent)
+        }
+
+        // Switching companion (or exit in progress): exit completely, then relaunch.
         if (FreeformCompanionSession.isActive || exitInProgress) {
             pendingAppContext = appContext
             pendingAfterExit = PendingCompanionLaunch(pkg, side, percent)

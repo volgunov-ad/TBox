@@ -70,11 +70,6 @@ internal fun launchAppFromWidget(context: Context, config: FloatingDashboardWidg
         return
     }
 
-    if (FreeformCompanionSession.isActiveFor(packageName)) {
-        FreeformLaunchHelper.exitWindowMode(context)
-        return
-    }
-
     val launched = FreeformLaunchHelper.launchCompanion(
         context = context,
         packageName = packageName,

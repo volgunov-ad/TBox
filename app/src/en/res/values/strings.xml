@@ -902,7 +902,7 @@
     <string name="widget_app_launcher_freeform_side_bottom">Bottom</string>
     <string name="widget_app_launcher_freeform_percent">App size, %</string>
     <string name="widget_app_launcher_freeform_percent_desc">Share of the screen for the selected app; TBox Monitor takes the rest</string>
-    <string name="widget_app_launcher_freeform_hint">One shortcut: app in a window, TBox on the remaining half. A second shortcut on the opposite side replaces TBox with another app. Tap the same shortcut again to dismiss its window; Full screen exits the mode.</string>
+    <string name="widget_app_launcher_freeform_hint">The app opens in a window on the chosen side and screen share; the remaining area shows the TBox main-screen overlay. Another window-mode shortcut switches the companion app (TBox overlay stays). Tapping the same shortcut again re-launches the app in a window and shows the overlay if it is hidden. Exit with × or Full screen.</string>
     <string name="widget_app_launcher_freeform_unsupported">Window mode is not available on this device</string>
     <string name="widget_app_launcher_freeform_launch_failed">Could not launch the app in a window</string>
     <string name="freeform_exit_fullscreen">Full screen</string>

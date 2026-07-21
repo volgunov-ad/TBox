@@ -916,7 +916,7 @@
     <string name="widget_app_launcher_freeform_side_bottom">Снизу</string>
     <string name="widget_app_launcher_freeform_percent">Размер приложения, %</string>
     <string name="widget_app_launcher_freeform_percent_desc">Доля экрана для выбранного приложения; остальное занимает TBox Monitor</string>
-    <string name="widget_app_launcher_freeform_hint">Один ярлык: приложение в окне, TBox на оставшейся половине. Второй ярлык на противоположной стороне заменяет TBox другим приложением. Повторный тап по ярлыку убирает его окно; «На весь экран» закрывает режим.</string>
+    <string name="widget_app_launcher_freeform_hint">Приложение открывается в окне на выбранной стороне и доле экрана; на оставшейся области — overlay главного экрана TBox. Другой ярлык с оконным режимом сменяет приложение-компаньон (overlay TBox остаётся). Повторный тап по тому же ярлыку снова запускает приложение в окне и показывает overlay, если его нет. Выход: × или «На весь экран».</string>
     <string name="widget_app_launcher_freeform_unsupported">Режим окна недоступен на этом устройстве</string>
     <string name="widget_app_launcher_freeform_launch_failed">Не удалось запустить приложение в окне</string>
     <string name="freeform_exit_fullscreen">На весь экран</string>

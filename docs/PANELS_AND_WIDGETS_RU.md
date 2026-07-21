@@ -146,6 +146,7 @@ flowchart TB
    Companion force-stop не делается. На fullscreen-главной эти кнопки не показываются.
 5. Правила скрытия/показа плавающих панелей по Usage Stats продолжают работать и в оконном режиме (с debounce и безопасным sync). Смена foreground сама по себе оконный режим не закрывает.
 6. Смена companion (другой ярлык с оконным режимом): полный выход из оконного режима (как кнопка закрытия: снять overlay и якорь, без MainActivity), пауза settle, затем запуск нового companion. Предыдущее приложение force-stop не делается.
+7. Повторный тап по **тому же** ярлыку с оконным режимом: снова запускает companion в freeform и показывает overlay главного экрана, если его сейчас нет (`showMainScreenWindow` идемпотентен — второго overlay не создаёт). Выход из режима только кнопками overlay (**×** / **□**), не повторным тапом ярлыка.
 
 Требуется freeform на ГУ. Код: `freeform/FreeformLaunchHelper.kt`, `FreeformDisplaySpaces`, `FreeformLaunchBounds`, `FreeformCompanionSession`, `MainScreenWindowOverlayUI`, `BackgroundService` `ACTION_SHOW/HIDE_MAIN_SCREEN_WINDOW`.
 
