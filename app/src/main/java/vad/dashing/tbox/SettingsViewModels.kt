@@ -2179,7 +2179,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             widgetCount = widgetCount
         ).toMutableList()
         val currentConfig = normalizedConfigs.getOrNull(widgetIndex) ?: return
-        if (currentConfig.dataKey != MUSIC_WIDGET_DATA_KEY) return
+        if (!isMusicWidgetDataKey(currentConfig.dataKey)) return
         if (currentConfig.mediaSelectedPlayer == selectedPackage) return
 
         normalizedConfigs[widgetIndex] = currentConfig.copy(

@@ -35,6 +35,9 @@ import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
@@ -853,12 +856,52 @@ fun DashboardWidgetRenderer(
             )
         }
 
-        "musicWidget" -> {
+        MUSIC_WIDGET_DATA_KEY -> {
             DashboardMusicWidgetItem(
                 widget = widget,
                 widgetConfig = widgetConfig,
                 settingsViewModel = settingsViewModel,
                 canViewModel = canViewModel,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onSelectedPlayerChange = onMusicSelectedPlayerChange,
+                elevation = elevation,
+                shape = shape,
+                enableInnerInteractions = enableInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardMusicButtonsWidgetItem(
+                widget = widget,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                canViewModel = canViewModel,
+                isVertical = false,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onSelectedPlayerChange = onMusicSelectedPlayerChange,
+                elevation = elevation,
+                shape = shape,
+                enableInnerInteractions = enableInnerInteractions,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardMusicButtonsWidgetItem(
+                widget = widget,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                canViewModel = canViewModel,
+                isVertical = true,
                 title = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,

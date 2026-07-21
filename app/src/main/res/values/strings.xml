@@ -890,6 +890,8 @@
     <string name="data_title_rear_right_seat_heat_widget">Виджет обогрева правого заднего сиденья</string>
     <string name="data_title_restart_tbox">Кнопка перезагрузки TBox</string>
     <string name="data_title_music_widget">Виджет управления музыкой</string>
+    <string name="data_title_music_buttons_widget_horizontal">Виджет управления музыкой (только кнопки, горизонтально)</string>
+    <string name="data_title_music_buttons_widget_vertical">Виджет управления музыкой (только кнопки, вертикально)</string>
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
     <string name="data_title_time_widget">Время</string>
@@ -1069,6 +1071,8 @@
     <string name="widget_desc_rear_left_seat_heat">Обогрев левого заднего сиденья.</string>
     <string name="widget_desc_rear_right_seat_heat">Обогрев правого заднего сиденья.</string>
     <string name="widget_desc_music">Текущий медиаплеер, композиция и управление воспроизведением.</string>
+    <string name="widget_desc_music_buttons_horizontal">Кнопки управления воспроизведением без текста трека; шапка плеера — по «Показывать заголовок».</string>
+    <string name="widget_desc_music_buttons_vertical">Вертикальные кнопки управления воспроизведением без текста трека; шапка плеера — по «Показывать заголовок».</string>
     <string name="widget_desc_media_volume_horizontal">Горизонтальный регулятор громкости мультимедиа.</string>
     <string name="widget_desc_media_volume_vertical">Вертикальный регулятор громкости мультимедиа.</string>
     <string name="widget_desc_app_launcher">Ярлык выбранного приложения.</string>
@@ -1109,6 +1113,7 @@
     <string name="widget_actions_seat_heat_vent_single">Одиночное нажатие — следующий уровень; двойное — максимальный; свайп — переключить обогрев и вентиляцию.</string>
     <string name="widget_actions_rear_seat_heat">Одиночное нажатие — следующий уровень; двойное — максимальный уровень.</string>
     <string name="widget_actions_music">Кнопки — предыдущая, воспроизведение или пауза и следующая; свайп — сменить плеер; двойное нажатие на плеер — открыть его.</string>
+    <string name="widget_actions_music_buttons">Кнопки — предыдущая, воспроизведение или пауза и следующая; свайп — сменить плеер.</string>
     <string name="widget_actions_media_volume">Кнопки или свайп — изменить громкость; нажатие по центру — выключить или вернуть звук.</string>
     <string name="widget_actions_app_launcher">Одиночное нажатие — открыть приложение.</string>
     <string name="widget_actions_http_request">Одиночное нажатие — выполнить настроенное действие.</string>

@@ -65,7 +65,7 @@ import vad.dashing.tbox.isActiveTripWidgetDataKey
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
-import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.normalizeDateTimeWidgetFormat
 import vad.dashing.tbox.previewDateTimeWidgetFormat
 import vad.dashing.tbox.R
@@ -214,7 +214,7 @@ internal class WidgetSelectionDialogState(
         initialConfig.backgroundColorDark ?: panelDefaultBackgroundDark
     )
     var selectedMediaPlayers by mutableStateOf(
-        if (initialConfig.dataKey == MUSIC_WIDGET_DATA_KEY) {
+        if (isMusicWidgetDataKey(initialConfig.dataKey)) {
             normalizeMediaPlayersSelection(initialConfig.mediaPlayers)
         } else {
             emptySet()
@@ -504,7 +504,7 @@ internal class WidgetSelectionDialogState(
     }
 
     val isMusicWidgetSelected: Boolean
-        get() = selectedDataKey == MUSIC_WIDGET_DATA_KEY
+        get() = isMusicWidgetDataKey(selectedDataKey)
 
     val isAppLauncherWidgetSelected: Boolean
         get() = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY
@@ -1988,12 +1988,12 @@ internal fun applyWidgetSelectionChanges(
             textColorDark = state.textColorDark,
             backgroundColorLight = state.backgroundColorLight,
             backgroundColorDark = state.backgroundColorDark,
-            mediaPlayers = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaPlayers = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 orderedMediaPlayersForStorage(state.selectedMediaPlayers)
             } else {
                 emptyList()
             },
-            mediaSelectedPlayer = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaSelectedPlayer = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 resolveStoredMediaSelectedPlayer(
                     selectedPlayers = state.selectedMediaPlayers,
                     currentSelectedPlayer = state.selectedMediaPlayer
@@ -2001,19 +2001,19 @@ internal fun applyWidgetSelectionChanges(
             } else {
                 ""
             },
-            mediaAutoPlayOnInit = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaAutoPlayOnInit = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 state.mediaAutoPlayOnInit
             } else {
                 false
             },
-            mediaAutoPlayOnlyWhenEngineRunning = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaAutoPlayOnlyWhenEngineRunning = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 state.mediaAutoPlayOnlyWhenEngineRunning && state.mediaAutoPlayOnInit
             } else {
                 false
             },
 
             // anymani: сохраняем опцию "Оставить плеер на переднем плане" и запускаем уже независимо от автозапуска плеера
-            mediaKeepPlayerForeground = if (state.selectedDataKey == MUSIC_WIDGET_DATA_KEY) {
+            mediaKeepPlayerForeground = if (isMusicWidgetDataKey(state.selectedDataKey)) {
                 state.mediaKeepPlayerForeground
             } else {
                 false

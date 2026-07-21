@@ -204,7 +204,7 @@ adb shell pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS
 
 `DashboardWidgetRenderer` — центральный `when (widget.dataKey)`:
 
-- **Кастомные** ветки: музыка, поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д.
+- **Кастомные** ветки: музыка (полный и «только кнопки» H/V), поездка, режим вождения, HTTP-запрос, климат, сиденья и т.д.
 - **`else`** → `DashboardWidgetItem` — универсальная плитка «заголовок + значение» из `TboxDataProvider`.
 
 Источники данных:
