@@ -9,6 +9,7 @@
     <string name="action_clear">Очистить</string>
     <string name="action_close">Закрыть</string>
     <string name="action_configure">Настроить</string>
+    <string name="action_copy">Копировать</string>
     <string name="action_send">Отправить</string>
     <string name="action_get_all_sms">Получить все SMS</string>
 
@@ -280,6 +281,31 @@
     <string name="modem_mode_disabled">Выключен</string>
 
     <string name="settings_network_control_title">Настройки контроля сети</string>
+    <string name="settings_permissions_button">Разрешения</string>
+    <string name="settings_permissions_button_desc">Статус специальных доступов Android и подсказки по выдаче через ADB</string>
+    <string name="permissions_dialog_title">Разрешения приложения</string>
+    <string name="permissions_dialog_intro">Выдайте нужные доступы для используемых функций. Статус обновляется после возврата из настроек Android. Необязательные пункты можно пропустить и открыть этот список позже из «Настройки».</string>
+    <string name="permissions_status_granted">Выдано</string>
+    <string name="permissions_status_missing">Нет</string>
+    <string name="permissions_action_grant">Выдать / открыть настройки</string>
+    <string name="permissions_adb_copied">Команда ADB скопирована</string>
+    <string name="permissions_open_settings_failed">Не удалось открыть настройки Android</string>
+    <string name="permissions_overlay_title">Поверх других окон</string>
+    <string name="permissions_overlay_desc">Нужно для плавающих панелей и оконного режима главного экрана поверх других приложений.</string>
+    <string name="permissions_write_settings_title">Изменение системных настроек</string>
+    <string name="permissions_write_settings_desc">Для виджетов «Тема день/ночь» и «Регулировка зеркал» (запись штатных ключей ГУ). Включайте вместе с WRITE_SECURE_SETTINGS по ADB.</string>
+    <string name="permissions_write_secure_title">WRITE_SECURE_SETTINGS (ADB)</string>
+    <string name="permissions_write_secure_desc">Защищённое разрешение: через настройки Android не выдаётся. Нужно для тех же виджетов день/ночь и зеркал. Выполните команду на ПК с подключённым ГУ:</string>
+    <string name="permissions_usage_stats_title">Доступ к данным об использовании</string>
+    <string name="permissions_usage_stats_desc">Для скрытия или принудительного показа плавающих панелей в зависимости от активного приложения.</string>
+    <string name="permissions_notification_listener_title">Доступ к уведомлениям</string>
+    <string name="permissions_notification_listener_desc">Для музыкального виджета: название трека и управление воспроизведением.</string>
+    <string name="permissions_install_packages_title">Установка из неизвестных источников</string>
+    <string name="permissions_install_packages_desc">Для установки обновлений APK из вкладки «Обновление».</string>
+    <string name="permissions_storage_title">Хранилище / доступ к файлам</string>
+    <string name="permissions_storage_desc">Экспорт резервных копий и логов, сохранение файлов, выбор обоев главного экрана.</string>
+    <string name="permissions_location_title">Геолокация</string>
+    <string name="permissions_location_desc">Системный доступ к местоположению (в т.ч. для функций, связанных с геопозицией на ГУ). Данные GPS с TBox по UDP работают отдельно и этим разрешением не управляются.</string>
     <string name="settings_hu_type_title">Тип ГУ и стек CAN</string>
     <string name="settings_hu_type_desc">Android 9 использует mbCAN. Android 10 переводит CAN-управление на новый стек прошивки (без mbCAN).</string>
     <string name="settings_hu_type_android9">ГУ с Android 9</string>

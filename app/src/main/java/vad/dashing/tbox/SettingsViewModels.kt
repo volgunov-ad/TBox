@@ -202,6 +202,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         _mainScreenPanelDeleteInProgressId.asStateFlow()
     private var latestDashboardWidgetsConfig: List<FloatingDashboardWidgetConfig> = emptyList()
 
+    private val _showPermissionsDialog = MutableStateFlow(false)
+    val showPermissionsDialog: StateFlow<Boolean> = _showPermissionsDialog.asStateFlow()
+
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
         .stateIn(
             scope = viewModelScope,
@@ -1119,6 +1122,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         settingsManager.preThemeActivationFlush = preThemeActivationFlushHook
         ThemeActivationCoordinator.markMainScreenUiReady()
         viewModelScope.launch {
+            if (!settingsManager.permissionsIntroSeenFlow.first()) {
+                _showPermissionsDialog.value = true
+            }
+        }
+        viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
             selectedFloatingDashboardIdState.value =
                 storedConfigs.firstOrNull()?.id ?: DEFAULT_FLOATING_DASHBOARD_ID
@@ -1447,6 +1455,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveExpertModeSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveExpertModeSetting(enabled)
+        }
+    }
+
+    fun openPermissionsDialog() {
+        _showPermissionsDialog.value = true
+    }
+
+    fun dismissPermissionsDialog() {
+        _showPermissionsDialog.value = false
+        viewModelScope.launch {
+            settingsManager.savePermissionsIntroSeen(true)
         }
     }
 

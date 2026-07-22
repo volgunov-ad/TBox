@@ -350,6 +350,25 @@ fun SettingsTabContent(
             .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
+        Button(
+            onClick = rememberWrappedOnClick { settingsViewModel.openPermissionsDialog() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_permissions_button),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        Text(
+            text = stringResource(R.string.settings_permissions_button_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
         SettingsTitle(stringResource(R.string.settings_hu_type_title))
         Text(
             text = stringResource(R.string.settings_hu_type_desc),

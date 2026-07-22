@@ -466,6 +466,9 @@ class SettingsManager(private val context: Context) {
         private val WIDGET_SHOW_LOC_INDICATOR = booleanPreferencesKey("${KEY_PREFIX}widget_show_loc_indicator")
         private val MOCK_LOCATION = booleanPreferencesKey("${KEY_PREFIX}mock_location")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
+        /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
+        private val PERMISSIONS_INTRO_SEEN_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}permissions_intro_seen")
         private val LEFT_MENU_VISIBLE = booleanPreferencesKey("${KEY_PREFIX}left_menu_visible")
         private val MAIN_SCREEN_OPEN_ON_BOOT_KEY =
             booleanPreferencesKey("${KEY_PREFIX}main_screen_open_on_boot")
@@ -829,6 +832,10 @@ class SettingsManager(private val context: Context) {
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[EXPERT_MODE] ?: false }
+        .distinctUntilChanged()
+
+    val permissionsIntroSeenFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[PERMISSIONS_INTRO_SEEN_KEY] ?: false }
         .distinctUntilChanged()
 
     val leftMenuVisibleFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1451,6 +1458,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveExpertModeSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[EXPERT_MODE] = enabled
+        }
+    }
+
+    suspend fun savePermissionsIntroSeen(seen: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PERMISSIONS_INTRO_SEEN_KEY] = seen
         }
     }
 
