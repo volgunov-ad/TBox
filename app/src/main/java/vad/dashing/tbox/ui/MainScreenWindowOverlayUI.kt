@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -40,29 +41,32 @@ fun MainScreenWindowOverlayUI(
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
+    val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
-        MainScreen(
-            tboxViewModel = tboxViewModel,
-            canViewModel = canViewModel,
-            appDataViewModel = appDataViewModel,
-            settingsViewModel = settingsViewModel,
-            onOpenConsole = {
-                settingsViewModel.saveSelectedTab(
-                    LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
-                )
-                FreeformLaunchHelper.exitWindowModeToFullscreen(context.applicationContext)
-            },
-            onTboxRestart = onRebootTbox,
-            onTripFinishAndStart = onTripFinishAndStart,
-            windowMode = true,
-            onExitWindowMode = {
-                FreeformLaunchHelper.exitWindowMode(context.applicationContext)
-            },
-            onExitWindowModeToFullscreen = {
-                FreeformLaunchHelper.exitWindowModeToFullscreen(context.applicationContext)
-            },
-            modifier = Modifier.fillMaxSize(),
-        )
+        CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
+            MainScreen(
+                tboxViewModel = tboxViewModel,
+                canViewModel = canViewModel,
+                appDataViewModel = appDataViewModel,
+                settingsViewModel = settingsViewModel,
+                onOpenConsole = {
+                    settingsViewModel.saveSelectedTab(
+                        LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
+                    )
+                    FreeformLaunchHelper.exitWindowModeToFullscreen(context.applicationContext)
+                },
+                onTboxRestart = onRebootTbox,
+                onTripFinishAndStart = onTripFinishAndStart,
+                windowMode = true,
+                onExitWindowMode = {
+                    FreeformLaunchHelper.exitWindowMode(context.applicationContext)
+                },
+                onExitWindowModeToFullscreen = {
+                    FreeformLaunchHelper.exitWindowModeToFullscreen(context.applicationContext)
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
