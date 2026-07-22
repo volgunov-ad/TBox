@@ -1535,6 +1535,11 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMainScreenOpenOnBoot(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMainScreenOpenOnBoot(enabled)
+            TboxRepository.addLog(
+                "INFO",
+                "Boot UI",
+                "Setting mainScreenOpenOnBoot=$enabled",
+            )
         }
     }
 

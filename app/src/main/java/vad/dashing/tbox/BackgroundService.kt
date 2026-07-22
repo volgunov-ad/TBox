@@ -169,6 +169,11 @@ class BackgroundService : Service() {
     private var mbCanDebugProbeJob: Job? = null
     /** Serializes delayed / repeated "open MainActivity" commands: each new request replaces the previous. */
     private var openMainActivityJob: Job? = null
+    /**
+     * Boot-time «open main screen» episode (retries + pending across late BOOT_COMPLETED).
+     * Independent of [openMainActivityJob] and of the TBox startup pipeline.
+     */
+    private var bootOpenMainActivityJob: Job? = null
     /** Cancels in-flight [ACTION_START] bootstrap if [ACTION_STOP] runs mid-startup. */
     private var serviceStartupJob: Job? = null
     private var infraBootstrapJob: Job? = null
@@ -760,10 +765,23 @@ class BackgroundService : Service() {
         ensureServiceInfraReady()
         when (intent?.action) {
             ACTION_START -> {
+                val startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false)
+                val bootSource = intent.getStringExtra(EXTRA_START_SOURCE_ACTION)
+                    ?.takeIf { it.isNotBlank() }
+                if (startFromBoot) {
+                    MainScreenBootOpenStore.markPending(this, bootSource)
+                    TboxRepository.addLog(
+                        "INFO",
+                        "Boot UI",
+                        "Pending open main screen (source: ${bootSource ?: "?"})",
+                    )
+                    ensureBootOpenMainEpisode(forceRestart = true)
+                } else {
+                    // Sticky / late start: resume unfinished boot-open episode if still pending.
+                    ensureBootOpenMainEpisode(forceRestart = false)
+                }
                 if (!kickoffStart) return
-                launchServiceStartupPipeline(
-                    startFromBoot = intent.getBooleanExtra(EXTRA_START_FROM_BOOT, false),
-                )
+                launchServiceStartupPipeline()
             }
             ACTION_RESTART -> {
                 if (isRunning) {
@@ -776,7 +794,7 @@ class BackgroundService : Service() {
                     }
                     startForeground(NOTIFICATION_ID, notification)
                     TboxRepository.addLog("INFO", "Service", "Restart service")
-                    launchServiceStartupPipeline(startFromBoot = false)
+                    launchServiceStartupPipeline()
                 }
             }
             ACTION_RELOAD_TRIPS_FROM_STORE -> {
@@ -1067,6 +1085,9 @@ class BackgroundService : Service() {
         tripsFromDiskReady.set(false)
         openMainActivityJob?.cancel()
         openMainActivityJob = null
+        bootOpenMainActivityJob?.cancel()
+        bootOpenMainActivityJob = null
+        MainScreenBootOpenStore.clearPending(this)
         isRunning = false
         TboxRepository.addLog("INFO", "Service", "Stop service")
         stopNetUpdater()
@@ -1090,7 +1111,7 @@ class BackgroundService : Service() {
         servicePhase = ServiceLifecyclePhase.Idle
     }
 
-    private fun launchServiceStartupPipeline(startFromBoot: Boolean) {
+    private fun launchServiceStartupPipeline() {
         serviceStartupJob?.cancel()
         serviceStartupJob = scope.launch(exceptionHandler) {
             try {
@@ -1129,9 +1150,7 @@ class BackgroundService : Service() {
                 TripTelemetryRepository.start(scope)
                 startFuelCalibratedLitersWatcher()
                 timingMark("startup_listeners")
-                if (startFromBoot) {
-                    maybeOpenMainScreenAfterBootSuspend()
-                }
+                // Boot open-main runs via [ensureBootOpenMainEpisode] (early, not here).
                 TripRepository.setTripsProcessingEnabled(true)
                 servicePhase = ServiceLifecyclePhase.Running
                 timingMark("startup_running")
@@ -3731,7 +3750,8 @@ class BackgroundService : Service() {
             mainJob, periodicJob, apnJob, appCmdJob, crtCmdJob, ssmCmdJob,
             swdCmdJob, locCmdJob, apnCmdJob, sendATJob, humJob,
             modemModeJob, checkConnectionJob, tboxClientReconnectJob, versionsJob, generalStateBroadcastJob,
-            settingsListenerJob, usageStatsFloatingHideJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob, openMainActivityJob
+            settingsListenerJob, usageStatsFloatingHideJob, dataListenerJob, getSMSJob, mbCanDebugProbeJob,
+            openMainActivityJob, bootOpenMainActivityJob,
         ).forEach { job ->
             job?.cancel()
         }
@@ -3773,23 +3793,127 @@ class BackgroundService : Service() {
             if (delayMs > 0) {
                 delay(delayMs)
             }
-            suspend fun tryBringMainToFront() {
-                withContext(Dispatchers.Main) {
-                    try {
-                        val launchIntent =
-                            MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
-                        startActivity(launchIntent)
-                    } catch (e: Exception) {
-                        Log.e("BackgroundService", "Open MainActivity failed", e)
-                        TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")
-                    }
-                }
-            }
-            tryBringMainToFront()
+            tryBringMainActivityToFront()
             delay(OPEN_MAIN_ACTIVITY_VERIFY_DELAY_MS)
             if (!MainActivityForegroundTracker.isMainActivityInForeground.value) {
-                tryBringMainToFront()
+                tryBringMainActivityToFront()
             }
+        }
+    }
+
+    private suspend fun tryBringMainActivityToFront() {
+        withContext(Dispatchers.Main) {
+            try {
+                val launchIntent =
+                    MainActivityIntentHelper.createBringToFrontIntent(this@BackgroundService)
+                startActivity(launchIntent)
+            } catch (e: Exception) {
+                Log.e("BackgroundService", "Open MainActivity failed", e)
+                TboxRepository.addLog("ERROR", "UI", "Open MainActivity: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Runs (or resumes) the boot open-main episode when [MainScreenBootOpenStore] is pending.
+     * Starts early after service kickoff / late BOOT_COMPLETED — not gated on TBox startup.
+     */
+    private fun ensureBootOpenMainEpisode(forceRestart: Boolean) {
+        if (!MainScreenBootOpenStore.isPending(this)) return
+        if (!forceRestart && bootOpenMainActivityJob?.isActive == true) return
+        bootOpenMainActivityJob?.cancel()
+        bootOpenMainActivityJob = scope.launch(exceptionHandler) {
+            runBootOpenMainEpisode()
+        }
+    }
+
+    private suspend fun runBootOpenMainEpisode() {
+        try {
+            if (!MainScreenBootOpenStore.isPending(this@BackgroundService)) return
+            val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
+            TboxRepository.addLog(
+                "INFO",
+                "Boot UI",
+                "Read mainScreenOpenOnBoot=$enabled",
+            )
+            if (!enabled) {
+                MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                TboxRepository.addLog("INFO", "Boot UI", "Open main on boot disabled; clear pending")
+                return
+            }
+            val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
+            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
+            val source = MainScreenBootOpenStore.sourceAction(this@BackgroundService)
+                .ifBlank { "?" }
+            TboxRepository.addLog(
+                "INFO",
+                "Boot UI",
+                "Open main screen episode start (source: $source, delay: ${delaySeconds}s)",
+            )
+            if (delaySeconds > 0) {
+                delay(delaySeconds * 1000L)
+            }
+            var attempt = 0
+            while (
+                currentCoroutineContext().isActive &&
+                    MainScreenBootOpenStore.isPending(this@BackgroundService)
+            ) {
+                val deadline = MainScreenBootOpenStore.deadlineElapsedRealtimeMs(this@BackgroundService)
+                if (MainScreenBootOpenPolicy.isEpisodeExpired(SystemClock.elapsedRealtime(), deadline)) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog("WARN", "Boot UI", "Open main screen episode expired")
+                    return
+                }
+                if (MainActivityForegroundTracker.isMainActivityInForeground.value) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog("INFO", "Boot UI", "Main already foreground; done")
+                    return
+                }
+                val gap = MainScreenBootOpenPolicy.delayBeforeAttemptMs(attempt)
+                if (gap == null) {
+                    // Schedule exhausted: keep probing until episode deadline.
+                    delay(MainScreenBootOpenPolicy.RETRY_GAPS_MS.last())
+                } else if (gap > 0L) {
+                    delay(gap)
+                }
+                if (!MainScreenBootOpenStore.isPending(this@BackgroundService)) return
+                if (MainScreenBootOpenPolicy.isEpisodeExpired(
+                        SystemClock.elapsedRealtime(),
+                        MainScreenBootOpenStore.deadlineElapsedRealtimeMs(this@BackgroundService),
+                    )
+                ) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog("WARN", "Boot UI", "Open main screen episode expired")
+                    return
+                }
+                if (MainActivityForegroundTracker.isMainActivityInForeground.value) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog("INFO", "Boot UI", "Main already foreground; done")
+                    return
+                }
+                tryBringMainActivityToFront()
+                delay(MainScreenBootOpenPolicy.VERIFY_AFTER_LAUNCH_MS)
+                if (MainActivityForegroundTracker.isMainActivityInForeground.value) {
+                    MainScreenBootOpenStore.clearPending(this@BackgroundService)
+                    TboxRepository.addLog(
+                        "INFO",
+                        "Boot UI",
+                        "Open main screen ok (attempt ${attempt + 1})",
+                    )
+                    return
+                }
+                attempt++
+                TboxRepository.addLog(
+                    "INFO",
+                    "Boot UI",
+                    "Open main screen not foreground yet (attempt $attempt)",
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("BackgroundService", "Open main screen after boot failed", e)
+            TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")
         }
     }
 
@@ -4931,22 +5055,5 @@ class BackgroundService : Service() {
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
         Log.e("BackgroundService", "Coroutine error", throwable)
         TboxRepository.addLog("ERROR", "Coroutine", "Error: ${throwable.message}")
-    }
-
-    /**
-     * After boot-time service start: once the data listener is running, optionally bring
-     * [MainActivity] to the foreground on the home main screen (tab 100) after a short delay.
-     */
-    private suspend fun maybeOpenMainScreenAfterBootSuspend() {
-        try {
-            val enabled = settingsManager.mainScreenOpenOnBootFlow.first()
-            if (!enabled) return
-            val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
-            settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
-            scheduleOpenMainActivity(delaySeconds.toLong() * 1000L)
-        } catch (e: Exception) {
-            Log.e("BackgroundService", "Open main screen after boot failed", e)
-            TboxRepository.addLog("ERROR", "Boot UI", "Open main screen: ${e.message}")
-        }
     }
 }
