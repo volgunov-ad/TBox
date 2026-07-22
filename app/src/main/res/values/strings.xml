@@ -328,7 +328,7 @@
     <string name="settings_floating_usage_stats_hide_section_body">Слева — приложения, при которых справа отмеченные панели временно скрываются</string>
     <string name="settings_floating_usage_stats_show_section_title">Показывать панели</string>
     <string name="settings_floating_usage_stats_show_section_body">Слева — приложения, при которых справа отмеченные панели показываются поверх других окон, даже если для панели выключено «Показывать плавающую панель». Когда активно другое приложение, снова действует обычная настройка вкл/выкл</string>
-    <string name="settings_floating_usage_stats_hide_permission_hint">Без разрешения на статистику использования скрытие работать не будет</string>
+    <string name="settings_floating_usage_stats_hide_permission_hint">Без разрешения «Доступ к данным об использовании» скрытие работать не будет</string>
     <string name="settings_floating_usage_stats_open_usage_settings">Открыть настройки доступа к статистике</string>
     <string name="settings_floating_usage_stats_hide_column_apps">Приложения</string>
     <string name="settings_floating_usage_stats_hide_column_panels">Плавающие панели</string>
