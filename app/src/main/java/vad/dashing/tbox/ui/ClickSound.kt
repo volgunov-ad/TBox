@@ -7,7 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -106,19 +108,34 @@ fun Modifier.combinedClickableWithSound(
     val indication = LocalIndication.current
     val play = rememberPlaySystemClickSound()
     val notifyPanelTileTap = LocalNotifyPanelTileTap.current
-    val wrappedClick = remember(onClick, play, notifyPanelTileTap) {
+    val onClickLatest by rememberUpdatedState(onClick)
+    val onLongClickLatest by rememberUpdatedState(onLongClick)
+    val onDoubleClickLatest by rememberUpdatedState(onDoubleClick)
+    val notifyPanelTileTapLatest by rememberUpdatedState(notifyPanelTileTap)
+    val hasDoubleClick = onDoubleClick != null
+    val wrappedClick = remember(play) {
         {
             play()
-            onClick()
-            notifyPanelTileTap()
+            onClickLatest()
+            notifyPanelTileTapLatest()
         }
     }
-    val wrappedDouble = if (onDoubleClick != null) {
-        remember(onDoubleClick, play, notifyPanelTileTap) {
+    val wrappedDouble = if (hasDoubleClick) {
+        remember(play) {
             {
                 play()
-                onDoubleClick()
-                notifyPanelTileTap()
+                onDoubleClickLatest?.invoke()
+                notifyPanelTileTapLatest()
+            }
+        }
+    } else {
+        null
+    }
+    val wrappedLong = if (onLongClick != null) {
+        remember {
+            {
+                onLongClickLatest?.invoke()
+                Unit
             }
         }
     } else {
@@ -131,7 +148,7 @@ fun Modifier.combinedClickableWithSound(
         onClickLabel = onClickLabel,
         role = role,
         onLongClickLabel = onLongClickLabel,
-        onLongClick = onLongClick,
+        onLongClick = wrappedLong,
         onDoubleClick = wrappedDouble,
         onClick = wrappedClick,
     )

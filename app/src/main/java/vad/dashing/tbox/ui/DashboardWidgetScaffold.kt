@@ -39,19 +39,27 @@ fun DashboardWidgetScaffold(
     val useCardClickable = resolvedInteractionPolicy.mode == DashboardWidgetInteractionMode.STANDARD
     val playClick = rememberPlaySystemClickSound()
     val notifyPanelTileTap = LocalNotifyPanelTileTap.current
-    val wrappedOnClick = remember(onClick, playClick, notifyPanelTileTap) {
+    // Stable wrappers: unstable onClick/onDoubleClick/notify lambdas must not recreate
+    // combinedClickable mid-gesture (trip tiles recompose every second and used to reset
+    // the double-tap detector after LocalNotifyPanelTileTap was added as a remember key).
+    val onClickLatest by rememberUpdatedState(onClick)
+    val onLongClickLatest by rememberUpdatedState(onLongClick)
+    val onDoubleClickLatest by rememberUpdatedState(onDoubleClick)
+    val notifyPanelTileTapLatest by rememberUpdatedState(notifyPanelTileTap)
+    val hasDoubleClick = onDoubleClick != null
+    val wrappedOnClick = remember(playClick) {
         {
             playClick()
-            onClick()
-            notifyPanelTileTap()
+            onClickLatest()
+            notifyPanelTileTapLatest()
         }
     }
-    val wrappedOnDouble = if (onDoubleClick != null) {
-        remember(onDoubleClick, playClick, notifyPanelTileTap) {
+    val wrappedOnDouble = if (hasDoubleClick) {
+        remember(playClick) {
             {
                 playClick()
-                onDoubleClick()
-                notifyPanelTileTap()
+                onDoubleClickLatest?.invoke()
+                notifyPanelTileTapLatest()
             }
         }
     } else {
@@ -59,8 +67,6 @@ fun DashboardWidgetScaffold(
     }
     val cardInteractionSource = remember { MutableInteractionSource() }
     val cardIndication = LocalIndication.current
-    val onClickForPointer by rememberUpdatedState(onClick)
-    val notifyPanelTileTapForPointer by rememberUpdatedState(notifyPanelTileTap)
     Card(
         modifier = modifier
             .fillMaxSize()
@@ -69,7 +75,7 @@ fun DashboardWidgetScaffold(
                 indication = cardIndication,
                 enabled = useCardClickable,
                 onClick = wrappedOnClick,
-                onLongClick = onLongClick,
+                onLongClick = { onLongClickLatest() },
                 onDoubleClick = wrappedOnDouble,
             ),
         elevation = CardDefaults.cardElevation(elevation),
@@ -94,11 +100,7 @@ fun DashboardWidgetScaffold(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(
-                                resolvedInteractionPolicy,
-                                onClick,
-                                onLongClick
-                            ) {
+                            .pointerInput(resolvedInteractionPolicy) {
                                 detectTapGestures(
                                     onTap = { offset ->
                                         if (resolvedInteractionPolicy.isActionAllowed(
@@ -108,8 +110,8 @@ fun DashboardWidgetScaffold(
                                             )
                                         ) {
                                             playClick()
-                                            onClickForPointer()
-                                            notifyPanelTileTapForPointer()
+                                            onClickLatest()
+                                            notifyPanelTileTapLatest()
                                         }
                                     },
                                     onLongPress = { offset ->
@@ -119,7 +121,7 @@ fun DashboardWidgetScaffold(
                                                 height = size.height.toFloat()
                                             )
                                         ) {
-                                            onLongClick()
+                                            onLongClickLatest()
                                         }
                                     }
                                 )

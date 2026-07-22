@@ -213,18 +213,22 @@ fun FloatingDashboard(
     val collapseEdge = panelConfig.collapseEdgeOrNone()
     val panelCollapsed = PanelCollapseStates.isCollapsed(panelCollapseStates, panelId)
     val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
-    val notifyPanelTileTap: () -> Unit = {
-        if (!isEditMode &&
-            panelConfig.collapseOnTileTap &&
-            collapseEdge != PanelCollapseEdge.NONE
-        ) {
-            collapseAfterTapJob?.cancel()
-            val delaySec = normalizePanelCollapseOnTileTapDelaySec(
-                panelConfig.collapseOnTileTapDelaySec,
-            )
-            collapseAfterTapJob = collapseAfterTapScope.launch {
-                delay(delaySec * 1_000L)
-                settingsViewModel.setPanelCollapsed(panelId, true)
+    val collapseOnTileTapLatest by rememberUpdatedState(panelConfig.collapseOnTileTap)
+    val collapseEdgeLatest by rememberUpdatedState(collapseEdge)
+    val collapseDelaySecLatest by rememberUpdatedState(panelConfig.collapseOnTileTapDelaySec)
+    val isEditModeLatest by rememberUpdatedState(isEditMode)
+    val notifyPanelTileTap = remember(panelId, settingsViewModel, collapseAfterTapScope) {
+        {
+            if (!isEditModeLatest &&
+                collapseOnTileTapLatest &&
+                collapseEdgeLatest != PanelCollapseEdge.NONE
+            ) {
+                collapseAfterTapJob?.cancel()
+                val delaySec = normalizePanelCollapseOnTileTapDelaySec(collapseDelaySecLatest)
+                collapseAfterTapJob = collapseAfterTapScope.launch {
+                    delay(delaySec * 1_000L)
+                    settingsViewModel.setPanelCollapsed(panelId, true)
+                }
             }
         }
     }

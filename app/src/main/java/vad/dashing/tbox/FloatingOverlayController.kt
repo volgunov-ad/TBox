@@ -720,6 +720,11 @@ internal class FloatingOverlayController(
             if (lifecycleState != Lifecycle.State.DESTROYED &&
                 (!lifecycleOwner.isInitialized || !lifecycleState.isAtLeast(Lifecycle.State.STARTED))
             ) {
+                // Step through CREATED — jumping INITIALIZED → STARTED can throw and leave
+                // the shared overlay owner stuck below STARTED (breaks collectors / double-taps).
+                if (!lifecycleState.isAtLeast(Lifecycle.State.CREATED)) {
+                    lifecycleOwner.setCurrentState(Lifecycle.State.CREATED)
+                }
                 lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
             }
 

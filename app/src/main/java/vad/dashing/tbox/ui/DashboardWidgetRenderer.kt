@@ -23,6 +23,7 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.normalizeTripWidgetSource
+import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
@@ -986,9 +987,11 @@ fun DashboardWidgetRenderer(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
+                    // Read TripRepository directly: AppDataViewModel.activeTrip is stateIn
+                    // (WhileSubscribed) and can lag behind the live active trip on overlays.
                     if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
                         TRIP_WIDGET_SOURCE_CURRENT &&
-                        appDataViewModel.activeTrip.value?.isCurrentActive == true
+                        TripRepository.activeTrip.value?.isCurrentActive == true
                     ) {
                         onTripFinishAndStart()
                     }
@@ -1015,7 +1018,7 @@ fun DashboardWidgetRenderer(
                 onDoubleClick = {
                     if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
                         TRIP_WIDGET_SOURCE_CURRENT &&
-                        appDataViewModel.activeTrip.value?.isCurrentActive == true
+                        TripRepository.activeTrip.value?.isCurrentActive == true
                     ) {
                         onTripFinishAndStart()
                     }

@@ -311,18 +311,22 @@ fun MainScreenDashboardPanel(
     val collapseEdge = panel.collapseEdgeOrNone()
     val panelCollapsed = PanelCollapseStates.isCollapsed(panelCollapseStates, panel.id)
     val effectiveCollapsed = panelCollapsed && !isEditMode && collapseEdge != PanelCollapseEdge.NONE
-    val notifyPanelTileTap: () -> Unit = {
-        if (!isEditMode &&
-            panel.collapseOnTileTap &&
-            collapseEdge != PanelCollapseEdge.NONE
-        ) {
-            collapseAfterTapJob?.cancel()
-            val delaySec = normalizePanelCollapseOnTileTapDelaySec(
-                panel.collapseOnTileTapDelaySec,
-            )
-            collapseAfterTapJob = collapseAfterTapScope.launch {
-                delay(delaySec * 1_000L)
-                settingsViewModel.setPanelCollapsed(panel.id, true)
+    val collapseOnTileTapLatest by rememberUpdatedState(panel.collapseOnTileTap)
+    val collapseEdgeLatest by rememberUpdatedState(collapseEdge)
+    val collapseDelaySecLatest by rememberUpdatedState(panel.collapseOnTileTapDelaySec)
+    val isEditModeLatest by rememberUpdatedState(isEditMode)
+    val notifyPanelTileTap = remember(panel.id, settingsViewModel, collapseAfterTapScope) {
+        {
+            if (!isEditModeLatest &&
+                collapseOnTileTapLatest &&
+                collapseEdgeLatest != PanelCollapseEdge.NONE
+            ) {
+                collapseAfterTapJob?.cancel()
+                val delaySec = normalizePanelCollapseOnTileTapDelaySec(collapseDelaySecLatest)
+                collapseAfterTapJob = collapseAfterTapScope.launch {
+                    delay(delaySec * 1_000L)
+                    settingsViewModel.setPanelCollapsed(panel.id, true)
+                }
             }
         }
     }
