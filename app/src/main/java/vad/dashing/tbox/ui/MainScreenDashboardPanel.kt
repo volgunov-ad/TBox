@@ -40,6 +40,7 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardViewModel
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
+import vad.dashing.tbox.MainScreenPanelInterestIds
 import vad.dashing.tbox.PanelCollapseEdge
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.PanelCollapseStates
@@ -164,21 +165,11 @@ fun MainScreenDashboardPanel(
     val widgetConfigs = panel.widgetsConfig
     val dashboardRows = panel.rows
     val dashboardCols = panel.cols
-    // Distinct from fullscreen MainActivity: finishing the activity must not clear
-    // media / mbCAN–VHAL interest still held by the window-mode overlay.
     val mediaSourceId = remember(panel.id, windowMode) {
-        if (windowMode) {
-            "main-screen-window-dashboard-${panel.id}"
-        } else {
-            "main-screen-dashboard-${panel.id}"
-        }
+        MainScreenPanelInterestIds.mediaSourceId(panel.id, windowMode)
     }
     val mbCanInterestSourceId = remember(panel.id, windowMode) {
-        if (windowMode) {
-            "main-screen-window-${panel.id}"
-        } else {
-            "main-screen-${panel.id}"
-        }
+        MainScreenPanelInterestIds.mbCanInterestSourceId(panel.id, windowMode)
     }
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)

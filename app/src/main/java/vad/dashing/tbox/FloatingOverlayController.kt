@@ -611,13 +611,21 @@ internal class FloatingOverlayController(
         }
     }
 
-    private fun shouldShowFloatingOverlay(config: FloatingDashboardConfig, myPackageName: String): Boolean {
-        if (usageStatsOverlayRules.isUsageStatsForceHidden(config.id, myPackageName)) {
-            return false
-        }
-        if (config.enabled) return true
-        return usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPackageName)
-    }
+    private fun shouldShowFloatingOverlay(config: FloatingDashboardConfig, myPackageName: String): Boolean =
+        FloatingOverlayVisibility.shouldShowBySettingsAndUsageStats(
+            panelId = config.id,
+            enabled = config.enabled,
+            myPackageName = myPackageName,
+            rules = usageStatsOverlayRules,
+        )
+
+    private fun isFloatingPanelTemporarilyHidden(panelId: String, myPackageName: String): Boolean =
+        FloatingOverlayVisibility.isTemporarilyHidden(
+            panelId = panelId,
+            myPackageName = myPackageName,
+            hiddenFloatingPanelIds = hiddenFloatingPanelIds,
+            rules = usageStatsOverlayRules,
+        )
 
     private suspend fun openOverlay(config: FloatingDashboardConfig, myPackageName: String) {
         ensureWindowManager()
@@ -1011,10 +1019,6 @@ internal class FloatingOverlayController(
             }
         }
     }
-
-    private fun isFloatingPanelTemporarilyHidden(panelId: String, myPackageName: String): Boolean =
-        hiddenFloatingPanelIds.contains(panelId) ||
-            usageStatsOverlayRules.isUsageStatsForceHidden(panelId, myPackageName)
 
     /**
      * Updates usage-stats-driven visibility; [BackgroundService] calls this every poll before

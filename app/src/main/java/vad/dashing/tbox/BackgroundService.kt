@@ -902,7 +902,9 @@ class BackgroundService : Service() {
                             // Show again: restore config order among overlapping mounted panels.
                             overlayController.syncFloatingDashboards(
                                 floatingDashboards.value,
-                                reorderZOrder = revealing,
+                                reorderZOrder = FloatingOverlayVisibility.syncReorderZOrderAfterHideToggle(
+                                    revealing,
+                                ),
                                 closeImmediate = true,
                             )
                             overlayController.ensureFloatingDashboards(floatingDashboards.value)
@@ -1213,13 +1215,22 @@ class BackgroundService : Service() {
             }
 
             override fun onConnectionChanged(connected: Boolean) {
-                TboxRepository.addLog(
-                    "INFO",
-                    "TBox Proxy",
-                    "Bridge connection state: ${if (connected) "connected" else "disconnected"}"
-                )
-                if (!connected && TboxRepository.tboxConnected.value) {
-                    onTboxConnected(false)
+                try {
+                    TboxRepository.addLog(
+                        "INFO",
+                        "TBox Proxy",
+                        "Bridge connection state: ${if (connected) "connected" else "disconnected"}"
+                    )
+                    if (!connected && TboxRepository.tboxConnected.value) {
+                        onTboxConnected(false)
+                    }
+                } catch (e: Exception) {
+                    TboxRepository.addLog(
+                        "ERROR",
+                        "TBox Proxy",
+                        "Error handling bridge connection change: ${e.message}",
+                    )
+                    Log.e("TBox Proxy", "Error handling bridge connection change", e)
                 }
             }
         }
@@ -4809,84 +4820,99 @@ class BackgroundService : Service() {
     }
 
     private fun onTboxConnected(value: Boolean = false) {
-        if (value) {
-            packetSilenceChecks = 0
-            TboxRepository.addLog("INFO", "TBox connection", "TBox connected")
-            TboxRepository.updateTboxConnected(true)
+        try {
+            if (value) {
+                packetSilenceChecks = 0
+                TboxRepository.addLog("INFO", "TBox connection", "TBox connected")
+                TboxRepository.updateTboxConnected(true)
 
-            modemMode(-1)
+                modemMode(-1)
 
-            if (autoSuspendTboxSwd.value) {
-                sendControlTboxApplication("SWD", "SUSPEND")
-                suspendTboxSwdLastTime = System.currentTimeMillis()
-            }
-            if (autoSuspendTboxLoc.value) {
-                sendControlTboxApplication("LOC", "SUSPEND")
-                suspendTboxLocLastTime = System.currentTimeMillis()
-            }
-            if (autoSuspendTboxMdc.value) {
-                sendControlTboxApplication("MDC", "SUSPEND")
-                suspendTboxMdcLastTime = System.currentTimeMillis()
-            }
-            if (autoSuspendTboxApp.value) {
-                sendControlTboxApplication("APP", "SUSPEND")
-                suspendTboxAppLastTime = System.currentTimeMillis()
-            }
-
-            if (autoStopTboxApp.value) {
                 if (autoSuspendTboxSwd.value) {
-                    scope.launch {
-                        delay(5000)
+                    sendControlTboxApplication("SWD", "SUSPEND")
+                    suspendTboxSwdLastTime = System.currentTimeMillis()
+                }
+                if (autoSuspendTboxLoc.value) {
+                    sendControlTboxApplication("LOC", "SUSPEND")
+                    suspendTboxLocLastTime = System.currentTimeMillis()
+                }
+                if (autoSuspendTboxMdc.value) {
+                    sendControlTboxApplication("MDC", "SUSPEND")
+                    suspendTboxMdcLastTime = System.currentTimeMillis()
+                }
+                if (autoSuspendTboxApp.value) {
+                    sendControlTboxApplication("APP", "SUSPEND")
+                    suspendTboxAppLastTime = System.currentTimeMillis()
+                }
+
+                if (autoStopTboxApp.value) {
+                    if (autoSuspendTboxSwd.value) {
+                        scope.launch {
+                            delay(5000)
+                            sendControlTboxApplication("APP", "STOP")
+                            stopTboxAppLastTime = System.currentTimeMillis()
+                        }
+                    } else {
                         sendControlTboxApplication("APP", "STOP")
                         stopTboxAppLastTime = System.currentTimeMillis()
                     }
-                } else {
-                    sendControlTboxApplication("APP", "STOP")
-                    stopTboxAppLastTime = System.currentTimeMillis()
                 }
-            }
-            if (autoStopTboxMdc.value) {
-                if (autoSuspendTboxSwd.value) {
-                    scope.launch {
-                        delay(5000)
+                if (autoStopTboxMdc.value) {
+                    if (autoSuspendTboxSwd.value) {
+                        scope.launch {
+                            delay(5000)
+                            sendControlTboxApplication("MDC", "STOP")
+                            stopTboxMdcLastTime = System.currentTimeMillis()
+                        }
+                    } else {
                         sendControlTboxApplication("MDC", "STOP")
                         stopTboxMdcLastTime = System.currentTimeMillis()
                     }
-                } else {
-                    sendControlTboxApplication("MDC", "STOP")
-                    stopTboxMdcLastTime = System.currentTimeMillis()
                 }
-            }
 
-            if (autoPreventTboxRestart.value) {
-                swdPreventRestart()
-                preventRestartLastTime = System.currentTimeMillis()
+                if (autoPreventTboxRestart.value) {
+                    swdPreventRestart()
+                    preventRestartLastTime = System.currentTimeMillis()
+                }
+                /*if (updateVoltages.value) {
+                    crtGetPowVolInfo()
+                }*/
+                if (getCanFrame.value) {
+                    crtGetCanFrame()
+                }
+                /*if (getCycleSignal.value) {
+                    crtGetCycleSignal()
+                }*/
+                if (getLocData.value) {
+                    locSubscribe(true)
+                }
+                //crtGetHdmData()
+                val notification = createNotification("TBox connected")
+                startForeground(NOTIFICATION_ID, notification)
+            } else {
+                packetSilenceChecks = 0
+                TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
+                TboxRepository.resetConnectionData()
+                val notification = createNotification("TBox disconnected")
+                startForeground(NOTIFICATION_ID, notification)
             }
-            /*if (updateVoltages.value) {
-                crtGetPowVolInfo()
-            }*/
-            if (getCanFrame.value) {
-                crtGetCanFrame()
+            TboxRepository.updateTboxConnectionTime()
+            sendWidgetUpdate()
+        } catch (e: Exception) {
+            Log.e("TBox connection", "onTboxConnected($value) failed", e)
+            TboxRepository.addLog(
+                "ERROR",
+                "TBox connection",
+                "onTboxConnected($value) failed: ${e.message}",
+            )
+            // Best-effort: keep connected flag aligned even if side effects failed.
+            try {
+                TboxRepository.updateTboxConnected(value)
+                TboxRepository.updateTboxConnectionTime()
+            } catch (inner: Exception) {
+                Log.e("TBox connection", "Failed to update connected flag after error", inner)
             }
-            /*if (getCycleSignal.value) {
-                crtGetCycleSignal()
-            }*/
-            if (getLocData.value) {
-                locSubscribe(true)
-            }
-            //crtGetHdmData()
-            val notification = createNotification("TBox connected")
-            startForeground(NOTIFICATION_ID, notification)
         }
-        else {
-            packetSilenceChecks = 0
-            TboxRepository.addLog("WARN", "TBox connection", "TBox disconnected")
-            TboxRepository.resetConnectionData()
-            val notification = createNotification("TBox disconnected")
-            startForeground(NOTIFICATION_ID, notification)
-        }
-        TboxRepository.updateTboxConnectionTime()
-        sendWidgetUpdate()
     }
 
     private suspend fun Job?.awaitCompletionWithTimeout(timeoutMillis: Long = 5000): Boolean {
