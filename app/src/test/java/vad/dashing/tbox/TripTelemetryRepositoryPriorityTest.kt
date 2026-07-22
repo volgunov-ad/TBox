@@ -97,7 +97,25 @@ class TripTelemetryRepositoryPriorityTest {
     }
 
     @Test
-    fun accountingAccessorsNullWhenStaleButCachedValueRemains() {
+    fun accountingKeepsCacheWhileTboxPathAliveEvenIfSampleOld() {
+        TripTelemetryRepository.setTboxConnectedForAccountingTest(true)
+        TripTelemetryRepository.applyTboxFuelPercent(55u)
+        TripTelemetryRepository.updateFuelLevelPercentageFiltered(55u)
+        TripTelemetryRepository.applyTboxOdometer(12_000u)
+        TripTelemetryRepository.applyTboxSpeed(40f)
+        TripTelemetryRepository.applyTboxRpm(1500f)
+        val now = SystemClock.elapsedRealtime()
+        val later = now + TripTelemetryRepository.FRESHNESS_MS + 1L
+
+        assertEquals(55u, TripTelemetryRepository.accountingFuelLevelPercentageFiltered(later))
+        assertEquals(12_000u, TripTelemetryRepository.accountingOdometerKm(later))
+        assertEquals(40f, TripTelemetryRepository.accountingCarSpeed(later))
+        assertEquals(1500f, TripTelemetryRepository.accountingEngineRpm(later))
+    }
+
+    @Test
+    fun accountingNullOnlyWhenBothPathsDeadAndSampleOld() {
+        TripTelemetryRepository.setTboxConnectedForAccountingTest(false)
         TripTelemetryRepository.applyTboxFuelPercent(55u)
         TripTelemetryRepository.updateFuelLevelPercentageFiltered(55u)
         TripTelemetryRepository.applyTboxOdometer(12_000u)
@@ -106,24 +124,20 @@ class TripTelemetryRepositoryPriorityTest {
         val now = SystemClock.elapsedRealtime()
 
         assertEquals(55u, TripTelemetryRepository.accountingFuelLevelPercentageFiltered(now))
-        assertEquals(12_000u, TripTelemetryRepository.accountingOdometerKm(now))
-        assertEquals(40f, TripTelemetryRepository.accountingCarSpeed(now))
-        assertEquals(1500f, TripTelemetryRepository.accountingEngineRpm(now))
 
-        val staleAt = now + TripTelemetryRepository.FRESHNESS_MS + 1L
-        assertNull(TripTelemetryRepository.accountingFuelLevelPercentageFiltered(staleAt))
-        assertNull(TripTelemetryRepository.accountingOdometerKm(staleAt))
-        assertNull(TripTelemetryRepository.accountingCarSpeed(staleAt))
-        assertNull(TripTelemetryRepository.accountingEngineRpm(staleAt))
-        // Cached StateFlows keep last values for UI / disk (CDR untouched by this gate).
+        val later = now + TripTelemetryRepository.FRESHNESS_MS + 1L
+        // stop() left collectJob null → HU path dead; TBox override false → real source loss
+        assertNull(TripTelemetryRepository.accountingFuelLevelPercentageFiltered(later))
+        assertNull(TripTelemetryRepository.accountingOdometerKm(later))
+        assertNull(TripTelemetryRepository.accountingCarSpeed(later))
+        assertNull(TripTelemetryRepository.accountingEngineRpm(later))
         assertEquals(55u, TripTelemetryRepository.fuelLevelPercentageFiltered.value)
         assertEquals(12_000u, TripTelemetryRepository.odometerKm.value)
-        assertEquals(40f, TripTelemetryRepository.carSpeed.value)
-        assertEquals(1500f, TripTelemetryRepository.engineRpm.value)
     }
 
     @Test
     fun accountingFuelNullAfterDiskRestoreWithoutLiveFuelSample() {
+        TripTelemetryRepository.setTboxConnectedForAccountingTest(true)
         TripTelemetryRepository.updateFuelLevelPercentageFiltered(70u)
         TripTelemetryRepository.updateFuelLevelCalibratedLiters(35f)
         val now = SystemClock.elapsedRealtime()
@@ -134,7 +148,25 @@ class TripTelemetryRepositoryPriorityTest {
     }
 
     @Test
-    fun accountingGearboxOilNullWhenTboxTempStale() {
+    fun accountingGearboxOilKeptWhileTboxConnectedAfterSampleAges() {
+        TripTelemetryRepository.setTboxConnectedForAccountingTest(true)
+        val t0 = SystemClock.elapsedRealtime()
+        TripTelemetryRepository.noteTboxTempPriority(
+            TripTelemetryRepository.Signal.GearboxOilTemp,
+            t0,
+        )
+        assertEquals(
+            90,
+            TripTelemetryRepository.accountingGearboxOilTemperature(
+                90,
+                t0 + TripTelemetryRepository.FRESHNESS_MS + 1L,
+            ),
+        )
+    }
+
+    @Test
+    fun accountingGearboxOilNullWhenTboxDisconnectedAndSampleOld() {
+        TripTelemetryRepository.setTboxConnectedForAccountingTest(false)
         val t0 = SystemClock.elapsedRealtime()
         TripTelemetryRepository.noteTboxTempPriority(
             TripTelemetryRepository.Signal.GearboxOilTemp,

@@ -26,9 +26,11 @@ import vad.dashing.tbox.utils.InOutTemperatureNullDebounce
  *
  * After [FRESHNESS_MS] with no RPM from either source, forces RPM to 0 so trips can close.
  *
- * Cached StateFlows keep the last value for UI / disk restore; [BackgroundService] trip and
- * refuel accounting must use [accountingEngineRpm] / [accountingFuelLevelPercentageFiltered] /
- * etc., which return null when the signal has no fresh HU/TBox update (does not clear CDR).
+ * Cached StateFlows keep the last value for UI / disk restore. [BackgroundService] trip/refuel
+ * accounting uses [accountingEngineRpm] / etc.: keep cache while a **path is alive**
+ * (TBox UDP connected, or HU collectors running after a sample), even if the discrete reading
+ * (1 km / 1% / constant RPM or speed 0) is not re-emitted for >[FRESHNESS_MS]. Return null only
+ * on real source loss (both paths down / never sampled). Does not clear CDR.
  *
  * Filtered fuel % and calibrated liters live here only. Emits DEBUG `TripFuel` every
  * [DEBUG_SNAPSHOT_MS] via [TboxRepository.addLog].
@@ -38,6 +40,10 @@ object TripTelemetryRepository {
     const val TRIP_ACCOUNTING_SOURCE_ID: String = "trip-accounting-telemetry"
     private const val DEBUG_SNAPSHOT_MS: Long = 15_000L
     private const val DEBUG_TAG: String = "TripFuel"
+
+    /** Test override for [isTboxPathAliveForAccounting]; null = use [TboxRepository.tboxConnected]. */
+    @Volatile
+    private var tboxConnectedForAccountingTest: Boolean? = null
 
     private val tripSignals: Set<MbCanSignal> = setOf(
         MbCanSignal.EngineRpm,
@@ -294,11 +300,17 @@ object TripTelemetryRepository {
             lastTboxElapsedMs.fill(-1L)
         }
         a9EngineTempTboxOnlyForTest = null
+        tboxConnectedForAccountingTest = null
     }
 
     /** Visible for unit tests: force A9 TBox-only coolant policy (`true`) or A10 fallback (`false`). */
     internal fun setA9EngineTempTboxOnlyForTest(enabled: Boolean?) {
         a9EngineTempTboxOnlyForTest = enabled
+    }
+
+    /** Visible for unit tests: override TBox-connected path for accounting usability. */
+    internal fun setTboxConnectedForAccountingTest(connected: Boolean?) {
+        tboxConnectedForAccountingTest = connected
     }
 
     /** Visible for unit tests. */
@@ -340,61 +352,94 @@ object TripTelemetryRepository {
     }
 
     /**
-     * True when [signal] has a fresh HU or TBox sample within [FRESHNESS_MS] under the same
-     * priority rules as mixing (see class KDoc). Used by trip/refuel accounting; does not clear values.
+     * True when trip/refuel accounting may use the cached value for [signal].
+     * Fresh sample within [FRESHNESS_MS], or path still alive after an earlier sample
+     * (unchanged discrete readings stay usable). False only on real source loss.
      */
+    fun isSignalUsableForAccounting(
+        signal: Signal,
+        nowElapsedMs: Long = SystemClock.elapsedRealtime(),
+    ): Boolean {
+        val stamp = synchronized(lock) {
+            val huLast = lastHuElapsedMs[signal.ordinal]
+            val tboxLast = lastTboxElapsedMs[signal.ordinal]
+            if (activeSourceLocked(signal, nowElapsedMs) != null) return@synchronized "fresh"
+            when {
+                huLast < 0L && tboxLast < 0L -> "none"
+                huLast >= 0L && tboxLast >= 0L -> "both"
+                huLast >= 0L -> "hu"
+                else -> "tbox"
+            }
+        }
+        return when (stamp) {
+            "fresh" -> true
+            "none" -> false
+            "hu" -> isHuPathAliveForAccounting()
+            "tbox" -> isTboxPathAliveForAccounting()
+            "both" -> isHuPathAliveForAccounting() || isTboxPathAliveForAccounting()
+            else -> false
+        }
+    }
+
+    /** Alias used by older call sites / tests; same as [isSignalUsableForAccounting]. */
     fun isSignalFreshForAccounting(
         signal: Signal,
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
-    ): Boolean = synchronized(lock) {
-        activeSourceLocked(signal, nowElapsedMs) != null
-    }
+    ): Boolean = isSignalUsableForAccounting(signal, nowElapsedMs)
 
-    /** Cached RPM if fresh for accounting; otherwise null (StateFlow may still hold a last value). */
+    /** Cached RPM when usable for accounting; otherwise null (StateFlow may still hold a last value). */
     fun accountingEngineRpm(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Float? =
-        valueIfFresh(Signal.Rpm, _engineRpm.value, nowElapsedMs)
+        valueIfUsable(Signal.Rpm, _engineRpm.value, nowElapsedMs)
 
     fun accountingCarSpeed(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Float? =
-        valueIfFresh(Signal.Speed, _carSpeed.value, nowElapsedMs)
+        valueIfUsable(Signal.Speed, _carSpeed.value, nowElapsedMs)
 
     fun accountingOdometerKm(nowElapsedMs: Long = SystemClock.elapsedRealtime()): UInt? =
-        valueIfFresh(Signal.Odometer, _odometerKm.value, nowElapsedMs)
+        valueIfUsable(Signal.Odometer, _odometerKm.value, nowElapsedMs)
 
     /**
-     * Filtered % for trip/refuel steps only when raw [Signal.Fuel] is fresh.
+     * Filtered % for trip/refuel when fuel path is usable.
      * Disk-restored filtered values without a live fuel sample stay null here.
      */
     fun accountingFuelLevelPercentageFiltered(
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
-    ): UInt? = valueIfFresh(Signal.Fuel, _fuelLevelPercentageFiltered.value, nowElapsedMs)
+    ): UInt? = valueIfUsable(Signal.Fuel, _fuelLevelPercentageFiltered.value, nowElapsedMs)
 
     fun accountingFuelLevelCalibratedLiters(
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
-    ): Float? = valueIfFresh(Signal.Fuel, _fuelLevelCalibratedLiters.value, nowElapsedMs)
+    ): Float? = valueIfUsable(Signal.Fuel, _fuelLevelCalibratedLiters.value, nowElapsedMs)
 
     fun accountingOutsideTemperature(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Float? =
-        valueIfFresh(Signal.OutsideTemp, _outsideTemperature.value, nowElapsedMs)
+        valueIfUsable(Signal.OutsideTemp, _outsideTemperature.value, nowElapsedMs)
 
     fun accountingEngineTemperature(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Float? =
-        valueIfFresh(Signal.EngineTemp, _engineTemperature.value, nowElapsedMs)
+        valueIfUsable(Signal.EngineTemp, _engineTemperature.value, nowElapsedMs)
 
     /**
-     * Gearbox oil lives on [CanDataRepository]; pass its current value — returned only while
-     * [Signal.GearboxOilTemp] is fresh from TBox.
+     * Gearbox oil lives on [CanDataRepository]; pass its current value — returned while
+     * [Signal.GearboxOilTemp] is usable (TBox path alive or fresh sample).
      */
     fun accountingGearboxOilTemperature(
         cdrValue: Int?,
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
-    ): Int? = valueIfFresh(Signal.GearboxOilTemp, cdrValue, nowElapsedMs)
+    ): Int? = valueIfUsable(Signal.GearboxOilTemp, cdrValue, nowElapsedMs)
 
-    private fun <T> valueIfFresh(signal: Signal, value: T?, nowElapsedMs: Long): T? {
+    private fun <T> valueIfUsable(signal: Signal, value: T?, nowElapsedMs: Long): T? {
         if (value == null) return null
-        return if (isSignalFreshForAccounting(signal, nowElapsedMs)) value else null
+        return if (isSignalUsableForAccounting(signal, nowElapsedMs)) value else null
     }
+
+    private fun isTboxPathAliveForAccounting(): Boolean {
+        tboxConnectedForAccountingTest?.let { return it }
+        return TboxRepository.tboxConnected.value
+    }
+
+    /** HU collectors from [start] still running (mbCAN/VHAL path subscribed). */
+    private fun isHuPathAliveForAccounting(): Boolean = collectJob?.isActive == true
 
     /**
      * Active source label for [signal], or null if neither HU nor TBox is fresh.
-     * Must be called under [lock] or via [isSignalFreshForAccounting] / snapshot builder.
+     * Must be called under [lock].
      */
     private fun activeSourceLocked(signal: Signal, nowElapsedMs: Long): String? {
         val huLast = lastHuElapsedMs[signal.ordinal]
@@ -419,14 +464,17 @@ object TripTelemetryRepository {
 
     private fun maybeClearStaleRpm() {
         val now = SystemClock.elapsedRealtime()
-        val clear = synchronized(lock) {
+        val noFreshSample = synchronized(lock) {
             val huLast = lastHuElapsedMs[Signal.Rpm.ordinal]
             val tboxLast = lastTboxElapsedMs[Signal.Rpm.ordinal]
             val huFresh = huLast >= 0L && now - huLast <= FRESHNESS_MS
             val tboxFresh = tboxLast >= 0L && now - tboxLast <= FRESHNESS_MS
-            !huFresh && !tboxFresh && (_engineRpm.value ?: 0f) > 0f
+            !huFresh && !tboxFresh
         }
-        if (clear) {
+        // While TBox UDP or HU collectors are alive, keep last RPM (constant idle is normal).
+        if (!noFreshSample) return
+        if (isTboxPathAliveForAccounting() || isHuPathAliveForAccounting()) return
+        if ((_engineRpm.value ?: 0f) > 0f) {
             _engineRpm.setIfChanged(0f)
         }
     }
