@@ -856,7 +856,14 @@ class BackgroundService : Service() {
             ACTION_RESUME_OVERLAYS -> {
                 overlayController.resumeOverlays()
                 scope.launch {
-                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                    try {
+                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e("BackgroundService", "RESUME_OVERLAYS ensure failed", e)
+                        TboxRepository.addLog("ERROR", "Floating", "resume ensure: ${e.message}")
+                    }
                 }
             }
             ACTION_CLOSE -> crtCmd(0x26,
@@ -885,13 +892,34 @@ class BackgroundService : Service() {
                 val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
                 if (!(excludeOrigin && originId.isBlank())) {
                     scope.launch {
-                        overlayController.toggleHideOtherFloatingPanels(
-                            originPanelId = originId,
-                            currentlyShownIds = TboxRepository.floatingDashboardShownIds.value,
-                            excludeOriginPanel = excludeOrigin
-                        )
-                        overlayController.syncFloatingDashboards(floatingDashboards.value)
-                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                        try {
+                            val revealing = overlayController.toggleHideOtherFloatingPanels(
+                                originPanelId = originId,
+                                currentlyShownIds = TboxRepository.floatingDashboardShownIds.value,
+                                excludeOriginPanel = excludeOrigin
+                            )
+                            // Hide: skip z-order remount so the remaining panel does not flicker.
+                            // Show again: restore config order among overlapping mounted panels.
+                            overlayController.syncFloatingDashboards(
+                                floatingDashboards.value,
+                                reorderZOrder = revealing,
+                                closeImmediate = true,
+                            )
+                            overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                            if (revealing) {
+                                // ensure may add a late panel after sync; re-apply order once.
+                                overlayController.syncFloatingDashboards(
+                                    floatingDashboards.value,
+                                    reorderZOrder = true,
+                                    closeImmediate = true,
+                                )
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "TOGGLE_HIDE floating failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "toggle hide: ${e.message}")
+                        }
                     }
                 }
             }
@@ -900,21 +928,28 @@ class BackgroundService : Service() {
                 val originId = intent.getStringExtra(EXTRA_FLOATING_PANEL_ORIGIN_ID).orEmpty()
                 if (toggleAll || originId.isNotBlank()) {
                     scope.launch {
-                        val updated = withContext(Dispatchers.IO) {
-                            val current = settingsManager.floatingDashboardsFlow.first()
-                            val toggled = if (toggleAll) {
-                                current.map { it.copy(enabled = !it.enabled) }
-                            } else {
-                                current.map { cfg ->
-                                    if (cfg.id != originId) cfg.copy(enabled = !cfg.enabled) else cfg
+                        try {
+                            val updated = withContext(Dispatchers.IO) {
+                                val current = settingsManager.floatingDashboardsFlow.first()
+                                val toggled = if (toggleAll) {
+                                    current.map { it.copy(enabled = !it.enabled) }
+                                } else {
+                                    current.map { cfg ->
+                                        if (cfg.id != originId) cfg.copy(enabled = !cfg.enabled) else cfg
+                                    }
                                 }
+                                settingsManager.saveFloatingDashboards(toggled)
+                                toggled
                             }
-                            settingsManager.saveFloatingDashboards(toggled)
-                            toggled
+                            overlayController.clearHiddenFloatingPanelIds()
+                            overlayController.syncFloatingDashboards(updated)
+                            overlayController.ensureFloatingDashboards(updated)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "TOGGLE_ENABLED floating failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "toggle enabled: ${e.message}")
                         }
-                        overlayController.clearHiddenFloatingPanelIds()
-                        overlayController.syncFloatingDashboards(updated)
-                        overlayController.ensureFloatingDashboards(updated)
                     }
                 }
             }
@@ -2730,10 +2765,17 @@ class BackgroundService : Service() {
                 floatingDashboards
                     .drop(1) // Пропускаем начальное значение
                     .collect { configs ->
-                        val newSignature = buildFloatingOverlayLayoutSignature(configs)
-                        if (newSignature != lastFloatingOverlayLayoutSignature) {
-                            lastFloatingOverlayLayoutSignature = newSignature
-                            overlayController.syncFloatingDashboards(configs)
+                        try {
+                            val newSignature = buildFloatingOverlayLayoutSignature(configs)
+                            if (newSignature != lastFloatingOverlayLayoutSignature) {
+                                lastFloatingOverlayLayoutSignature = newSignature
+                                overlayController.syncFloatingDashboards(configs)
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "floatingDashboards sync failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "settings sync: ${e.message}")
                         }
                     }
             }
@@ -2741,7 +2783,14 @@ class BackgroundService : Service() {
                 FloatingPanelEditModeTracker.overlayEditEpoch
                     .drop(1)
                     .collect {
-                        overlayController.syncFloatingDashboards(floatingDashboards.value)
+                        try {
+                            overlayController.syncFloatingDashboards(floatingDashboards.value)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "edit-mode floating sync failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "edit sync: ${e.message}")
+                        }
                     }
             }
         }
@@ -2937,9 +2986,16 @@ class BackgroundService : Service() {
         lastUsageStatsOverlayRules = null
         clearUsageStatsForegroundDebounce()
         scope.launch {
-            overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
-            overlayController.syncFloatingDashboards(floatingDashboards.value)
-            overlayController.ensureFloatingDashboards(floatingDashboards.value)
+            try {
+                overlayController.setUsageStatsOverlayRulesState(UsageStatsOverlayRulesState.EMPTY)
+                overlayController.syncFloatingDashboards(floatingDashboards.value)
+                overlayController.ensureFloatingDashboards(floatingDashboards.value)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("BackgroundService", "stopUsageStatsFloatingHideWatcher sync failed", e)
+                TboxRepository.addLog("ERROR", "UsageStats", "stop sync: ${e.message}")
+            }
         }
     }
 
@@ -2949,7 +3005,15 @@ class BackgroundService : Service() {
             try {
                 Log.d("1s Job", "Start periodic job")
                 delay(5000)
-                overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                try {
+                    // First show after service start (cold start / permission race).
+                    overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e("BackgroundService", "initial floating ensure failed", e)
+                    TboxRepository.addLog("ERROR", "Floating", "initial ensure: ${e.message}")
+                }
                 sendWidgetUpdate()
                 var widgetUpdateTime = System.currentTimeMillis()
                 var floatingDashboardCheckTime = System.currentTimeMillis()
@@ -3005,7 +3069,14 @@ class BackgroundService : Service() {
 
                     if (System.currentTimeMillis() - floatingDashboardCheckTime > 60000) {
                         floatingDashboardCheckTime = System.currentTimeMillis()
-                        overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                        try {
+                            overlayController.ensureFloatingDashboards(floatingDashboards.value)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("BackgroundService", "periodic floating ensure failed", e)
+                            TboxRepository.addLog("ERROR", "Floating", "periodic ensure: ${e.message}")
+                        }
                     }
 
                     val currentTime = Date().time
