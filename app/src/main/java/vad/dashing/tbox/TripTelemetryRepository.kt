@@ -26,6 +26,10 @@ import vad.dashing.tbox.utils.InOutTemperatureNullDebounce
  *
  * After [FRESHNESS_MS] with no RPM from either source, forces RPM to 0 so trips can close.
  *
+ * Cached StateFlows keep the last value for UI / disk restore; [BackgroundService] trip and
+ * refuel accounting must use [accountingEngineRpm] / [accountingFuelLevelPercentageFiltered] /
+ * etc., which return null when the signal has no fresh HU/TBox update (does not clear CDR).
+ *
  * Filtered fuel % and calibrated liters live here only. Emits DEBUG `TripFuel` every
  * [DEBUG_SNAPSHOT_MS] via [TboxRepository.addLog].
  */
@@ -335,6 +339,84 @@ object TripTelemetryRepository {
         if (allow) write()
     }
 
+    /**
+     * True when [signal] has a fresh HU or TBox sample within [FRESHNESS_MS] under the same
+     * priority rules as mixing (see class KDoc). Used by trip/refuel accounting; does not clear values.
+     */
+    fun isSignalFreshForAccounting(
+        signal: Signal,
+        nowElapsedMs: Long = SystemClock.elapsedRealtime(),
+    ): Boolean = synchronized(lock) {
+        activeSourceLocked(signal, nowElapsedMs) != null
+    }
+
+    /** Cached RPM if fresh for accounting; otherwise null (StateFlow may still hold a last value). */
+    fun accountingEngineRpm(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Float? =
+        valueIfFresh(Signal.Rpm, _engineRpm.value, nowElapsedMs)
+
+    fun accountingCarSpeed(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Float? =
+        valueIfFresh(Signal.Speed, _carSpeed.value, nowElapsedMs)
+
+    fun accountingOdometerKm(nowElapsedMs: Long = SystemClock.elapsedRealtime()): UInt? =
+        valueIfFresh(Signal.Odometer, _odometerKm.value, nowElapsedMs)
+
+    /**
+     * Filtered % for trip/refuel steps only when raw [Signal.Fuel] is fresh.
+     * Disk-restored filtered values without a live fuel sample stay null here.
+     */
+    fun accountingFuelLevelPercentageFiltered(
+        nowElapsedMs: Long = SystemClock.elapsedRealtime(),
+    ): UInt? = valueIfFresh(Signal.Fuel, _fuelLevelPercentageFiltered.value, nowElapsedMs)
+
+    fun accountingFuelLevelCalibratedLiters(
+        nowElapsedMs: Long = SystemClock.elapsedRealtime(),
+    ): Float? = valueIfFresh(Signal.Fuel, _fuelLevelCalibratedLiters.value, nowElapsedMs)
+
+    fun accountingOutsideTemperature(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Float? =
+        valueIfFresh(Signal.OutsideTemp, _outsideTemperature.value, nowElapsedMs)
+
+    fun accountingEngineTemperature(nowElapsedMs: Long = SystemClock.elapsedRealtime()): Float? =
+        valueIfFresh(Signal.EngineTemp, _engineTemperature.value, nowElapsedMs)
+
+    /**
+     * Gearbox oil lives on [CanDataRepository]; pass its current value — returned only while
+     * [Signal.GearboxOilTemp] is fresh from TBox.
+     */
+    fun accountingGearboxOilTemperature(
+        cdrValue: Int?,
+        nowElapsedMs: Long = SystemClock.elapsedRealtime(),
+    ): Int? = valueIfFresh(Signal.GearboxOilTemp, cdrValue, nowElapsedMs)
+
+    private fun <T> valueIfFresh(signal: Signal, value: T?, nowElapsedMs: Long): T? {
+        if (value == null) return null
+        return if (isSignalFreshForAccounting(signal, nowElapsedMs)) value else null
+    }
+
+    /**
+     * Active source label for [signal], or null if neither HU nor TBox is fresh.
+     * Must be called under [lock] or via [isSignalFreshForAccounting] / snapshot builder.
+     */
+    private fun activeSourceLocked(signal: Signal, nowElapsedMs: Long): String? {
+        val huLast = lastHuElapsedMs[signal.ordinal]
+        val tboxLast = lastTboxElapsedMs[signal.ordinal]
+        val huFresh = huLast >= 0L && nowElapsedMs - huLast <= FRESHNESS_MS
+        val tboxFresh = tboxLast >= 0L && nowElapsedMs - tboxLast <= FRESHNESS_MS
+        return when (signal) {
+            Signal.EngineTemp -> when {
+                isA9EngineTempTboxOnly() -> if (tboxFresh) "TBox" else null
+                tboxFresh -> "TBox"
+                huFresh -> "HU"
+                else -> null
+            }
+            Signal.GearboxOilTemp -> if (tboxFresh) "TBox" else null
+            else -> when {
+                huFresh -> "HU"
+                tboxFresh -> "TBox"
+                else -> null
+            }
+        }
+    }
+
     private fun maybeClearStaleRpm() {
         val now = SystemClock.elapsedRealtime()
         val clear = synchronized(lock) {
@@ -357,35 +439,13 @@ object TripTelemetryRepository {
     internal fun buildAccountingDebugSnapshot(
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
     ): String {
-        val a9CoolantTboxOnly = isA9EngineTempTboxOnly()
         val sources = synchronized(lock) {
             fun fmt(signal: Signal): String {
                 val huLast = lastHuElapsedMs[signal.ordinal]
                 val tboxLast = lastTboxElapsedMs[signal.ordinal]
                 val huAge = if (huLast >= 0L) nowElapsedMs - huLast else null
                 val tboxAge = if (tboxLast >= 0L) nowElapsedMs - tboxLast else null
-                val huFresh = huAge != null && huAge <= FRESHNESS_MS
-                val tboxFresh = tboxAge != null && tboxAge <= FRESHNESS_MS
-                val active = when (signal) {
-                    Signal.EngineTemp -> when {
-                        a9CoolantTboxOnly -> when {
-                            tboxFresh -> "TBox"
-                            else -> "-"
-                        }
-                        tboxFresh -> "TBox"
-                        huFresh -> "HU"
-                        else -> "-"
-                    }
-                    Signal.GearboxOilTemp -> when {
-                        tboxFresh -> "TBox"
-                        else -> "-"
-                    }
-                    else -> when {
-                        huFresh -> "HU"
-                        tboxFresh -> "TBox"
-                        else -> "-"
-                    }
-                }
+                val active = activeSourceLocked(signal, nowElapsedMs) ?: "-"
                 val ages = buildString {
                     append("hu=")
                     append(huAge?.toString() ?: "-")

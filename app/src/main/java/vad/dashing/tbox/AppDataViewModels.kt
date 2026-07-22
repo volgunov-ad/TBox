@@ -85,9 +85,9 @@ class AppDataViewModel(
             synchronized(TripRepository.lock) {
                 TripRepository.resetPersistentTrip(
                     defaultName = defaultName,
-                    odometerStartKm = TripTelemetryRepository.odometerKm.value,
-                    fuelBaselinePercent = TripTelemetryRepository.fuelLevelPercentageFiltered.value?.toFloat(),
-                    fuelBaselineLiters = TripTelemetryRepository.fuelLevelCalibratedLiters.value,
+                    odometerStartKm = TripTelemetryRepository.accountingOdometerKm(),
+                    fuelBaselinePercent = TripTelemetryRepository.accountingFuelLevelPercentageFiltered()?.toFloat(),
+                    fuelBaselineLiters = TripTelemetryRepository.accountingFuelLevelCalibratedLiters(),
                 )
             }
             persistTripsIfNeeded()

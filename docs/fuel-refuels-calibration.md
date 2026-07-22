@@ -12,7 +12,7 @@
 |--------|---------------------|--------|------------|
 | **Сырой % с CAN** | `CanDataRepository.fuelLevelPercentage` (TBox) + сырой % в `TripTelemetryRepository` | TBox кадр / HU через trip-репо | Диагностика, «Данные авто» (CDR); учёт поездок (trip-репо) |
 | **Стабильный отфильтрованный %** | `TripTelemetryRepository.fuelLevelPercentageFiltered` | Dwell-фильтр `FuelLevelDwellFilter` (**15 с** одного и того же %) — **только при активной поездке** (`FuelLevelStableApply`) | Поля заправки «до/после %», плитки; при отсутствии калиброванных литров — линейный fallback для учёта |
-| **Откалиброванные литры** | `TripTelemetryRepository.fuelLevelCalibratedLiters` | Тот же стабильный % + **JSON калибровки** + **температура снаружи** (если включено «Учитывать заправки»); иначе **линейно** `filtered % × бак` | Учёт расхода и заправок в поездке (`TripFuelAccounting.applyFuelCalibratedLitersStep`) |
+| **Откалиброванные литры** | `TripTelemetryRepository.fuelLevelCalibratedLiters` | Тот же стабильный % + **JSON калибровки** + **температура снаружи** (если включено «Учитывать заправки»); иначе **линейно** `filtered % × бак` | Учёт расхода и заправок в поездке (`TripFuelAccounting.applyFuelCalibratedLitersStep`) через `accounting*` (только если сырой fuel свежий &lt;45 с) |
 
 Калибровка **не** подменяет сырые проценты CAN; она даёт вторую оценку объёма в литрах.
 
