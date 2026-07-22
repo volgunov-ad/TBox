@@ -164,7 +164,22 @@ fun MainScreenDashboardPanel(
     val widgetConfigs = panel.widgetsConfig
     val dashboardRows = panel.rows
     val dashboardCols = panel.cols
-    val mediaSourceId = remember(panel.id) { "main-screen-dashboard-${panel.id}" }
+    // Distinct from fullscreen MainActivity: finishing the activity must not clear
+    // media / mbCAN–VHAL interest still held by the window-mode overlay.
+    val mediaSourceId = remember(panel.id, windowMode) {
+        if (windowMode) {
+            "main-screen-window-dashboard-${panel.id}"
+        } else {
+            "main-screen-dashboard-${panel.id}"
+        }
+    }
+    val mbCanInterestSourceId = remember(panel.id, windowMode) {
+        if (windowMode) {
+            "main-screen-window-${panel.id}"
+        } else {
+            "main-screen-${panel.id}"
+        }
+    }
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
     }
@@ -455,7 +470,7 @@ fun MainScreenDashboardPanel(
             modifier = Modifier.fillMaxSize(),
         ) {
         DashboardPanelGridAndFrames(
-            mbCanInterestSourceId = "main-screen-${panel.id}",
+            mbCanInterestSourceId = mbCanInterestSourceId,
             dashboardRows = dashboardRows,
             dashboardCols = dashboardCols,
             dashboardState = dashboardState,
